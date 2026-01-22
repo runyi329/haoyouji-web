@@ -207,3 +207,15 @@
 ### 登录信息
 - 用户名：jiang
 - 密码：123456
+
+
+## SQL 查询错误修复
+
+- [x] 定位 SUM() 函数缺少参数的查询位置
+- [x] 修复 contacts 表的聚合查询
+- [x] 重启服务器应用修复
+- [ ] 测试修复后的查询
+
+### 问题原因
+- contacts 表没有 interactionCount 字段
+- 修复方案：使用 contact_interactions 表统计互动记录总数

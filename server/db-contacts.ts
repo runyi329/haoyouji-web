@@ -915,12 +915,13 @@ export async function addCustomFields(contactId: number, fields: Array<{ fieldNa
  */
 export async function getTotalInteractionCount(parentUserId: number): Promise<number> {
   const db = await getDb();
- if (!db) throw new Error("Database not available");
-  if (!db) return 0;
+  if (!db) throw new Error("Database not available");
   
+  // 统计该用户所有联系人的互动记录总数
   const result = await db
-    .select({ total: sql<number>`COALESCE(SUM(${contacts.interactionCount}), 0)` })
-    .from(contacts)
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(contactInteractions)
+    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
     .where(eq(contacts.parentUserId, parentUserId));
   
   return result[0]?.total || 0;
