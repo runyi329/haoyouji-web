@@ -1,5 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCog } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -114,6 +117,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const [showUserSwitcher, setShowUserSwitcher] = useState(false);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -221,6 +225,15 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {user?.role === 'super_admin' && (
+                  <DropdownMenuItem
+                    onClick={() => setShowUserSwitcher(true)}
+                    className="cursor-pointer"
+                  >
+                    <UserCog className="mr-2 h-4 w-4" />
+                    <span>切换用户</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -259,6 +272,62 @@ function DashboardLayoutContent({
         )}
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
+      
+      {/* 用户切换对话框 */}
+      <UserSwitcherDialog 
+        open={showUserSwitcher} 
+        onOpenChange={setShowUserSwitcher}
+      />
     </>
+  );
+}
+
+// 用户切换对话框组件
+function UserSwitcherDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { data: users } = trpc.admin.getUsers.useQuery(undefined, { enabled: open });
+  const switchUserMutation = trpc.auth.quickLogin.useMutation({
+    onSuccess: () => {
+      window.location.reload();
+    },
+    onError: (error) => {
+      toast.error(error.message || "切换失败");
+    },
+  });
+  
+  const handleSwitchUser = (userId: number) => {
+    switchUserMutation.mutate({ targetUserId: userId });
+  };
+  
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>切换用户</DialogTitle>
+          <DialogDescription>
+            选择要切换到的用户账号
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-96 overflow-y-auto space-y-2">
+          {users?.map((user: any) => (
+            <div
+              key={user.id}
+              className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer"
+              onClick={() => handleSwitchUser(user.id)}
+            >
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback>{user.name?.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{user.name || user.username}</p>
+                  <p className="text-sm text-muted-foreground">{user.email || '-'}</p>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">{user.role}</span>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
