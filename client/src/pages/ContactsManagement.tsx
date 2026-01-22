@@ -64,7 +64,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners }: { totalCon
       className="group hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">人脉总数</p>
         <p className="font-bold text-blue-700 dark:text-blue-300" style={{ fontSize: getAdaptiveFontSize(totalContacts) }}>
           {totalContacts}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -82,7 +82,7 @@ function WeeklyNewCard({ count, onClick, dragListeners }: { count: number; onCli
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-green-600 dark:text-green-400">本周新增</p>
         <p className="font-bold text-green-700 dark:text-green-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}
@@ -100,7 +100,7 @@ function MonthlyNewCard({ count, onClick, dragListeners }: { count: number; onCl
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-1 py-3 px-3">
         <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本月新增</p>
         <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -118,7 +118,7 @@ function YearlyNewCard({ count, onClick, dragListeners }: { count: number; onCli
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">今年新增</p>
         <p className="font-bold text-purple-700 dark:text-purple-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -150,7 +150,7 @@ function NeedsAttentionCard({ count, onClick, dragListeners }: { count: number; 
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">需要关注</p>
         <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -168,7 +168,7 @@ function MonthlyActiveCard({ count, onClick, dragListeners }: { count: number; o
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">本月活跃</p>
         <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -186,7 +186,7 @@ function WeeklyActiveCard({ count, onClick, dragListeners }: { count: number; on
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">本周活跃</p>
         <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -204,7 +204,7 @@ function YearlyActiveCard({ count, onClick, dragListeners }: { count: number; on
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400">今年活跃</p>
         <p className="font-bold text-violet-700 dark:text-violet-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -222,7 +222,7 @@ function BlacklistCard({ count, onClick, dragListeners }: { count: number; onCli
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">拉黑名单</p>
         <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -240,7 +240,7 @@ function TodayRemindersCard({ count, onClick, dragListeners }: { count: number; 
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-300 dark:border-red-700 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">今日提醒</p>
         <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -258,7 +258,7 @@ function WeekRemindersCard({ count, onClick, dragListeners }: { count: number; o
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/30 border-orange-300 dark:border-orange-700 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本周提醒</p>
         <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -276,7 +276,7 @@ function MonthRemindersCard({ count, onClick, dragListeners }: { count: number; 
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-300 dark:border-yellow-700 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">本月提醒</p>
         <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -294,7 +294,7 @@ function TodayActiveCard({ count, onClick, dragListeners }: { count: number; onC
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/30 border-cyan-200 dark:border-cyan-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-cyan-600 dark:text-cyan-400">今日活跃</p>
         <p className="font-bold text-cyan-700 dark:text-cyan-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -312,7 +312,7 @@ function DormantCard({ count, onClick, dragListeners }: { count: number; onClick
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 border-gray-300 dark:border-gray-700 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">休眠名单</p>
         <p className="font-bold text-gray-700 dark:text-gray-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
@@ -330,7 +330,7 @@ function CompanyCountCard({ count, onClick, dragListeners }: { count: number; on
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">公司数量</p>
         <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">家</span>
@@ -348,7 +348,7 @@ function TotalInteractionCard({ count, onClick, dragListeners }: { count: number
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200 dark:border-pink-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-2 px-3">
         <p className="text-xs sm:text-sm text-pink-600 dark:text-pink-400">累计联络</p>
         <p className="font-bold text-pink-700 dark:text-pink-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">次</span>
@@ -366,7 +366,7 @@ function TotalTagCard({ count, onClick, dragListeners }: { count: number; onClic
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none"
       onClick={onClick}
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">累计标签</p>
         <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">个</span>
@@ -383,7 +383,7 @@ function TotalUsageDaysCard({ days, dragListeners }: { days: number; dragListene
       {...dragListeners}
       className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-amber-200 dark:border-amber-800 flex flex-col justify-center cursor-pointer select-none"
     >
-      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
+      <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-3">
         <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">累计使用</p>
         <p className="font-bold text-amber-700 dark:text-amber-300" style={{ fontSize: getAdaptiveFontSize(days) }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
