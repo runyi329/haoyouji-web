@@ -219,3 +219,19 @@
 ### 问题原因
 - contacts 表没有 interactionCount 字段
 - 修复方案：使用 contact_interactions 表统计互动记录总数
+
+
+## 首页统计数据修复
+
+- [x] 检查首页统计 API 的数据计算逻辑
+- [x] 确认哪些统计应该包含共享数据
+- [x] 修复 totalContacts 统计以包含共享联系人
+- [ ] 测试修复后的统计数据
+
+### 问题原因
+- totalContacts 只统计自己的人脉，不包括共享的
+- 修复方案：使用 visibleContactIds.length（包含自己+共享）
+
+### 需求说明
+- 首页容器应显示“自己+共享”的数据总和
+- 本周新增、本月新增、今年新增已正确包含共享数据

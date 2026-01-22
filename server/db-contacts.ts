@@ -1031,12 +1031,8 @@ export async function getContactStats(parentUserId: number) {
     };
   }
   
-  // 总人脉数（只统计自己的人脉，不包括共享的）
-  const ownContactsResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(contacts)
-    .where(eq(contacts.parentUserId, parentUserId));
-  const totalContacts = ownContactsResult[0]?.count || 0;
+  // 总人脉数（包括自己的 + 共享的）
+  const totalContacts = visibleContactIds.length;
   
   // 计算本周开始时间（周一为一周开始）
   const now = new Date();
