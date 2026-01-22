@@ -1,0 +1,19 @@
+{
+  "query": "\nSELECT \n  u.id,\n  u.name,\n  u.email,\n  u.role,\n  u.createdAt,\n  u.lastSignedIn,\n  COUNT(c.id) as contact_count\nFROM users u\nLEFT JOIN contacts c ON c.parentUserId = u.id\nWHERE u.name LIKE '%jiang%'\nGROUP BY u.id;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  u.id,\n  u.name,\n  u.email,\n  u.role,\n  u.createdAt,\n  u.lastSignedIn,\n  COUNT(c.id) as contact_count\nFROM users u\nLEFT JOIN contacts c ON c.parentUserId = u.id\nWHERE u.name LIKE '%jiang%'\nGROUP BY u.id;\n",
+  "rows": [
+    {
+      "id": "870413",
+      "name": "jiang",
+      "email": "NULL",
+      "role": "parent",
+      "createdAt": "2026-01-11 17:41:14",
+      "lastSignedIn": "2026-01-22 21:18:09",
+      "contact_count": "104"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tcreatedAt\tlastSignedIn\tcontact_count\n870413\tjiang\tNULL\tparent\t2026-01-11 17:41:14\t2026-01-22 21:18:09\t104\n",
+  "stderr": "",
+  "execution_time_ms": 383
+}

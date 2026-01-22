@@ -1,0 +1,18 @@
+{
+  "query": "\nSELECT \n  id,\n  name,\n  username,\n  loginMethod,\n  passwordHash,\n  CASE \n    WHEN passwordHash IS NOT NULL THEN 'Yes'\n    ELSE 'No'\n  END as has_password\nFROM users \nWHERE name = 'jiang';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  id,\n  name,\n  username,\n  loginMethod,\n  passwordHash,\n  CASE \n    WHEN passwordHash IS NOT NULL THEN 'Yes'\n    ELSE 'No'\n  END as has_password\nFROM users \nWHERE name = 'jiang';\n",
+  "rows": [
+    {
+      "id": "870413",
+      "name": "jiang",
+      "username": "NULL",
+      "loginMethod": "password",
+      "passwordHash": "NULL",
+      "has_password": "No"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tusername\tloginMethod\tpasswordHash\thas_password\n870413\tjiang\tNULL\tpassword\tNULL\tNo\n",
+  "stderr": "",
+  "execution_time_ms": 357
+}

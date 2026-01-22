@@ -1,0 +1,22 @@
+{
+  "query": "\nSELECT \n  'interactions' as data_type,\n  COUNT(*) as count\nFROM contact_interactions ci\nJOIN contacts c ON ci.contactId = c.id\nJOIN users u ON c.parentUserId = u.id\nWHERE u.name LIKE '%jiang%'\nUNION ALL\nSELECT \n  'sharing_as_sharer' as data_type,\n  COUNT(*) as count\nFROM contact_sharing_connections csc\nJOIN users u ON csc.sharerId = u.id\nWHERE u.name LIKE '%jiang%'\nUNION ALL\nSELECT \n  'sharing_as_receiver' as data_type,\n  COUNT(*) as count\nFROM contact_sharing_connections csc\nJOIN users u ON csc.receiverId = u.id\nWHERE u.name LIKE '%jiang%';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  'interactions' as data_type,\n  COUNT(*) as count\nFROM contact_interactions ci\nJOIN contacts c ON ci.contactId = c.id\nJOIN users u ON c.parentUserId = u.id\nWHERE u.name LIKE '%jiang%'\nUNION ALL\nSELECT \n  'sharing_as_sharer' as data_type,\n  COUNT(*) as count\nFROM contact_sharing_connections csc\nJOIN users u ON csc.sharerId = u.id\nWHERE u.name LIKE '%jiang%'\nUNION ALL\nSELECT \n  'sharing_as_receiver' as data_type,\n  COUNT(*) as count\nFROM contact_sharing_connections csc\nJOIN users u ON csc.receiverId = u.id\nWHERE u.name LIKE '%jiang%';\n",
+  "rows": [
+    {
+      "data_type": "sharing_as_receiver",
+      "count": "2"
+    },
+    {
+      "data_type": "sharing_as_sharer",
+      "count": "1"
+    },
+    {
+      "data_type": "interactions",
+      "count": "99"
+    }
+  ],
+  "messages": [],
+  "stdout": "data_type\tcount\nsharing_as_receiver\t2\nsharing_as_sharer\t1\ninteractions\t99\n",
+  "stderr": "",
+  "execution_time_ms": 377
+}
