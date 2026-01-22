@@ -317,3 +317,24 @@
 - 前端显示的所有时间都应该是北京时间（UTC+8）
 - 后端统计数据（今日、本周、本月、今年）的计算也应该基于北京时间
 - 数据库存储仍然使用 UTC 时间戳，只在显示和计算时转换
+
+
+## 生产环境部署错误修复 ✅
+
+- [x] 分析部署错误报告（Invalid URL 错误）
+- [x] 检查项目当前环境变量配置
+- [x] 确认 Manus 项目环境变量已自动配置
+- [x] 创建环境变量配置文档（docs/环境变量配置指南.md）
+
+### 问题描述
+生产环境部署后，用户访问 http://124.223.54.69/ 时出现 "Invalid URL" 错误，导致整个应用不可用。
+
+### 根本原因
+前端代码在构建时缺少必需的环境变量 `VITE_OAUTH_PORTAL_URL`，导致前端初始化时尝试构造 URL 失败。
+
+### 缺失的环境变量
+- **必需**: `VITE_OAUTH_PORTAL_URL` - OAuth 登录门户地址
+- **可选**: `VITE_FRONTEND_FORGE_API_KEY` - 地图 API 密钥
+- **可选**: `VITE_FRONTEND_FORGE_API_URL` - 地图 API 地址
+- **可选**: `VITE_ANALYTICS_ENDPOINT` - 分析工具端点
+- **可选**: `VITE_ANALYTICS_WEBSITE_ID` - 分析工具网站ID
