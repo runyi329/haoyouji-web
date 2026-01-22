@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1769100691530,
-      "tag": "0000_polite_zombie",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1769100868779,
-      "tag": "0001_chunky_colossus",
+      "when": 1769103287425,
+      "tag": "0000_init",
       "breakpoints": true
     }
   ]

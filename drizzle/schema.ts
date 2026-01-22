@@ -468,32 +468,32 @@ export type InsertStarRedemption = typeof starRedemptions.$inferInsert;
  */// 人脉管理表
 export const contacts = mysqlTable("contacts", {
   id: int("id").autoincrement().primaryKey(),
-  parentUserId: int("parent_user_id").notNull(), // 所属家长ID
+  parentUserId: int("parentUserId").notNull(), // 所属家长ID
   name: varchar("name", { length: 100 }).notNull(), // 姓名
   title: varchar("title", { length: 50 }), // 称谓（如：叔叔、阿姨、老师等）
   gender: varchar("gender", { length: 10 }), // 性别
-  birthDate: varchar("birth_date", { length: 20 }), // 出生年月
+  birthDate: varchar("birthDate", { length: 20 }), // 出生年月
   occupation: varchar("occupation", { length: 100 }), // 职业
   address: text("address"), // 联络地址
   region: varchar("region", { length: 50 }), // 所在地区/省份
   wechat: varchar("wechat", { length: 100 }), // 微信
   phone: varchar("phone", { length: 20 }), // 电话
   tags: json("tags").$type<string[]>(), // 标签列表（如：资金往来、亲戚、同事等）
-  referrerId: int("referrer_id"), // 介绍人 ID（外键关联 contacts.id）
-  isBlacklisted: boolean("is_blacklisted").default(false).notNull(), // 是否拉黑
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  referrerId: int("referrerId"), // 介绍人 ID（外键关联 contacts.id）
+  isBlacklisted: boolean("isBlacklisted").default(false).notNull(), // 是否拉黑
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 // 人脉自定义字段表
 export const contactCustomFields = mysqlTable("contact_custom_fields", {
   id: int("id").autoincrement().primaryKey(),
-  contactId: int("contact_id").notNull(), // 关联的人脉ID
-  fieldName: varchar("field_name", { length: 100 }).notNull(), // 字段标题
-  fieldValue: text("field_value"), // 字段内容
-  sortOrder: int("sort_order").default(0).notNull(), // 排序顺序
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  contactId: int("contactId").notNull(), // 关联的人脉ID
+  fieldName: varchar("fieldName", { length: 100 }).notNull(), // 字段标题
+  fieldValue: text("fieldValue"), // 字段内容
+  sortOrder: int("sortOrder").default(0).notNull(), // 排序顺序
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type ContactCustomField = typeof contactCustomFields.$inferSelect;
@@ -501,27 +501,27 @@ export type InsertContactCustomField = typeof contactCustomFields.$inferInsert;
 
 export const contactTags = mysqlTable("contact_tags", {
   id: int("id").autoincrement().primaryKey(),
-  parentUserId: int("parent_user_id").notNull(), // 所属家长ID
+  parentUserId: int("parentUserId").notNull(), // 所属家长ID
   name: varchar("name", { length: 50 }).notNull(), // 标签名称
   color: varchar("color", { length: 20 }).default("#3b82f6").notNull(), // 标签颜色（十六进制颜色值）
-  sortOrder: int("sort_order").default(0).notNull(), // 排序顺序（数字越小越靠前）
-  isPreset: boolean("is_preset").default(false).notNull(), // 是否为预设标签
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(), // 排序顺序（数字越小越靠前）
+  isPreset: boolean("isPreset").default(false).notNull(), // 是否为预设标签
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export const contactTagRelations = mysqlTable("contact_tag_relations", {
   id: int("id").autoincrement().primaryKey(),
-  contactId: int("contact_id").notNull(), // 人脉ID
-  tagId: int("tag_id").notNull(), // 标签ID
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  contactId: int("contactId").notNull(), // 人脉ID
+  tagId: int("tagId").notNull(), // 标签ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export const contactInteractions = mysqlTable("contact_interactions", {
   id: int("id").autoincrement().primaryKey(),
-  contactId: int("contact_id").notNull(), // 人脉ID
-  interactionDate: timestamp("interaction_date").notNull(), // 联络时间
+  contactId: int("contactId").notNull(), // 人脉ID
+  interactionDate: timestamp("interactionDate").notNull(), // 联络时间
   note: text("note"), // 备注
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type Contact = typeof contacts.$inferSelect;
@@ -545,11 +545,11 @@ export type InsertContactInteraction = typeof contactInteractions.$inferInsert;
  */
 export const personalContactTags = mysqlTable("personal_contact_tags", {
   id: int("id").autoincrement().primaryKey(),
-  contactId: int("contact_id").notNull(), // 关联的人脉ID
-  parentUserId: int("parent_user_id").notNull(), // 所属家长ID
+  contactId: int("contactId").notNull(), // 关联的人脉ID
+  parentUserId: int("parentUserId").notNull(), // 所属家长ID
   name: varchar("name", { length: 50 }).notNull(), // 标签名称
   color: varchar("color", { length: 20 }).default("#8b5cf6").notNull(), // 标签颜色（默认紫色，与全局标签区分）
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type PersonalContactTag = typeof personalContactTags.$inferSelect;
@@ -962,14 +962,14 @@ export type InsertFamilyViConfig = typeof familyViConfig.$inferInsert;
  */
 export const contactFieldCategories = mysqlTable("contact_field_categories", {
   id: int("id").autoincrement().primaryKey(),
-  parentUserId: int("parent_user_id").notNull(), // 所属用户ID
+  parentUserId: int("parentUserId").notNull(), // 所属用户ID
   name: varchar("name", { length: 100 }).notNull(), // 字段名称
-  fieldType: varchar("field_type", { length: 20 }).default("text").notNull(), // 字段类型：text, number, date, select
+  fieldType: varchar("fieldType", { length: 20 }).default("text").notNull(), // 字段类型：text, number, date, select
   options: json("options").$type<string[]>(), // 选项列表（当fieldType为select时使用）
-  sortOrder: int("sort_order").default(0).notNull(), // 排序顺序
-  isRequired: boolean("is_required").default(false).notNull(), // 是否必填
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(), // 排序顺序
+  isRequired: boolean("isRequired").default(false).notNull(), // 是否必填
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type ContactFieldCategory = typeof contactFieldCategories.$inferSelect;
@@ -982,11 +982,11 @@ export type InsertContactFieldCategory = typeof contactFieldCategories.$inferIns
  */
 export const contactFieldValues = mysqlTable("contact_field_values", {
   id: int("id").autoincrement().primaryKey(),
-  contactId: int("contact_id").notNull(), // 关联的人脉ID
-  categoryId: int("category_id").notNull(), // 关联的字段分类ID
+  contactId: int("contactId").notNull(), // 关联的人脉ID
+  categoryId: int("categoryId").notNull(), // 关联的字段分类ID
   value: text("value"), // 字段值
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type ContactFieldValue = typeof contactFieldValues.$inferSelect;
