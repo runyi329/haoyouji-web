@@ -1,0 +1,15 @@
+{
+  "query": "\n-- 查询 jiang 用户的 ID\nSELECT id, username, name FROM users WHERE username = 'jiang';\n\n-- 查询 jiang 作为分享者的记录\nSELECT \n  csc.id,\n  csc.sharerId,\n  sharer.username as sharerUsername,\n  csc.receiverId,\n  receiver.username as receiverUsername,\n  csc.status,\n  csc.createdAt\nFROM contact_sharing_connections csc\nLEFT JOIN users sharer ON csc.sharerId = sharer.id\nLEFT JOIN users receiver ON csc.receiverId = receiver.id\nWHERE csc.sharerId = 29;\n\n-- 查询 jiang 作为接收者的记录\nSELECT \n  csc.id,\n  csc.sharerId,\n  sharer.username as sharerUsername,\n  csc.receiverId,\n  receiver.username as receiverUsername,\n  csc.status,\n  csc.createdAt\nFROM contact_sharing_connections csc\nLEFT JOIN users sharer ON csc.sharerId = sharer.id\nLEFT JOIN users receiver ON csc.receiverId = receiver.id\nWHERE csc.receiverId = 29;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询 jiang 用户的 ID\nSELECT id, username, name FROM users WHERE username = 'jiang';\n\n-- 查询 jiang 作为分享者的记录\nSELECT \n  csc.id,\n  csc.sharerId,\n  sharer.username as sharerUsername,\n  csc.receiverId,\n  receiver.username as receiverUsername,\n  csc.status,\n  csc.createdAt\nFROM contact_sharing_connections csc\nLEFT JOIN users sharer ON csc.sharerId = sharer.id\nLEFT JOIN users receiver ON csc.receiverId = receiver.id\nWHERE csc.sharerId = 29;\n\n-- 查询 jiang 作为接收者的记录\nSELECT \n  csc.id,\n  csc.sharerId,\n  sharer.username as sharerUsername,\n  csc.receiverId,\n  receiver.username as receiverUsername,\n  csc.status,\n  csc.createdAt\nFROM contact_sharing_connections csc\nLEFT JOIN users sharer ON csc.sharerId = sharer.id\nLEFT JOIN users receiver ON csc.receiverId = receiver.id\nWHERE csc.receiverId = 29;\n",
+  "rows": [
+    {
+      "id": "870413",
+      "username": "jiang",
+      "name": "jiang"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\n870413\tjiang\tjiang\n",
+  "stderr": "",
+  "execution_time_ms": 506
+}

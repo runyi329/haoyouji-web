@@ -1,0 +1,40 @@
+{
+  "query": "\n-- 查询所有用户的联系人数量\nSELECT \n  u.id,\n  u.username,\n  COUNT(c.id) as contactCount\nFROM users u\nLEFT JOIN contacts c ON c.parentUserId = u.id\nGROUP BY u.id, u.username\nHAVING contactCount > 0\nORDER BY contactCount DESC;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询所有用户的联系人数量\nSELECT \n  u.id,\n  u.username,\n  COUNT(c.id) as contactCount\nFROM users u\nLEFT JOIN contacts c ON c.parentUserId = u.id\nGROUP BY u.id, u.username\nHAVING contactCount > 0\nORDER BY contactCount DESC;\n",
+  "rows": [
+    {
+      "id": "540801",
+      "username": "NULL",
+      "contactCount": "346"
+    },
+    {
+      "id": "870413",
+      "username": "jiang",
+      "contactCount": "104"
+    },
+    {
+      "id": "3060001",
+      "username": "NULL",
+      "contactCount": "16"
+    },
+    {
+      "id": "1260396",
+      "username": "NULL",
+      "contactCount": "4"
+    },
+    {
+      "id": "2040145",
+      "username": "NULL",
+      "contactCount": "2"
+    },
+    {
+      "id": "28",
+      "username": "NULL",
+      "contactCount": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tcontactCount\n540801\tNULL\t346\n870413\tjiang\t104\n3060001\tNULL\t16\n1260396\tNULL\t4\n2040145\tNULL\t2\n28\tNULL\t1\n",
+  "stderr": "",
+  "execution_time_ms": 375
+}

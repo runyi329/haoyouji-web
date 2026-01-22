@@ -15,6 +15,7 @@ import { eq, and, like, or, desc, sql, gte, lt, isNotNull, isNull, ne, inArray }
  * @returns 人脉ID数组
  */
 async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> {
+  console.log('[getAllVisibleContactIds] 开始获取可见联系人ID，用户ID:', parentUserId);
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return [];
@@ -26,6 +27,7 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
     .where(eq(contacts.parentUserId, parentUserId));
   
   const ownContactIds = ownContacts.map(c => c.id);
+  console.log('[getAllVisibleContactIds] 自己的联系人数量:', ownContactIds.length);
   
   // 获取共享给我的人脉ID
   const { contactSharingConnections } = await import('../drizzle/schema');
@@ -38,6 +40,8 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
         eq(contactSharingConnections.status, 'active')
       )
     );
+  console.log('[getAllVisibleContactIds] 找到的共享连接数:', sharingConnections.length);
+  console.log('[getAllVisibleContactIds] 共享连接详情:', sharingConnections);
   
   // 获取所有分享者的人脉ID
   const sharedContactIds: number[] = [];
@@ -46,11 +50,16 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
       .select({ id: contacts.id })
       .from(contacts)
       .where(eq(contacts.parentUserId, conn.sharerId));
-    sharedContactIds.push(...sharerContacts.map(c => c.id));
+    const sharerContactIds = sharerContacts.map(c => c.id);
+    console.log(`[getAllVisibleContactIds] 分享者 ${conn.sharerId} 的联系人数量:`, sharerContactIds.length);
+    sharedContactIds.push(...sharerContactIds);
   }
   
   // 合并并去重
-  return Array.from(new Set([...ownContactIds, ...sharedContactIds]));
+  console.log('[getAllVisibleContactIds] 共享联系人总数:', sharedContactIds.length);
+  const result = Array.from(new Set([...ownContactIds, ...sharedContactIds]));
+  console.log('[getAllVisibleContactIds] 最终可见联系人总数:', result.length);
+  return result;
 }
 
 /**

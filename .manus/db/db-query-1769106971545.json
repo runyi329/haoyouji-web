@@ -1,0 +1,37 @@
+{
+  "query": "\n-- 查询用户ID 870413\nSELECT * FROM users WHERE id = 870413;\n\n-- 查询该用户的联系人数量\nSELECT COUNT(*) as contactCount FROM contacts WHERE parentUserId = 870413;\n\n-- 查询该用户的共享连接\nSELECT * FROM contact_sharing_connections \nWHERE receiverId = 870413 OR sharerId = 870413;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询用户ID 870413\nSELECT * FROM users WHERE id = 870413;\n\n-- 查询该用户的联系人数量\nSELECT COUNT(*) as contactCount FROM contacts WHERE parentUserId = 870413;\n\n-- 查询该用户的共享连接\nSELECT * FROM contact_sharing_connections \nWHERE receiverId = 870413 OR sharerId = 870413;\n",
+  "rows": [
+    {
+      "id": "870413",
+      "openId": "legacy_870413_9e32d70bc0dcca31",
+      "username": "jiang",
+      "passwordHash": "$2b$10$MiIc4jUi1n7F8SN7aHf2n.UxU/IrkrNHTUEOb5ZjN9jVct5sF5S1u",
+      "name": "jiang",
+      "email": "NULL",
+      "loginMethod": "password",
+      "role": "parent",
+      "familyId": "NULL",
+      "avatar": "NULL",
+      "points": "0",
+      "sharingEnabled": "0",
+      "isLocked": "0",
+      "failedLoginAttempts": "0",
+      "lastFailedLogin": "NULL",
+      "createdAt": "2026-01-11 17:41:14",
+      "updatedAt": "2026-01-22 18:35:11",
+      "lastSignedIn": "2026-01-22 18:35:12"
+    }
+  ],
+  "messages": [
+    "contactCount",
+    "104",
+    "id\tsharerId\treceiverId\tstatus\tnote\tcreatedAt\tupdatedAt",
+    "2\t540801\t870413\tpending\tNULL\t2026-01-17 17:27:55\t2026-01-17 17:27:55",
+    "30002\t870413\t540801\tpending\tNULL\t2026-01-18 07:48:59\t2026-01-18 07:48:59",
+    "90001\t3060001\t870413\tpending\tNULL\t2026-01-20 08:49:57\t2026-01-20 08:49:57"
+  ],
+  "stdout": "id\topenId\tusername\tpasswordHash\tname\temail\tloginMethod\trole\tfamilyId\tavatar\tpoints\tsharingEnabled\tisLocked\tfailedLoginAttempts\tlastFailedLogin\tcreatedAt\tupdatedAt\tlastSignedIn\n870413\tlegacy_870413_9e32d70bc0dcca31\tjiang\t$2b$10$MiIc4jUi1n7F8SN7aHf2n.UxU/IrkrNHTUEOb5ZjN9jVct5sF5S1u\tjiang\tNULL\tpassword\tparent\tNULL\tNULL\t0\t0\t0\t0\tNULL\t2026-01-11 17:41:14\t2026-01-22 18:35:11\t2026-01-22 18:35:12\ncontactCount\n104\nid\tsharerId\treceiverId\tstatus\tnote\tcreatedAt\tupdatedAt\n2\t540801\t870413\tpending\tNULL\t2026-01-17 17:27:55\t2026-01-17 17:27:55\n30002\t870413\t540801\tpending\tNULL\t2026-01-18 07:48:59\t2026-01-18 07:48:59\n90001\t3060001\t870413\tpending\tNULL\t2026-01-20 08:49:57\t2026-01-20 08:49:57\n",
+  "stderr": "",
+  "execution_time_ms": 474
+}

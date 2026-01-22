@@ -1,0 +1,31 @@
+{
+  "query": "\n-- 查询 jiang 用户的联系人总数\nSELECT COUNT(*) as totalContacts FROM contacts WHERE parentUserId = 29;\n\n-- 查询本周新增（假设今天是2026-01-22）\nSELECT COUNT(*) as newThisWeek \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-20 00:00:00';\n\n-- 查询本月新增\nSELECT COUNT(*) as newThisMonth \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-01 00:00:00';\n\n-- 查询今年新增\nSELECT COUNT(*) as newThisYear \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-01 00:00:00';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询 jiang 用户的联系人总数\nSELECT COUNT(*) as totalContacts FROM contacts WHERE parentUserId = 29;\n\n-- 查询本周新增（假设今天是2026-01-22）\nSELECT COUNT(*) as newThisWeek \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-20 00:00:00';\n\n-- 查询本月新增\nSELECT COUNT(*) as newThisMonth \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-01 00:00:00';\n\n-- 查询今年新增\nSELECT COUNT(*) as newThisYear \nFROM contacts \nWHERE parentUserId = 29 \n  AND createdAt >= '2026-01-01 00:00:00';\n",
+  "rows": [
+    {
+      "totalContacts": "0"
+    },
+    {
+      "totalContacts": "newThisWeek"
+    },
+    {
+      "totalContacts": "0"
+    },
+    {
+      "totalContacts": "newThisMonth"
+    },
+    {
+      "totalContacts": "0"
+    },
+    {
+      "totalContacts": "newThisYear"
+    },
+    {
+      "totalContacts": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "totalContacts\n0\nnewThisWeek\n0\nnewThisMonth\n0\nnewThisYear\n0\n",
+  "stderr": "",
+  "execution_time_ms": 533
+}

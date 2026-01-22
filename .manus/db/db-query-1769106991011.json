@@ -1,0 +1,37 @@
+{
+  "query": "\n-- 将用户 870413 相关的共享连接状态改为 active\nUPDATE contact_sharing_connections \nSET status = 'active', updatedAt = NOW()\nWHERE (receiverId = 870413 OR sharerId = 870413) \n  AND status = 'pending';\n\n-- 验证更新结果\nSELECT * FROM contact_sharing_connections \nWHERE receiverId = 870413 OR sharerId = 870413;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 将用户 870413 相关的共享连接状态改为 active\nUPDATE contact_sharing_connections \nSET status = 'active', updatedAt = NOW()\nWHERE (receiverId = 870413 OR sharerId = 870413) \n  AND status = 'pending';\n\n-- 验证更新结果\nSELECT * FROM contact_sharing_connections \nWHERE receiverId = 870413 OR sharerId = 870413;\n",
+  "rows": [
+    {
+      "id": "2",
+      "sharerId": "540801",
+      "receiverId": "870413",
+      "status": "active",
+      "note": "NULL",
+      "createdAt": "2026-01-17 17:27:55",
+      "updatedAt": "2026-01-22 18:36:30"
+    },
+    {
+      "id": "30002",
+      "sharerId": "870413",
+      "receiverId": "540801",
+      "status": "active",
+      "note": "NULL",
+      "createdAt": "2026-01-18 07:48:59",
+      "updatedAt": "2026-01-22 18:36:30"
+    },
+    {
+      "id": "90001",
+      "sharerId": "3060001",
+      "receiverId": "870413",
+      "status": "active",
+      "note": "NULL",
+      "createdAt": "2026-01-20 08:49:57",
+      "updatedAt": "2026-01-22 18:36:30"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tsharerId\treceiverId\tstatus\tnote\tcreatedAt\tupdatedAt\n2\t540801\t870413\tactive\tNULL\t2026-01-17 17:27:55\t2026-01-22 18:36:30\n30002\t870413\t540801\tactive\tNULL\t2026-01-18 07:48:59\t2026-01-22 18:36:30\n90001\t3060001\t870413\tactive\tNULL\t2026-01-20 08:49:57\t2026-01-22 18:36:30\n",
+  "stderr": "",
+  "execution_time_ms": 435
+}

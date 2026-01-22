@@ -731,12 +731,8 @@ export default function ContactsManagement() {
   // 获取共享给我的人脉列表
   const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
   
-  // 计算合并后的总人脉数（自己的 + 共享的）
-  const totalContactsWithShared = React.useMemo(() => {
-    const ownCount = stats?.totalContacts || 0;
-    const sharedCount = sharedContacts?.length || 0;
-    return ownCount + sharedCount;
-  }, [stats?.totalContacts, sharedContacts]);
+  // stats.totalContacts 已经包含了自己的 + 共享的联系人总数，不需要再加
+  const totalContactsWithShared = stats?.totalContacts || 0;
   
   // 点击外部关闭下拉列表和历史记录
   useEffect(() => {
@@ -1235,7 +1231,7 @@ export default function ContactsManagement() {
 
 // 介绍人排行榜区域组件
 function ReferrerLeaderboardSection() {
-  const { data: referrerStats, isLoading } = trpc.contacts.referrerStats.list.useQuery();
+  const { data: referrerStats, isLoading } = trpc.contacts.referrerStats.leaderboard.useQuery();
 
   if (isLoading) {
     return null; // 不显示加载中状态

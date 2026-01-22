@@ -1,0 +1,13 @@
+{
+  "query": "\n-- 查询 jiang 接收到的共享连接\nSELECT \n  csc.sharerId,\n  u.username as sharerUsername,\n  COUNT(c.id) as contactCount\nFROM contact_sharing_connections csc\nLEFT JOIN users u ON csc.sharerId = u.id\nLEFT JOIN contacts c ON c.parentUserId = csc.sharerId\nWHERE csc.receiverId = 29 \n  AND csc.status = 'active'\nGROUP BY csc.sharerId, u.username;\n\n-- 查询分享者（用户30）的联系人总数\nSELECT COUNT(*) as count FROM contacts WHERE parentUserId = 30;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询 jiang 接收到的共享连接\nSELECT \n  csc.sharerId,\n  u.username as sharerUsername,\n  COUNT(c.id) as contactCount\nFROM contact_sharing_connections csc\nLEFT JOIN users u ON csc.sharerId = u.id\nLEFT JOIN contacts c ON c.parentUserId = csc.sharerId\nWHERE csc.receiverId = 29 \n  AND csc.status = 'active'\nGROUP BY csc.sharerId, u.username;\n\n-- 查询分享者（用户30）的联系人总数\nSELECT COUNT(*) as count FROM contacts WHERE parentUserId = 30;\n",
+  "rows": [
+    {
+      "count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "count\n0\n",
+  "stderr": "",
+  "execution_time_ms": 424
+}
