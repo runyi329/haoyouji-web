@@ -35,7 +35,26 @@ interface Feature {
   title: string;
 }
 
-
+// 优化的数字字体大小计算函数 - 支持 1-5 位数自适应
+function getAdaptiveFontSize(value: number): string {
+  const digits = value.toString().length;
+  
+  // 根据位数动态调整字体大小
+  // 1位数: 2.25rem (36px)
+  // 2位数: 2rem (32px)
+  // 3位数: 1.75rem (28px)
+  // 4位数: 1.5rem (24px)
+  // 5位数: 1.25rem (20px)
+  const sizeMap: Record<number, string> = {
+    1: '2.25rem',
+    2: '2rem',
+    3: '1.75rem',
+    4: '1.5rem',
+    5: '1.25rem',
+  };
+  
+  return sizeMap[Math.min(digits, 5)] || '1.25rem';
+}
 
 // 功能1卡片 - 人脉总数统计
 function ContactsStatsCard({ totalContacts, onClick, dragListeners }: { totalContacts: number; onClick?: () => void; dragListeners?: any }) {
@@ -47,7 +66,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners }: { totalCon
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">人脉总数</p>
-        <p className="font-bold text-blue-700 dark:text-blue-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - totalContacts.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-blue-700 dark:text-blue-300" style={{ fontSize: getAdaptiveFontSize(totalContacts) }}>
           {totalContacts}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -65,7 +84,7 @@ function WeeklyNewCard({ count, onClick, dragListeners }: { count: number; onCli
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-green-600 dark:text-green-400">本周新增</p>
-        <p className="font-bold text-green-700 dark:text-green-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-green-700 dark:text-green-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}
         </p>
       </CardContent>
@@ -83,7 +102,7 @@ function MonthlyNewCard({ count, onClick, dragListeners }: { count: number; onCl
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本月新增</p>
-        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -101,7 +120,7 @@ function YearlyNewCard({ count, onClick, dragListeners }: { count: number; onCli
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">今年新增</p>
-        <p className="font-bold text-purple-700 dark:text-purple-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-purple-700 dark:text-purple-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -115,7 +134,7 @@ function AverageIntervalCard({ days, dragListeners }: { days: number; dragListen
     <Card className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center">
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-2 py-3 px-2 md:cursor-grab md:active:cursor-grabbing">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">联络频率</p>
-        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - days.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: getAdaptiveFontSize(days) }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
         </p>
       </CardContent>
@@ -133,7 +152,7 @@ function NeedsAttentionCard({ count, onClick, dragListeners }: { count: number; 
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">需要关注</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -151,7 +170,7 @@ function MonthlyActiveCard({ count, onClick, dragListeners }: { count: number; o
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">本月活跃</p>
-        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -169,7 +188,7 @@ function WeeklyActiveCard({ count, onClick, dragListeners }: { count: number; on
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">本周活跃</p>
-        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -187,7 +206,7 @@ function YearlyActiveCard({ count, onClick, dragListeners }: { count: number; on
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400">今年活跃</p>
-        <p className="font-bold text-violet-700 dark:text-violet-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-violet-700 dark:text-violet-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -205,7 +224,7 @@ function BlacklistCard({ count, onClick, dragListeners }: { count: number; onCli
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">拉黑名单</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -223,7 +242,7 @@ function TodayRemindersCard({ count, onClick, dragListeners }: { count: number; 
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">今日提醒</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -241,7 +260,7 @@ function WeekRemindersCard({ count, onClick, dragListeners }: { count: number; o
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本周提醒</p>
-        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -259,7 +278,7 @@ function MonthRemindersCard({ count, onClick, dragListeners }: { count: number; 
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">本月提醒</p>
-        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -277,7 +296,7 @@ function TodayActiveCard({ count, onClick, dragListeners }: { count: number; onC
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-cyan-600 dark:text-cyan-400">今日活跃</p>
-        <p className="font-bold text-cyan-700 dark:text-cyan-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-cyan-700 dark:text-cyan-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -295,7 +314,7 @@ function DormantCard({ count, onClick, dragListeners }: { count: number; onClick
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">休眠名单</p>
-        <p className="font-bold text-gray-700 dark:text-gray-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-gray-700 dark:text-gray-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -313,7 +332,7 @@ function CompanyCountCard({ count, onClick, dragListeners }: { count: number; on
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">公司数量</p>
-        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">家</span>
         </p>
       </CardContent>
@@ -331,7 +350,7 @@ function TotalInteractionCard({ count, onClick, dragListeners }: { count: number
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-pink-600 dark:text-pink-400">累计联络</p>
-        <p className="font-bold text-pink-700 dark:text-pink-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-pink-700 dark:text-pink-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">次</span>
         </p>
       </CardContent>
@@ -349,7 +368,7 @@ function TotalTagCard({ count, onClick, dragListeners }: { count: number; onClic
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">累计标签</p>
-        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - count.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: getAdaptiveFontSize(count) }}>
           {count}<span className="text-xs sm:text-sm font-normal">个</span>
         </p>
       </CardContent>
@@ -366,7 +385,7 @@ function TotalUsageDaysCard({ days, dragListeners }: { days: number; dragListene
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-3 px-2">
         <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">累计使用</p>
-        <p className="font-bold text-amber-700 dark:text-amber-300" style={{ fontSize: `clamp(1.25rem, ${Math.max(1.5, 3 - days.toString().length * 0.3)}rem, 1.875rem)` }}>
+        <p className="font-bold text-amber-700 dark:text-amber-300" style={{ fontSize: getAdaptiveFontSize(days) }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
         </p>
       </CardContent>
