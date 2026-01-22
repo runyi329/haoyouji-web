@@ -6,6 +6,7 @@ import {
   InsertPersonalContactTag,
 } from "../drizzle/schema";
 import { eq, and, like, or, desc, sql, gte, lt, isNotNull, isNull, ne, inArray } from "drizzle-orm";
+import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart, getBeijingTodayStart, getBeijingTodayEnd } from "../shared/timezone";
 
 // ==================== 工具函数 ====================
 
@@ -1043,13 +1044,9 @@ export async function getContactStats(parentUserId: number) {
   // 总人脉数（包括自己的 + 共享的）
   const totalContacts = visibleContactIds.length;
   
-  // 计算本周开始时间（周一为一周开始）
-  const now = new Date();
-  const thisWeekStart = new Date(now);
-  const dayOfWeek = thisWeekStart.getDay();
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  thisWeekStart.setDate(thisWeekStart.getDate() - daysToMonday);
-  thisWeekStart.setHours(0, 0, 0, 0);
+  // 计算本周开始时间（周一为一周开始，基于北京时间）
+  const thisWeekStartTimestamp = getBeijingThisWeekStart();
+  const thisWeekStart = new Date(thisWeekStartTimestamp);
   
   // 本周新增
   const newThisWeekResult = await db
@@ -1063,10 +1060,9 @@ export async function getContactStats(parentUserId: number) {
     );
   const newThisWeek = newThisWeekResult[0]?.count || 0;
   
-  // 本月新增
-  const thisMonthStart = new Date();
-  thisMonthStart.setDate(1);
-  thisMonthStart.setHours(0, 0, 0, 0);
+  // 本月新增（基于北京时间）
+  const thisMonthStartTimestamp = getBeijingThisMonthStart();
+  const thisMonthStart = new Date(thisMonthStartTimestamp);
   
   const newThisMonthResult = await db
     .select({ count: sql<number>`count(*)` })
@@ -1079,10 +1075,9 @@ export async function getContactStats(parentUserId: number) {
     );
   const newThisMonth = newThisMonthResult[0]?.count || 0;
   
-  // 本年新增
-  const thisYearStart = new Date();
-  thisYearStart.setMonth(0, 1);
-  thisYearStart.setHours(0, 0, 0, 0);
+  // 本年新增（基于北京时间）
+  const thisYearStartTimestamp = getBeijingThisYearStart();
+  const thisYearStart = new Date(thisYearStartTimestamp);
   
   const newThisYearResult = await db
     .select({ count: sql<number>`count(*)` })
@@ -1360,11 +1355,8 @@ export async function getContactsOverviewStats(parentUserId: number) {
     }
   }
 
-  // 计算本月活跃人脉数量
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-  const startOfMonthTimestamp = startOfMonth.getTime();
+  // 计算本月活跃人脉数量（基于北京时间）
+  const startOfMonthTimestamp = getBeijingThisMonthStart();
 
   const monthlyActiveContactIds = new Set<number>();
   for (const interaction of allInteractions) {
@@ -1546,10 +1538,9 @@ export async function getTodayRemindersCount(userId: number) {
  if (!db) throw new Error("Database not available");
   if (!db) return 0;
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // 使用北京时间计算今日范围
+  const today = new Date(getBeijingTodayStart());
+  const tomorrow = new Date(getBeijingTodayEnd() + 1);
   
   const result = await db.select({ count: sql<number>`COUNT(DISTINCT ${reminders.contactId})` })
     .from(reminders)
@@ -1571,13 +1562,8 @@ export async function getWeekRemindersCount(userId: number) {
  if (!db) throw new Error("Database not available");
   if (!db) return 0;
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // 获取本周一
-  const dayOfWeek = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  // 使用北京时间计算本周范围
+  const monday = new Date(getBeijingThisWeekStart());
   
   // 获取下周一
   const nextMonday = new Date(monday);
@@ -1603,9 +1589,10 @@ export async function getMonthRemindersCount(userId: number) {
  if (!db) throw new Error("Database not available");
   if (!db) return 0;
   
-  const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const firstDayOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  // 使用北京时间计算本月范围
+  const firstDayOfMonth = new Date(getBeijingThisMonthStart());
+  const firstDayOfNextMonth = new Date(firstDayOfMonth);
+  firstDayOfNextMonth.setMonth(firstDayOfNextMonth.getMonth() + 1);
   
   const result = await db.select({ count: sql<number>`COUNT(DISTINCT ${reminders.contactId})` })
     .from(reminders)
