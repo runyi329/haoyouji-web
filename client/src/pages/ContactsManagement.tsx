@@ -1183,8 +1183,7 @@ export default function ContactsManagement() {
 
       {/* 人脉列表已移至独立页面 /parent/contacts/list */}
 
-      {/* 介绍人贡献排行榜 - 领奖台 */}
-      <ReferrerLeaderboardSection />
+      {/* 介绍人贡献排行榜已移除 */}
       
       {/* 邀请码验证对话框 */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
