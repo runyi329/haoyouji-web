@@ -1151,13 +1151,13 @@ export async function getContactStats(parentUserId: number) {
     .groupBy(contactInteractions.contactId);
   const yearlyActive = yearlyActiveResult.length;
   
-  // 拉黑名单
+  // 拉黑名单（只统计个人的）
   const blacklistResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(contacts)
     .where(
       and(
-        inArray(contacts.id, visibleContactIds),
+        eq(contacts.parentUserId, parentUserId),
         eq(contacts.isBlacklisted, true)
       )
     );
@@ -1185,10 +1185,15 @@ export async function getContactStats(parentUserId: number) {
     .groupBy(contactInteractions.contactId);
   const todayActive = todayActiveResult.length;
   
-  // 休眠名单（180天未联络）
+  // 休眠名单（180天未联络，只统计个人的）
   const oneEightyDaysAgo = Date.now() - (180 * 24 * 60 * 60 * 1000);
+  const ownContacts = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, parentUserId));
+  
   let dormantCount = 0;
-  for (const contact of allContacts) {
+  for (const contact of ownContacts) {
     const lastInteraction = await getLastInteractionDate(contact.id);
     if (!lastInteraction || lastInteraction < oneEightyDaysAgo) {
       dormantCount++;
