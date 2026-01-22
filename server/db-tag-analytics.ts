@@ -8,18 +8,130 @@ import {
   contactTagRelations, 
   personalContactTags,
   contacts,
-  users
+  users,
+  contactSharingConnections
 } from "../drizzle/schema";
-import { eq, sql, desc, and, gte, count } from "drizzle-orm";
+import { eq, sql, desc, and, gte, count, inArray, or } from "drizzle-orm";
+
+export type DataScope = 'all' | 'mine' | 'shared' | 'global';
+
+/**
+ * 获取可见联系人ID列表
+ * @param parentUserId 用户ID
+ * @param scope 数据范围
+ */
+async function getVisibleContactIds(parentUserId: number, scope: DataScope): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (scope === 'global') {
+    // 全局：所有联系人
+    const allContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts);
+    return allContacts.map(c => c.id);
+  }
+
+  // 获取自己的联系人
+  const ownContacts = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, parentUserId));
+  const ownContactIds = ownContacts.map(c => c.id);
+
+  if (scope === 'mine') {
+    // 只看自己
+    return ownContactIds;
+  }
+
+  // 获取共享给我的联系人
+  const sharingConnections = await db
+    .select()
+    .from(contactSharingConnections)
+    .where(
+      and(
+        eq(contactSharingConnections.receiverId, parentUserId),
+        eq(contactSharingConnections.status, 'active')
+      )
+    );
+
+  const sharedContactIds: number[] = [];
+  for (const conn of sharingConnections) {
+    const sharerContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.parentUserId, conn.sharerId));
+    sharedContactIds.push(...sharerContacts.map(c => c.id));
+  }
+
+  if (scope === 'shared') {
+    // 只看共享
+    return sharedContactIds;
+  }
+
+  // scope === 'all': 自己 + 共享
+  return Array.from(new Set([...ownContactIds, ...sharedContactIds]));
+}
+
+/**
+ * 获取可见用户ID列表
+ * @param parentUserId 用户ID
+ * @param scope 数据范围
+ */
+async function getVisibleUserIds(parentUserId: number, scope: DataScope): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  if (scope === 'global') {
+    // 全局：所有用户
+    const allUsers = await db
+      .select({ id: users.id })
+      .from(users);
+    return allUsers.map(u => u.id);
+  }
+
+  if (scope === 'mine') {
+    // 只看自己
+    return [parentUserId];
+  }
+
+  // 获取共享给我的用户
+  const sharingConnections = await db
+    .select()
+    .from(contactSharingConnections)
+    .where(
+      and(
+        eq(contactSharingConnections.receiverId, parentUserId),
+        eq(contactSharingConnections.status, 'active')
+      )
+    );
+  const sharedUserIds = sharingConnections.map(conn => conn.sharerId);
+
+  if (scope === 'shared') {
+    // 只看共享
+    return sharedUserIds;
+  }
+
+  // scope === 'all': 自己 + 共享
+  return Array.from(new Set([parentUserId, ...sharedUserIds]));
+}
 
 /**
  * 获取全局标签使用排行榜
  * @param parentUserId 用户ID
+ * @param scope 数据范围
  * @param limit 返回数量限制
  */
-export async function getGlobalTagRanking(parentUserId: number, limit: number = 50) {
+export async function getGlobalTagRanking(
+  parentUserId: number,
+  scope: DataScope = 'all',
+  limit: number = 50
+) {
   const db = await getDb();
   if (!db) return [];
+
+  const visibleContactIds = await getVisibleContactIds(parentUserId, scope);
+  if (visibleContactIds.length === 0) return [];
 
   // 查询全局标签的使用次数（按人数统计）
   const result = await db
@@ -31,7 +143,7 @@ export async function getGlobalTagRanking(parentUserId: number, limit: number = 
     })
     .from(contactTagRelations)
     .leftJoin(contactTags, eq(contactTagRelations.tagId, contactTags.id))
-    .leftJoin(contacts, eq(contactTagRelations.contactId, contacts.id))
+    .where(inArray(contactTagRelations.contactId, visibleContactIds))
     .groupBy(contactTagRelations.tagId, contactTags.name, contactTags.color)
     .orderBy(desc(sql`usage_count`))
     .limit(limit);
@@ -47,11 +159,19 @@ export async function getGlobalTagRanking(parentUserId: number, limit: number = 
 /**
  * 获取个人标签使用排行榜
  * @param parentUserId 用户ID
+ * @param scope 数据范围
  * @param limit 返回数量限制
  */
-export async function getPersonalTagRanking(parentUserId: number, limit: number = 50) {
+export async function getPersonalTagRanking(
+  parentUserId: number,
+  scope: DataScope = 'all',
+  limit: number = 50
+) {
   const db = await getDb();
   if (!db) return [];
+
+  const visibleUserIds = await getVisibleUserIds(parentUserId, scope);
+  if (visibleUserIds.length === 0) return [];
 
   // 查询个人标签的使用情况（按标签名称分组统计）
   const result = await db
@@ -61,7 +181,7 @@ export async function getPersonalTagRanking(parentUserId: number, limit: number 
       usageCount: count(personalContactTags.id).as('usage_count'),
     })
     .from(personalContactTags)
-    .leftJoin(contacts, eq(personalContactTags.contactId, contacts.id))
+    .where(inArray(personalContactTags.parentUserId, visibleUserIds))
     .groupBy(personalContactTags.name, personalContactTags.color)
     .orderBy(desc(sql`usage_count`))
     .limit(limit);
@@ -76,12 +196,22 @@ export async function getPersonalTagRanking(parentUserId: number, limit: number 
 /**
  * 获取标签使用的用户分布
  * @param parentUserId 用户ID
+ * @param scope 数据范围
  */
-export async function getTagUserDistribution(parentUserId: number) {
+export async function getTagUserDistribution(
+  parentUserId: number,
+  scope: DataScope = 'all'
+) {
   const db = await getDb();
   if (!db) return [];
 
-  // 统计每个用户的标签使用情况
+  const visibleUserIds = await getVisibleUserIds(parentUserId, scope);
+  if (visibleUserIds.length === 0) return [];
+
+  const visibleContactIds = await getVisibleContactIds(parentUserId, scope);
+  if (visibleContactIds.length === 0) return [];
+
+  // 统计每个用户的全局标签使用情况
   const globalTagsByUser = await db
     .select({
       userId: contacts.parentUserId,
@@ -91,9 +221,16 @@ export async function getTagUserDistribution(parentUserId: number) {
     .from(contactTagRelations)
     .leftJoin(contacts, eq(contactTagRelations.contactId, contacts.id))
     .leftJoin(users, eq(contacts.parentUserId, users.id))
+    .where(
+      and(
+        inArray(contactTagRelations.contactId, visibleContactIds),
+        inArray(contacts.parentUserId, visibleUserIds)
+      )
+    )
     .groupBy(contacts.parentUserId, users.name)
     .orderBy(desc(sql`tag_count`));
 
+  // 统计每个用户的个人标签使用情况
   const personalTagsByUser = await db
     .select({
       userId: personalContactTags.parentUserId,
@@ -102,6 +239,7 @@ export async function getTagUserDistribution(parentUserId: number) {
     })
     .from(personalContactTags)
     .leftJoin(users, eq(personalContactTags.parentUserId, users.id))
+    .where(inArray(personalContactTags.parentUserId, visibleUserIds))
     .groupBy(personalContactTags.parentUserId, users.name)
     .orderBy(desc(sql`tag_count`));
 
@@ -142,92 +280,83 @@ export async function getTagUserDistribution(parentUserId: number) {
 }
 
 /**
- * 获取标签颜色分布统计
- */
-export async function getTagColorDistribution() {
-  const db = await getDb();
-  if (!db) return [];
-
-  // 全局标签颜色分布
-  const globalColors = await db
-    .select({
-      color: contactTags.color,
-      count: count(contactTags.id).as('count'),
-    })
-    .from(contactTags)
-    .groupBy(contactTags.color)
-    .orderBy(desc(sql`count`));
-
-  // 个人标签颜色分布
-  const personalColors = await db
-    .select({
-      color: personalContactTags.color,
-      count: count(personalContactTags.id).as('count'),
-    })
-    .from(personalContactTags)
-    .groupBy(personalContactTags.color)
-    .orderBy(desc(sql`count`));
-
-  // 合并颜色统计
-  const colorMap = new Map<string, { color: string; globalCount: number; personalCount: number }>();
-
-  globalColors.forEach(row => {
-    colorMap.set(row.color || '#3b82f6', {
-      color: row.color || '#3b82f6',
-      globalCount: Number(row.count),
-      personalCount: 0,
-    });
-  });
-
-  personalColors.forEach(row => {
-    const color = row.color || '#8b5cf6';
-    const existing = colorMap.get(color);
-    if (existing) {
-      existing.personalCount = Number(row.count);
-    } else {
-      colorMap.set(color, {
-        color,
-        globalCount: 0,
-        personalCount: Number(row.count),
-      });
-    }
-  });
-
-  return Array.from(colorMap.values()).map(item => ({
-    ...item,
-    totalCount: item.globalCount + item.personalCount,
-  })).sort((a, b) => b.totalCount - a.totalCount);
-}
-
-/**
  * 获取标签总体统计数据
+ * @param parentUserId 用户ID
+ * @param scope 数据范围
  */
-export async function getTagOverallStats() {
+export async function getTagOverallStats(
+  parentUserId: number,
+  scope: DataScope = 'all'
+) {
   const db = await getDb();
   if (!db) return null;
 
-  // 全局标签统计
-  const [globalTagsCount] = await db
-    .select({ count: count(contactTags.id) })
-    .from(contactTags);
+  const visibleContactIds = await getVisibleContactIds(parentUserId, scope);
+  const visibleUserIds = await getVisibleUserIds(parentUserId, scope);
 
-  const [globalTagUsageCount] = await db
-    .select({ count: count(contactTagRelations.id) })
-    .from(contactTagRelations);
+  // 全局标签统计
+  let globalTagsCount, globalTagUsageCount;
+  
+  if (scope === 'global') {
+    // 全局模式：统计所有标签
+    [globalTagsCount] = await db
+      .select({ count: count(contactTags.id) })
+      .from(contactTags);
+
+    [globalTagUsageCount] = await db
+      .select({ count: count(contactTagRelations.id) })
+      .from(contactTagRelations);
+  } else {
+    // 其他模式：只统计可见范围内的标签
+    if (visibleContactIds.length === 0) {
+      globalTagsCount = { count: 0 };
+      globalTagUsageCount = { count: 0 };
+    } else {
+      // 统计可见联系人使用的不同标签数量
+      [globalTagsCount] = await db
+        .select({ count: count(sql`DISTINCT ${contactTagRelations.tagId}`) })
+        .from(contactTagRelations)
+        .where(inArray(contactTagRelations.contactId, visibleContactIds));
+
+      [globalTagUsageCount] = await db
+        .select({ count: count(contactTagRelations.id) })
+        .from(contactTagRelations)
+        .where(inArray(contactTagRelations.contactId, visibleContactIds));
+    }
+  }
 
   // 个人标签统计
-  const [personalTagsCount] = await db
-    .select({ count: count(personalContactTags.id) })
-    .from(personalContactTags);
+  let personalTagsCount;
+  if (visibleUserIds.length === 0) {
+    personalTagsCount = { count: 0 };
+  } else {
+    [personalTagsCount] = await db
+      .select({ count: count(personalContactTags.id) })
+      .from(personalContactTags)
+      .where(inArray(personalContactTags.parentUserId, visibleUserIds));
+  }
 
   // 有标签的联系人数量
-  const [contactsWithGlobalTags] = await db
-    .select({ count: count(sql`DISTINCT ${contactTagRelations.contactId}`) })
-    .from(contactTagRelations);
+  let contactsWithGlobalTags, contactsWithPersonalTags;
+  if (visibleContactIds.length === 0) {
+    contactsWithGlobalTags = { count: 0 };
+    contactsWithPersonalTags = { count: 0 };
+  } else {
+    [contactsWithGlobalTags] = await db
+      .select({ count: count(sql`DISTINCT ${contactTagRelations.contactId}`) })
+      .from(contactTagRelations)
+      .where(inArray(contactTagRelations.contactId, visibleContactIds));
 
-  const [contactsWithPersonalTags] = await db
-    .select({ count: count(sql`DISTINCT ${personalContactTags.contactId}`) })
-    .from(personalContactTags);
+    [contactsWithPersonalTags] = await db
+      .select({ count: count(sql`DISTINCT ${personalContactTags.contactId}`) })
+      .from(personalContactTags)
+      .where(
+        and(
+          inArray(personalContactTags.parentUserId, visibleUserIds),
+          inArray(personalContactTags.contactId, visibleContactIds)
+        )
+      );
+  }
 
   return {
     globalTags: {
@@ -253,37 +382,89 @@ export async function getTagOverallStats() {
 
 /**
  * 获取最近创建的标签
+ * @param parentUserId 用户ID
+ * @param scope 数据范围
  * @param limit 返回数量限制
  */
-export async function getRecentTags(limit: number = 20) {
+export async function getRecentTags(
+  parentUserId: number,
+  scope: DataScope = 'all',
+  limit: number = 20
+) {
   const db = await getDb();
   if (!db) return [];
 
-  // 最近创建的全局标签
-  const recentGlobalTags = await db
-    .select({
-      id: contactTags.id,
-      name: contactTags.name,
-      color: contactTags.color,
-      type: sql<string>`'global'`.as('type'),
-      createdAt: contactTags.createdAt,
-    })
-    .from(contactTags)
-    .orderBy(desc(contactTags.createdAt))
-    .limit(limit);
+  const visibleUserIds = await getVisibleUserIds(parentUserId, scope);
 
-  // 最近创建的个人标签
-  const recentPersonalTags = await db
-    .select({
-      id: personalContactTags.id,
-      name: personalContactTags.name,
-      color: personalContactTags.color,
-      type: sql<string>`'personal'`.as('type'),
-      createdAt: personalContactTags.createdAt,
-    })
-    .from(personalContactTags)
-    .orderBy(desc(personalContactTags.createdAt))
-    .limit(limit);
+  let recentGlobalTags: any[] = [];
+  let recentPersonalTags: any[] = [];
+
+  if (scope === 'global') {
+    // 全局模式：所有标签
+    recentGlobalTags = await db
+      .select({
+        id: contactTags.id,
+        name: contactTags.name,
+        color: contactTags.color,
+        type: sql<string>`'global'`.as('type'),
+        createdAt: contactTags.createdAt,
+      })
+      .from(contactTags)
+      .orderBy(desc(contactTags.createdAt))
+      .limit(limit);
+
+    recentPersonalTags = await db
+      .select({
+        id: personalContactTags.id,
+        name: personalContactTags.name,
+        color: personalContactTags.color,
+        type: sql<string>`'personal'`.as('type'),
+        createdAt: personalContactTags.createdAt,
+      })
+      .from(personalContactTags)
+      .orderBy(desc(personalContactTags.createdAt))
+      .limit(limit);
+  } else {
+    // 其他模式：只看可见用户的标签
+    if (visibleUserIds.length === 0) {
+      recentGlobalTags = [];
+      recentPersonalTags = [];
+    } else {
+      // 全局标签：通过联系人关联
+      const visibleContactIds = await getVisibleContactIds(parentUserId, scope);
+      if (visibleContactIds.length > 0) {
+        recentGlobalTags = await db
+          .select({
+            id: contactTags.id,
+            name: contactTags.name,
+            color: contactTags.color,
+            type: sql<string>`'global'`.as('type'),
+            createdAt: contactTags.createdAt,
+          })
+          .from(contactTags)
+          .leftJoin(contactTagRelations, eq(contactTags.id, contactTagRelations.tagId))
+          .where(inArray(contactTagRelations.contactId, visibleContactIds))
+          .groupBy(contactTags.id, contactTags.name, contactTags.color, contactTags.createdAt)
+          .orderBy(desc(contactTags.createdAt))
+          .limit(limit);
+      } else {
+        recentGlobalTags = [];
+      }
+
+      recentPersonalTags = await db
+        .select({
+          id: personalContactTags.id,
+          name: personalContactTags.name,
+          color: personalContactTags.color,
+          type: sql<string>`'personal'`.as('type'),
+          createdAt: personalContactTags.createdAt,
+        })
+        .from(personalContactTags)
+        .where(inArray(personalContactTags.parentUserId, visibleUserIds))
+        .orderBy(desc(personalContactTags.createdAt))
+        .limit(limit);
+    }
+  }
 
   // 合并并按时间排序
   const allTags = [...recentGlobalTags, ...recentPersonalTags]

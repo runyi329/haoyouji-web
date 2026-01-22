@@ -1,13 +1,16 @@
 import { useState } from 'react';
+import React from 'react';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart3, TrendingUp, Users, Palette, Clock, Tag } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Clock, Tag, Filter } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function TagAnalytics() {
-  const { data, isLoading } = trpc.contacts.tags.analytics.useQuery();
+  const [scope, setScope] = React.useState<'all' | 'mine' | 'shared' | 'global'>('all');
+  const { data, isLoading } = trpc.contacts.tags.analytics.useQuery({ scope });
 
   if (isLoading) {
     return (
@@ -31,14 +34,30 @@ export default function TagAnalytics() {
     );
   }
 
-  const { overallStats, globalRanking, personalRanking, userDistribution, colorDistribution, recentTags } = data;
+  const { overallStats, globalRanking, personalRanking, userDistribution, recentTags } = data;
 
   return (
     <div className="container mx-auto py-4 px-4 space-y-6">
       {/* 页面标题 */}
-      <div>
-        <h1 className="text-2xl font-bold">标签大数据透视</h1>
-        <p className="text-sm text-muted-foreground mt-1">全面分析标签使用情况和趋势</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">标签大数据透视</h1>
+          <p className="text-sm text-muted-foreground mt-1">全面分析标签使用情况和趋势</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={scope} onValueChange={(value: any) => setScope(value)}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部</SelectItem>
+              <SelectItem value="mine">自己</SelectItem>
+              <SelectItem value="shared">共享</SelectItem>
+              <SelectItem value="global">全局</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* 关键指标卡片 */}
@@ -106,11 +125,10 @@ export default function TagAnalytics() {
 
       {/* 标签页 */}
       <Tabs defaultValue="global" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="global">全局标签</TabsTrigger>
           <TabsTrigger value="personal">个人标签</TabsTrigger>
           <TabsTrigger value="users">用户分布</TabsTrigger>
-          <TabsTrigger value="colors">颜色分布</TabsTrigger>
         </TabsList>
 
         {/* 全局标签排行榜 */}
@@ -250,54 +268,6 @@ export default function TagAnalytics() {
           </Card>
         </TabsContent>
 
-        {/* 颜色分布 */}
-        <TabsContent value="colors" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Palette className="h-5 w-5" />
-                标签颜色分布
-              </CardTitle>
-              <CardDescription>不同颜色标签的使用情况统计</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {colorDistribution.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">暂无数据</div>
-                ) : (
-                  colorDistribution.slice(0, 15).map((color, index) => (
-                    <div key={color.color} className="flex items-center gap-3">
-                      <div className="w-8 text-center font-bold text-muted-foreground">
-                        #{index + 1}
-                      </div>
-                      <div
-                        className="w-8 h-8 rounded-full border-2 border-border"
-                        style={{ backgroundColor: color.color }}
-                      />
-                      <div className="flex-1">
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full transition-all"
-                            style={{
-                              backgroundColor: color.color,
-                              width: `${(color.totalCount / (colorDistribution[0]?.totalCount || 1)) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        全局: {color.globalCount} | 个人: {color.personalCount}
-                      </div>
-                      <div className="w-16 text-right font-semibold">
-                        {color.totalCount}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* 最近创建的标签 */}

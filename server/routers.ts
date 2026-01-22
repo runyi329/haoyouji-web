@@ -3627,14 +3627,17 @@ export const appRouter = router({
 
     // 获取标签大数据分析
     analytics: protectedProcedure
-      .query(async ({ ctx }) => {
-        const [overallStats, globalRanking, personalRanking, userDistribution, colorDistribution, recentTags] = await Promise.all([
-          dbTagAnalytics.getTagOverallStats(),
-          dbTagAnalytics.getGlobalTagRanking(ctx.user.id, 50),
-          dbTagAnalytics.getPersonalTagRanking(ctx.user.id, 50),
-          dbTagAnalytics.getTagUserDistribution(ctx.user.id),
-          dbTagAnalytics.getTagColorDistribution(),
-          dbTagAnalytics.getRecentTags(20),
+      .input(z.object({
+        scope: z.enum(['all', 'mine', 'shared', 'global']).default('all'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { scope } = input;
+        const [overallStats, globalRanking, personalRanking, userDistribution, recentTags] = await Promise.all([
+          dbTagAnalytics.getTagOverallStats(ctx.user.id, scope),
+          dbTagAnalytics.getGlobalTagRanking(ctx.user.id, scope, 50),
+          dbTagAnalytics.getPersonalTagRanking(ctx.user.id, scope, 50),
+          dbTagAnalytics.getTagUserDistribution(ctx.user.id, scope),
+          dbTagAnalytics.getRecentTags(ctx.user.id, scope, 20),
         ]);
 
         return {
@@ -3642,7 +3645,6 @@ export const appRouter = router({
           globalRanking,
           personalRanking,
           userDistribution,
-          colorDistribution,
           recentTags,
         };
       }),
