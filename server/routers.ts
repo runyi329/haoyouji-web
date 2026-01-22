@@ -15,6 +15,7 @@ import * as dbReminderTypes from "./db-reminder-types";
 import * as dbReferrerStats from "./db-referrer-stats";
 import * as dbAnalytics from "./db-analytics";
 import * as dbPoints from "./db-points";
+import * as dbTagAnalytics from "./db-tag-analytics";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -3622,6 +3623,28 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await dbContacts.updateTagsOrder(ctx.user.id, input.tagOrders);
         return { success: true };
+      }),
+
+    // 获取标签大数据分析
+    analytics: protectedProcedure
+      .query(async ({ ctx }) => {
+        const [overallStats, globalRanking, personalRanking, userDistribution, colorDistribution, recentTags] = await Promise.all([
+          dbTagAnalytics.getTagOverallStats(),
+          dbTagAnalytics.getGlobalTagRanking(ctx.user.id, 50),
+          dbTagAnalytics.getPersonalTagRanking(ctx.user.id, 50),
+          dbTagAnalytics.getTagUserDistribution(ctx.user.id),
+          dbTagAnalytics.getTagColorDistribution(),
+          dbTagAnalytics.getRecentTags(20),
+        ]);
+
+        return {
+          overallStats,
+          globalRanking,
+          personalRanking,
+          userDistribution,
+          colorDistribution,
+          recentTags,
+        };
       }),
 
     // 为人脉添加标签

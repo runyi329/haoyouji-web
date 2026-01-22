@@ -639,7 +639,7 @@ function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: Stat
         <TotalTagCard 
           count={stats.totalTagCount} 
           dragListeners={listeners}
-          onClick={() => setLocation('/parent/contacts/tag-search')}
+          onClick={() => setLocation('/parent/contacts/tag-analytics')}
         />
       </div>
     );

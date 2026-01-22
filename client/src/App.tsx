@@ -70,6 +70,7 @@ const ExportContacts = lazy(() => import("./pages/ExportContacts"));
 const ReferralChainVisualization = lazy(() => import("./pages/ReferralChainVisualization"));
 const ReferralList = lazy(() => import("./pages/ReferralList"));
 const TagsManagement = lazy(() => import("./pages/TagsManagement"));
+const TagAnalytics = lazy(() => import("./pages/TagAnalytics"));
 const SharingSettings = lazy(() => import("./pages/parent/contacts/SharingSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
@@ -111,6 +112,7 @@ function Router() {
         <Route path="/parent/contacts/add" component={AddContact} />
         <Route path="/parent/contacts/export" component={ExportContacts} />
         <Route path="/parent/contacts/tags" component={TagsManagement} />
+        <Route path="/parent/contacts/tag-analytics" component={TagAnalytics} />
         <Route path="/parent/contacts/sharing" component={SharingSettings} />
         <Route path="/parent/profile" component={Profile} />
         <Route path="/parent/points" component={PointsDetail} />
