@@ -921,18 +921,24 @@ export async function addCustomFields(contactId: number, fields: Array<{ fieldNa
 }
 
 /**
- * 获取累计联络次数（所有人脉的interactionCount总和）
+ * 获取累计联络次数（自己的 + 共享联系人的联络记录总数）
  */
 export async function getTotalInteractionCount(parentUserId: number): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 统计该用户所有联系人的互动记录总数
+  // 获取所有可见人脉ID（自己的 + 共享的）
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  
+  if (visibleContactIds.length === 0) {
+    return 0;
+  }
+  
+  // 统计所有可见联系人的互动记录总数
   const result = await db
     .select({ total: sql<number>`COUNT(*)` })
     .from(contactInteractions)
-    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
-    .where(eq(contacts.parentUserId, parentUserId));
+    .where(inArray(contactInteractions.contactId, visibleContactIds));
   
   return result[0]?.total || 0;
 }
