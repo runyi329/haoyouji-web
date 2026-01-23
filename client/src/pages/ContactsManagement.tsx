@@ -828,11 +828,15 @@ export default function ContactsManagement() {
 
   // 当API返回数据时，更新features
   useEffect(() => {
-    if (featureOrderData) {
+    if (featureOrderData && featureOrderData.length > 0) {
+      console.log('[ContactsManagement] 加载用户容器排序数据:', featureOrderData);
+      
       const apiFeatures = featureOrderData.map(f => ({
         id: f.featureId,
         title: f.title,
       }));
+      
+      console.log('[ContactsManagement] 转换后的features:', apiFeatures);
       
       // 如果API返回的功能数量少于19，自动补充到19个
       if (apiFeatures.length < 19) {
@@ -844,8 +848,11 @@ export default function ContactsManagement() {
             title: `功能${maxId + i + 1}`,
           })
         );
-        setFeatures([...apiFeatures, ...additionalFeatures]);
+        const finalFeatures = [...apiFeatures, ...additionalFeatures];
+        console.log('[ContactsManagement] 最终features（包含补充）:', finalFeatures);
+        setFeatures(finalFeatures);
       } else {
+        console.log('[ContactsManagement] 最终features（无需补充）:', apiFeatures);
         setFeatures(apiFeatures);
       }
     }

@@ -843,24 +843,7 @@ export default function ContactDetail() {
 
   return (
     <div className="container py-8">
-      {/* 返回和编辑按钮 */}
-      <div className="flex items-center justify-between mb-4">
-        <Button
-          variant="ghost"
-          onClick={() => setLocation("/parent/contacts")}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          返回
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => setLocation(`/parent/contacts/${contact.id}/referral-chain`)}
-        >
-          <Network className="h-4 w-4 mr-2" />
-          查看推荐链路
-        </Button>
 
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 左侧：基本信息 */}
@@ -968,6 +951,14 @@ export default function ContactDetail() {
                       >
                         <Settings className="h-4 w-4 mr-1" />
                         配置
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLocation("/parent/contacts")}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        返回
                       </Button>
                     </div>
                   </div>
