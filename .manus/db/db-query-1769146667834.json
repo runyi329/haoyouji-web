@@ -1,0 +1,9 @@
+{
+  "query": "SELECT cfv.*, cfc.name as fieldName FROM contact_field_values cfv LEFT JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT cfv.*, cfc.name as fieldName FROM contact_field_values cfv LEFT JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id LIMIT 20;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 360
+}

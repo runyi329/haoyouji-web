@@ -75,6 +75,7 @@ const SharingSettings = lazy(() => import("./pages/parent/contacts/SharingSettin
 const Profile = lazy(() => import("./pages/Profile"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
 const ProfileSettings = lazy(() => import("./pages/ProfileSettings"));
+const Academy = lazy(() => import("./pages/Academy"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -115,6 +116,7 @@ function Router() {
         <Route path="/parent/contacts/tag-analytics" component={TagAnalytics} />
         <Route path="/parent/contacts/sharing" component={SharingSettings} />
         <Route path="/parent/profile" component={Profile} />
+        <Route path="/parent/academy" component={Academy} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/profile/settings" component={ProfileSettings} />
 
