@@ -304,3 +304,20 @@
 - 如果后端未上传该公司报告，图标为暗灰色（disabled）
 - 如果后端已上传该公司报告，图标点亮（可点击）
 - 点击图标可查看 DeepSeek AI 整理好的企业信息（文字形式）
+
+
+## Bug 修复：企业报告管理页面无法显示用户添加的公司✅
+
+- [x] 检查数据库查询逻辑
+  - 查看 GET /api/company-reports/companies API 的 SQL 查询语句
+  - 确认查询是否正确关联了 contacts 表和 users 表
+- [x] 修复 SQL 查询语句
+  - 修正表名：extendedFieldValues → contact_field_values
+  - 修正表名：extendedFieldCategories → contact_field_categories
+  - 修正用户关联：c.userId → c.parentUserId
+- [x] 测试修复后的功能
+  - 测试后台管理页面是否能显示公司列表
+  - 测试公司信息是否完整（公司名称、联系人、填写用户）
+
+### 问题原因
+原 SQL 查询使用了错误的表名（`extendedFieldValues` 和 `extendedFieldCategories`），导致无法查询到数据。正确的表名应该是 `contact_field_values` 和 `contact_field_categories`。同时，用户关联字段也需要从 `c.userId` 修正为 `c.parentUserId`。

@@ -138,18 +138,18 @@ router.get('/companies', async (req, res) => {
     // 查询所有联系人的扩展信息，筛选出公司名称
     const result = await db.execute(`
       SELECT DISTINCT 
-        efv.value AS companyName,
+        cfv.value AS companyName,
         c.name AS contactName,
         u.name AS userName,
         cr.id AS reportId,
         cr.updatedAt AS reportUpdatedAt
-      FROM extendedFieldValues efv
-      INNER JOIN extendedFieldCategories efc ON efv.categoryId = efc.id
-      INNER JOIN contacts c ON efv.contactId = c.id
-      INNER JOIN users u ON c.userId = u.id
-      LEFT JOIN companyReports cr ON efv.value = cr.companyName
-      WHERE efc.name = '公司名称' AND efv.value IS NOT NULL AND efv.value != ''
-      ORDER BY efv.value
+      FROM contact_field_values cfv
+      INNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id
+      INNER JOIN contacts c ON cfv.contactId = c.id
+      INNER JOIN users u ON c.parentUserId = u.id
+      LEFT JOIN companyReports cr ON cfv.value = cr.companyName
+      WHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''
+      ORDER BY cfv.value
     `);
 
     res.json({
