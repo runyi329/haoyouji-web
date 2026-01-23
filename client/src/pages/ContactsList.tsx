@@ -750,7 +750,7 @@ export default function ContactsList() {
           {filterType === 'todayReminders' && '今日提醒'}
           {filterType === 'weekReminders' && '本周提醒'}
           {filterType === 'monthReminders' && '本月提醒'}
-          {viewMode === 'company' && '公司人脉'}
+          {viewMode === 'company' && '公司数量'}
           {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
           {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
@@ -796,7 +796,12 @@ export default function ContactsList() {
         </div>
         
         <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">
-          共 {filteredContacts?.length || 0} 位人脉
+          {viewMode === 'company' && companyList ? (
+            // 公司视图：统计去重后的公司家数
+            `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
+          ) : (
+            `共 ${filteredContacts?.length || 0} 位人脉`
+          )}
         </p>
         
         {/* 折叠标签按钮和排序按钮 */}
