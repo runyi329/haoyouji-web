@@ -770,3 +770,21 @@ const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 ```
 
 loadPrompt 和 savePrompt 函数已经存在，不需要重新添加。
+
+
+## Bug 修复：Textarea is not defined 错误✅
+
+- [x] 重新导入 Textarea 组件
+  - 在 CompanyReportManagement.tsx 中添加 Textarea 的 import
+- [x] 测试修复后的功能
+  - 测试“查看提示词”按钮
+  - 验证弹窗能否正常打开和编辑提示词
+
+### 问题原因
+在删除“查看报告”弹窗时，误删了 Textarea 组件的 import，但“查看提示词” Dialog 中使用了 Textarea 组件，导致 Textarea is not defined 错误。
+
+### 修复方案
+重新导入 Textarea 组件：
+```typescript
+import { Textarea } from '@/components/ui/textarea';
+```
