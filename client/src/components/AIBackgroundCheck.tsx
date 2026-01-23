@@ -248,7 +248,42 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
           </SheetHeader>
 
           <div className="mt-6 space-y-6">
-            {result && (
+            {isLoading && (
+              <div className="space-y-6">
+                {/* 骨架屏加载状态 */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <CardTitle className="text-base">AI 正在分析中...</CardTitle>
+                    </div>
+                    <CardDescription>
+                      正在搜索公开信息并生成报告，预计需要 10-15 秒
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* 骨架屏元素 */}
+                    <div className="space-y-3">
+                      <div className="h-4 bg-muted rounded animate-pulse" />
+                      <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
+                      <div className="h-4 bg-muted rounded animate-pulse w-4/6" />
+                    </div>
+                    <div className="space-y-3 mt-6">
+                      <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                      <div className="h-4 bg-muted rounded animate-pulse" />
+                      <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
+                    </div>
+                    <div className="space-y-3 mt-6">
+                      <div className="h-4 bg-muted rounded animate-pulse w-4/6" />
+                      <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
+                      <div className="h-4 bg-muted rounded animate-pulse" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {!isLoading && result && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">搜索结果</CardTitle>
