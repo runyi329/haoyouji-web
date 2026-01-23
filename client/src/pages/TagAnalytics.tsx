@@ -119,7 +119,7 @@ export default function TagAnalytics() {
           <Card className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-md">
             <div className="flex items-center gap-2 mb-1">
               <Tag className="w-3.5 h-3.5" />
-              <span className="text-xs opacity-90">全局标签</span>
+              <span className="text-xs opacity-90">全部标签</span>
             </div>
             <div className="text-2xl font-bold">{overallStats.globalTags.totalTags}</div>
             <div className="text-xs opacity-80 mt-0.5">使用 {overallStats.globalTags.totalUsage} 次</div>
@@ -140,7 +140,7 @@ export default function TagAnalytics() {
               <span className="text-xs opacity-90">标记人脉</span>
             </div>
             <div className="text-2xl font-bold">{overallStats.contacts.withGlobalTags}</div>
-            <div className="text-xs opacity-80 mt-0.5">使用全局标签</div>
+            <div className="text-xs opacity-80 mt-0.5">使用全部标签</div>
           </Card>
 
           <Card className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 text-white border-0 shadow-md">
@@ -156,15 +156,15 @@ export default function TagAnalytics() {
         {/* 标签页 */}
         <Tabs defaultValue="global" className="w-full">
           <TabsList className="grid w-full grid-cols-3 h-9">
-            <TabsTrigger value="global" className="text-xs">全局标签</TabsTrigger>
+            <TabsTrigger value="global" className="text-xs">全部标签</TabsTrigger>
             <TabsTrigger value="personal" className="text-xs">个人标签</TabsTrigger>
             <TabsTrigger value="users" className="text-xs">用户分布</TabsTrigger>
           </TabsList>
 
-          {/* 全局标签排行 */}
+          {/* 全部标签排行 */}
           <TabsContent value="global" className="mt-3 space-y-3">
             <Card className="p-3 shadow-md">
-              <h3 className="text-sm font-semibold mb-2">全局标签使用排行</h3>
+              <h3 className="text-sm font-semibold mb-2">全部标签使用排行</h3>
               <p className="text-xs text-gray-500 mb-3">按使用人数排序</p>
               
               {globalTagsData.length > 0 ? (
