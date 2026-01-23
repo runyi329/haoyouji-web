@@ -2195,18 +2195,29 @@ export async function getFieldValuesForContacts(contactIds: number[]): Promise<M
 // ==================== 扩展信息管理 ====================
 
 /**
- * 获取所有扩展信息类目
- * @returns 类目列表
+ * 获取所有扩展信息类目（树状结构）
+ * @returns 主分类列表，每个主分类包含 children 字段
  */
 export async function getFieldCategories() {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  const categories = await db
+  // 获取所有类目
+  const allCategories = await db
     .select()
-    .from(contactFieldCategories);
+    .from(contactFieldCategories)
+    .where(eq(contactFieldCategories.parentUserId, 0))
+    .orderBy(contactFieldCategories.sortOrder);
   
-  return categories;
+  // 分离主分类和子分类
+  const mainCategories = allCategories.filter(cat => (cat.parentCategoryId ?? 0) === 0);
+  const subCategories = allCategories.filter(cat => (cat.parentCategoryId ?? 0) !== 0);
+  
+  // 构建树状结构
+  return mainCategories.map(main => ({
+    ...main,
+    children: subCategories.filter(sub => sub.parentCategoryId === main.id)
+  }));
 }
 
 /**

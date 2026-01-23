@@ -53,12 +53,23 @@ describe('扩展信息字段值管理', () => {
     expect(Array.isArray(categories)).toBe(true);
     expect(categories.length).toBeGreaterThan(0);
     
-    // 验证类目结构
+    // 验证主分类结构
     const firstCategory = categories[0];
     expect(firstCategory).toHaveProperty('id');
     expect(firstCategory).toHaveProperty('name');
-    expect(firstCategory).toHaveProperty('fieldType');
-    expect(firstCategory).toHaveProperty('sortOrder');
+    expect(firstCategory).toHaveProperty('icon');
+    expect(firstCategory).toHaveProperty('children');
+    expect(Array.isArray(firstCategory.children)).toBe(true);
+    
+    // 验证子分类结构
+    if (firstCategory.children.length > 0) {
+      const firstChild = firstCategory.children[0];
+      expect(firstChild).toHaveProperty('id');
+      expect(firstChild).toHaveProperty('name');
+      expect(firstChild).toHaveProperty('fieldType');
+      expect(firstChild).toHaveProperty('parentCategoryId');
+      expect(firstChild.parentCategoryId).toBe(firstCategory.id);
+    }
   });
 
   it('应该能够添加扩展信息字段值', async () => {
@@ -169,12 +180,19 @@ describe('扩展信息字段值管理', () => {
 
     const categories = await caller.contacts.fieldValues.categories();
 
-    // 验证类目数量大于0
-    expect(categories.length).toBeGreaterThan(0);
+    // 验证主分类数量（6个）
+    expect(categories.length).toBe(6);
 
-    // 验证一些关键类目存在
-    const categoryNames = categories.map((c: any) => c.name);
-    expect(categoryNames).toContain('手机号码');
-    expect(categoryNames).toContain('微信号');
+    // 验证主分类名称
+    const mainCategoryNames = categories.map((c: any) => c.name);
+    expect(mainCategoryNames.some((name: string) => name.includes('地址'))).toBe(true);
+    expect(mainCategoryNames.some((name: string) => name.includes('联系方式'))).toBe(true);
+    expect(mainCategoryNames.some((name: string) => name.includes('职业信息'))).toBe(true);
+    
+    // 验证子分类存在
+    const allChildren = categories.flatMap((c: any) => c.children || []);
+    const childNames = allChildren.map((c: any) => c.name);
+    expect(childNames).toContain('手机号码');
+    expect(childNames).toContain('微信号');
   });
 });

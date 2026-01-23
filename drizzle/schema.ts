@@ -963,7 +963,9 @@ export type InsertFamilyViConfig = typeof familyViConfig.$inferInsert;
 export const contactFieldCategories = mysqlTable("contact_field_categories", {
   id: int("id").autoincrement().primaryKey(),
   parentUserId: int("parentUserId").notNull(), // 所属用户ID
+  parentCategoryId: int("parentCategoryId").default(0), // 父分类ID，0表示主分类
   name: varchar("name", { length: 100 }).notNull(), // 字段名称
+  icon: varchar("icon", { length: 50 }), // 图标（主分类使用emoji）
   fieldType: varchar("fieldType", { length: 20 }).default("text").notNull(), // 字段类型：text, number, date, select
   options: json("options").$type<string[]>(), // 选项列表（当fieldType为select时使用）
   sortOrder: int("sortOrder").default(0).notNull(), // 排序顺序
