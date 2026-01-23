@@ -1095,3 +1095,10 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 - [x] 检查人脉列表页面机器人图标显示逻辑
 - [x] 修复数据获取或渲染问题
 - [x] 测试并保存 checkpoint
+
+## 修复公司列表页面机器人图标状态显示
+
+- [x] 检查后端 companyList API 返回的数据结构
+- [x] 修改后端 API 返回每个公司的 hasReport 状态
+- [x] 修改前端显示逻辑，根据 hasReport 显示不同颜色的机器人图标
+- [x] 测试并保存 checkpoint

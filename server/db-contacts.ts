@@ -2366,10 +2366,22 @@ export async function getCompanyList(parentUserId: number) {
     companyCountMap.set(contact.companyName, count + 1);
   });
 
-  // 为每个联系人添加是否重复的标记
+  // 查询所有公司的报告状态
+  const { companyReports } = await import('../drizzle/schema');
+  const uniqueCompanyNames = Array.from(new Set(companyContacts.map(c => c.companyName)));
+  const reportsData = uniqueCompanyNames.length > 0 ? await db
+    .select({ companyName: companyReports.companyName })
+    .from(companyReports)
+    .where(inArray(companyReports.companyName, uniqueCompanyNames))
+  : [];
+  
+  const hasReportMap = new Map(reportsData.map(r => [r.companyName, true]));
+
+  // 为每个联系人添加是否重复的标记和报告状态
   return companyContacts.map(contact => ({
     ...contact,
     isDuplicate: companyCountMap.get(contact.companyName)! > 1,
     duplicateCount: companyCountMap.get(contact.companyName)!,
+    hasReport: hasReportMap.get(contact.companyName) || false,
   }));
 }
