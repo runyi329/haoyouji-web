@@ -3,10 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Upload, Link as LinkIcon, Eye, Loader2, FileText, CheckCircle, Edit, Save } from 'lucide-react';
+import { Upload, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CompanyReportDialog } from '@/components/CompanyReportDialog';
 import { CompanyReportIcon } from '@/components/CompanyReportIcon';
@@ -30,23 +28,11 @@ export default function CompanyReportManagement() {
   const [uploadingCompany, setUploadingCompany] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [viewingReport, setViewingReport] = useState<string | null>(null);
-  const [reportData, setReportData] = useState<any>(null);
-  const [showReportDialog, setShowReportDialog] = useState(false);
-  const [showPromptDialog, setShowPromptDialog] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   
   // 上传相关状态
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [currentCompany, setCurrentCompany] = useState<string | null>(null);
-
-  // 编辑相关状态
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState('');
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // 前端预览相关状态
   const [showFrontendPreview, setShowFrontendPreview] = useState(false);
@@ -210,57 +196,7 @@ export default function CompanyReportManagement() {
     }
   };
 
-  const handleViewReport = async (companyName: string) => {
-    try {
-      setViewingReport(companyName);
-      const response = await fetch(`/api/company-reports/${encodeURIComponent(companyName)}`);
-      const result = await response.json();
-      
-      if (result.success) {
-        setReportData(result.data);
-        setEditedContent(result.data.formattedContent);
-        setIsEditing(false);
-        setShowReportDialog(true);
-      } else {
-        toast.error(result.error || '查看报告失败');
-      }
-    } catch (error) {
-      console.error('查看报告错误:', error);
-      toast.error('网络错误，请稍后重试');
-    } finally {
-      setViewingReport(null);
-    }
-  };
 
-  const handleSaveEdit = async () => {
-    if (!reportData) return;
-
-    try {
-      setIsSavingEdit(true);
-      const response = await fetch(`/api/company-reports/${encodeURIComponent(reportData.companyName)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ formattedContent: editedContent }),
-      });
-      const result = await response.json();
-      
-      if (result.success) {
-        toast.success('报告内容已更新');
-        setReportData({ ...reportData, formattedContent: editedContent });
-        setIsEditing(false);
-        loadCompanies(); // 刷新列表
-      } else {
-        toast.error(result.error || '更新失败');
-      }
-    } catch (error) {
-      console.error('更新报告错误:', error);
-      toast.error('网络错误，请稍后重试');
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
 
   const getUploadStatusText = () => {
     switch (uploadStatus) {
@@ -446,39 +382,18 @@ export default function CompanyReportManagement() {
 
                   {/* 查看报告按钮 */}
                   {company.reportId && (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 bg-green-50 hover:bg-green-100 border-green-200"
-                        onClick={() => handleViewReport(company.companyName)}
-                        disabled={viewingReport === company.companyName}
-                      >
-                        {viewingReport === company.companyName ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            加载中...
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                            查看 AI 分析结果
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="bg-blue-50 hover:bg-blue-100 border-blue-200"
-                        onClick={() => {
-                          setPreviewCompanyName(company.companyName);
-                          setShowFrontendPreview(true);
-                        }}
-                        title="预览前端效果"
-                      >
-                        <CompanyReportIcon hasReport={true} onClick={() => {}} />
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200"
+                      onClick={() => {
+                        setPreviewCompanyName(company.companyName);
+                        setShowFrontendPreview(true);
+                      }}
+                    >
+                      <CompanyReportIcon hasReport={true} onClick={() => {}} />
+                      <span className="ml-2">查看报告</span>
+                    </Button>
                   )}
 
                   {/* 提示文字 */}
@@ -493,88 +408,6 @@ export default function CompanyReportManagement() {
           ))}
         </div>
       )}
-
-      {/* 报告查看和编辑弹窗 */}
-      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>AI 分析结果</DialogTitle>
-          </DialogHeader>
-          {reportData && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <h4 className="font-semibold mb-2">公司名称</h4>
-                <p>{reportData.companyName}</p>
-              </div>
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold">AI 格式化结果</h4>
-                  {!isEditing && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      <Edit className="w-4 h-4 mr-1" />
-                      编辑
-                    </Button>
-                  )}
-                </div>
-                {isEditing ? (
-                  <Textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    rows={20}
-                    className="font-mono text-sm"
-                  />
-                ) : (
-                  <pre className="text-sm whitespace-pre-wrap font-mono">
-                    {reportData.formattedContent}
-                  </pre>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                最后更新：{new Date(reportData.updatedAt).toLocaleString('zh-CN')}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            {isEditing ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setEditedContent(reportData?.formattedContent || '');
-                  }}
-                >
-                  取消
-                </Button>
-                <Button
-                  onClick={handleSaveEdit}
-                  disabled={isSavingEdit}
-                >
-                  {isSavingEdit ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      保存中...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      保存
-                    </>
-                  )}
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => setShowReportDialog(false)}>
-                关闭
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* 前端预览弹窗 */}
       {previewCompanyName && (

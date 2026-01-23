@@ -672,3 +672,42 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 4. **添加预览弹窗：**
    - 使用 CompanyReportDialog 组件显示前端效果
    - 传递公司名称，自动加载报告数据
+
+
+## UI 优化：去除上传完成后的弹窗✅
+
+- [x] 修改 CompanyReportManagement.tsx 去除弹窗逻辑
+  - 删除“查看报告”相关的 Dialog 组件
+  - 删除 handleViewReport 和 handleSaveEdit 函数
+  - 删除相关状态（viewingReport, reportData, showReportDialog, isEditing, editedContent, isSavingEdit）
+  - 删除未使用的 import 语句
+- [x] 修改按钮显示逻辑
+  - 只保留一个“查看报告”按钮（蓝色，带企查查+DeepSeek图标）
+  - 点击后直接打开 CompanyReportDialog 弹窗
+- [x] 测试修改后的上传流程
+  - 测试上传 PDF 文件
+  - 验证上传完成后直接显示“查看报告”按钮
+  - 确认没有弹窗出现
+
+### 优化目标
+去除上传完成后从左边弹出的文字框（Dialog），改为上传完成后直接在原位置显示“查看报告”按钮，点击后打开前端预览弹窗，简化用户操作流程。
+
+### 修改内容
+修改 CompanyReportManagement.tsx：
+
+1. **删除状态：**
+   - 删除 viewingReport, reportData, showReportDialog, showPromptDialog, prompt, isLoadingPrompt, isSavingPrompt, isEditing, editedContent, isSavingEdit
+
+2. **删除函数：**
+   - 删除 handleViewReport 函数
+   - 删除 handleSaveEdit 函数
+
+3. **删除 Dialog 组件：**
+   - 删除整个“报告查看和编辑弹窗”的 Dialog 组件
+
+4. **修改按钮显示：**
+   - 只保留一个“查看报告”按钮
+   - 按钮点击后直接打开 CompanyReportDialog 弹窗
+
+5. **清理 import：**
+   - 删除未使用的 Dialog, Textarea, Edit, Save 等组件的 import
