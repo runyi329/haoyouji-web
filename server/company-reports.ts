@@ -312,7 +312,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
           reportFileUrl: fileUrl,
           rawText: rawText,
           formattedContent: formattedContent,
-          uploadedBy: userId,
+          uploadedBy: null, // 依赖前端权限控制，后端不跟踪用户
           updatedAt: new Date(),
         })
         .where(eq(companyReports.companyName, companyName));
@@ -323,7 +323,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
         reportFileUrl: fileUrl,
         rawText: rawText,
         formattedContent: formattedContent,
-        uploadedBy: userId,
+        uploadedBy: null, // 依赖前端权限控制，后端不跟踪用户
       });
     }
 

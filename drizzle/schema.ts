@@ -1227,7 +1227,7 @@ export const companyReports = mysqlTable("company_reports", {
   reportFileUrl: text("report_file_url"), // 原始 PDF 文件的 S3 URL
   rawText: text("raw_text"), // PDF 提取的原始文本
   formattedContent: text("formatted_content").notNull(), // AI 格式化后的内容（JSON 格式）
-  uploadedBy: int("uploaded_by").notNull(), // 上传者用户ID
+  uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });

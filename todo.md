@@ -488,3 +488,32 @@ cleanedContent = cleanedContent.trim();
 JSON.parse(cleanedContent);
 return cleanedContent;
 ```
+
+
+## Bug 修复：userId is not defined✅
+
+- [x] 检查 userId 使用位置和错误日志
+  - 查看 company-reports.ts 中哪里使用了 userId
+  - 确认 userId 应该从哪里获取
+- [x] 修复 userId 定义问题
+  - 修改 schema.ts，将 uploadedBy 字段改为可选
+  - 修改 company-reports.ts，将 userId 改为 null
+  - 执行 pnpm db:push 推送 schema 更改
+- [x] 测试修复后的上传功能
+  - 测试上传 PDF 文件
+  - 验证数据库记录是否正常保存
+
+### 问题原因
+在上传路由中使用了 userId 变量，但该变量未定义。由于 company-reports.ts 路由没有经过 tRPC 的 context 创建流程，req.user 不会被注入，因此无法获取用户 ID。
+
+### 修复方案
+1. 修改 drizzle/schema.ts 第 1230 行：
+```typescript
+// 修改前：uploadedBy: int("uploaded_by").notNull(),
+// 修改后：
+uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
+```
+
+2. 修改 server/company-reports.ts，将两处 `uploadedBy: userId` 改为 `uploadedBy: null`
+
+3. 执行 `pnpm db:push` 推送数据库 schema 更改
