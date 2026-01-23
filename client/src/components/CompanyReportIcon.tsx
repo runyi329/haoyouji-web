@@ -13,9 +13,8 @@ interface CompanyReportIconProps {
  */
 export function CompanyReportIcon({ hasReport, onClick, className }: CompanyReportIconProps) {
   return (
-    <button
+    <div
       onClick={hasReport ? onClick : undefined}
-      disabled={!hasReport}
       className={cn(
         "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium transition-all",
         className
@@ -26,7 +25,8 @@ export function CompanyReportIcon({ hasReport, onClick, className }: CompanyRepo
           : 'rgb(229, 231, 235)',
         color: hasReport ? 'white' : 'rgb(156, 163, 175)',
         cursor: hasReport ? 'pointer' : 'not-allowed',
-        opacity: hasReport ? 1 : 0.6
+        opacity: hasReport ? 1 : 0.6,
+        pointerEvents: hasReport ? 'auto' : 'none'
       }}
       title={hasReport ? "查看企业报告" : "暂无企业报告"}
     >
@@ -63,6 +63,6 @@ export function CompanyReportIcon({ hasReport, onClick, className }: CompanyRepo
         {/* AI标识（中心点） */}
         <circle cx="8" cy="8" r="1.5" fill="currentColor" />
       </svg>
-    </button>
+    </div>
   );
 }

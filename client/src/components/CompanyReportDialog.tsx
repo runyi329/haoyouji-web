@@ -7,28 +7,29 @@ interface CompanyReport {
   companyName: string;
   reportFileUrl: string;
   formattedContent: {
-    basicInfo: {
-      registeredCapital: string;
-      establishDate: string;
-      legalRepresentative: string;
-      businessStatus: string;
+    reportGeneratedTime?: string;
+    basicInfo?: {
+      registeredCapital?: string;
+      establishDate?: string;
+      legalRepresentative?: string;
+      businessStatus?: string;
     };
-    businessScope: {
-      mainBusiness: string;
-      businessScope: string;
+    businessScope?: {
+      mainBusiness?: string;
+      businessScope?: string;
     };
-    financialData: {
-      revenue: string;
-      profit: string;
-      assets: string;
+    financialData?: {
+      revenue?: string;
+      profit?: string;
+      assets?: string;
     };
-    riskInfo: {
-      lawsuits: string;
-      penalties: string;
-      abnormalRecords: string;
+    riskInfo?: {
+      lawsuits?: string;
+      penalties?: string;
+      abnormalRecords?: string;
     };
-    shareholderInfo: {
-      mainShareholders: Array<{
+    shareholderInfo?: {
+      mainShareholders?: Array<{
         name: string;
         shareholding: string;
       }>;
@@ -36,6 +37,16 @@ interface CompanyReport {
   };
   createdAt: Date;
   updatedAt: Date;
+}
+
+// 辅助函数：检查对象是否有任何非空值
+function hasAnyContent(obj: Record<string, any> | undefined): boolean {
+  if (!obj) return false;
+  return Object.values(obj).some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object' && value !== null) return hasAnyContent(value);
+    return value !== undefined && value !== null && value !== '';
+  });
 }
 
 interface CompanyReportDialogProps {
@@ -106,95 +117,127 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
         {!loading && !error && report && (
           <div className="space-y-6">
             {/* 📊 基本信息 */}
-            <section>
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span>📊</span>
-                <span>基本信息</span>
-              </h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">注册资本：</span>
-                  <span>{report.formattedContent.basicInfo.registeredCapital}</span>
+            {hasAnyContent(report.formattedContent.basicInfo) && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>📊</span>
+                  <span>基本信息</span>
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {report.formattedContent.basicInfo?.registeredCapital && (
+                    <div>
+                      <span className="text-muted-foreground">注册资本：</span>
+                      <span>{report.formattedContent.basicInfo.registeredCapital}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.basicInfo?.establishDate && (
+                    <div>
+                      <span className="text-muted-foreground">成立日期：</span>
+                      <span>{report.formattedContent.basicInfo.establishDate}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.basicInfo?.legalRepresentative && (
+                    <div>
+                      <span className="text-muted-foreground">法人代表：</span>
+                      <span>{report.formattedContent.basicInfo.legalRepresentative}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.basicInfo?.businessStatus && (
+                    <div>
+                      <span className="text-muted-foreground">经营状态：</span>
+                      <span>{report.formattedContent.basicInfo.businessStatus}</span>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">成立日期：</span>
-                  <span>{report.formattedContent.basicInfo.establishDate}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">法人代表：</span>
-                  <span>{report.formattedContent.basicInfo.legalRepresentative}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">经营状态：</span>
-                  <span>{report.formattedContent.basicInfo.businessStatus}</span>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* 🏢 经营状况 */}
-            <section>
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span>🏢</span>
-                <span>经营状况</span>
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">主营业务：</span>
-                  <p className="mt-1">{report.formattedContent.businessScope.mainBusiness}</p>
+            {hasAnyContent(report.formattedContent.businessScope) && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>🏢</span>
+                  <span>经营状况</span>
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {report.formattedContent.businessScope?.mainBusiness && (
+                    <div>
+                      <span className="text-muted-foreground">主营业务：</span>
+                      <p className="mt-1">{report.formattedContent.businessScope.mainBusiness}</p>
+                    </div>
+                  )}
+                  {report.formattedContent.businessScope?.businessScope && (
+                    <div>
+                      <span className="text-muted-foreground">经营范围：</span>
+                      <p className="mt-1 text-xs leading-relaxed">{report.formattedContent.businessScope.businessScope}</p>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">经营范围：</span>
-                  <p className="mt-1 text-xs leading-relaxed">{report.formattedContent.businessScope.businessScope}</p>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* 💰 财务数据 */}
-            <section>
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span>💰</span>
-                <span>财务数据</span>
-              </h3>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">营业收入：</span>
-                  <span>{report.formattedContent.financialData.revenue}</span>
+            {hasAnyContent(report.formattedContent.financialData) && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>💰</span>
+                  <span>财务数据</span>
+                </h3>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  {report.formattedContent.financialData?.revenue && (
+                    <div>
+                      <span className="text-muted-foreground">营业收入：</span>
+                      <span>{report.formattedContent.financialData.revenue}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.financialData?.profit && (
+                    <div>
+                      <span className="text-muted-foreground">净利润：</span>
+                      <span>{report.formattedContent.financialData.profit}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.financialData?.assets && (
+                    <div>
+                      <span className="text-muted-foreground">总资产：</span>
+                      <span>{report.formattedContent.financialData.assets}</span>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">净利润：</span>
-                  <span>{report.formattedContent.financialData.profit}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">总资产：</span>
-                  <span>{report.formattedContent.financialData.assets}</span>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* ⚖️ 风险信息 */}
-            <section>
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span>⚖️</span>
-                <span>风险信息</span>
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">诉讼信息：</span>
-                  <span className="ml-2">{report.formattedContent.riskInfo.lawsuits}</span>
+            {hasAnyContent(report.formattedContent.riskInfo) && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>⚖️</span>
+                  <span>风险信息</span>
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {report.formattedContent.riskInfo?.lawsuits && (
+                    <div>
+                      <span className="text-muted-foreground">诉讼信息：</span>
+                      <span className="ml-2">{report.formattedContent.riskInfo.lawsuits}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.riskInfo?.penalties && (
+                    <div>
+                      <span className="text-muted-foreground">行政处罚：</span>
+                      <span className="ml-2">{report.formattedContent.riskInfo.penalties}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.riskInfo?.abnormalRecords && (
+                    <div>
+                      <span className="text-muted-foreground">经营异常：</span>
+                      <span className="ml-2">{report.formattedContent.riskInfo.abnormalRecords}</span>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">行政处罚：</span>
-                  <span className="ml-2">{report.formattedContent.riskInfo.penalties}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">经营异常：</span>
-                  <span className="ml-2">{report.formattedContent.riskInfo.abnormalRecords}</span>
-                </div>
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* 🤝 股东信息 */}
-            {report.formattedContent.shareholderInfo.mainShareholders.length > 0 && (
+            {report.formattedContent.shareholderInfo?.mainShareholders && report.formattedContent.shareholderInfo.mainShareholders.length > 0 && (
               <section>
                 <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                   <span>🤝</span>
@@ -211,10 +254,12 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
               </section>
             )}
 
-            {/* 更新时间 */}
-            <div className="text-xs text-muted-foreground text-right pt-4 border-t">
-              最后更新：{new Date(report.updatedAt).toLocaleString('zh-CN')}
-            </div>
+            {/* 报告生成时间 */}
+            {report.formattedContent.reportGeneratedTime && (
+              <div className="text-xs text-muted-foreground pt-4 border-t">
+                本报告生成时间为 {report.formattedContent.reportGeneratedTime}，您所看的内容为截止时间点的数据快照。
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
