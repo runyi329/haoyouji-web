@@ -711,3 +711,22 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 
 5. **清理 import：**
    - 删除未使用的 Dialog, Textarea, Edit, Save 等组件的 import
+
+
+## Bug 修复：Dialog is not defined 错误✅
+
+- [x] 检查 CompanyReportDialog 组件的实现
+  - 查看组件是否使用了 Dialog
+  - 确认 Dialog 组件的导入情况
+- [x] 修复 Dialog 导入问题
+  - 确认 CompanyReportDialog 组件已经自己导入了 Dialog
+  - 重启开发服务器解决 HMR 问题
+- [x] 测试修复后的功能
+  - 测试点击“查看报告”按钮
+  - 验证弹窗能否正常打开
+
+### 问题原因
+在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但 CompanyReportDialog 组件已经自己导入了 Dialog。错误是由于 React 的热更新（HMR）没有正确处理导致的。
+
+### 修复方案
+重启开发服务器，清除 HMR 缓存，解决 Dialog is not defined 错误。
