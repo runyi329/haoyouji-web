@@ -517,3 +517,37 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 2. 修改 server/company-reports.ts，将两处 `uploadedBy: userId` 改为 `uploadedBy: null`
 
 3. 执行 `pnpm db:push` 推送数据库 schema 更改
+
+
+## UI 优化：联系人详情页公司名称显示优化✅
+
+- [x] 查看 ContactDetail.tsx 中公司名称的显示逻辑
+  - 找到扩展信息的渲染代码
+  - 确认当前的显示格式
+- [x] 修改显示逻辑
+  - 去掉标签图标（🏷️）
+  - 去掉“公司名称：”文字
+  - 直接显示公司名称和企查查+DeepSeek图标
+  - 确保在一行内显示（使用 truncate 类截断超长文本）
+- [x] 测试优化后的显示效果
+  - 测试有公司名称的联系人
+  - 验证显示是否紧凑美观
+
+### 优化目标
+将“🏷️ 公司名称：上海禹捷商务信息咨询有限公司 [图标]”优化为“上海禹捷商务信息咨询有限公司 [图标]”，让显示更紧凑，尽量控制在一行内。
+
+### 修改内容
+修改 ContactDetail.tsx 第 959-982 行，添加公司名称特殊处理逻辑：
+```tsx
+{fv.categoryName === '公司名称' ? (
+  <div className="flex items-center gap-2 w-full">
+    <span className="flex-1 truncate">{fv.value}</span>
+    <CompanyReportIcon
+      hasReport={companyReportExists}
+      onClick={() => setShowCompanyReportDialog(true)}
+    />
+  </div>
+) : (
+  // 其他字段正常显示
+)}
+```

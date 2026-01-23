@@ -958,20 +958,26 @@ export default function ContactDetail() {
                   <div className="text-xs font-medium text-muted-foreground mb-2">扩展信息</div>
                   {extendedFieldValues.map((fv: any) => (
                     <div key={fv.id} className="flex items-start text-sm">
-                      <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      <div className="flex items-center gap-2">
-                        <div>
-                          <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
-                          <span>{fv.value}</span>
-                        </div>
-                        {/* 如果是公司名称，显示企业报告图标 */}
-                        {fv.categoryName === '公司名称' && (
+                      {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
+                      {fv.categoryName === '公司名称' ? (
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="flex-1 truncate">{fv.value}</span>
                           <CompanyReportIcon
                             hasReport={companyReportExists}
                             onClick={() => setShowCompanyReportDialog(true)}
                           />
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <>
+                          <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
+                              <span>{fv.value}</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
