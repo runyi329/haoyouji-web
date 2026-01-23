@@ -765,3 +765,28 @@
 - [x] 统一“编辑信息”和“AI情报”按钮样式（都使用 outline 边框样式）
 - [x] 移除配置对话框相关代码
 - [x] 测试界面显示效果
+
+
+## AI 情报功能集成 ✅
+
+- [x] 查看 AI_FEATURE_PACKAGE 代码包并理解功能
+- [x] 安装 react-markdown 依赖
+- [x] 复制后端文件 ai-search.ts 到 server/
+- [x] 复制前端组件 AIBackgroundCheck.tsx 到 client/src/components/
+- [x] 在 server/_core/index.ts 中注册 AI 路由
+- [ ] 配置 DeepSeek API Key 环境变量（用户稍后提供）
+- [x] 修改 AIBackgroundCheck 组件支持外部控制
+- [x] 在 ContactDetail.tsx 中集成 AIBackgroundCheck 组件
+- [x] 替换“AI情报”按钮的点击事件为打开 AI 背调组件
+- [x] 测试界面和交互流程
+
+### 功能说明
+- 点击详情页的“AI情报”按钮弹出侧边栏
+- 自动调用 DeepSeek API 进行背景调查
+- 支持查看历史记录
+- 智能按钮状态（首次使用显示“AI 背调”，已有历史显示“更新背调 (X天/月前)”）
+- 所有 AI 数据带 🤖 标识
+- Markdown 格式化内容展示
+
+### 待办
+- 用户需要提供 DeepSeek API Key 才能使用实际功能

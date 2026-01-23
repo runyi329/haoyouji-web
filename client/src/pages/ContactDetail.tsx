@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { AIBackgroundCheck } from "@/components/AIBackgroundCheck";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import {
@@ -421,8 +422,10 @@ export default function ContactDetail() {
   const [newPersonalTagColor, setNewPersonalTagColor] = useState("#8b5cf6");
   const [isPersonalTagEditMode, setIsPersonalTagEditMode] = useState(false); // 编辑模式
   const [editingPersonalTag, setEditingPersonalTag] = useState<{ id: number; name: string; color: string } | null>(null);
+  // AI 背调状态
+  const [showAIBackgroundCheck, setShowAIBackgroundCheck] = useState(false);
 
-  // 从localStorage加载可见性配置
+  // 控制联络统计的显示/隐藏状态
   const [visibleStats, setVisibleStats] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem(`contact-stats-visibility-${contactId}`);
     if (saved) {
@@ -976,7 +979,7 @@ export default function ContactDetail() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => toast.info('AI情报功能即将上线')}
+                        onClick={() => setShowAIBackgroundCheck(true)}
                       >
                         AI情报
                       </Button>
@@ -1891,6 +1894,24 @@ export default function ContactDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AI 背调组件 */}
+      {contact && (
+        <AIBackgroundCheck
+          contact={{
+            id: contact.id.toString(),
+            name: contact.name,
+            company: extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value,
+            position: extendedFieldValues?.find(f => f.categoryName === '职位')?.value,
+            wechat: extendedFieldValues?.find(f => f.categoryName === '微信号')?.value,
+            phone: extendedFieldValues?.find(f => f.categoryName === '手机号码')?.value,
+            email: extendedFieldValues?.find(f => f.categoryName === '邮箱')?.value,
+          }}
+          open={showAIBackgroundCheck}
+          onOpenChange={setShowAIBackgroundCheck}
+          showButton={false}
+        />
+      )}
     </div>
   );
 }
