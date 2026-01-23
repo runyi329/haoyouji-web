@@ -886,6 +886,14 @@ export default function ContactDetail() {
                       }`} 
                     />
                   </Button>
+                  <Button 
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setLocation("/parent/contacts")}
+                    title="返回"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -952,14 +960,7 @@ export default function ContactDetail() {
                         <Settings className="h-4 w-4 mr-1" />
                         配置
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setLocation("/parent/contacts")}
-                      >
-                        <ArrowLeft className="h-4 w-4 mr-1" />
-                        返回
-                      </Button>
+
                     </div>
                   </div>
                   <DndContext
