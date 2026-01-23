@@ -774,7 +774,7 @@
 - [x] 复制后端文件 ai-search.ts 到 server/
 - [x] 复制前端组件 AIBackgroundCheck.tsx 到 client/src/components/
 - [x] 在 server/_core/index.ts 中注册 AI 路由
-- [ ] 配置 DeepSeek API Key 环境变量（用户稍后提供）
+- [x] 配置 DeepSeek API Key 环境变量
 - [x] 修改 AIBackgroundCheck 组件支持外部控制
 - [x] 在 ContactDetail.tsx 中集成 AIBackgroundCheck 组件
 - [x] 替换“AI情报”按钮的点击事件为打开 AI 背调组件
@@ -788,5 +788,6 @@
 - 所有 AI 数据带 🤖 标识
 - Markdown 格式化内容展示
 
-### 待办
-- 用户需要提供 DeepSeek API Key 才能使用实际功能
+### 测试结果
+- DeepSeek API Key 验证通过 ✅
+- AI 情报功能完全可用 ✅
