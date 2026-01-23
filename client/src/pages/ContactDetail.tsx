@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { AIBackgroundCheck } from "@/components/AIBackgroundCheck";
+import { CompanyReportDialog } from "@/components/CompanyReportDialog";
+import { CompanyReportIcon } from "@/components/CompanyReportIcon";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import {
@@ -424,6 +426,9 @@ export default function ContactDetail() {
   const [editingPersonalTag, setEditingPersonalTag] = useState<{ id: number; name: string; color: string } | null>(null);
   // AI 背调状态
   const [showAIBackgroundCheck, setShowAIBackgroundCheck] = useState(false);
+  const [showCompanyReportDialog, setShowCompanyReportDialog] = useState(false);
+  const [companyReportExists, setCompanyReportExists] = useState(false);
+  const [checkingCompanyReport, setCheckingCompanyReport] = useState(false);
 
   // 控制联络统计的显示/隐藏状态
   const [visibleStats, setVisibleStats] = useState<Record<string, boolean>>(() => {
@@ -574,6 +579,27 @@ export default function ContactDetail() {
       );
     }
   }, [stats]);
+
+  // 查询公司是否有报告
+  useEffect(() => {
+    const companyName = extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value;
+    if (companyName) {
+      setCheckingCompanyReport(true);
+      fetch(`/api/company-reports/${encodeURIComponent(companyName)}`)
+        .then(res => res.json())
+        .then(data => {
+          setCompanyReportExists(!!data.data);
+        })
+        .catch(() => {
+          setCompanyReportExists(false);
+        })
+        .finally(() => {
+          setCheckingCompanyReport(false);
+        });
+    } else {
+      setCompanyReportExists(false);
+    }
+  }, [extendedFieldValues]);
 
   // 拖拽传感器
   const sensors = useSensors(
@@ -933,9 +959,18 @@ export default function ContactDetail() {
                   {extendedFieldValues.map((fv: any) => (
                     <div key={fv.id} className="flex items-start text-sm">
                       <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      <div>
-                        <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
-                        <span>{fv.value}</span>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
+                          <span>{fv.value}</span>
+                        </div>
+                        {/* 如果是公司名称，显示企业报告图标 */}
+                        {fv.categoryName === '公司名称' && (
+                          <CompanyReportIcon
+                            hasReport={companyReportExists}
+                            onClick={() => setShowCompanyReportDialog(true)}
+                          />
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1910,6 +1945,15 @@ export default function ContactDetail() {
           open={showAIBackgroundCheck}
           onOpenChange={setShowAIBackgroundCheck}
           showButton={false}
+        />
+      )}
+
+      {/* 企业报告弹窗 */}
+      {contact && extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value && (
+        <CompanyReportDialog
+          open={showCompanyReportDialog}
+          onOpenChange={setShowCompanyReportDialog}
+          companyName={extendedFieldValues.find(f => f.categoryName === '公司名称')!.value}
         />
       )}
     </div>
