@@ -264,6 +264,13 @@ export default function ContactsList() {
   const { data: allContacts, isLoading } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
     sortBy: sortBy,
+  }, {
+    enabled: viewMode !== 'company', // 公司视图不使用这个 API
+  });
+
+  // 获取公司列表（当 viewMode 为 company 时）
+  const { data: companyList, isLoading: isLoadingCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
+    enabled: viewMode === 'company', // 只在公司视图时启用
   });
   
   // 获取共享给我的人脉列表
@@ -1388,8 +1395,37 @@ export default function ContactsList() {
 
       {/* 人脉列表 */}
       <div>
-        {isLoading ? (
+        {(isLoading || isLoadingCompanyList) ? (
           <div className="text-center py-8 text-muted-foreground">加载中...</div>
+        ) : viewMode === 'company' && companyList && companyList.length > 0 ? (
+          // 公司列表视图
+          <div className="space-y-2">
+            {companyList.map((item) => (
+              <Card 
+                key={`${item.contactId}-${item.companyName}`}
+                className="hover:shadow-lg transition-all cursor-pointer"
+                onClick={() => setLocation(`/parent/contacts/${item.contactId}`)}
+              >
+                <CardHeader className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{item.contactName}</CardTitle>
+                        {item.isDuplicate && (
+                          <Badge variant="secondary" className="text-xs">
+                            重复 ({item.duplicateCount})
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.companyName}
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
         ) : filteredContacts && filteredContacts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredContacts.map((contact) => {

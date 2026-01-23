@@ -1210,24 +1210,23 @@ export async function getContactStats(parentUserId: number) {
     }
   }
   
-  // 公司数量（去重）- 从 contactFieldValues 表中查询
+  // 公司数量（不去重）- 从 contact_custom_fields 表中查询所有有公司名称的联系人
   const companyResult = await db
     .select({ 
-      value: contactFieldValues.value 
+      contactId: contactCustomFields.contactId,
+      companyName: contactCustomFields.fieldValue
     })
-    .from(contactFieldValues)
-    .innerJoin(contactFieldCategories, eq(contactFieldValues.categoryId, contactFieldCategories.id))
-    .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
+    .from(contactCustomFields)
+    .innerJoin(contacts, eq(contactCustomFields.contactId, contacts.id))
     .where(
       and(
         inArray(contacts.id, visibleContactIds),
-        eq(contactFieldCategories.name, '公司'),
-        isNotNull(contactFieldValues.value),
-        ne(contactFieldValues.value, '')
+        eq(contactCustomFields.fieldName, '公司名称'),
+        isNotNull(contactCustomFields.fieldValue),
+        ne(contactCustomFields.fieldValue, '')
       )
     );
-  const uniqueCompanies = new Set(companyResult.map(r => r.value));
-  const companyCount = uniqueCompanies.size;
+  const companyCount = companyResult.length;
   
   return {
     totalContacts,
@@ -2321,4 +2320,56 @@ export async function updateFieldValue(fieldValueId: number, value: string) {
     .returning();
   
   return updatedFieldValue;
+}
+
+
+/**
+ * 获取公司列表（所有有公司名称的联系人，标注重复）
+ * @param parentUserId 用户ID
+ * @returns 公司列表，包含联系人信息和是否重复的标记
+ */
+export async function getCompanyList(parentUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 获取所有可见人脉ID（自己的 + 共享的）
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+
+  if (visibleContactIds.length === 0) {
+    return [];
+  }
+
+  // 查询所有有公司名称的联系人
+  const companyContacts = await db
+    .select({
+      contactId: contactCustomFields.contactId,
+      contactName: contacts.name,
+      companyName: contactCustomFields.fieldValue,
+      createdAt: contactCustomFields.createdAt,
+    })
+    .from(contactCustomFields)
+    .innerJoin(contacts, eq(contactCustomFields.contactId, contacts.id))
+    .where(
+      and(
+        inArray(contacts.id, visibleContactIds),
+        eq(contactCustomFields.fieldName, '公司名称'),
+        isNotNull(contactCustomFields.fieldValue),
+        ne(contactCustomFields.fieldValue, '')
+      )
+    )
+    .orderBy(desc(contactCustomFields.createdAt));
+
+  // 统计每个公司名称的出现次数
+  const companyCountMap = new Map<string, number>();
+  companyContacts.forEach(contact => {
+    const count = companyCountMap.get(contact.companyName) || 0;
+    companyCountMap.set(contact.companyName, count + 1);
+  });
+
+  // 为每个联系人添加是否重复的标记
+  return companyContacts.map(contact => ({
+    ...contact,
+    isDuplicate: companyCountMap.get(contact.companyName)! > 1,
+    duplicateCount: companyCountMap.get(contact.companyName)!,
+  }));
 }

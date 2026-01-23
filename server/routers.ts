@@ -3542,6 +3542,12 @@ export const appRouter = router({
       return await dbContacts.getContactStats(ctx.user.id);
     }),
 
+  // 获取公司列表（所有有公司名称的联系人，标注重复）
+  companyList: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getCompanyList(ctx.user.id);
+    }),
+
   // 获取累计联络次数
   totalInteractionCount: protectedProcedure
     .query(async ({ ctx }) => {
