@@ -41,6 +41,9 @@ async function startServer() {
   // AI prompts management router
   const aiPromptsModule = await import('../ai-prompts.js');
   app.use(aiPromptsModule.default);
+  // Company reports management router
+  const companyReportsModule = await import('../company-reports.js');
+  app.use(companyReportsModule.default);
   // tRPC API
   app.use(
     "/api/trpc",

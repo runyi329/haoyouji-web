@@ -1215,3 +1215,22 @@ export const todos = mysqlTable("todos", {
 
 export type Todo = typeof todos.$inferSelect;
 export type InsertTodo = typeof todos.$inferInsert;
+
+/**
+ * 企业报告表 - 存储企查查报告的 AI 格式化结果
+ * 
+ * 用于存储上传的企查查 PDF 报告，经过 DeepSeek AI 提取和格式化后的内容
+ */
+export const companyReports = mysqlTable("company_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  companyName: varchar("company_name", { length: 255 }).notNull().unique(), // 公司名称（唯一）
+  reportFileUrl: text("report_file_url"), // 原始 PDF 文件的 S3 URL
+  rawText: text("raw_text"), // PDF 提取的原始文本
+  formattedContent: text("formatted_content").notNull(), // AI 格式化后的内容（JSON 格式）
+  uploadedBy: int("uploaded_by").notNull(), // 上传者用户ID
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CompanyReport = typeof companyReports.$inferSelect;
+export type InsertCompanyReport = typeof companyReports.$inferInsert;
