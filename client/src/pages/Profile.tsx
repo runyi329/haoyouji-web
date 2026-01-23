@@ -245,7 +245,7 @@ export default function Profile() {
     {
       title: "帮助与支持",
       items: [
-        { icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => setLocation("/parent/academy") },
+        { icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => navigate("/parent/academy") },
         { icon: HelpCircle, label: "帮助中心", badge: null, onClick: () => toast("功能开发中") },
         { icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },
       ],

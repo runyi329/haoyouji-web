@@ -694,3 +694,9 @@
 - [x] 搜索结果高亮显示匹配内容
 - [x] 自动展开包含搜索结果的折叠面板
 - [x] 代码实现完成
+
+
+## 修复 Profile.tsx 中 setLocation 未定义错误 ✅
+
+- [x] 将 setLocation 修改为 navigate
+- [x] 修复脉动学院按钮点击功能
