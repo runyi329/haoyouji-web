@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Sparkles, RefreshCw, Eye, Clock } from 'lucide-react';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import ReactMarkdown from 'react-markdown';
 
 interface ContactHistoryRecord {
@@ -57,15 +57,15 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AISearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [internalSheetOpen, setInternalSheetOpen] = useState(false);
+  const [internalDialogOpen, setInternalDialogOpen] = useState(false);
   
   // 使用外部控制或内部状态
-  const isSheetOpen = externalOpen !== undefined ? externalOpen : internalSheetOpen;
-  const setIsSheetOpen = (open: boolean) => {
+  const isDialogOpen = externalOpen !== undefined ? externalOpen : internalDialogOpen;
+  const setIsDialogOpen = (open: boolean) => {
     if (externalOnOpenChange) {
       externalOnOpenChange(open);
     } else {
-      setInternalSheetOpen(open);
+      setInternalDialogOpen(open);
     }
   };
   const [history, setHistory] = useState<HistoryRecord[]>([]);
@@ -124,7 +124,7 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
       }
 
       setResult(data.data);
-      setIsSheetOpen(true);
+      setIsDialogOpen(true);
       
       // 刷新历史记录
       await fetchHistory();
@@ -214,7 +214,7 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2"
-                onClick={() => setIsSheetOpen(true)}
+                onClick={() => setIsDialogOpen(true)}
               >
                 <Eye className="h-3 w-3 mr-1" />
                 查看历史
@@ -225,14 +225,14 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
         </div>
       )}
 
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               {contact.name} 的 AI 背调报告
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               {result && (
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="secondary" className="flex items-center gap-1">
@@ -244,8 +244,8 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
                   </span>
                 </div>
               )}
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
           <div className="mt-6 space-y-6">
             {isLoading && (
@@ -340,8 +340,8 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
               </div>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
