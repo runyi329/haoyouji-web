@@ -129,42 +129,44 @@ export default function CompanyReportManagement() {
       formData.append('file', selectedFile);
       formData.append('companyName', companyName);
 
-      // 模拟上传进度
+      // 模拟上传进度（快速到达 20%）
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
-          if (prev >= 30) {
+          if (prev >= 20) {
             clearInterval(progressInterval);
-            return 30;
+            return 20;
           }
           return prev + 10;
         });
       }, 200);
 
+      // 开始上传，同时切换到分析状态
+      setTimeout(() => {
+        clearInterval(progressInterval);
+        setUploadProgress(30);
+        setUploadStatus('analyzing');
+        
+        // 分析阶段的进度模拟（慢速增长）
+        const analyzeInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev >= 85) {
+              clearInterval(analyzeInterval);
+              return 85;
+            }
+            return prev + 5;
+          });
+        }, 1500);
+      }, 600);
+
+      // 等待 API 响应（实际 AI 分析在后端进行）
       const response = await fetch('/api/company-reports/upload', {
         method: 'POST',
         body: formData,
       });
 
-      clearInterval(progressInterval);
-      setUploadProgress(40);
-      setUploadStatus('analyzing');
-
       const result = await response.json();
       
-      // 模拟 AI 分析进度
-      const analyzeInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(analyzeInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 1000);
-
-      // 等待一小段时间模拟 AI 分析
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      clearInterval(analyzeInterval);
+      // API 返回后，进度跳到 100%
       setUploadProgress(100);
 
       if (result.success) {
@@ -173,12 +175,14 @@ export default function CompanyReportManagement() {
         setSelectedFile(null);
         setCurrentCompany(null);
         
-        // 延迟重置状态和刷新列表
+        // 立即刷新列表，然后延迟重置状态
+        await loadCompanies();
+        
+        // 保持成功状态 3 秒，让用户看清
         setTimeout(() => {
           setUploadStatus('idle');
           setUploadProgress(0);
-          loadCompanies();
-        }, 1500);
+        }, 3000);
       } else {
         setUploadStatus('error');
         toast.error(result.error || '上传失败');
