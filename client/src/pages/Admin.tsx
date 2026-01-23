@@ -23,6 +23,7 @@ import {
   BookMarked,
   Star,
   Camera,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -275,6 +276,10 @@ export default function Admin() {
             <TabsTrigger value="permissions" className="text-xs sm:text-sm">
               <Shield className="w-4 h-4 mr-1 hidden sm:inline" />
               功能权限
+            </TabsTrigger>
+            <TabsTrigger value="aiManagement" className="text-xs sm:text-sm">
+              <Sparkles className="w-4 h-4 mr-1 hidden sm:inline" />
+              AI管理
             </TabsTrigger>
           </TabsList>
 
@@ -657,6 +662,22 @@ export default function Admin() {
           {/* 功能权限管理 */}
           <TabsContent value="permissions">
             <UserPermissionsManager />
+          </TabsContent>
+
+          {/* AI 管理 */}
+          <TabsContent value="aiManagement">
+            <Card className="p-4">
+              <h2 className="font-bold mb-4">AI 管理</h2>
+              <p className="text-muted-foreground text-sm mb-4">
+                在这里管理 AI 提示词、企业报告等 AI 功能。
+              </p>
+              <Link href="/parent/ai-management">
+                <Button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  前往 AI 管理
+                </Button>
+              </Link>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
