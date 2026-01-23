@@ -3589,7 +3589,75 @@ export async function setContactFieldValues(
 }
 
 /**
- * 获取人脉详情（包含自定义字段值）
+ * 获取所有可用的字段类目（全局类目，parentUserId=0）
+ */
+export async function getAllFieldCategories(): Promise<Array<{
+  id: number;
+  name: string;
+  fieldType: string;
+  sortOrder: number;
+}>> {
+  const db = await getDb();
+ if (!db) throw new Error("Database not available");
+  if (!db) return [];
+  
+  try {
+    const categories = await db.select()
+      .from(contactFieldCategories)
+      .where(eq(contactFieldCategories.parentUserId, 0))
+      .orderBy(contactFieldCategories.sortOrder);
+    return categories;
+  } catch (error) {
+    console.error("[Database] Failed to get all field categories:", error);
+    return [];
+  }
+}
+
+/**
+ * 添加单个字段值
+ */
+export async function addContactFieldValue(
+  contactId: number,
+  categoryId: number,
+  value: string
+): Promise<number> {
+  const db = await getDb();
+ if (!db) throw new Error("Database not available");
+  if (!db) throw new Error("Database not available");
+  
+  try {
+    const result = await db.insert(contactFieldValues).values({
+      contactId,
+      categoryId,
+      value,
+    });
+    return result[0].insertId;
+  } catch (error) {
+    console.error("[Database] Failed to add contact field value:", error);
+    throw error;
+  }
+}
+
+/**
+ * 删除单个字段值
+ */
+export async function deleteContactFieldValue(id: number): Promise<boolean> {
+  const db = await getDb();
+ if (!db) throw new Error("Database not available");
+  if (!db) return false;
+  
+  try {
+    await db.delete(contactFieldValues)
+      .where(eq(contactFieldValues.id, id));
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to delete contact field value:", error);
+    return false;
+  }
+}
+
+/**
+ * 获取人脉和字段值（用于编辑页面）
  */
 export async function getContactWithFieldValues(contactId: number, parentUserId: number): Promise<{
   contact: typeof contacts.$inferSelect | null;

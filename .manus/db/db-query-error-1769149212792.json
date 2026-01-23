@@ -1,0 +1,8 @@
+{
+  "query": "INSERT INTO contact_field_categories (parent_user_id, name, field_type, options, sort_order, is_required, created_at, updated_at) VALUES\n(NULL, '公司', 'text', NULL, 1, 0, NOW(), NOW()),\n(NULL, '职位', 'text', NULL, 2, 0, NOW(), NOW()),\n(NULL, '手机号码', 'text', NULL, 3, 0, NOW(), NOW()),\n(NULL, '邮箱', 'text', NULL, 4, 0, NOW(), NOW()),\n(NULL, '微信号', 'text', NULL, 5, 0, NOW(), NOW()),\n(NULL, '快递地址', 'text', NULL, 6, 0, NOW(), NOW()),\n(NULL, '生日', 'date', NULL, 7, 0, NOW(), NOW()),\n(NULL, '爱好', 'text', NULL, 8, 0, NOW(), NOW()),\n(NULL, '备注', 'text', NULL, 9, 0, NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute INSERT INTO contact_field_categories (parent_user_id, name, field_type, options, sort_order, is_required, created_at, updated_at) VALUES\n(NULL, '公司', 'text', NULL, 1, 0, NOW(), NOW()),\n(NULL, '职位', 'text', NULL, 2, 0, NOW(), NOW()),\n(NULL, '手机号码', 'text', NULL, 3, 0, NOW(), NOW()),\n(NULL, '邮箱', 'text', NULL, 4, 0, NOW(), NOW()),\n(NULL, '微信号', 'text', NULL, 5, 0, NOW(), NOW()),\n(NULL, '快递地址', 'text', NULL, 6, 0, NOW(), NOW()),\n(NULL, '生日', 'date', NULL, 7, 0, NOW(), NOW()),\n(NULL, '爱好', 'text', NULL, 8, 0, NOW(), NOW()),\n(NULL, '备注', 'text', NULL, 9, 0, NOW(), NOW());",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'parent_user_id' in 'field list'"
+  ]
+}
