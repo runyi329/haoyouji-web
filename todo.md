@@ -1106,3 +1106,9 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 ## 修改公司列表标签文案
 - [x] 将公司列表中的“重复”标签改为“交集”"
 - [x] 测试并保存 checkpoint
+
+## 修复公司数量列表查询逻辑
+
+- [x] 检查后端 getCompanyList 查询逻辑，确认字段名称
+- [x] 修复字段名称匹配问题（可能是“公司名称” vs “公司”）
+- [x] 测试并保存 checkpoint

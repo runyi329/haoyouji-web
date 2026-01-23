@@ -2339,25 +2339,39 @@ export async function getCompanyList(parentUserId: number) {
     return [];
   }
 
+  // 查询公司字段的 categoryId
+  const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
+  const companyCategoryResult = await db
+    .select({ id: contactFieldCategories.id })
+    .from(contactFieldCategories)
+    .where(eq(contactFieldCategories.name, '公司'))
+    .limit(1);
+  
+  if (companyCategoryResult.length === 0) {
+    return [];
+  }
+  
+  const companyCategoryId = companyCategoryResult[0].id;
+  
   // 查询所有有公司名称的联系人
   const companyContacts = await db
     .select({
-      contactId: contactCustomFields.contactId,
+      contactId: contactFieldValues.contactId,
       contactName: contacts.name,
-      companyName: contactCustomFields.fieldValue,
-      createdAt: contactCustomFields.createdAt,
+      companyName: contactFieldValues.value,
+      createdAt: contactFieldValues.createdAt,
     })
-    .from(contactCustomFields)
-    .innerJoin(contacts, eq(contactCustomFields.contactId, contacts.id))
+    .from(contactFieldValues)
+    .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
     .where(
       and(
         inArray(contacts.id, visibleContactIds),
-        eq(contactCustomFields.fieldName, '公司名称'),
-        isNotNull(contactCustomFields.fieldValue),
-        ne(contactCustomFields.fieldValue, '')
+        eq(contactFieldValues.categoryId, companyCategoryId),
+        isNotNull(contactFieldValues.value),
+        ne(contactFieldValues.value, '')
       )
     )
-    .orderBy(desc(contactCustomFields.createdAt));
+    .orderBy(desc(contactFieldValues.createdAt));
 
   // 统计每个公司名称的出现次数
   const companyCountMap = new Map<string, number>();
