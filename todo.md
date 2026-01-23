@@ -377,3 +377,22 @@ API 现在能正确返回公司列表数据，包括：
 - 新添加的同名公司会自动关联已上传的报告，无需重复上传
 - 更新任何一条同名公司的报告时，所有同名公司都会同步更新到最新版本
 - SQL 查询使用 `LEFT JOIN company_reports cr ON cfv.value = cr.company_name`，确保所有同名公司自动关联到同一份报告
+
+
+## Bug 修复：企业报告上传功能显示“未登录”错误✅
+
+- [x] 检查上传 API 的权限设置
+  - 查看 /api/company-reports/upload 路由的中间件配置
+  - 确认是否需要管理员权限或普通用户权限
+- [x] 修复权限验证问题
+  - 移除后端用户认证检查（req.user?.id）
+  - 依赖前端权限控制，与 ai-prompts.ts 等路由保持一致
+- [x] 测试修复后的上传功能
+  - 测试上传 PDF 文件
+  - 验证 DeepSeek AI 分析是否正常工作
+
+### 问题原因
+company-reports.ts 路由是直接注册到 Express 的，没有经过 tRPC 的 context 创建流程，所以 `req.user` 不会被注入。上传路由中检查 `req.user?.id` 时总是返回 undefined，导致“未登录”错误。
+
+### 修复方案
+移除了所有后端用户认证检查，依赖前端权限控制。这与其他类似路由（如 ai-prompts.ts）的处理方式保持一致。

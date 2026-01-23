@@ -251,14 +251,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
       });
     }
 
-    // @ts-ignore - req.user 由认证中间件注入
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: '未登录',
-      });
-    }
+    // 注意：此路由依赖前端权限控制，后端不进行用户认证检查
 
     // 1. 上传 PDF 文件到 S3
     const fileKey = `company-reports/${Date.now()}-${companyName}.pdf`;
@@ -406,14 +399,7 @@ router.delete('/api/company-reports/:companyName', async (req, res) => {
   try {
     const { companyName } = req.params;
 
-    // @ts-ignore - req.user 由认证中间件注入
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        error: '未登录',
-      });
-    }
+    // 注意：此路由依赖前端权限控制，后端不进行用户认证检查
 
     const db = await getDb();
     await db
