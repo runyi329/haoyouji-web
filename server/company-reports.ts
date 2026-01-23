@@ -314,15 +314,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
 
     // 注意：此路由依赖前端权限控制，后端不进行用户认证检查
 
-    // 1. 上传 PDF 文件到 S3
-    const fileKey = `company-reports/${Date.now()}-${companyName}.pdf`;
-    const { url: fileUrl } = await storagePut(
-      fileKey,
-      req.file.buffer,
-      'application/pdf'
-    );
-
-    // 2. 提取 PDF 文本
+    // 1. 提取 PDF 文本（不上传到 S3）
     const parser = new PDFParse({ data: req.file.buffer });
     const pdfData = await parser.getText();
     const rawText = pdfData.text;
@@ -334,10 +326,10 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
       });
     }
 
-    // 3. 调用 DeepSeek API 格式化
+    // 2. 调用 DeepSeek API 格式化
     const formattedContent = await formatCompanyReport(rawText);
 
-    // 4. 保存到数据库（如果公司已存在则更新）
+    // 3. 保存到数据库（不保存文件 URL）
     const db = await getDb();
     const existingReport = await db
       .select()
@@ -350,7 +342,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
       await db
         .update(companyReports)
         .set({
-          reportFileUrl: fileUrl,
+          reportFileUrl: null, // 不保存文件 URL
           rawText: rawText,
           formattedContent: formattedContent,
           uploadedBy: null, // 依赖前端权限控制，后端不跟踪用户
@@ -361,7 +353,7 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
       // 插入新报告
       await db.insert(companyReports).values({
         companyName: companyName,
-        reportFileUrl: fileUrl,
+        reportFileUrl: null, // 不保存文件 URL
         rawText: rawText,
         formattedContent: formattedContent,
         uploadedBy: null, // 依赖前端权限控制，后端不跟踪用户
@@ -372,7 +364,6 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
       success: true,
       data: {
         companyName,
-        fileUrl,
         formattedContent: JSON.parse(formattedContent),
       },
     });
