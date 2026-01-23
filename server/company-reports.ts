@@ -143,19 +143,26 @@ router.get('/api/company-reports/companies', async (req, res) => {
     
     // 查询所有联系人的扩展信息，筛选出公司名称
     const result = await db.execute(sql`
-      SELECT DISTINCT 
+      SELECT 
         cfv.value AS companyName,
+        c.id AS contactId,
         c.name AS contactName,
         u.name AS userName,
         cr.id AS reportId,
-        cr.updated_at AS reportUpdatedAt
+        cr.updated_at AS reportUpdatedAt,
+        (
+          SELECT COUNT(*)
+          FROM contact_field_values cfv2
+          INNER JOIN contact_field_categories cfc2 ON cfv2.categoryId = cfc2.id
+          WHERE cfc2.name = '公司名称' AND cfv2.value = cfv.value
+        ) AS duplicateCount
       FROM contact_field_values cfv
       INNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id
       INNER JOIN contacts c ON cfv.contactId = c.id
       INNER JOIN users u ON c.parentUserId = u.id
       LEFT JOIN company_reports cr ON cfv.value = cr.company_name
       WHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''
-      ORDER BY cfv.value
+      ORDER BY cfv.value, c.name
     `);
     
     const rows = result[0] as any[];

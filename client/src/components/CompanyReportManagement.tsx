@@ -10,10 +10,12 @@ import { Upload, Link as LinkIcon, Eye, Loader2, FileText, CheckCircle } from 'l
 
 interface Company {
   companyName: string;
+  contactId: number;
   contactName: string;
   userName: string;
   reportId: number | null;
   reportUpdatedAt: string | null;
+  duplicateCount: number;
 }
 
 export default function CompanyReportManagement() {
@@ -243,19 +245,26 @@ export default function CompanyReportManagement() {
       ) : (
         <div className="space-y-3">
           {companies.map((company, index) => (
-            <Card key={index}>
+            <Card key={`${company.contactId}-${index}`} className={company.duplicateCount > 1 ? 'border-amber-200 bg-amber-50/30' : ''}>
               <CardContent className="p-4">
                 <div className="space-y-3">
                   {/* 公司信息 */}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h4 className="font-semibold">{company.companyName}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold">{company.companyName}</h4>
+                        {company.duplicateCount > 1 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                            ⚠️ 重复 (共 {company.duplicateCount} 条)
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         联系人：{company.contactName} · 填写人：{company.userName}
                       </p>
                       {company.reportId && (
                         <p className="text-xs text-green-600 mt-1">
-                          ✓ 已上传报告
+                          ✓ 已上传报告（所有同名公司共享）
                         </p>
                       )}
                     </div>
