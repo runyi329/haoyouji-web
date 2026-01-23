@@ -31,6 +31,7 @@ import {
   BookOpen,
   Loader2,
   ArrowLeft,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function Profile() {
@@ -215,6 +216,13 @@ export default function Profile() {
 
   // 功能分组配置
   const featureGroups = [
+    // 超级管理员专属功能
+    ...(user.role === "super_admin" ? [{
+      title: "管理功能",
+      items: [
+        { icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/parent/admin") },
+      ],
+    }] : []),
     {
       title: "常用功能",
       items: [
@@ -291,7 +299,7 @@ export default function Profile() {
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                  {user.role === "admin" ? "管理员" : "普通用户"}
+                  {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
                 </span>
               </div>
             </div>

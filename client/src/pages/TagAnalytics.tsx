@@ -14,7 +14,8 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
-import { Tag, User, TrendingUp, Hash } from "lucide-react";
+import { Tag, User, TrendingUp, Hash, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 
 type DataScope = "all" | "mine" | "shared";
 
@@ -31,6 +32,7 @@ const COLORS = [
 
 export default function TagAnalytics() {
   const [scope, setScope] = useState<DataScope>("all");
+  const [, setLocation] = useLocation();
   
   const { data, isLoading } = trpc.contacts.tags.analytics.useQuery({ scope });
 
@@ -79,9 +81,19 @@ export default function TagAnalytics() {
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 sticky top-0 z-10 shadow-lg">
         <div className="container max-w-2xl mx-auto">
           <div className="flex flex-col gap-2">
-            <div>
-              <h1 className="text-lg font-bold">标签数据透视</h1>
-              <p className="text-xs text-purple-100 mt-0.5">全面分析标签使用情况</p>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLocation('/parent/contacts')}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 flex-shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-lg font-bold">标签数据透视</h1>
+                <p className="text-xs text-purple-100 mt-0.5">全面分析标签使用情况</p>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <Button
