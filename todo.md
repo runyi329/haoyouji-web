@@ -718,15 +718,26 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 - [x] 检查 CompanyReportDialog 组件的实现
   - 查看组件是否使用了 Dialog
   - 确认 Dialog 组件的导入情况
-- [x] 修复 Dialog 导入问题
-  - 确认 CompanyReportDialog 组件已经自己导入了 Dialog
-  - 重启开发服务器解决 HMR 问题
+- [x] 检查浏览器控制台日志
+  - 查看完整的错误堆栈
+  - 找出错误的具体位置：第 204 行（实际是第 234 行的 Dialog 组件）
+- [x] 修复 Dialog 引用问题
+  - 重新导入 Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 组件
+  - 重新导入 Eye 图标
 - [x] 测试修复后的功能
   - 测试点击“查看报告”按钮
   - 验证弹窗能否正常打开
 
 ### 问题原因
-在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但 CompanyReportDialog 组件已经自己导入了 Dialog。错误是由于 React 的热更新（HMR）没有正确处理导致的。
+在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但第 234-289 行还有一个“查看提示词”的 Dialog 组件在使用 Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle，导致 Dialog is not defined 错误。
+
+### 修复方案
+重新导入 Dialog 相关组件：
+```typescript
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { Upload, Loader2, Eye } from 'lucide-react';
+```
 
 ### 修复方案
 重启开发服务器，清除 HMR 缓存，解决 Dialog is not defined 错误。
