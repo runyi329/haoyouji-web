@@ -114,11 +114,31 @@ async function formatCompanyReport(rawText: string): Promise<string> {
       throw new Error('DeepSeek API 返回内容为空');
     }
 
-    // 验证返回的是否是有效的 JSON
+    // 清理 markdown 代码块标记并验证 JSON
     try {
-      JSON.parse(content);
-      return content;
+      // 移除可能的 markdown 代码块标记
+      let cleanedContent = content.trim();
+      
+      // 移除开头的 ```json 或 ```
+      if (cleanedContent.startsWith('```json')) {
+        cleanedContent = cleanedContent.slice(7);
+      } else if (cleanedContent.startsWith('```')) {
+        cleanedContent = cleanedContent.slice(3);
+      }
+      
+      // 移除结尾的 ```
+      if (cleanedContent.endsWith('```')) {
+        cleanedContent = cleanedContent.slice(0, -3);
+      }
+      
+      // 再次去除前后空白
+      cleanedContent = cleanedContent.trim();
+      
+      // 验证是否是有效的 JSON
+      JSON.parse(cleanedContent);
+      return cleanedContent;
     } catch (e) {
+      console.error('JSON 解析失败，原始内容:', content);
       throw new Error('DeepSeek API 返回的不是有效的 JSON 格式');
     }
   } catch (error) {

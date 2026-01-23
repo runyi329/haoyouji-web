@@ -444,3 +444,47 @@ pdf-parse 库的 PDFParse 构造函数需要使用 `data` 参数而不是 `buffe
 // 正确：
 const parser = new PDFParse({ data: req.file.buffer });
 ```
+
+
+## Bug 修复：DeepSeek API 返回的不是有效的 JSON 格式✅
+
+- [x] 检查当前 DeepSeek API 调用和 JSON 解析逻辑
+  - 查看 company-reports.ts 中的 DeepSeek API 调用代码
+  - 查看返回数据的解析方式
+- [x] 修复 JSON 解析逻辑
+  - 处理 markdown 代码块标记（```json 和 ```）
+  - 处理可能的前后空白字符
+  - 添加更健壮的错误处理
+- [x] 测试修复后的上传和解析功能
+  - 测试上传 PDF 文件
+  - 验证 DeepSeek API 返回的内容能正确解析
+  - 验证前端能正常显示格式化后的报告
+
+### 问题原因
+DeepSeek API 返回的内容可能包含 markdown 代码块标记（```json）或其他非 JSON 内容，导致 JSON.parse() 失败。
+
+### 修复方案
+修改 company-reports.ts 的 formatCompanyReport 函数，添加 JSON 清理逻辑：
+```typescript
+// 移除可能的 markdown 代码块标记
+let cleanedContent = content.trim();
+
+// 移除开头的 ```json 或 ```
+if (cleanedContent.startsWith('```json')) {
+  cleanedContent = cleanedContent.slice(7);
+} else if (cleanedContent.startsWith('```')) {
+  cleanedContent = cleanedContent.slice(3);
+}
+
+// 移除结尾的 ```
+if (cleanedContent.endsWith('```')) {
+  cleanedContent = cleanedContent.slice(0, -3);
+}
+
+// 再次去除前后空白
+cleanedContent = cleanedContent.trim();
+
+// 验证是否是有效的 JSON
+JSON.parse(cleanedContent);
+return cleanedContent;
+```
