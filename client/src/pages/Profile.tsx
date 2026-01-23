@@ -220,7 +220,7 @@ export default function Profile() {
     ...(user.role === "super_admin" ? [{
       title: "管理功能",
       items: [
-        { icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/parent/admin") },
+        { icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/admin") },
       ],
     }] : []),
     {
