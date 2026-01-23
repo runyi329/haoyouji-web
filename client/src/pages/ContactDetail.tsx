@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Settings, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -398,7 +398,6 @@ export default function ContactDetail() {
 
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
   const [interactionNote, setInteractionNote] = useState("");
-  const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [showReferrerDialog, setShowReferrerDialog] = useState(false);
   const [showQuickContactDialog, setShowQuickContactDialog] = useState(false);
   const [quickContactNote, setQuickContactNote] = useState("");
@@ -975,12 +974,11 @@ export default function ContactDetail() {
                         编辑信息
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        onClick={() => setShowConfigDialog(true)}
+                        onClick={() => toast.info('AI情报功能即将上线')}
                       >
-                        <Settings className="h-4 w-4 mr-1" />
-                        配置
+                        AI情报
                       </Button>
 
                     </div>
@@ -1312,50 +1310,6 @@ export default function ContactDetail() {
 
 
       </div>
-
-      {/* 配置对话框 */}
-      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>统计项配置</DialogTitle>
-            <DialogDescription>
-              选择您想要显示的统计项
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {defaultStatCards.map((card) => (
-              <div key={card.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={card.id}
-                  checked={visibleStats[card.id]}
-                  onCheckedChange={(checked) => {
-                    const newVisibleStats = {
-                      ...visibleStats,
-                      [card.id]: checked as boolean,
-                    };
-                    setVisibleStats(newVisibleStats);
-                    localStorage.setItem(
-                      `contact-stats-visibility-${contactId}`,
-                      JSON.stringify(newVisibleStats)
-                    );
-                  }}
-                />
-                <label
-                  htmlFor={card.id}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                >
-                  {card.title}
-                </label>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowConfigDialog(false)}>
-              完成
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* 记录联络对话框 */}
       <Dialog open={showInteractionDialog} onOpenChange={setShowInteractionDialog}>
