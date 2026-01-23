@@ -1,305 +1,285 @@
-import { useState } from 'react';
-import React from 'react';
-import { trpc } from '@/lib/trpc';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart3, TrendingUp, Users, Clock, Tag, Filter } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from "recharts";
+import { Tag, User, TrendingUp, Hash } from "lucide-react";
+
+type DataScope = "all" | "mine" | "shared" | "global";
+
+const COLORS = [
+  "#8b5cf6", // 紫色
+  "#3b82f6", // 蓝色
+  "#10b981", // 绿色
+  "#f59e0b", // 橙色
+  "#ef4444", // 红色
+  "#ec4899", // 粉色
+  "#06b6d4", // 青色
+  "#8b5cf6", // 紫色
+];
 
 export default function TagAnalytics() {
-  const [scope, setScope] = React.useState<'all' | 'mine' | 'shared' | 'global'>('all');
+  const [scope, setScope] = useState<DataScope>("all");
+  
   const { data, isLoading } = trpc.contacts.tags.analytics.useQuery({ scope });
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-6 space-y-6">
-        <Skeleton className="h-12 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} className="h-32" />
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 p-3">
+        <div className="container max-w-2xl mx-auto space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="p-4 animate-pulse">
+              <div className="h-20 bg-gray-200 rounded" />
+            </Card>
           ))}
         </div>
-        <Skeleton className="h-96" />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="container mx-auto py-6">
-        <div className="text-center text-muted-foreground">暂无数据</div>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
+        <Card className="p-6 text-center">
+          <p className="text-gray-500">暂无数据</p>
+        </Card>
       </div>
     );
   }
 
-  const { overallStats, globalRanking, personalRanking, userDistribution, recentTags } = data;
+  const { overallStats, globalRanking, personalRanking, userDistribution } = data;
+
+  // 转换数据格式
+  const globalTagsData = globalRanking.map(tag => ({
+    name: tag.tagName,
+    count: tag.usageCount,
+    color: tag.tagColor,
+  }));
+
+  const personalTagsData = personalRanking.map(tag => ({
+    name: tag.tagName,
+    count: tag.usageCount,
+    color: tag.tagColor,
+  }));
 
   return (
-    <div className="container mx-auto py-4 px-4 space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">标签大数据透视</h1>
-          <p className="text-sm text-muted-foreground mt-1">全面分析标签使用情况和趋势</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={scope} onValueChange={(value: any) => setScope(value)}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              <SelectItem value="mine">自己</SelectItem>
-              <SelectItem value="shared">共享</SelectItem>
-              <SelectItem value="global">全局</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* 关键指标卡片 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Tag className="h-4 w-4 text-blue-500" />
-              全局标签
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallStats?.globalTags.totalTags || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              使用 {overallStats?.globalTags.totalUsage || 0} 次
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Tag className="h-4 w-4 text-purple-500" />
-              个人标签
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallStats?.personalTags.totalTags || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              自定义标签
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4 text-green-500" />
-              标记人脉
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallStats?.contacts.withGlobalTags || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              使用全局标签
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-orange-500" />
-              累计使用
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{overallStats?.overall.totalUsage || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              总使用次数
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 标签页 */}
-      <Tabs defaultValue="global" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="global">全局标签</TabsTrigger>
-          <TabsTrigger value="personal">个人标签</TabsTrigger>
-          <TabsTrigger value="users">用户分布</TabsTrigger>
-        </TabsList>
-
-        {/* 全局标签排行榜 */}
-        <TabsContent value="global" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                全局标签使用排行
-              </CardTitle>
-              <CardDescription>按使用人数排序，显示最热门的标签</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {globalRanking.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">暂无数据</div>
-                ) : (
-                  globalRanking.slice(0, 20).map((tag, index) => (
-                    <div key={tag.tagId} className="flex items-center gap-3">
-                      <div className="w-8 text-center font-bold text-muted-foreground">
-                        #{index + 1}
-                      </div>
-                      <Badge style={{ backgroundColor: tag.tagColor }} className="text-white">
-                        {tag.tagName}
-                      </Badge>
-                      <div className="flex-1">
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 transition-all"
-                            style={{
-                              width: `${(tag.usageCount / (globalRanking[0]?.usageCount || 1)) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="w-16 text-right font-semibold">
-                        {tag.usageCount} 次
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* 个人标签排行榜 */}
-        <TabsContent value="personal" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                个人标签使用排行
-              </CardTitle>
-              <CardDescription>按标签数量排序，显示使用最多的个人标签</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {personalRanking.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">暂无数据</div>
-                ) : (
-                  personalRanking.slice(0, 20).map((tag, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      <div className="w-8 text-center font-bold text-muted-foreground">
-                        #{index + 1}
-                      </div>
-                      <Badge style={{ backgroundColor: tag.tagColor }} className="text-white">
-                        {tag.tagName}
-                      </Badge>
-                      <div className="flex-1">
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-purple-500 transition-all"
-                            style={{
-                              width: `${(tag.usageCount / (personalRanking[0]?.usageCount || 1)) * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="w-16 text-right font-semibold">
-                        {tag.usageCount} 个
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* 用户分布 */}
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                用户标签使用分布
-              </CardTitle>
-              <CardDescription>每个用户使用标签的情况统计</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {userDistribution.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">暂无数据</div>
-                ) : (
-                  userDistribution.slice(0, 20).map((user, index) => (
-                    <div key={user.userId} className="flex items-center gap-3">
-                      <div className="w-8 text-center font-bold text-muted-foreground">
-                        #{index + 1}
-                      </div>
-                      <div className="w-32 truncate font-medium">
-                        {user.userName}
-                      </div>
-                      <div className="flex-1 flex gap-2 items-center">
-                        <div className="flex-1">
-                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all"
-                              style={{
-                                width: `${(user.totalTags / (userDistribution[0]?.totalTags || 1)) * 100}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          全局: {user.globalTags} | 个人: {user.personalTags}
-                        </div>
-                      </div>
-                      <div className="w-16 text-right font-semibold">
-                        {user.totalTags}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-      </Tabs>
-
-      {/* 最近创建的标签 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            最近创建的标签
-          </CardTitle>
-          <CardDescription>最新添加的标签列表</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {recentTags.length === 0 ? (
-              <div className="text-center text-muted-foreground py-4 w-full">暂无数据</div>
-            ) : (
-              recentTags.map((tag) => (
-                <Badge
-                  key={`${tag.type}-${tag.id}`}
-                  style={{ backgroundColor: tag.color }}
-                  className="text-white"
-                >
-                  {tag.name}
-                  <span className="ml-1 text-xs opacity-75">
-                    ({tag.type === 'global' ? '全局' : '个人'})
-                  </span>
-                </Badge>
-              ))
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 pb-20">
+      {/* 头部 */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 sticky top-0 z-10 shadow-lg">
+        <div className="container max-w-2xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold">标签数据透视</h1>
+              <p className="text-xs text-purple-100 mt-0.5">全面分析标签使用情况</p>
+            </div>
+            <Select value={scope} onValueChange={(v) => setScope(v as DataScope)}>
+              <SelectTrigger className="w-20 h-8 bg-white/20 border-white/30 text-white text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="mine">自己</SelectItem>
+                <SelectItem value="shared">共享</SelectItem>
+                <SelectItem value="global">全局</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <div className="container max-w-2xl mx-auto p-3 space-y-3">
+        {/* 关键指标 - 2x2 网格 */}
+        <div className="grid grid-cols-2 gap-2">
+          <Card className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <Tag className="w-3.5 h-3.5" />
+              <span className="text-xs opacity-90">全局标签</span>
+            </div>
+            <div className="text-2xl font-bold">{overallStats.globalTags.totalTags}</div>
+            <div className="text-xs opacity-80 mt-0.5">使用 {overallStats.globalTags.totalUsage} 次</div>
+          </Card>
+
+          <Card className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <Hash className="w-3.5 h-3.5" />
+              <span className="text-xs opacity-90">个人标签</span>
+            </div>
+            <div className="text-2xl font-bold">{overallStats.personalTags.totalTags}</div>
+            <div className="text-xs opacity-80 mt-0.5">自定义标签</div>
+          </Card>
+
+          <Card className="p-3 bg-gradient-to-br from-green-500 to-green-600 text-white border-0 shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <User className="w-3.5 h-3.5" />
+              <span className="text-xs opacity-90">标记人脉</span>
+            </div>
+            <div className="text-2xl font-bold">{overallStats.contacts.withGlobalTags}</div>
+            <div className="text-xs opacity-80 mt-0.5">使用全局标签</div>
+          </Card>
+
+          <Card className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 text-white border-0 shadow-md">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="text-xs opacity-90">累计使用</span>
+            </div>
+            <div className="text-2xl font-bold">{overallStats.overall.totalUsage}</div>
+            <div className="text-xs opacity-80 mt-0.5">总使用次数</div>
+          </Card>
+        </div>
+
+        {/* 标签页 */}
+        <Tabs defaultValue="global" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 h-9">
+            <TabsTrigger value="global" className="text-xs">全局标签</TabsTrigger>
+            <TabsTrigger value="personal" className="text-xs">个人标签</TabsTrigger>
+            <TabsTrigger value="users" className="text-xs">用户分布</TabsTrigger>
+          </TabsList>
+
+          {/* 全局标签排行 */}
+          <TabsContent value="global" className="mt-3 space-y-3">
+            <Card className="p-3 shadow-md">
+              <h3 className="text-sm font-semibold mb-2">全局标签使用排行</h3>
+              <p className="text-xs text-gray-500 mb-3">按使用人数排序</p>
+              
+              {globalTagsData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={Math.min(globalTagsData.length * 28 + 40, 400)}>
+                  <BarChart
+                    data={globalTagsData.slice(0, 15)}
+                    layout="vertical"
+                    margin={{ top: 5, right: 20, left: 5, bottom: 5 }}
+                  >
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis 
+                      dataKey="name" 
+                      type="category" 
+                      width={60}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ fontSize: 12 }}
+                      formatter={(value: number) => [`${value} 次`, "使用次数"]}
+                    />
+                    <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
+              )}
+            </Card>
+          </TabsContent>
+
+          {/* 个人标签排行 */}
+          <TabsContent value="personal" className="mt-3 space-y-3">
+            <Card className="p-3 shadow-md">
+              <h3 className="text-sm font-semibold mb-2">个人标签排行</h3>
+              <p className="text-xs text-gray-500 mb-3">按标签数量排序</p>
+              
+              {personalTagsData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={Math.min(personalTagsData.length * 28 + 40, 400)}>
+                  <BarChart
+                    data={personalTagsData.slice(0, 15)}
+                    layout="vertical"
+                    margin={{ top: 5, right: 20, left: 5, bottom: 5 }}
+                  >
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis 
+                      dataKey="name" 
+                      type="category" 
+                      width={60}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ fontSize: 12 }}
+                      formatter={(value: number) => [`${value} 个`, "标签数"]}
+                    />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
+              )}
+            </Card>
+
+            {/* 个人标签分布饼图 */}
+            {personalTagsData.length > 0 && (
+              <Card className="p-3 shadow-md">
+                <h3 className="text-sm font-semibold mb-2">个人标签分布</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={personalTagsData.slice(0, 8)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="count"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={{ stroke: "#666", strokeWidth: 1 }}
+                    >
+                      {personalTagsData.slice(0, 8).map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* 用户分布 */}
+          <TabsContent value="users" className="mt-3 space-y-3">
+            <Card className="p-3 shadow-md">
+              <h3 className="text-sm font-semibold mb-2">用户标签使用分布</h3>
+              <p className="text-xs text-gray-500 mb-3">每个用户使用标签的情况</p>
+              
+              {userDistribution.length > 0 ? (
+                <div className="space-y-2">
+                  {userDistribution.slice(0, 10).map((user, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="w-8 text-xs text-gray-500 font-medium">#{index + 1}</div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-medium truncate">{user.userName}</span>
+                          <span className="text-xs text-gray-600 ml-2">{user.totalTags} 个</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className="bg-gradient-to-r from-green-500 to-green-600 h-1.5 rounded-full transition-all"
+                            style={{
+                              width: `${(user.totalTags / Math.max(...userDistribution.map(u => u.totalTags))) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
+              )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
