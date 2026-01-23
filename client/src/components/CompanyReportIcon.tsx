@@ -7,9 +7,9 @@ interface CompanyReportIconProps {
 }
 
 /**
- * 企查查 + DeepSeek 联名图标
- * - hasReport=false: 暗灰色（disabled）
- * - hasReport=true: 亮色（可点击）
+ * 机器人图标（企业报告）
+ * - hasReport=false: 灰色（未点亮）
+ * - hasReport=true: 蓝色线条（点亮）
  */
 export function CompanyReportIcon({ hasReport, onClick, className }: CompanyReportIconProps) {
   return (
@@ -20,48 +20,36 @@ export function CompanyReportIcon({ hasReport, onClick, className }: CompanyRepo
         className
       )}
       style={{
-        background: hasReport 
-          ? 'linear-gradient(to right, rgb(59, 130, 246), rgb(147, 51, 234))' 
-          : 'rgb(229, 231, 235)',
-        color: hasReport ? 'white' : 'rgb(156, 163, 175)',
         cursor: hasReport ? 'pointer' : 'not-allowed',
-        opacity: hasReport ? 1 : 0.6,
         pointerEvents: hasReport ? 'auto' : 'none'
       }}
       title={hasReport ? "查看企业报告" : "暂无企业报告"}
     >
-      {/* 企查查图标（简化的放大镜+文档） */}
+      {/* 机器人图标 */}
       <svg
-        className="w-3 h-3"
-        viewBox="0 0 16 16"
+        className="w-5 h-5"
+        viewBox="0 0 24 24"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        stroke={hasReport ? 'rgb(59, 130, 246)' : 'rgb(156, 163, 175)'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       >
-        {/* 文档 */}
-        <rect x="2" y="1" width="9" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        <line x1="4" y1="4" x2="8" y2="4" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="4" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" />
-        {/* 放大镜 */}
-        <circle cx="11" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        <line x1="13" y1="12" x2="15" y2="14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-
-      {/* DeepSeek图标（简化的AI芯片） */}
-      <svg
-        className="w-3 h-3"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        {/* 芯片外框 */}
-        <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        {/* 芯片引脚 */}
-        <line x1="2" y1="6" x2="4" y2="6" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="2" y1="10" x2="4" y2="10" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="12" y1="6" x2="14" y2="6" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="12" y1="10" x2="14" y2="10" stroke="currentColor" strokeWidth="1.5" />
-        {/* AI标识（中心点） */}
-        <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+        {/* 头部天线 */}
+        <path d="M12 2v2" />
+        {/* 头部主体 */}
+        <rect x="6" y="4" width="12" height="10" rx="2" />
+        {/* 眼睛 */}
+        <circle cx="9" cy="8" r="1" fill={hasReport ? 'rgb(59, 130, 246)' : 'rgb(156, 163, 175)'} />
+        <circle cx="15" cy="8" r="1" fill={hasReport ? 'rgb(59, 130, 246)' : 'rgb(156, 163, 175)'} />
+        {/* 嘴巴 */}
+        <path d="M9 11h6" />
+        {/* 身体 */}
+        <rect x="8" y="14" width="8" height="6" rx="1" />
+        {/* 手臂 */}
+        <path d="M6 16h2" />
+        <path d="M16 16h2" />
       </svg>
     </div>
   );
