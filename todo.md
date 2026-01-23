@@ -895,3 +895,11 @@ companyName={selectedCompanyName}
 
 - [x] 将 AI 情报功能的侧边栏（Sheet）改为居中弹窗（Dialog）
 - [x] 移除从右边弹出的行为
+
+
+## 修复企业报告上传失败问题
+
+- [x] 检查数据库 schema 中 raw_text 字段的类型
+- [x] 修改 raw_text 字段为 LONGTEXT 类型以支持长文本
+- [x] 推送数据库变更（pnpm db:push）
+- [x] 测试上传功能确保能成功保存长文本
