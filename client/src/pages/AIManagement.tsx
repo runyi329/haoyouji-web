@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowLeft, Save, RotateCcw, Loader2 } from 'lucide-react';
+import CompanyReportManagement from '@/components/CompanyReportManagement';
 
 interface PromptsConfig {
   systemPrompt: string;
@@ -189,9 +190,10 @@ export default function AIManagement() {
 
       {/* 内容 */}
       <Tabs defaultValue="prompts" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="prompts">提示词管理</TabsTrigger>
           <TabsTrigger value="parameters">参数配置</TabsTrigger>
+          <TabsTrigger value="companyReports">企业报告</TabsTrigger>
         </TabsList>
 
         {/* 提示词管理 */}
@@ -304,6 +306,21 @@ export default function AIManagement() {
                 <span>2000</span>
                 <span>4000</span>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 企业报告管理 */}
+        <TabsContent value="companyReports" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>AI 企业报告管理</CardTitle>
+              <CardDescription>
+                管理企查查报告，使用 DeepSeek AI 自动格式化企业信息
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CompanyReportManagement />
             </CardContent>
           </Card>
         </TabsContent>

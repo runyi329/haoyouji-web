@@ -27,7 +27,7 @@ const upload = multer({
 /**
  * DeepSeek 提示词：格式化企业报告
  */
-const COMPANY_REPORT_PROMPT = `你是一位专业的企业信息分析师。请从提供的企查查报告文本中提取关键信息，并按以下 JSON 格式输出：
+const DEFAULT_COMPANY_REPORT_PROMPT = `你是一位专业的企业信息分析师。请从提供的企查查报告文本中提取关键信息，并按以下 JSON 格式输出：
 
 {
   "basicInfo": {
@@ -71,6 +71,11 @@ const COMPANY_REPORT_PROMPT = `你是一位专业的企业信息分析师。请�
 请直接返回 JSON 格式，不要添加任何其他说明文字。`;
 
 /**
+ * 当前使用的提示词（可通过 API 更新）
+ */
+let customPrompt = DEFAULT_COMPANY_REPORT_PROMPT;
+
+/**
  * 调用 DeepSeek API 格式化企业报告
  */
 async function formatCompanyReport(rawText: string): Promise<string> {
@@ -86,7 +91,7 @@ async function formatCompanyReport(rawText: string): Promise<string> {
         messages: [
           {
             role: 'system',
-            content: COMPANY_REPORT_PROMPT,
+            content: customPrompt,
           },
           {
             role: 'user',
@@ -123,7 +128,95 @@ async function formatCompanyReport(rawText: string): Promise<string> {
 }
 
 /**
- * POST /api/company-reports/upload
+ * POST /api/company-reports/uplo/**
+ * 获取所有公司列表（汇总前端用户填写的公司名称）
+ */
+router.get('/companies', async (req, res) => {
+  try {
+    const db = getDb();
+    
+    // 查询所有联系人的扩展信息，筛选出公司名称
+    const result = await db.execute(`
+      SELECT DISTINCT 
+        efv.value AS companyName,
+        c.name AS contactName,
+        u.name AS userName,
+        cr.id AS reportId,
+        cr.updatedAt AS reportUpdatedAt
+      FROM extendedFieldValues efv
+      INNER JOIN extendedFieldCategories efc ON efv.categoryId = efc.id
+      INNER JOIN contacts c ON efv.contactId = c.id
+      INNER JOIN users u ON c.userId = u.id
+      LEFT JOIN companyReports cr ON efv.value = cr.companyName
+      WHERE efc.name = '公司名称' AND efv.value IS NOT NULL AND efv.value != ''
+      ORDER BY efv.value
+    `);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取公司列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '获取公司列表失败',
+    });
+  }
+});
+
+/**
+ * 获取 DeepSeek 提示词
+ */
+router.get('/prompt', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        prompt: customPrompt,
+      },
+    });
+  } catch (error) {
+    console.error('获取提示词失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '获取提示词失败',
+    });
+  }
+});
+
+/**
+ * 更新 DeepSeek 提示词（暂时存储在内存中，重启后恢复默认值）
+ */
+router.put('/prompt', async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '提示词不能为空',
+      });
+    }
+
+    customPrompt = prompt;
+
+    res.json({
+      success: true,
+      data: {
+        prompt: customPrompt,
+      },
+    });
+  } catch (error) {
+    console.error('更新提示词失败:', error);
+    res.status(500).json({
+      success: false,
+      error: '更新提示词失败',
+    });
+  }
+});
+
+/**
  * 上传企查查 PDF 报告
  */
 router.post('/upload', upload.single('file'), async (req, res) => {
