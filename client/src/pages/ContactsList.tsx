@@ -36,6 +36,9 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { InteractionHistoryDialog } from "@/components/InteractionHistoryDialog";
 import { ReferralRelationshipDialog } from "@/components/ReferralRelationshipDialog";
+import { CompanyReportIcon } from "@/components/CompanyReportIcon";
+import { CompanyReportDialog } from "@/components/CompanyReportDialog";
+import { CompanyListDialog } from "@/components/CompanyListDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { LogIn, LogOut } from "lucide-react";
@@ -238,6 +241,14 @@ export default function ContactsList() {
   const [showReferralDialog, setShowReferralDialog] = useState(false);
   const [selectedContactForReferral, setSelectedContactForReferral] = useState<any>(null);
   const [referralType, setReferralType] = useState<'direct' | 'indirect'>('direct');
+  
+  // 企业报告对话框状态
+  const [showCompanyReportDialog, setShowCompanyReportDialog] = useState(false);
+  const [selectedCompanyForReport, setSelectedCompanyForReport] = useState<string>('');
+  
+  // 公司列表弹窗状态
+  const [showCompanyListDialog, setShowCompanyListDialog] = useState(false);
+  const [selectedContactForCompanyList, setSelectedContactForCompanyList] = useState<any>(null);
   
   // 获取URL参数中的筛选条件
   const urlParams = new URLSearchParams(searchParams);
@@ -1422,9 +1433,19 @@ export default function ContactsList() {
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {item.companyName}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-muted-foreground">
+                          {item.companyName}
+                        </p>
+                        <CompanyReportIcon
+                          hasReport={item.hasReport}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCompanyForReport(item.companyName);
+                            setShowCompanyReportDialog(true);
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -1548,6 +1569,25 @@ export default function ContactsList() {
                             <Network className="h-4 w-4" />
                           </button>
                         )}
+                        {/* 机器人图标 - 显示公司数量 */}
+                        {(() => {
+                          const companies = contact.fieldValues?.filter((fv: any) => fv.categoryName === '公司名称') || [];
+                          if (companies.length === 0) return null;
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedContactForCompanyList(contact);
+                                setShowCompanyListDialog(true);
+                              }}
+                              className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
+                              title="点击查看公司列表"
+                            >
+                              <CompanyReportIcon hasReport={true} onClick={() => {}} />
+                              <span className="text-xs font-medium">×{companies.length}</span>
+                            </button>
+                          );
+                        })()}
                         {/* 共享者标识 - 显示这个人脉是谁共享给我的，放在最后 */}
                         {contact._isShared && contact._sharedBy && (
                           <span className="flex items-center gap-0.5">
@@ -2011,6 +2051,20 @@ export default function ContactsList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* 企业报告弹窗 */}
+      <CompanyReportDialog
+        open={showCompanyReportDialog}
+        onOpenChange={setShowCompanyReportDialog}
+        companyName={selectedCompanyForReport}
+      />
+      
+      {/* 公司列表弹窗 */}
+      <CompanyListDialog
+        open={showCompanyListDialog}
+        onOpenChange={setShowCompanyListDialog}
+        contact={selectedContactForCompanyList}
+      />
     </div>
   );
 }
