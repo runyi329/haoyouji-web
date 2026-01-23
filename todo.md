@@ -788,3 +788,90 @@ loadPrompt 和 savePrompt 函数已经存在，不需要重新添加。
 ```typescript
 import { Textarea } from '@/components/ui/textarea';
 ```
+
+
+## Bug 修复：企业报告显示逻辑错误✅
+
+- [x] 检查 CompanyReportIcon 和 CompanyReportDialog 组件的实现
+  - 查看如何判断报告是否存在
+  - 查看如何加载报告数据
+  - 确认是否正确使用公司名称作为查询条件
+- [x] 修复报告存在判断和加载逻辑
+  - 确保每个公司的图标状态基于该公司是否有报告
+  - 确保每个公司点击图标后加载的是该公司的报告
+  - 修复可能的公司名称匹配问题
+- [x] 测试修复后的功能
+  - 测试只上传一家公司的报告
+  - 验证其他公司的图标不会被点亮
+  - 验证每个公司点击图标后显示的是自己的报告
+
+### 问题描述
+只上传了“上海禹捷商务信息咨询有限公司”的报告，但“北京润仪商业中心（有限合伙）”的企查查+DeepSeek图标也被点亮了，并且点击后显示的是上海禹捷的报告，而不是北京润仪的报告。
+
+### 问题原因
+原有逻辑使用全局状态 `companyReportExists` 和 `find()` 方法查找第一个公司名称字段，导致：
+1. 所有公司名称字段共享同一个报告存在状态
+2. 所有公司名称字段都查询的是第一个公司的报告
+3. 点击任何公司名称字段都打开第一个公司的报告
+
+### 修复方案
+修改 ContactDetail.tsx，使用 Map 结构存储每个公司名称的报告存在状态：
+
+1. **修改状态定义：**
+```typescript
+// 修改前：
+const [companyReportExists, setCompanyReportExists] = useState(false);
+const [checkingCompanyReport, setCheckingCompanyReport] = useState(false);
+
+// 修改后：
+const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
+const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
+const [checkingCompanyReports, setCheckingCompanyReports] = useState<Record<string, boolean>>({});
+```
+
+2. **修改查询逻辑：**
+```typescript
+// 修改前：只查询第一个公司名称
+const companyName = extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value;
+
+// 修改后：查询所有公司名称
+const companyNames = extendedFieldValues?.filter(f => f.categoryName === '公司名称').map(f => f.value) || [];
+companyNames.forEach(companyName => {
+  // 为每个公司名称查询报告是否存在
+});
+```
+
+3. **修改图标显示：**
+```typescript
+// 修改前：使用全局状态
+hasReport={companyReportExists}
+
+// 修改后：使用对应公司名称的状态
+hasReport={!!companyReportExistsMap[fv.value]}
+```
+
+4. **修改点击事件：**
+```typescript
+// 修改前：直接打开弹窗
+onClick={() => setShowCompanyReportDialog(true)}
+
+// 修改后：记录选中的公司名称再打开弹窗
+onClick={() => {
+  setSelectedCompanyName(fv.value);
+  setShowCompanyReportDialog(true);
+}}
+```
+
+5. **修改弹窗传参：**
+```typescript
+// 修改前：使用 find() 查找第一个公司名称
+companyName={extendedFieldValues.find(f => f.categoryName === '公司名称')!.value}
+
+// 修改后：使用选中的公司名称
+companyName={selectedCompanyName}
+```
+
+
+## Bug 修复：企业报告图标显示错误
+
+- [x] 修复企业报告图标显示错误：未上传报告的公司图标应该显示为灰色而不是紫色

@@ -18,11 +18,16 @@ export function CompanyReportIcon({ hasReport, onClick, className }: CompanyRepo
       disabled={!hasReport}
       className={cn(
         "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium transition-all",
-        hasReport
-          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 cursor-pointer shadow-sm"
-          : "bg-gray-200 text-gray-400 cursor-not-allowed",
         className
       )}
+      style={{
+        background: hasReport 
+          ? 'linear-gradient(to right, rgb(59, 130, 246), rgb(147, 51, 234))' 
+          : 'rgb(229, 231, 235)',
+        color: hasReport ? 'white' : 'rgb(156, 163, 175)',
+        cursor: hasReport ? 'pointer' : 'not-allowed',
+        opacity: hasReport ? 1 : 0.6
+      }}
       title={hasReport ? "查看企业报告" : "暂无企业报告"}
     >
       {/* 企查查图标（简化的放大镜+文档） */}

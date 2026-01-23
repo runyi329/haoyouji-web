@@ -427,8 +427,9 @@ export default function ContactDetail() {
   // AI 背调状态
   const [showAIBackgroundCheck, setShowAIBackgroundCheck] = useState(false);
   const [showCompanyReportDialog, setShowCompanyReportDialog] = useState(false);
-  const [companyReportExists, setCompanyReportExists] = useState(false);
-  const [checkingCompanyReport, setCheckingCompanyReport] = useState(false);
+  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
+  const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
+  const [checkingCompanyReports, setCheckingCompanyReports] = useState<Record<string, boolean>>({});
 
   // 控制联络统计的显示/隐藏状态
   const [visibleStats, setVisibleStats] = useState<Record<string, boolean>>(() => {
@@ -580,24 +581,26 @@ export default function ContactDetail() {
     }
   }, [stats]);
 
-  // 查询公司是否有报告
+  // 查询所有公司名称是否有报告
   useEffect(() => {
-    const companyName = extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value;
-    if (companyName) {
-      setCheckingCompanyReport(true);
-      fetch(`/api/company-reports/${encodeURIComponent(companyName)}`)
-        .then(res => res.json())
-        .then(data => {
-          setCompanyReportExists(!!data.data);
-        })
-        .catch(() => {
-          setCompanyReportExists(false);
-        })
-        .finally(() => {
-          setCheckingCompanyReport(false);
-        });
-    } else {
-      setCompanyReportExists(false);
+    const companyNames = extendedFieldValues?.filter(f => f.categoryName === '公司名称').map(f => f.value) || [];
+    
+    if (companyNames.length > 0) {
+      // 为每个公司名称查询报告是否存在
+      companyNames.forEach(companyName => {
+        setCheckingCompanyReports(prev => ({ ...prev, [companyName]: true }));
+        fetch(`/api/company-reports/${encodeURIComponent(companyName)}`)
+          .then(res => res.json())
+          .then(data => {
+            setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: !!data.data }));
+          })
+          .catch(() => {
+            setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: false }));
+          })
+          .finally(() => {
+            setCheckingCompanyReports(prev => ({ ...prev, [companyName]: false }));
+          });
+      });
     }
   }, [extendedFieldValues]);
 
@@ -963,8 +966,11 @@ export default function ContactDetail() {
                         <div className="flex items-center gap-2 w-full">
                           <span className="flex-1 truncate">{fv.value}</span>
                           <CompanyReportIcon
-                            hasReport={companyReportExists}
-                            onClick={() => setShowCompanyReportDialog(true)}
+                            hasReport={!!companyReportExistsMap[fv.value]}
+                            onClick={() => {
+                              setSelectedCompanyName(fv.value);
+                              setShowCompanyReportDialog(true);
+                            }}
                           />
                         </div>
                       ) : (
@@ -1955,11 +1961,11 @@ export default function ContactDetail() {
       )}
 
       {/* 企业报告弹窗 */}
-      {contact && extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value && (
+      {selectedCompanyName && (
         <CompanyReportDialog
           open={showCompanyReportDialog}
           onOpenChange={setShowCompanyReportDialog}
-          companyName={extendedFieldValues.find(f => f.categoryName === '公司名称')!.value}
+          companyName={selectedCompanyName}
         />
       )}
     </div>

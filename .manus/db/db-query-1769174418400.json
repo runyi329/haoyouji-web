@@ -1,0 +1,13 @@
+{
+  "query": "SELECT company_name FROM company_reports;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT company_name FROM company_reports;",
+  "rows": [
+    {
+      "company_name": "上海禹捷商务信息咨询有限公司"
+    }
+  ],
+  "messages": [],
+  "stdout": "company_name\n上海禹捷商务信息咨询有限公司\n",
+  "stderr": "",
+  "execution_time_ms": 342
+}
