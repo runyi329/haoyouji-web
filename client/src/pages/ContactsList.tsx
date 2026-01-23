@@ -1571,7 +1571,8 @@ export default function ContactsList() {
                         )}
                         {/* 机器人图标 - 显示公司数量 */}
                         {(() => {
-                          const companies = contact.fieldValues?.filter((fv: any) => fv.categoryName === '公司名称') || [];
+                          if (!companyCategoryId) return null;
+                          const companies = contact.fieldValues?.filter((fv: any) => fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== '') || [];
                           if (companies.length === 0) return null;
                           return (
                             <button
