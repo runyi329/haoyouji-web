@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Upload, Link as LinkIcon, Eye, Loader2, FileText, CheckCircle, Edit, Save } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { CompanyReportDialog } from '@/components/CompanyReportDialog';
+import { CompanyReportIcon } from '@/components/CompanyReportIcon';
 
 interface Company {
   companyName: string;
@@ -45,6 +47,10 @@ export default function CompanyReportManagement() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // 前端预览相关状态
+  const [showFrontendPreview, setShowFrontendPreview] = useState(false);
+  const [previewCompanyName, setPreviewCompanyName] = useState<string | null>(null);
 
   useEffect(() => {
     loadCompanies();
@@ -440,25 +446,39 @@ export default function CompanyReportManagement() {
 
                   {/* 查看报告按钮 */}
                   {company.reportId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full bg-green-50 hover:bg-green-100 border-green-200"
-                      onClick={() => handleViewReport(company.companyName)}
-                      disabled={viewingReport === company.companyName}
-                    >
-                      {viewingReport === company.companyName ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          加载中...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                          查看 AI 分析结果
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-green-50 hover:bg-green-100 border-green-200"
+                        onClick={() => handleViewReport(company.companyName)}
+                        disabled={viewingReport === company.companyName}
+                      >
+                        {viewingReport === company.companyName ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            加载中...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                            查看 AI 分析结果
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        onClick={() => {
+                          setPreviewCompanyName(company.companyName);
+                          setShowFrontendPreview(true);
+                        }}
+                        title="预览前端效果"
+                      >
+                        <CompanyReportIcon hasReport={true} onClick={() => {}} />
+                      </Button>
+                    </div>
                   )}
 
                   {/* 提示文字 */}
@@ -555,6 +575,15 @@ export default function CompanyReportManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 前端预览弹窗 */}
+      {previewCompanyName && (
+        <CompanyReportDialog
+          open={showFrontendPreview}
+          onOpenChange={setShowFrontendPreview}
+          companyName={previewCompanyName}
+        />
+      )}
     </div>
   );
 }

@@ -635,3 +635,40 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
    - 上传成功后立即调用 `await loadCompanies()` 刷新列表
    - 成功状态保持 3 秒，让用户看清结果
    - 确保“查看 AI 分析结果”按钮能立即显示
+
+
+## 功能增强：后台添加前端报告预览功能✅
+
+- [x] 查看前端 CompanyReportDialog 组件的实现
+  - 了解前端报告展示的格式和样式
+  - 确认需要复用的组件和逻辑
+- [x] 在后台添加前端预览按钮
+  - 在上传成功后的公司卡片中添加企查查+DeepSeek图标按钮
+  - 使用蓝色背景，和前端一样的图标样式
+- [x] 复用前端 CompanyReportDialog 组件
+  - 在后台管理页面中导入 CompanyReportDialog
+  - 传递公司名称并显示弹窗
+- [x] 测试预览功能
+  - 测试上传完成后点击预览按钮
+  - 验证弹窗显示的内容和前端用户看到的一致
+
+### 功能目标
+让管理员在上传企业报告后，能够直接在后台预览前端用户看到的报告展示效果，无需切换到前端用户视角，方便确认报告格式和内容是否符合预期。
+
+### 实现内容
+修改 CompanyReportManagement.tsx：
+
+1. **导入组件：**
+   - 导入 CompanyReportDialog 和 CompanyReportIcon 组件
+
+2. **添加状态管理：**
+   - `showFrontendPreview`: 控制预览弹窗显示
+   - `previewCompanyName`: 存储需要预览的公司名称
+
+3. **修改按钮布局：**
+   - 将“查看 AI 分析结果”按钮和预览按钮并排显示
+   - 预览按钮使用 CompanyReportIcon 组件，蓝色背景
+
+4. **添加预览弹窗：**
+   - 使用 CompanyReportDialog 组件显示前端效果
+   - 传递公司名称，自动加载报告数据
