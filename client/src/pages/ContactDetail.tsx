@@ -1246,70 +1246,43 @@ export default function ContactDetail() {
             </Card>
           )}
 
-          {/* 扩展信息 */}
+          {/* 引荐人 */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Briefcase className="h-5 w-5 mr-2" />
-                  扩展信息
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLocation(`/parent/contacts/add?id=${contactId}&mode=edit`)}
-                >
-                  编辑
-                </Button>
+              <CardTitle className="flex items-center">
+                <UserCheck className="h-5 w-5 mr-2" />
+                引荐人
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {/* 介绍人 - 使用独立的设置功能 */}
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-muted-foreground">介绍人</div>
-                  <div className="flex items-center gap-2">
-                    {contact.referrer ? (
-                      <>
-                        <span className="text-sm">
-                          {contact.referrer.name} {contact.referrer.title ? `(${contact.referrer.title})` : ""}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => setShowReferrerDialog(true)}
-                        >
-                          修改
-                        </Button>
-                      </>
-                    ) : (
+                <div className="flex items-center gap-2">
+                  {contact.referrer ? (
+                    <>
+                      <span className="text-sm">
+                        {contact.referrer.name} {contact.referrer.title ? `(${contact.referrer.title})` : ""}
+                      </span>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="h-7 text-xs"
+                        className="h-6 px-2 text-xs"
                         onClick={() => setShowReferrerDialog(true)}
                       >
-                        + 设置介绍人
+                        修改
                       </Button>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setShowReferrerDialog(true)}
+                    >
+                      + 设置引荐人
+                    </Button>
+                  )}
                 </div>
-                
-                {/* 其他自定义字段 */}
-                {contact.fieldValues && contact.fieldValues.length > 0 && (
-                  contact.fieldValues.map((fv: any) => (
-                    <div key={fv.id} className="space-y-1">
-                      <div className="text-sm font-medium text-muted-foreground">{fv.fieldName}</div>
-                      <div className="text-sm">{fv.value}</div>
-                    </div>
-                  ))
-                )}
-                
-                {/* 无数据提示 - 仅当没有自定义字段时显示 */}
-                {(!contact.fieldValues || contact.fieldValues.length === 0) && (
-                  <p className="text-sm text-muted-foreground">点击上方“编辑”按钮添加更多信息</p>
-                )}
               </div>
             </CardContent>
           </Card>
