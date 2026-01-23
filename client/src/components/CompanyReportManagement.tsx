@@ -39,6 +39,12 @@ export default function CompanyReportManagement() {
   const [showFrontendPreview, setShowFrontendPreview] = useState(false);
   const [previewCompanyName, setPreviewCompanyName] = useState<string | null>(null);
 
+  // 提示词管理相关状态
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+
   useEffect(() => {
     loadCompanies();
   }, []);

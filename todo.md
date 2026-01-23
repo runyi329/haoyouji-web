@@ -741,3 +741,32 @@ import { Upload, Loader2, Eye } from 'lucide-react';
 
 ### 修复方案
 重启开发服务器，清除 HMR 缓存，解决 Dialog is not defined 错误。
+
+
+## Bug 修复：showPromptDialog is not defined 错误✅
+
+- [x] 检查 CompanyReportManagement.tsx 中缺失的状态变量
+  - 查看哪些状态变量被删除了
+  - 确认“查看提示词” Dialog 需要哪些状态
+- [x] 添加缺失的状态变量和函数
+  - 添加 showPromptDialog 状态
+  - 添加 prompt, isLoadingPrompt, isSavingPrompt 状态
+  - loadPrompt 和 savePrompt 函数已存在
+- [x] 测试修复后的功能
+  - 测试“查看提示词”按钮
+  - 验证弹窗能否正常打开和编辑
+
+### 问题原因
+在删除“查看报告”弹窗时，误删了“查看提示词” Dialog 需要的状态变量，导致 showPromptDialog is not defined 错误。
+
+### 修复方案
+重新添加缺失的状态变量：
+```typescript
+// 提示词管理相关状态
+const [showPromptDialog, setShowPromptDialog] = useState(false);
+const [prompt, setPrompt] = useState('');
+const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+```
+
+loadPrompt 和 savePrompt 函数已经存在，不需要重新添加。
