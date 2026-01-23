@@ -1,0 +1,18 @@
+{
+  "query": "\nSELECT \n  c.id AS contact_id,\n  c.name AS contact_name,\n  ccf.id AS field_id,\n  ccf.fieldName,\n  ccf.fieldValue,\n  ccf.createdAt\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE u.username = 'Jiang' AND c.name = '羊仲平';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  c.id AS contact_id,\n  c.name AS contact_name,\n  ccf.id AS field_id,\n  ccf.fieldName,\n  ccf.fieldValue,\n  ccf.createdAt\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE u.username = 'Jiang' AND c.name = '羊仲平';\n",
+  "rows": [
+    {
+      "contact_id": "540004",
+      "contact_name": "羊仲平",
+      "field_id": "3",
+      "fieldName": "公司名称",
+      "fieldValue": "隐钰庐（上海）艺术设计有限公司",
+      "createdAt": "2026-01-23 16:02:23"
+    }
+  ],
+  "messages": [],
+  "stdout": "contact_id\tcontact_name\tfield_id\tfieldName\tfieldValue\tcreatedAt\n540004\t羊仲平\t3\t公司名称\t隐钰庐（上海）艺术设计有限公司\t2026-01-23 16:02:23\n",
+  "stderr": "",
+  "execution_time_ms": 297
+}

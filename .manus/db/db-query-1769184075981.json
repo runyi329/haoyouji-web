@@ -1,0 +1,3167 @@
+{
+  "query": "\nSELECT \n  u.username,\n  c.id,\n  c.name,\n  ccf.fieldName,\n  ccf.fieldValue\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId AND ccf.fieldName = '公司名称'\nWHERE u.username IN ('Jiang', 'yunting')\nORDER BY u.username, c.name;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  u.username,\n  c.id,\n  c.name,\n  ccf.fieldName,\n  ccf.fieldValue\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId AND ccf.fieldName = '公司名称'\nWHERE u.username IN ('Jiang', 'yunting')\nORDER BY u.username, c.name;\n",
+  "rows": [
+    {
+      "username": "jiang",
+      "id": "420017",
+      "name": "AIda",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750015",
+      "name": "Believe",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420005",
+      "name": "丁凯乐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390028",
+      "name": "丁楠",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750002",
+      "name": "乔治妈妈米亚洁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750003",
+      "name": "乔治爸爸谷风淳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750013",
+      "name": "亓华琛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420011",
+      "name": "付before",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "870001",
+      "name": "何巧男",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750014",
+      "name": "刘先",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "210001",
+      "name": "刘力凡",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420033",
+      "name": "刘强",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750008",
+      "name": "包宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "360006",
+      "name": "卓迪敏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "510003",
+      "name": "单怀红",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "510002",
+      "name": "单菲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750017",
+      "name": "卞乐天",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750018",
+      "name": "卞雨萌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "600001",
+      "name": "印建雅",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "690001",
+      "name": "叶峰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150001",
+      "name": "司旭东",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420015",
+      "name": "吴培",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150005",
+      "name": "周栩",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150011",
+      "name": "唐成科",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750004",
+      "name": "四宝妈妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "540001",
+      "name": "夏菡",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390032",
+      "name": "孙井丹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420022",
+      "name": "安仁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420024",
+      "name": "安宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420021",
+      "name": "安平印",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420023",
+      "name": "安诣彬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "690002",
+      "name": "宋少琛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "270002",
+      "name": "宋皓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750009",
+      "name": "巴山",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "600002",
+      "name": "应勇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150008",
+      "name": "应皓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "780001",
+      "name": "张伟英",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "360001",
+      "name": "张寒露",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420001",
+      "name": "张慧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390001",
+      "name": "张珏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "1140001",
+      "name": "张镇疆",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "240002",
+      "name": "成天乐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "180002",
+      "name": "戴子聪",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750007",
+      "name": "旭旭老师",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420016",
+      "name": "易天",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390003",
+      "name": "望悦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "630002",
+      "name": "李强",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390005",
+      "name": "李斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750011",
+      "name": "李新影",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "540002",
+      "name": "李方华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390004",
+      "name": "李晓宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390031",
+      "name": "李晓洁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420020",
+      "name": "李芳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "570001",
+      "name": "李赛泽",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "240001",
+      "name": "杨竣贺",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420026",
+      "name": "杨雪",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "330004",
+      "name": "林佳任",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750001",
+      "name": "林莑",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "330001",
+      "name": "梁惠乐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390030",
+      "name": "汉明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "1440003",
+      "name": "江晓旭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390025",
+      "name": "洪小燕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "510001",
+      "name": "王占洋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "180003",
+      "name": "王海艳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "1110001",
+      "name": "王茜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420012",
+      "name": "王蔚",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420031",
+      "name": "白君禹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420032",
+      "name": "白媛媛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750005",
+      "name": "白崇延",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750006",
+      "name": "白皓天",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420034",
+      "name": "白茹茜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420010",
+      "name": "秦主任",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420013",
+      "name": "綦占深",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "720001",
+      "name": "罗潇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "540004",
+      "name": "羊仲平",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "330002",
+      "name": "胡永煜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390026",
+      "name": "胡艺",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420018",
+      "name": "艾宁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750012",
+      "name": "苏熙乔",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390029",
+      "name": "苏静雲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420014",
+      "name": "英超起",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "1260001",
+      "name": "范海俊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420004",
+      "name": "荆晶",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750010",
+      "name": "蒋大兴",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390034",
+      "name": "蒋耘莛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150007",
+      "name": "蔡啸",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "930001",
+      "name": "覃皓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "540003",
+      "name": "许婉琴",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420019",
+      "name": "谢野",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "630001",
+      "name": "谭志强",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420002",
+      "name": "贾嘲风",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420009",
+      "name": "赵鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750016",
+      "name": "边国英",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "750019",
+      "name": "边宇晴",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390027",
+      "name": "郑奎",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "690003",
+      "name": "郝东林",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420027",
+      "name": "钟贝",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "390033",
+      "name": "闫然",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "150006",
+      "name": "陈奇戌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420003",
+      "name": "陈思",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "900001",
+      "name": "陈文驰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "300005",
+      "name": "陈明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420035",
+      "name": "陈明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420007",
+      "name": "雷涯邻",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "jiang",
+      "id": "420028",
+      "name": "马婉义",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810020",
+      "name": "camille",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810033",
+      "name": "Cecilia",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840052",
+      "name": "chris黄培峰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350003",
+      "name": "Emily晓宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380016",
+      "name": "Gavin陈哥",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1320001",
+      "name": "jyt",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960014",
+      "name": "mia陈老师",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840089",
+      "name": "丁东旭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840091",
+      "name": "丁军",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840092",
+      "name": "丁勐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840094",
+      "name": "丁晓宁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840090",
+      "name": "丁洁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840093",
+      "name": "丁胜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840087",
+      "name": "丁雅勤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810008",
+      "name": "不冻泉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840104",
+      "name": "东旭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840074",
+      "name": "丹阳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200008",
+      "name": "习朝瑞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170005",
+      "name": "云霞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840055",
+      "name": "从辉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380004",
+      "name": "付秋玲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840068",
+      "name": "代栋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380028",
+      "name": "任志坤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810031",
+      "name": "何嘉雯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200001",
+      "name": "何敏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380065",
+      "name": "何敏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380069",
+      "name": "侯俊琳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380068",
+      "name": "侯贺良",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380070",
+      "name": "侯锐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840051",
+      "name": "侴辰寅",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840082",
+      "name": "俞怡岚",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380035",
+      "name": "关婧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380040",
+      "name": "关渤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350014",
+      "name": "冯全普",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200004",
+      "name": "冯晓鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350015",
+      "name": "冯莎",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350012",
+      "name": "冯超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840084",
+      "name": "刁瑞弢",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380113",
+      "name": "刘丽瑶",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380114",
+      "name": "刘娜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380026",
+      "name": "刘寅凯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170003",
+      "name": "刘康泰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380039",
+      "name": "刘建文",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380115",
+      "name": "刘思远",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170004",
+      "name": "刘桦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350009",
+      "name": "刘若惜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380116",
+      "name": "刘颖慧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380081",
+      "name": "化伟",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840073",
+      "name": "单小婵",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810006",
+      "name": "博钊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380094",
+      "name": "吴万众",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200011",
+      "name": "周元松",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380066",
+      "name": "哼哼爸爸",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810015",
+      "name": "唐溢江",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810030",
+      "name": "嘉嘉妈妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840075",
+      "name": "大田Andy",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380091",
+      "name": "姜龙斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "990001",
+      "name": "孙一寒",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350020",
+      "name": "孙莉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810007",
+      "name": "孙豳bin",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960005",
+      "name": "孟庆芬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380025",
+      "name": "宫爱丽",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350013",
+      "name": "封雷迅",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350016",
+      "name": "小微",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810002",
+      "name": "小蛮妈妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840059",
+      "name": "崔丽君",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840060",
+      "name": "崔丽霞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840062",
+      "name": "崔乃亮",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840057",
+      "name": "崔凯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840058",
+      "name": "崔宏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840056",
+      "name": "崔慧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840065",
+      "name": "崔振声",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840061",
+      "name": "崔玲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840063",
+      "name": "崔秀",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840064",
+      "name": "崔育骐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200014",
+      "name": "左晓平",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810036",
+      "name": "常岭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810041",
+      "name": "常海燕总",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810040",
+      "name": "常远",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380099",
+      "name": "廖理纯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960013",
+      "name": "张广裕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380032",
+      "name": "张晓茹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200007",
+      "name": "张海燕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960006",
+      "name": "张育硕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "930005",
+      "name": "张镇疆",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840053",
+      "name": "张雨诗",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810016",
+      "name": "张黎",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380055",
+      "name": "徐壮",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810051",
+      "name": "成凯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810049",
+      "name": "成怀喜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840070",
+      "name": "戴维",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840069",
+      "name": "戴萌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810011",
+      "name": "才力",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810012",
+      "name": "才显春叔叔",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350005",
+      "name": "方木森",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840054",
+      "name": "春晓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200012",
+      "name": "曲晓东",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810028",
+      "name": "曹云蕾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810029",
+      "name": "曹子嘉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810027",
+      "name": "曹宇飞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810024",
+      "name": "曹扬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810026",
+      "name": "曹洋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810022",
+      "name": "曹琨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810025",
+      "name": "曹阳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810023",
+      "name": "曹麦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380024",
+      "name": "朱彬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170001",
+      "name": "朱清",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960004",
+      "name": "朱虹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840117",
+      "name": "朵妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840111",
+      "name": "李丹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "990002",
+      "name": "李佳星",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380103",
+      "name": "李佳星",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380107",
+      "name": "李俊杞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380108",
+      "name": "李君强",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380109",
+      "name": "李君韬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380027",
+      "name": "李富龙",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200010",
+      "name": "李月明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380110",
+      "name": "李林",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380111",
+      "name": "李梦旭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840050",
+      "name": "李玲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380097",
+      "name": "李瑾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380101",
+      "name": "李璨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380100",
+      "name": "李璨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380042",
+      "name": "李立",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380105",
+      "name": "李红颖",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810010",
+      "name": "李胤宁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380106",
+      "name": "李菁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380102",
+      "name": "李超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380031",
+      "name": "李银生",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380104",
+      "name": "李静",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840115",
+      "name": "杜丙权",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380034",
+      "name": "杜丽丽",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840116",
+      "name": "杜嘉林",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840118",
+      "name": "杜文韬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840119",
+      "name": "杜晓燕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840120",
+      "name": "杜欣",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840121",
+      "name": "杜雪娇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350017",
+      "name": "林莑",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380112",
+      "name": "柳超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810035",
+      "name": "柴微",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380098",
+      "name": "梁晓军",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200013",
+      "name": "梁鑫鴛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380018",
+      "name": "歌伶",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200009",
+      "name": "武文斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840112",
+      "name": "段凌靓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840083",
+      "name": "段建国",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840114",
+      "name": "段晓东",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840113",
+      "name": "段然",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200002",
+      "name": "殷之络",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810001",
+      "name": "毕昆峰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380090",
+      "name": "江丽娜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380092",
+      "name": "江勇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380089",
+      "name": "江锋涛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960009",
+      "name": "汤鑫雷",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840072",
+      "name": "淡培蕾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170002",
+      "name": "熊瑛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350010",
+      "name": "王佳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960015",
+      "name": "王克维",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810009",
+      "name": "王晓军",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960001",
+      "name": "王晶",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380052",
+      "name": "王若婷",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840086",
+      "name": "王茜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380037",
+      "name": "王道斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810019",
+      "name": "王金秋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350001",
+      "name": "王雪冰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380033",
+      "name": "王雪梅",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380095",
+      "name": "琚小红",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840049",
+      "name": "种法辉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810050",
+      "name": "程吉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840047",
+      "name": "程广超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840001",
+      "name": "程旭",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840004",
+      "name": "程玉花",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810048",
+      "name": "程程",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810053",
+      "name": "程诗惠",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840002",
+      "name": "程跃华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810034",
+      "name": "程非",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840109",
+      "name": "窦宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840108",
+      "name": "窦豆",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960012",
+      "name": "章勋奇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380002",
+      "name": "符宝嵩",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380003",
+      "name": "符翠玲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840096",
+      "name": "綦东慧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200006",
+      "name": "罗杨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380019",
+      "name": "耿全颖",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380022",
+      "name": "耿天鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380020",
+      "name": "耿淑娟",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1170006",
+      "name": "耿雷",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810038",
+      "name": "聂倩雯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840071",
+      "name": "胡单",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380087",
+      "name": "胡培战",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380085",
+      "name": "胡晓龙",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380084",
+      "name": "胡燕",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380083",
+      "name": "胡石磊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350004",
+      "name": "苑生龙",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350007",
+      "name": "范华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350008",
+      "name": "范嘉斯",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810003",
+      "name": "范敬天",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350006",
+      "name": "范海波",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840067",
+      "name": "茜茜大哥妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380023",
+      "name": "葛煜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380021",
+      "name": "葛茜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380017",
+      "name": "葛超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840101",
+      "name": "董倩",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840100",
+      "name": "董娜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840107",
+      "name": "董振华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840102",
+      "name": "董文新",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840103",
+      "name": "董新颖",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840099",
+      "name": "董明磊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350021",
+      "name": "董春凤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840095",
+      "name": "董春芝老师",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840088",
+      "name": "董滨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840098",
+      "name": "董琳湾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840106",
+      "name": "董艺菲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840097",
+      "name": "董辉",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840105",
+      "name": "董雪冰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960002",
+      "name": "蒋腾飞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810014",
+      "name": "蔡文源",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810013",
+      "name": "蔡文迪",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810017",
+      "name": "蔡雄山",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810005",
+      "name": "薄丽",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810004",
+      "name": "薄惠君",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960007",
+      "name": "薛牧青",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380030",
+      "name": "袁欣",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960011",
+      "name": "裴孟然",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380067",
+      "name": "贺晔",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380088",
+      "name": "贾佳国",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960003",
+      "name": "赵国华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840045",
+      "name": "车序贞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840048",
+      "name": "迟敏敏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840080",
+      "name": "邓周鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840078",
+      "name": "邓媛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840081",
+      "name": "邓子",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840076",
+      "name": "邓红星",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840079",
+      "name": "邓艳青",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840077",
+      "name": "邓金子",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810037",
+      "name": "邓长清",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350018",
+      "name": "邱晓雨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810021",
+      "name": "郑子煜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380063",
+      "name": "郝丽丹",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380064",
+      "name": "郝元明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380061",
+      "name": "郝博川",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380043",
+      "name": "郭佳奇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380038",
+      "name": "郭宝明",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380046",
+      "name": "郭宪勇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380050",
+      "name": "郭志安",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380041",
+      "name": "郭怀瑾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380045",
+      "name": "郭明英",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380049",
+      "name": "郭星辰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380048",
+      "name": "郭晓雁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380047",
+      "name": "郭晓雷",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380005",
+      "name": "郭玉安",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380044",
+      "name": "郭珂伊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350002",
+      "name": "鄂力铁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840085",
+      "name": "钓鱼台国宾馆刘经理",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810039",
+      "name": "长腿妈妈",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840044",
+      "name": "陈中锋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810047",
+      "name": "陈丰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840039",
+      "name": "陈义望",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840006",
+      "name": "陈佳蕙",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840010",
+      "name": "陈俊豪",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810032",
+      "name": "陈偲偲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840036",
+      "name": "陈垚",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840021",
+      "name": "陈天媛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840008",
+      "name": "陈婧",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840014",
+      "name": "陈宁",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810043",
+      "name": "陈宝红",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810044",
+      "name": "陈崇斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840032",
+      "name": "陈延",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840019",
+      "name": "陈思",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840037",
+      "name": "陈怡凤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840005",
+      "name": "陈昊",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810045",
+      "name": "陈春锋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840024",
+      "name": "陈显松",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840025",
+      "name": "陈晓晔",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810042",
+      "name": "陈晨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840007",
+      "name": "陈晶",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840043",
+      "name": "陈智洋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840027",
+      "name": "陈曦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840028",
+      "name": "陈曦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840023",
+      "name": "陈曦",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840012",
+      "name": "陈梁擎",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840040",
+      "name": "陈永胜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840035",
+      "name": "陈洋赵楚",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840041",
+      "name": "陈照玥",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840018",
+      "name": "陈瑞华",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840031",
+      "name": "陈璇璇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840013",
+      "name": "陈璐洋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380001",
+      "name": "陈立坤",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840026",
+      "name": "陈筱茵",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840022",
+      "name": "陈维强",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840033",
+      "name": "陈艳",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840017",
+      "name": "陈若剑",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840011",
+      "name": "陈蕾",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840034",
+      "name": "陈言飞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840020",
+      "name": "陈诗",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840110",
+      "name": "陈迎涛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810046",
+      "name": "陈迪",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840030",
+      "name": "陈鑫",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840042",
+      "name": "陈震",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840009",
+      "name": "陈静",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840038",
+      "name": "陈颖婷",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840029",
+      "name": "陈馨",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840016",
+      "name": "陈鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "840015",
+      "name": "陈鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380096",
+      "name": "雷小武",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380086",
+      "name": "霍丙森",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380093",
+      "name": "靳奇心",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380057",
+      "name": "韩冬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960010",
+      "name": "韩哥家嫂子小白",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380062",
+      "name": "韩月超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380058",
+      "name": "韩璐",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380056",
+      "name": "韩超",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380060",
+      "name": "韩轶之",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380059",
+      "name": "韩轶新",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200005",
+      "name": "韩黎斌",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380051",
+      "name": "顾文杰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380053",
+      "name": "顾晓",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380036",
+      "name": "顾立东",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380054",
+      "name": "顾鑫",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380029",
+      "name": "颜方",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380010",
+      "name": "高寒松",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380014",
+      "name": "高旭枫",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380011",
+      "name": "高杰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810018",
+      "name": "高杰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380009",
+      "name": "高枫潇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380012",
+      "name": "高汝峰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380015",
+      "name": "高照军",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "810052",
+      "name": "高美玲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380013",
+      "name": "高翔宇",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380007",
+      "name": "高聪哲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380006",
+      "name": "高菲",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380008",
+      "name": "高飞",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "960008",
+      "name": "魏巍",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380082",
+      "name": "魏炜",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1350011",
+      "name": "鲁婧晗",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380074",
+      "name": "黄剑",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380075",
+      "name": "黄剑锋",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380072",
+      "name": "黄国伟",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380071",
+      "name": "黄彬",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380078",
+      "name": "黄楷峰",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1200003",
+      "name": "黄河清",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380077",
+      "name": "黄泰之",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380079",
+      "name": "黄涛",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380080",
+      "name": "黄真",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380076",
+      "name": "黄立",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    },
+    {
+      "username": "yunting",
+      "id": "1380073",
+      "name": "黄鹤鹏",
+      "fieldName": "NULL",
+      "fieldValue": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "username\tid\tname\tfieldName\tfieldValue\njiang\t420017\tAIda\tNULL\tNULL\njiang\t750015\tBelieve\tNULL\tNULL\njiang\t420005\t丁凯乐\tNULL\tNULL\njiang\t390028\t丁楠\tNULL\tNULL\njiang\t750002\t乔治妈妈米亚洁\tNULL\tNULL\njiang\t750003\t乔治爸爸谷风淳\tNULL\tNULL\njiang\t750013\t亓华琛\tNULL\tNULL\njiang\t420011\t付before\tNULL\tNULL\njiang\t870001\t何巧男\tNULL\tNULL\njiang\t750014\t刘先\tNULL\tNULL\njiang\t210001\t刘力凡\tNULL\tNULL\njiang\t420033\t刘强\tNULL\tNULL\njiang\t750008\t包宇\tNULL\tNULL\njiang\t360006\t卓迪敏\tNULL\tNULL\njiang\t510003\t单怀红\tNULL\tNULL\njiang\t510002\t单菲\tNULL\tNULL\njiang\t750017\t卞乐天\tNULL\tNULL\njiang\t750018\t卞雨萌\tNULL\tNULL\njiang\t600001\t印建雅\tNULL\tNULL\njiang\t690001\t叶峰\tNULL\tNULL\njiang\t150001\t司旭东\tNULL\tNULL\njiang\t420015\t吴培\tNULL\tNULL\njiang\t150005\t周栩\tNULL\tNULL\njiang\t150011\t唐成科\tNULL\tNULL\njiang\t750004\t四宝妈妈\tNULL\tNULL\njiang\t540001\t夏菡\tNULL\tNULL\njiang\t390032\t孙井丹\tNULL\tNULL\njiang\t420022\t安仁\tNULL\tNULL\njiang\t420024\t安宇\tNULL\tNULL\njiang\t420021\t安平印\tNULL\tNULL\njiang\t420023\t安诣彬\tNULL\tNULL\njiang\t690002\t宋少琛\tNULL\tNULL\njiang\t270002\t宋皓\tNULL\tNULL\njiang\t750009\t巴山\tNULL\tNULL\njiang\t600002\t应勇\tNULL\tNULL\njiang\t150008\t应皓\tNULL\tNULL\njiang\t780001\t张伟英\tNULL\tNULL\njiang\t360001\t张寒露\tNULL\tNULL\njiang\t420001\t张慧\tNULL\tNULL\njiang\t390001\t张珏\tNULL\tNULL\njiang\t1140001\t张镇疆\tNULL\tNULL\njiang\t240002\t成天乐\tNULL\tNULL\njiang\t180002\t戴子聪\tNULL\tNULL\njiang\t750007\t旭旭老师\tNULL\tNULL\njiang\t420016\t易天\tNULL\tNULL\njiang\t390003\t望悦\tNULL\tNULL\njiang\t630002\t李强\tNULL\tNULL\njiang\t390005\t李斌\tNULL\tNULL\njiang\t750011\t李新影\tNULL\tNULL\njiang\t540002\t李方华\tNULL\tNULL\njiang\t390004\t李晓宇\tNULL\tNULL\njiang\t390031\t李晓洁\tNULL\tNULL\njiang\t420020\t李芳\tNULL\tNULL\njiang\t570001\t李赛泽\tNULL\tNULL\njiang\t240001\t杨竣贺\tNULL\tNULL\njiang\t420026\t杨雪\tNULL\tNULL\njiang\t330004\t林佳任\tNULL\tNULL\njiang\t750001\t林莑\tNULL\tNULL\njiang\t330001\t梁惠乐\tNULL\tNULL\njiang\t390030\t汉明\tNULL\tNULL\njiang\t1440003\t江晓旭\tNULL\tNULL\njiang\t390025\t洪小燕\tNULL\tNULL\njiang\t510001\t王占洋\tNULL\tNULL\njiang\t180003\t王海艳\tNULL\tNULL\njiang\t1110001\t王茜\tNULL\tNULL\njiang\t420012\t王蔚\tNULL\tNULL\njiang\t420031\t白君禹\tNULL\tNULL\njiang\t420032\t白媛媛\tNULL\tNULL\njiang\t750005\t白崇延\tNULL\tNULL\njiang\t750006\t白皓天\tNULL\tNULL\njiang\t420034\t白茹茜\tNULL\tNULL\njiang\t420010\t秦主任\tNULL\tNULL\njiang\t420013\t綦占深\tNULL\tNULL\njiang\t720001\t罗潇\tNULL\tNULL\njiang\t540004\t羊仲平\tNULL\tNULL\njiang\t330002\t胡永煜\tNULL\tNULL\njiang\t390026\t胡艺\tNULL\tNULL\njiang\t420018\t艾宁\tNULL\tNULL\njiang\t750012\t苏熙乔\tNULL\tNULL\njiang\t390029\t苏静雲\tNULL\tNULL\njiang\t420014\t英超起\tNULL\tNULL\njiang\t1260001\t范海俊\tNULL\tNULL\njiang\t420004\t荆晶\tNULL\tNULL\njiang\t750010\t蒋大兴\tNULL\tNULL\njiang\t390034\t蒋耘莛\tNULL\tNULL\njiang\t150007\t蔡啸\tNULL\tNULL\njiang\t930001\t覃皓\tNULL\tNULL\njiang\t540003\t许婉琴\tNULL\tNULL\njiang\t420019\t谢野\tNULL\tNULL\njiang\t630001\t谭志强\tNULL\tNULL\njiang\t420002\t贾嘲风\tNULL\tNULL\njiang\t420009\t赵鹏\tNULL\tNULL\njiang\t750016\t边国英\tNULL\tNULL\njiang\t750019\t边宇晴\tNULL\tNULL\njiang\t390027\t郑奎\tNULL\tNULL\njiang\t690003\t郝东林\tNULL\tNULL\njiang\t420027\t钟贝\tNULL\tNULL\njiang\t390033\t闫然\tNULL\tNULL\njiang\t150006\t陈奇戌\tNULL\tNULL\njiang\t420003\t陈思\tNULL\tNULL\njiang\t900001\t陈文驰\tNULL\tNULL\njiang\t300005\t陈明\tNULL\tNULL\njiang\t420035\t陈明\tNULL\tNULL\njiang\t420007\t雷涯邻\tNULL\tNULL\njiang\t420028\t马婉义\tNULL\tNULL\nyunting\t810020\tcamille\tNULL\tNULL\nyunting\t810033\tCecilia\tNULL\tNULL\nyunting\t840052\tchris黄培峰\tNULL\tNULL\nyunting\t1350003\tEmily晓宇\tNULL\tNULL\nyunting\t1380016\tGavin陈哥\tNULL\tNULL\nyunting\t1320001\tjyt\tNULL\tNULL\nyunting\t960014\tmia陈老师\tNULL\tNULL\nyunting\t840089\t丁东旭\tNULL\tNULL\nyunting\t840091\t丁军\tNULL\tNULL\nyunting\t840092\t丁勐\tNULL\tNULL\nyunting\t840094\t丁晓宁\tNULL\tNULL\nyunting\t840090\t丁洁\tNULL\tNULL\nyunting\t840093\t丁胜\tNULL\tNULL\nyunting\t840087\t丁雅勤\tNULL\tNULL\nyunting\t810008\t不冻泉\tNULL\tNULL\nyunting\t840104\t东旭\tNULL\tNULL\nyunting\t840074\t丹阳\tNULL\tNULL\nyunting\t1200008\t习朝瑞\tNULL\tNULL\nyunting\t1170005\t云霞\tNULL\tNULL\nyunting\t840055\t从辉\tNULL\tNULL\nyunting\t1380004\t付秋玲\tNULL\tNULL\nyunting\t840068\t代栋\tNULL\tNULL\nyunting\t1380028\t任志坤\tNULL\tNULL\nyunting\t810031\t何嘉雯\tNULL\tNULL\nyunting\t1200001\t何敏\tNULL\tNULL\nyunting\t1380065\t何敏\tNULL\tNULL\nyunting\t1380069\t侯俊琳\tNULL\tNULL\nyunting\t1380068\t侯贺良\tNULL\tNULL\nyunting\t1380070\t侯锐\tNULL\tNULL\nyunting\t840051\t侴辰寅\tNULL\tNULL\nyunting\t840082\t俞怡岚\tNULL\tNULL\nyunting\t1380035\t关婧\tNULL\tNULL\nyunting\t1380040\t关渤\tNULL\tNULL\nyunting\t1350014\t冯全普\tNULL\tNULL\nyunting\t1200004\t冯晓鹏\tNULL\tNULL\nyunting\t1350015\t冯莎\tNULL\tNULL\nyunting\t1350012\t冯超\tNULL\tNULL\nyunting\t840084\t刁瑞弢\tNULL\tNULL\nyunting\t1380113\t刘丽瑶\tNULL\tNULL\nyunting\t1380114\t刘娜\tNULL\tNULL\nyunting\t1380026\t刘寅凯\tNULL\tNULL\nyunting\t1170003\t刘康泰\tNULL\tNULL\nyunting\t1380039\t刘建文\tNULL\tNULL\nyunting\t1380115\t刘思远\tNULL\tNULL\nyunting\t1170004\t刘桦\tNULL\tNULL\nyunting\t1350009\t刘若惜\tNULL\tNULL\nyunting\t1380116\t刘颖慧\tNULL\tNULL\nyunting\t1380081\t化伟\tNULL\tNULL\nyunting\t840073\t单小婵\tNULL\tNULL\nyunting\t810006\t博钊\tNULL\tNULL\nyunting\t1380094\t吴万众\tNULL\tNULL\nyunting\t1200011\t周元松\tNULL\tNULL\nyunting\t1380066\t哼哼爸爸\tNULL\tNULL\nyunting\t810015\t唐溢江\tNULL\tNULL\nyunting\t810030\t嘉嘉妈妈\tNULL\tNULL\nyunting\t840075\t大田Andy\tNULL\tNULL\nyunting\t1380091\t姜龙斌\tNULL\tNULL\nyunting\t990001\t孙一寒\tNULL\tNULL\nyunting\t1350020\t孙莉\tNULL\tNULL\nyunting\t810007\t孙豳bin\tNULL\tNULL\nyunting\t960005\t孟庆芬\tNULL\tNULL\nyunting\t1380025\t宫爱丽\tNULL\tNULL\nyunting\t1350013\t封雷迅\tNULL\tNULL\nyunting\t1350016\t小微\tNULL\tNULL\nyunting\t810002\t小蛮妈妈\tNULL\tNULL\nyunting\t840059\t崔丽君\tNULL\tNULL\nyunting\t840060\t崔丽霞\tNULL\tNULL\nyunting\t840062\t崔乃亮\tNULL\tNULL\nyunting\t840057\t崔凯\tNULL\tNULL\nyunting\t840058\t崔宏\tNULL\tNULL\nyunting\t840056\t崔慧\tNULL\tNULL\nyunting\t840065\t崔振声\tNULL\tNULL\nyunting\t840061\t崔玲\tNULL\tNULL\nyunting\t840063\t崔秀\tNULL\tNULL\nyunting\t840064\t崔育骐\tNULL\tNULL\nyunting\t1200014\t左晓平\tNULL\tNULL\nyunting\t810036\t常岭\tNULL\tNULL\nyunting\t810041\t常海燕总\tNULL\tNULL\nyunting\t810040\t常远\tNULL\tNULL\nyunting\t1380099\t廖理纯\tNULL\tNULL\nyunting\t960013\t张广裕\tNULL\tNULL\nyunting\t1380032\t张晓茹\tNULL\tNULL\nyunting\t1200007\t张海燕\tNULL\tNULL\nyunting\t960006\t张育硕\tNULL\tNULL\nyunting\t930005\t张镇疆\tNULL\tNULL\nyunting\t840053\t张雨诗\tNULL\tNULL\nyunting\t810016\t张黎\tNULL\tNULL\nyunting\t1380055\t徐壮\tNULL\tNULL\nyunting\t810051\t成凯\tNULL\tNULL\nyunting\t810049\t成怀喜\tNULL\tNULL\nyunting\t840070\t戴维\tNULL\tNULL\nyunting\t840069\t戴萌\tNULL\tNULL\nyunting\t810011\t才力\tNULL\tNULL\nyunting\t810012\t才显春叔叔\tNULL\tNULL\nyunting\t1350005\t方木森\tNULL\tNULL\nyunting\t840054\t春晓\tNULL\tNULL\nyunting\t1200012\t曲晓东\tNULL\tNULL\nyunting\t810028\t曹云蕾\tNULL\tNULL\nyunting\t810029\t曹子嘉\tNULL\tNULL\nyunting\t810027\t曹宇飞\tNULL\tNULL\nyunting\t810024\t曹扬\tNULL\tNULL\nyunting\t810026\t曹洋\tNULL\tNULL\nyunting\t810022\t曹琨\tNULL\tNULL\nyunting\t810025\t曹阳\tNULL\tNULL\nyunting\t810023\t曹麦\tNULL\tNULL\nyunting\t1380024\t朱彬\tNULL\tNULL\nyunting\t1170001\t朱清\tNULL\tNULL\nyunting\t960004\t朱虹\tNULL\tNULL\nyunting\t840117\t朵妈\tNULL\tNULL\nyunting\t840111\t李丹\tNULL\tNULL\nyunting\t990002\t李佳星\tNULL\tNULL\nyunting\t1380103\t李佳星\tNULL\tNULL\nyunting\t1380107\t李俊杞\tNULL\tNULL\nyunting\t1380108\t李君强\tNULL\tNULL\nyunting\t1380109\t李君韬\tNULL\tNULL\nyunting\t1380027\t李富龙\tNULL\tNULL\nyunting\t1200010\t李月明\tNULL\tNULL\nyunting\t1380110\t李林\tNULL\tNULL\nyunting\t1380111\t李梦旭\tNULL\tNULL\nyunting\t840050\t李玲\tNULL\tNULL\nyunting\t1380097\t李瑾\tNULL\tNULL\nyunting\t1380101\t李璨\tNULL\tNULL\nyunting\t1380100\t李璨\tNULL\tNULL\nyunting\t1380042\t李立\tNULL\tNULL\nyunting\t1380105\t李红颖\tNULL\tNULL\nyunting\t810010\t李胤宁\tNULL\tNULL\nyunting\t1380106\t李菁\tNULL\tNULL\nyunting\t1380102\t李超\tNULL\tNULL\nyunting\t1380031\t李银生\tNULL\tNULL\nyunting\t1380104\t李静\tNULL\tNULL\nyunting\t840115\t杜丙权\tNULL\tNULL\nyunting\t1380034\t杜丽丽\tNULL\tNULL\nyunting\t840116\t杜嘉林\tNULL\tNULL\nyunting\t840118\t杜文韬\tNULL\tNULL\nyunting\t840119\t杜晓燕\tNULL\tNULL\nyunting\t840120\t杜欣\tNULL\tNULL\nyunting\t840121\t杜雪娇\tNULL\tNULL\nyunting\t1350017\t林莑\tNULL\tNULL\nyunting\t1380112\t柳超\tNULL\tNULL\nyunting\t810035\t柴微\tNULL\tNULL\nyunting\t1380098\t梁晓军\tNULL\tNULL\nyunting\t1200013\t梁鑫鴛\tNULL\tNULL\nyunting\t1380018\t歌伶\tNULL\tNULL\nyunting\t1200009\t武文斌\tNULL\tNULL\nyunting\t840112\t段凌靓\tNULL\tNULL\nyunting\t840083\t段建国\tNULL\tNULL\nyunting\t840114\t段晓东\tNULL\tNULL\nyunting\t840113\t段然\tNULL\tNULL\nyunting\t1200002\t殷之络\tNULL\tNULL\nyunting\t810001\t毕昆峰\tNULL\tNULL\nyunting\t1380090\t江丽娜\tNULL\tNULL\nyunting\t1380092\t江勇\tNULL\tNULL\nyunting\t1380089\t江锋涛\tNULL\tNULL\nyunting\t960009\t汤鑫雷\tNULL\tNULL\nyunting\t840072\t淡培蕾\tNULL\tNULL\nyunting\t1170002\t熊瑛\tNULL\tNULL\nyunting\t1350010\t王佳\tNULL\tNULL\nyunting\t960015\t王克维\tNULL\tNULL\nyunting\t810009\t王晓军\tNULL\tNULL\nyunting\t960001\t王晶\tNULL\tNULL\nyunting\t1380052\t王若婷\tNULL\tNULL\nyunting\t840086\t王茜\tNULL\tNULL\nyunting\t1380037\t王道斌\tNULL\tNULL\nyunting\t810019\t王金秋\tNULL\tNULL\nyunting\t1350001\t王雪冰\tNULL\tNULL\nyunting\t1380033\t王雪梅\tNULL\tNULL\nyunting\t1380095\t琚小红\tNULL\tNULL\nyunting\t840049\t种法辉\tNULL\tNULL\nyunting\t810050\t程吉\tNULL\tNULL\nyunting\t840047\t程广超\tNULL\tNULL\nyunting\t840001\t程旭\tNULL\tNULL\nyunting\t840004\t程玉花\tNULL\tNULL\nyunting\t810048\t程程\tNULL\tNULL\nyunting\t810053\t程诗惠\tNULL\tNULL\nyunting\t840002\t程跃华\tNULL\tNULL\nyunting\t810034\t程非\tNULL\tNULL\nyunting\t840109\t窦宇\tNULL\tNULL\nyunting\t840108\t窦豆\tNULL\tNULL\nyunting\t960012\t章勋奇\tNULL\tNULL\nyunting\t1380002\t符宝嵩\tNULL\tNULL\nyunting\t1380003\t符翠玲\tNULL\tNULL\nyunting\t840096\t綦东慧\tNULL\tNULL\nyunting\t1200006\t罗杨\tNULL\tNULL\nyunting\t1380019\t耿全颖\tNULL\tNULL\nyunting\t1380022\t耿天鹏\tNULL\tNULL\nyunting\t1380020\t耿淑娟\tNULL\tNULL\nyunting\t1170006\t耿雷\tNULL\tNULL\nyunting\t810038\t聂倩雯\tNULL\tNULL\nyunting\t840071\t胡单\tNULL\tNULL\nyunting\t1380087\t胡培战\tNULL\tNULL\nyunting\t1380085\t胡晓龙\tNULL\tNULL\nyunting\t1380084\t胡燕\tNULL\tNULL\nyunting\t1380083\t胡石磊\tNULL\tNULL\nyunting\t1350004\t苑生龙\tNULL\tNULL\nyunting\t1350007\t范华\tNULL\tNULL\nyunting\t1350008\t范嘉斯\tNULL\tNULL\nyunting\t810003\t范敬天\tNULL\tNULL\nyunting\t1350006\t范海波\tNULL\tNULL\nyunting\t840067\t茜茜大哥妈\tNULL\tNULL\nyunting\t1380023\t葛煜\tNULL\tNULL\nyunting\t1380021\t葛茜\tNULL\tNULL\nyunting\t1380017\t葛超\tNULL\tNULL\nyunting\t840101\t董倩\tNULL\tNULL\nyunting\t840100\t董娜\tNULL\tNULL\nyunting\t840107\t董振华\tNULL\tNULL\nyunting\t840102\t董文新\tNULL\tNULL\nyunting\t840103\t董新颖\tNULL\tNULL\nyunting\t840099\t董明磊\tNULL\tNULL\nyunting\t1350021\t董春凤\tNULL\tNULL\nyunting\t840095\t董春芝老师\tNULL\tNULL\nyunting\t840088\t董滨\tNULL\tNULL\nyunting\t840098\t董琳湾\tNULL\tNULL\nyunting\t840106\t董艺菲\tNULL\tNULL\nyunting\t840097\t董辉\tNULL\tNULL\nyunting\t840105\t董雪冰\tNULL\tNULL\nyunting\t960002\t蒋腾飞\tNULL\tNULL\nyunting\t810014\t蔡文源\tNULL\tNULL\nyunting\t810013\t蔡文迪\tNULL\tNULL\nyunting\t810017\t蔡雄山\tNULL\tNULL\nyunting\t810005\t薄丽\tNULL\tNULL\nyunting\t810004\t薄惠君\tNULL\tNULL\nyunting\t960007\t薛牧青\tNULL\tNULL\nyunting\t1380030\t袁欣\tNULL\tNULL\nyunting\t960011\t裴孟然\tNULL\tNULL\nyunting\t1380067\t贺晔\tNULL\tNULL\nyunting\t1380088\t贾佳国\tNULL\tNULL\nyunting\t960003\t赵国华\tNULL\tNULL\nyunting\t840045\t车序贞\tNULL\tNULL\nyunting\t840048\t迟敏敏\tNULL\tNULL\nyunting\t840080\t邓周鹏\tNULL\tNULL\nyunting\t840078\t邓媛\tNULL\tNULL\nyunting\t840081\t邓子\tNULL\tNULL\nyunting\t840076\t邓红星\tNULL\tNULL\nyunting\t840079\t邓艳青\tNULL\tNULL\nyunting\t840077\t邓金子\tNULL\tNULL\nyunting\t810037\t邓长清\tNULL\tNULL\nyunting\t1350018\t邱晓雨\tNULL\tNULL\nyunting\t810021\t郑子煜\tNULL\tNULL\nyunting\t1380063\t郝丽丹\tNULL\tNULL\nyunting\t1380064\t郝元明\tNULL\tNULL\nyunting\t1380061\t郝博川\tNULL\tNULL\nyunting\t1380043\t郭佳奇\tNULL\tNULL\nyunting\t1380038\t郭宝明\tNULL\tNULL\nyunting\t1380046\t郭宪勇\tNULL\tNULL\nyunting\t1380050\t郭志安\tNULL\tNULL\nyunting\t1380041\t郭怀瑾\tNULL\tNULL\nyunting\t1380045\t郭明英\tNULL\tNULL\nyunting\t1380049\t郭星辰\tNULL\tNULL\nyunting\t1380048\t郭晓雁\tNULL\tNULL\nyunting\t1380047\t郭晓雷\tNULL\tNULL\nyunting\t1380005\t郭玉安\tNULL\tNULL\nyunting\t1380044\t郭珂伊\tNULL\tNULL\nyunting\t1350002\t鄂力铁\tNULL\tNULL\nyunting\t840085\t钓鱼台国宾馆刘经理\tNULL\tNULL\nyunting\t810039\t长腿妈妈\tNULL\tNULL\nyunting\t840044\t陈中锋\tNULL\tNULL\nyunting\t810047\t陈丰\tNULL\tNULL\nyunting\t840039\t陈义望\tNULL\tNULL\nyunting\t840006\t陈佳蕙\tNULL\tNULL\nyunting\t840010\t陈俊豪\tNULL\tNULL\nyunting\t810032\t陈偲偲\tNULL\tNULL\nyunting\t840036\t陈垚\tNULL\tNULL\nyunting\t840021\t陈天媛\tNULL\tNULL\nyunting\t840008\t陈婧\tNULL\tNULL\nyunting\t840014\t陈宁\tNULL\tNULL\nyunting\t810043\t陈宝红\tNULL\tNULL\nyunting\t810044\t陈崇斌\tNULL\tNULL\nyunting\t840032\t陈延\tNULL\tNULL\nyunting\t840019\t陈思\tNULL\tNULL\nyunting\t840037\t陈怡凤\tNULL\tNULL\nyunting\t840005\t陈昊\tNULL\tNULL\nyunting\t810045\t陈春锋\tNULL\tNULL\nyunting\t840024\t陈显松\tNULL\tNULL\nyunting\t840025\t陈晓晔\tNULL\tNULL\nyunting\t810042\t陈晨\tNULL\tNULL\nyunting\t840007\t陈晶\tNULL\tNULL\nyunting\t840043\t陈智洋\tNULL\tNULL\nyunting\t840027\t陈曦\tNULL\tNULL\nyunting\t840028\t陈曦\tNULL\tNULL\nyunting\t840023\t陈曦\tNULL\tNULL\nyunting\t840012\t陈梁擎\tNULL\tNULL\nyunting\t840040\t陈永胜\tNULL\tNULL\nyunting\t840035\t陈洋赵楚\tNULL\tNULL\nyunting\t840041\t陈照玥\tNULL\tNULL\nyunting\t840018\t陈瑞华\tNULL\tNULL\nyunting\t840031\t陈璇璇\tNULL\tNULL\nyunting\t840013\t陈璐洋\tNULL\tNULL\nyunting\t1380001\t陈立坤\tNULL\tNULL\nyunting\t840026\t陈筱茵\tNULL\tNULL\nyunting\t840022\t陈维强\tNULL\tNULL\nyunting\t840033\t陈艳\tNULL\tNULL\nyunting\t840017\t陈若剑\tNULL\tNULL\nyunting\t840011\t陈蕾\tNULL\tNULL\nyunting\t840034\t陈言飞\tNULL\tNULL\nyunting\t840020\t陈诗\tNULL\tNULL\nyunting\t840110\t陈迎涛\tNULL\tNULL\nyunting\t810046\t陈迪\tNULL\tNULL\nyunting\t840030\t陈鑫\tNULL\tNULL\nyunting\t840042\t陈震\tNULL\tNULL\nyunting\t840009\t陈静\tNULL\tNULL\nyunting\t840038\t陈颖婷\tNULL\tNULL\nyunting\t840029\t陈馨\tNULL\tNULL\nyunting\t840016\t陈鹏\tNULL\tNULL\nyunting\t840015\t陈鹏\tNULL\tNULL\nyunting\t1380096\t雷小武\tNULL\tNULL\nyunting\t1380086\t霍丙森\tNULL\tNULL\nyunting\t1380093\t靳奇心\tNULL\tNULL\nyunting\t1380057\t韩冬\tNULL\tNULL\nyunting\t960010\t韩哥家嫂子小白\tNULL\tNULL\nyunting\t1380062\t韩月超\tNULL\tNULL\nyunting\t1380058\t韩璐\tNULL\tNULL\nyunting\t1380056\t韩超\tNULL\tNULL\nyunting\t1380060\t韩轶之\tNULL\tNULL\nyunting\t1380059\t韩轶新\tNULL\tNULL\nyunting\t1200005\t韩黎斌\tNULL\tNULL\nyunting\t1380051\t顾文杰\tNULL\tNULL\nyunting\t1380053\t顾晓\tNULL\tNULL\nyunting\t1380036\t顾立东\tNULL\tNULL\nyunting\t1380054\t顾鑫\tNULL\tNULL\nyunting\t1380029\t颜方\tNULL\tNULL\nyunting\t1380010\t高寒松\tNULL\tNULL\nyunting\t1380014\t高旭枫\tNULL\tNULL\nyunting\t1380011\t高杰\tNULL\tNULL\nyunting\t810018\t高杰\tNULL\tNULL\nyunting\t1380009\t高枫潇\tNULL\tNULL\nyunting\t1380012\t高汝峰\tNULL\tNULL\nyunting\t1380015\t高照军\tNULL\tNULL\nyunting\t810052\t高美玲\tNULL\tNULL\nyunting\t1380013\t高翔宇\tNULL\tNULL\nyunting\t1380007\t高聪哲\tNULL\tNULL\nyunting\t1380006\t高菲\tNULL\tNULL\nyunting\t1380008\t高飞\tNULL\tNULL\nyunting\t960008\t魏巍\tNULL\tNULL\nyunting\t1380082\t魏炜\tNULL\tNULL\nyunting\t1350011\t鲁婧晗\tNULL\tNULL\nyunting\t1380074\t黄剑\tNULL\tNULL\nyunting\t1380075\t黄剑锋\tNULL\tNULL\nyunting\t1380072\t黄国伟\tNULL\tNULL\nyunting\t1380071\t黄彬\tNULL\tNULL\nyunting\t1380078\t黄楷峰\tNULL\tNULL\nyunting\t1200003\t黄河清\tNULL\tNULL\nyunting\t1380077\t黄泰之\tNULL\tNULL\nyunting\t1380079\t黄涛\tNULL\tNULL\nyunting\t1380080\t黄真\tNULL\tNULL\nyunting\t1380076\t黄立\tNULL\tNULL\nyunting\t1380073\t黄鹤鹏\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

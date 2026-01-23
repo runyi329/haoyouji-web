@@ -470,6 +470,9 @@ export default function ContactDetail() {
   // 获取个人标签
   const { data: personalTags } = trpc.contacts.personalTags.list.useQuery({ contactId });
 
+  // 获取自定义字段
+  const { data: customFields } = trpc.contacts.customFields.list.useQuery({ contactId });
+
   // 获取联络统计信息
   const { data: stats } = trpc.contacts.interactions.stats.useQuery({ contactId });
 
@@ -1119,6 +1122,33 @@ export default function ContactDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {/* 自定义字段 */}
+          {customFields && customFields.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Briefcase className="h-5 w-5 mr-2" />
+                  详细信息
+                </CardTitle>
+                <CardDescription>联系人的详细信息</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {customFields.map((field) => (
+                    <div key={field.id} className="flex items-start gap-2">
+                      <div className="text-sm font-medium text-muted-foreground min-w-[80px]">
+                        {field.fieldName}:
+                      </div>
+                      <div className="text-sm flex-1">
+                        {field.fieldValue}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* 个人标签 */}
           <Card>
