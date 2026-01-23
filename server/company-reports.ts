@@ -262,7 +262,8 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
     );
 
     // 2. 提取 PDF 文本
-    const pdfData = await PDFParse(req.file.buffer);
+    const parser = new PDFParse({ buffer: req.file.buffer });
+    const pdfData = await parser.getText();
     const rawText = pdfData.text;
 
     if (!rawText || rawText.trim().length === 0) {

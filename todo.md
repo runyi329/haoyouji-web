@@ -396,3 +396,26 @@ company-reports.ts 路由是直接注册到 Express 的，没有经过 tRPC 的 
 
 ### 修复方案
 移除了所有后端用户认证检查，依赖前端权限控制。这与其他类似路由（如 ai-prompts.ts）的处理方式保持一致。
+
+
+## Bug 修复：PDFParse 类实例化错误✅
+
+- [x] 修复 PDFParse 的使用方式
+  - PDFParse 是一个类，需要使用 new 关键字实例化
+  - 使用 `new PDFParse({ buffer: req.file.buffer })` 创建实例
+  - 调用 `parser.getText()` 方法提取文本
+- [x] 测试修复后的上传功能
+  - 测试上传 PDF 文件
+  - 验证 PDF 文本提取是否正常
+  - 验证 DeepSeek AI 分析是否正常工作
+
+### 问题原因
+原代码使用 `PDFParse(req.file.buffer)` 直接调用，但 pdf-parse v2 中 PDFParse 是一个类，必须使用 `new` 关键字实例化。
+
+### 修复方案
+使用正确的实例化方式：
+```typescript
+const parser = new PDFParse({ buffer: req.file.buffer });
+const pdfData = await parser.getText();
+const rawText = pdfData.text;
+```
