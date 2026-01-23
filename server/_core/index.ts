@@ -38,6 +38,9 @@ async function startServer() {
   // AI search router
   const aiSearchModule = await import('../ai-search.js');
   app.use(aiSearchModule.default);
+  // AI prompts management router
+  const aiPromptsModule = await import('../ai-prompts.js');
+  app.use(aiPromptsModule.default);
   // tRPC API
   app.use(
     "/api/trpc",

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getPromptsConfig } from './ai-prompts';
 
 const router = Router();
 
@@ -24,6 +25,9 @@ router.post('/api/ai/background-check', async (req, res) => {
       });
     }
 
+    // 获取提示词配置
+    const promptsConfig = await getPromptsConfig();
+
     // 构建搜索提示词（包含标签和联系记录）
     const searchPrompt = buildSearchPrompt({ 
       name, 
@@ -35,7 +39,7 @@ router.post('/api/ai/background-check', async (req, res) => {
       notes, 
       tags, 
       contactHistory 
-    });
+    }, promptsConfig.userPromptTemplate);
 
     console.log(`[AI背调] 开始搜索: ${name} (${company || '未知公司'})`);
 
@@ -51,15 +55,15 @@ router.post('/api/ai/background-check', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: '你是一位专业的商业背景调查分析师。你需要根据用户提供的联系人信息，模拟进行全网搜索和背景分析，并以结构化的方式返回结果。注意：你应该基于提供的信息进行合理推测和分析，而不是声称无法联网搜索。'
+            content: promptsConfig.systemPrompt
           },
           {
             role: 'user',
             content: searchPrompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        temperature: promptsConfig.temperature,
+        max_tokens: promptsConfig.maxTokens,
       }),
     });
 
@@ -152,7 +156,13 @@ function buildSearchPrompt(contact: {
     type: string;
     content: string;
   }>;
-}) {
+}, template?: string) {
+  // 如果提供了自定义模板，使用模板；否则使用默认逻辑
+  if (template) {
+    return renderTemplate(template, contact);
+  }
+  
+  // 默认模板逻辑（兼容旧版本）
   let prompt = `请对以下人物进行全网背景调查和分析：\n\n`;
   
   prompt += `## 已知基础信息\n\n`;
@@ -203,6 +213,38 @@ function buildSearchPrompt(contact: {
   prompt += `- 使用 Markdown 格式，让结果易于阅读`;
 
   return prompt;
+}
+
+/**
+ * 渲染模板（简单的 Handlebars 风格模板引擎）
+ */
+function renderTemplate(template: string, data: any): string {
+  let result = template;
+  
+  // 处理 {{#if field}} ... {{/if}} 条件语句
+  result = result.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, field, content) => {
+    const value = data[field];
+    if (value && (Array.isArray(value) ? value.length > 0 : true)) {
+      return content;
+    }
+    return '';
+  });
+  
+  // 处理 {{field}} 变量替换
+  result = result.replace(/\{\{(\w+)\}\}/g, (match, field) => {
+    const value = data[field];
+    if (Array.isArray(value)) {
+      return value.join('、');
+    }
+    if (field === 'contactHistory' && Array.isArray(value)) {
+      return value.map((record: any, index: number) => 
+        `**${index + 1}. ${record.date}** (${record.type}):\n${record.content}\n`
+      ).join('\n');
+    }
+    return value || '';
+  });
+  
+  return result;
 }
 
 export default router;
