@@ -102,9 +102,9 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto text-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{companyName}</span>
-            <span className="text-sm font-normal text-muted-foreground">企业报告</span>
+          <DialogTitle className="flex flex-col gap-1">
+            <span className="text-xs font-normal text-muted-foreground">企业报告</span>
+            <span className="text-base font-semibold leading-tight break-words" style={{ wordBreak: 'break-word' }}>{companyName}</span>
           </DialogTitle>
         </DialogHeader>
 
