@@ -1,0 +1,25 @@
+{
+  "query": "SELECT DISTINCT \n  cfv.value AS companyName,\n  c.name AS contactName,\n  u.name AS userName\nFROM contact_field_values cfv\nINNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id\nINNER JOIN contacts c ON cfv.contactId = c.id\nINNER JOIN users u ON c.parentUserId = u.id\nWHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''\nORDER BY cfv.value;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT DISTINCT \n  cfv.value AS companyName,\n  c.name AS contactName,\n  u.name AS userName\nFROM contact_field_values cfv\nINNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id\nINNER JOIN contacts c ON cfv.contactId = c.id\nINNER JOIN users u ON c.parentUserId = u.id\nWHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''\nORDER BY cfv.value;",
+  "rows": [
+    {
+      "companyName": "上海禹捷商务信息咨询有限公司",
+      "contactName": "胡永煜",
+      "userName": "jiang"
+    },
+    {
+      "companyName": "北京扶摇新程信息咨询有限公司",
+      "contactName": "王茜",
+      "userName": "jiang"
+    },
+    {
+      "companyName": "北京润仪商业中心（有限合伙）",
+      "contactName": "胡永煜",
+      "userName": "jiang"
+    }
+  ],
+  "messages": [],
+  "stdout": "companyName\tcontactName\tuserName\n上海禹捷商务信息咨询有限公司\t胡永煜\tjiang\n北京扶摇新程信息咨询有限公司\t王茜\tjiang\n北京润仪商业中心（有限合伙）\t胡永煜\tjiang\n",
+  "stderr": "",
+  "execution_time_ms": 388
+}

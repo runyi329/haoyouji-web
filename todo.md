@@ -321,3 +321,32 @@
 
 ### 问题原因
 原 SQL 查询使用了错误的表名（`extendedFieldValues` 和 `extendedFieldCategories`），导致无法查询到数据。正确的表名应该是 `contact_field_values` 和 `contact_field_categories`。同时，用户关联字段也需要从 `c.userId` 修正为 `c.parentUserId`。
+
+
+## Bug 修复：企业报告管理页面显示“网络错误”和无法加载公司列表✅
+
+- [x] 检查后端 API 路由和错误日志
+  - 查看 .manus-logs/devserver.log 中的错误信息
+  - 确认 company-reports.ts 路由是否正确注册
+- [x] 修复 API 路由注册问题
+  - 修复 pdf-parse 导入错误：使用 { PDFParse } 命名导入
+  - 添加路由路径前缀 /api/company-reports
+  - 修复数据库表名：companyReports → company_reports
+  - 修复数据库字段名：使用 camelCase（contactId, categoryId, parentUserId）
+  - 修复数据库查询方式：使用 Drizzle ORM 的 sql 标签函数
+- [x] 测试修复后的功能
+  - 测试 GET /api/company-reports/companies API
+  - 验证前端页面是否能正常显示公司列表
+
+### 问题原因
+1. **pdf-parse 导入错误**：包没有默认导出，需要使用命名导入 `{ PDFParse }`
+2. **路由路径缺失**：路由定义中没有包含 `/api/company-reports` 前缀
+3. **数据库表名错误**：SQL 中使用了 `companyReports`，应该是 `company_reports`
+4. **数据库字段名错误**：SQL 中使用了 snake_case，但实际字段名是 camelCase
+5. **数据库查询方式错误**：使用了 `db.execute()` 而不是 Drizzle ORM 的 `sql` 标签函数
+
+### 修复结果
+API 现在能正确返回公司列表数据，包括：
+- 上海禹捷商务信息咨询有限公司 - 联系人：胡永煌 - 用户：jiang
+- 北京扶摇新程信息咨询有限公司 - 联系人：王茜 - 用户：jiang
+- 北京润仪商业中心（有限合伙）- 联系人：胡永煌 - 用户：jiang

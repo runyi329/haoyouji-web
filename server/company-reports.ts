@@ -1,9 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import * as pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import { getDb } from './db';
-import { companyReports } from '../drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { companyReports, contactFieldValues, contactFieldCategories, contacts, users } from '../drizzle/schema';
+import { eq, sql } from 'drizzle-orm';
 import { storagePut } from './storage';
 import { ENV } from './_core/env';
 
@@ -131,30 +131,38 @@ async function formatCompanyReport(rawText: string): Promise<string> {
  * POST /api/company-reports/uplo/**
  * 获取所有公司列表（汇总前端用户填写的公司名称）
  */
-router.get('/companies', async (req, res) => {
+router.get('/api/company-reports/companies', async (req, res) => {
   try {
-    const db = getDb();
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        error: '数据库连接失败',
+      });
+    }
     
     // 查询所有联系人的扩展信息，筛选出公司名称
-    const result = await db.execute(`
+    const result = await db.execute(sql`
       SELECT DISTINCT 
         cfv.value AS companyName,
         c.name AS contactName,
         u.name AS userName,
         cr.id AS reportId,
-        cr.updatedAt AS reportUpdatedAt
+        cr.updated_at AS reportUpdatedAt
       FROM contact_field_values cfv
       INNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id
       INNER JOIN contacts c ON cfv.contactId = c.id
       INNER JOIN users u ON c.parentUserId = u.id
-      LEFT JOIN companyReports cr ON cfv.value = cr.companyName
+      LEFT JOIN company_reports cr ON cfv.value = cr.company_name
       WHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''
       ORDER BY cfv.value
     `);
+    
+    const rows = result[0] as any[];
 
     res.json({
       success: true,
-      data: result,
+      data: rows,
     });
   } catch (error) {
     console.error('获取公司列表失败:', error);
@@ -168,7 +176,7 @@ router.get('/companies', async (req, res) => {
 /**
  * 获取 DeepSeek 提示词
  */
-router.get('/prompt', async (req, res) => {
+router.get('/api/company-reports/prompt', async (req, res) => {
   try {
     res.json({
       success: true,
@@ -188,7 +196,7 @@ router.get('/prompt', async (req, res) => {
 /**
  * 更新 DeepSeek 提示词（暂时存储在内存中，重启后恢复默认值）
  */
-router.put('/prompt', async (req, res) => {
+router.put('/api/company-reports/prompt', async (req, res) => {
   try {
     const { prompt } = req.body;
     
@@ -219,7 +227,7 @@ router.put('/prompt', async (req, res) => {
 /**
  * 上传企查查 PDF 报告
  */
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/api/company-reports/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -254,7 +262,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     );
 
     // 2. 提取 PDF 文本
-    const pdfData = await pdfParse(req.file.buffer);
+    const pdfData = await PDFParse(req.file.buffer);
     const rawText = pdfData.text;
 
     if (!rawText || rawText.trim().length === 0) {
@@ -319,7 +327,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
  * GET /api/company-reports/:companyName
  * 获取指定公司的报告
  */
-router.get('/:companyName', async (req, res) => {
+router.get('/api/company-reports/:companyName', async (req, res) => {
   try {
     const { companyName } = req.params;
 
@@ -357,7 +365,7 @@ router.get('/:companyName', async (req, res) => {
  * GET /api/company-reports
  * 获取所有报告列表
  */
-router.get('/', async (req, res) => {
+router.get('/api/company-reports', async (req, res) => {
   try {
     const db = await getDb();
     const reports = await db
@@ -387,7 +395,7 @@ router.get('/', async (req, res) => {
  * DELETE /api/company-reports/:companyName
  * 删除指定公司的报告
  */
-router.delete('/:companyName', async (req, res) => {
+router.delete('/api/company-reports/:companyName', async (req, res) => {
   try {
     const { companyName } = req.params;
 
