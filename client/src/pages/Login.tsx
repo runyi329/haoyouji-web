@@ -109,7 +109,7 @@ export default function Login() {
               <Sparkles className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              水果基地
+              好友记
             </h1>
             <p className="text-sm text-muted-foreground mt-1">欢迎回来！</p>
           </div>
