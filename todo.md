@@ -419,3 +419,28 @@ const parser = new PDFParse({ buffer: req.file.buffer });
 const pdfData = await parser.getText();
 const rawText = pdfData.text;
 ```
+
+
+## Bug 修复:PDFParse getDocument 错误✅
+
+- [x] 查看 pdf-parse 文档确认正确用法
+  - 检查如何正确传递 buffer 参数
+  - 确认 PDFParse 构造函数的参数格式
+- [x] 修复 PDFParse 的参数传递方式
+  - 根据文档调整参数格式：使用 `data` 而不是 `buffer`
+  - 确保 buffer 能够正确传递给 PDF 解析器
+- [x] 测试修复后的上传功能
+  - 测试上传 PDF 文件
+  - 验证 PDF 文本提取是否正常
+  - 验证 DeepSeek AI 分析是否正常工作
+
+### 问题原因
+pdf-parse 库的 PDFParse 构造函数需要使用 `data` 参数而不是 `buffer` 参数。
+
+### 修复方案
+修改 company-reports.ts 第 265 行：
+```typescript
+// 错误：const parser = new PDFParse({ buffer: req.file.buffer });
+// 正确：
+const parser = new PDFParse({ data: req.file.buffer });
+```
