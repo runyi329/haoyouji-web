@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Upload, Loader2, Eye } from 'lucide-react';
+import { Upload, Loader2, Eye, Edit, Trash2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CompanyReportDialog } from '@/components/CompanyReportDialog';
 import { CompanyReportIcon } from '@/components/CompanyReportIcon';
@@ -45,6 +45,11 @@ export default function CompanyReportManagement() {
   const [prompt, setPrompt] = useState('');
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
+
+  // 编辑报告相关状态
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingReport, setEditingReport] = useState<{ id: number; content: string } | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   useEffect(() => {
     loadCompanies();
@@ -205,6 +210,83 @@ export default function CompanyReportManagement() {
   };
 
 
+
+  const handleDeleteReport = async (reportId: number, companyName: string) => {
+    if (!confirm(`确定要删除「${companyName}」的企业报告吗？`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/company-reports/by-id/${reportId}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('删除报告成功！');
+        loadCompanies(); // 刷新列表
+      } else {
+        toast.error(result.error || '删除失败');
+      }
+    } catch (error) {
+      console.error('删除报告错误:', error);
+      toast.error('网络错误，请稍后重试');
+    }
+  };
+
+  const handleEditReport = async (reportId: number, companyName: string) => {
+    try {
+      const response = await fetch(`/api/company-reports/${encodeURIComponent(companyName)}`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setEditingReport({ id: reportId, content: companyName });
+        setEditContent(JSON.stringify(result.data.formattedContent, null, 2));
+        setShowEditDialog(true);
+      } else {
+        toast.error('获取报告失败');
+      }
+    } catch (error) {
+      console.error('获取报告错误:', error);
+      toast.error('网络错误，请稍后重试');
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingReport) return;
+
+    try {
+      const formattedContent = JSON.parse(editContent);
+
+      const response = await fetch(`/api/company-reports/by-id/${editingReport.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ formattedContent }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('保存成功！');
+        setShowEditDialog(false);
+        setEditingReport(null);
+        setEditContent('');
+        loadCompanies(); // 刷新列表
+      } else {
+        toast.error(result.error || '保存失败');
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        toast.error('JSON 格式错误，请检查后重试');
+      } else {
+        console.error('保存报告错误:', error);
+        toast.error('网络错误，请稍后重试');
+      }
+    }
+  };
 
   const getUploadStatusText = () => {
     switch (uploadStatus) {
@@ -390,18 +472,36 @@ export default function CompanyReportManagement() {
 
                   {/* 查看报告按钮 */}
                   {company.reportId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200"
-                      onClick={() => {
-                        setPreviewCompanyName(company.companyName);
-                        setShowFrontendPreview(true);
-                      }}
-                    >
-                      <CompanyReportIcon hasReport={true} onClick={() => {}} />
-                      <span className="ml-2">查看报告</span>
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        onClick={() => {
+                          setPreviewCompanyName(company.companyName);
+                          setShowFrontendPreview(true);
+                        }}
+                      >
+                        <CompanyReportIcon hasReport={true} onClick={() => {}} />
+                        <span className="ml-2">查看报告</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        onClick={() => handleEditReport(company.reportId!, company.companyName)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-red-50 hover:bg-red-100 border-red-200 text-red-600 hover:text-red-700"
+                        onClick={() => handleDeleteReport(company.reportId!, company.companyName)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   )}
 
                   {/* 提示文字 */}
@@ -425,6 +525,41 @@ export default function CompanyReportManagement() {
           companyName={previewCompanyName}
         />
       )}
+
+      {/* 编辑报告弹窗 */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑企业报告</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>JSON 内容</Label>
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={20}
+                className="font-mono text-sm mt-2"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveEdit}
+                className="flex-1"
+              >
+                保存
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+                className="flex-1"
+              >
+                取消
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

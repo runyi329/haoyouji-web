@@ -477,6 +477,82 @@ router.put('/api/company-reports/:companyName', async (req, res) => {
 });
 
 /**
+ * DELETE /api/company-reports/by-id/:id
+ * 按 ID 删除企业报告
+ */
+router.delete('/api/company-reports/by-id/:id', async (req, res) => {
+  try {
+    const reportId = parseInt(req.params.id, 10);
+
+    if (isNaN(reportId)) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的报告 ID',
+      });
+    }
+
+    const db = await getDb();
+    await db
+      .delete(companyReports)
+      .where(eq(companyReports.id, reportId));
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error('删除企业报告错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '删除失败',
+    });
+  }
+});
+
+/**
+ * PUT /api/company-reports/by-id/:id
+ * 按 ID 编辑企业报告
+ */
+router.put('/api/company-reports/by-id/:id', async (req, res) => {
+  try {
+    const reportId = parseInt(req.params.id, 10);
+    const { formattedContent } = req.body;
+
+    if (isNaN(reportId)) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的报告 ID',
+      });
+    }
+
+    if (!formattedContent) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少报告内容',
+      });
+    }
+
+    const db = await getDb();
+    await db
+      .update(companyReports)
+      .set({
+        formattedContent: JSON.stringify(formattedContent),
+        updatedAt: new Date(),
+      })
+      .where(eq(companyReports.id, reportId));
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error('编辑企业报告错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '编辑失败',
+    });
+  }
+});
+
+/**
  * DELETE /api/company-reports/:companyName
  * 删除企业报告
  */

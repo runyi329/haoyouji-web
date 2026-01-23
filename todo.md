@@ -911,3 +911,13 @@ companyName={selectedCompanyName}
 - [x] 修改 DeepSeek 提示词，添加"联系方式"字段提取（电话、邮箱、地址、网站）
 - [x] 修改前端 CompanyReportDialog 组件，支持显示企业标签（胶囊形状）
 - [x] 修改前端 CompanyReportDialog 组件，支持显示联系方式
+
+
+## 为企业报告添加删除和编辑功能
+
+- [x] 添加后端 API：DELETE /api/company-reports/by-id/:id
+- [x] 添加后端 API：PUT /api/company-reports/by-id/:id  
+- [x] 修改前端添加删除按钮（红色垃圾桶图标）
+- [x] 修改前端添加编辑按钮（蓝色编辑图标）
+- [x] 实现编辑对话框
+- [x] 测试删除和编辑功能
