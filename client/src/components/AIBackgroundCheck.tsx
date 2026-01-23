@@ -157,9 +157,15 @@ export function AIBackgroundCheck({ contact, onDataUpdate, open: externalOpen, o
   };
 
   // 当外部控制打开时，自动触发搜索
+  const [hasAutoSearched, setHasAutoSearched] = useState(false);
+  
   useEffect(() => {
-    if (externalOpen && !result && !isLoading) {
+    if (externalOpen && !hasAutoSearched && !isLoading) {
+      setHasAutoSearched(true);
       handleSearch();
+    }
+    if (!externalOpen) {
+      setHasAutoSearched(false);
     }
   }, [externalOpen]);
 
