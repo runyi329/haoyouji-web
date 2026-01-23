@@ -245,7 +245,7 @@
   - 测试加载状态和错误处理
 
 ### 功能说明
-- 在联系人详情页的“扩展信息”中，如果有“公司名称”字段，会自动显示企查查+DeepSeek联名图标
+- 在联系人详情页的"扩展信息"中，如果有"公司名称"字段，会自动显示企查查+DeepSeek联名图标
 - 图标有两种状态：
   - 暗灰色（disabled）：该公司暂无报告
   - 蓝紫渐变色（可点击）：该公司已有报告
@@ -254,8 +254,8 @@
 
 ## 后台管理页面添加 AI 管理快捷按钮✅
 
-- [x] 在 Admin.tsx 顶部导航栏添加“AI 管理”按钮
-  - 按钮位置：与“用户”、“邀请”、“知识”等按钮并列
+- [x] 在 Admin.tsx 顶部导航栏添加"AI 管理"按钮
+  - 按钮位置：与"用户"、"邀请"、"知识"等按钮并列
   - 点击跳转到 /parent/ai-management 页面
   - 图标：使用 Sparkles 图标
 - [x] 测试按钮功能
@@ -263,8 +263,8 @@
   - 测试在移动端的显示效果
 
 ### 功能说明
-- 在后台管理页面顶部导航栏添加了“AI 管理”快捷按钮
-- 按钮位于“功能权限”后面，使用 Sparkles 图标
+- 在后台管理页面顶部导航栏添加了"AI 管理"快捷按钮
+- 按钮位于"功能权限"后面，使用 Sparkles 图标
 - 点击后跳转到 AI 管理页面，方便管理 AI 提示词、企业报告等功能
 
 
@@ -274,7 +274,7 @@
   - GET /api/company-reports/companies - 获取所有公司列表（汇总前端用户填写的公司名称）
   - GET /api/company-reports/prompt - 获取 DeepSeek 提示词
   - PUT /api/company-reports/prompt - 更新 DeepSeek 提示词
-- [x] 在 AIManagement.tsx 添加“AI 企业报告管理”标签页
+- [x] 在 AIManagement.tsx 添加"AI 企业报告管理"标签页
   - 显示公司列表（公司名称 + 联系人 + 填写用户）
   - 每个公司后面有上传按钮
   - 显示当前报告状态（已上传/未上传）
@@ -283,9 +283,9 @@
   - 上传后自动调用 DeepSeek AI 分析
   - 显示上传进度
 - [x] 实现查看报告和提示词管理
-  - 已上传报告的公司显示“查看 AI 分析结果”按钮
+  - 已上传报告的公司显示"查看 AI 分析结果"按钮
   - 点击按钮显示 DeepSeek 格式化后的报告内容
-  - 添加“查看提示词”按钮，支持查看和编辑 DeepSeek 提示词
+  - 添加"查看提示词"按钮，支持查看和编辑 DeepSeek 提示词
 - [x] 测试完整功能流程
   - 测试公司列表汇总
   - 测试文件上传
@@ -294,13 +294,13 @@
 
 ### 功能说明
 **后端管理员操作：**
-- 在 AI 管理页面的“企业报告”标签页中，系统自动汇总所有前端用户填写的公司名称
+- 在 AI 管理页面的"企业报告"标签页中，系统自动汇总所有前端用户填写的公司名称
 - 管理员可以为每个公司上传企查查 PDF 报告
 - 上传后系统自动调用 DeepSeek AI 分析并格式化企业信息
 - 管理员可以查看和编辑 DeepSeek 提示词，优化生成的报告质量
 
 **前端用户体验：**
-- 用户在联系人详情页填写“公司名称”后，会自动显示企查查+DeepSeek联名图标
+- 用户在联系人详情页填写"公司名称"后，会自动显示企查查+DeepSeek联名图标
 - 如果后端未上传该公司报告，图标为暗灰色（disabled）
 - 如果后端已上传该公司报告，图标点亮（可点击）
 - 点击图标可查看 DeepSeek AI 整理好的企业信息（文字形式）
@@ -323,7 +323,7 @@
 原 SQL 查询使用了错误的表名（`extendedFieldValues` 和 `extendedFieldCategories`），导致无法查询到数据。正确的表名应该是 `contact_field_values` 和 `contact_field_categories`。同时，用户关联字段也需要从 `c.userId` 修正为 `c.parentUserId`。
 
 
-## Bug 修复：企业报告管理页面显示“网络错误”和无法加载公司列表✅
+## Bug 修复：企业报告管理页面显示"网络错误"和无法加载公司列表✅
 
 - [x] 检查后端 API 路由和错误日志
   - 查看 .manus-logs/devserver.log 中的错误信息
@@ -359,9 +359,9 @@ API 现在能正确返回公司列表数据，包括：
   - 使用子查询统计每个公司名称出现的次数
   - 返回数据中包含 duplicateCount 和 contactId 字段
 - [x] 修改前端界面显示重复标识
-  - 在公司列表中，如果公司名称重复，显示“⚠️ 重复 (共 X 条)”标识
+  - 在公司列表中，如果公司名称重复，显示"⚠️ 重复 (共 X 条)"标识
   - 重复公司卡片使用淡黄色背景和琥珀色边框
-  - 已上传报告显示“✓ 已上传报告（所有同名公司共享）”
+  - 已上传报告显示"✓ 已上传报告（所有同名公司共享）"
 - [x] 测试完整功能流程
   - 测试 API 返回 duplicateCount 字段
   - 验证报告按公司名称存储，天然支持共享
@@ -369,7 +369,7 @@ API 现在能正确返回公司列表数据，包括：
 ### 功能说明
 **重复公司检测：**
 - 当多个用户添加了同一个公司时，后台管理页面会显示所有记录
-- 每条记录都会标注“⚠️ 重复 (共 X 条)”，方便管理员识别
+- 每条记录都会标注"⚠️ 重复 (共 X 条)"，方便管理员识别
 - 重复公司卡片使用淡黄色背景和琥珀色边框，视觉上更易识别
 
 **自动同步更新：**
@@ -379,7 +379,7 @@ API 现在能正确返回公司列表数据，包括：
 - SQL 查询使用 `LEFT JOIN company_reports cr ON cfv.value = cr.company_name`，确保所有同名公司自动关联到同一份报告
 
 
-## Bug 修复：企业报告上传功能显示“未登录”错误✅
+## Bug 修复：企业报告上传功能显示"未登录"错误✅
 
 - [x] 检查上传 API 的权限设置
   - 查看 /api/company-reports/upload 路由的中间件配置
@@ -392,7 +392,7 @@ API 现在能正确返回公司列表数据，包括：
   - 验证 DeepSeek AI 分析是否正常工作
 
 ### 问题原因
-company-reports.ts 路由是直接注册到 Express 的，没有经过 tRPC 的 context 创建流程，所以 `req.user` 不会被注入。上传路由中检查 `req.user?.id` 时总是返回 undefined，导致“未登录”错误。
+company-reports.ts 路由是直接注册到 Express 的，没有经过 tRPC 的 context 创建流程，所以 `req.user` 不会被注入。上传路由中检查 `req.user?.id` 时总是返回 undefined，导致"未登录"错误。
 
 ### 修复方案
 移除了所有后端用户认证检查，依赖前端权限控制。这与其他类似路由（如 ai-prompts.ts）的处理方式保持一致。
@@ -526,7 +526,7 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
   - 确认当前的显示格式
 - [x] 修改显示逻辑
   - 去掉标签图标（🏷️）
-  - 去掉“公司名称：”文字
+  - 去掉"公司名称："文字
   - 直接显示公司名称和企查查+DeepSeek图标
   - 确保在一行内显示（使用 truncate 类截断超长文本）
 - [x] 测试优化后的显示效果
@@ -534,7 +534,7 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
   - 验证显示是否紧凑美观
 
 ### 优化目标
-将“🏷️ 公司名称：上海禹捷商务信息咨询有限公司 [图标]”优化为“上海禹捷商务信息咨询有限公司 [图标]”，让显示更紧凑，尽量控制在一行内。
+将"🏷️ 公司名称：上海禹捷商务信息咨询有限公司 [图标]"优化为"上海禹捷商务信息咨询有限公司 [图标]"，让显示更紧凑，尽量控制在一行内。
 
 ### 修改内容
 修改 ContactDetail.tsx 第 959-982 行，添加公司名称特殊处理逻辑：
@@ -557,15 +557,15 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 
 - [x] 实现上传进度反馈
   - 添加上传进度条（文件上传阶段）
-  - 显示“PDF 上传中...”状态
-  - 显示“DeepSeek AI 分析中...（预计 15-30 秒）”状态
-  - 显示“✓ 分析完成！”成功提示
+  - 显示"PDF 上传中..."状态
+  - 显示"DeepSeek AI 分析中...（预计 15-30 秒）"状态
+  - 显示"✓ 分析完成！"成功提示
   - 上传失败时显示错误信息
 - [x] 实现后台查看分析结果功能
-  - 在公司列表中，已上传报告的公司显示“查看 AI 分析结果”按钮
+  - 在公司列表中，已上传报告的公司显示"查看 AI 分析结果"按钮
   - 点击后在弹窗中显示 AI 分析的完整内容
 - [x] 实现后台编辑分析结果功能
-  - 在查看弹窗中添加“编辑”按钮
+  - 在查看弹窗中添加"编辑"按钮
   - 允许管理员在 Textarea 中手动修改分析结果
   - 保存修改后的内容到数据库
 - [x] 添加后端 API 支持编辑
@@ -588,8 +588,8 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
    - `editedContent` 存储编辑中的内容
    - `handleSaveEdit` 保存编辑后的内容
 4. 优化弹窗显示：
-   - 查看模式：显示格式化的报告内容 + “编辑”按钮
-   - 编辑模式：显示 Textarea + “保存”/“取消”按钮
+   - 查看模式：显示格式化的报告内容 + "编辑"按钮
+   - 编辑模式：显示 Textarea + "保存"/"取消"按钮
 
 **后端修改（company-reports.ts）：**
 添加 PUT /api/company-reports/:companyName 路由：
@@ -611,30 +611,30 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
   - 成功状态保持 3 秒，让用户看清
 - [x] 修复后台查看编辑功能
   - 确保上传完成后立即刷新公司列表
-  - 验证“查看 AI 分析结果”按钮是否正确显示
+  - 验证"查看 AI 分析结果"按钮是否正确显示
   - 测试点击按钮能否正常打开弹窗
 - [x] 测试完整流程
   - 测试上传 PDF 的完整进度显示
-  - 验证上传完成后能立即看到“查看 AI 分析结果”按钮
+  - 验证上传完成后能立即看到"查看 AI 分析结果"按钮
   - 测试点击按钮查看和编辑报告内容
 
 ### 问题描述
 1. 上传进度条结束后直接消失，没有显示 AI 分析阶段
 2. 不知道 AI 分析是否完成，是否已同步到前端
-3. 上传完成后，“查看 AI 分析结果”按钮没有出现或无法点击
+3. 上传完成后，"查看 AI 分析结果"按钮没有出现或无法点击
 
 ### 修复方案
 修改 CompanyReportManagement.tsx 的 handleFileUpload 函数：
 
 1. **优化进度显示逻辑：**
-   - 上传阶段（0-20%）：快速显示“PDF 上传中...”
-   - AI 分析阶段（30-85%）：切换到“DeepSeek AI 分析中...”，进度慢速增长（每 1.5 秒 +5%）
-   - 完成阶段（100%）：API 返回后跳到 100%，显示“✓ 分析完成！”
+   - 上传阶段（0-20%）：快速显示"PDF 上传中..."
+   - AI 分析阶段（30-85%）：切换到"DeepSeek AI 分析中..."，进度慢速增长（每 1.5 秒 +5%）
+   - 完成阶段（100%）：API 返回后跳到 100%，显示"✓ 分析完成！"
 
 2. **优化列表刷新逻辑：**
    - 上传成功后立即调用 `await loadCompanies()` 刷新列表
    - 成功状态保持 3 秒，让用户看清结果
-   - 确保“查看 AI 分析结果”按钮能立即显示
+   - 确保"查看 AI 分析结果"按钮能立即显示
 
 
 ## 功能增强：后台添加前端报告预览功能✅
@@ -666,7 +666,7 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
    - `previewCompanyName`: 存储需要预览的公司名称
 
 3. **修改按钮布局：**
-   - 将“查看 AI 分析结果”按钮和预览按钮并排显示
+   - 将"查看 AI 分析结果"按钮和预览按钮并排显示
    - 预览按钮使用 CompanyReportIcon 组件，蓝色背景
 
 4. **添加预览弹窗：**
@@ -677,59 +677,60 @@ uploadedBy: int("uploaded_by"), // 上传者用户ID（可选）
 ## UI 优化：去除上传完成后的弹窗✅
 
 - [x] 修改 CompanyReportManagement.tsx 去除弹窗逻辑
-  - 删除“查看报告”相关的 Dialog 组件
+  - 删除"查看报告"相关的 Dialog 组件
   - 删除 handleViewReport 和 handleSaveEdit 函数
   - 删除相关状态（viewingReport, reportData, showReportDialog, isEditing, editedContent, isSavingEdit）
   - 删除未使用的 import 语句
 - [x] 修改按钮显示逻辑
-  - 只保留一个“查看报告”按钮（蓝色，带企查查+DeepSeek图标）
+  - 只保留一个"查看报告"按钮（蓝色，带企查查+DeepSeek图标）
   - 点击后直接打开 CompanyReportDialog 弹窗
 - [x] 测试修改后的上传流程
   - 测试上传 PDF 文件
-  - 验证上传完成后直接显示“查看报告”按钮
-  - 确认没有弹窗出现
+  - 验证上传完成后直接显示"查看报告"按钮
+  - 测试点击按钮能否正常打开前端预览弹窗
 
 ### 优化目标
-去除上传完成后从左边弹出的文字框（Dialog），改为上传完成后直接在原位置显示“查看报告”按钮，点击后打开前端预览弹窗，简化用户操作流程。
+简化上传完成后的操作流程，去除中间的"查看报告"弹窗，直接显示"查看报告"按钮，点击后打开前端预览弹窗。
 
 ### 修改内容
-修改 CompanyReportManagement.tsx：
-
-1. **删除状态：**
-   - 删除 viewingReport, reportData, showReportDialog, showPromptDialog, prompt, isLoadingPrompt, isSavingPrompt, isEditing, editedContent, isSavingEdit
-
-2. **删除函数：**
-   - 删除 handleViewReport 函数
-   - 删除 handleSaveEdit 函数
-
-3. **删除 Dialog 组件：**
-   - 删除整个“报告查看和编辑弹窗”的 Dialog 组件
-
-4. **修改按钮显示：**
-   - 只保留一个“查看报告”按钮
-   - 按钮点击后直接打开 CompanyReportDialog 弹窗
-
-5. **清理 import：**
-   - 删除未使用的 Dialog, Textarea, Edit, Save 等组件的 import
+1. 删除所有与"查看报告"弹窗相关的状态和函数
+2. 修改按钮显示逻辑，只保留一个预览按钮
+3. 清理未使用的 import 语句
 
 
 ## Bug 修复：Dialog is not defined 错误✅
 
-- [x] 检查 CompanyReportDialog 组件的实现
-  - 查看组件是否使用了 Dialog
-  - 确认 Dialog 组件的导入情况
-- [x] 检查浏览器控制台日志
-  - 查看完整的错误堆栈
-  - 找出错误的具体位置：第 204 行（实际是第 234 行的 Dialog 组件）
-- [x] 修复 Dialog 引用问题
-  - 重新导入 Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 组件
-  - 重新导入 Eye 图标
+- [x] 检查 CompanyReportDialog 组件的 import
+  - 确认 Dialog 组件是否正确导入
+  - 检查是否有其他地方使用了 Dialog 但未导入
+- [x] 重启开发服务器
+  - 清除 HMR 缓存
+  - 解决 React 热更新导致的 Dialog 未定义问题
 - [x] 测试修复后的功能
-  - 测试点击“查看报告”按钮
-  - 验证弹窗能否正常打开
+  - 测试上传 PDF 完成后点击"查看报告"按钮
+  - 验证弹窗是否正常显示
 
 ### 问题原因
-在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但第 234-289 行还有一个“查看提示词”的 Dialog 组件在使用 Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle，导致 Dialog is not defined 错误。
+在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但 CompanyReportDialog 组件已经自己导入了 Dialog。错误是由于 React 的热更新（HMR）没有正确处理导致的。
+
+### 修复方案
+重启开发服务器，清除 HMR 缓存，解决 Dialog is not defined 错误。
+
+
+## Bug 修复：彻底修复 Dialog is not defined 错误✅
+
+- [x] 检查浏览器控制台日志，找出错误源头
+  - 第 234 行的"查看提示词" Dialog 组件使用了 Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle
+  - 这些组件在删除"查看报告"弹窗时被误删
+- [x] 重新导入 Dialog 相关组件
+  - 导入 Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+  - 导入 Eye 图标
+- [x] 测试修复后的功能
+  - 测试上传 PDF 完成后点击"查看报告"按钮
+  - 测试"查看提示词"功能是否正常
+
+### 问题原因
+在 CompanyReportManagement.tsx 中删除了 Dialog 的 import，但第 234-289 行还有一个"查看提示词"的 Dialog 组件在使用 Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle，导致 Dialog is not defined 错误。
 
 ### 修复方案
 重新导入 Dialog 相关组件：
@@ -739,25 +740,23 @@ import { toast } from 'sonner';
 import { Upload, Loader2, Eye } from 'lucide-react';
 ```
 
-### 修复方案
-重启开发服务器，清除 HMR 缓存，解决 Dialog is not defined 错误。
-
 
 ## Bug 修复：showPromptDialog is not defined 错误✅
 
 - [x] 检查 CompanyReportManagement.tsx 中缺失的状态变量
-  - 查看哪些状态变量被删除了
-  - 确认“查看提示词” Dialog 需要哪些状态
-- [x] 添加缺失的状态变量和函数
-  - 添加 showPromptDialog 状态
-  - 添加 prompt, isLoadingPrompt, isSavingPrompt 状态
-  - loadPrompt 和 savePrompt 函数已存在
+  - 查看"查看提示词" Dialog 需要的状态变量
+  - 确认哪些状态变量被误删
+- [x] 重新添加缺失的状态变量
+  - showPromptDialog: 控制提示词弹窗显示
+  - prompt: 存储提示词内容
+  - isLoadingPrompt: 加载提示词状态
+  - isSavingPrompt: 保存提示词状态
 - [x] 测试修复后的功能
-  - 测试“查看提示词”按钮
-  - 验证弹窗能否正常打开和编辑
+  - 测试"查看提示词"功能是否正常
+  - 测试编辑和保存提示词
 
 ### 问题原因
-在删除“查看报告”弹窗时，误删了“查看提示词” Dialog 需要的状态变量，导致 showPromptDialog is not defined 错误。
+在删除"查看报告"弹窗时，误删了"查看提示词" Dialog 需要的状态变量，导致 showPromptDialog is not defined 错误。
 
 ### 修复方案
 重新添加缺失的状态变量：
@@ -769,19 +768,16 @@ const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
 const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 ```
 
-loadPrompt 和 savePrompt 函数已经存在，不需要重新添加。
-
 
 ## Bug 修复：Textarea is not defined 错误✅
 
-- [x] 重新导入 Textarea 组件
-  - 在 CompanyReportManagement.tsx 中添加 Textarea 的 import
+- [x] 在 CompanyReportManagement.tsx 中重新导入 Textarea 组件
 - [x] 测试修复后的功能
-  - 测试“查看提示词”按钮
-  - 验证弹窗能否正常打开和编辑提示词
+  - 测试"查看提示词"功能是否正常
+  - 测试编辑提示词
 
 ### 问题原因
-在删除“查看报告”弹窗时，误删了 Textarea 组件的 import，但“查看提示词” Dialog 中使用了 Textarea 组件，导致 Textarea is not defined 错误。
+在删除"查看报告"弹窗时，误删了 Textarea 组件的 import，但"查看提示词" Dialog 中使用了 Textarea 组件，导致 Textarea is not defined 错误。
 
 ### 修复方案
 重新导入 Textarea 组件：
@@ -790,127 +786,212 @@ import { Textarea } from '@/components/ui/textarea';
 ```
 
 
-## Bug 修复：企业报告显示逻辑错误✅
+## Bug 修复：企业报告图标显示错误✅
 
-- [x] 检查 CompanyReportIcon 和 CompanyReportDialog 组件的实现
-  - 查看如何判断报告是否存在
-  - 查看如何加载报告数据
-  - 确认是否正确使用公司名称作为查询条件
-- [x] 修复报告存在判断和加载逻辑
-  - 确保每个公司的图标状态基于该公司是否有报告
-  - 确保每个公司点击图标后加载的是该公司的报告
-  - 修复可能的公司名称匹配问题
-- [x] 测试修复后的功能
-  - 测试只上传一家公司的报告
-  - 验证其他公司的图标不会被点亮
-  - 验证每个公司点击图标后显示的是自己的报告
-
-### 问题描述
-只上传了“上海禹捷商务信息咨询有限公司”的报告，但“北京润仪商业中心（有限合伙）”的企查查+DeepSeek图标也被点亮了，并且点击后显示的是上海禹捷的报告，而不是北京润仪的报告。
+- [x] 检查 CompanyReportIcon 组件的样式定义
+  - 查看当前的 opacity 设置
+  - 确认 Tailwind 类名是否正确应用
+- [x] 修改图标样式
+  - 未上传报告：使用内联 style 设置 opacity: 0.6（60%）
+  - 已上传报告：使用内联 style 设置 opacity: 1（100%）
+  - 使用内联 style 替代 Tailwind 类名，确保跨设备一致性
+- [x] 测试修复后的显示效果
+  - 测试未上传报告的公司图标（应为灰色，60% opacity）
+  - 测试已上传报告的公司图标（应为蓝紫色渐变，100% opacity）
 
 ### 问题原因
-原有逻辑使用全局状态 `companyReportExists` 和 `find()` 方法查找第一个公司名称字段，导致：
-1. 所有公司名称字段共享同一个报告存在状态
-2. 所有公司名称字段都查询的是第一个公司的报告
-3. 点击任何公司名称字段都打开第一个公司的报告
+Tailwind 的 `opacity-60` 类名在某些设备上可能不生效，导致图标显示不正确。
 
 ### 修复方案
-修改 ContactDetail.tsx，使用 Map 结构存储每个公司名称的报告存在状态：
+修改 CompanyReportIcon.tsx，使用内联 style 属性替代 Tailwind 类名：
+```tsx
+<div
+  style={{
+    opacity: hasReport ? 1 : 0.6,
+    cursor: hasReport ? 'pointer' : 'not-allowed',
+  }}
+  onClick={hasReport ? onClick : undefined}
+>
+  {/* 图标内容 */}
+</div>
+```
 
-1. **修改状态定义：**
+
+## 功能优化：优化企业报告提示词和显示格式✅
+
+- [x] 修改 DeepSeek 提示词
+  - 添加报告生成时间提取逻辑
+  - 修改提示词，只输出有内容的字段，省略空字段
+- [x] 修改前端显示逻辑
+  - 只渲染有内容的部分
+  - 在报告最下面显示"本报告生成时间为 XXXX 年 XX 月 XX 日 XX:XX:XX"
+- [x] 修复 CompanyReportIcon 组件的嵌套 button 错误
+  - 将 button 改为 div，避免嵌套 button 导致的 React 警告
+- [x] 测试优化后的效果
+  - 测试上传新的企查查 PDF
+  - 验证报告生成时间是否正确显示
+  - 验证空字段是否被省略
+
+### 优化目标
+1. 提取并显示报告生成时间
+2. 只显示有内容的字段，省略空字段
+3. 修复 CompanyReportIcon 组件的嵌套 button 错误
+
+### 修改内容
+
+**后端修改（company-reports.ts）：**
+修改 DeepSeek 提示词：
+```
+**重要要求：**
+1. **必须提取报告生成时间**：从原文中找到类似"本报告生成时间为 2025 年 05 月 07 日 13:03:31"的文本，提取完整的时间字符串
+2. **只输出有内容的字段**：如果某个字段在报告中没有找到或为空，直接省略该字段，不要输出"未找到相关信息"或"无"等占位文本
+3. **完全省略空的分类**：如果某个分类（如 financialData、riskInfo）下所有字段都为空，则完全省略该分类
+```
+
+**前端修改（CompanyReportDialog.tsx）：**
+1. 添加报告生成时间显示：
+```tsx
+{reportData.reportGeneratedTime && (
+  <div className="text-sm text-muted-foreground text-center border-t pt-4">
+    本报告生成时间为 {reportData.reportGeneratedTime}
+  </div>
+)}
+```
+
+2. 修改字段渲染逻辑，只显示有内容的字段：
+```tsx
+{reportData.basicInfo?.registeredCapital && (
+  <div className="flex justify-between">
+    <span className="text-muted-foreground">注册资本</span>
+    <span className="font-medium">{reportData.basicInfo.registeredCapital}</span>
+  </div>
+)}
+```
+
+**修复 CompanyReportIcon 组件：**
+将 button 改为 div，避免嵌套 button 导致的 React 警告
+
+
+## 功能优化：优化 AI 情报功能展示方式✅
+
+- [x] 将 AIBackgroundCheck 组件的侧边栏（Sheet）改为居中弹窗（Dialog）
+- [x] 移除从右边弹出的行为，改为居中显示
+- [x] 提升移动端用户体验
+- [x] 测试优化后的效果
+  - 测试点击"AI 情报"按钮
+  - 验证弹窗是否居中显示
+
+### 优化目标
+将 AI 情报功能从侧边栏（Sheet）改为居中弹窗（Dialog），提升移动端用户体验。
+
+### 修改内容
+修改 AIBackgroundCheck.tsx：
+1. 将 Sheet 组件改为 Dialog 组件
+2. 将 SheetTrigger, SheetContent, SheetHeader, SheetTitle 改为 DialogTrigger, DialogContent, DialogHeader, DialogTitle
+3. 移除 side="right" 属性，使用默认的居中显示
+
+
+## Bug 修复：企业报告上传失败问题✅
+
+- [x] 检查数据库表结构
+  - 查看 company_reports 表的 raw_text 字段类型
+  - 确认字段长度限制
+- [x] 修改数据库表结构
+  - 将 raw_text 字段从 TEXT 改为 LONGTEXT 类型
+  - 支持最大 4GB 的长文本存储
+- [x] 执行数据库迁移
+  - 运行 pnpm db:push 推送 schema 更改
+- [x] 测试修复后的上传功能
+  - 测试上传长文本的企查查 PDF
+  - 验证上传是否成功
+
+### 问题原因
+MySQL 的 TEXT 类型最大只能存储 65,535 字节（约 64KB），当企查查 PDF 提取的文本超过这个长度时，会报错"Data too long for column 'raw_text'"。
+
+### 修复方案
+修改 drizzle/schema.ts 第 1228 行：
 ```typescript
-// 修改前：
-const [companyReportExists, setCompanyReportExists] = useState(false);
-const [checkingCompanyReport, setCheckingCompanyReport] = useState(false);
-
+// 修改前：rawText: text("raw_text").notNull(),
 // 修改后：
-const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
-const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
-const [checkingCompanyReports, setCheckingCompanyReports] = useState<Record<string, boolean>>({});
+rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 ```
 
-2. **修改查询逻辑：**
-```typescript
-// 修改前：只查询第一个公司名称
-const companyName = extendedFieldValues?.find(f => f.categoryName === '公司名称')?.value;
+然后执行 `pnpm db:push` 推送数据库 schema 更改。
 
-// 修改后：查询所有公司名称
-const companyNames = extendedFieldValues?.filter(f => f.categoryName === '公司名称').map(f => f.value) || [];
-companyNames.forEach(companyName => {
-  // 为每个公司名称查询报告是否存在
-});
+
+## 功能优化：优化 DeepSeek 提示词，添加企业标签和联系方式字段✅
+
+- [x] 修改 DeepSeek 提示词
+  - 添加企业标签（companyTags）字段
+  - 添加联系方式（contactInfo）字段，包含电话、邮箱、地址、网站
+- [x] 修改前端 CompanyReportDialog 组件
+  - 添加企业标签显示（胶囊形状）
+  - 添加联系方式显示（电话、邮箱、地址、网站）
+  - 只显示有内容的字段，空字段自动隐藏
+- [x] 测试优化后的效果
+  - 测试上传新的企查查 PDF
+  - 验证企业标签和联系方式是否正确提取和显示
+
+### 优化目标
+从企查查 PDF 中提取企业标签和联系方式，并在前端以美观的方式展示。
+
+### 修改内容
+
+**后端修改（company-reports.ts）：**
+修改 DeepSeek 提示词，添加以下字段：
+```json
+{
+  "companyTags": ["企业标签1", "企业标签2"],
+  "contactInfo": {
+    "phone": "联系电话",
+    "email": "邮箱地址",
+    "address": "公司地址",
+    "website": "公司网站"
+  }
+}
 ```
 
-3. **修改图标显示：**
-```typescript
-// 修改前：使用全局状态
-hasReport={companyReportExists}
-
-// 修改后：使用对应公司名称的状态
-hasReport={!!companyReportExistsMap[fv.value]}
+**前端修改（CompanyReportDialog.tsx）：**
+1. 添加企业标签显示：
+```tsx
+{reportData.companyTags && reportData.companyTags.length > 0 && (
+  <div className="space-y-2">
+    <h3 className="text-lg font-semibold flex items-center gap-2">
+      🏷️ 企业标签
+    </h3>
+    <div className="flex flex-wrap gap-2">
+      {reportData.companyTags.map((tag, index) => (
+        <span
+          key={index}
+          className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  </div>
+)}
 ```
 
-4. **修改点击事件：**
-```typescript
-// 修改前：直接打开弹窗
-onClick={() => setShowCompanyReportDialog(true)}
-
-// 修改后：记录选中的公司名称再打开弹窗
-onClick={() => {
-  setSelectedCompanyName(fv.value);
-  setShowCompanyReportDialog(true);
-}}
+2. 添加联系方式显示：
+```tsx
+{reportData.contactInfo && (
+  <div className="space-y-2">
+    <h3 className="text-lg font-semibold flex items-center gap-2">
+      📞 联系方式
+    </h3>
+    <div className="space-y-2 text-sm">
+      {reportData.contactInfo.phone && (
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">电话</span>
+          <span className="font-medium">{reportData.contactInfo.phone}</span>
+        </div>
+      )}
+      {/* 邮箱、地址、网站同理 */}
+    </div>
+  </div>
+)}
 ```
-
-5. **修改弹窗传参：**
-```typescript
-// 修改前：使用 find() 查找第一个公司名称
-companyName={extendedFieldValues.find(f => f.categoryName === '公司名称')!.value}
-
-// 修改后：使用选中的公司名称
-companyName={selectedCompanyName}
-```
-
-
-## Bug 修复：企业报告图标显示错误
-
-- [x] 修复企业报告图标显示错误：未上传报告的公司图标应该显示为灰色而不是紫色
-
-
-## 优化企业报告提示词和显示格式
-
-- [x] 修改 DeepSeek 提示词，添加报告生成时间提取逻辑
-- [x] 修改提示词，只输出有内容的字段，省略空字段
-- [x] 修改前端显示逻辑，只渲染有内容的部分
-- [x] 在报告最下面显示“本报告生成时间为 XXXX 年 XX 月 XX 日 XX:XX:XX”
-
-
-## 优化 AI 管理页面上传体验
-
-- [ ] 移除上传成功后自动弹出报告的功能
-- [ ] 上传成功后直接显示"查看报告"按钮，不自动弹出
-
-
-## 优化 AI 情报功能展示方式
-
-- [x] 将 AI 情报功能的侧边栏（Sheet）改为居中弹窗（Dialog）
-- [x] 移除从右边弹出的行为
-
-
-## 修复企业报告上传失败问题
-
-- [x] 检查数据库 schema 中 raw_text 字段的类型
-- [x] 修改 raw_text 字段为 LONGTEXT 类型以支持长文本
-- [x] 推送数据库变更（pnpm db:push）
-- [x] 测试上传功能确保能成功保存长文本
-
-
-## 优化企业报告提示词 - 添加企业标签和联系方式
-
-- [x] 修改 DeepSeek 提示词，添加"企业标签"字段提取
-- [x] 修改 DeepSeek 提示词，添加"联系方式"字段提取（电话、邮箱、地址、网站）
-- [x] 修改前端 CompanyReportDialog 组件，支持显示企业标签（胶囊形状）
-- [x] 修改前端 CompanyReportDialog 组件，支持显示联系方式
 
 
 ## 为企业报告添加删除和编辑功能
@@ -921,3 +1002,10 @@ companyName={selectedCompanyName}
 - [x] 修改前端添加编辑按钮（蓝色编辑图标）
 - [x] 实现编辑对话框
 - [x] 测试删除和编辑功能
+
+
+## 优化 DeepSeek 提示词，确保所有字段完整输出
+
+- [x] 修改提示词，确保企业标签之后的所有内容完整提取
+- [x] 所有字段都要输出，空字段显示"暂无"
+- [x] 测试新提示词效果
