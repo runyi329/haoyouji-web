@@ -3852,14 +3852,14 @@ export const appRouter = router({
     // 获取所有可用的字段类目
     categories: protectedProcedure
       .query(async () => {
-        return await db.getAllFieldCategories();
+        return await dbContacts.getFieldCategories();
       }),
 
     // 获取人脉的所有字段值
     list: protectedProcedure
       .input(z.object({ contactId: z.number() }))
       .query(async ({ input }) => {
-        return await db.getContactFieldValues(input.contactId);
+        return await dbContacts.getContactFieldValues(input.contactId);
       }),
 
     // 批量设置人脉的字段值
@@ -3887,15 +3887,15 @@ export const appRouter = router({
         value: z.string(),
       }))
       .mutation(async ({ input }) => {
-        const id = await db.addContactFieldValue(input.contactId, input.categoryId, input.value);
-        return { id };
+        const newFieldValue = await dbContacts.addFieldValue(input.contactId, input.categoryId, input.value);
+        return newFieldValue;
       }),
 
     // 删除单个字段值
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        const success = await db.deleteContactFieldValue(input.id);
+        const success = await dbContacts.deleteFieldValue(input.id);
         if (!success) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "删除字段值失败" });
         }

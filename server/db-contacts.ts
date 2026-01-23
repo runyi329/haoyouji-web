@@ -2191,3 +2191,123 @@ export async function getFieldValuesForContacts(contactIds: number[]): Promise<M
   
   return valuesMap;
 }
+
+// ==================== 扩展信息管理 ====================
+
+/**
+ * 获取所有扩展信息类目
+ * @returns 类目列表
+ */
+export async function getFieldCategories() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const categories = await db
+    .select()
+    .from(contactFieldCategories);
+  
+  return categories;
+}
+
+/**
+ * 添加扩展信息字段值
+ * @param contactId 联系人ID
+ * @param categoryId 类目ID
+ * @param value 字段值
+ * @returns 新增的字段值记录
+ */
+export async function addFieldValue(contactId: number, categoryId: number, value: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db
+    .insert(contactFieldValues)
+    .values({
+      contactId,
+      categoryId,
+      value,
+    });
+  
+  const insertId = result[0].insertId;
+  
+  // 返回新插入的记录
+  return {
+    id: insertId,
+    contactId,
+    categoryId,
+    value,
+    createdAt: new Date(),
+  };
+}
+
+/**
+ * 删除扩展信息字段值
+ * @param fieldValueId 字段值ID
+ * @returns 是否删除成功
+ */
+export async function deleteFieldValue(fieldValueId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db
+    .delete(contactFieldValues)
+    .where(eq(contactFieldValues.id, fieldValueId));
+  
+  return true;
+}
+
+/**
+ * 获取联系人的所有扩展信息字段值（包含类目信息）
+ * @param contactId 联系人ID
+ * @returns 字段值列表（包含类目名称）
+ */
+export async function getContactFieldValues(contactId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 先获取字段值
+  const fieldValues = await db
+    .select()
+    .from(contactFieldValues)
+    .where(eq(contactFieldValues.contactId, contactId));
+  
+  // 获取所有类目
+  const categories = await db
+    .select()
+    .from(contactFieldCategories);
+  
+  // 手动关联类目信息
+  const result = fieldValues.map(fv => {
+    const category = categories.find(c => c.id === fv.categoryId);
+    return {
+      id: fv.id,
+      contactId: fv.contactId,
+      categoryId: fv.categoryId,
+      categoryName: category?.name || '',
+      categoryKey: category?.name || '', // 使用 name 作为 key
+      value: fv.value,
+      createdAt: fv.createdAt,
+    };
+  });
+  
+  return result;
+}
+
+/**
+ * 更新扩展信息字段值
+ * @param fieldValueId 字段值ID
+ * @param value 新的字段值
+ * @returns 更新后的字段值记录
+ */
+export async function updateFieldValue(fieldValueId: number, value: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const [updatedFieldValue] = await db
+    .update(contactFieldValues)
+    .set({ value })
+    .where(eq(contactFieldValues.id, fieldValueId))
+    .returning();
+  
+  return updatedFieldValue;
+}

@@ -453,6 +453,9 @@ export default function ContactDetail() {
   // 获取人脉详情
   const { data: contact, isLoading } = trpc.contacts.get.useQuery({ id: contactId });
 
+  // 获取扩展信息字段值
+  const { data: extendedFieldValues } = trpc.contacts.fieldValues.list.useQuery({ contactId });
+
   // 获取所有标签
   const { data: allTags } = trpc.contacts.tags.list.useQuery();
   
@@ -898,23 +901,42 @@ export default function ContactDetail() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* 显示公司和职位（从fieldValues获取） */}
-              {contact.fieldValues && contact.fieldValues.length > 0 && (
-                <div className="space-y-2">
-                  {contact.fieldValues.map((fv: any) => (
-                    <div key={fv.id} className="flex items-center text-sm">
-                      <Briefcase className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>{fv.value}</span>
-                    </div>
-                  ))}
+              {/* 基本信息：称谓、性别、地区 */}
+              {contact.title && (
+                <div className="flex items-center text-sm">
+                  <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <span>称谓：{contact.title}</span>
                 </div>
               )}
               
-               {/* 显示地区 */}
+              {contact.gender && (
+                <div className="flex items-center text-sm">
+                  <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <span>性别：{contact.gender}</span>
+                </div>
+              )}
+              
+              {/* 显示地区 */}
               {contact.region && (
                 <div className="flex items-center text-sm">
                   <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
                   <span>所在地区：{contact.region}</span>
+                </div>
+              )}
+              
+              {/* 显示扩展信息字段值 */}
+              {extendedFieldValues && extendedFieldValues.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">扩展信息</div>
+                  {extendedFieldValues.map((fv: any) => (
+                    <div key={fv.id} className="flex items-start text-sm">
+                      <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      <div>
+                        <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
+                        <span>{fv.value}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               
