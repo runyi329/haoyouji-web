@@ -1429,7 +1429,7 @@ export default function ContactsList() {
                         <CardTitle className="text-lg">{item.contactName}</CardTitle>
                         {item.isDuplicate && (
                           <Badge variant="secondary" className="text-xs">
-                            重复 ({item.duplicateCount})
+                            交集 ({item.duplicateCount})
                           </Badge>
                         )}
                       </div>

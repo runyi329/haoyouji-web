@@ -1102,3 +1102,7 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 - [x] 修改后端 API 返回每个公司的 hasReport 状态
 - [x] 修改前端显示逻辑，根据 hasReport 显示不同颜色的机器人图标
 - [x] 测试并保存 checkpoint
+
+## 修改公司列表标签文案
+- [x] 将公司列表中的“重复”标签改为“交集”"
+- [x] 测试并保存 checkpoint
