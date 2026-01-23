@@ -413,8 +413,63 @@ router.get('/api/company-reports', async (req, res) => {
 });
 
 /**
+ * PUT /api/company-reports/:companyName
+ * 更新企业报告内容
+ */
+router.put('/api/company-reports/:companyName', async (req, res) => {
+  try {
+    const { companyName } = req.params;
+    const { formattedContent } = req.body;
+
+    if (!formattedContent) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少报告内容',
+      });
+    }
+
+    // 注意：此路由依赖前端权限控制，后端不进行用户认证检查
+
+    const db = await getDb();
+    
+    // 验证 JSON 格式
+    try {
+      JSON.parse(formattedContent);
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        error: '报告内容必须是有效的 JSON 格式',
+      });
+    }
+
+    // 更新报告
+    const result = await db
+      .update(companyReports)
+      .set({
+        formattedContent: formattedContent,
+        updatedAt: new Date(),
+      })
+      .where(eq(companyReports.companyName, companyName));
+
+    res.json({
+      success: true,
+      data: {
+        companyName,
+        formattedContent: JSON.parse(formattedContent),
+      },
+    });
+  } catch (error) {
+    console.error('更新企业报告错误:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '更新失败',
+    });
+  }
+});
+
+/**
  * DELETE /api/company-reports/:companyName
- * 删除指定公司的报告
+ * 删除企业报告
  */
 router.delete('/api/company-reports/:companyName', async (req, res) => {
   try {

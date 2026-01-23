@@ -3,10 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Upload, Link as LinkIcon, Eye, Loader2, FileText, CheckCircle } from 'lucide-react';
+import { Upload, Link as LinkIcon, Eye, Loader2, FileText, CheckCircle, Edit, Save } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 interface Company {
   companyName: string;
@@ -18,10 +19,15 @@ interface Company {
   duplicateCount: number;
 }
 
+// 上传状态类型
+type UploadStatus = 'idle' | 'uploading' | 'analyzing' | 'success' | 'error';
+
 export default function CompanyReportManagement() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingCompany, setUploadingCompany] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [viewingReport, setViewingReport] = useState<string | null>(null);
   const [reportData, setReportData] = useState<any>(null);
   const [showReportDialog, setShowReportDialog] = useState(false);
@@ -34,6 +40,11 @@ export default function CompanyReportManagement() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [currentCompany, setCurrentCompany] = useState<string | null>(null);
+
+  // 编辑相关状态
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -111,27 +122,79 @@ export default function CompanyReportManagement() {
 
     try {
       setUploadingCompany(companyName);
+      setUploadStatus('uploading');
+      setUploadProgress(0);
+
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('companyName', companyName);
+
+      // 模拟上传进度
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 30) {
+            clearInterval(progressInterval);
+            return 30;
+          }
+          return prev + 10;
+        });
+      }, 200);
 
       const response = await fetch('/api/company-reports/upload', {
         method: 'POST',
         body: formData,
       });
+
+      clearInterval(progressInterval);
+      setUploadProgress(40);
+      setUploadStatus('analyzing');
+
       const result = await response.json();
       
+      // 模拟 AI 分析进度
+      const analyzeInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(analyzeInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 1000);
+
+      // 等待一小段时间模拟 AI 分析
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      clearInterval(analyzeInterval);
+      setUploadProgress(100);
+
       if (result.success) {
-        toast.success('报告上传成功！');
+        setUploadStatus('success');
+        toast.success('报告上传并分析完成！');
         setSelectedFile(null);
         setCurrentCompany(null);
-        loadCompanies();
+        
+        // 延迟重置状态和刷新列表
+        setTimeout(() => {
+          setUploadStatus('idle');
+          setUploadProgress(0);
+          loadCompanies();
+        }, 1500);
       } else {
+        setUploadStatus('error');
         toast.error(result.error || '上传失败');
+        setTimeout(() => {
+          setUploadStatus('idle');
+          setUploadProgress(0);
+        }, 2000);
       }
     } catch (error) {
       console.error('上传错误:', error);
+      setUploadStatus('error');
       toast.error('网络错误，请稍后重试');
+      setTimeout(() => {
+        setUploadStatus('idle');
+        setUploadProgress(0);
+      }, 2000);
     } finally {
       setUploadingCompany(null);
     }
@@ -145,6 +208,8 @@ export default function CompanyReportManagement() {
       
       if (result.success) {
         setReportData(result.data);
+        setEditedContent(result.data.formattedContent);
+        setIsEditing(false);
         setShowReportDialog(true);
       } else {
         toast.error(result.error || '查看报告失败');
@@ -154,6 +219,51 @@ export default function CompanyReportManagement() {
       toast.error('网络错误，请稍后重试');
     } finally {
       setViewingReport(null);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!reportData) return;
+
+    try {
+      setIsSavingEdit(true);
+      const response = await fetch(`/api/company-reports/${encodeURIComponent(reportData.companyName)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ formattedContent: editedContent }),
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success('报告内容已更新');
+        setReportData({ ...reportData, formattedContent: editedContent });
+        setIsEditing(false);
+        loadCompanies(); // 刷新列表
+      } else {
+        toast.error(result.error || '更新失败');
+      }
+    } catch (error) {
+      console.error('更新报告错误:', error);
+      toast.error('网络错误，请稍后重试');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const getUploadStatusText = () => {
+    switch (uploadStatus) {
+      case 'uploading':
+        return 'PDF 上传中...';
+      case 'analyzing':
+        return 'DeepSeek AI 分析中...（预计 15-30 秒）';
+      case 'success':
+        return '✓ 分析完成！';
+      case 'error':
+        return '✗ 上传失败';
+      default:
+        return '';
     }
   };
 
@@ -285,6 +395,7 @@ export default function CompanyReportManagement() {
                             }
                           }}
                           className="text-sm"
+                          disabled={uploadingCompany === company.companyName}
                         />
                       </div>
                       <Button
@@ -295,7 +406,7 @@ export default function CompanyReportManagement() {
                         {uploadingCompany === company.companyName ? (
                           <>
                             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            上传中
+                            处理中
                           </>
                         ) : (
                           <>
@@ -306,19 +417,21 @@ export default function CompanyReportManagement() {
                       </Button>
                     </div>
 
-                    {/* URL 输入（暂时隐藏，后续实现） */}
-                    {/* <div className="flex gap-2">
-                      <Input
-                        placeholder="或输入企查查报告 URL"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        className="flex-1 text-sm"
-                      />
-                      <Button size="sm" variant="outline">
-                        <LinkIcon className="w-4 h-4 mr-1" />
-                        导入
-                      </Button>
-                    </div> */}
+                    {/* 上传进度显示 */}
+                    {uploadingCompany === company.companyName && (
+                      <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium text-blue-900">{getUploadStatusText()}</span>
+                          <span className="text-blue-700">{uploadProgress}%</span>
+                        </div>
+                        <Progress value={uploadProgress} className="h-2" />
+                        {uploadStatus === 'analyzing' && (
+                          <p className="text-xs text-blue-600">
+                            正在提取 PDF 文本并调用 DeepSeek AI 进行分析...
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 查看报告按钮 */}
@@ -345,7 +458,7 @@ export default function CompanyReportManagement() {
                   )}
 
                   {/* 提示文字 */}
-                  {!company.reportId && (
+                  {!company.reportId && uploadingCompany !== company.companyName && (
                     <p className="text-xs text-muted-foreground text-center">
                       上传 PDF 后将自动调用 DeepSeek AI 分析
                     </p>
@@ -357,7 +470,7 @@ export default function CompanyReportManagement() {
         </div>
       )}
 
-      {/* 报告查看弹窗 */}
+      {/* 报告查看和编辑弹窗 */}
       <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -370,16 +483,72 @@ export default function CompanyReportManagement() {
                 <p>{reportData.companyName}</p>
               </div>
               <div className="p-4 bg-muted rounded-lg">
-                <h4 className="font-semibold mb-2">AI 格式化结果</h4>
-                <pre className="text-sm whitespace-pre-wrap font-mono">
-                  {reportData.formattedContent}
-                </pre>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold">AI 格式化结果</h4>
+                  {!isEditing && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      编辑
+                    </Button>
+                  )}
+                </div>
+                {isEditing ? (
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    rows={20}
+                    className="font-mono text-sm"
+                  />
+                ) : (
+                  <pre className="text-sm whitespace-pre-wrap font-mono">
+                    {reportData.formattedContent}
+                  </pre>
+                )}
               </div>
               <div className="text-xs text-muted-foreground">
                 最后更新：{new Date(reportData.updatedAt).toLocaleString('zh-CN')}
               </div>
             </div>
           )}
+          <DialogFooter>
+            {isEditing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditedContent(reportData?.formattedContent || '');
+                  }}
+                >
+                  取消
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit}
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      保存
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setShowReportDialog(false)}>
+                关闭
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
