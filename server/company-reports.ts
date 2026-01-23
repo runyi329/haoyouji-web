@@ -31,6 +31,13 @@ const DEFAULT_COMPANY_REPORT_PROMPT = `你是一位专业的企业信息分析�
 
 {
   "reportGeneratedTime": "报告生成时间（从原文提取，格式：YYYY 年 MM 月 DD 日 HH:MM:SS）",
+  "companyTags": ["企业标签1", "企业标签2"],
+  "contactInfo": {
+    "phone": "联系电话",
+    "email": "邮箱地址",
+    "address": "公司地址",
+    "website": "公司网站"
+  },
   "basicInfo": {
     "registeredCapital": "注册资本",
     "establishDate": "成立日期",

@@ -903,3 +903,11 @@ companyName={selectedCompanyName}
 - [x] 修改 raw_text 字段为 LONGTEXT 类型以支持长文本
 - [x] 推送数据库变更（pnpm db:push）
 - [x] 测试上传功能确保能成功保存长文本
+
+
+## 优化企业报告提示词 - 添加企业标签和联系方式
+
+- [x] 修改 DeepSeek 提示词，添加"企业标签"字段提取
+- [x] 修改 DeepSeek 提示词，添加"联系方式"字段提取（电话、邮箱、地址、网站）
+- [x] 修改前端 CompanyReportDialog 组件，支持显示企业标签（胶囊形状）
+- [x] 修改前端 CompanyReportDialog 组件，支持显示联系方式

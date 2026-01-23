@@ -8,6 +8,13 @@ interface CompanyReport {
   reportFileUrl: string;
   formattedContent: {
     reportGeneratedTime?: string;
+    companyTags?: string[];
+    contactInfo?: {
+      phone?: string;
+      email?: string;
+      address?: string;
+      website?: string;
+    };
     basicInfo?: {
       registeredCapital?: string;
       establishDate?: string;
@@ -116,6 +123,64 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
 
         {!loading && !error && report && (
           <div className="space-y-6">
+            {/* 🏷️ 企业标签 */}
+            {report.formattedContent.companyTags && report.formattedContent.companyTags.length > 0 && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>🏷️</span>
+                  <span>企业标签</span>
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {report.formattedContent.companyTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 📞 联系方式 */}
+            {hasAnyContent(report.formattedContent.contactInfo) && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <span>📞</span>
+                  <span>联系方式</span>
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {report.formattedContent.contactInfo?.phone && (
+                    <div>
+                      <span className="text-muted-foreground">电话：</span>
+                      <span>{report.formattedContent.contactInfo.phone}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.contactInfo?.email && (
+                    <div>
+                      <span className="text-muted-foreground">邮箱：</span>
+                      <span>{report.formattedContent.contactInfo.email}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.contactInfo?.address && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">地址：</span>
+                      <span>{report.formattedContent.contactInfo.address}</span>
+                    </div>
+                  )}
+                  {report.formattedContent.contactInfo?.website && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">网站：</span>
+                      <a href={report.formattedContent.contactInfo.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {report.formattedContent.contactInfo.website}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             {/* 📊 基本信息 */}
             {hasAnyContent(report.formattedContent.basicInfo) && (
               <section>
