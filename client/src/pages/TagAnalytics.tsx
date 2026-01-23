@@ -2,13 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   BarChart,
   Bar,
@@ -22,7 +16,7 @@ import {
 } from "recharts";
 import { Tag, User, TrendingUp, Hash } from "lucide-react";
 
-type DataScope = "all" | "mine" | "shared" | "global";
+type DataScope = "all" | "mine" | "shared";
 
 const COLORS = [
   "#8b5cf6", // 紫色
@@ -84,22 +78,37 @@ export default function TagAnalytics() {
       {/* 头部 */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 sticky top-0 z-10 shadow-lg">
         <div className="container max-w-2xl mx-auto">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2">
             <div>
               <h1 className="text-lg font-bold">标签数据透视</h1>
               <p className="text-xs text-purple-100 mt-0.5">全面分析标签使用情况</p>
             </div>
-            <Select value={scope} onValueChange={(v) => setScope(v as DataScope)}>
-              <SelectTrigger className="w-20 h-8 bg-white/20 border-white/30 text-white text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="mine">自己</SelectItem>
-                <SelectItem value="shared">共享</SelectItem>
-                <SelectItem value="global">全局</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Button
+                variant={scope === 'all' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setScope('all')}
+                className="h-7 px-3 text-xs text-white hover:bg-white/20"
+              >
+                全部
+              </Button>
+              <Button
+                variant={scope === 'mine' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setScope('mine')}
+                className="h-7 px-3 text-xs text-white hover:bg-white/20"
+              >
+                我的
+              </Button>
+              <Button
+                variant={scope === 'shared' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setScope('shared')}
+                className="h-7 px-3 text-xs text-white hover:bg-white/20"
+              >
+                共享
+              </Button>
+            </div>
           </div>
         </div>
       </div>
