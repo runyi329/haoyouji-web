@@ -79,7 +79,7 @@ export const appRouter = router({
     // 用户名密码登录
     loginWithPassword: publicProcedure
       .input(z.object({
-        username: z.string().min(3).max(20),
+        username: z.string().min(1).max(20),
         password: z.string().min(6),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -126,7 +126,7 @@ export const appRouter = router({
     // 用户名密码注册
     registerWithPassword: publicProcedure
       .input(z.object({
-        username: z.string().min(3).max(20),
+        username: z.string().min(1).max(20),
         password: z.string().min(6),
         name: z.string().optional(),
         email: z.string().email().optional(),
@@ -446,7 +446,7 @@ export const appRouter = router({
     // 创建用户（管理员创建）
     createUser: protectedProcedure
       .input(z.object({
-        username: z.string().min(3).max(20),
+        username: z.string().min(1).max(20),
         password: z.string().min(6),
         name: z.string().optional(),
         role: z.enum(["super_admin", "parent", "baby"]).default("parent"),
@@ -2301,7 +2301,7 @@ export const appRouter = router({
     register: publicProcedure
       .input(z.object({
         code: z.string(),
-        username: z.string().min(3).max(20),
+        username: z.string().min(1).max(20),
         password: z.string().min(6),
         name: z.string().optional(),
         email: z.string().email().optional(),
