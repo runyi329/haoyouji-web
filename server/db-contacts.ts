@@ -1133,33 +1133,34 @@ export async function getContactStats(parentUserId: number) {
     )
     .groupBy(contactTags.id, contactTags.name);
   
+  // 创建 visibleContactIds 的 Set 用于快速查找
+  const visibleContactIdsSet = new Set(visibleContactIds);
+  
   // 本周活跃（本周有联络记录）
-  const weeklyActiveResult = await db
+  const allWeeklyInteractions = await db
     .select({ contactId: contactInteractions.contactId })
     .from(contactInteractions)
-    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
-    .where(
-      and(
-        inArray(contacts.id, visibleContactIds),
-        sql`${contactInteractions.interactionDate} >= ${thisWeekStart}`
-      )
-    )
-    .groupBy(contactInteractions.contactId);
-  const weeklyActive = weeklyActiveResult.length;
+    .where(sql`${contactInteractions.interactionDate} >= ${thisWeekStart}`);
+  
+  const weeklyActiveContactIds = new Set(
+    allWeeklyInteractions
+      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
+      .map(interaction => interaction.contactId)
+  );
+  const weeklyActive = weeklyActiveContactIds.size;
   
   // 今年活跃（今年有联络记录）
-  const yearlyActiveResult = await db
+  const allYearlyInteractions = await db
     .select({ contactId: contactInteractions.contactId })
     .from(contactInteractions)
-    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
-    .where(
-      and(
-        inArray(contacts.id, visibleContactIds),
-        sql`${contactInteractions.interactionDate} >= ${thisYearStart}`
-      )
-    )
-    .groupBy(contactInteractions.contactId);
-  const yearlyActive = yearlyActiveResult.length;
+    .where(sql`${contactInteractions.interactionDate} >= ${thisYearStart}`);
+  
+  const yearlyActiveContactIds = new Set(
+    allYearlyInteractions
+      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
+      .map(interaction => interaction.contactId)
+  );
+  const yearlyActive = yearlyActiveContactIds.size;
   
   // 拉黑名单（只统计个人的）
   const blacklistResult = await db
@@ -1181,19 +1182,24 @@ export async function getContactStats(parentUserId: number) {
   const startOfTodayUTC = new Date(beijingStartOfDay - beijingOffset);
   const endOfTodayUTC = new Date(startOfTodayUTC.getTime() + oneDayMs);
   
-  const todayActiveResult = await db
+  // 查询今天所有的互动记录，然后在应用层过滤
+  const allTodayInteractions = await db
     .select({ contactId: contactInteractions.contactId })
     .from(contactInteractions)
-    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
     .where(
       and(
-        inArray(contacts.id, visibleContactIds),
         gte(contactInteractions.interactionDate, startOfTodayUTC),
         lt(contactInteractions.interactionDate, endOfTodayUTC)
       )
-    )
-    .groupBy(contactInteractions.contactId);
-  const todayActive = todayActiveResult.length;
+    );
+  
+  // 过滤出属于 visibleContactIds 的记录，并去重
+  const todayActiveContactIds = new Set(
+    allTodayInteractions
+      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
+      .map(interaction => interaction.contactId)
+  );
+  const todayActive = todayActiveContactIds.size;
   
   // 休眠名单（180天未联络，只统计个人的）
   const oneEightyDaysAgo = Date.now() - (180 * 24 * 60 * 60 * 1000);
