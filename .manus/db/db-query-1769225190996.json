@@ -1,0 +1,9 @@
+{
+  "query": "\n-- 将\"月关注\"和\"季关注\"标签的颜色更新为蓝色（#3b82f6），与\"周关注\"统一\nUPDATE contact_tags \nSET color = '#3b82f6' \nWHERE name IN ('月关注', '季关注');\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 将\"月关注\"和\"季关注\"标签的颜色更新为蓝色（#3b82f6），与\"周关注\"统一\nUPDATE contact_tags \nSET color = '#3b82f6' \nWHERE name IN ('月关注', '季关注');\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 96
+}
