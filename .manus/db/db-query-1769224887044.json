@@ -1,0 +1,9 @@
+{
+  "query": "\n-- 为所有用户添加\"周关注\"、\"月关注\"、\"季关注\"三个默认全局标签\n-- 使用 INSERT IGNORE 避免重复插入\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '周关注' as name,\n  '#3b82f6' as color,\n  1 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '月关注' as name,\n  '#10b981' as color,\n  2 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '季关注' as name,\n  '#f59e0b' as color,\n  3 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 为所有用户添加\"周关注\"、\"月关注\"、\"季关注\"三个默认全局标签\n-- 使用 INSERT IGNORE 避免重复插入\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '周关注' as name,\n  '#3b82f6' as color,\n  1 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '月关注' as name,\n  '#10b981' as color,\n  2 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n\nINSERT IGNORE INTO contact_tags (parentUserId, name, color, sortOrder, isPreset, createdAt)\nSELECT \n  id as parentUserId,\n  '季关注' as name,\n  '#f59e0b' as color,\n  3 as sortOrder,\n  0 as isPreset,\n  NOW() as createdAt\nFROM users;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 109
+}
