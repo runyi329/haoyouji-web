@@ -1136,3 +1136,9 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 - [x] 修改登录接口的用户名验证规则（min从3改为1）
 - [x] 修改其他相关接口的用户名验证规则
 - [x] 测试并保存 checkpoint
+
+## 解决腾讯云部署后登录循环问题
+
+- [x] 排查 Cookie 配置问题（SameSite、Secure、Domain 等）
+- [x] 检查并修复 session cookie 设置
+- [x] 提供腾讯云部署的完整解决方案
