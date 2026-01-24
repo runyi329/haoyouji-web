@@ -1254,3 +1254,38 @@ const todayActive = todayActiveContactIds.size;
 - [x] 配置 ORIGINAL_DATABASE_URL 环境变量
 - [x] 连接到腾讯云 MySQL（crm_db）
 - [x] 验证数据同步功能（Manus ↔ 腾讯云）
+
+
+## Bug 修复：公司数量统计逻辑错误
+
+- [ ] 分析当前"公司数量"的统计逻辑
+- [ ] 修复后端统计：应该统计（自己+共享人）所有人脉中有公司信息的公司列表
+- [ ] 修复前端显示：点击"公司数量"应该显示公司列表，而不是人脉列表
+- [ ] 测试验证修复效果
+
+
+## Bug 修复：公司列表显示联系人名字而不是公司名称✅
+
+- [x] 修复后端 getCompanyList 函数（server/db-contacts.ts 第 2382-2449 行）
+  - 改为按公司名分组，而不是返回每个联系人一条记录
+  - 返回数据结构包含：companyName, contactIds, contactNames, contactCount, hasReport, createdAt
+- [x] 修复前端公司列表渲染（client/src/pages/ContactsList.tsx 第 1419-1470 行）
+  - 标题显示公司名（蓝绿色高亮）
+  - 显示该公司的联系人数量（如果 > 1 人显示徽章）
+  - 副标题显示所有联系人名字（用逗号分隔，可点击跳转）
+  - 点击公司卡片：只有 1 人时跳转到联系人详情，多人时不跳转
+- [x] 修复统计逻辑（server/db-contacts.ts 第 1219-1252 行）
+  - 从旧表 contactCustomFields 改为新表 contactFieldValues
+  - 统计去重后的公司数量，而不是有公司的联系人数量
+
+### 问题原因
+1. 后端 getCompanyList 函数返回的是"每个联系人一条记录"，而不是"每个公司一条记录"
+2. 前端显示 contactName 作为标题，而不是 companyName
+3. 统计逻辑还在使用旧表 contactCustomFields（字段名"公司名称"），应该使用新表 contactFieldValues（字段名"公司"）
+4. 统计的是"有公司的联系人数量"，而不是"去重后的公司数量"
+
+### 修复结果
+- 公司列表现在正确显示公司名称作为标题
+- 每个公司卡片显示该公司的所有联系人名字作为副标题
+- 如果多个联系人在同一家公司，会显示"X 人"徽章
+- 统计逻辑正确统计去重后的公司数量

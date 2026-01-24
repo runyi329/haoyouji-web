@@ -1416,35 +1416,52 @@ export default function ContactsList() {
         ) : viewMode === 'company' && companyList && companyList.length > 0 ? (
           // 公司列表视图
           <div className="space-y-2">
-            {companyList.map((item) => (
+            {companyList.map((company) => (
               <Card 
-                key={`${item.contactId}-${item.companyName}`}
+                key={company.companyName}
                 className="hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => setLocation(`/parent/contacts/${item.contactId}`)}
+                onClick={() => {
+                  // 如果只有一个联系人，直接跳转到该联系人详情
+                  if (company.contactCount === 1) {
+                    setLocation(`/parent/contacts/${company.contactIds[0]}`);
+                  }
+                  // 如果有多个联系人，暂时不跳转（未来可以弹出选择对话框）
+                }}
               >
                 <CardHeader className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{item.contactName}</CardTitle>
-                        {item.isDuplicate && (
+                        <CardTitle className="text-lg text-teal-600 dark:text-teal-400">{company.companyName}</CardTitle>
+                        {company.contactCount > 1 && (
                           <Badge variant="secondary" className="text-xs">
-                            交集 ({item.duplicateCount})
+                            {company.contactCount} 人
                           </Badge>
                         )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-sm text-muted-foreground">
-                          {item.companyName}
-                        </p>
                         <CompanyReportIcon
-                          hasReport={item.hasReport}
+                          hasReport={company.hasReport}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedCompanyForReport(item.companyName);
+                            setSelectedCompanyForReport(company.companyName);
                             setShowCompanyReportDialog(true);
                           }}
                         />
+                      </div>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {company.contactNames.map((name, index) => (
+                          <span key={index}>
+                            <span 
+                              className="text-sm text-muted-foreground hover:text-primary cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLocation(`/parent/contacts/${company.contactIds[index]}`);
+                              }}
+                            >
+                              {name}
+                            </span>
+                            {index < company.contactNames.length - 1 && <span className="text-muted-foreground">, </span>}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>

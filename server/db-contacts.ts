@@ -1216,23 +1216,40 @@ export async function getContactStats(parentUserId: number) {
     }
   }
   
-  // 公司数量（不去重）- 从 contact_custom_fields 表中查询所有有公司名称的联系人
-  const companyResult = await db
-    .select({ 
-      contactId: contactCustomFields.contactId,
-      companyName: contactCustomFields.fieldValue
-    })
-    .from(contactCustomFields)
-    .innerJoin(contacts, eq(contactCustomFields.contactId, contacts.id))
-    .where(
-      and(
-        inArray(contacts.id, visibleContactIds),
-        eq(contactCustomFields.fieldName, '公司名称'),
-        isNotNull(contactCustomFields.fieldValue),
-        ne(contactCustomFields.fieldValue, '')
-      )
-    );
-  const companyCount = companyResult.length;
+  // 公司数量（去重后的公司数）- 从 contact_field_values 表中查询
+  const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
+  
+  // 查找"公司"字段的 categoryId
+  const companyCategory = await db
+    .select({ id: contactFieldCategories.id })
+    .from(contactFieldCategories)
+    .where(eq(contactFieldCategories.name, '公司'))
+    .limit(1);
+  
+  let companyCount = 0;
+  if (companyCategory.length > 0) {
+    const companyCategoryId = companyCategory[0].id;
+    
+    // 查询所有可见联系人的公司名称
+    const companyResult = await db
+      .select({ 
+        companyName: contactFieldValues.value
+      })
+      .from(contactFieldValues)
+      .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
+      .where(
+        and(
+          inArray(contacts.id, visibleContactIds),
+          eq(contactFieldValues.categoryId, companyCategoryId),
+          isNotNull(contactFieldValues.value),
+          ne(contactFieldValues.value, '')
+        )
+      );
+    
+    // 去重计算公司数量
+    const uniqueCompanies = new Set(companyResult.map(r => r.companyName));
+    companyCount = uniqueCompanies.size;
+  }
   
   return {
     totalContacts,
@@ -2379,16 +2396,39 @@ export async function getCompanyList(parentUserId: number) {
     )
     .orderBy(desc(contactFieldValues.createdAt));
 
-  // 统计每个公司名称的出现次数
-  const companyCountMap = new Map<string, number>();
+  // 按公司名分组
+  const companyMap = new Map<string, {
+    companyName: string;
+    contactIds: number[];
+    contactNames: string[];
+    contactCount: number;
+    createdAt: Date;
+  }>();
+
   companyContacts.forEach(contact => {
-    const count = companyCountMap.get(contact.companyName) || 0;
-    companyCountMap.set(contact.companyName, count + 1);
+    const existing = companyMap.get(contact.companyName);
+    if (existing) {
+      existing.contactIds.push(contact.contactId);
+      existing.contactNames.push(contact.contactName);
+      existing.contactCount++;
+      // 保留最早的创建时间
+      if (new Date(contact.createdAt) < new Date(existing.createdAt)) {
+        existing.createdAt = contact.createdAt;
+      }
+    } else {
+      companyMap.set(contact.companyName, {
+        companyName: contact.companyName,
+        contactIds: [contact.contactId],
+        contactNames: [contact.contactName],
+        contactCount: 1,
+        createdAt: contact.createdAt,
+      });
+    }
   });
 
   // 查询所有公司的报告状态
   const { companyReports } = await import('../drizzle/schema');
-  const uniqueCompanyNames = Array.from(new Set(companyContacts.map(c => c.companyName)));
+  const uniqueCompanyNames = Array.from(companyMap.keys());
   const reportsData = uniqueCompanyNames.length > 0 ? await db
     .select({ companyName: companyReports.companyName })
     .from(companyReports)
@@ -2397,11 +2437,11 @@ export async function getCompanyList(parentUserId: number) {
   
   const hasReportMap = new Map(reportsData.map(r => [r.companyName, true]));
 
-  // 为每个联系人添加是否重复的标记和报告状态
-  return companyContacts.map(contact => ({
-    ...contact,
-    isDuplicate: companyCountMap.get(contact.companyName)! > 1,
-    duplicateCount: companyCountMap.get(contact.companyName)!,
-    hasReport: hasReportMap.get(contact.companyName) || false,
-  }));
+  // 返回按公司分组的列表，按创建时间倒序排列
+  return Array.from(companyMap.values())
+    .map(company => ({
+      ...company,
+      hasReport: hasReportMap.get(company.companyName) || false,
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
