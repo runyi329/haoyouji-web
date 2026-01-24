@@ -1,0 +1,17 @@
+{
+  "name": "脉动",
+  "short_name": "脉动",
+  "description": "人脉管理软件 - 让人脉流动起来",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

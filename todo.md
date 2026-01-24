@@ -1240,3 +1240,17 @@ const todayActive = todayActiveContactIds.size;
 - ✅ "本周活跃"：0 人 → 66 人（包含共享联系人）
 - ✅ "今年活跃"：0 人 → 87 人（包含共享联系人）
 - ✅ "人脉总数"：0 人 → 482 人（105 个自己的 + 377 个共享的）
+
+
+## 品牌更新：网站标题和 Logo✅
+
+- [x] 生成"脉动"品牌 logo（人脉流动主题，蓝紫渐变）
+- [x] 更新网站标题为"脉动"
+- [x] 添加 PWA 配置支持（manifest.json）
+- [x] 配置 iOS 和安卓添加到主屏幕功能
+
+## 数据库配置：连接腾讯云 MySQL✅
+
+- [x] 配置 ORIGINAL_DATABASE_URL 环境变量
+- [x] 连接到腾讯云 MySQL（crm_db）
+- [x] 验证数据同步功能（Manus ↔ 腾讯云）
