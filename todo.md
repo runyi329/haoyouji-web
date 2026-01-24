@@ -1112,3 +1112,9 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 - [x] 检查后端 getCompanyList 查询逻辑，确认字段名称
 - [x] 修复字段名称匹配问题（可能是“公司名称” vs “公司”）
 - [x] 测试并保存 checkpoint
+
+## 修改地区字段为下拉框选择
+
+- [x] 创建包含36个完整选项的地区列表（34个省市自治区 + 海外 + 其他）
+- [x] 修改人脉详情页面地区字段为下拉框（Select组件）
+- [x] 测试并保存 checkpoint
