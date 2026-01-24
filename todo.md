@@ -1142,3 +1142,12 @@ rawText: longtext("raw_text").notNull(), // 原始文本内容（最大 4GB）
 - [x] 排查 Cookie 配置问题（SameSite、Secure、Domain 等）
 - [x] 检查并修复 session cookie 设置
 - [x] 提供腾讯云部署的完整解决方案
+
+## 移除 Manus OAuth 认证
+
+- [x] 移除后端 OAuth 回调路由和相关代码
+- [x] 移除前端 OAuth 登录按钮和逻辑
+- [x] 清理 OAuth 相关的环境变量引用
+- [x] 移除 OAuth 相关的依赖和文件
+- [x] 测试用户名密码登录功能
+- [x] 保存 checkpoint
