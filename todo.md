@@ -1289,3 +1289,22 @@ const todayActive = todayActiveContactIds.size;
 - 每个公司卡片显示该公司的所有联系人名字作为副标题
 - 如果多个联系人在同一家公司，会显示"X 人"徽章
 - 统计逻辑正确统计去重后的公司数量
+
+## Bug 修复：公司列表显示联系人名字而不是公司名称 ✅
+
+- [x] 后端 `getCompanyList` 函数改为按公司名分组
+- [x] 前端公司列表渲染逻辑修改为显示公司名称作为标题
+- [x] 统计逻辑修复：从旧表迁移到新表，统计去重后的公司数量
+- [x] 修复公司列表查询：字段名称从“公司”改为“公司名称”
+
+### 修复说明
+- 后端 `getCompanyList` 函数现在按公司名分组返回数据，每个公司包含：
+  - `companyName`：公司名称
+  - `contactIds`：该公司的所有联系人 ID 数组
+  - `contactNames`：该公司的所有联系人名字数组
+  - `contactCount`：该公司的联系人数量
+  - `hasReport`：是否有企业报告
+  - `createdAt`：最早创建时间
+- 前端公司列表显示公司名称作为标题，联系人名字作为副标题
+- 统计逻辑从 `contactCustomFields` 表迁移到 `contactFieldValues` 表
+- 字段名称从“公司”改为“公司名称”（categoryId: 76）

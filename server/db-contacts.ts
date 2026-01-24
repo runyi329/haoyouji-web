@@ -1219,11 +1219,11 @@ export async function getContactStats(parentUserId: number) {
   // 公司数量（去重后的公司数）- 从 contact_field_values 表中查询
   const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
   
-  // 查找"公司"字段的 categoryId
+  // 查找“公司名称”字段的 categoryId
   const companyCategory = await db
     .select({ id: contactFieldCategories.id })
     .from(contactFieldCategories)
-    .where(eq(contactFieldCategories.name, '公司'))
+    .where(eq(contactFieldCategories.name, '公司名称'))
     .limit(1);
   
   let companyCount = 0;
@@ -2358,23 +2358,28 @@ export async function getCompanyList(parentUserId: number) {
   // 获取所有可见人脉ID（自己的 + 共享的）
   const visibleContactIds = await getAllVisibleContactIds(parentUserId);
 
+  console.log('[getCompanyList] visibleContactIds.length:', visibleContactIds.length);
   if (visibleContactIds.length === 0) {
     return [];
   }
 
   // 查询公司字段的 categoryId
   const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
+  
   const companyCategoryResult = await db
     .select({ id: contactFieldCategories.id })
     .from(contactFieldCategories)
-    .where(eq(contactFieldCategories.name, '公司'))
+    .where(eq(contactFieldCategories.name, '公司名称'))
     .limit(1);
   
+  console.log('[getCompanyList] companyCategoryResult:', companyCategoryResult);
   if (companyCategoryResult.length === 0) {
+    console.log('[getCompanyList] 未找到“公司名称”字段分类');
     return [];
   }
   
   const companyCategoryId = companyCategoryResult[0].id;
+  console.log('[getCompanyList] companyCategoryId:', companyCategoryId);
   
   // 查询所有有公司名称的联系人
   const companyContacts = await db
@@ -2395,6 +2400,11 @@ export async function getCompanyList(parentUserId: number) {
       )
     )
     .orderBy(desc(contactFieldValues.createdAt));
+
+  console.log('[getCompanyList] companyContacts.length:', companyContacts.length);
+  if (companyContacts.length > 0) {
+    console.log('[getCompanyList] companyContacts 示例:', companyContacts.slice(0, 3));
+  }
 
   // 按公司名分组
   const companyMap = new Map<string, {

@@ -256,6 +256,11 @@ export default function ContactsList() {
   const tagIdParam = urlParams.get('tag'); // 标签ID筛选（支持多个，用逗号分隔）
   const viewMode = urlParams.get('view'); // 视图模式：company显示公司信息
   
+  // 调试日志
+  console.log('[ContactsList] searchParams:', searchParams);
+  console.log('[ContactsList] viewMode:', viewMode);
+  console.log('[ContactsList] viewMode === "company":', viewMode === 'company');
+  
   // 解析选中的标签ID列表
   const selectedTagIds = React.useMemo(() => {
     if (!tagIdParam) return [];
@@ -283,6 +288,11 @@ export default function ContactsList() {
   const { data: companyList, isLoading: isLoadingCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
     enabled: viewMode === 'company', // 只在公司视图时启用
   });
+  
+  // 调试日志
+  console.log('[ContactsList] viewMode:', viewMode);
+  console.log('[ContactsList] companyList:', companyList);
+  console.log('[ContactsList] isLoadingCompanyList:', isLoadingCompanyList);
   
   // 获取共享给我的人脉列表
   const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
@@ -767,6 +777,24 @@ export default function ContactsList() {
           </h1>
           
           <div className="flex items-center gap-2">
+            {/* 用户信息和退出按钮 */}
+            {isAuthenticated && (
+              <div className="flex items-center gap-2 mr-2">
+                <span className="text-xs sm:text-sm text-muted-foreground">{user?.username}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    logout();
+                    setLocation('/parent/contacts');
+                  }}
+                  className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                >
+                  <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+                  退出
+                </Button>
+              </div>
+            )}
             {/* 共享人脉筛选按钮 */}
             <div className="flex items-center gap-1 sm:gap-2">
               <Button

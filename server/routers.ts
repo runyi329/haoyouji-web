@@ -3545,7 +3545,10 @@ export const appRouter = router({
   // 获取公司列表（所有有公司名称的联系人，标注重复）
   companyList: protectedProcedure
     .query(async ({ ctx }) => {
-      return await dbContacts.getCompanyList(ctx.user.id);
+      const result = await dbContacts.getCompanyList(ctx.user.id);
+      console.log('[companyList] 返回数据示例:', result.slice(0, 3));
+      console.log('[companyList] 总共返回', result.length, '条记录');
+      return result;
     }),
 
   // 获取累计联络次数
