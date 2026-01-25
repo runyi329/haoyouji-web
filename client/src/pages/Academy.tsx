@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { GraduationCap, Home, Users, Tags, MapPin, Share2, BarChart3, Bell, TrendingUp, Search, X } from "lucide-react";
+import { GraduationCap, Home, Users, Tags, MapPin, Share2, BarChart3, Bell, TrendingUp, Search, X, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
@@ -211,6 +211,38 @@ const featureSections: FeatureSection[] = [
       {
         subtitle: "功能模块",
         text: "• 用户管理：查看和管理所有用户账号\\n• 邀请管理：管理邀请码和邀请记录\\n• 知识库：管理系统知识库内容\\n• 系统设置：配置全局系统参数"
+      }
+    ]
+  },
+  {
+    id: "pwa",
+    icon: Smartphone,
+    title: "PWA 桌面应用",
+    color: "text-pink-600",
+    content: [
+      {
+        subtitle: "什么是 PWA？",
+        text: "PWA（Progressive Web App，渐进式 Web 应用）是一种结合了网页和原生应用优点的技术。您可以将脉动安装到手机桌面，像使用普通 App 一样打开和使用，无需从应用商店下载。"
+      },
+      {
+        subtitle: "安装优势",
+        text: "• 桌面图标：在手机桌面显示脉动图标，一键打开\\n• 全屏体验：去除浏览器地址栏，获得更大的显示空间\\n• 离线访问：支持离线缓存，无网络时也能浏览已缓存的内容\\n• 快速启动：启动速度更快，无需等待浏览器加载\\n• 自动更新：应用会自动更新到最新版本，无需手动下载"
+      },
+      {
+        subtitle: "Android 手机安装步骤",
+        text: "1、在 Chrome 或 Edge 浏览器中打开脉动\\n2、当页面底部弹出安装提示时，点击“立即安装”按钮\\n3、或者点击浏览器右上角菜单（三个点），选择“添加到主屏幕”\\n4、确认安装，等待几秒钟\\n5、安装完成后，桌面上会出现脉动图标\\n\\n💡 小贴士：如果没有看到安装提示，请尝试刷新页面或使用浏览器菜单手动添加。"
+      },
+      {
+        subtitle: "iPhone/iPad 安装步骤",
+        text: "1、在 Safari 浏览器中打开脉动\\n2、点击底部工具栏中间的“分享”按钮（方框+箭头图标）\\n3、在弹出菜单中向下滚动，找到并点击“添加到主屏幕”\\n4、点击右上角的“添加”按钮\\n5、安装完成后，主屏幕上会出现脉动图标\\n\\n💡 小贴士：iOS 设备必须使用 Safari 浏览器才能安装 PWA，Chrome 或其他浏览器不支持。"
+      },
+      {
+        subtitle: "常见问题",
+        text: "Q：安装后如何卸载？\\nA：Android 设备长按图标选择卸载；iOS 设备长按图标选择“删除 App”。\\n\\nQ：安装后会占用很多存储空间吗？\\nA：PWA 应用非常轻量，只会缓存必要的资源，通常只占用几 MB 空间。\\n\\nQ：安装后需要联网使用吗？\\nA：大部分功能需要联网，但已缓存的页面和数据可以离线浏览。\\n\\nQ：安装后如何更新？\\nA：应用会自动检测并更新到最新版本，无需手动操作。"
+      },
+      {
+        subtitle: "技术原理",
+        text: "脉动使用了 Service Worker 技术实现离线缓存和快速加载。当您访问过一次后，应用会自动缓存关键资源，下次打开时会优先使用缓存，大大提升加载速度。同时，应用会在后台自动检查更新，确保您始终使用最新版本。"
       }
     ]
   }
