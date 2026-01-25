@@ -556,3 +556,27 @@
   - 检查网络请求是否成功
   - 检查前端渲染逻辑
 - [ ] 修复问题并测试
+
+
+---
+
+## 实现账本功能（重新开发）
+
+### 数据库层
+- [x] 检查 ledgers 表是否存在
+- [x] 检查 ledger_members 表是否存在
+- [x] 检查 transactions 表是否存在
+
+### 后端 API
+- [x] 创建 server/db-ledger.ts 数据库操作文件
+- [x] 在 server/routers.ts 中添加 ledger router
+
+### 前端页面
+- [x] 创建账本列表页面 (client/src/pages/LedgerList.tsx)
+- [x] 创建账本详情页面 (client/src/pages/LedgerDetail.tsx)
+- [x] 在 App.tsx 中添加路由配置
+- [x] 在 Home.tsx 底部导航添加“账本”按钮
+
+### 测试与交付
+- [ ] 浏览器测试功能
+- [ ] 保存 checkpoint

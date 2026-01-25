@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date, decimal } from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -1283,3 +1283,52 @@ export const pointLogs = mysqlTable("point_logs", {
 
 export type PointLog = typeof pointLogs.$inferSelect;
 export type InsertPointLog = typeof pointLogs.$inferInsert;
+
+
+/**
+ * 账本表 - 存储账本基本信息
+ */
+export const ledgers = mysqlTable("ledgers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // 账本名称
+  description: text("description"), // 账本描述
+  creatorId: int("creatorId").notNull(), // 创建者ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Ledger = typeof ledgers.$inferSelect;
+export type InsertLedger = typeof ledgers.$inferInsert;
+
+/**
+ * 账本成员表 - 存储账本的成员关系
+ */
+export const ledgerMembers = mysqlTable("ledger_members", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  userId: int("userId").notNull(), // 用户ID
+  role: varchar("role", { length: 20 }).default("member").notNull(), // 角色：owner/member
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+});
+
+export type LedgerMember = typeof ledgerMembers.$inferSelect;
+export type InsertLedgerMember = typeof ledgerMembers.$inferInsert;
+
+/**
+ * 账单表 - 存储账本中的每一笔账单
+ */
+export const transactions = mysqlTable("transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  userId: int("userId").notNull(), // 记账人ID
+  type: varchar("type", { length: 20 }).notNull(), // 类型：income/expense
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // 金额
+  category: varchar("category", { length: 50 }).notNull(), // 分类
+  description: text("description"), // 描述
+  transactionDate: timestamp("transactionDate").notNull(), // 账单日期
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Transaction = typeof transactions.$inferSelect;
+export type InsertTransaction = typeof transactions.$inferInsert;
