@@ -925,10 +925,9 @@ export default function ContactsManagement() {
     setShowInviteDialog(true);
   };
   
-  // 处理共享按钮点击
+  // 处理共享按钮点击 - 直接跳转，不需要密码验证
   const handleShareClick = () => {
-    setInviteTarget("share");
-    setShowInviteDialog(true);
+    setLocation('/parent/contacts/sharing');
   };
   
   // 验证邀请码
