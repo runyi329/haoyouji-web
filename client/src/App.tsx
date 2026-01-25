@@ -82,8 +82,6 @@ const AIManagement = lazy(() => import("./pages/AIManagement"));
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
 const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
-const LedgerList = lazy(() => import("./pages/LedgerList"));
-const LedgerDetail = lazy(() => import("./pages/LedgerDetail"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // 加载中组件
@@ -132,10 +130,6 @@ function Router() {
         <Route path="/parent/contacts/:id" component={ContactDetail} />
         <Route path="/parent/contacts/:contactId/referral-chain" component={ReferralChainVisualization} />
         <Route path="/parent/contacts/:contactId/referrals/:type" component={ReferralList} />
-        
-        {/* 账本相关页面 */}
-        <Route path="/ledger" component={LedgerList} />
-        <Route path="/ledger/:id" component={LedgerDetail} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />

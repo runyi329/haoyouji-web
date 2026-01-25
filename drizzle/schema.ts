@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date, decimal } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date } from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -1283,61 +1283,3 @@ export const pointLogs = mysqlTable("point_logs", {
 
 export type PointLog = typeof pointLogs.$inferSelect;
 export type InsertPointLog = typeof pointLogs.$inferInsert;
-
-
-/**
- * 账本表 - 存储用户创建的账本
- * 
- * 支持多账本管理（家庭记账、生意账本、公司账本等）
- */
-export const ledgers = mysqlTable("ledgers", {
-  id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 100 }).notNull(), // 账本名称
-  ownerId: int("ownerId").notNull(), // 创建者ID
-  isVip: boolean("isVip").default(false).notNull(), // 是否VIP账本
-  isArchived: boolean("isArchived").default(false).notNull(), // 是否已封账
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Ledger = typeof ledgers.$inferSelect;
-export type InsertLedger = typeof ledgers.$inferInsert;
-
-/**
- * 账本成员表 - 存储账本的共享成员关系
- * 
- * 支持多人共享同一个账本
- */
-export const ledgerMembers = mysqlTable("ledger_members", {
-  id: int("id").autoincrement().primaryKey(),
-  ledgerId: int("ledgerId").notNull(), // 账本ID
-  userId: int("userId").notNull(), // 成员用户ID
-  role: mysqlEnum("role", ["owner", "member"]).default("member").notNull(), // 角色：所有者/成员
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type LedgerMember = typeof ledgerMembers.$inferSelect;
-export type InsertLedgerMember = typeof ledgerMembers.$inferInsert;
-
-/**
- * 账单表 - 存储收支记录
- * 
- * 记录每一笔收入或支出
- */
-export const transactions = mysqlTable("transactions", {
-  id: int("id").autoincrement().primaryKey(),
-  ledgerId: int("ledgerId").notNull(), // 所属账本ID
-  userId: int("userId").notNull(), // 记录者ID
-  type: mysqlEnum("type", ["income", "expense"]).notNull(), // 类型：收入/支出
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // 金额
-  category: varchar("category", { length: 50 }).notNull(), // 分类（餐饮、交通、工资等）
-  subcategory: varchar("subcategory", { length: 50 }), // 子分类
-  description: text("description"), // 备注
-  transactionDate: date("transactionDate").notNull(), // 交易日期
-  images: json("images").$type<string[]>(), // 图片附件URL数组
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Transaction = typeof transactions.$inferSelect;
-export type InsertTransaction = typeof transactions.$inferInsert;
