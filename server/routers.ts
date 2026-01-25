@@ -234,6 +234,14 @@ export const appRouter = router({
           await db_instance.update(users).set({ avatar: url }).where(eq(users.id, ctx.user.id));
         }
         
+        // 同步更新关联人脉记录的头像
+        try {
+          await db.syncLinkedContactAvatar(ctx.user.id, url);
+        } catch (error) {
+          console.error('同步人脉记录头像失败:', error);
+          // 不影响头像上传，继续执行
+        }
+        
         return { success: true, avatarUrl: url };
       }),
     

@@ -4392,3 +4392,24 @@ export async function syncLinkedContactName(userId: number, newName: string): Pr
     return false;
   }
 }
+
+/**
+ * 同步关联人脉记录的头像（用户修改头像时调用）
+ */
+export async function syncLinkedContactAvatar(userId: number, avatarUrl: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  try {
+    // 更新所有 linkedUserId 为该用户的人脉记录
+    await db
+      .update(contacts)
+      .set({ avatar: avatarUrl })
+      .where(eq(contacts.linkedUserId, userId));
+    
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to sync linked contact avatar:", error);
+    return false;
+  }
+}

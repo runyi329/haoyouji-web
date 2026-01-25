@@ -502,3 +502,13 @@
   - 在 routers.ts 的 updateProfile 接口中添加同步逻辑
   - 在 routers.ts 的 updateUser 接口（管理员）中添加同步逻辑
   - 使用 try-catch 包裹，确保同步失败不影响用户资料更新
+
+
+## 用户头像更新自动同步人脉记录✅
+
+- [x] 添加数据库同步头像函数
+  - 在 db.ts 中添加 syncLinkedContactAvatar 函数
+  - 根据 linkedUserId 查找并更新对应的人脉记录头像
+- [x] 修改头像上传逻辑
+  - 在 routers.ts 的 uploadAvatar 接口中添加同步逻辑
+  - 使用 try-catch 包裹，确保同步失败不影响头像上传
