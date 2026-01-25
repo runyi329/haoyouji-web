@@ -606,7 +606,7 @@ export default function Home() {
           {/* 账本 */}
           <div 
             className="nav-item cursor-pointer" 
-            onClick={() => window.location.href = "/ledger";
+            onClick={() => window.location.href = "/ledger"}
           >
             <BookOpen className="w-6 h-6" />
             <span className="text-xs">账本</span>
