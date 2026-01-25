@@ -18,7 +18,11 @@ import {
   Lightbulb,
   Brain,
   Users,
-  ChevronDown
+  ChevronDown,
+  Home as HomeIcon,
+  Search,
+  MessageCircle,
+  Activity
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -591,17 +595,49 @@ export default function Home() {
       {/* 底部导航（移动端） */}
       <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 sm:hidden">
         <div className="flex justify-around py-2">
-          {features.map((feature) => (
-            <Link 
-              key={feature.href} 
-              href={feature.href}
-            >
-              <div className="nav-item">
-                <span className="text-xl">{feature.emoji}</span>
-                <span className="text-xs">{feature.title.slice(0, 2)}</span>
-              </div>
-            </Link>
-          ))}
+          {/* 首页 */}
+          <Link href="/">
+            <div className="nav-item">
+              <HomeIcon className="w-6 h-6" />
+              <span className="text-xs">首页</span>
+            </div>
+          </Link>
+          
+          {/* 发现 */}
+          <div 
+            className="nav-item cursor-pointer" 
+            onClick={() => toast.info('功能开发中，敬请期待！')}
+          >
+            <Search className="w-6 h-6" />
+            <span className="text-xs">发现</span>
+          </div>
+          
+          {/* 消息 */}
+          <div 
+            className="nav-item cursor-pointer" 
+            onClick={() => toast.info('功能开发中，敬请期待！')}
+          >
+            <MessageCircle className="w-6 h-6" />
+            <span className="text-xs">消息</span>
+          </div>
+          
+          {/* 动态 */}
+          <div 
+            className="nav-item cursor-pointer" 
+            onClick={() => toast.info('功能开发中，敬请期待！')}
+          >
+            <Activity className="w-6 h-6" />
+            <span className="text-xs">动态</span>
+          </div>
+          
+          {/* 我的 */}
+          <div 
+            className="nav-item cursor-pointer" 
+            onClick={() => toast.info('功能开发中，敬请期待！')}
+          >
+            <User className="w-6 h-6" />
+            <span className="text-xs">我的</span>
+          </div>
         </div>
       </nav>
 

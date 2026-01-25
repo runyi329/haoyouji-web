@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, name, parentUserId, linkedUserId, createdAt FROM contacts ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, name, parentUserId, linkedUserId, createdAt FROM contacts ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "1560008",
+      "name": "马双马",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:35:20"
+    },
+    {
+      "id": "1560007",
+      "name": "牟君",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:27:14"
+    },
+    {
+      "id": "1560006",
+      "name": "智振华",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:26:21"
+    },
+    {
+      "id": "1560005",
+      "name": "张奇",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:23:43"
+    },
+    {
+      "id": "1560004",
+      "name": "张宇",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:19:08"
+    },
+    {
+      "id": "1560003",
+      "name": "付利红",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 11:17:21"
+    },
+    {
+      "id": "1530003",
+      "name": "韩岳平",
+      "parentUserId": "540801",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 08:17:07"
+    },
+    {
+      "id": "1500003",
+      "name": "王海霞",
+      "parentUserId": "4680302",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 07:39:10"
+    },
+    {
+      "id": "1470009",
+      "name": "罗玉青",
+      "parentUserId": "4680302",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 03:58:29"
+    },
+    {
+      "id": "1470008",
+      "name": "刘军华",
+      "parentUserId": "4680302",
+      "linkedUserId": "NULL",
+      "createdAt": "2026-01-24 03:53:10"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tparentUserId\tlinkedUserId\tcreatedAt\n1560008\t马双马\t540801\tNULL\t2026-01-24 11:35:20\n1560007\t牟君\t540801\tNULL\t2026-01-24 11:27:14\n1560006\t智振华\t540801\tNULL\t2026-01-24 11:26:21\n1560005\t张奇\t540801\tNULL\t2026-01-24 11:23:43\n1560004\t张宇\t540801\tNULL\t2026-01-24 11:19:08\n1560003\t付利红\t540801\tNULL\t2026-01-24 11:17:21\n1530003\t韩岳平\t540801\tNULL\t2026-01-24 08:17:07\n1500003\t王海霞\t4680302\tNULL\t2026-01-24 07:39:10\n1470009\t罗玉青\t4680302\tNULL\t2026-01-24 03:58:29\n1470008\t刘军华\t4680302\tNULL\t2026-01-24 03:53:10\n",
+  "stderr": "",
+  "execution_time_ms": 2415
+}
