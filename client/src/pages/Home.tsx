@@ -342,7 +342,7 @@ export default function Home() {
             <img 
               src="/logo-header-transparent.png" 
               alt="脉动" 
-              className="h-8 w-auto object-contain"
+              className="h-7 sm:h-8 w-auto object-contain"
             />
           </div>
 

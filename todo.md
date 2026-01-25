@@ -1334,3 +1334,7 @@ const todayActive = todayActiveContactIds.size;
   - [ ] 登录页图标显示
   - [ ] iOS Safari "添加到主屏幕"图标
   - [ ] Android Chrome "添加到主屏幕"图标
+
+- [x] 优化首页 Logo
+  - [x] 添加响应式尺寸（移动端 h-7，桌面端 h-8）
+  - [ ] 提交到 GitHub
