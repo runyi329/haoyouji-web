@@ -122,21 +122,6 @@ export default function Login() {
           {/* 登录/注册卡片 */}
           <Card className="w-full p-8 shadow-xl border-2 border-gray-200 bg-white">
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-8 h-12 bg-gray-100">
-                <TabsTrigger 
-                  value="login" 
-                  className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
-                >
-                  登录
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="register"
-                  className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
-                >
-                  注册
-                </TabsTrigger>
-              </TabsList>
-
               {/* 登录表单 */}
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-6">
@@ -187,6 +172,22 @@ export default function Login() {
                   >
                     {loginMutation.isPending ? "登录中..." : "登录"}
                   </Button>
+
+                  {/* 登录/注册切换按钮 */}
+                  <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
+                    <TabsTrigger 
+                      value="login" 
+                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                    >
+                      登录
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="register"
+                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                    >
+                      注册
+                    </TabsTrigger>
+                  </TabsList>
                 </form>
               </TabsContent>
 
@@ -270,6 +271,22 @@ export default function Login() {
                   >
                     {registerMutation.isPending ? "注册中..." : "注册"}
                   </Button>
+
+                  {/* 登录/注册切换按钮 */}
+                  <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
+                    <TabsTrigger 
+                      value="login" 
+                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                    >
+                      登录
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="register"
+                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                    >
+                      注册
+                    </TabsTrigger>
+                  </TabsList>
                 </form>
               </TabsContent>
             </Tabs>
