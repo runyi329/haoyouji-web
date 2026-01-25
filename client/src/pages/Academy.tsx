@@ -322,15 +322,6 @@ export default function Academy() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          onClick={() => setLocation("/parent/profile")}
-          className="mb-6"
-        >
-          <Home className="h-4 w-4 mr-2" />
-          返回个人中心
-        </Button>
-
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="relative">
