@@ -115,7 +115,7 @@ const defaultFeatures = [
 ];
 
 // 可拖拽的功能卡片组件
-function SortableFeatureCard({ feature, isAuthenticated }: { feature: typeof defaultFeatures[0]; isAuthenticated: boolean }) {
+function SortableFeatureCard({ feature, isAuthenticated, hasHeartbeat }: { feature: typeof defaultFeatures[0]; isAuthenticated: boolean; hasHeartbeat?: boolean }) {
   const {
     attributes,
     listeners,
@@ -133,7 +133,7 @@ function SortableFeatureCard({ feature, isAuthenticated }: { feature: typeof def
 
   const cardContent = (
     <Card 
-      className={`card-hover p-4 sm:p-6 h-full ${feature.bgColor} border-0 ${isDragging ? 'shadow-2xl' : ''} ${isAuthenticated ? 'cursor-move' : ''}`}
+      className={`card-hover p-4 sm:p-6 h-full ${feature.bgColor} border-0 ${isDragging ? 'shadow-2xl' : ''} ${isAuthenticated ? 'cursor-move' : ''} ${hasHeartbeat ? 'heartbeat-animation' : ''}`}
     >
       <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 shadow-lg`}>
         <span className="text-2xl sm:text-3xl">{feature.emoji}</span>
@@ -259,6 +259,9 @@ export default function Home() {
   // 卡片排序状态
   const [features, setFeatures] = useState(defaultFeatures);
   
+  // 心跳特效状态
+  const [heartbeatIndex, setHeartbeatIndex] = useState<number | null>(null);
+  
   // 获取用户保存的卡片排序
   const { data: savedOrder } = trpc.userPreferences.getHomeCardOrder.useQuery(
     undefined,
@@ -317,6 +320,22 @@ export default function Home() {
   useEffect(() => {
     initMutation.mutate();
   }, []);
+  
+  // 心跳特效定时器
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // 随机选择一个卡片
+      const randomIndex = Math.floor(Math.random() * features.length);
+      setHeartbeatIndex(randomIndex);
+      
+      // 600ms 后恢复（心跳动画时长）
+      setTimeout(() => {
+        setHeartbeatIndex(null);
+      }, 600);
+    }, 1000); // 每 1 秒触发一次
+    
+    return () => clearInterval(interval);
+  }, [features.length]);
 
 
 
@@ -551,11 +570,12 @@ export default function Home() {
             strategy={rectSortingStrategy}
           >
             <section className="grid grid-cols-3 gap-4 sm:gap-6 mb-8">
-              {features.map((feature) => (
+              {features.map((feature, index) => (
                 <SortableFeatureCard
                   key={feature.id}
                   feature={feature}
                   isAuthenticated={isAuthenticated}
+                  hasHeartbeat={heartbeatIndex === index}
                 />
               ))}
             </section>

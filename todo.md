@@ -512,3 +512,15 @@
 - [x] 修改头像上传逻辑
   - 在 routers.ts 的 uploadAvatar 接口中添加同步逻辑
   - 使用 try-catch 包裹，确保同步失败不影响头像上传
+
+
+## 首页容器心跳特效✅
+
+- [x] 实现心跳特效逻辑和动画
+  - 在 Home.tsx 中添加 heartbeatIndex 状态
+  - 添加 useEffect 定时器（每 1 秒触发一次）
+  - 随机选择一个容器，600ms 后恢复
+  - 在 index.css 添加 heartbeat 动画：微微放大（scale 1.05）+ 边框高亮 + 恢复
+  - 使用 keyframes 实现心跳节奏感（两次跳动）
+  - 给 SortableFeatureCard 添加 hasHeartbeat 属性
+  - 动态添加 heartbeat-animation 类名
