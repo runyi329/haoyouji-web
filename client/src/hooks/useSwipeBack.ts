@@ -62,10 +62,8 @@ export function useSwipeBack(options: SwipeBackOptions) {
         const progress = Math.min(deltaX / threshold, 1);
         setSwipeProgress(progress);
 
-        // 阻止默认行为，避免触发浏览器的返回手势
-        if (progress > 0.1) {
-          e.preventDefault();
-        }
+        // 立即阻止默认行为，确保手势优先
+        e.preventDefault();
       }
     };
 
