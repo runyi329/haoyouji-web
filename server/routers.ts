@@ -16,6 +16,7 @@ import * as dbReferrerStats from "./db-referrer-stats";
 import * as dbAnalytics from "./db-analytics";
 import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
+import { addPointsForAction } from "./db-point-system";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -3416,6 +3417,18 @@ export const appRouter = router({
         await dbContacts.addCustomFields(contactId, customFields);
       }
       
+      // 奖励积分：添加人脉
+      await addPointsForAction(ctx.user.id, 'add_contact', contactId);
+      
+      // 如果设置了推荐人，给推荐人奖励积分
+      if (input.referrerId) {
+        // 需要找到推荐人对应的 userId
+        const referrerContact = await dbContacts.getContactById(input.referrerId);
+        if (referrerContact && referrerContact.parentUserId) {
+          await addPointsForAction(referrerContact.parentUserId, 'be_referrer', contactId);
+        }
+      }
+      
       return { id: contactId };
     }),
 
@@ -3685,8 +3698,12 @@ export const appRouter = router({
         contactId: z.number(),
         tagId: z.number(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         await dbContacts.addTagToContact(input.contactId, input.tagId);
+        
+        // 奖励积分：打标签
+        await addPointsForAction(ctx.user.id, 'add_tag', input.contactId);
+        
         return { success: true };
       }),
 
@@ -3941,12 +3958,16 @@ export const appRouter = router({
         contactId: z.number(),
         note: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const interactionId = await dbContacts.createContactInteraction({
           contactId: input.contactId,
           interactionDate: new Date(),
           note: input.note,
         });
+        
+        // 奖励积分：每次联络
+        await addPointsForAction(ctx.user.id, 'communication', input.contactId);
+        
         return { id: interactionId };
       }),
 
@@ -4389,6 +4410,9 @@ export const appRouter = router({
           });
         }
         
+        // 奖励积分：共享人脉
+        await addPointsForAction(ctx.user.id, 'share_contact', connectionId);
+        
         return { connectionId, receiverName: receiver.name || receiver.username };
       }),
 
@@ -4776,6 +4800,120 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // 积分系统
+  pointSystem: router({
+    // 获取当前用户积分
+    getMyPoints: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getUserPoints } = await import('./db-point-system');
+        const points = await getUserPoints(ctx.user.id);
+        return { points };
+      }),
+    
+    // 获取当前用户的积分变动记录
+    getMyPointLogs: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(100).default(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getUserPointLogs } = await import('./db-point-system');
+        const logs = await getUserPointLogs(ctx.user.id, input.limit);
+        return logs;
+      }),
+    
+    // 管理员：获取所有积分规则
+    getAllRules: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { getAllPointRules } = await import('./db-point-system');
+        return await getAllPointRules();
+      }),
+    
+    // 管理员：更新积分规则
+    updateRule: protectedProcedure
+      .input(z.object({
+        actionType: z.string(),
+        points: z.number().optional(),
+        isActive: z.boolean().optional(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { updatePointRule } = await import('./db-point-system');
+        await updatePointRule(input.actionType, {
+          points: input.points,
+          isActive: input.isActive,
+          description: input.description,
+        });
+        return { success: true };
+      }),
+    
+    // 管理员：获取所有用户及其积分
+    getAllUsers: protectedProcedure
+      .input(z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { getAllUsersWithPoints } = await import('./db-point-system');
+        return await getAllUsersWithPoints(input.page, input.pageSize);
+      }),
+    
+    // 管理员：搜索用户
+    searchUsers: protectedProcedure
+      .input(z.object({
+        keyword: z.string().min(1),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { searchUsersByUsername } = await import('./db-point-system');
+        return await searchUsersByUsername(input.keyword);
+      }),
+    
+    // 管理员：手动调整用户积分
+    adjustUserPoints: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        points: z.number(),
+        description: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { adjustUserPointsByAdmin } = await import('./db-point-system');
+        await adjustUserPointsByAdmin(
+          input.userId,
+          input.points,
+          input.description,
+          ctx.user.id
+        );
+        return { success: true };
+      }),
+    
+    // 管理员：获取所有积分变动记录
+    getAllLogs: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(200).default(100),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const { getAllPointLogs } = await import('./db-point-system');
+        return await getAllPointLogs(input.limit);
+      }),
+  }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
@@ -4809,6 +4947,5 @@ export const adminFeatureRouter = router({
       return { success: true };
     }),
 });
-
 
 export type AppRouter = typeof appRouter;

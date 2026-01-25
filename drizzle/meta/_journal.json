@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1769103287425,
-      "tag": "0000_init",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1769151550732,
-      "tag": "0001_milky_mathemanic",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1769164967683,
-      "tag": "0002_harsh_unicorn",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1769170975945,
-      "tag": "0003_blue_payback",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1769178472394,
-      "tag": "0004_quiet_xavin",
+      "when": 1769366671425,
+      "tag": "0000_past_xorn",
       "breakpoints": true
     }
   ]

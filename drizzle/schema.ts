@@ -1234,3 +1234,49 @@ export const companyReports = mysqlTable("company_reports", {
 
 export type CompanyReport = typeof companyReports.$inferSelect;
 export type InsertCompanyReport = typeof companyReports.$inferInsert;
+
+
+/**
+ * 积分规则配置表 - 定义各种行为的积分奖励规则
+ * 
+ * 支持的行为类型：
+ * - add_contact: 添加人脉
+ * - add_tag: 打标签
+ * - communication: 每次联络
+ * - share_contact: 共享人脉
+ * - be_referrer: 被别人加为推荐人
+ */
+export const pointRules = mysqlTable("point_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  actionType: varchar("actionType", { length: 50 }).notNull().unique(), // 行为类型
+  actionName: varchar("actionName", { length: 100 }).notNull(), // 行为名称（中文）
+  points: int("points").default(0).notNull(), // 奖励积分值
+  isActive: boolean("isActive").default(true).notNull(), // 是否启用
+  description: text("description"), // 规则描述
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PointRule = typeof pointRules.$inferSelect;
+export type InsertPointRule = typeof pointRules.$inferInsert;
+
+/**
+ * 积分变动记录表 - 记录所有积分变动
+ * 
+ * 记录类型：
+ * - 自动奖励：用户完成特定行为自动获得积分
+ * - 手动调整：管理员手动增加或减少积分
+ */
+export const pointLogs = mysqlTable("point_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // 用户ID
+  actionType: varchar("actionType", { length: 50 }), // 行为类型（自动奖励时）
+  points: int("points").notNull(), // 积分变动值（正数=增加，负数=减少）
+  description: text("description").notNull(), // 变动描述
+  operatorId: int("operatorId"), // 操作者ID（管理员手动调整时）
+  relatedId: int("relatedId"), // 关联ID（联系人ID、标签ID等）
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PointLog = typeof pointLogs.$inferSelect;
+export type InsertPointLog = typeof pointLogs.$inferInsert;

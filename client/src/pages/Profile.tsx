@@ -43,6 +43,9 @@ export default function Profile() {
 
   // 获取当前用户信息
   const { data: user, refetch: refetchUser } = trpc.auth.me.useQuery();
+  
+  // 获取当前用户积分
+  const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery();
 
   // 头像上传状态
   const [isUploading, setIsUploading] = useState(false);
@@ -325,6 +328,9 @@ export default function Profile() {
               <div className="flex items-center gap-2 mt-2">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                   {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
+                </span>
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                  ⭐ {pointsData?.points || 0} 积分
                 </span>
               </div>
             </div>

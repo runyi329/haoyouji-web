@@ -1,0 +1,9 @@
+{
+  "query": "\nINSERT INTO `point_rules` (`actionType`, `actionName`, `points`, `isActive`, `description`) VALUES\n('add_contact', '添加人脉', 10, true, '每添加一个新的联系人可获得积分'),\n('add_tag', '打标签', 5, true, '为联系人添加标签可获得积分'),\n('communication', '每次联络', 3, true, '每次与联系人进行联络可获得积分'),\n('share_contact', '共享人脉', 20, true, '将人脉共享给其他用户可获得积分'),\n('be_referrer', '被加为推荐人', 15, true, '被其他人添加为推荐人可获得积分')\nON DUPLICATE KEY UPDATE \n  `actionName` = VALUES(`actionName`),\n  `description` = VALUES(`description`);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nINSERT INTO `point_rules` (`actionType`, `actionName`, `points`, `isActive`, `description`) VALUES\n('add_contact', '添加人脉', 10, true, '每添加一个新的联系人可获得积分'),\n('add_tag', '打标签', 5, true, '为联系人添加标签可获得积分'),\n('communication', '每次联络', 3, true, '每次与联系人进行联络可获得积分'),\n('share_contact', '共享人脉', 20, true, '将人脉共享给其他用户可获得积分'),\n('be_referrer', '被加为推荐人', 15, true, '被其他人添加为推荐人可获得积分')\nON DUPLICATE KEY UPDATE \n  `actionName` = VALUES(`actionName`),\n  `description` = VALUES(`description`);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1524
+}

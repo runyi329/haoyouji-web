@@ -80,6 +80,7 @@ const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
+const PointsManagement = lazy(() => import("./pages/PointsManagement"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // 加载中组件
@@ -105,6 +106,7 @@ function Router() {
         {/* 后台管理 */}
         <Route path="/admin" component={Admin} />
         <Route path="/admin/banner" component={BannerConfig} />
+        <Route path="/admin/points" component={PointsManagement} />
 
         {/* 好友记相关页面 */}
         <Route path="/parent/contacts" component={ContactsManagement} />
