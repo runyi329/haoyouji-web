@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Network, Undo, Handshake, ArrowUpDown } from "lucide-react";
+import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
@@ -1574,19 +1574,7 @@ export default function ContactsList() {
                             <span className="text-xs font-medium">×{(contact as any).indirectReferrals}</span>
                           </button>
                         )}
-                        {/* Network图标 - 查看推荐链路 */}
-                        {((contact as any).directReferrals > 0 || (contact as any).indirectReferrals > 0) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocation(`/parent/contacts/${contact.id}/referral-chain`);
-                            }}
-                            className="text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="查看推荐链路"
-                          >
-                            <Network className="h-4 w-4" />
-                          </button>
-                        )}
+
                         {/* 机器人图标 - 显示公司数量 */}
                         {(() => {
                           if (!companyCategoryId) return null;
