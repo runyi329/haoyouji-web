@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, UserCog } from "lucide-react";
+import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { LayoutDashboard, LogOut, PanelLeft, Users, UserCog, ChevronLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -119,6 +120,20 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
   const [showUserSwitcher, setShowUserSwitcher] = useState(false);
 
+  // 智能判断返回路径：子页面返回首页，首页不启用手势
+  const getBackPath = () => {
+    if (location === '/parent/home') return null; // 首页不启用
+    return '/parent/home'; // 所有子页面返回首页
+  };
+
+  const backPath = getBackPath();
+  const { swipeProgress } = useSwipeBack({
+    backPath: backPath || '/parent/home',
+    enabled: isMobile && backPath !== null, // 只在移动端且非首页启用
+    threshold: 100,
+    edgeWidth: 50,
+  });
+
   useEffect(() => {
     if (isCollapsed) {
       setIsResizing(false);
@@ -157,6 +172,21 @@ function DashboardLayoutContent({
 
   return (
     <>
+      {/* 右划返回视觉反馈指示器 */}
+      {swipeProgress > 0 && (
+        <div 
+          className="fixed inset-y-0 left-0 z-50 pointer-events-none flex items-center"
+          style={{
+            width: `${swipeProgress * 100}px`,
+            opacity: swipeProgress,
+          }}
+        >
+          <div className="ml-4 bg-primary/20 backdrop-blur-sm rounded-full p-3 shadow-lg">
+            <ChevronLeft className="h-6 w-6 text-primary" />
+          </div>
+        </div>
+      )}
+
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
