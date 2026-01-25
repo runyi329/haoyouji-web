@@ -32,7 +32,6 @@ import {
   Award,
   BookOpen,
   Loader2,
-  ArrowLeft,
   ShieldCheck,
   Smartphone,
 } from "lucide-react";
@@ -287,14 +286,6 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="container max-w-4xl py-8 px-4">
-        {/* 返回按钮 */}
-        <button
-          onClick={() => window.location.href = '/'}
-          className="mb-6 p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-        </button>
-
         {/* 顶部用户信息卡片 */}
         <div className="p-6 mb-6">
           <div className="flex items-center gap-4">
