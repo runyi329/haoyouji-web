@@ -622,7 +622,7 @@ export default function ContactsList() {
   };
   
   // 点击人脉项跳转到详情页
-  const handleContactClick = (contactId: number, contact?: any) => {
+  const handleContactClick = (contactId: number, contact?: any, event?: React.MouseEvent) => {
     // 保存搜索历史
     if (searchQuery.trim()) {
       saveSearchHistory(searchQuery.trim());
@@ -635,10 +635,24 @@ export default function ContactsList() {
     // 判断是否为共享人脉
     if (contact && contact._isShared && contact._sharedBy) {
       // 共享人脉，显示提示信息
-      toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
-        duration: 1000,
-        position: "top",
-      });
+      if (event) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
+          duration: 1000,
+          position: "top",
+          style: {
+            position: 'fixed',
+            top: `${rect.top - 60}px`,
+            left: '50%',
+            transform: 'translateX(-50%)',
+          },
+        });
+      } else {
+        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
+          duration: 1000,
+          position: "top",
+        });
+      }
     } else {
       // 自己的人脉，正常跳转
       setLocation(`/parent/contacts/${contactId}`);
@@ -1000,7 +1014,7 @@ export default function ContactsList() {
                   return (
                     <div
                       key={contact.id}
-                      onClick={() => handleContactClick(contact.id, contact)}
+                      onClick={(e) => handleContactClick(contact.id, contact, e)}
                       className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
@@ -1489,7 +1503,7 @@ export default function ContactsList() {
                 <Card 
                   key={contact.id}
                   className={`hover:shadow-lg transition-all cursor-pointer relative ${isContactSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
-                  onClick={() => {
+                  onClick={(e) => {
                     if (selectedContactIds.length > 0) {
                       // 如果已有选中的人脉，点击卡片切换选中状态
                       if (isContactSelected) {
@@ -1501,9 +1515,16 @@ export default function ContactsList() {
                       // 判断是否为共享人脉
                       if (contact._isShared && contact._sharedBy) {
                         // 共享人脉，显示提示信息
+                        const rect = e.currentTarget.getBoundingClientRect();
                         toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
                           duration: 1000,
                           position: "top",
+                          style: {
+                            position: 'fixed',
+                            top: `${rect.top - 60}px`,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                          },
                         });
                       } else {
                         // 自己的人脉，正常跳转
