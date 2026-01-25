@@ -804,15 +804,6 @@ export default function ContactsList() {
                 共享
               </Button>
             </div>
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setLocation("/parent/contacts")}
-              className="-mr-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
           </div>
         </div>
         
