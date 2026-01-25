@@ -1317,3 +1317,5 @@ const todayActive = todayActiveContactIds.size;
 - [x] 移除联系人列表页顶部的“退出”按钮
 
 - [x] 修复 Safari 浏览器主题颜色：将上下蓝色背景改为白色以匹配页面背景
+
+- [ ] 将新图标文件（maidong-icon.png）提交到 GitHub，确保腾讯云部署时不会丢失
