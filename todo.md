@@ -524,3 +524,13 @@
   - 使用 keyframes 实现心跳节奏感（两次跳动）
   - 给 SortableFeatureCard 添加 hasHeartbeat 属性
   - 动态添加 heartbeat-animation 类名
+
+
+## 修改首页容器特效为呼吸灯效果✅
+
+- [x] 修改 index.css 中的 heartbeat 动画
+  - 移除 scale 放大效果
+  - 只保留 box-shadow 边框发光效果
+  - 缓慢无极变亮再变暗（0% → 50% 变亮 → 100% 变暗）
+  - 重命名为 breathing-light 动画
+  - 动画时长改为 1s，与定时器间隔一致
