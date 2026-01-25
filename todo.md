@@ -1318,4 +1318,4 @@ const todayActive = todayActiveContactIds.size;
 
 - [x] 修复 Safari 浏览器主题颜色：将上下蓝色背景改为白色以匹配页面背景
 
-- [ ] 将新图标文件（maidong-icon.png）提交到 GitHub，确保腾讯云部署时不会丢失
+- [x] 将新图标文件（maidong-icon.png）提交到 GitHub，确保腾讯云部署时不会丢失
