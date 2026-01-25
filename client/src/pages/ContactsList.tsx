@@ -622,7 +622,7 @@ export default function ContactsList() {
   };
   
   // 点击人脉项跳转到详情页
-  const handleContactClick = (contactId: number) => {
+  const handleContactClick = (contactId: number, contact?: any) => {
     // 保存搜索历史
     if (searchQuery.trim()) {
       saveSearchHistory(searchQuery.trim());
@@ -631,7 +631,17 @@ export default function ContactsList() {
     setShowDropdown(false);
     setShowHistory(false);
     setSearchQuery("");
-    setLocation(`/parent/contacts/${contactId}`);
+    
+    // 判断是否为共享人脉
+    if (contact && contact._isShared && contact._sharedBy) {
+      // 共享人脉，显示提示信息
+      toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
+        duration: 1000,
+      });
+    } else {
+      // 自己的人脉，正常跳转
+      setLocation(`/parent/contacts/${contactId}`);
+    }
   };
   
   // 点击历史记录项
@@ -989,7 +999,7 @@ export default function ContactsList() {
                   return (
                     <div
                       key={contact.id}
-                      onClick={() => handleContactClick(contact.id)}
+                      onClick={() => handleContactClick(contact.id, contact)}
                       className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
@@ -1487,7 +1497,16 @@ export default function ContactsList() {
                         setSelectedContactIds(prev => [...prev, contact.id]);
                       }
                     } else {
-                      setLocation(`/parent/contacts/${contact.id}`);
+                      // 判断是否为共享人脉
+                      if (contact._isShared && contact._sharedBy) {
+                        // 共享人脉，显示提示信息
+                        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
+                          duration: 1000,
+                        });
+                      } else {
+                        // 自己的人脉，正常跳转
+                        setLocation(`/parent/contacts/${contact.id}`);
+                      }
                     }
                   }}
                 >
