@@ -232,7 +232,7 @@ export default function Profile() {
       items: [
         { 
           icon: Smartphone, 
-          label: isInstalled ? "已安装" : "添加主屏", 
+          label: isInstalled ? "已安装" : "安卓主屏", 
           badge: null, 
           onClick: async () => {
             // iOS Safari 需要手动引导，跳转到说明页面
