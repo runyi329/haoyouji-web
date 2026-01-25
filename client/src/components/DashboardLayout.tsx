@@ -186,6 +186,14 @@ function DashboardLayoutContent({
         </div>
       )}
 
+      {/* 页面跟随手指移动的容器 */}
+      <div 
+        className="relative"
+        style={{
+          transform: swipeProgress > 0 ? `translateX(${swipeProgress * 100}px)` : 'translateX(0)',
+          transition: swipeProgress === 0 ? 'transform 0.3s ease-out' : 'none',
+        }}
+      >
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
@@ -307,6 +315,7 @@ function DashboardLayoutContent({
         open={showUserSwitcher} 
         onOpenChange={setShowUserSwitcher}
       />
+      </div>
     </>
   );
 }
