@@ -15,6 +15,13 @@
       "when": 1769370896742,
       "tag": "0001_classy_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769372071751,
+      "tag": "0002_flaky_lady_ursula",
+      "breakpoints": true
     }
   ]
 }

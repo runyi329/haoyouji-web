@@ -1565,6 +1565,19 @@ export default function ContactsList() {
                         <CardTitle className="text-base sm:text-lg">
                           {contact.name}
                         </CardTitle>
+                        {/* 已注册/我自己标识 */}
+                        {(contact as any).linkedUserId && (
+                          <Badge 
+                            variant="secondary" 
+                            className="text-xs"
+                            style={{
+                              backgroundColor: (contact as any).linkedUserId === user?.id ? '#10b981' : '#3b82f6',
+                              color: 'white',
+                            }}
+                          >
+                            {(contact as any).linkedUserId === user?.id ? '我自己' : '已注册'}
+                          </Badge>
+                        )}
                         {/* 推荐人状态指示器 - 放在名字右边 */}
                         {(contact as any).hasReferrer !== undefined && (
                           (contact as any).hasReferrer ? (

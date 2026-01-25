@@ -481,6 +481,7 @@ export const contacts = mysqlTable("contacts", {
   phone: varchar("phone", { length: 20 }), // 电话
   tags: json("tags").$type<string[]>(), // 标签列表（如：资金往来、亲戚、同事等）
   referrerId: int("referrerId"), // 介绍人 ID（外键关联 contacts.id）
+  linkedUserId: int("linkedUserId"), // 关联的用户ID（如果这个人脉已注册网站）
   isBlacklisted: boolean("isBlacklisted").default(false).notNull(), // 是否拉黑
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -182,6 +182,18 @@ export async function registerWithPassword(
     };
   }
 
+  // 自动创建关联人脉记录
+  try {
+    await db.createLinkedContact({
+      parentUserId: userId,
+      name: name || username,
+      linkedUserId: userId,
+    });
+  } catch (error) {
+    console.error("创建关联人脉失败:", error);
+    // 不影响注册流程，继续执行
+  }
+
   return {
     success: true,
     userId,

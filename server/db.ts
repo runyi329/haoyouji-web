@@ -4347,3 +4347,27 @@ export async function saveHomeCardOrder(userId: number, cardOrder: string[]): Pr
     });
   }
 }
+
+/**
+ * 创建关联人脉记录（用户注册时自动创建）
+ */
+export async function createLinkedContact(data: {
+  parentUserId: number;
+  name: string;
+  linkedUserId: number;
+}): Promise<number | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  try {
+    const result = await db.insert(contacts).values({
+      parentUserId: data.parentUserId,
+      name: data.name,
+      linkedUserId: data.linkedUserId,
+    });
+    return result[0].insertId;
+  } catch (error) {
+    console.error("[Database] Failed to create linked contact:", error);
+    return null;
+  }
+}

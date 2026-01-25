@@ -473,3 +473,21 @@
   - 实现添加/移除逻辑
   - 保存配置到数据库
   - 编辑模式下隐藏固定分区（账户管理、帮助与支持）
+
+
+## 用户注册自动创建关联人脉✅
+
+- [x] 修改数据库 schema 添加用户关联字段
+  - 在 contacts 表添加 linkedUserId 字段（关联到 users 表）
+  - 标识这条人脉记录对应的已注册用户
+- [x] 修改注册逻辑自动创建人脉
+  - 在 auth.ts 的 registerWithPassword 函数中添加自动创建逻辑
+  - 联系人名字默认使用用户注册名字
+  - 设置 linkedUserId 为当前用户 ID
+  - 设置 parentUserId 为当前用户 ID（自己的联系人）
+  - 在 db.ts 中添加 createLinkedContact 函数
+- [x] 修改联系人列表显示逻辑
+  - 在 ContactsList.tsx 中添加标识显示
+  - linkedUserId === 当前用户 ID 时，显示绿色“我自己”标签
+  - linkedUserId 存在但不等于当前用户时，显示蓝色“已注册”标签
+  - 标签显示在联系人名字后面
