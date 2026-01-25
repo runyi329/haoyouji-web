@@ -33,6 +33,7 @@ import {
   Loader2,
   ArrowLeft,
   ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 
 export default function Profile() {
@@ -227,6 +228,7 @@ export default function Profile() {
     {
       title: "常用功能",
       items: [
+        { icon: Smartphone, label: "添加主屏", badge: null, onClick: () => navigate("/parent/academy#pwa") },
         { icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
         { icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
         { icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },

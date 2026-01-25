@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { GraduationCap, Home, Users, Tags, MapPin, Share2, BarChart3, Bell, TrendingUp, Search, X, Smartphone } from "lucide-react";
@@ -253,6 +253,21 @@ export default function Academy() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
+  // 检查 URL 锤点，自动展开对应模块
+  useEffect(() => {
+    const hash = window.location.hash.slice(1); // 移除 # 号
+    if (hash && featureSections.some(s => s.id === hash)) {
+      setExpandedItems([hash]);
+      // 等待 DOM 渲染后滚动到目标位置
+      setTimeout(() => {
+        const element = document.getElementById(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+  }, []);
+
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) {
       return featureSections;
@@ -358,7 +373,7 @@ export default function Academy() {
                 className="w-full"
               >
                 {filteredSections.map((section) => (
-                  <AccordionItem key={section.id} value={section.id}>
+                  <AccordionItem key={section.id} value={section.id} id={section.id}>
                     <AccordionTrigger className="text-left">
                       <div className="flex items-center gap-2">
                         <section.icon className={`h-5 w-5 ${section.color}`} />
