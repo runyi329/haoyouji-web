@@ -1,0 +1,13 @@
+# 图片文件作为二进制文件处理，不进行换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+
+# 其他二进制文件
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
