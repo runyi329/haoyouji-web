@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Tag, MapPin, Share2, BarChart3, LogIn, LogOut, User, UserCircle, Bot } from "lucide-react";
+import { Search, Plus, Tag, MapPin, Share2, BarChart3, LogIn, LogOut, User, UserCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ReferrerPodium } from "@/components/ReferrerPodium";
 import { toast } from "sonner";
@@ -994,10 +994,6 @@ export default function ContactsManagement() {
                   <DropdownMenuItem onClick={() => window.location.href = "/parent/profile"}>
                     <UserCircle className="mr-2 h-4 w-4" />
                     个人中心
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = "/parent/ai-management"}>
-                    <Bot className="mr-2 h-4 w-4" />
-                    AI 管理
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
