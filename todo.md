@@ -1346,6 +1346,15 @@ const todayActive = todayActiveContactIds.size;
 - [x] 替换 iOS 主屏幕图标 (maidong-icon.png)
 - [x] 替换 Android 主屏幕图标
 - [x] 替换登录页面图标
-- [ ] 提交到 GitHub
+- [x] 提交到 GitHub
 - [ ] 部署到腾讯云服务器
 - [ ] iOS/Android 测试验证
+
+## 修改图标文件名解决 iOS 缓存问题
+- [x] 重命名图标文件为 maidong-icon-v2.png
+- [x] 更新 index.html 中的引用
+- [x] 更新 manifest.json 中的引用
+- [x] 更新 Login.tsx 中的引用
+- [ ] 提交到 GitHub
+- [ ] 部署到腾讯云
+- [ ] iOS 清除缓存并测试
