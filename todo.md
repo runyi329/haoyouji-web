@@ -1315,3 +1315,5 @@ const todayActive = todayActiveContactIds.size;
 - [x] 优化登录界面：使用谷歌色系（红黄蓝绿黑白）重新设计配色方案
 
 - [x] 移除联系人列表页顶部的“退出”按钮
+
+- [x] 修复 Safari 浏览器主题颜色：将上下蓝色背景改为白色以匹配页面背景
