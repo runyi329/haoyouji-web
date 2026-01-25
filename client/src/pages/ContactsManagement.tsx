@@ -955,7 +955,7 @@ export default function ContactsManagement() {
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
-            好友记{user && <span className="text-muted-foreground font-normal">×{user.name || user.username}</span>}
+            脉动{user && <span className="text-muted-foreground font-normal">×{user.name || user.username}</span>}
           </h1>
           
           {/* 登录/用户按钮 */}

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Lock, Eye, EyeOff, Sparkles } from "lucide-react";
+import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,7 +31,7 @@ export default function Login() {
       // 先刷新认证状态
       utils.auth.me.invalidate();
       // 给浏览器200ms时间处理cookie，特别是安卓浏览器
-      // 使用href而不是replace，确俜ookie被正确携带
+      // 使用href而不是replace，确保cookie被正确携带
       setTimeout(() => {
         window.location.href = "/";
       }, 200);
@@ -47,7 +47,7 @@ export default function Login() {
       // 先刷新认证状态
       utils.auth.me.invalidate();
       // 给浏览器200ms时间处理cookie，特别是安卓浏览器
-      // 使用href而不是replace，确俜ookie被正确携带
+      // 使用href而不是replace，确保cookie被正确携带
       setTimeout(() => {
         window.location.href = "/";
       }, 200);
@@ -91,159 +91,190 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex flex-col">
-      {/* 顶部导航 */}
-      <header className="p-4">
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* 顶部导航 - 固定在顶部 */}
+      <header className="absolute top-0 left-0 right-0 p-4 z-10">
         <Link href="/">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="w-5 h-5" />
+          <Button variant="ghost" size="icon" className="hover:bg-gray-100">
+            <ArrowLeft className="w-6 h-6 text-gray-700" />
           </Button>
         </Link>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-6 shadow-xl border-0 bg-white/80 backdrop-blur">
-          {/* Logo区域 */}
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
-              <Sparkles className="w-8 h-8 text-white" />
+      {/* 主内容区域 - 扩大到整个屏幕 */}
+      <main className="flex-1 flex items-center justify-center px-6 py-20">
+        <div className="w-full max-w-md">
+          {/* Logo区域 - 使用新图标 */}
+          <div className="text-center mb-8">
+            <div className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden shadow-lg">
+              <img 
+                src="/maidong-icon.png" 
+                alt="脉动" 
+                className="w-full h-full object-cover"
+              />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              好友记
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              脉动
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">欢迎回来！</p>
+            <p className="text-lg text-gray-600">欢迎回来！</p>
           </div>
 
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="login">登录</TabsTrigger>
-              <TabsTrigger value="register">注册</TabsTrigger>
-            </TabsList>
-
-            {/* 登录表单 */}
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-username">用户名</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="login-username"
-                      placeholder="请输入用户名"
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">密码</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="login-password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="请输入密码"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
-                  disabled={loginMutation.isPending}
+          {/* 登录/注册卡片 */}
+          <Card className="w-full p-8 shadow-xl border-2 border-gray-200 bg-white">
+            <Tabs defaultValue="login" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-8 h-12 bg-gray-100">
+                <TabsTrigger 
+                  value="login" 
+                  className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
                 >
-                  {loginMutation.isPending ? "登录中..." : "登录"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            {/* 注册表单 */}
-            <TabsContent value="register">
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reg-username">用户名</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="reg-username"
-                      placeholder="3-20个字符，字母数字下划线"
-                      value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reg-name">昵称（可选）</Label>
-                  <Input
-                    id="reg-name"
-                    placeholder="显示名称"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reg-password">密码</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="reg-password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="至少6个字符"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      className="pl-10 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reg-confirm">确认密码</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="reg-confirm"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="再次输入密码"
-                      value={regConfirmPassword}
-                      onChange={(e) => setRegConfirmPassword(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 hover:opacity-90"
-                  disabled={registerMutation.isPending}
+                  登录
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="register"
+                  className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
                 >
-                  {registerMutation.isPending ? "注册中..." : "注册"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </Card>
+                  注册
+                </TabsTrigger>
+              </TabsList>
+
+              {/* 登录表单 */}
+              <TabsContent value="login">
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="login-username" className="text-base font-medium text-gray-700">
+                      用户名
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        id="login-username"
+                        placeholder="请输入用户名"
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="login-password" className="text-base font-medium text-gray-700">
+                      密码
+                    </Label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="请输入密码"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className="pl-12 pr-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-14 text-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg shadow-md"
+                    disabled={loginMutation.isPending}
+                  >
+                    {loginMutation.isPending ? "登录中..." : "登录"}
+                  </Button>
+                </form>
+              </TabsContent>
+
+              {/* 注册表单 */}
+              <TabsContent value="register">
+                <form onSubmit={handleRegister} className="space-y-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="reg-username" className="text-base font-medium text-gray-700">
+                      用户名
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        id="reg-username"
+                        placeholder="3-20个字符，字母数字下划线"
+                        value={regUsername}
+                        onChange={(e) => setRegUsername(e.target.value)}
+                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="reg-name" className="text-base font-medium text-gray-700">
+                      昵称（可选）
+                    </Label>
+                    <Input
+                      id="reg-name"
+                      placeholder="显示名称"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      className="h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="reg-password" className="text-base font-medium text-gray-700">
+                      密码
+                    </Label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        id="reg-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="至少6个字符"
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        className="pl-12 pr-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="reg-confirm" className="text-base font-medium text-gray-700">
+                      确认密码
+                    </Label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Input
+                        id="reg-confirm"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="再次输入密码"
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-14 text-lg font-semibold bg-green-600 hover:bg-green-700 text-white border-0 rounded-lg shadow-md"
+                    disabled={registerMutation.isPending}
+                  >
+                    {registerMutation.isPending ? "注册中..." : "注册"}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </Card>
+        </div>
       </main>
     </div>
   );
