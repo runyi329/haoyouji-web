@@ -1355,6 +1355,15 @@ const todayActive = todayActiveContactIds.size;
 - [x] 更新 index.html 中的引用
 - [x] 更新 manifest.json 中的引用
 - [x] 更新 Login.tsx 中的引用
-- [ ] 提交到 GitHub
+- [x] 提交到 GitHub
 - [ ] 部署到腾讯云
 - [ ] iOS 清除缓存并测试
+
+## 替换新图标文件名为 maidong-hyy.png
+- [x] 复制用户上传的新图标为 maidong-hyy.png
+- [x] 更新 index.html 中的引用
+- [x] 更新 manifest.json 中的引用
+- [x] 更新 Login.tsx 中的引用
+- [ ] 提交到 GitHub
+- [ ] 部署到腾讯云
+- [ ] iOS/Android 测试验证

@@ -108,7 +108,7 @@ export default function Login() {
           <div className="text-center mb-8">
             <div className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden shadow-lg">
               <img 
-                src="/maidong-icon-v2.png" 
+                src="/maidong-hyy.png" 
                 alt="脉动" 
                 className="w-full h-full object-cover"
               />
