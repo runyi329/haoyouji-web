@@ -955,11 +955,18 @@ export default function ContactsManagement() {
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
           <div className="flex items-center gap-2">
-            <img 
-              src="/logo-header-transparent.png" 
-              alt="脉动" 
-              className="h-8 md:h-10 w-auto object-contain"
-            />
+            {/* Logo: 文字 + SVG 心电图 */}
+            <div className="flex items-center gap-1">
+              <span className="text-xl md:text-2xl font-bold text-foreground">脉动</span>
+              <svg width="40" height="24" viewBox="0 0 40 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="-ml-1">
+                <path d="M2 12 L8 12 L10 8 L12 16 L14 4 L16 20 L18 12 L22 12 L24 10 L26 14 L28 12 L38 12" 
+                      stroke="#FF6B35" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      fill="none" />
+              </svg>
+            </div>
             {user && <span className="text-lg sm:text-xl md:text-2xl text-muted-foreground font-normal">×{user.name || user.username}</span>}
           </div>
           

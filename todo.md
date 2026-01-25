@@ -1338,3 +1338,6 @@ const todayActive = todayActiveContactIds.size;
 - [x] 优化首页 Logo
   - [x] 添加响应式尺寸（移动端 h-7，桌面端 h-8）
   - [ ] 提交到 GitHub
+
+## Logo 显示优化
+- [x] 修复首页 Logo 图片显示灰色容器边框问题，改用纯 CSS/SVG 实现，完美融入页面背景
