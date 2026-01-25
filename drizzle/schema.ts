@@ -45,6 +45,7 @@ export const userPreferences = mysqlTable("user_preferences", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().unique(), // 用户ID,一个用户只有一条偏好记录
   homeCardOrder: json("homeCardOrder").$type<string[]>(), // 首页卡片排序,存储卡片ID数组
+  favoriteFeatures: json("favoriteFeatures").$type<string[]>(), // 个人中心常用功能,存储功能ID数组
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

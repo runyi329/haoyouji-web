@@ -8,6 +8,13 @@
       "when": 1769366671425,
       "tag": "0000_past_xorn",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1769370896742,
+      "tag": "0001_classy_the_professor",
+      "breakpoints": true
     }
   ]
 }

@@ -454,3 +454,22 @@
   - 计算点击位置，在按钮上方 60px 处显示提示
   - 确保不遮挡手指操作区域
   - 修改了两处：搜索结果点击和列表项点击
+
+
+## 个人中心常用功能自定义编辑✅
+
+- [x] 设计数据库表存储用户常用功能配置
+  - 在 user_preferences 表添加 favoriteFeatures 字段（JSON 类型）
+- [x] 实现后端 API 接口
+  - 创建 db-profile-features.ts 文件
+  - 实现 getUserFavoriteFeatures 和 saveUserFavoriteFeatures 函数
+  - 在 routers.ts 中添加 profileFeatures router
+- [x] 修改个人中心页面实现编辑功能
+  - 添加“编辑”按钮（常用功能区右上角）
+  - 实现编辑模式切换（isEditMode 状态）
+  - 常用功能显示 ➖ 按钮（移除）
+  - 可添加功能显示 ➕ 按钮（添加）
+  - 添加“取消”和“保存”按钮
+  - 实现添加/移除逻辑
+  - 保存配置到数据库
+  - 编辑模式下隐藏固定分区（账户管理、帮助与支持）

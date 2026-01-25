@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { trpc } from "@/lib/trpc";
@@ -34,7 +34,19 @@ import {
   Loader2,
   ShieldCheck,
   Smartphone,
+  Edit3,
+  Plus,
+  Minus,
 } from "lucide-react";
+
+// 定义所有可用的功能项
+type FeatureItem = {
+  id: string;
+  icon: any;
+  label: string;
+  badge?: number | null;
+  onClick: () => void;
+};
 
 export default function Profile() {
   const [, navigate] = useLocation();
@@ -46,6 +58,25 @@ export default function Profile() {
   
   // 获取当前用户积分
   const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery();
+
+  // 获取用户常用功能配置
+  const { data: favoritesData, refetch: refetchFavorites } = trpc.profileFeatures.getFavorites.useQuery();
+
+  // 保存常用功能配置
+  const saveFavoritesMutation = trpc.profileFeatures.saveFavorites.useMutation({
+    onSuccess: () => {
+      toast.success("常用功能保存成功");
+      refetchFavorites();
+      setIsEditMode(false);
+    },
+    onError: (error) => {
+      toast.error(`保存失败: ${error.message}`);
+    },
+  });
+
+  // 编辑模式状态
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [tempFavorites, setTempFavorites] = useState<string[]>([]);
 
   // 头像上传状态
   const [isUploading, setIsUploading] = useState(false);
@@ -99,44 +130,46 @@ export default function Profile() {
   // 修改密码mutation
   const changePasswordMutation = trpc.auth.changePassword.useMutation({
     onSuccess: () => {
-      toast.success("密码修改成功,请重新登录");
+      toast.success("密码修改成功");
       setIsPasswordDialogOpen(false);
       setPasswordForm({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
-      setTimeout(() => {
-        trpc.auth.logout.useMutation().mutate();
-        navigate("/");
-      }, 1500);
     },
     onError: (error) => {
-      toast.error(`密码修改失败: ${error.message}`);
+      toast.error(`修改失败: ${error.message}`);
     },
   });
 
   // 退出登录mutation
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
-      toast.success("已退出登录");
-      navigate("/");
+      window.location.href = "/";
     },
   });
 
-  // 处理头像选择
+  // 初始化临时常用功能列表
+  useEffect(() => {
+    if (favoritesData?.favorites) {
+      setTempFavorites(favoritesData.favorites);
+    }
+  }, [favoritesData]);
+
+  // 处理头像点击
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
 
   // 处理文件选择
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 检查文件大小 (5MB)
+    // 检查文件大小（限制为 5MB）
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("图片大小不能超过5MB");
+      toast.error("图片大小不能超过 5MB");
       return;
     }
 
@@ -146,58 +179,60 @@ export default function Profile() {
       return;
     }
 
-    // 读取图片并打开裁剪对话框
+    // 读取文件并显示预览
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setSelectedImage(reader.result as string);
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setSelectedImage(result);
       setIsCropDialogOpen(true);
     };
     reader.readAsDataURL(file);
-    
-    // 重置input以便可以选择同一文件
-    e.target.value = "";
   };
-  
+
   // 处理裁剪完成
-  const handleCropComplete = async (croppedBlob: Blob) => {
+  const handleCropComplete = async (croppedImageBlob: Blob) => {
     setIsUploading(true);
-    
-    // 将Blob转换为base64
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64Data = reader.result as string;
-      setAvatarPreview(base64Data);
-      
-      // 上传裁剪后的图片
-      uploadAvatarMutation.mutate({
-        imageData: base64Data,
-      });
-    };
-    reader.readAsDataURL(croppedBlob);
+    setIsCropDialogOpen(false);
+
+    try {
+      // 转换为 base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        uploadAvatarMutation.mutate({ avatar: base64String });
+      };
+      reader.readAsDataURL(croppedImageBlob);
+    } catch (error) {
+      toast.error("图片处理失败");
+      setIsUploading(false);
+    }
   };
 
-  // 处理个人信息编辑
+  // 处理编辑个人信息
   const handleEditProfile = () => {
-    navigate("/parent/profile/settings");
+    setEditForm({
+      name: user?.name || "",
+      email: user?.email || "",
+    });
+    setIsEditDialogOpen(true);
   };
 
-  // 提交个人信息
+  // 提交个人信息更新
   const handleSubmitProfile = () => {
     if (!editForm.name.trim()) {
       toast.error("姓名不能为空");
       return;
     }
-    updateProfileMutation.mutate(editForm);
+    updateProfileMutation.mutate({
+      name: editForm.name,
+      email: editForm.email || undefined,
+    });
   };
 
   // 提交密码修改
   const handleSubmitPassword = () => {
-    if (!passwordForm.currentPassword) {
-      toast.error("请输入当前密码");
-      return;
-    }
-    if (passwordForm.newPassword.length < 6) {
-      toast.error("新密码至少需要6位");
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast.error("请填写所有密码字段");
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -210,6 +245,35 @@ export default function Profile() {
     });
   };
 
+  // 进入编辑模式
+  const handleEnterEditMode = () => {
+    setIsEditMode(true);
+    setTempFavorites(favoritesData?.favorites || []);
+  };
+
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setTempFavorites(favoritesData?.favorites || []);
+  };
+
+  // 保存编辑
+  const handleSaveEdit = () => {
+    saveFavoritesMutation.mutate({ featureIds: tempFavorites });
+  };
+
+  // 添加到常用功能
+  const handleAddToFavorites = (featureId: string) => {
+    if (!tempFavorites.includes(featureId)) {
+      setTempFavorites([...tempFavorites, featureId]);
+    }
+  };
+
+  // 从常用功能移除
+  const handleRemoveFromFavorites = (featureId: string) => {
+    setTempFavorites(tempFavorites.filter(id => id !== featureId));
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -220,71 +284,58 @@ export default function Profile() {
 
   const displayAvatar = avatarPreview || user.avatar || "/default-avatar.png";
 
-  // 功能分组配置
-  const featureGroups = [
-    // 超级管理员专属功能
-    ...(user.role === "super_admin" ? [{
-      title: "管理功能",
-      items: [
-        { icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/admin") },
-      ],
-    }] : []),
-    {
-      title: "常用功能",
-      items: [
-        { 
-          icon: Smartphone, 
-          label: isInstalled ? "已安装" : "安卓主屏", 
-          badge: null, 
-          onClick: async () => {
-            // iOS Safari 需要手动引导，跳转到说明页面
-            if (isIOSSafari) {
-              navigate("/parent/academy#pwa");
-              return;
-            }
-            
-            // 已安装，提示用户
-            if (isInstalled) {
-              toast.success("应用已安装到桌面");
-              return;
-            }
-            
-            // Android/桌面 Chrome 支持直接安装
-            if (isInstallable) {
-              const success = await promptInstall();
-              if (success) {
-                toast.success("安装成功！请查看桌面图标");
-              }
-            } else {
-              // 不支持自动安装，跳转到说明页面
-              navigate("/parent/academy#pwa");
-            }
-          } 
-        },
-        { icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
-        { icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
-        { icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },
-        { icon: Award, label: "我的积分", badge: user.points, onClick: () => navigate("/parent/points") },
-      ],
+  // 定义所有可用的功能项（不包括超级管理员专属）
+  const allFeatures: FeatureItem[] = [
+    { 
+      id: "install-app",
+      icon: Smartphone, 
+      label: isInstalled ? "已安装" : "安卓主屏", 
+      badge: null, 
+      onClick: async () => {
+        if (isIOSSafari) {
+          navigate("/parent/academy#pwa");
+          return;
+        }
+        if (isInstalled) {
+          toast.success("应用已安装到桌面");
+          return;
+        }
+        if (isInstallable) {
+          const success = await promptInstall();
+          if (success) {
+            toast.success("安装成功！请查看桌面图标");
+          }
+        } else {
+          navigate("/parent/academy#pwa");
+        }
+      } 
     },
-    {
-      title: "账户管理",
-      items: [
-        { icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
-        { icon: Shield, label: "修改密码", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
-        { icon: Bell, label: "消息通知", badge: null, onClick: () => toast("功能开发中") },
-        { icon: Settings, label: "隐私设置", badge: null, onClick: () => toast("功能开发中") },
-      ],
-    },
-    {
-      title: "帮助与支持",
-      items: [
-        { icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => navigate("/parent/academy") },
-        { icon: HelpCircle, label: "帮助中心", badge: null, onClick: () => toast("功能开发中") },
-        { icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },
-      ],
-    },
+    { id: "favorites", icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
+    { id: "friends", icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
+    { id: "calendar", icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },
+    { id: "points", icon: Award, label: "我的积分", badge: user.points, onClick: () => navigate("/parent/points") },
   ];
+
+  // 账户管理功能
+  const accountFeatures: FeatureItem[] = [
+    { id: "edit-profile", icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
+    { id: "change-password", icon: Shield, label: "修改密码", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
+    { id: "notifications", icon: Bell, label: "消息通知", badge: null, onClick: () => toast("功能开发中") },
+    { id: "privacy", icon: Settings, label: "隐私设置", badge: null, onClick: () => toast("功能开发中") },
+  ];
+
+  // 帮助与支持功能
+  const helpFeatures: FeatureItem[] = [
+    { id: "academy", icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => navigate("/parent/academy") },
+    { id: "help", icon: HelpCircle, label: "帮助中心", badge: null, onClick: () => toast("功能开发中") },
+    { id: "about", icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },
+  ];
+
+  // 获取常用功能列表
+  const favoriteFeatures = allFeatures.filter(f => tempFavorites.includes(f.id));
+  
+  // 获取其他功能列表（不在常用功能中的）
+  const otherFeatures = allFeatures.filter(f => !tempFavorites.includes(f.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -337,47 +388,202 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* 功能分组 - 网格布局 */}
-        {featureGroups.map((group, groupIndex) => (
-          <div key={groupIndex} className="mb-8">
+        {/* 超级管理员专属功能 */}
+        {user.role === "super_admin" && (
+          <div className="mb-8">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              {group.title}
+              管理功能
             </h3>
             <div className="grid grid-cols-4 gap-6">
-              {group.items.map((item, itemIndex) => {
-                const Icon = item.icon;
-                return (
+              <button
+                onClick={() => navigate("/admin")}
+                className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
+              >
+                <ShieldCheck className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                  后台管理
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 常用功能 */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+              常用功能
+            </h3>
+            {!isEditMode ? (
+              <button
+                onClick={handleEnterEditMode}
+                className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:opacity-70"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                编辑
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCancelEdit}
+                  className="text-xs text-slate-600 dark:text-slate-400 hover:opacity-70"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saveFavoritesMutation.isPending}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:opacity-70 disabled:opacity-50"
+                >
+                  {saveFavoritesMutation.isPending ? "保存中..." : "保存"}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-4 gap-6">
+            {favoriteFeatures.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.id} className="relative">
                   <button
-                    key={itemIndex}
                     onClick={item.onClick}
-                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 relative"
+                    disabled={isEditMode}
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 disabled:opacity-50 w-full"
                   >
                     <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
                     <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
                       {item.label}
                     </span>
-                    {item.badge !== null && (
+                    {item.badge !== null && item.badge !== undefined && (
                       <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
                         {item.badge}
                       </span>
                     )}
                   </button>
+                  {isEditMode && (
+                    <button
+                      onClick={() => handleRemoveFromFavorites(item.id)}
+                      className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg z-10"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {/* 空位占位符 */}
+            {isEditMode && favoriteFeatures.length < 4 && (
+              <>
+                {Array.from({ length: 4 - favoriteFeatures.length }).map((_, index) => (
+                  <div
+                    key={`placeholder-${index}`}
+                    className="flex flex-col items-center gap-2 opacity-30"
+                  >
+                    <div className="w-6 h-6 border-2 border-dashed border-slate-400 dark:border-slate-600 rounded" />
+                    <span className="text-xs text-slate-500 dark:text-slate-500">
+                      空位
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 编辑模式：显示其他可添加的功能 */}
+        {isEditMode && otherFeatures.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+              可添加功能
+            </h3>
+            <div className="grid grid-cols-4 gap-6">
+              {otherFeatures.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.id} className="relative">
+                    <div className="flex flex-col items-center gap-2 opacity-70">
+                      <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                      <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                        {item.label}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleAddToFavorites(item.id)}
+                      className="absolute -top-2 -right-2 bg-green-500 hover:bg-green-600 text-white rounded-full p-1 shadow-lg z-10"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
           </div>
-        ))}
+        )}
+
+        {/* 账户管理 - 固定分区 */}
+        {!isEditMode && (
+          <div className="mb-8">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+              账户管理
+            </h3>
+            <div className="grid grid-cols-4 gap-6">
+              {accountFeatures.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={item.onClick}
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
+                  >
+                    <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                    <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 帮助与支持 - 固定分区 */}
+        {!isEditMode && (
+          <div className="mb-8">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+              帮助与支持
+            </h3>
+            <div className="grid grid-cols-4 gap-6">
+              {helpFeatures.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={item.onClick}
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
+                  >
+                    <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                    <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 退出登录按钮 */}
-        <Button
-          onClick={() => logoutMutation.mutate()}
-          disabled={logoutMutation.isPending}
-          variant="outline"
-          className="w-full rounded-2xl h-14 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 border-2"
-        >
-          <LogOut className="w-5 h-5 mr-2" />
-          退出登录
-        </Button>
+        {!isEditMode && (
+          <Button
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            variant="outline"
+            className="w-full rounded-2xl h-14 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 border-2"
+          >
+            <LogOut className="w-5 h-5 mr-2" />
+            退出登录
+          </Button>
+        )}
       </div>
 
       {/* 图片裁剪对话框 */}
@@ -403,9 +609,7 @@ export default function Profile() {
               <Input
                 id="name"
                 value={editForm.name}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, name: e.target.value })
-                }
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 placeholder="请输入姓名"
               />
             </div>
@@ -415,9 +619,7 @@ export default function Profile() {
                 id="email"
                 type="email"
                 value={editForm.email}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, email: e.target.value })
-                }
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                 placeholder="请输入邮箱"
               />
             </div>
@@ -440,16 +642,11 @@ export default function Profile() {
       </Dialog>
 
       {/* 修改密码对话框 */}
-      <Dialog
-        open={isPasswordDialogOpen}
-        onOpenChange={setIsPasswordDialogOpen}
-      >
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>修改密码</DialogTitle>
-            <DialogDescription>
-              请输入当前密码和新密码
-            </DialogDescription>
+            <DialogDescription>请输入当前密码和新密码</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -458,12 +655,7 @@ export default function Profile() {
                 id="currentPassword"
                 type="password"
                 value={passwordForm.currentPassword}
-                onChange={(e) =>
-                  setPasswordForm({
-                    ...passwordForm,
-                    currentPassword: e.target.value,
-                  })
-                }
+                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                 placeholder="请输入当前密码"
               />
             </div>
@@ -473,13 +665,8 @@ export default function Profile() {
                 id="newPassword"
                 type="password"
                 value={passwordForm.newPassword}
-                onChange={(e) =>
-                  setPasswordForm({
-                    ...passwordForm,
-                    newPassword: e.target.value,
-                  })
-                }
-                placeholder="请输入新密码(至少6位)"
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                placeholder="请输入新密码"
               />
             </div>
             <div className="space-y-2">
@@ -488,12 +675,7 @@ export default function Profile() {
                 id="confirmPassword"
                 type="password"
                 value={passwordForm.confirmPassword}
-                onChange={(e) =>
-                  setPasswordForm({
-                    ...passwordForm,
-                    confirmPassword: e.target.value,
-                  })
-                }
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                 placeholder="请再次输入新密码"
               />
             </div>

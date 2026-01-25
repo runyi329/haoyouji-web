@@ -4914,6 +4914,28 @@ export const appRouter = router({
         return await getAllPointLogs(input.limit);
       }),
   }),
+
+  // 个人中心常用功能管理
+  profileFeatures: router({
+    // 获取用户的常用功能列表
+    getFavorites: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getUserFavoriteFeatures } = await import('./db-profile-features');
+        const favorites = await getUserFavoriteFeatures(ctx.user.id);
+        return { favorites };
+      }),
+    
+    // 保存用户的常用功能配置
+    saveFavorites: protectedProcedure
+      .input(z.object({
+        featureIds: z.array(z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { saveUserFavoriteFeatures } = await import('./db-profile-features');
+        await saveUserFavoriteFeatures(ctx.user.id, input.featureIds);
+        return { success: true };
+      }),
+  }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
