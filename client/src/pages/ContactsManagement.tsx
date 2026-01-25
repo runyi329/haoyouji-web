@@ -954,9 +954,14 @@ export default function ContactsManagement() {
       {/* 页面标题 - 手机端更紧凑 */}
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
-            脉动{user && <span className="text-muted-foreground font-normal">×{user.name || user.username}</span>}
-          </h1>
+          <div className="flex items-center gap-2">
+            <img 
+              src="/logo-header-transparent.png" 
+              alt="脉动" 
+              className="h-8 md:h-10 w-auto object-contain"
+            />
+            {user && <span className="text-lg sm:text-xl md:text-2xl text-muted-foreground font-normal">×{user.name || user.username}</span>}
+          </div>
           
           {/* 登录/用户按钮 */}
           <div className="flex items-center gap-2">
