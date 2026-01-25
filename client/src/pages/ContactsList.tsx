@@ -637,6 +637,7 @@ export default function ContactsList() {
       // 共享人脉，显示提示信息
       toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
         duration: 1000,
+        position: "top",
       });
     } else {
       // 自己的人脉，正常跳转
@@ -1502,6 +1503,7 @@ export default function ContactsList() {
                         // 共享人脉，显示提示信息
                         toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
                           duration: 1000,
+                          position: "top",
                         });
                       } else {
                         // 自己的人脉，正常跳转
