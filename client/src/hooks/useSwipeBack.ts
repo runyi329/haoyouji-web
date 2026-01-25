@@ -12,11 +12,6 @@ interface SwipeBackOptions {
    */
   threshold?: number;
   /**
-   * 触发区域的宽度（从屏幕左侧开始，像素）
-   * @default 50
-   */
-  edgeWidth?: number;
-  /**
    * 是否启用手势
    * @default true
    */
@@ -25,13 +20,12 @@ interface SwipeBackOptions {
 
 /**
  * 右划返回手势 Hook
- * 在屏幕左侧边缘向右滑动时返回到指定页面
+ * 在屏幕任意位置向右滑动时返回到指定页面
  */
 export function useSwipeBack(options: SwipeBackOptions) {
   const {
     backPath,
     threshold = 100,
-    edgeWidth = 50,
     enabled = true,
   } = options;
 
@@ -49,13 +43,8 @@ export function useSwipeBack(options: SwipeBackOptions) {
       const touch = e.touches[0];
       touchStartX.current = touch.clientX;
       touchStartY.current = touch.clientY;
-
-      // 检查是否在屏幕左侧边缘开始触摸
-      if (touch.clientX <= edgeWidth) {
-        isEdgeSwipe.current = true;
-      } else {
-        isEdgeSwipe.current = false;
-      }
+      // 允许在屏幕任意位置开始触摸
+      isEdgeSwipe.current = true;
     };
 
     const handleTouchMove = (e: TouchEvent) => {
@@ -104,7 +93,7 @@ export function useSwipeBack(options: SwipeBackOptions) {
       document.removeEventListener('touchend', handleTouchEnd);
       document.removeEventListener('touchcancel', handleTouchEnd);
     };
-  }, [enabled, backPath, threshold, edgeWidth, navigate, swipeProgress]);
+  }, [enabled, backPath, threshold, navigate, swipeProgress]);
 
   return {
     /**

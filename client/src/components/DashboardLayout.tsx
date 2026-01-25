@@ -131,7 +131,6 @@ function DashboardLayoutContent({
     backPath: backPath || '/parent/home',
     enabled: isMobile && backPath !== null, // 只在移动端且非首页启用
     threshold: 100,
-    edgeWidth: 50,
   });
 
   useEffect(() => {
