@@ -1341,3 +1341,11 @@ const todayActive = todayActiveContactIds.size;
 
 ## Logo 显示优化
 - [x] 修复首页 Logo 图片显示灰色容器边框问题，改用纯 CSS/SVG 实现，完美融入页面背景
+
+## 替换谷歌色系图标到所有位置
+- [x] 替换 iOS 主屏幕图标 (maidong-icon.png)
+- [x] 替换 Android 主屏幕图标
+- [x] 替换登录页面图标
+- [ ] 提交到 GitHub
+- [ ] 部署到腾讯云服务器
+- [ ] iOS/Android 测试验证
