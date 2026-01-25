@@ -1364,6 +1364,68 @@ const todayActive = todayActiveContactIds.size;
 - [x] 更新 index.html 中的引用
 - [x] 更新 manifest.json 中的引用
 - [x] 更新 Login.tsx 中的引用
-- [ ] 提交到 GitHub
+- [x] 提交到 GitHub
 - [ ] 部署到腾讯云
 - [ ] iOS/Android 测试验证
+
+## 修复人脉列表排序功能
+- [ ] 检查 ContactsManagement.tsx 中的排序逻辑
+- [ ] 定位排序功能不工作的原因
+- [ ] 修复排序功能
+- [ ] 测试所有排序选项
+- [ ] 提交修复
+
+
+## Bug 修复：联系人列表排序功能无效✅
+
+- [x] 问题调查
+  - 在腾讯云生产环境（124.223.54.69:3001）测试排序功能
+  - 确认前端代码正确传递 sortBy 参数
+  - 发现后端 API 没有处理 sortBy 参数
+- [x] 修复后端 API（server/routers.ts）
+  - 在 contacts.list 的 .input() 中添加 sortBy 参数验证
+  - 支持 4 种排序方式：tagCount_desc, tagCount_asc, interactionCount_desc, interactionCount_asc
+  - 实现排序逻辑：根据标签数量（标签+个人标签）或联络次数排序
+- [x] 编写单元测试（server/contacts.sort.test.ts）
+  - 测试默认排序（不传 sortBy 参数）
+  - 测试按标签数量由高到低排序
+  - 测试按标签数量由低到高排序
+  - 测试按联络次数由高到低排序
+  - 测试按联络次数由低到高排序
+  - 测试排序逻辑处理空标签和零联络次数
+  - 测试排序逻辑包含个人标签
+  - **测试结果：7 个测试全部通过 ✅**
+
+### 问题原因
+后端 `contacts.list` API 的 `.input()` 中缺少 `sortBy` 参数定义，导致前端传递的排序参数被忽略。同时，返回数据前没有根据 `sortBy` 参数进行排序处理。
+
+### 修复方案
+1. 在 `.input()` 中添加 `sortBy` 参数：
+```typescript
+sortBy: z.enum(['tagCount_desc', 'tagCount_asc', 'interactionCount_desc', 'interactionCount_asc']).optional()
+```
+
+2. 在返回数据前添加排序逻辑：
+```typescript
+if (input.sortBy) {
+  contactsWithDetails.sort((a, b) => {
+    if (input.sortBy === 'tagCount_desc') {
+      return (b.tags.length + b.personalTags.length) - (a.tags.length + a.personalTags.length);
+    } else if (input.sortBy === 'tagCount_asc') {
+      return (a.tags.length + a.personalTags.length) - (b.tags.length + b.personalTags.length);
+    } else if (input.sortBy === 'interactionCount_desc') {
+      return (b.totalInteractions || 0) - (a.totalInteractions || 0);
+    } else if (input.sortBy === 'interactionCount_asc') {
+      return (a.totalInteractions || 0) - (b.totalInteractions || 0);
+    }
+    return 0;
+  });
+}
+```
+
+### 测试覆盖
+- ✅ 默认排序保持原顺序
+- ✅ 标签数量排序（升序/降序）
+- ✅ 联络次数排序（升序/降序）
+- ✅ 边缘情况处理（空标签、零联络次数）
+- ✅ 个人标签计入总标签数

@@ -3237,6 +3237,7 @@ export const appRouter = router({
   list: protectedProcedure
     .input(z.object({
       searchQuery: z.string().optional(),
+      sortBy: z.enum(['tagCount_desc', 'tagCount_asc', 'interactionCount_desc', 'interactionCount_asc']).optional(),
     }))
     .query(async ({ ctx, input }) => {
       const contacts = await dbContacts.getContactsByParent(ctx.user.id, input.searchQuery);
@@ -3298,6 +3299,26 @@ export const appRouter = router({
           indirectReferrals: referrerStats?.indirectReferrals || 0,
         };
       });
+      
+      // 根据 sortBy 参数排序
+      if (input.sortBy) {
+        contactsWithDetails.sort((a, b) => {
+          if (input.sortBy === 'tagCount_desc') {
+            // 标签数量：由高到低（标签数 + 个人标签数）
+            return (b.tags.length + b.personalTags.length) - (a.tags.length + a.personalTags.length);
+          } else if (input.sortBy === 'tagCount_asc') {
+            // 标签数量：由低到高
+            return (a.tags.length + a.personalTags.length) - (b.tags.length + b.personalTags.length);
+          } else if (input.sortBy === 'interactionCount_desc') {
+            // 联络次数：由高到低
+            return (b.totalInteractions || 0) - (a.totalInteractions || 0);
+          } else if (input.sortBy === 'interactionCount_asc') {
+            // 联络次数：由低到高
+            return (a.totalInteractions || 0) - (b.totalInteractions || 0);
+          }
+          return 0;
+        });
+      }
       
       return contactsWithDetails;
     }),
