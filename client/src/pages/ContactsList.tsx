@@ -777,24 +777,6 @@ export default function ContactsList() {
           </h1>
           
           <div className="flex items-center gap-2">
-            {/* 用户信息和退出按钮 */}
-            {isAuthenticated && (
-              <div className="flex items-center gap-2 mr-2">
-                <span className="text-xs sm:text-sm text-muted-foreground">{user?.username}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    logout();
-                    setLocation('/parent/contacts');
-                  }}
-                  className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                >
-                  <LogOut className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                  退出
-                </Button>
-              </div>
-            )}
             {/* 共享人脉筛选按钮 */}
             <div className="flex items-center gap-1 sm:gap-2">
               <Button
