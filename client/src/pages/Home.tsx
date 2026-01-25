@@ -22,7 +22,7 @@ import {
   Home as HomeIcon,
   Search,
   MessageCircle,
-  Activity
+  BookText
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -621,14 +621,13 @@ export default function Home() {
             <span className="text-xs">消息</span>
           </div>
           
-          {/* 动态 */}
-          <div 
-            className="nav-item cursor-pointer" 
-            onClick={() => toast.info('功能开发中，敬请期待！')}
-          >
-            <Activity className="w-6 h-6" />
-            <span className="text-xs">动态</span>
-          </div>
+          {/* 账本 */}
+          <Link href="/ledger">
+            <div className="nav-item">
+              <BookText className="w-6 h-6" />
+              <span className="text-xs">账本</span>
+            </div>
+          </Link>
           
           {/* 我的 */}
           <div 

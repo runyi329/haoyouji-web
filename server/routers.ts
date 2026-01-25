@@ -4944,6 +4944,70 @@ export const appRouter = router({
       }),
   }),
 
+  // 账本管理
+  ledger: router({
+    // 获取用户的所有账本
+    getMyLedgers: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getUserLedgers } = await import('./db-ledger');
+        return await getUserLedgers(ctx.user.id);
+      }),
+    
+    // 创建新账本
+    createLedger: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { createLedger } = await import('./db-ledger');
+        return await createLedger(input.name, ctx.user.id);
+      }),
+    
+    // 获取账本详情（包括成员和统计）
+    getLedgerDetail: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerMembers, getLedgerStats } = await import('./db-ledger');
+        const members = await getLedgerMembers(input.ledgerId);
+        const stats = await getLedgerStats(input.ledgerId);
+        return { members, stats };
+      }),
+    
+    // 获取账本的账单列表
+    getTransactions: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { getTransactions } = await import('./db-ledger');
+        return await getTransactions(input.ledgerId, input.startDate, input.endDate);
+      }),
+    
+    // 添加账单
+    addTransaction: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        type: z.enum(["income", "expense"]),
+        amount: z.string(),
+        category: z.string(),
+        subcategory: z.string().optional(),
+        description: z.string().optional(),
+        transactionDate: z.date(),
+        images: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { addTransaction } = await import('./db-ledger');
+        return await addTransaction({
+          ...input,
+          userId: ctx.user.id,
+        });
+      }),
+  }),
+
   // 个人中心常用功能管理
   profileFeatures: router({
     // 获取用户的常用功能列表

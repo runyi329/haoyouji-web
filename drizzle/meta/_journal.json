@@ -29,6 +29,13 @@
       "when": 1769372832205,
       "tag": "0003_luxuriant_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769377629064,
+      "tag": "0004_open_triathlon",
+      "breakpoints": true
     }
   ]
 }

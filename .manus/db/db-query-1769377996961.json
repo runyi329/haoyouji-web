@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `ledger_members` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `ledgerId` int NOT NULL,\n  `userId` int NOT NULL,\n  `role` enum('owner','member') NOT NULL DEFAULT 'member',\n  `joinedAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `ledger_members_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute CREATE TABLE IF NOT EXISTS `ledger_members` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `ledgerId` int NOT NULL,\n  `userId` int NOT NULL,\n  `role` enum('owner','member') NOT NULL DEFAULT 'member',\n  `joinedAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `ledger_members_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1496
+}
