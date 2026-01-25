@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ import {
 export default function Profile() {
   const [, navigate] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isInstallable, isInstalled, isIOSSafari, promptInstall } = usePWAInstall();
 
   // 获取当前用户信息
   const { data: user, refetch: refetchUser } = trpc.auth.me.useQuery();
@@ -228,7 +230,35 @@ export default function Profile() {
     {
       title: "常用功能",
       items: [
-        { icon: Smartphone, label: "添加主屏", badge: null, onClick: () => navigate("/parent/academy#pwa") },
+        { 
+          icon: Smartphone, 
+          label: isInstalled ? "已安装" : "添加主屏", 
+          badge: null, 
+          onClick: async () => {
+            // iOS Safari 需要手动引导，跳转到说明页面
+            if (isIOSSafari) {
+              navigate("/parent/academy#pwa");
+              return;
+            }
+            
+            // 已安装，提示用户
+            if (isInstalled) {
+              toast.success("应用已安装到桌面");
+              return;
+            }
+            
+            // Android/桌面 Chrome 支持直接安装
+            if (isInstallable) {
+              const success = await promptInstall();
+              if (success) {
+                toast.success("安装成功！请查看桌面图标");
+              }
+            } else {
+              // 不支持自动安装，跳转到说明页面
+              navigate("/parent/academy#pwa");
+            }
+          } 
+        },
         { icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
         { icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
         { icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },

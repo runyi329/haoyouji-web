@@ -1569,3 +1569,25 @@ if (input.sortBy) {
   - 代码已修改，等待用户在手机上测试
   - 现在支持在屏幕任意位置向右滑动 100px 返回首页
   - 仍然保持方向判断，不影响垂直滚动
+
+
+## 修改“添加主屏”按钮 - 直接触发 PWA 安装✅
+
+- [x] 创建 usePWAInstall Hook
+  - 监听 beforeinstallprompt 事件
+  - 保存安装提示对象（deferredPrompt）
+  - 提供 promptInstall 方法触发安装
+  - 提供 isInstallable 状态判断是否可安装
+  - 提供 isInstalled 状态判断是否已安装
+  - 处理 iOS 设备（提供 isIOSSafari 判断）
+- [x] 修改个人中心“添加主屏”按钮
+  - 使用 usePWAInstall Hook
+  - iOS Safari：跳转到安装说明页面
+  - 已安装：显示“已安装”并提示用户
+  - Android/桌面 Chrome：调用 promptInstall 直接触发安装
+  - 不支持自动安装：跳转到说明页面
+- [x] 测试安装功能
+  - 代码已实现，等待用户在手机上测试
+  - Android Chrome：应该直接弹出安装提示
+  - iOS Safari：应该跳转到说明页面
+  - 已安装：按钮显示“已安装”
