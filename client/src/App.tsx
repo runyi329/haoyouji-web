@@ -80,7 +80,7 @@ const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
-const PointsManagement = lazy(() => import("./pages/PointsManagement"));
+const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
 const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
