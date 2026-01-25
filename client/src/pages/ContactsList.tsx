@@ -1545,7 +1545,9 @@ export default function ContactsList() {
                         {/* 推荐人状态指示器 - 放在名字右边 */}
                         {(contact as any).hasReferrer !== undefined && (
                           (contact as any).hasReferrer ? (
-                            <UserCheck className="h-4 w-4 text-blue-500" />
+                            <UserCheck className={`h-4 w-4 ${
+                              contact._isShared ? 'text-gray-400' : 'text-blue-500'
+                            }`} />
                           ) : (
                             <UserX className="h-4 w-4 text-gray-400" />
                           )
@@ -1554,12 +1556,21 @@ export default function ContactsList() {
                         {(contact as any).totalInteractions !== undefined && (contact as any).totalInteractions > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
                               setSelectedContactForInteraction(contact);
                               setShowInteractionDialog(true);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看互动记录"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                            }`}
+                            title={contact._isShared ? '' : '点击查看互动记录'}
+                            disabled={contact._isShared}
                           >
                             <Smile className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).totalInteractions}</span>
@@ -1569,11 +1580,20 @@ export default function ContactsList() {
                         {(contact as any).directReferrals !== undefined && (contact as any).directReferrals > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
                               setLocation(`/parent/contacts/${contact.id}/referrals/direct`);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看直接推荐"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                            }`}
+                            title={contact._isShared ? '' : '点击查看直接推荐'}
+                            disabled={contact._isShared}
                           >
                             <Layers2 className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).directReferrals}</span>
@@ -1583,11 +1603,20 @@ export default function ContactsList() {
                         {(contact as any).indirectReferrals !== undefined && (contact as any).indirectReferrals > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
                               setLocation(`/parent/contacts/${contact.id}/referrals/indirect`);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看间接推荐"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                            }`}
+                            title={contact._isShared ? '' : '点击查看间接推荐'}
+                            disabled={contact._isShared}
                           >
                             <Layers3 className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).indirectReferrals}</span>
@@ -1602,12 +1631,21 @@ export default function ContactsList() {
                           return (
                             <button
                               onClick={(e) => {
+                                if (contact._isShared) {
+                                  e.stopPropagation();
+                                  return; // 共享人脉不可点击
+                                }
                                 e.stopPropagation();
                                 setSelectedContactForCompanyList(contact);
                                 setShowCompanyListDialog(true);
                               }}
-                              className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                              title="点击查看公司列表"
+                              className={`flex items-center gap-0.5 transition-opacity ${
+                                contact._isShared 
+                                  ? 'text-gray-400 cursor-default' 
+                                  : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                              }`}
+                              title={contact._isShared ? '' : '点击查看公司列表'}
+                              disabled={contact._isShared}
                             >
                               <CompanyReportIcon hasReport={true} onClick={() => {}} />
                               <span className="text-xs font-medium">×{companies.length}</span>
