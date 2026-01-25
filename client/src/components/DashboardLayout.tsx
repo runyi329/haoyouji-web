@@ -130,7 +130,7 @@ function DashboardLayoutContent({
   const { swipeProgress } = useSwipeBack({
     backPath: backPath || '/parent/home',
     enabled: isMobile && backPath !== null, // 只在移动端且非首页启用
-    threshold: 100,
+    threshold: 80,
   });
 
   useEffect(() => {
@@ -176,7 +176,7 @@ function DashboardLayoutContent({
         <div 
           className="fixed inset-y-0 left-0 z-50 pointer-events-none flex items-center"
           style={{
-            width: `${swipeProgress * 100}px`,
+            width: `${swipeProgress * 80}px`,
             opacity: swipeProgress,
           }}
         >
@@ -190,7 +190,7 @@ function DashboardLayoutContent({
       <div 
         className="relative"
         style={{
-          transform: swipeProgress > 0 ? `translateX(${swipeProgress * 100}px)` : 'translateX(0)',
+          transform: swipeProgress > 0 ? `translateX(${swipeProgress * 80}px)` : 'translateX(0)',
           transition: swipeProgress === 0 ? 'transform 0.3s ease-out' : 'none',
         }}
       >
