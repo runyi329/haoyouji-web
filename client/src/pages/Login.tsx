@@ -116,7 +116,7 @@ export default function Login() {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               脉动
             </h1>
-            <p className="text-lg text-gray-600">欢迎回来！</p>
+            <p className="text-lg text-gray-600">让人脉动起来</p>
           </div>
 
           {/* 登录/注册卡片 */}
