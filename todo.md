@@ -491,3 +491,14 @@
   - linkedUserId === 当前用户 ID 时，显示绿色“我自己”标签
   - linkedUserId 存在但不等于当前用户时，显示蓝色“已注册”标签
   - 标签显示在联系人名字后面
+
+
+## 用户资料修改自动同步人脉记录✅
+
+- [x] 添加数据库同步函数
+  - 在 db.ts 中添加 syncLinkedContactName 函数
+  - 根据 linkedUserId 查找并更新对应的人脉记录名字
+- [x] 修改用户资料更新逻辑
+  - 在 routers.ts 的 updateProfile 接口中添加同步逻辑
+  - 在 routers.ts 的 updateUser 接口（管理员）中添加同步逻辑
+  - 使用 try-catch 包裹，确保同步失败不影响用户资料更新

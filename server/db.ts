@@ -4371,3 +4371,24 @@ export async function createLinkedContact(data: {
     return null;
   }
 }
+
+/**
+ * 同步关联人脉记录的名字（用户修改个人资料时调用）
+ */
+export async function syncLinkedContactName(userId: number, newName: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  try {
+    // 更新所有 linkedUserId 为该用户的人脉记录
+    await db
+      .update(contacts)
+      .set({ name: newName })
+      .where(eq(contacts.linkedUserId, userId));
+    
+    return true;
+  } catch (error) {
+    console.error("[Database] Failed to sync linked contact name:", error);
+    return false;
+  }
+}
