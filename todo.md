@@ -1429,3 +1429,40 @@ if (input.sortBy) {
 - ✅ 联络次数排序（升序/降序）
 - ✅ 边缘情况处理（空标签、零联络次数）
 - ✅ 个人标签计入总标签数
+
+
+## PWA（渐进式 Web 应用）集成✅
+
+- [x] 下载并分析 PWA 配置文件
+  - pwa_deployment_guide.md - PWA 部署指南
+  - manifest.json - 应用清单文件
+  - sw.js - Service Worker 文件
+- [x] 集成 PWA 文件到项目中
+  - 将 manifest.json 放到 client/public/ 目录（已存在）
+  - 将 sw.js 放到 client/public/ 目录
+  - 在 client/index.html 中添加 manifest 链接（已存在）
+  - 在 client/src/main.tsx 中注册 Service Worker
+- [x] 配置应用图标和元数据
+  - 使用现有图标 maidong-hyy.png（512x512）
+  - 更新 manifest.json 添加多尺寸支持
+  - 配置应用分类、语言、屏幕方向
+  - 创建 PWA 安装提示组件
+- [x] 测试 PWA 功能
+  - Service Worker 注册成功
+  - 应用可以安装到桌面
+  - 支持离线缓存
+  - 安装提示组件正常工作
+
+### PWA 功能说明
+**已实现功能：**
+- ✅ Service Worker 缓存策略：API 请求网络优先，静态资源缓存优先
+- ✅ 自动清理旧版本缓存
+- ✅ 智能安装提示：检测到可安装时自动显示
+- ✅ 用户可以选择“稍后”，7天内不再显示
+- ✅ 支持 iOS 和 Android 设备
+
+**使用方法：**
+1. 在手机浏览器中访问应用
+2. 点击底部弹出的安装提示
+3. 或者点击浏览器菜单中的“添加到主屏幕”
+4. 安装后可以像原生应用一样使用
