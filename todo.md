@@ -1310,6 +1310,7 @@ const todayActive = todayActiveContactIds.size;
 - 字段名称从“公司”改为“公司名称”（categoryId: 76）
 
 - [ ] 排查公司列表后端代码：腾讯云测试显示还是"一个个的人"而不是公司名称
+<<<<<<< Updated upstream
 
 - [x] 优化登录界面：替换紫色星星图标为谷歌色系图标（红黄蓝绿黑白）- [x] 优化登录界面：扩大登录容器适配到整个手机屏幕（无上下留空白）- [x] 优化登录界面：放大字体和输入框尺寸（用户名、密码输入框、登录按钮）
 - [x] 优化登录界面：使用谷歌色系（红黄蓝绿黑白）重新设计配色方案
@@ -1319,3 +1320,17 @@ const todayActive = todayActiveContactIds.size;
 - [x] 修复 Safari 浏览器主题颜色：将上下蓝色背景改为白色以匹配页面背景
 
 - [x] 将新图标文件（maidong-icon.png）提交到 GitHub，确保腾讯云部署时不会丢失
+=======
+>>>>>>> Stashed changes
+
+## 当前任务
+- [x] 替换首页左上角“脉动”文字为 logo 图片
+  - [x] 生成首页 logo 图片（透明背景）
+  - [x] 修改 Home.tsx 代码
+  - [ ] 测试显示效果
+  - [ ] 提交到 GitHub
+
+- [ ] 验证腾讯云部署后的图标显示
+  - [ ] 登录页图标显示
+  - [ ] iOS Safari "添加到主屏幕"图标
+  - [ ] Android Chrome "添加到主屏幕"图标

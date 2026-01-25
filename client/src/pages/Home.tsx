@@ -337,20 +337,13 @@ export default function Home() {
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
-          {/* 左上角可配置区域 */}
+          {/* 左上角 Logo */}
           <div className="flex items-center gap-2">
-            {banner?.imageUrl && (
-              <img 
-                src={banner.imageUrl} 
-                alt="Logo" 
-                className="w-10 h-10 rounded-xl object-cover"
-              />
-            )}
-            {banner?.title && (
-              <span className="font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                {banner.title}
-              </span>
-            )}
+            <img 
+              src="/logo-header-transparent.png" 
+              alt="脉动" 
+              className="h-8 w-auto object-contain"
+            />
           </div>
 
           <div className="flex items-center gap-2">
