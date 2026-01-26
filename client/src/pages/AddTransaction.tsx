@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TransactionType = "expense" | "income" | "transfer";
+type TransactionType = "expense" | "income";
 
 const AddTransaction = () => {
   const [, setLocation] = useLocation();
@@ -32,7 +32,6 @@ const AddTransaction = () => {
   const categories = {
     expense: ["贷款", "购物", "交通", "其他", "保险医疗", "餐饮", "娱乐", "教育", "住房"],
     income: ["工资", "奖金", "投资收益", "其他收入"],
-    transfer: ["内部转账"],
   };
 
   // 快捷分类（支出专用）
@@ -117,16 +116,6 @@ const AddTransaction = () => {
           onClick={() => setTransactionType("income")}
         >
           收入
-        </button>
-        <button
-          className={`flex-1 py-3 text-center ${
-            transactionType === "transfer"
-              ? "bg-blue-500 text-white font-semibold"
-              : "text-gray-600"
-          }`}
-          onClick={() => setTransactionType("transfer")}
-        >
-          内部转账
         </button>
       </div>
 

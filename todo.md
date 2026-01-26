@@ -96,3 +96,5 @@
 - [x] 在 LedgerDetail.tsx 中集成"+"按钮跳转
 
 - [x] 修复 LedgerDetail.tsx 中 id 未定义的错误
+
+- [x] 去除添加记账页面的"内部转账"标签页，只保留"支出"和"收入"
