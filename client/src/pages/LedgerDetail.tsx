@@ -283,14 +283,13 @@ export default function LedgerDetail() {
             <span className="text-xs text-gray-600">账本</span>
           </button>
 
-          <button
-            className="w-14 h-14 rounded-full bg-blue-500 hover:bg-blue-600 flex items-center justify-center shadow-lg -mt-8 transition-colors"
-            onClick={() => {
-              // TODO: 添加记账
-            }}
+          <Button
+            size="icon"
+            className="w-16 h-16 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
+            onClick={() => setLocation(`/ledger/${id}/add`)}
           >
-            <Plus className="w-8 h-8 text-white" />
-          </button>
+            <Plus className="w-8 h-8" />
+          </Button>
 
           <button
             onClick={() => setLocation("/profile")}
