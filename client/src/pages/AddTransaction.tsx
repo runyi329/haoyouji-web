@@ -1,32 +1,37 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
-  Image as ImageIcon,
-  Link as LinkIcon,
-  MapPin,
   Calendar,
   CheckCircle2,
+  Image as ImageIcon,
+  Link2,
   User,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 type TransactionType = "expense" | "income";
 
 const AddTransaction = () => {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
-  
+
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("0.00");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("银行转账");
   const [note, setNote] = useState("");
-  const [date, setDate] = useState(new Date().toLocaleDateString("zh-CN"));
+  const [date, setDate] = useState(new Date().toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+  const [payer, setPayer] = useState("我自己");
+  const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
 
   // 分类选项
   const categories = {
@@ -45,9 +50,20 @@ const AddTransaction = () => {
   // 账户选项
   const accounts = ["银行转账", "现金", "招行转账", "支付宝", "微信支付"];
 
+  // 模拟成员列表
+  const members = [
+    { id: 1, name: "我自己", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=me" },
+    { id: 2, name: "Yunting", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=yunting" },
+    { id: 3, name: "M", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=m" },
+  ];
+
   // 处理数字键盘输入
   const handleNumberInput = (num: string) => {
-    if (amount === "0.00") {
+    if (num === "." && amount.includes(".")) {
+      return; // 已经有小数点了
+    }
+    
+    if (amount === "0.00" || amount === "0") {
       setAmount(num === "." ? "0." : num);
     } else {
       setAmount(amount + num);
@@ -74,23 +90,17 @@ const AddTransaction = () => {
       return;
     }
 
-    // TODO: 调用 API 保存记账记录
-    toast.success("记账成功");
+    toast.success("记账成功！");
     setLocation(`/ledger/${id}`);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-blue-600 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-96">
       {/* 顶部导航 */}
-      <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-white hover:bg-blue-700"
-          onClick={() => setLocation(`/ledger/${id}`)}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
+      <div className="bg-blue-500 text-white p-4 flex items-center justify-between">
+        <button onClick={() => setLocation(`/ledger/${id}`)}>
+          <ArrowLeft className="w-6 h-6" />
+        </button>
         <h1 className="text-lg font-semibold">添加账目</h1>
         <div className="w-10" /> {/* 占位 */}
       </div>
@@ -125,124 +135,106 @@ const AddTransaction = () => {
       </div>
 
       {/* 分类选择 */}
-      <div className="bg-white p-4 mt-2">
+      <div className="bg-white mt-2 p-4">
         <div className="text-sm text-gray-500 mb-3">请选择分类</div>
         <div className="flex flex-wrap gap-2">
           {categories[transactionType].map((category) => (
-            <Button
+            <button
               key={category}
-              variant={selectedCategory === category ? "default" : "outline"}
-              size="lg"
-              className={`rounded-full ${
+              className={`px-4 py-2 rounded-full text-sm ${
                 selectedCategory === category
                   ? "bg-blue-500 text-white"
-                  : "text-gray-700"
+                  : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => setSelectedCategory(category)}
             >
               {category}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* 快捷分类（仅支出显示） */}
+      {/* 快捷分类（仅支出） */}
       {transactionType === "expense" && (
-        <div className="bg-white p-4 mt-2">
+        <div className="bg-white mt-2 p-4">
           <div className="flex flex-wrap gap-2">
             {quickCategories.map((category) => (
-              <Button
+              <button
                 key={category}
-                variant="outline"
-                size="sm"
-                className="text-gray-700 border-gray-300"
+                className="px-3 py-1.5 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200"
                 onClick={() => {
                   setSelectedCategory("贷款");
                   setNote(category);
                 }}
               >
                 {category}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
       )}
 
       {/* 账户选择 */}
-      <div className="bg-white p-4 mt-2">
-        <div className="text-sm text-gray-500 mb-3">请选择账户</div>
+      <div className="bg-white mt-2 p-4">
+        <div className="text-sm text-gray-500 mb-3">
+          {transactionType === "expense" ? "选择付款方式" : "选择收款方式"}
+        </div>
         <div className="flex flex-wrap gap-2">
           {accounts.map((account) => (
-            <Button
+            <button
               key={account}
-              variant={selectedAccount === account ? "default" : "outline"}
-              size="lg"
-              className={`rounded-full ${
+              className={`px-4 py-2 rounded-full text-sm ${
                 selectedAccount === account
                   ? "bg-blue-500 text-white"
-                  : "text-gray-700"
+                  : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => setSelectedAccount(account)}
             >
               {account}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* 备注 */}
-      <div className="bg-white p-4 mt-2">
-        <div className="text-sm text-gray-500 mb-2">备注</div>
-        <Textarea
-          placeholder="添加备注..."
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="min-h-[80px] resize-none"
-        />
-      </div>
-
-      {/* 上传图片 */}
-      <div className="bg-white p-4 mt-2 flex justify-end">
-        <Button
-          variant="default"
-          className="bg-blue-500 hover:bg-blue-600 text-white"
-        >
-          <ImageIcon className="w-4 h-4 mr-2" />
-          上传图片
-        </Button>
+      {/* 备注输入 */}
+      <div className="bg-white mt-2 p-4">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="备注"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="flex-1 p-2 border-none outline-none text-gray-700"
+          />
+          <button className="p-2 bg-blue-500 text-white rounded">
+            <ImageIcon className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* 底部工具栏 */}
-      <div className="bg-white p-4 mt-2 flex items-center justify-between text-sm">
-        <div className="flex items-center gap-4">
+      <div className="bg-white mt-2 p-4">
+        <div className="flex items-center justify-between text-sm">
           <button className="flex items-center gap-1 text-gray-600">
-            <LinkIcon className="w-4 h-4" />
-          </button>
-          <button className="flex items-center gap-1 text-gray-600">
-            <MapPin className="w-4 h-4" />
+            <Link2 className="w-4 h-4" />
+            <span>关联账户</span>
           </button>
           <button className="flex items-center gap-1 text-gray-600">
             <Calendar className="w-4 h-4" />
             <span>{date}</span>
           </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="flex items-center gap-1 text-blue-500">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>计入收支</span>
-          </button>
-          <button className="flex items-center gap-1 text-gray-600">
-            <span>支出人</span>
-          </button>
-          <button className="flex items-center gap-1 text-gray-600">
+          <button 
+            className="flex items-center gap-1 text-gray-600"
+            onClick={() => setIsPayerSheetOpen(true)}
+          >
             <User className="w-4 h-4" />
-            <span>我自己</span>
+            <span>{payer}</span>
           </button>
         </div>
       </div>
 
       {/* 数字键盘 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-100 grid grid-cols-4 gap-px border-t">
+      <div className="fixed bottom-0 left-0 right-0 bg-gray-100 grid grid-cols-4 gap-px border-t z-50">
         {["7", "8", "9", "-"].map((key) => (
           <button
             key={key}
@@ -295,6 +287,47 @@ const AddTransaction = () => {
           ⌫
         </button>
       </div>
+
+      {/* 支出人选择抽屉 */}
+      <Sheet open={isPayerSheetOpen} onOpenChange={setIsPayerSheetOpen}>
+        <SheetContent side="bottom" className="h-[60vh]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center justify-between">
+              <span>请选择支出人：</span>
+              <button
+                onClick={() => setIsPayerSheetOpen(false)}
+                className="text-blue-500"
+              >
+                完成
+              </button>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-4">
+            {members.map((member) => (
+              <button
+                key={member.id}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg"
+                onClick={() => {
+                  setPayer(member.name);
+                  setIsPayerSheetOpen(false);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={member.avatar}
+                    alt={member.name}
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <span className="text-lg">{member.name}</span>
+                </div>
+                {payer === member.name && (
+                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
