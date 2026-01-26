@@ -610,3 +610,10 @@
 - [x] 移除所有行间距（mb-1.5）
 - [x] 使用flex布局实现垂直均匀分布（justify-between）
 - [x] 测试验证视觉效果
+
+## 将文字行高改为leading-none（2026-01-26）
+
+- [x] 将账本标题改为 leading-none
+- [x] 将成员信息改为 leading-none
+- [x] 将按钮文字改为 leading-none
+- [x] 测试验证视觉效果

@@ -133,7 +133,7 @@ export default function Ledger() {
                 <BookOpen className="w-6 h-6 text-blue-500" strokeWidth={1.5} />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-base leading-tight text-gray-800">{ledger.name}</h3>
+                    <h3 className="font-semibold text-base leading-none text-gray-800">{ledger.name}</h3>
                     {ledger.isVip && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs">
                         <Crown className="w-3 h-3 mr-1" />
@@ -157,7 +157,7 @@ export default function Ledger() {
                     </div>
                   ))}
                 </div>
-                <span className="text-sm leading-tight text-gray-500">{ledger.memberCount}人共享+</span>
+                <span className="text-sm leading-none text-gray-500">{ledger.memberCount}人共享+</span>
               </div>
 
               {/* 操作按钮 */}
@@ -165,7 +165,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs leading-tight px-2 py-0.5 h-6"
+                  className="text-xs leading-none px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     setLocation(`/ledger/${ledger.id}/settings`);
@@ -176,7 +176,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs leading-tight px-2 py-0.5 h-6"
+                  className="text-xs leading-none px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 导出
@@ -187,7 +187,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs leading-tight px-2 py-0.5 h-6"
+                  className="text-xs leading-none px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看明细
@@ -198,7 +198,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs leading-tight px-2 py-0.5 h-6"
+                  className="text-xs leading-none px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看报表
@@ -209,7 +209,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs leading-tight px-2 py-0.5 h-6"
+                  className="text-xs leading-none px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 邀请成员
