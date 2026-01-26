@@ -155,7 +155,7 @@ export default function LedgerDetail() {
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-2 flex-1 justify-center -ml-8">
+          <div className="flex items-center gap-2 flex-1 justify-center">
             <h1 className="text-lg font-medium">{ledgerData.name}</h1>
             <button
               onClick={() => setLocation("/ledger")}
@@ -165,11 +165,6 @@ export default function LedgerDetail() {
               <span>切换账本</span>
             </button>
           </div>
-          {/* 报表按钮 */}
-          <button className="flex flex-col items-center gap-0.5">
-            <BarChart3 className="w-5 h-5" />
-            <span className="text-xs">报表</span>
-          </button>
         </div>
 
         {/* 成员头像、设置按钮和搜索按钮 */}
@@ -196,6 +191,10 @@ export default function LedgerDetail() {
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
               <Search className="w-5 h-5 text-white" />
+            </div>
+            {/* 报表按钮 */}
+            <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer">
+              <BarChart3 className="w-5 h-5 text-white" />
             </div>
           </div>
         </div>
