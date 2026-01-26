@@ -432,20 +432,18 @@ const AddTransaction = () => {
         </div>
 
         {/* 备注输入 */}
-        <div className="bg-white mt-1 p-3">
-          <div className="flex items-stretch gap-2">
-            <input
-              type="text"
-              placeholder="备注"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="flex-1 p-2 border-none outline-none text-sm text-gray-700"
-            />
-            <button className="px-4 py-2 bg-blue-500 text-white rounded flex items-center gap-1.5">
-              <ImageIcon className="w-5 h-5" />
-              <span className="text-sm font-medium">传图</span>
-            </button>
-          </div>
+        <div className="bg-white mt-1 flex items-stretch">
+          <input
+            type="text"
+            placeholder="备注"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="flex-1 px-3 py-3 border-none outline-none text-sm text-gray-700"
+          />
+          <button className="px-6 bg-blue-500 text-white flex items-center gap-2">
+            <ImageIcon className="w-5 h-5" />
+            <span className="text-sm font-medium">传图</span>
+          </button>
         </div>
 
         {/* 底部工具栏 */}
