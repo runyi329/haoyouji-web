@@ -414,6 +414,7 @@ interface StatsData {
 
 function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: StatsData }) {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const {
     attributes,
     listeners,
@@ -681,7 +682,7 @@ function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: Stat
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <MyPointsCard 
           points={user?.points || 0} 
-          onClick={() => router('/profile')}
+          onClick={() => setLocation('/parent/profile')}
           dragListeners={listeners}
         />
       </div>
