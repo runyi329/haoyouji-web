@@ -52,7 +52,8 @@ const AddTransaction = () => {
   const ledgerId = parseInt(id || "0");
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
-  const [amount, setAmount] = useState("0.00");
+  const [amount, setAmount] = useState("");
+  
   
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([]);
@@ -275,51 +276,42 @@ const AddTransaction = () => {
 
   // 处理数字键盘输入
   const handleNumberInput = (num: string) => {
-    // 如果是小数点
-    if (num === ".") {
-      if (amount.includes(".")) {
-        return; // 已经有小数点了
+    setAmount((prevAmount) => {
+      // 如果是小数点
+      if (num === ".") {
+        if (prevAmount.includes(".")) return prevAmount; // 已经有小数点
+        return (!prevAmount || prevAmount === "0.00" || prevAmount === "") ? "0." : prevAmount + ".";
       }
-      // 如果当前是0.00，替换为0.
-      if (amount === "0.00") {
-        setAmount("0.");
-      } else {
-        setAmount(amount + ".");
+      
+      // 检查小数点后是否已有两位
+      if (prevAmount.includes(".")) {
+        const parts = prevAmount.split(".");
+        if (parts[1] && parts[1].length >= 2) return prevAmount; // 限制小数点后两位
+        return prevAmount + num;
       }
-      return;
-    }
-    
-    // 检查小数点后是否已有两位
-    if (amount.includes(".")) {
-      const parts = amount.split(".");
-      if (parts[1] && parts[1].length >= 2) {
-        return; // 小数点后已有两位，不再接受输入
+      
+      // 如果当前是空字符串、0或0.00，替换为新数字
+      if (!prevAmount || prevAmount === "0" || prevAmount === "0.00" || prevAmount === "") {
+        return num;
       }
-      // 在小数点后追加数字
-      setAmount(amount + num);
-      return;
-    }
-    
-    // 如果当前是0.00或单独的0，替换为新数字
-    if (amount === "0.00" || amount === "0") {
-      setAmount(num);
-    } else {
-      setAmount(amount + num);
-    }
+      
+      // 否则追加数字
+      return prevAmount + num;
+    });
   };
 
   // 处理删除
   const handleDelete = () => {
     if (amount.length > 1) {
       const newAmount = amount.slice(0, -1);
-      // 如果删除后为空或只剩下小数点，重置为0.00
+      // 如果删除后为空或只剩下小数点，重置为空字符串
       if (newAmount === "" || newAmount === ".") {
-        setAmount("0.00");
+        setAmount("");
       } else {
         setAmount(newAmount);
       }
     } else {
-      setAmount("0.00");
+      setAmount("");
     }
   };
 
@@ -498,7 +490,7 @@ const AddTransaction = () => {
               onClick={() => setIsDateSheetOpen(true)}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>{displayDate}</span>
+              <span>{date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </button>
             <button 
               className="flex items-center gap-1 text-gray-600"
@@ -517,7 +509,9 @@ const AddTransaction = () => {
           <button
             key={key}
             className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
-            onClick={() => key !== "-" && handleNumberInput(key)}
+            onClick={() => {
+              if (key !== "-") handleNumberInput(key);
+            }}
           >
             {key}
           </button>
@@ -526,7 +520,9 @@ const AddTransaction = () => {
           <button
             key={key}
             className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
-            onClick={() => key !== "+" && handleNumberInput(key)}
+            onClick={() => {
+              if (key !== "+") handleNumberInput(key);
+            }}
           >
             {key}
           </button>
