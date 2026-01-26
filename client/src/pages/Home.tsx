@@ -18,11 +18,7 @@ import {
   Lightbulb,
   Brain,
   Users,
-  ChevronDown,
-  Home as HomeIcon,
-  Search,
-  MessageCircle,
-  Activity
+  ChevronDown
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -119,7 +115,7 @@ const defaultFeatures = [
 ];
 
 // 可拖拽的功能卡片组件
-function SortableFeatureCard({ feature, isAuthenticated, hasHeartbeat }: { feature: typeof defaultFeatures[0]; isAuthenticated: boolean; hasHeartbeat?: boolean }) {
+function SortableFeatureCard({ feature, isAuthenticated }: { feature: typeof defaultFeatures[0]; isAuthenticated: boolean }) {
   const {
     attributes,
     listeners,
@@ -137,7 +133,7 @@ function SortableFeatureCard({ feature, isAuthenticated, hasHeartbeat }: { featu
 
   const cardContent = (
     <Card 
-      className={`card-hover p-4 sm:p-6 h-full ${feature.bgColor} border-0 ${isDragging ? 'shadow-2xl' : ''} ${isAuthenticated ? 'cursor-move' : ''} ${hasHeartbeat ? 'heartbeat-animation' : ''}`}
+      className={`card-hover p-4 sm:p-6 h-full ${feature.bgColor} border-0 ${isDragging ? 'shadow-2xl' : ''} ${isAuthenticated ? 'cursor-move' : ''}`}
     >
       <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 shadow-lg`}>
         <span className="text-2xl sm:text-3xl">{feature.emoji}</span>
@@ -263,9 +259,6 @@ export default function Home() {
   // 卡片排序状态
   const [features, setFeatures] = useState(defaultFeatures);
   
-  // 心跳特效状态
-  const [heartbeatIndex, setHeartbeatIndex] = useState<number | null>(null);
-  
   // 获取用户保存的卡片排序
   const { data: savedOrder } = trpc.userPreferences.getHomeCardOrder.useQuery(
     undefined,
@@ -324,22 +317,6 @@ export default function Home() {
   useEffect(() => {
     initMutation.mutate();
   }, []);
-  
-  // 心跳特效定时器
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // 随机选择一个卡片
-      const randomIndex = Math.floor(Math.random() * features.length);
-      setHeartbeatIndex(randomIndex);
-      
-      // 600ms 后恢复（心跳动画时长）
-      setTimeout(() => {
-        setHeartbeatIndex(null);
-      }, 600);
-    }, 1000); // 每 1 秒触发一次
-    
-    return () => clearInterval(interval);
-  }, [features.length]);
 
 
 
@@ -574,12 +551,11 @@ export default function Home() {
             strategy={rectSortingStrategy}
           >
             <section className="grid grid-cols-3 gap-4 sm:gap-6 mb-8">
-              {features.map((feature, index) => (
+              {features.map((feature) => (
                 <SortableFeatureCard
                   key={feature.id}
                   feature={feature}
                   isAuthenticated={isAuthenticated}
-                  hasHeartbeat={heartbeatIndex === index}
                 />
               ))}
             </section>
@@ -595,49 +571,17 @@ export default function Home() {
       {/* 底部导航（移动端） */}
       <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 sm:hidden">
         <div className="flex justify-around py-2">
-          {/* 首页 */}
-          <Link href="/">
-            <div className="nav-item">
-              <HomeIcon className="w-6 h-6" />
-              <span className="text-xs">首页</span>
-            </div>
-          </Link>
-          
-          {/* 发现 */}
-          <div 
-            className="nav-item cursor-pointer" 
-            onClick={() => toast.info('功能开发中，敬请期待！')}
-          >
-            <Search className="w-6 h-6" />
-            <span className="text-xs">发现</span>
-          </div>
-          
-          {/* 消息 */}
-          <div 
-            className="nav-item cursor-pointer" 
-            onClick={() => toast.info('功能开发中，敬请期待！')}
-          >
-            <MessageCircle className="w-6 h-6" />
-            <span className="text-xs">消息</span>
-          </div>
-          
-          {/* 动态 */}
-          <div 
-            className="nav-item cursor-pointer" 
-            onClick={() => toast.info('功能开发中，敬请期待！')}
-          >
-            <Activity className="w-6 h-6" />
-            <span className="text-xs">动态</span>
-          </div>
-          
-          {/* 我的 */}
-          <div 
-            className="nav-item cursor-pointer" 
-            onClick={() => toast.info('功能开发中，敬请期待！')}
-          >
-            <User className="w-6 h-6" />
-            <span className="text-xs">我的</span>
-          </div>
+          {features.map((feature) => (
+            <Link 
+              key={feature.href} 
+              href={feature.href}
+            >
+              <div className="nav-item">
+                <span className="text-xl">{feature.emoji}</span>
+                <span className="text-xs">{feature.title.slice(0, 2)}</span>
+              </div>
+            </Link>
+          ))}
         </div>
       </nav>
 

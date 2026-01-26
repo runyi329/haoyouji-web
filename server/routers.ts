@@ -193,16 +193,6 @@ export const appRouter = router({
           name: input.name,
         });
         
-        // 同步更新关联人脉记录的名字
-        if (input.name) {
-          try {
-            await db.syncLinkedContactName(ctx.user.id, input.name);
-          } catch (error) {
-            console.error('同步人脉记录失败:', error);
-            // 不影响用户资料更新，继续执行
-          }
-        }
-        
         // 如果需要更新email,也可以在这里添加
         if (input.email) {
           const db_instance = await getDb();
@@ -232,14 +222,6 @@ export const appRouter = router({
         const db_instance = await getDb();
         if (db_instance) {
           await db_instance.update(users).set({ avatar: url }).where(eq(users.id, ctx.user.id));
-        }
-        
-        // 同步更新关联人脉记录的头像
-        try {
-          await db.syncLinkedContactAvatar(ctx.user.id, url);
-        } catch (error) {
-          console.error('同步人脉记录头像失败:', error);
-          // 不影响头像上传，继续执行
         }
         
         return { success: true, avatarUrl: url };
@@ -733,17 +715,6 @@ export const appRouter = router({
           username: input.username,
           name: input.name,
         });
-        
-        // 同步更新关联人脉记录的名字
-        if (input.name) {
-          try {
-            await db.syncLinkedContactName(input.userId, input.name);
-          } catch (error) {
-            console.error('同步人脉记录失败:', error);
-            // 不影响用户资料更新，继续执行
-          }
-        }
-        
         return { success: true };
       }),
     

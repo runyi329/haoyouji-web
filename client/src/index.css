@@ -447,20 +447,3 @@ input[type="range"].slider::-moz-range-thumb {
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
-
-/* 呼吸灯动画 */
-@keyframes breathing-light {
-  0% {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  }
-  50% {
-    box-shadow: 0 0 0 4px oklch(0.65 0.18 280 / 0.4), 0 0 20px 2px oklch(0.65 0.18 280 / 0.3), 0 10px 30px -5px rgb(0 0 0 / 0.2);
-  }
-  100% {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  }
-}
-
-.heartbeat-animation {
-  animation: breathing-light 1s ease-in-out;
-}

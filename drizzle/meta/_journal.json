@@ -22,41 +22,6 @@
       "when": 1769372071751,
       "tag": "0002_flaky_lady_ursula",
       "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1769372832205,
-      "tag": "0003_luxuriant_agent_zero",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1769377629064,
-      "tag": "0004_open_triathlon",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1769378782972,
-      "tag": "0005_misty_rockslide",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "5",
-      "when": 1769379053240,
-      "tag": "0006_jazzy_captain_america",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "5",
-      "when": 1769402015059,
-      "tag": "0007_concerned_wind_dancer",
-      "breakpoints": true
     }
   ]
 }
