@@ -1,6 +1,6 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v2.0.0';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源
@@ -82,14 +82,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 静态资源：缓存优先，失败时使用网络
+  // 静态资源：网络优先，失败时使用缓存（确保用户总是看到最新内容）
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         // 只缓存成功的 GET 请求
         if (request.method === 'GET' && response.status === 200) {
           const responseToCache = response.clone();
@@ -98,8 +94,11 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return response;
-      });
-    })
+      })
+      .catch(() => {
+        // 网络失败时，尝试从缓存读取
+        return caches.match(request);
+      })
   );
 });
 
