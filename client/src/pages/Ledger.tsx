@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Crown, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
@@ -58,6 +59,7 @@ const mockLedgers = [
 export default function Ledger() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // 根据当前标签页过滤账本（这里暂时都显示在"使用中"）
   const filteredLedgers = activeTab === "active" ? mockLedgers : [];
@@ -221,9 +223,7 @@ export default function Ledger() {
           </Button>
           <Button
             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
-            onClick={() => {
-              // TODO: 创建新账本
-            }}
+            onClick={() => setShowCreateDialog(true)}
           >
             创建新的账本
           </Button>
@@ -232,6 +232,37 @@ export default function Ledger() {
 
       {/* 底部导航栏 */}
       <BottomNav />
+
+      {/* 创建账本对话框 */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="w-[85%] rounded-lg p-0 gap-0">
+          <h3 className="text-lg font-semibold text-center py-4 border-b">新建全新账本</h3>
+          <button
+            onClick={() => {
+              setShowCreateDialog(false);
+              setLocation("/ledger/create-type");
+            }}
+            className="py-4 text-base text-gray-800 hover:bg-gray-50 transition-colors border-b"
+          >
+            新建全新账本
+          </button>
+          <button
+            onClick={() => {
+              setShowCreateDialog(false);
+              // TODO: 复制已有账本
+            }}
+            className="py-4 text-base text-gray-800 hover:bg-gray-50 transition-colors border-b"
+          >
+            复制已有账本
+          </button>
+          <button
+            onClick={() => setShowCreateDialog(false)}
+            className="py-4 text-base text-gray-800 hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
