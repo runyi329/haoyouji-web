@@ -490,7 +490,7 @@ const AddTransaction = () => {
               onClick={() => setIsDateSheetOpen(true)}
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>{date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span>{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </button>
             <button 
               className="flex items-center gap-1 text-gray-600"
