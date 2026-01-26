@@ -61,8 +61,12 @@ export default function Ledger() {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // 根据当前标签页过滤账本（这里暂时都显示在"使用中"）
-  const filteredLedgers = activeTab === "active" ? mockLedgers : [];
+  // 从后端API获取账本列表
+  const { data: ledgers, isLoading } = trpc.ledger.list.useQuery({
+    isArchived: activeTab === "archived",
+  });
+
+  const filteredLedgers = ledgers || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 pb-20">
