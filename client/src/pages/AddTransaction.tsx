@@ -578,36 +578,36 @@ const AddTransaction = () => {
           <div className="p-4">
             {/* 月份导航 */}
             {/* 日期导航 - 复刻参考图片样式 */}
-            <div className="flex items-center justify-center mb-4 relative">
+            <div className="flex items-center mb-4 relative">
               {/* 外层箭头 - 控制年份 */}
-              <button onClick={prevYear} className="p-2 absolute left-0">
+              <button onClick={prevYear} className="p-2">
                 <ChevronLeft className="w-6 h-6 text-gray-400" />
               </button>
               
               {/* 内层箭头 - 控制月份 */}
-              <button onClick={prevMonth} className="p-2 absolute left-12">
+              <button onClick={prevMonth} className="p-2">
                 <ChevronLeft className="w-6 h-6 text-blue-500" />
               </button>
               
               {/* 年月显示 */}
-              <div className="text-lg font-medium">
+              <div className="text-lg font-medium mx-4">
                 {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
               </div>
               
               {/* 内层箭头 - 控制月份 */}
-              <button onClick={nextMonth} className="p-2 absolute right-12">
+              <button onClick={nextMonth} className="p-2">
                 <ChevronRight className="w-6 h-6 text-blue-500" />
               </button>
               
               {/* 外层箭头 - 控制年份 */}
-              <button onClick={nextYear} className="p-2 absolute right-0">
+              <button onClick={nextYear} className="p-2">
                 <ChevronRight className="w-6 h-6 text-gray-400" />
               </button>
               
               {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="absolute -right-2 px-4 py-1.5 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
+                className="ml-auto px-4 py-1.5 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
               >
                 今天
               </button>
