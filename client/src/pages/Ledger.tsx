@@ -101,7 +101,11 @@ export default function Ledger() {
 
       {/* 账本列表 */}
       <div className="container px-4 pb-4 space-y-4">
-        {filteredLedgers.length === 0 ? (
+        {isLoading ? (
+          <Card className="p-8 text-center">
+            <p className="text-gray-500">加载中...</p>
+          </Card>
+        ) : filteredLedgers.length === 0 ? (
           <Card className="p-8 text-center">
             <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已存档"}的账本</p>
           </Card>

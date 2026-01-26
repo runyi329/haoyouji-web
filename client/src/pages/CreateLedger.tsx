@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 // 账本类型配置
 const ledgerTypeConfig: Record<string, { name: string; icon: any; defaultName: string }> = {
@@ -54,6 +55,17 @@ export default function CreateLedger() {
   const [nickname, setNickname] = useState("");
   const [currency, setCurrency] = useState("CNY");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [createdLedgerId, setCreatedLedgerId] = useState<number | null>(null);
+
+  const createLedgerMutation = trpc.ledger.create.useMutation({
+    onSuccess: (data) => {
+      setCreatedLedgerId(data.id);
+      setShowSuccessDialog(true);
+    },
+    onError: (error) => {
+      toast.error("创建账本失败: " + error.message);
+    },
+  });
 
   const handleCreate = () => {
     if (!ledgerName.trim()) {
@@ -65,22 +77,29 @@ export default function CreateLedger() {
       return;
     }
 
-    // TODO: 调用后端API创建账本
-    console.log("创建账本:", { ledgerName, nickname, currency, type: typeParam });
-    
-    // 显示成功对话框
-    setShowSuccessDialog(true);
+    // 调用后端API创建账本
+    createLedgerMutation.mutate({
+      name: ledgerName,
+      type: typeParam,
+      currency,
+      memberNickname: nickname,
+    });
   };
 
   const handleGoToSettings = () => {
-    // TODO: 使用真实的账本ID
-    const mockLedgerId = "new-ledger-id";
-    setLocation(`/ledger/${mockLedgerId}/settings`);
+    if (createdLedgerId) {
+      setLocation(`/ledger/${createdLedgerId}/settings`);
+    }
   };
 
   const handleSkip = () => {
-    // 跳转到账本列表
-    setLocation("/ledger");
+    if (createdLedgerId) {
+      // 跳转到新创建的账本详情页
+      setLocation(`/ledger/${createdLedgerId}`);
+    } else {
+      // 如果没有创建成功，跳转到账本列表
+      setLocation("/ledger");
+    }
   };
 
   return (
@@ -160,9 +179,10 @@ export default function CreateLedger() {
         {/* 创建按钮 */}
         <Button
           onClick={handleCreate}
+          disabled={createLedgerMutation.isPending}
           className="w-full h-10 bg-blue-500 hover:bg-blue-600 text-white"
         >
-          创建账本
+          {createLedgerMutation.isPending ? "创建中..." : "创建账本"}
         </Button>
       </div>
 

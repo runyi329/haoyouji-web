@@ -17,6 +17,7 @@ import * as dbAnalytics from "./db-analytics";
 import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
+import * as dbLedger from "./db-ledger";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -4933,6 +4934,58 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { saveUserFavoriteFeatures } = await import('./db-profile-features');
         await saveUserFavoriteFeatures(ctx.user.id, input.featureIds);
+        return { success: true };
+      }),
+  }),
+
+  // 账本管理
+  ledger: router({
+    // 获取用户的所有账本
+    list: protectedProcedure
+      .input(z.object({
+        isArchived: z.boolean().optional().default(false),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
+      }),
+
+    // 创建新账本
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        description: z.string().optional(),
+        type: z.string().optional(),
+        currency: z.string().optional(),
+        memberNickname: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: input.type,
+          createdBy: ctx.user.id,
+        });
+        return ledger;
+      }),
+
+    // 存档/取消存档账本
+    archive: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        isArchived: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.archiveLedger(input.ledgerId, ctx.user.id, input.isArchived);
+        return { success: true };
+      }),
+
+    // 删除账本
+    delete: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.deleteLedger(input.ledgerId, ctx.user.id);
         return { success: true };
       }),
   }),
