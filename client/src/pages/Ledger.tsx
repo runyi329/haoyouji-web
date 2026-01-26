@@ -125,7 +125,7 @@ export default function Ledger() {
           filteredLedgers.map((ledger) => (
             <Card
               key={ledger.id}
-              className="p-1.5 h-[100px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+              className="p-1.5 h-[120px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
               {/* 账本名称和VIP标识 */}
