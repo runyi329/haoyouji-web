@@ -101,6 +101,11 @@ const AddTransaction = () => {
     "-1": [{ id: -11, name: "外卖", icon: "🍜", color: "bg-blue-400", parentId: -1 }],
     "-2": [{ id: -21, name: "地铁", icon: "🚇", color: "bg-orange-400", parentId: -2 }],
     "-3": [{ id: -31, name: "淘宝", icon: "🛒", color: "bg-green-400", parentId: -3 }],
+    // 三级分类：外卖的子分类
+    "-11": [
+      { id: -111, name: "美团", icon: "🐛", color: "bg-yellow-400", parentId: -11 },
+      { id: -112, name: "饿了么", icon: "🐦", color: "bg-blue-300", parentId: -11 },
+    ],
   };
 
   // 获取顶级分类（parentId = null）
