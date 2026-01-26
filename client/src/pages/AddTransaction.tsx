@@ -324,17 +324,17 @@ const AddTransaction = () => {
       <div className="px-4 py-3 flex-shrink-0">
         <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
           <button
-            className={`flex-1 py-2.5 text-sm text-center transition-colors ${
+            className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "expense"
                 ? "bg-blue-500 text-white font-semibold"
                 : "text-gray-600 bg-white"
             }`}
             onClick={() => setTransactionType("expense")}
           >
-            支出 {transactionType === "expense" ? "▼" : ""}
+            支出
           </button>
           <button
-            className={`flex-1 py-2.5 text-sm text-center transition-colors ${
+            className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "income"
                 ? "bg-blue-500 text-white font-semibold"
                 : "text-gray-600 bg-white"
