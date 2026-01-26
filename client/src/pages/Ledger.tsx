@@ -125,11 +125,11 @@ export default function Ledger() {
           filteredLedgers.map((ledger) => (
             <Card
               key={ledger.id}
-              className="p-1.5 h-[120px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+              className="p-2 h-[120px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden flex flex-col justify-between"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
               {/* 账本名称和VIP标识 */}
-              <div className="flex items-center gap-2 mb-1.5 h-6">
+              <div className="flex items-center gap-2">
                 <BookOpen className="w-6 h-6 text-blue-500" strokeWidth={1.5} />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export default function Ledger() {
               </div>
 
               {/* 成员头像 */}
-              <div className="flex items-center gap-2 mb-1.5 h-8">
+              <div className="flex items-center gap-2">
                 <div className="flex -space-x-2">
                   {ledger.members.slice(0, 4).map((member, index) => (
                     <div
