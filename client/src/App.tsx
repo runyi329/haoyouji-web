@@ -81,6 +81,7 @@ const AIManagement = lazy(() => import("./pages/AIManagement"));
 const Moments = lazy(() => import("./pages/Moments"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Ledger = lazy(() => import("./pages/Ledger"));
+const LedgerDetail = lazy(() => import("./pages/LedgerDetail"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
@@ -138,6 +139,7 @@ function Router() {
         <Route path="/moments" component={Moments} />
         <Route path="/ai" component={AIChat} />
         <Route path="/ledger" component={Ledger} />
+        <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         
         {/* 404 */}

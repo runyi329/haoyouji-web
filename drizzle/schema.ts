@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, longtext, timestamp, varchar, boolean, json, date, decimal } from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -1281,3 +1281,115 @@ export const pointLogs = mysqlTable("point_logs", {
 
 export type PointLog = typeof pointLogs.$inferSelect;
 export type InsertPointLog = typeof pointLogs.$inferInsert;
+
+/**
+ * 账本表 - 存储账本基本信息
+ * 
+ * 支持多人共享账本，每个账本可以有多个成员
+ * 账本可以是家庭账本、生意账本、公司账本等
+ */
+export const ledgers = mysqlTable("ledgers", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(), // 账本名称
+  description: text("description"), // 账本描述
+  type: varchar("type", { length: 50 }).default("personal").notNull(), // 账本类型：personal(个人), family(家庭), business(生意), company(公司)
+  isVip: boolean("isVip").default(false).notNull(), // 是否为VIP账本
+  isArchived: boolean("isArchived").default(false).notNull(), // 是否已存档
+  currency: varchar("currency", { length: 10 }).default("CNY").notNull(), // 货币类型
+  icon: text("icon"), // 账本图标
+  createdBy: int("createdBy").notNull(), // 创建者用户ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Ledger = typeof ledgers.$inferSelect;
+export type InsertLedger = typeof ledgers.$inferInsert;
+
+/**
+ * 账本成员表 - 存储账本的共享成员
+ * 
+ * 一个账本可以有多个成员，每个成员有不同的权限
+ */
+export const ledgerMembers = mysqlTable("ledger_members", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  userId: int("userId").notNull(), // 用户ID
+  role: mysqlEnum("role", ["owner", "admin", "member", "viewer"]).default("member").notNull(), // 角色：owner(所有者), admin(管理员), member(成员), viewer(查看者)
+  canEdit: boolean("canEdit").default(true).notNull(), // 是否可以编辑记录
+  canDelete: boolean("canDelete").default(false).notNull(), // 是否可以删除记录
+  canInvite: boolean("canInvite").default(false).notNull(), // 是否可以邀请成员
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  invitedBy: int("invitedBy"), // 邀请人用户ID
+});
+
+export type LedgerMember = typeof ledgerMembers.$inferSelect;
+export type InsertLedgerMember = typeof ledgerMembers.$inferInsert;
+
+/**
+ * 账本分类表 - 存储收支分类
+ * 
+ * 每个账本可以有自己的分类体系
+ */
+export const ledgerCategories = mysqlTable("ledger_categories", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  name: varchar("name", { length: 50 }).notNull(), // 分类名称
+  type: mysqlEnum("type", ["income", "expense"]).notNull(), // 类型：income(收入), expense(支出)
+  icon: varchar("icon", { length: 50 }), // 图标名称
+  color: varchar("color", { length: 20 }), // 颜色
+  parentId: int("parentId"), // 父分类ID（支持二级分类）
+  sortOrder: int("sortOrder").default(0).notNull(), // 排序
+  isDefault: boolean("isDefault").default(false).notNull(), // 是否为默认分类
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LedgerCategory = typeof ledgerCategories.$inferSelect;
+export type InsertLedgerCategory = typeof ledgerCategories.$inferInsert;
+
+/**
+ * 账本记录表 - 存储收支记录
+ * 
+ * 记录每一笔收入或支出
+ */
+export const ledgerRecords = mysqlTable("ledger_records", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  categoryId: int("categoryId").notNull(), // 分类ID
+  type: mysqlEnum("type", ["income", "expense"]).notNull(), // 类型：income(收入), expense(支出)
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(), // 金额
+  description: text("description"), // 描述
+  recordDate: date("recordDate").notNull(), // 记录日期
+  attachments: json("attachments").$type<string[]>(), // 附件URL数组
+  tags: json("tags").$type<string[]>(), // 标签数组
+  location: varchar("location", { length: 200 }), // 地点
+  createdBy: int("createdBy").notNull(), // 创建者用户ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LedgerRecord = typeof ledgerRecords.$inferSelect;
+export type InsertLedgerRecord = typeof ledgerRecords.$inferInsert;
+
+/**
+ * 账本预算表 - 存储预算设置
+ * 
+ * 为每个分类设置月度预算
+ */
+export const ledgerBudgets = mysqlTable("ledger_budgets", {
+  id: int("id").autoincrement().primaryKey(),
+  ledgerId: int("ledgerId").notNull(), // 账本ID
+  categoryId: int("categoryId"), // 分类ID（null表示总预算）
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(), // 预算金额
+  period: mysqlEnum("period", ["monthly", "yearly"]).default("monthly").notNull(), // 周期：monthly(月度), yearly(年度)
+  startDate: date("startDate").notNull(), // 开始日期
+  endDate: date("endDate"), // 结束日期（null表示长期有效）
+  alertThreshold: int("alertThreshold").default(80).notNull(), // 预警阈值（百分比）
+  createdBy: int("createdBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LedgerBudget = typeof ledgerBudgets.$inferSelect;
+export type InsertLedgerBudget = typeof ledgerBudgets.$inferInsert;
