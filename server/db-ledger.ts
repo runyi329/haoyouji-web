@@ -690,3 +690,270 @@ export async function removeLedgerMember(ledgerId: number, operatorId: number, t
       )
     );
 }
+
+/**
+ * 获取账本成员权限列表
+ */
+export async function getMemberPermissions(ledgerId: number, requestUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  if (ledger[0].createdBy !== requestUserId) {
+    throw new Error("只有账本创建者可以查看权限设置");
+  }
+  
+  // 获取所有成员及其权限
+  const members = await db
+    .select({
+      id: ledgerMembers.id,
+      userId: ledgerMembers.userId,
+      role: ledgerMembers.role,
+      permissionView: ledgerMembers.permissionView,
+      permissionAdd: ledgerMembers.permissionAdd,
+      permissionEdit: ledgerMembers.permissionEdit,
+      permissionDelete: ledgerMembers.permissionDelete,
+    })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.ledgerId, ledgerId));
+  
+  return {
+    ledgerName: ledger[0].name,
+    members,
+  };
+}
+
+/**
+ * 更新成员权限
+ */
+export async function updateMemberPermission(
+  ledgerId: number,
+  memberId: number,
+  permissionType: "view" | "add" | "edit" | "delete",
+  permissionValue: "all" | "own",
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  if (ledger[0].createdBy !== requestUserId) {
+    throw new Error("只有账本创建者可以修改权限设置");
+  }
+  
+  // 验证成员是否属于该账本
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.id, memberId),
+        eq(ledgerMembers.ledgerId, ledgerId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0) {
+    throw new Error("成员不存在");
+  }
+  
+  // 不能修改创建者的权限
+  if (member[0].role === "owner") {
+    throw new Error("不能修改创建者的权限");
+  }
+  
+  // 根据权限类型更新对应字段
+  const updateData: any = {};
+  switch (permissionType) {
+    case "view":
+      updateData.permissionView = permissionValue;
+      break;
+    case "add":
+      updateData.permissionAdd = permissionValue;
+      break;
+    case "edit":
+      updateData.permissionEdit = permissionValue;
+      break;
+    case "delete":
+      updateData.permissionDelete = permissionValue;
+      break;
+  }
+  
+  await db
+    .update(ledgerMembers)
+    .set(updateData)
+    .where(eq(ledgerMembers.id, memberId));
+  
+  return { success: true };
+}
+
+/**
+ * 获取账本的AI雇员列表
+ */
+export async function getAIEmployees(ledgerId: number, requestUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取所有AI雇员
+  const aiEmployees = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai')
+      )
+    );
+  
+  return aiEmployees;
+}
+
+/**
+ * 添加AI雇员到账本
+ */
+export async function addAIEmployee(
+  ledgerId: number,
+  avatarType: string,
+  nickname: string,
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 检查该头像类型是否已存在
+  const existing = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai'),
+        eq(ledgerMembers.avatarType, avatarType)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    throw new Error("该虚拟成员已添加");
+  }
+  
+  // 添加AI雇员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId: 0, // AI雇员的userId为0
+    role: 'member',
+    memberType: 'ai',
+    avatarType,
+    nickname,
+    permissionView: 'all',
+    permissionAdd: 'all',
+    permissionEdit: 'own',
+    permissionDelete: 'own',
+  });
+  
+  return { success: true };
+}
+
+/**
+ * 删除账本中的AI雇员
+ */
+export async function removeAIEmployee(
+  ledgerId: number,
+  employeeId: number,
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 验证要删除的是AI雇员
+  const employee = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.id, employeeId),
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai')
+      )
+    )
+    .limit(1);
+  
+  if (employee.length === 0) {
+    throw new Error("AI雇员不存在");
+  }
+  
+  // 删除AI雇员
+  await db
+    .delete(ledgerMembers)
+    .where(eq(ledgerMembers.id, employeeId));
+  
+  return { success: true };
+}

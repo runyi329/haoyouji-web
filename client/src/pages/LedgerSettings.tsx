@@ -159,8 +159,18 @@ export default function LedgerSettings() {
             />
           }
         />
-        <SettingItem label="虚拟成员" showIcon hasHelp />
-        <SettingItem label="成员权限设置" showIcon hasHelp />
+        <SettingItem 
+          label="AI雇员" 
+          showIcon 
+          hasHelp 
+          onClick={() => setLocation(`/ledger/${ledgerId}/ai-employees`)}
+        />
+        <SettingItem 
+          label="成员权限设置" 
+          showIcon 
+          hasHelp 
+          onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
+        />
         <SettingItem label="记账默认类型" value="默认:支出,显示转账" hasHelp />
         <SettingItem label="首页统计方式" value="自然月统计" />
         <SettingItem label="账目锁定" value="不限制" />
@@ -277,6 +287,7 @@ interface SettingItemProps {
   isVip?: boolean;
   hasHelp?: boolean;
   rightContent?: React.ReactNode;
+  onClick?: () => void;
 }
 
 function SettingItem({
@@ -287,9 +298,13 @@ function SettingItem({
   isVip = false,
   hasHelp = false,
   rightContent,
+  onClick,
 }: SettingItemProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0">
+    <div 
+      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-gray-50"
+      onClick={onClick}
+    >
       <div className="flex items-center gap-2">
         <span className="text-[15px] text-gray-900">{label}</span>
         {isVip && (

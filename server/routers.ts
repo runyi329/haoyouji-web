@@ -5049,6 +5049,87 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, input.type, input.parentId);
       }),
+
+    // 获取成员权限列表
+    getMemberPermissions: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const result = await dbLedger.getMemberPermissions(input.ledgerId, ctx.user.id);
+        
+        // 从主数据库获取用户信息
+        const membersWithUserInfo = await Promise.all(
+          result.members.map(async (member: any) => {
+            const user = await db.getUserById(member.userId);
+            return {
+              ...member,
+              userName: user?.name || '未知用户',
+              userAvatar: user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+              ledgerName: result.ledgerName,
+            };
+          })
+        );
+        
+        return membersWithUserInfo;
+      }),
+
+    // 更新成员权限
+    updateMemberPermission: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        memberId: z.number(),
+        permissionType: z.enum(['view', 'add', 'edit', 'delete']),
+        permissionValue: z.enum(['all', 'own']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.updateMemberPermission(
+          input.ledgerId,
+          input.memberId,
+          input.permissionType,
+          input.permissionValue,
+          ctx.user.id
+        );
+      }),
+
+    // 获取AI雇员列表
+    getAIEmployees: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getAIEmployees(input.ledgerId, ctx.user.id);
+      }),
+
+    // 添加AI雇员
+    addAIEmployee: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        avatarType: z.string(),
+        nickname: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.addAIEmployee(
+          input.ledgerId,
+          input.avatarType,
+          input.nickname,
+          ctx.user.id
+        );
+      }),
+
+    // 删除AI雇员
+    removeAIEmployee: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        employeeId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.removeAIEmployee(
+          input.ledgerId,
+          input.employeeId,
+          ctx.user.id
+        );
+      }),
   }),
 });
 
