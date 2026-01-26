@@ -45,21 +45,23 @@ export default function BottomNav() {
           const isActive = location === item.path;
 
           return (
-            <Link key={item.id} href={item.path}>
-              <a className="flex flex-col items-center justify-center flex-1 h-full px-2 space-y-1 transition-colors">
-                <Icon
-                  className={`w-6 h-6 ${
-                    isActive ? "text-blue-500" : "text-gray-500"
-                  }`}
-                />
-                <span
-                  className={`text-xs ${
-                    isActive ? "text-blue-500 font-medium" : "text-gray-500"
-                  }`}
-                >
-                  {item.label}
-                </span>
-              </a>
+            <Link 
+              key={item.id} 
+              href={item.path}
+              className="flex flex-col items-center justify-center flex-1 h-full px-2 space-y-1 transition-colors"
+            >
+              <Icon
+                className={`w-6 h-6 ${
+                  isActive ? "text-blue-500" : "text-gray-500"
+                }`}
+              />
+              <span
+                className={`text-xs ${
+                  isActive ? "text-blue-500 font-medium" : "text-gray-500"
+                }`}
+              >
+                {item.label}
+              </span>
             </Link>
           );
         })}
