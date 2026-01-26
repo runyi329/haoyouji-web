@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Crown, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 // 模拟账本数据
 const mockLedgers = [
@@ -58,6 +59,7 @@ const mockLedgers = [
 export default function Ledger() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // 根据当前标签页过滤账本（这里暂时都显示在"使用中"）
   const filteredLedgers = activeTab === "active" ? mockLedgers : [];
@@ -221,9 +223,7 @@ export default function Ledger() {
           </Button>
           <Button
             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
-            onClick={() => {
-              // TODO: 创建新账本
-            }}
+            onClick={() => setShowCreateDialog(true)}
           >
             创建新的账本
           </Button>
@@ -232,6 +232,37 @@ export default function Ledger() {
 
       {/* 底部导航栏 */}
       <BottomNav />
+
+      {/* 创建账本对话框 */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="w-[85%] rounded-lg p-0 gap-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">创建账本</DialogTitle>
+          <button
+            onClick={() => {
+              setShowCreateDialog(false);
+              setLocation("/ledger/create-type");
+            }}
+            className="w-full text-center py-3.5 text-blue-500 font-medium border-b border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            新建全新账本
+          </button>
+          <button
+            onClick={() => {
+              setShowCreateDialog(false);
+              // TODO: 实现复制已有账本功能
+            }}
+            className="w-full text-center py-3.5 text-blue-500 font-medium border-b border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            复制已有账本
+          </button>
+          <button
+            onClick={() => setShowCreateDialog(false)}
+            className="w-full text-center py-3.5 text-gray-600 font-medium hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
