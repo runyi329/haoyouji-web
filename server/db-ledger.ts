@@ -329,15 +329,39 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
 /**
  * 获取账本的所有分类（包括子分类）
  */
-export async function getLedgerCategories(ledgerId: number) {
+export async function getLedgerCategories(
+  ledgerId: number,
+  userId?: number,
+  type?: 'income' | 'expense',
+  parentId?: number | null
+) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
+  
+  // 如果提供userId，验证用户是否是账本成员
+  if (userId) {
+    await verifyLedgerMember(ledgerId, userId);
+  }
+  
+  // 构建查询条件
+  const conditions = [eq(ledgerCategories.ledgerId, ledgerId)];
+  
+  if (type) {
+    conditions.push(eq(ledgerCategories.type, type));
+  }
+  
+  // 处理parentId查询：undefined表示查所有，null表示查顶级分类，number表示查指定父分类的子分类
+  if (parentId === null) {
+    conditions.push(isNull(ledgerCategories.parentId));
+  } else if (parentId !== undefined) {
+    conditions.push(eq(ledgerCategories.parentId, parentId));
+  }
   
   const categories = await db
     .select()
     .from(ledgerCategories)
-    .where(eq(ledgerCategories.ledgerId, ledgerId))
-    .orderBy(ledgerCategories.sortOrder);
+    .where(and(...conditions))
+    .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
   
   return categories;
 }

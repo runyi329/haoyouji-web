@@ -5038,6 +5038,17 @@ export const appRouter = router({
         await dbLedger.removeLedgerMember(input.ledgerId, ctx.user.id, input.userId);
         return { success: true };
       }),
+
+    // 获取账本分类列表
+    getCategories: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        type: z.enum(['income', 'expense']).optional(),
+        parentId: z.number().nullable().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, input.type, input.parentId);
+      }),
   }),
 });
 

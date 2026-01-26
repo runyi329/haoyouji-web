@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,16 +30,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { trpc } from "@/lib/trpc";
 
 type TransactionType = "expense" | "income";
+
+interface Category {
+  id: number;
+  ledgerId: number;
+  name: string;
+  type: "income" | "expense";
+  parentId: number | null;
+  icon: string | null;
+  color: string | null;
+  sortOrder: number;
+  createdBy: number;
+}
 
 const AddTransaction = () => {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
+  const ledgerId = parseInt(id || "0");
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("0.00");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  
+  // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
+  const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([]);
+  
   const [selectedAccount, setSelectedAccount] = useState("银行转账");
   const [note, setNote] = useState("");
   
@@ -53,12 +70,6 @@ const AddTransaction = () => {
   
   const [payer, setPayer] = useState("我自己");
   const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
-
-  // 分类选项
-  const categories = {
-    expense: ["贷款", "购物", "交通", "其他", "保险医疗", "餐饮", "娱乐", "教育", "住房"],
-    income: ["工资", "奖金", "投资收益", "其他收入"],
-  };
 
   // 快捷分类（支出专用）
   const quickCategories = [
@@ -77,6 +88,57 @@ const AddTransaction = () => {
     { id: 2, name: "Yunting", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=yunting" },
     { id: 3, name: "M", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=m" },
   ];
+
+  // 获取顶级分类（parentId = null）
+  const { data: topCategories = [], isLoading: isLoadingTop } = trpc.ledger.getCategories.useQuery({
+    ledgerId,
+    type: transactionType,
+    parentId: null,
+  });
+
+  // 根据选中的分类路径，获取各级子分类
+  // 例如：如果选中了一级分类，获取其子分类；如果选中了二级分类，获取其子分类
+  const categoryLevels: Category[][] = [topCategories];
+  
+  // 为每一级已选中的分类获取其子分类
+  selectedCategoryPath.forEach((parentId, index) => {
+    const { data: subCategories = [] } = trpc.ledger.getCategories.useQuery({
+      ledgerId,
+      type: transactionType,
+      parentId,
+    });
+    categoryLevels.push(subCategories);
+  });
+
+  // 处理分类选择
+  const handleCategorySelect = (categoryId: number, level: number) => {
+    // 更新选中路径：保留到当前层级，移除后续层级
+    const newPath = [...selectedCategoryPath.slice(0, level), categoryId];
+    setSelectedCategoryPath(newPath);
+  };
+
+  // 获取当前选中的分类名称（用于显示）
+  const getSelectedCategoryName = () => {
+    if (selectedCategoryPath.length === 0) return "";
+    
+    // 找到最后一级选中的分类
+    const lastSelectedId = selectedCategoryPath[selectedCategoryPath.length - 1];
+    const lastLevelCategories = categoryLevels[selectedCategoryPath.length];
+    
+    // 在上一级的分类列表中查找
+    if (selectedCategoryPath.length > 0) {
+      const prevLevelCategories = categoryLevels[selectedCategoryPath.length - 1];
+      const category = prevLevelCategories.find(c => c.id === lastSelectedId);
+      return category?.name || "";
+    }
+    
+    return "";
+  };
+
+  // 切换交易类型时重置分类选择
+  useEffect(() => {
+    setSelectedCategoryPath([]);
+  }, [transactionType]);
 
   // 判断是否是今天
   const isToday = (date: Date) => {
@@ -205,7 +267,7 @@ const AddTransaction = () => {
 
   // 处理保存
   const handleSave = () => {
-    if (!selectedCategory) {
+    if (selectedCategoryPath.length === 0) {
       toast.error("请选择分类");
       return;
     }
@@ -220,6 +282,9 @@ const AddTransaction = () => {
 
   const calendarDays = getCalendarDays();
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+
+  // 主题颜色数组
+  const themeColors = ["bg-blue-500", "bg-orange-500", "bg-green-500", "bg-purple-500"];
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -263,30 +328,58 @@ const AddTransaction = () => {
 
       {/* 可滚动内容区域 */}
       <div className="flex-1 overflow-y-auto">
-        {/* 分类选择 */}
+        {/* 多级分类选择 */}
         <div className="bg-white mt-1 p-3">
           <div className="text-xs text-gray-500 mb-2">请选择分类</div>
-          <div className="flex flex-wrap gap-1.5">
-            {categories[transactionType].map((category) => (
-              <button
-                key={category}
-                className={`px-3 py-1.5 rounded-full text-xs ${
-                  selectedCategory === category
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setSelectedCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
-            <button
-              className="px-3 py-1.5 rounded-full text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1"
-              onClick={() => setLocation(`/ledger/${id}/categories`)}
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          
+          {/* 渲染每一级分类 */}
+          {categoryLevels.map((categories, level) => {
+            if (categories.length === 0) return null;
+            
+            return (
+              <div key={level} className="mb-3 last:mb-0">
+                {level > 0 && (
+                  <div className="text-xs text-gray-400 mb-1.5">
+                    {level === 1 ? "二级分类" : level === 2 ? "三级分类" : `${level + 1}级分类`}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map((category, index) => {
+                    const isSelected = selectedCategoryPath[level] === category.id;
+                    const colorClass = themeColors[index % themeColors.length];
+                    
+                    return (
+                      <button
+                        key={category.id}
+                        className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+                          isSelected
+                            ? `${colorClass} text-white`
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                        onClick={() => handleCategorySelect(category.id, level)}
+                      >
+                        {category.name}
+                      </button>
+                    );
+                  })}
+                  
+                  {/* 只在第一级显示"+"按钮 */}
+                  {level === 0 && (
+                    <button
+                      className="px-3 py-1.5 rounded-full text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
+                      onClick={() => setLocation(`/ledger/${id}/categories`)}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          
+          {isLoadingTop && (
+            <div className="text-xs text-gray-400">加载分类中...</div>
+          )}
         </div>
 
         {/* 快捷分类（仅支出） */}
@@ -296,9 +389,10 @@ const AddTransaction = () => {
               {quickCategories.map((category) => (
                 <button
                   key={category}
-                  className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200"
+                  className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200 hover:bg-gray-100"
                   onClick={() => {
-                    setSelectedCategory("贷款");
+                    // 快捷分类：自动选择"贷款"分类并填充备注
+                    // TODO: 需要从分类列表中找到"贷款"分类的ID
                     setNote(category);
                   }}
                 >
