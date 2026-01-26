@@ -264,6 +264,16 @@ const AddTransaction = () => {
     setIsDateSheetOpen(false);
   };
 
+  // 上一年
+  const prevYear = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear() - 1, calendarMonth.getMonth()));
+  };
+
+  // 下一年
+  const nextYear = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear() + 1, calendarMonth.getMonth()));
+  };
+
   // 上一个月
   const prevMonth = () => {
     setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1));
@@ -567,15 +577,29 @@ const AddTransaction = () => {
         <SheetContent side="bottom" className="h-auto max-h-[70vh]">
           <div className="p-4">
             {/* 月份导航 */}
+            {/* 年份控制 - 外层 */}
+            <div className="flex items-center justify-between mb-2">
+              <button onClick={prevYear} className="p-2">
+                <ChevronLeft className="w-6 h-6 text-gray-600" />
+              </button>
+              <div className="text-lg font-medium">
+                {calendarMonth.getFullYear()}年
+              </div>
+              <button onClick={nextYear} className="p-2">
+                <ChevronRight className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+            
+            {/* 月份控制 - 内层 */}
             <div className="flex items-center justify-between mb-4">
               <button onClick={prevMonth} className="p-2">
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                <ChevronLeft className="w-5 h-5 text-gray-500" />
               </button>
-              <div className="text-base font-medium">
-                {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
+              <div className="text-base font-medium text-gray-700">
+                {calendarMonth.getMonth() + 1}月
               </div>
               <button onClick={nextMonth} className="p-2">
-                <ChevronRight className="w-5 h-5 text-gray-600" />
+                <ChevronRight className="w-5 h-5 text-gray-500" />
               </button>
               <button
                 onClick={goToToday}
