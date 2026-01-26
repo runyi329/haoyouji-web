@@ -38,6 +38,7 @@ import {
   Plus,
   Minus,
 } from "lucide-react";
+import BottomNav from "@/components/BottomNav";
 
 // 定义所有可用的功能项
 type FeatureItem = {
@@ -338,7 +339,7 @@ export default function Profile() {
   const otherFeatures = allFeatures.filter(f => !tempFavorites.includes(f.id));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
       <div className="container max-w-4xl py-8 px-4">
         {/* 顶部用户信息卡片 */}
         <div className="p-6 mb-6">
@@ -696,6 +697,9 @@ export default function Profile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* 底部导航栏 */}
+      <BottomNav />
     </div>
   );
 }

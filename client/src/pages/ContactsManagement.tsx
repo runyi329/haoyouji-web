@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Tag, MapPin, Share2, BarChart3, LogIn, LogOut, User, UserCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ReferrerPodium } from "@/components/ReferrerPodium";
+import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -981,7 +982,7 @@ export default function ContactsManagement() {
   };
 
   return (
-    <div className="container py-4 sm:py-8 px-2 sm:px-4">
+    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-20">
       {/* 页面标题 - 手机端更紧凑 */}
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
@@ -1234,6 +1235,9 @@ export default function ContactsManagement() {
       {/* 人脉列表已移至独立页面 /parent/contacts/list */}
 
       {/* 介绍人贡献排行榜已移除 */}
+      
+      {/* 底部导航栏 */}
+      <BottomNav />
       
       {/* 邀请码验证对话框 */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>

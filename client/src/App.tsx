@@ -78,6 +78,9 @@ const PointsDetail = lazy(() => import("./pages/PointsDetail"));
 const ProfileSettings = lazy(() => import("./pages/ProfileSettings"));
 const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
+const Moments = lazy(() => import("./pages/Moments"));
+const AIChat = lazy(() => import("./pages/AIChat"));
+const Ledger = lazy(() => import("./pages/Ledger"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
@@ -130,6 +133,12 @@ function Router() {
         <Route path="/parent/contacts/:id" component={ContactDetail} />
         <Route path="/parent/contacts/:contactId/referral-chain" component={ReferralChainVisualization} />
         <Route path="/parent/contacts/:contactId/referrals/:type" component={ReferralList} />
+        
+        {/* 底部导航栏页面 */}
+        <Route path="/moments" component={Moments} />
+        <Route path="/ai" component={AIChat} />
+        <Route path="/ledger" component={Ledger} />
+        <Route path="/profile" component={Profile} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />
