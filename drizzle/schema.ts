@@ -460,25 +460,25 @@ export const knowledgeItems = mysqlTable("knowledge_items", {
 
 export const ledgerMembers = mysqlTable("ledger_members", {
 	id: int().autoincrement().notNull(),
-	ledgerId: int().notNull(),
-	userId: int().notNull(), // AI雇员的userId为0
+	ledgerId: int("ledger_id").notNull(),
+	userId: int("user_id").notNull(), // AI雇员的userId为0
 	role: mysqlEnum(['owner','member']).default('member').notNull(),
 	nickname: varchar({ length: 50 }),
 	// AI雇员相关字段
-	memberType: mysqlEnum(['real','ai']).default('real').notNull(), // 成员类型：真实成员/AI雇员
-	avatarType: varchar({ length: 50 }), // AI雇员的头像类型（如'grandfather', 'father', 'mother'等）
+	memberType: mysqlEnum("member_type", ['real','ai']).default('real').notNull(), // 成员类型：真实成员/AI雇员
+	avatarType: varchar("avatar_type", { length: 50 }), // AI雇员的头像类型（如'grandfather', 'father', 'mother'等）
 	// 权限字段：'all' = 全部，'own' = 仅自己
-	permissionView: mysqlEnum(['all','own']).default('all').notNull(), // 查看账目
-	permissionAdd: mysqlEnum(['all','own']).default('all').notNull(), // 添加账目
-	permissionEdit: mysqlEnum(['all','own']).default('own').notNull(), // 修改账目
-	permissionDelete: mysqlEnum(['all','own']).default('own').notNull(), // 删除账目
+	permissionView: mysqlEnum("permission_view", ['all','own']).default('all').notNull(), // 查看账目
+	permissionAdd: mysqlEnum("permission_add", ['all','own']).default('all').notNull(), // 添加账目
+	permissionEdit: mysqlEnum("permission_edit", ['all','own']).default('own').notNull(), // 修改账目
+	permissionDelete: mysqlEnum("permission_delete", ['all','own']).default('own').notNull(), // 删除账目
 	// 保留旧字段以兼容现有代码
-	canEdit: tinyint().default(1).notNull(),
-	canDelete: tinyint().default(0).notNull(),
-	canInvite: tinyint().default(0).notNull(),
-	invitedBy: int(),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	canEdit: tinyint("can_edit").default(1).notNull(),
+	canDelete: tinyint("can_delete").default(0).notNull(),
+	canInvite: tinyint("can_invite").default(0).notNull(),
+	invitedBy: int("invited_by"),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 
 export const ledgers = mysqlTable("ledgers", {
