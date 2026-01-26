@@ -76,13 +76,30 @@ export async function createLedger(data: {
   name: string;
   description?: string;
   type?: string;
+  currency?: string;
   createdBy: number;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   
-  // 创建账本
-  const [newLedger] = await db.insert(ledgers).values(data).$returningId();
+  // 创建账本，显式设置所有字段
+  const ledgerData: any = {
+    name: data.name,
+    createdBy: data.createdBy,
+  };
+  
+  // 只添加非 undefined 的可选字段
+  if (data.description !== undefined) {
+    ledgerData.description = data.description;
+  }
+  if (data.type !== undefined) {
+    ledgerData.type = data.type;
+  }
+  if (data.currency !== undefined) {
+    ledgerData.currency = data.currency;
+  }
+  
+  const [newLedger] = await db.insert(ledgers).values(ledgerData).$returningId();
 
   // 将创建者添加为账本所有者
   await db.insert(ledgerMembers).values({

@@ -4963,6 +4963,7 @@ export const appRouter = router({
           name: input.name,
           description: input.description,
           type: input.type,
+          currency: input.currency,
           createdBy: ctx.user.id,
         });
         return ledger;
