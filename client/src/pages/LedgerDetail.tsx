@@ -172,9 +172,10 @@ export default function LedgerDetail() {
           </button>
         </div>
 
-        {/* 搜索框 */}
-        <div className="px-4 py-2">
-          <div className="flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-sm">
+        {/* 搜索框、成员头像和设置按钮 */}
+        <div className="px-4 py-2 flex items-center gap-3">
+          {/* 搜索框 */}
+          <div className="flex-1 flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-sm">
             <Search className="w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -182,23 +183,23 @@ export default function LedgerDetail() {
               className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
             />
           </div>
-        </div>
-
-        {/* 成员头像和设置按钮 */}
-        <div className="px-4 py-2 flex items-center gap-2">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
-            >
-              R{i}
+          
+          {/* 成员头像 */}
+          <div className="flex items-center gap-2">
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+              >
+                R{i}
+              </div>
+            ))}
+            <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
+              <Settings 
+                className="w-5 h-5 text-white cursor-pointer" 
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              />
             </div>
-          ))}
-          <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
-            <Settings 
-              className="w-5 h-5 text-white cursor-pointer" 
-              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-            />
           </div>
         </div>
 
