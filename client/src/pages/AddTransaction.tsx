@@ -279,6 +279,14 @@ const AddTransaction = () => {
       return; // 已经有小数点了
     }
     
+    // 检查小数点后是否已有两位
+    if (amount.includes(".")) {
+      const decimalPart = amount.split(".")[1];
+      if (decimalPart && decimalPart.length >= 2) {
+        return; // 小数点后已有两位，不再接受输入
+      }
+    }
+    
     if (amount === "0.00" || amount === "0") {
       setAmount(num === "." ? "0." : num);
     } else {
@@ -289,7 +297,13 @@ const AddTransaction = () => {
   // 处理删除
   const handleDelete = () => {
     if (amount.length > 1) {
-      setAmount(amount.slice(0, -1));
+      const newAmount = amount.slice(0, -1);
+      // 如果删除后为空或只剩下小数点，重置为0.00
+      if (newAmount === "" || newAmount === ".") {
+        setAmount("0.00");
+      } else {
+        setAmount(newAmount);
+      }
     } else {
       setAmount("0.00");
     }
@@ -301,10 +315,7 @@ const AddTransaction = () => {
       toast.error("请选择分类");
       return;
     }
-    if (parseFloat(amount) === 0) {
-      toast.error("请输入金额");
-      return;
-    }
+    // 允许零金额提交
 
     toast.success("记账成功！");
     setLocation(`/ledger/${id}`);
@@ -355,7 +366,23 @@ const AddTransaction = () => {
 
       {/* 金额显示 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
-        <div className="text-5xl font-light text-gray-800">{amount}</div>
+        <div className="text-5xl font-light text-gray-800">
+          {(() => {
+            // 如果正在输入小数点或小数，显示原始输入
+            if (amount.includes(".")) {
+              const parts = amount.split(".");
+              if (parts[1] === undefined || parts[1] === "") {
+                return amount; // 显示 "123."
+              } else if (parts[1].length === 1) {
+                return amount; // 显示 "123.5"
+              } else {
+                return amount; // 显示 "123.50"
+              }
+            }
+            // 没有小数点，显示两位小数
+            return parseFloat(amount || "0").toFixed(2);
+          })()}
+        </div>
       </div>
 
       {/* 可滚动内容区域 */}
