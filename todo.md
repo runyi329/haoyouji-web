@@ -94,3 +94,5 @@
 - [x] 保存按钮
 - [x] 添加路由配置
 - [x] 在 LedgerDetail.tsx 中集成"+"按钮跳转
+
+- [x] 修复 LedgerDetail.tsx 中 id 未定义的错误

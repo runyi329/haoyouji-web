@@ -286,7 +286,7 @@ export default function LedgerDetail() {
           <Button
             size="icon"
             className="w-16 h-16 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
-            onClick={() => setLocation(`/ledger/${id}/add`)}
+            onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           >
             <Plus className="w-8 h-8" />
           </Button>
