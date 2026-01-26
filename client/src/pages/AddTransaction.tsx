@@ -57,7 +57,7 @@ const AddTransaction = () => {
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([]);
   
-  const [selectedAccount, setSelectedAccount] = useState("银行转账");
+  const [selectedAccount, setSelectedAccount] = useState("微信");
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -80,13 +80,20 @@ const AddTransaction = () => {
   ];
 
   // 账户选项
-  const accounts = ["银行转账", "现金", "招行转账", "支付宝", "微信支付"];
+  const accounts = ["微信", "支付宝", "银行卡", "数字钱包", "现金"];
 
   // 模拟成员列表
   const members = [
     { id: 1, name: "我自己", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=me" },
     { id: 2, name: "Yunting", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=yunting" },
     { id: 3, name: "M", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=m" },
+  ];
+
+  // 预设分类（当数据库中没有分类时显示）
+  const defaultCategories = [
+    { id: -1, name: "餐饮", icon: "🍴", color: "bg-blue-500" },
+    { id: -2, name: "交通", icon: "🚗", color: "bg-orange-500" },
+    { id: -3, name: "购物", icon: "🛒", color: "bg-green-500" },
   ];
 
   // 获取顶级分类（parentId = null）
@@ -96,9 +103,12 @@ const AddTransaction = () => {
     parentId: null,
   });
 
+  // 如果没有分类，使用预设分类
+  const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
+
   // 根据选中的分类路径，获取各级子分类
   // 例如：如果选中了一级分类，获取其子分类；如果选中了二级分类，获取其子分类
-  const categoryLevels: Category[][] = [topCategories];
+  const categoryLevels: any[][] = [displayCategories];
   
   // 为每一级已选中的分类获取其子分类
   selectedCategoryPath.forEach((parentId, index) => {
@@ -406,7 +416,7 @@ const AddTransaction = () => {
         {/* 账户选择 */}
         <div className="bg-white mt-1 p-3">
           <div className="text-xs text-gray-500 mb-2">
-            {transactionType === "expense" ? "选择付款方式" : "选择收款方式"}
+            {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {accounts.map((account) => (
