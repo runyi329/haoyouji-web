@@ -907,3 +907,12 @@
 - [x] 应用到LedgerSwipeContainer（账本详情页）
 - [x] 应用到TransactionDetail（交易明细页）
 - [ ] 测试优化后的手势体验
+
+## 移除手势滑动返回功能（2026-01-27）
+
+- [x] 恢复Ledger和LedgerDetail为独立路由
+- [x] 移除TransactionDetail的手势滑动代码
+- [x] 保留所有页面的返回按钮
+- [x] 更新路由配置
+- [ ] 测试返回按钮功能
+- [x] 删除不再使用的LedgerSwipeContainer和LedgerContainer文件
