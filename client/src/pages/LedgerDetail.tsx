@@ -137,9 +137,8 @@ export default function LedgerDetail() {
     );
   }
   
-  // 使用真实数据，如果没有数据则显示空状态
-  // 对于新创建的账本（ID >= 30000），显示空状态
-  const hasRecords = ledgerId < 30000 && mockRecords && mockRecords.length > 0;
+  // 使用模拟数据展示
+  const hasRecords = mockRecords && mockRecords.length > 0;
 
   // 计算月度统计
   const monthlyStats = {
