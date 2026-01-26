@@ -167,9 +167,9 @@ export default function LedgerDetail() {
           </div>
         </div>
 
-        {/* 成员头像、设置按钮和搜索按钮 */}
-        <div className="px-4 py-2 flex items-center gap-3">
-          {/* 成员头像 */}
+        {/* 成员头像和功能按钮 */}
+        <div className="px-4 py-2 flex items-center justify-between">
+          {/* 成员头像（靠左） */}
           <div className="flex items-center gap-2">
             {[1, 2].map((i) => (
               <div
@@ -179,20 +179,22 @@ export default function LedgerDetail() {
                 R{i}
               </div>
             ))}
+          </div>
+          
+          {/* 功能按钮（靠右） */}
+          <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
               <Settings 
                 className="w-5 h-5 text-white cursor-pointer" 
                 onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
               />
             </div>
-            {/* 搜索按钮 */}
             <div 
               className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer"
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
               <Search className="w-5 h-5 text-white" />
             </div>
-            {/* 报表按钮 */}
             <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
