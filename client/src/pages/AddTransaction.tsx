@@ -71,13 +71,7 @@ const AddTransaction = () => {
   const [payer, setPayer] = useState("我自己");
   const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
 
-  // 快捷分类（支出专用）
-  const quickCategories = [
-    "胡上海建行按揭",
-    "邮储",
-    "胡招行经营贷",
-    "蒋招行闪电贷",
-  ];
+
 
   // 账户选项
   const accounts = ["微信", "支付宝", "银行卡", "数字钱包", "现金"];
@@ -411,26 +405,7 @@ const AddTransaction = () => {
           )}
         </div>
 
-        {/* 快捷分类（仅支出） */}
-        {transactionType === "expense" && (
-          <div className="bg-white mt-1 p-3">
-            <div className="flex flex-wrap gap-1.5">
-              {quickCategories.map((category) => (
-                <button
-                  key={category}
-                  className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200 hover:bg-gray-100"
-                  onClick={() => {
-                    // 快捷分类：自动选择"贷款"分类并填充备注
-                    // TODO: 需要从分类列表中找到"贷款"分类的ID
-                    setNote(category);
-                  }}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         {/* 账户选择 */}
         <div className="bg-white mt-1 p-3">
