@@ -13,7 +13,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   
   // 获取用户的账本列表
-  const { data: ledgers, isLoading } = trpc.ledger.getUserLedgers.useQuery();
+  const { data: ledgers, isLoading } = trpc.ledger.list.useQuery({ isArchived: false });
 
   useEffect(() => {
     if (isLoading) return;

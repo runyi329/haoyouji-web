@@ -370,3 +370,9 @@
 - [x] 生产环境运行的是旧代码，旧代码中 ENV 对象没有导出 DEEPSEEK_API_KEY
 - [ ] 保存检查点并部署到生产环境
 - [ ] 测试生产环境的公司报告上传功能
+
+## 修复首页404错误
+- [x] 检查Home.tsx组件的路由跳转逻辑
+- [x] 发现问题：使用了不存在的API trpc.ledger.getUserLedgers
+- [x] 修复：改为使用正确的API trpc.ledger.list
+- [ ] 测试所有页面访问是否正常
