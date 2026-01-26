@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Image as ImageIcon,
   Link2,
+  Plus,
   User,
   X,
 } from "lucide-react";
@@ -279,6 +280,12 @@ const AddTransaction = () => {
                 {category}
               </button>
             ))}
+            <button
+              className="px-3 py-1.5 rounded-full text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1"
+              onClick={() => setLocation(`/ledger/${id}/categories`)}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 

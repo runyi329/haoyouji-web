@@ -37,6 +37,8 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
   const result = await Promise.all(
     ledgerList.map(async (ledger: any) => {
       const dbInner = await getDb();
+      if (!dbInner) throw new Error("Database connection failed");
+      
       const members = await dbInner
         .select({
           userId: ledgerMembers.userId,
@@ -235,5 +237,178 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
     invitedBy,
   });
 
+  return true;
+}
+
+/**
+ * 获取账本的所有分类（包括子分类）
+ */
+export async function getLedgerCategories(ledgerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  const categories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.ledgerId, ledgerId))
+    .orderBy(ledgerCategories.sortOrder);
+  
+  return categories;
+}
+
+/**
+ * 添加自定义分类
+ */
+export async function addLedgerCategory(data: {
+  ledgerId: number;
+  name: string;
+  type: "income" | "expense";
+  parentId?: number;
+  icon?: string;
+  color?: string;
+  sortOrder?: number;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  // 如果没有指定排序，获取当前最大排序值+1
+  let sortOrder = data.sortOrder;
+  if (sortOrder === undefined) {
+    const maxSortOrder = await db
+      .select({ max: sql<number>`MAX(${ledgerCategories.sortOrder})` })
+      .from(ledgerCategories)
+      .where(
+        and(
+          eq(ledgerCategories.ledgerId, data.ledgerId),
+          eq(ledgerCategories.type, data.type),
+          data.parentId ? eq(ledgerCategories.parentId, data.parentId) : sql`${ledgerCategories.parentId} IS NULL`
+        )
+      )
+      .then((rows: any[]) => rows[0]?.max || 0);
+    
+    sortOrder = maxSortOrder + 1;
+  }
+  
+  const [newCategory] = await db.insert(ledgerCategories).values({
+    ledgerId: data.ledgerId,
+    name: data.name,
+    type: data.type,
+    parentId: data.parentId || null,
+    icon: data.icon || "📝",
+    color: data.color || (data.type === "income" ? "#10b981" : "#ef4444"),
+    sortOrder,
+    isDefault: false,
+    createdBy: data.createdBy,
+  }).$returningId();
+  
+  return newCategory;
+}
+
+/**
+ * 更新分类排序
+ */
+export async function updateCategorySortOrder(categoryId: number, sortOrder: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  await db
+    .update(ledgerCategories)
+    .set({ sortOrder, updatedAt: new Date() })
+    .where(eq(ledgerCategories.id, categoryId));
+  
+  return true;
+}
+
+/**
+ * 批量更新分类排序
+ */
+export async function batchUpdateCategorySortOrder(updates: { id: number; sortOrder: number }[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  // 使用事务批量更新
+  await Promise.all(
+    updates.map(({ id, sortOrder }) =>
+      db
+        .update(ledgerCategories)
+        .set({ sortOrder, updatedAt: new Date() })
+        .where(eq(ledgerCategories.id, id))
+    )
+  );
+  
+  return true;
+}
+
+/**
+ * 删除分类
+ */
+export async function deleteLedgerCategory(categoryId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  // 获取分类信息
+  const category = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, categoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  if (!category) {
+    throw new Error("分类不存在");
+  }
+  
+  // 检查是否为默认分类
+  if (category.isDefault) {
+    throw new Error("默认分类不能删除");
+  }
+  
+  // 检查是否有子分类
+  const hasChildren = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.parentId, categoryId))
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  if (hasChildren > 0) {
+    throw new Error("请先删除子分类");
+  }
+  
+  // 检查是否有记录使用此分类
+  const hasRecords = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.categoryId, categoryId))
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  if (hasRecords > 0) {
+    throw new Error("此分类下有记录，不能删除");
+  }
+  
+  // 删除分类
+  await db.delete(ledgerCategories).where(eq(ledgerCategories.id, categoryId));
+  
+  return true;
+}
+
+/**
+ * 更新分类信息
+ */
+export async function updateLedgerCategory(
+  categoryId: number,
+  data: {
+    name?: string;
+    icon?: string;
+    color?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database connection failed");
+  
+  await db
+    .update(ledgerCategories)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(ledgerCategories.id, categoryId));
+  
   return true;
 }
