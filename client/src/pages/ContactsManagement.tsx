@@ -372,6 +372,24 @@ function TotalUsageDaysCard({ days, dragListeners }: { days: number; dragListene
   );
 }
 
+// 功能20卡片 - 我的积分
+function MyPointsCard({ points, onClick, dragListeners }: { points: number; onClick?: () => void; dragListeners?: any }) {
+  return (
+    <Card 
+      {...dragListeners}
+      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-200 dark:border-yellow-800 flex flex-col justify-center cursor-pointer select-none"
+      onClick={onClick}
+    >
+      <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
+        <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">我的积分</p>
+        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - points.toString().length * 0.175)}rem, 1.05rem)` }}>
+          {points}<span className="text-xs sm:text-sm font-normal">分</span>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 interface StatsData {
   totalContacts: number;
   newThisWeek: number;
@@ -657,6 +675,19 @@ function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: Stat
     );
   }
 
+  // 功能20显示我的积分
+  if (feature.id === 20) {
+    return (
+      <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
+        <MyPointsCard 
+          points={user?.points || 0} 
+          onClick={() => router('/profile')}
+          dragListeners={listeners}
+        />
+      </div>
+    );
+  }
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing aspect-square">
       {/* 手机端使用更紧凑的卡片样式 */}
@@ -838,11 +869,11 @@ export default function ContactsManagement() {
       
       console.log('[ContactsManagement] 转换后的features:', apiFeatures);
       
-      // 如果API返回的功能数量少于19，自动补充到19个
-      if (apiFeatures.length < 19) {
+      // 如果API返回的功能数量少于20，自动补充到20个
+      if (apiFeatures.length < 20) {
         const maxId = Math.max(...apiFeatures.map(f => f.id), 0);
         const additionalFeatures = Array.from(
-          { length: 19 - apiFeatures.length },
+          { length: 20 - apiFeatures.length },
           (_, i) => ({
             id: maxId + i + 1,
             title: `功能${maxId + i + 1}`,
@@ -858,9 +889,9 @@ export default function ContactsManagement() {
     }
   }, [featureOrderData]);
 
-  // 生成19个默认功能容器（fallback）
+  // 生成20个默认功能容器（fallback）
   function generateDefaultFeatures(): Feature[] {
-    return Array.from({ length: 19 }, (_, i) => ({
+    return Array.from({ length: 20 }, (_, i) => ({
       id: i + 1,
       title: `功能${i + 1}`,
     }));
