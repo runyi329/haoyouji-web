@@ -95,20 +95,20 @@ const AddTransaction = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-96">
+    <div className="h-screen flex flex-col bg-gray-50">
       {/* 顶部导航 */}
-      <div className="bg-blue-500 text-white p-4 flex items-center justify-between">
+      <div className="bg-blue-500 text-white p-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setLocation(`/ledger/${id}`)}>
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-semibold">添加账目</h1>
-        <div className="w-10" /> {/* 占位 */}
+        <h1 className="text-base font-semibold">添加账目</h1>
+        <div className="w-5" /> {/* 占位 */}
       </div>
 
       {/* 类型标签页 */}
-      <div className="bg-white flex">
+      <div className="bg-white flex flex-shrink-0">
         <button
-          className={`flex-1 py-3 text-center ${
+          className={`flex-1 py-2.5 text-sm text-center ${
             transactionType === "expense"
               ? "bg-blue-500 text-white font-semibold"
               : "text-gray-600"
@@ -118,7 +118,7 @@ const AddTransaction = () => {
           支出 ▼
         </button>
         <button
-          className={`flex-1 py-3 text-center ${
+          className={`flex-1 py-2.5 text-sm text-center ${
             transactionType === "income"
               ? "bg-blue-500 text-white font-semibold"
               : "text-gray-600"
@@ -129,116 +129,119 @@ const AddTransaction = () => {
         </button>
       </div>
 
-      {/* 金额显示 */}
-      <div className="bg-white p-6">
-        <div className="text-5xl font-light text-gray-800">¥{amount}</div>
+      {/* 金额显示 - 缩小高度和字体 */}
+      <div className="bg-white py-2 px-4 flex-shrink-0">
+        <div className="text-3xl font-light text-gray-800">¥{amount}</div>
       </div>
 
-      {/* 分类选择 */}
-      <div className="bg-white mt-2 p-4">
-        <div className="text-sm text-gray-500 mb-3">请选择分类</div>
-        <div className="flex flex-wrap gap-2">
-          {categories[transactionType].map((category) => (
-            <button
-              key={category}
-              className={`px-4 py-2 rounded-full text-sm ${
-                selectedCategory === category
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-              onClick={() => setSelectedCategory(category)}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 快捷分类（仅支出） */}
-      {transactionType === "expense" && (
-        <div className="bg-white mt-2 p-4">
-          <div className="flex flex-wrap gap-2">
-            {quickCategories.map((category) => (
+      {/* 可滚动内容区域 */}
+      <div className="flex-1 overflow-y-auto">
+        {/* 分类选择 */}
+        <div className="bg-white mt-1 p-3">
+          <div className="text-xs text-gray-500 mb-2">请选择分类</div>
+          <div className="flex flex-wrap gap-1.5">
+            {categories[transactionType].map((category) => (
               <button
                 key={category}
-                className="px-3 py-1.5 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200"
-                onClick={() => {
-                  setSelectedCategory("贷款");
-                  setNote(category);
-                }}
+                className={`px-3 py-1.5 rounded-full text-xs ${
+                  selectedCategory === category
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setSelectedCategory(category)}
               >
                 {category}
               </button>
             ))}
           </div>
         </div>
-      )}
 
-      {/* 账户选择 */}
-      <div className="bg-white mt-2 p-4">
-        <div className="text-sm text-gray-500 mb-3">
-          {transactionType === "expense" ? "选择付款方式" : "选择收款方式"}
+        {/* 快捷分类（仅支出） */}
+        {transactionType === "expense" && (
+          <div className="bg-white mt-1 p-3">
+            <div className="flex flex-wrap gap-1.5">
+              {quickCategories.map((category) => (
+                <button
+                  key={category}
+                  className="px-2.5 py-1 bg-gray-50 text-gray-600 text-xs rounded border border-gray-200"
+                  onClick={() => {
+                    setSelectedCategory("贷款");
+                    setNote(category);
+                  }}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 账户选择 */}
+        <div className="bg-white mt-1 p-3">
+          <div className="text-xs text-gray-500 mb-2">
+            {transactionType === "expense" ? "选择付款方式" : "选择收款方式"}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {accounts.map((account) => (
+              <button
+                key={account}
+                className={`px-3 py-1.5 rounded-full text-xs ${
+                  selectedAccount === account
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setSelectedAccount(account)}
+              >
+                {account}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {accounts.map((account) => (
-            <button
-              key={account}
-              className={`px-4 py-2 rounded-full text-sm ${
-                selectedAccount === account
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-              onClick={() => setSelectedAccount(account)}
-            >
-              {account}
+
+        {/* 备注输入 */}
+        <div className="bg-white mt-1 p-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="备注"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="flex-1 p-2 border-none outline-none text-sm text-gray-700"
+            />
+            <button className="p-2 bg-blue-500 text-white rounded">
+              <ImageIcon className="w-4 h-4" />
             </button>
-          ))}
+          </div>
+        </div>
+
+        {/* 底部工具栏 */}
+        <div className="bg-white mt-1 p-3 mb-2">
+          <div className="flex items-center justify-between text-xs">
+            <button className="flex items-center gap-1 text-gray-600">
+              <Link2 className="w-3.5 h-3.5" />
+              <span>关联账户</span>
+            </button>
+            <button className="flex items-center gap-1 text-gray-600">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{date}</span>
+            </button>
+            <button 
+              className="flex items-center gap-1 text-gray-600"
+              onClick={() => setIsPayerSheetOpen(true)}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>{payer}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 备注输入 */}
-      <div className="bg-white mt-2 p-4">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="备注"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="flex-1 p-2 border-none outline-none text-gray-700"
-          />
-          <button className="p-2 bg-blue-500 text-white rounded">
-            <ImageIcon className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* 底部工具栏 */}
-      <div className="bg-white mt-2 p-4">
-        <div className="flex items-center justify-between text-sm">
-          <button className="flex items-center gap-1 text-gray-600">
-            <Link2 className="w-4 h-4" />
-            <span>关联账户</span>
-          </button>
-          <button className="flex items-center gap-1 text-gray-600">
-            <Calendar className="w-4 h-4" />
-            <span>{date}</span>
-          </button>
-          <button 
-            className="flex items-center gap-1 text-gray-600"
-            onClick={() => setIsPayerSheetOpen(true)}
-          >
-            <User className="w-4 h-4" />
-            <span>{payer}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 数字键盘 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-100 grid grid-cols-4 gap-px border-t z-50">
+      {/* 数字键盘 - 固定在底部，缩小高度 */}
+      <div className="flex-shrink-0 bg-gray-100 grid grid-cols-4 gap-px border-t z-50">
         {["7", "8", "9", "-"].map((key) => (
           <button
             key={key}
-            className="bg-white p-6 text-2xl font-light text-gray-800 active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
             onClick={() => key !== "-" && handleNumberInput(key)}
           >
             {key}
@@ -247,7 +250,7 @@ const AddTransaction = () => {
         {["4", "5", "6", "+"].map((key) => (
           <button
             key={key}
-            className="bg-white p-6 text-2xl font-light text-gray-800 active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
             onClick={() => key !== "+" && handleNumberInput(key)}
           >
             {key}
@@ -256,32 +259,32 @@ const AddTransaction = () => {
         {["1", "2", "3"].map((key) => (
           <button
             key={key}
-            className="bg-white p-6 text-2xl font-light text-gray-800 active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
             onClick={() => handleNumberInput(key)}
           >
             {key}
           </button>
         ))}
         <button
-          className="bg-blue-500 text-white p-6 text-lg font-semibold row-span-2 active:bg-blue-600"
+          className="bg-blue-500 text-white p-3 text-base font-semibold row-span-2 active:bg-blue-600"
           onClick={handleSave}
         >
           保存
         </button>
         <button
-          className="bg-white p-6 text-2xl font-light text-gray-800 active:bg-gray-200"
+          className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
           onClick={() => handleNumberInput(".")}
         >
           .
         </button>
         <button
-          className="bg-white p-6 text-2xl font-light text-gray-800 active:bg-gray-200"
+          className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
           onClick={() => handleNumberInput("0")}
         >
           0
         </button>
         <button
-          className="bg-white p-6 text-xl text-gray-800 active:bg-gray-200 flex items-center justify-center"
+          className="bg-white p-3 text-lg text-gray-800 active:bg-gray-200 flex items-center justify-center"
           onClick={handleDelete}
         >
           ⌫
