@@ -39,13 +39,10 @@ export default function LedgerSwipeContainer({
 
     // 只处理横向滑动
     if (Math.abs(deltaX) > Math.abs(deltaY)) {
-      e.preventDefault();
-
-      // 列表页：只允许向左滑动（deltaX < 0）
-      // 详情页：只允许向右滑动（deltaX > 0）
-      if (currentView === "list" && deltaX < 0) {
-        setSwipeOffset(Math.max(deltaX, -window.innerWidth));
-      } else if (currentView === "detail" && deltaX > 0) {
+      // 只允许详情页向右滑动返回列表页
+      // 列表页不允许滑动
+      if (currentView === "detail" && deltaX > 0) {
+        e.preventDefault();
         setSwipeOffset(Math.min(deltaX, window.innerWidth));
       }
     }
@@ -58,11 +55,8 @@ export default function LedgerSwipeContainer({
     // 如果滑动距离超过屏幕宽度的30%，切换页面
     const threshold = window.innerWidth * 0.3;
 
-    if (currentView === "list" && Math.abs(swipeOffset) > threshold) {
-      // 列表页向左滑动，进入详情页
-      onViewChange("detail");
-    } else if (currentView === "detail" && swipeOffset > threshold) {
-      // 详情页向右滑动，返回列表页
+    // 只处理详情页向右滑动返回列表页
+    if (currentView === "detail" && swipeOffset > threshold) {
       onViewChange("list");
     }
 
