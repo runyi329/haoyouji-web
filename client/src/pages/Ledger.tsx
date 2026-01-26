@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown } from "lucide-react";
+import { Crown, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 // 模拟账本数据
@@ -113,7 +113,7 @@ export default function Ledger() {
               {/* 账本名称和VIP标识 */}
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600" />
+                  <BookOpen className="w-5 h-5 text-blue-600" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
