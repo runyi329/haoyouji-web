@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Settings,
   BarChart3,
-  Calendar,
   Plus,
   Search,
 } from "lucide-react";
@@ -194,10 +193,6 @@ export default function LedgerDetail() {
             <button className="flex flex-col items-center gap-0.5">
               <BarChart3 className="w-5 h-5" />
               <span className="text-xs">报表</span>
-            </button>
-            <button className="flex flex-col items-center gap-0.5">
-              <Calendar className="w-5 h-5" />
-              <span className="text-xs">日历</span>
             </button>
           </div>
         </div>
