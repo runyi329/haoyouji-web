@@ -4949,6 +4949,24 @@ export const appRouter = router({
         return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
       }),
 
+    // 获取单个账本详情
+    getById: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerById(input.ledgerId, ctx.user.id);
+      }),
+
+    // 获取账本成员列表
+    getMembers: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+      }),
+
     // 创建新账本
     create: protectedProcedure
       .input(z.object({
@@ -4987,6 +5005,37 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         await dbLedger.deleteLedger(input.ledgerId, ctx.user.id);
+        return { success: true };
+      }),
+
+    // 生成邀请token
+    generateInviteToken: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const token = await dbLedger.generateInviteToken(input.ledgerId, ctx.user.id);
+        return { token };
+      }),
+
+    // 通过邀请token加入账本
+    joinByToken: protectedProcedure
+      .input(z.object({
+        token: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const ledger = await dbLedger.joinLedgerByToken(input.token, ctx.user.id);
+        return ledger;
+      }),
+
+    // 移除账本成员
+    removeMember: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        userId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.removeLedgerMember(input.ledgerId, ctx.user.id, input.userId);
         return { success: true };
       }),
   }),

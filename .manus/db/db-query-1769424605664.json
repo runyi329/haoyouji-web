@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE ledger_members ADD COLUMN nickname VARCHAR(50) AFTER role;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute ALTER TABLE ledger_members ADD COLUMN nickname VARCHAR(50) AFTER role;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2108
+}

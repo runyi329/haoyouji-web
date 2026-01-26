@@ -1,37 +1,24 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
+  ChevronLeft,
   ChevronRight,
   Settings,
   Wallet,
   BarChart3,
   Calendar,
   Plus,
-  User,
-  FileText,
+  Search,
 } from "lucide-react";
-
-// 模拟账本数据
-const mockLedgers = [
-  { id: 1, name: "家庭记账" },
-  { id: 2, name: "生意账本" },
-  { id: 3, name: "澳门润仪投资有限公司" },
-  { id: 4, name: "上海润豆仪豆贸易有限公司" },
-];
 
 // 模拟记账记录数据
 const mockRecords = [
   {
     date: "2026-01-11",
-    dayOfWeek: "周六",
+    dayOfWeek: "周天",
     income: 0,
     expense: 38,
     balance: -38,
@@ -116,25 +103,38 @@ const mockRecords = [
   },
 ];
 
-// 分类图标映射
-const categoryIcons: Record<string, string> = {
-  交通: "🚗",
-  购物: "🛍️",
-  餐饮: "🍜",
-  娱乐: "🎮",
-  医疗: "💊",
-  教育: "📚",
-  住房: "🏠",
-  其他: "💸",
-};
-
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
 
   const ledgerId = params?.id ? parseInt(params.id) : 1;
-  const currentLedger = mockLedgers.find((l) => l.id === ledgerId) || mockLedgers[0];
+  console.log('[LedgerDetail] params:', params, 'ledgerId:', ledgerId);
+  
+  // 使用 tRPC 获取账本详情
+  const { data: ledgerData, isLoading, error } = trpc.ledger.getById.useQuery({
+    ledgerId,
+  });
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center">
+        <div className="text-[#404969] text-lg">加载中...</div>
+      </div>
+    );
+  }
+  
+  if (error || !ledgerData) {
+    return (
+      <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center">
+        <div className="text-[#404969] text-lg">账本不存在或您没有权限访问</div>
+      </div>
+    );
+  }
+  
+  // 使用真实数据，如果没有数据则显示空状态
+  // 对于新创建的账本（ID >= 30000），显示空状态
+  const hasRecords = ledgerId < 30000 && mockRecords && mockRecords.length > 0;
 
   // 计算月度统计
   const monthlyStats = {
@@ -143,187 +143,170 @@ export default function LedgerDetail() {
     balance: -1820.6,
   };
 
-  const handleSwitchLedger = (id: number) => {
-    setLocation(`/ledger/${id}`);
-    setIsDrawerOpen(false);
-  };
+
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-indigo-600 pb-20">
-      {/* 顶部导航 */}
-      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-        <div className="container py-4 px-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">{currentLedger.name}</h1>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* 顶部区域 */}
+      <div className="bg-[#bde4f4] text-[#404969] pb-4">
+        {/* 标题栏 */}
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+          <button
+            onClick={() => setLocation("/")}
+            className="p-1 -ml-2"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-2 flex-1 justify-center -ml-8">
+            <h1 className="text-lg font-medium">{ledgerData.name}</h1>
             <button
-              onClick={() => setIsDrawerOpen(true)}
-              className="flex items-center gap-1 text-sm bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors"
+              onClick={() => setLocation("/ledger")}
+              className="flex items-center gap-0.5 text-sm"
             >
-              <span>切换账本</span>
               <ChevronRight className="w-4 h-4" />
+              <span>切换账本</span>
             </button>
+          </div>
+          <div className="w-6"></div>
+        </div>
+
+        {/* 成员头像和设置按钮 */}
+        <div className="px-4 py-2 flex items-center justify-between">
+          {/* 成员头像 */}
+          <div className="flex items-center gap-2">
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+              >
+                R{i}
+              </div>
+            ))}
+            <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
+              <Settings 
+                className="w-5 h-5 text-white cursor-pointer" 
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              />
+            </div>
+          </div>
+
+          {/* 功能按钮 */}
+          <div className="flex items-center gap-4">
+            <button className="flex flex-col items-center gap-0.5">
+              <Wallet className="w-5 h-5" />
+              <span className="text-xs">资金</span>
+            </button>
+            <button className="flex flex-col items-center gap-0.5">
+              <BarChart3 className="w-5 h-5" />
+              <span className="text-xs">报表</span>
+            </button>
+            <button className="flex flex-col items-center gap-0.5">
+              <Calendar className="w-5 h-5" />
+              <span className="text-xs">日历</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 月度统计 */}
+        <div className="px-4 pt-2 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-xs opacity-90">1月总收入</div>
+            <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-xs opacity-90">1月总结余</div>
+            <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
+          </div>
+          <div>
+            <div className="text-xs opacity-90">1月总支出</div>
+            <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
           </div>
         </div>
       </div>
 
-      {/* 成员和功能按钮 */}
-      <div className="container px-4 py-4">
-        <div className="flex items-center justify-between mb-4">
-          {/* 成员头像 */}
-          <div className="flex -space-x-2">
-            {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 border-2 border-white flex items-center justify-center text-white text-sm font-medium shadow-md"
-              >
-                {i}
-              </div>
-            ))}
-          </div>
-
-          {/* 设置按钮 */}
-          <button className="w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-md transition-colors">
-            <Settings className="w-5 h-5 text-gray-700" />
-          </button>
-        </div>
-
-        {/* 功能按钮 */}
-        <div className="flex gap-4 mb-4">
-          <button className="flex items-center gap-2 bg-white/90 hover:bg-white px-4 py-2 rounded-lg shadow-md transition-colors">
-            <Wallet className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">资金</span>
-          </button>
-          <button className="flex items-center gap-2 bg-white/90 hover:bg-white px-4 py-2 rounded-lg shadow-md transition-colors">
-            <BarChart3 className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">报表</span>
-          </button>
-          <button className="flex items-center gap-2 bg-white/90 hover:bg-white px-4 py-2 rounded-lg shadow-md transition-colors">
-            <Calendar className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">日历</span>
-          </button>
-        </div>
-
-        {/* 月度统计 */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <Card className="p-3 text-center">
-            <div className="text-xs text-gray-500 mb-1">1月总收入</div>
-            <div className="text-lg font-bold text-green-600">{monthlyStats.income.toFixed(2)}</div>
-          </Card>
-          <Card className="p-3 text-center">
-            <div className="text-xs text-gray-500 mb-1">1月总结余</div>
-            <div className="text-lg font-bold text-gray-700">{monthlyStats.balance.toFixed(2)}</div>
-          </Card>
-          <Card className="p-3 text-center">
-            <div className="text-xs text-gray-500 mb-1">1月总支出</div>
-            <div className="text-lg font-bold text-red-600">{monthlyStats.expense.toFixed(2)}</div>
-          </Card>
+      {/* 搜索框 */}
+      <div className="px-4 py-3 bg-gray-50">
+        <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm">
+          <Search className="w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜索账单"
+            className="flex-1 text-sm outline-none bg-transparent"
+          />
         </div>
       </div>
 
       {/* 记账记录列表 */}
-      <div className="container px-4 pb-4 space-y-4">
-        {mockRecords.map((dayRecord) => (
-          <div key={dayRecord.date}>
-            {/* 日期标题 */}
-            <div className="flex items-center justify-between mb-2 px-2">
-              <span className="text-sm text-white/90">
-                {dayRecord.date} {dayRecord.dayOfWeek}
-              </span>
-              <span className="text-xs text-white/80">
-                收:{dayRecord.income}, 支:{dayRecord.expense}, 余:{dayRecord.balance}
-              </span>
-            </div>
+      <div className="flex-1 px-4 pb-20 space-y-3">
+        {!hasRecords ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 text-base mb-1">还没有记账记录</div>
+            <div className="text-gray-400 text-sm">点击下方"+"按钮开始记账</div>
+          </div>
+        ) : (
+          mockRecords.map((dayRecord) => (
+            <div key={dayRecord.date}>
+              {/* 日期标题 */}
+              <div className="flex items-center justify-between py-2 text-sm text-gray-500">
+                <span>
+                  {dayRecord.date} {dayRecord.dayOfWeek}
+                </span>
+                <span className="text-xs">
+                  收:{dayRecord.income}, 支:{dayRecord.expense}, 余:{dayRecord.balance}
+                </span>
+              </div>
 
-            {/* 当天的记录 */}
-            <div className="space-y-2">
-              {dayRecord.records.map((record) => (
-                <Card key={record.id} className="p-3">
-                  <div className="flex items-center gap-3">
+              {/* 当天的记录 */}
+              <div className="space-y-2">
+                {dayRecord.records.map((record) => (
+                  <div
+                    key={record.id}
+                    className="bg-white rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
+                  >
                     {/* 用户头像 */}
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
                       U
                     </div>
 
                     {/* 分类信息 */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-500 text-sm">●</span>
-                        <span className="text-sm font-medium text-gray-800">
-                          {categoryIcons[record.category] || "💰"} {record.category}
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
+                        <span className="text-sm text-gray-900">
+                          {record.category}
                           {record.subcategory && `–${record.subcategory}`}
                         </span>
                       </div>
                       {record.note && (
-                        <div className="text-xs text-gray-500 mt-1">{record.note}</div>
+                        <div className="text-xs text-gray-500 mt-0.5 ml-3.5">{record.note}</div>
                       )}
                     </div>
 
                     {/* 金额 */}
-                    <div className={`text-lg font-bold flex-shrink-0 ${
-                      record.amount < 0 ? "text-gray-800" : "text-green-600"
-                    }`}>
+                    <div className="text-base font-medium text-gray-900 flex-shrink-0">
                       {record.amount.toFixed(2)}
                     </div>
                   </div>
-                </Card>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* 底部固定按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
-        <div className="container flex items-center justify-around py-3">
-          <button
-            onClick={() => setLocation("/ledger")}
-            className="flex flex-col items-center gap-1"
-          >
-            <FileText className="w-6 h-6 text-gray-600" />
-            <span className="text-xs text-gray-600">账本</span>
-          </button>
-
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+        <div className="flex items-center justify-center py-2">
           <Button
             size="icon"
-            className="w-16 h-16 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
+            className="w-14 h-14 rounded-full bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] shadow-lg"
             onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           >
-            <Plus className="w-8 h-8" />
+            <Plus className="w-7 h-7" />
           </Button>
-
-          <button
-            onClick={() => setLocation("/profile")}
-            className="flex flex-col items-center gap-1"
-          >
-            <User className="w-6 h-6 text-gray-600" />
-            <span className="text-xs text-gray-600">我</span>
-          </button>
         </div>
       </div>
-
-      {/* 切换账本抽屉 */}
-      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <SheetContent side="bottom" className="h-[60vh]">
-          <SheetHeader>
-            <SheetTitle>创建或加入账本?</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 space-y-2">
-            {mockLedgers.map((ledger) => (
-              <button
-                key={ledger.id}
-                onClick={() => handleSwitchLedger(ledger.id)}
-                className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
-                  ledger.id === ledgerId
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                <div className="font-medium text-gray-800">{ledger.name}</div>
-              </button>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

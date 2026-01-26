@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE ledger_members ADD COLUMN canInvite TINYINT NOT NULL DEFAULT 0 AFTER canDelete, ADD COLUMN invitedBy INT AFTER canInvite;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute ALTER TABLE ledger_members ADD COLUMN canInvite TINYINT NOT NULL DEFAULT 0 AFTER canDelete, ADD COLUMN invitedBy INT AFTER canInvite;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'caninvite' in 'ledger_members'"
+  ]
+}

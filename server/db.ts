@@ -44,16 +44,17 @@ import {
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _ledgerDb: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db) {
-    // 优先使用原数据库 (ORIGINAL_DATABASE_URL)
+    // 优先使用原数据库 (ORIGINAL_DATABASE_URL) - 用于原有功能
     const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL;
     
     if (dbUrl) {
       try {
         _db = drizzle(dbUrl);
-        const dbType = process.env.ORIGINAL_DATABASE_URL ? "原数据库" : "Manus数据库";
+        const dbType = process.env.ORIGINAL_DATABASE_URL ? "原数据库(腾讯云)" : "Manus数据库";
         console.log(`[Database] 成功连接到${dbType}`);
       } catch (error) {
         console.warn("[Database] Failed to connect:", error);
@@ -62,6 +63,27 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+/**
+ * 获取账本专用数据库连接（使用 Manus 临时数据库）
+ */
+export async function getLedgerDb() {
+  if (!_ledgerDb) {
+    // 账本功能使用 Manus 临时数据库
+    const dbUrl = process.env.DATABASE_URL;
+    
+    if (dbUrl) {
+      try {
+        _ledgerDb = drizzle(dbUrl);
+        console.log("[LedgerDatabase] 成功连接到 Manus 临时数据库（账本专用）");
+      } catch (error) {
+        console.warn("[LedgerDatabase] Failed to connect:", error);
+        _ledgerDb = null;
+      }
+    }
+  }
+  return _ledgerDb;
 }
 
 // ==================== 用户相关 ====================

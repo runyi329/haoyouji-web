@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE ledger_members \nADD COLUMN canEdit TINYINT NOT NULL DEFAULT 1 AFTER nickname,\nADD COLUMN canDelete TINYINT NOT NULL DEFAULT 0 AFTER canEdit,\nADD COLUMN canInvite TINYINT NOT NULL DEFAULT 0 AFTER canDelete,\nADD COLUMN invitedBy INT AFTER canInvite,\nADD COLUMN updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER createdAt;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute ALTER TABLE ledger_members \nADD COLUMN canEdit TINYINT NOT NULL DEFAULT 1 AFTER nickname,\nADD COLUMN canDelete TINYINT NOT NULL DEFAULT 0 AFTER canEdit,\nADD COLUMN canInvite TINYINT NOT NULL DEFAULT 0 AFTER canDelete,\nADD COLUMN invitedBy INT AFTER canInvite,\nADD COLUMN updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER createdAt;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'canedit' in 'ledger_members'"
+  ]
+}

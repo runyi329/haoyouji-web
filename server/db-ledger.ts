@@ -1,13 +1,13 @@
-import { getDb } from "./db";
-import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, ledgerBudgets } from "../drizzle/schema";
+import { getLedgerDb } from "./db";
+import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords } from "../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
 export async function getUserLedgers(userId: number, isArchived: boolean = false) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 获取用户参与的所有账本ID
   const memberRecords = await db
@@ -36,10 +36,8 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
   // 为每个账本获取成员信息
   const result = await Promise.all(
     ledgerList.map(async (ledger: any) => {
-      const dbInner = await getDb();
-      if (!dbInner) throw new Error("Database connection failed");
-      
-      const members = await dbInner
+      // 使用账本数据库连接
+      const members = await db
         .select({
           userId: ledgerMembers.userId,
           role: ledgerMembers.role,
@@ -48,7 +46,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         .where(eq(ledgerMembers.ledgerId, ledger.id))
         .limit(4); // 最多显示4个成员头像
 
-      const memberCount = await dbInner
+      const memberCount = await db
         .select({ count: sql<number>`count(*)` })
         .from(ledgerMembers)
         .where(eq(ledgerMembers.ledgerId, ledger.id))
@@ -79,36 +77,43 @@ export async function createLedger(data: {
   currency?: string;
   createdBy: number;
 }) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
-  // 创建账本，显式设置所有字段
-  const ledgerData: any = {
-    name: data.name,
-    createdBy: data.createdBy,
-  };
-  
-  // 只添加非 undefined 的可选字段
-  if (data.description !== undefined) {
-    ledgerData.description = data.description;
+  // 使用原始 SQL 插入账本，避免 Drizzle 类型推断问题
+  let newLedgerId: number;
+  try {
+    console.log("[createLedger] 开始插入账本，数据:", {
+      name: data.name,
+      description: data.description ?? null,
+      type: data.type ?? "personal",
+      currency: data.currency ?? "CNY",
+      createdBy: data.createdBy
+    });
+    
+    const result = await db.execute(sql`
+      INSERT INTO ledgers (name, description, type, currency, icon, createdBy, ownerId, isVip, isArchived)
+      VALUES (${data.name}, ${data.description ?? null}, ${data.type ?? "personal"}, ${data.currency ?? "CNY"}, ${null}, ${data.createdBy}, ${data.createdBy}, ${0}, ${0})
+    `);
+    
+    console.log("[createLedger] result 结构:", JSON.stringify(result, null, 2));
+    
+    // TiDB 返回的是数组，需要从第一个元素获取 insertId
+    newLedgerId = Number((result as any)[0]?.insertId || result.insertId);
+    console.log("[createLedger] 账本插入成功， ID:", newLedgerId);
+  } catch (error) {
+    console.error("[createLedger] 插入账本失败:", error);
+    throw error;
   }
-  if (data.type !== undefined) {
-    ledgerData.type = data.type;
-  }
-  if (data.currency !== undefined) {
-    ledgerData.currency = data.currency;
-  }
-  
-  const [newLedger] = await db.insert(ledgers).values(ledgerData).$returningId();
 
   // 将创建者添加为账本所有者
   await db.insert(ledgerMembers).values({
-    ledgerId: newLedger.id,
+    ledgerId: newLedgerId,
     userId: data.createdBy,
     role: "owner",
-    canEdit: true,
-    canDelete: true,
-    canInvite: true,
+    canEdit: 1,
+    canDelete: 1,
+    canInvite: 1,
   });
 
   // 创建默认分类
@@ -131,7 +136,7 @@ export async function createLedger(data: {
 
   await db.insert(ledgerCategories).values(
     defaultCategories.map((cat, index) => ({
-      ledgerId: newLedger.id,
+      ledgerId: newLedgerId,
       name: cat.name,
       type: cat.type,
       icon: cat.icon,
@@ -142,15 +147,78 @@ export async function createLedger(data: {
     }))
   );
 
-  return newLedger;
+  return { id: newLedgerId, name: data.name };
+}
+
+/**
+ * 获取单个账本详情
+ */
+export async function getLedgerById(ledgerId: number, userId: number) {
+  console.log('[getLedgerById] 调用，参数:', { ledgerId, userId });
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查用户是否是账本成员
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  console.log('[getLedgerById] 成员检查结果:', member);
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  // 获取账本信息
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  console.log('[getLedgerById] 账本查询结果:', ledger);
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  // 获取所有成员
+  try {
+    console.log('[getLedgerById] 开始查询成员列表...');
+    const members = await db
+      .select({
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        nickname: ledgerMembers.nickname,
+      })
+      .from(ledgerMembers)
+      .where(eq(ledgerMembers.ledgerId, ledgerId));
+
+    console.log('[getLedgerById] 成员列表:', members);
+    const result = {
+      ...ledger[0],
+      members,
+      userRole: member[0].role,
+    };
+    console.log('[getLedgerById] 返回结果:', result);
+    return result;
+  } catch (error) {
+    console.error('[getLedgerById] 错误:', error);
+    throw error;
+  }
 }
 
 /**
  * 存档/取消存档账本
  */
 export async function archiveLedger(ledgerId: number, userId: number, isArchived: boolean) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 检查用户权限（只有所有者和管理员可以存档）
   const member = await db
@@ -180,8 +248,8 @@ export async function archiveLedger(ledgerId: number, userId: number, isArchived
  * 删除账本
  */
 export async function deleteLedger(ledgerId: number, userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 检查用户权限（只有所有者可以删除）
   const member = await db
@@ -202,7 +270,8 @@ export async function deleteLedger(ledgerId: number, userId: number) {
   // 删除所有相关数据
   await db.delete(ledgerRecords).where(eq(ledgerRecords.ledgerId, ledgerId));
   await db.delete(ledgerCategories).where(eq(ledgerCategories.ledgerId, ledgerId));
-  await db.delete(ledgerBudgets).where(eq(ledgerBudgets.ledgerId, ledgerId));
+  // TODO: 删除预算数据（待实现）
+  // await db.delete(ledgerBudgets).where(eq(ledgerBudgets.ledgerId, ledgerId));
   await db.delete(ledgerMembers).where(eq(ledgerMembers.ledgerId, ledgerId));
   await db.delete(ledgers).where(eq(ledgers.id, ledgerId));
 
@@ -213,8 +282,8 @@ export async function deleteLedger(ledgerId: number, userId: number) {
  * 加入账本（通过邀请码）
  */
 export async function joinLedger(ledgerId: number, userId: number, invitedBy: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 检查账本是否存在
   const ledger = await db
@@ -261,8 +330,8 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
  * 获取账本的所有分类（包括子分类）
  */
 export async function getLedgerCategories(ledgerId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   const categories = await db
     .select()
@@ -286,8 +355,8 @@ export async function addLedgerCategory(data: {
   sortOrder?: number;
   createdBy: number;
 }) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 如果没有指定排序，获取当前最大排序值+1
   let sortOrder = data.sortOrder;
@@ -326,8 +395,8 @@ export async function addLedgerCategory(data: {
  * 更新分类排序
  */
 export async function updateCategorySortOrder(categoryId: number, sortOrder: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   await db
     .update(ledgerCategories)
@@ -341,8 +410,8 @@ export async function updateCategorySortOrder(categoryId: number, sortOrder: num
  * 批量更新分类排序
  */
 export async function batchUpdateCategorySortOrder(updates: { id: number; sortOrder: number }[]) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 使用事务批量更新
   await Promise.all(
@@ -361,8 +430,8 @@ export async function batchUpdateCategorySortOrder(updates: { id: number; sortOr
  * 删除分类
  */
 export async function deleteLedgerCategory(categoryId: number, userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   // 获取分类信息
   const category = await db
@@ -419,8 +488,8 @@ export async function updateLedgerCategory(
     color?: string;
   }
 ) {
-  const db = await getDb();
-  if (!db) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
   
   await db
     .update(ledgerCategories)
@@ -428,4 +497,172 @@ export async function updateLedgerCategory(
     .where(eq(ledgerCategories.id, categoryId));
   
   return true;
+}
+
+/**
+ * 获取账本成员列表
+ */
+export async function getLedgerMembers(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  console.log("[getLedgerMembers] 开始获取成员列表，参数:", { ledgerId, userId });
+  
+  // 检查用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是此账本的成员");
+  }
+  
+  // 获取所有成员
+  const members = await db
+    .select({
+      userId: ledgerMembers.userId,
+      role: ledgerMembers.role,
+      nickname: ledgerMembers.nickname,
+      canEdit: ledgerMembers.canEdit,
+      canDelete: ledgerMembers.canDelete,
+      canInvite: ledgerMembers.canInvite,
+      createdAt: ledgerMembers.createdAt,
+    })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.ledgerId, ledgerId))
+    .orderBy(ledgerMembers.createdAt);
+  
+  console.log("[getLedgerMembers] 成员列表:", members);
+  
+  return members;
+}
+
+/**
+ * 生成邀请token
+ */
+export async function generateInviteToken(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  if (ledger[0].createdBy !== userId) {
+    throw new Error("只有账本创建人可以生成邀请链接");
+  }
+
+  // 生成唯一的token（使用ledgerId + 随机字符串）
+  const { nanoid } = await import("nanoid");
+  const token = `${ledgerId}-${nanoid(16)}`;
+
+  return token;
+}
+
+/**
+ * 通过邀请token加入账本
+ */
+export async function joinLedgerByToken(token: string, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 从token中解析ledgerId
+  const parts = token.split("-");
+  if (parts.length < 2) {
+    throw new Error("无效的邀请链接");
+  }
+
+  const ledgerId = parseInt(parts[0]);
+  if (isNaN(ledgerId)) {
+    throw new Error("无效的邀请链接");
+  }
+
+  // 验证账本是否存在
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (existingMember.length > 0) {
+    throw new Error("您已经是该账本的成员");
+  }
+
+  // 添加用户为账本成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId,
+    role: "member",
+    joinedAt: new Date(),
+  });
+
+  return ledger[0];
+}
+
+/**
+ * 移除账本成员
+ */
+export async function removeLedgerMember(ledgerId: number, operatorId: number, targetUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证操作者是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  if (ledger[0].createdBy !== operatorId) {
+    throw new Error("只有账本创建人可以移除成员");
+  }
+
+  // 不能移除创建者自己
+  if (targetUserId === ledger[0].createdBy) {
+    throw new Error("不能移除账本创建人");
+  }
+
+  // 移除成员
+  await db
+    .delete(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, targetUserId)
+      )
+    );
 }

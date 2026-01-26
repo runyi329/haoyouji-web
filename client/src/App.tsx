@@ -87,6 +87,9 @@ const LedgerCategories = lazy(() => import("./pages/LedgerCategories"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
+const LedgerInvite = lazy(() => import("./pages/LedgerInvite"));
+const JoinLedger = lazy(() => import("./pages/JoinLedger"));
+const TransactionDetail = lazy(() => import("./pages/TransactionDetail"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
@@ -146,9 +149,12 @@ function Router() {
         <Route path="/ledger" component={Ledger} />
         <Route path="/ledger/create-type" component={CreateLedgerType} />
         <Route path="/ledger/create" component={CreateLedger} />
+        <Route path="/ledger/join/:token" component={JoinLedger} />
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
+        <Route path="/ledger/:id/invite" component={LedgerInvite} />
         <Route path="/ledger/:id/add" component={AddTransaction} />
         <Route path="/ledger/:id/categories" component={LedgerCategories} />
+        <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         
