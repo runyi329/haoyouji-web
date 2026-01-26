@@ -7,6 +7,7 @@ import { Crown, BookOpen, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 
+
 // 模拟账本数据
 const mockLedgers = [
   {
@@ -73,7 +74,7 @@ export default function Ledger() {
       {/* 顶部导航栏 */}
       <div className="bg-white shadow-sm">
         <div className="container py-3 px-4 flex items-center">
-          <Link href="/">
+          <Link href="/contacts">
             <button
               className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
@@ -124,17 +125,15 @@ export default function Ledger() {
           filteredLedgers.map((ledger) => (
             <Card
               key={ledger.id}
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="p-2 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
               {/* 账本名称和VIP标识 */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-10 h-10 bg-[#f5ffcb] rounded-lg flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-[#a9eca2]" />
-                </div>
+              <div className="flex items-center gap-2 mb-2">
+                <BookOpen className="w-6 h-6 text-blue-500" strokeWidth={1.5} />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-800">{ledger.name}</h3>
+                    <h3 className="font-semibold text-base leading-tight text-gray-800">{ledger.name}</h3>
                     {ledger.isVip && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs">
                         <Crown className="w-3 h-3 mr-1" />
@@ -146,7 +145,7 @@ export default function Ledger() {
               </div>
 
               {/* 成员头像 */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="flex -space-x-2">
                   {ledger.members.slice(0, 4).map((member, index) => (
                     <div
@@ -158,18 +157,18 @@ export default function Ledger() {
                     </div>
                   ))}
                 </div>
-                <span className="text-sm text-gray-500">{ledger.memberCount}人共享+</span>
+                <span className="text-sm leading-tight text-gray-500">{ledger.memberCount}人共享+</span>
               </div>
 
               {/* 操作按钮 */}
-              <div className="flex gap-2">
+              <div className="flex gap-0.5">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 py-1 h-7"
+                  className="text-xs leading-tight px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
-                    // TODO: 打开设置
+                    setLocation(`/ledger/${ledger.id}/settings`);
                   }}
                 >
                   设置
@@ -177,7 +176,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 py-1 h-7"
+                  className="text-xs leading-tight px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 导出
@@ -188,7 +187,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 py-1 h-7"
+                  className="text-xs leading-tight px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看明细
@@ -199,7 +198,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 py-1 h-7"
+                  className="text-xs leading-tight px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看报表
@@ -210,7 +209,7 @@ export default function Ledger() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 py-1 h-7"
+                  className="text-xs leading-tight px-2 py-0.5 h-6"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 邀请成员
@@ -277,6 +276,8 @@ export default function Ledger() {
           </button>
         </DialogContent>
       </Dialog>
+
+
     </div>
   );
 }

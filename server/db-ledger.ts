@@ -160,40 +160,48 @@ export async function createLedger(data: {
  */
 export async function getLedgerById(ledgerId: number, userId: number) {
   console.log('[getLedgerById] 调用，参数:', { ledgerId, userId });
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
   
-  // 检查用户是否是账本成员
-  const member = await db
-    .select()
-    .from(ledgerMembers)
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, userId)
-      )
-    )
-    .limit(1);
-
-  console.log('[getLedgerById] 成员检查结果:', member);
-  if (member.length === 0) {
-    throw new Error("您不是该账本的成员");
-  }
-
-  // 获取账本信息
-  const ledger = await db
-    .select()
-    .from(ledgers)
-    .where(eq(ledgers.id, ledgerId))
-    .limit(1);
-
-  console.log('[getLedgerById] 账本查询结果:', ledger);
-  if (ledger.length === 0) {
-    throw new Error("账本不存在");
-  }
-
-  // 获取所有成员
   try {
+    const db = await getLedgerDb();
+    if (!db) {
+      console.error('[getLedgerById] 数据库连接失败');
+      throw new Error("Ledger database connection failed");
+    }
+    console.log('[getLedgerById] 数据库连接成功');
+    
+    // 检查用户是否是账本成员
+    console.log('[getLedgerById] 开始检查成员权限...');
+    const member = await db
+      .select()
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          eq(ledgerMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    console.log('[getLedgerById] 成员检查结果:', member);
+    if (member.length === 0) {
+      console.log('[getLedgerById] 用户不是账本成员');
+      throw new Error("您不是该账本的成员");
+    }
+
+    // 获取账本信息
+    console.log('[getLedgerById] 开始查询账本信息...');
+    const ledger = await db
+      .select()
+      .from(ledgers)
+      .where(eq(ledgers.id, ledgerId))
+      .limit(1);
+
+    console.log('[getLedgerById] 账本查询结果:', ledger);
+    if (ledger.length === 0) {
+      throw new Error("账本不存在");
+    }
+
+    // 获取所有成员
     console.log('[getLedgerById] 开始查询成员列表...');
     const members = await db
       .select({
@@ -353,27 +361,40 @@ export async function getLedgerCategories(
     await verifyLedgerMember(ledgerId, userId);
   }
   
-  // 构建查询条件
-  const conditions = [eq(ledgerCategories.ledgerId, ledgerId)];
+  // 构建查询条件：同时查询预设分类（ledgerId=0）和用户自定义分类（ledgerId=具体账本ID）
+  const ledgerConditions = [eq(ledgerCategories.ledgerId, ledgerId)];
+  const defaultConditions = [eq(ledgerCategories.ledgerId, 0)];
   
   if (type) {
-    conditions.push(eq(ledgerCategories.type, type));
+    ledgerConditions.push(eq(ledgerCategories.type, type));
+    defaultConditions.push(eq(ledgerCategories.type, type));
   }
   
   // 处理parentId查询：undefined表示查所有，null表示查顶级分类，number表示查指定父分类的子分类
   if (parentId === null) {
-    conditions.push(isNull(ledgerCategories.parentId));
+    ledgerConditions.push(isNull(ledgerCategories.parentId));
+    defaultConditions.push(isNull(ledgerCategories.parentId));
   } else if (parentId !== undefined) {
-    conditions.push(eq(ledgerCategories.parentId, parentId));
+    ledgerConditions.push(eq(ledgerCategories.parentId, parentId));
+    defaultConditions.push(eq(ledgerCategories.parentId, parentId));
   }
   
-  const categories = await db
+  // 查询预设分类
+  const defaultCategories = await db
     .select()
     .from(ledgerCategories)
-    .where(and(...conditions))
+    .where(and(...defaultConditions))
     .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
   
-  return categories;
+  // 查询用户自定义分类
+  const customCategories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(and(...ledgerConditions))
+    .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
+  
+  // 合并预设分类和自定义分类，预设分类在前
+  return [...defaultCategories, ...customCategories];
 }
 
 /**

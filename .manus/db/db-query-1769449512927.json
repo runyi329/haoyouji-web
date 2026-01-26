@@ -1,0 +1,42 @@
+{
+  "query": "\n-- 创建第1个测试账本：家庭账本\nINSERT INTO ledgers (name, type, description, ownerId, createdAt, updatedAt, isArchived)\nVALUES ('家庭账本', 'family', '家庭日常开支记录', 4200293, NOW(), NOW(), 0);\n\nSET @ledger1_id = LAST_INSERT_ID();\n\n-- 为账本1添加成员记录（只使用必需字段）\nINSERT INTO ledger_members (ledgerId, userId, role, nickname)\nVALUES (@ledger1_id, 4200293, 'owner', '胡');\n\n-- 创建第2个测试账本：生意账本\nINSERT INTO ledgers (name, type, description, ownerId, createdAt, updatedAt, isArchived)\nVALUES ('生意账本', 'business', '公司业务收支记录', 4200293, NOW(), NOW(), 0);\n\nSET @ledger2_id = LAST_INSERT_ID();\n\n-- 为账本2添加成员记录\nINSERT INTO ledger_members (ledgerId, userId, role, nickname)\nVALUES (@ledger2_id, 4200293, 'owner', '胡');\n\n-- 查询创建的账本\nSELECT l.id, l.name, l.type, l.ownerId, lm.role, lm.nickname\nFROM ledgers l\nLEFT JOIN ledger_members lm ON l.id = lm.ledgerId\nORDER BY l.id;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 创建第1个测试账本：家庭账本\nINSERT INTO ledgers (name, type, description, ownerId, createdAt, updatedAt, isArchived)\nVALUES ('家庭账本', 'family', '家庭日常开支记录', 4200293, NOW(), NOW(), 0);\n\nSET @ledger1_id = LAST_INSERT_ID();\n\n-- 为账本1添加成员记录（只使用必需字段）\nINSERT INTO ledger_members (ledgerId, userId, role, nickname)\nVALUES (@ledger1_id, 4200293, 'owner', '胡');\n\n-- 创建第2个测试账本：生意账本\nINSERT INTO ledgers (name, type, description, ownerId, createdAt, updatedAt, isArchived)\nVALUES ('生意账本', 'business', '公司业务收支记录', 4200293, NOW(), NOW(), 0);\n\nSET @ledger2_id = LAST_INSERT_ID();\n\n-- 为账本2添加成员记录\nINSERT INTO ledger_members (ledgerId, userId, role, nickname)\nVALUES (@ledger2_id, 4200293, 'owner', '胡');\n\n-- 查询创建的账本\nSELECT l.id, l.name, l.type, l.ownerId, lm.role, lm.nickname\nFROM ledgers l\nLEFT JOIN ledger_members lm ON l.id = lm.ledgerId\nORDER BY l.id;\n",
+  "rows": [
+    {
+      "id": "60004",
+      "name": "家庭账本",
+      "type": "family",
+      "ownerId": "4200293",
+      "role": "NULL",
+      "nickname": "NULL"
+    },
+    {
+      "id": "60005",
+      "name": "家庭账本",
+      "type": "family",
+      "ownerId": "4200293",
+      "role": "NULL",
+      "nickname": "NULL"
+    },
+    {
+      "id": "60006",
+      "name": "家庭账本",
+      "type": "family",
+      "ownerId": "4200293",
+      "role": "owner",
+      "nickname": "胡"
+    },
+    {
+      "id": "60007",
+      "name": "生意账本",
+      "type": "business",
+      "ownerId": "4200293",
+      "role": "owner",
+      "nickname": "胡"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttype\townerId\trole\tnickname\n60004\t家庭账本\tfamily\t4200293\tNULL\tNULL\n60005\t家庭账本\tfamily\t4200293\tNULL\tNULL\n60006\t家庭账本\tfamily\t4200293\towner\t胡\n60007\t生意账本\tbusiness\t4200293\towner\t胡\n",
+  "stderr": "",
+  "execution_time_ms": 2830
+}

@@ -1,0 +1,25 @@
+{
+  "query": "\n-- 查询用户信息（假设用户表名为users或类似）\nSHOW TABLES LIKE '%user%';\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询用户信息（假设用户表名为users或类似）\nSHOW TABLES LIKE '%user%';\n",
+  "rows": [
+    {
+      "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)": "user_badges"
+    },
+    {
+      "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)": "user_feature_order"
+    },
+    {
+      "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)": "user_feature_permissions"
+    },
+    {
+      "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)": "user_preferences"
+    },
+    {
+      "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_kjgmNaH8wU2okdbYBsMXbA (%user%)\nuser_badges\nuser_feature_order\nuser_feature_permissions\nuser_preferences\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 1558
+}
