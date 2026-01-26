@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -109,11 +109,18 @@ export default function LedgerDetail() {
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   console.log('[LedgerDetail] params:', params, 'ledgerId:', ledgerId);
   
-  // 使用 tRPC 获取账本详情
+  // 使用 tRPC
   const { data: ledgerData, isLoading, error } = trpc.ledger.getById.useQuery({
-    ledgerId,
+    ledgerId: Number(ledgerId),
   });
-  
+
+  // 记录最后访问的账本ID到localStorage
+  useEffect(() => {
+    if (ledgerId) {
+      localStorage.setItem('lastVisitedLedgerId', String(ledgerId));
+    }
+  }, [ledgerId]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center">
