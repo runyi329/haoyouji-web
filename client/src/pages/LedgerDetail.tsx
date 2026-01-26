@@ -105,6 +105,9 @@ const mockRecords = [
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
 
   const ledgerId = params?.id ? parseInt(params.id) : 1;
@@ -150,8 +153,46 @@ export default function LedgerDetail() {
 
 
 
+  // 手势滑动返回功能
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - swipeStartRef.current.x;
+    const deltaY = touch.clientY - swipeStartRef.current.y;
+
+    // 只处理横向滑动，且从屏幕左侧开始滑动
+    if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      e.preventDefault();
+      setSwipeOffset(Math.min(deltaX, window.innerWidth));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    // 如果滑动距离超过屏幕宽度的30%，触发返回
+    if (swipeOffset > window.innerWidth * 0.3) {
+      setLocation("/ledger");
+    } else {
+      // 否则回弹
+      setSwipeOffset(0);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div 
+      ref={containerRef}
+      className="min-h-screen bg-gray-50 flex flex-col"
+      style={{
+        transform: `translateX(${swipeOffset}px)`,
+        transition: swipeOffset === 0 ? 'transform 0.3s ease-out' : 'none',
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* 顶部区域 */}
       <div className="bg-[#bde4f4] text-[#404969] pb-4">
         {/* 标题栏 */}
