@@ -361,20 +361,23 @@ const AddTransaction = () => {
       {/* 可滚动内容区域 */}
       <div className="flex-1 overflow-y-auto">
         {/* 多级分类选择 */}
-        <div className="bg-white mt-1 p-3">
-          <div className="text-xs text-gray-500 mb-2">选择分类</div>
+        <div className="bg-white mt-1">
+          {/* 一级分类标题 */}
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 */}
           {categoryLevels.map((categories, level) => {
             if (categories.length === 0) return null;
             
             return (
-              <div key={level} className="mb-3 last:mb-0">
+              <div key={level}>
+                {/* 二级、三级分类标题 */}
                 {level > 0 && (
-                  <div className="text-xs text-gray-400 mb-1.5">
+                  <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
                     {level === 1 ? "二级分类" : level === 2 ? "三级分类" : `${level + 1}级分类`}
                   </div>
                 )}
+                <div className="p-3">
                 <div className="flex flex-wrap gap-1.5">
                   {categories.map((category, index) => {
                     const isSelected = selectedCategoryPath[level] === category.id;
@@ -405,6 +408,7 @@ const AddTransaction = () => {
                     </button>
                   )}
                 </div>
+                </div>
               </div>
             );
           })}
@@ -417,10 +421,11 @@ const AddTransaction = () => {
 
 
         {/* 账户选择 */}
-        <div className="bg-white mt-1 p-3">
-          <div className="text-xs text-gray-500 mb-2">
+        <div className="bg-white mt-1">
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
             {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
+          <div className="p-3">
           <div className="flex flex-wrap gap-1.5">
             {accounts.map((account) => (
               <button
@@ -435,6 +440,7 @@ const AddTransaction = () => {
                 {account}
               </button>
             ))}
+          </div>
           </div>
         </div>
 
