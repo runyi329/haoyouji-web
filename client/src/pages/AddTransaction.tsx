@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Image as ImageIcon,
   Link2,
   User,
@@ -17,6 +19,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type TransactionType = "expense" | "income";
 
@@ -29,7 +41,15 @@ const AddTransaction = () => {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("银行转账");
   const [note, setNote] = useState("");
-  const [date, setDate] = useState(new Date().toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+  
+  // 日期相关状态
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [displayDate, setDisplayDate] = useState(new Date().toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
+  const [showDateConfirm, setShowDateConfirm] = useState(false);
+  const [pendingDate, setPendingDate] = useState<Date | null>(null);
+  
   const [payer, setPayer] = useState("我自己");
   const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
 
@@ -56,6 +76,109 @@ const AddTransaction = () => {
     { id: 2, name: "Yunting", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=yunting" },
     { id: 3, name: "M", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=m" },
   ];
+
+  // 判断是否是今天
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // 判断是否是同一天
+  const isSameDay = (date1: Date, date2: Date) => {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  };
+
+  // 获取月历数据
+  const getCalendarDays = () => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    
+    // 获取当月第一天和最后一天
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // 获取第一天是星期几（0=周日，需要调整为1=周一）
+    let firstDayOfWeek = firstDay.getDay();
+    if (firstDayOfWeek === 0) firstDayOfWeek = 7; // 周日改为7
+    
+    // 计算需要显示的上个月的天数
+    const prevMonthDays = firstDayOfWeek - 1;
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    
+    const days: Date[] = [];
+    
+    // 添加上个月的日期
+    for (let i = prevMonthDays; i > 0; i--) {
+      days.push(new Date(year, month - 1, prevMonthLastDay - i + 1));
+    }
+    
+    // 添加当月的日期
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    // 添加下个月的日期，补足到42天（6周）
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push(new Date(year, month + 1, i));
+    }
+    
+    return days;
+  };
+
+  // 处理日期选择
+  const handleDateSelect = (date: Date) => {
+    if (isToday(date)) {
+      // 如果选择今天，直接设置
+      setSelectedDate(date);
+      setDisplayDate(date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      setIsDateSheetOpen(false);
+    } else {
+      // 如果不是今天，显示确认对话框
+      setPendingDate(date);
+      setShowDateConfirm(true);
+    }
+  };
+
+  // 确认日期选择
+  const confirmDateSelect = () => {
+    if (pendingDate) {
+      setSelectedDate(pendingDate);
+      setDisplayDate(pendingDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      setIsDateSheetOpen(false);
+      setShowDateConfirm(false);
+      setPendingDate(null);
+    }
+  };
+
+  // 取消日期选择
+  const cancelDateSelect = () => {
+    setShowDateConfirm(false);
+    setPendingDate(null);
+  };
+
+  // 切换到今天
+  const goToToday = () => {
+    const today = new Date();
+    setSelectedDate(today);
+    setDisplayDate(today.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+    setCalendarMonth(today);
+    setIsDateSheetOpen(false);
+  };
+
+  // 上一个月
+  const prevMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1));
+  };
+
+  // 下一个月
+  const nextMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1));
+  };
 
   // 处理数字键盘输入
   const handleNumberInput = (num: string) => {
@@ -93,6 +216,9 @@ const AddTransaction = () => {
     toast.success("记账成功！");
     setLocation(`/ledger/${id}`);
   };
+
+  const calendarDays = getCalendarDays();
+  const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -221,9 +347,12 @@ const AddTransaction = () => {
               <Link2 className="w-3.5 h-3.5" />
               <span>关联账户</span>
             </button>
-            <button className="flex items-center gap-1 text-gray-600">
+            <button 
+              className="flex items-center gap-1 text-gray-600"
+              onClick={() => setIsDateSheetOpen(true)}
+            >
               <Calendar className="w-3.5 h-3.5" />
-              <span>{date}</span>
+              <span>{displayDate}</span>
             </button>
             <button 
               className="flex items-center gap-1 text-gray-600"
@@ -290,6 +419,92 @@ const AddTransaction = () => {
           ⌫
         </button>
       </div>
+
+      {/* 日期选择抽屉 */}
+      <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
+        <SheetContent side="bottom" className="h-auto max-h-[70vh]">
+          <div className="p-4">
+            {/* 月份导航 */}
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={prevMonth} className="p-2">
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+              <div className="text-base font-medium">
+                {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
+              </div>
+              <button onClick={nextMonth} className="p-2">
+                <ChevronRight className="w-5 h-5 text-gray-600" />
+              </button>
+              <button
+                onClick={goToToday}
+                className="ml-2 px-3 py-1 text-xs text-blue-500 border border-blue-500 rounded-full"
+              >
+                今天
+              </button>
+            </div>
+
+            {/* 星期标题 */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {weekDays.map((day) => (
+                <div key={day} className="text-center text-xs text-blue-500 py-1">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* 日期网格 */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((day, index) => {
+                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                const isSelected = isSameDay(day, selectedDate);
+                const isTodayDate = isToday(day);
+
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleDateSelect(day)}
+                    className={`
+                      aspect-square flex items-center justify-center text-sm rounded
+                      ${!isCurrentMonth ? "text-gray-300" : "text-gray-800"}
+                      ${isSelected ? "bg-blue-500 text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected ? "border border-blue-500" : ""}
+                      ${isCurrentMonth && !isSelected ? "hover:bg-gray-100" : ""}
+                    `}
+                  >
+                    {day.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* 日期确认对话框 */}
+      <AlertDialog open={showDateConfirm} onOpenChange={setShowDateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-center">
+              {pendingDate && (() => {
+                const year = pendingDate.getFullYear();
+                const month = (pendingDate.getMonth() + 1).toString().padStart(2, '0');
+                const day = pendingDate.getDate().toString().padStart(2, '0');
+                const currentYear = new Date().getFullYear();
+                const yearText = year !== currentYear ? `${year}年` : '';
+                return `您选择的 ${year}-${month}-${day}, ${yearText}不是今年呀，确定吗？`;
+              })()}
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2">
+            <AlertDialogCancel onClick={cancelDateSelect} className="flex-1">
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDateSelect} className="flex-1">
+              确定
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 支出人选择抽屉 */}
       <Sheet open={isPayerSheetOpen} onOpenChange={setIsPayerSheetOpen}>
