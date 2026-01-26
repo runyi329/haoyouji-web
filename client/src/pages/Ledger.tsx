@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Crown, BookOpen } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { trpc } from "@/lib/trpc";
 
 // 模拟账本数据
 const mockLedgers = [
