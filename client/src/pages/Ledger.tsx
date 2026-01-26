@@ -62,6 +62,7 @@ export default function Ledger() {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
+
   // 从后端API获取账本列表
   const { data: ledgers, isLoading } = trpc.ledger.list.useQuery({
     isArchived: activeTab === "archived",

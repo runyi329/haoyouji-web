@@ -80,8 +80,7 @@ const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
 const Moments = lazy(() => import("./pages/Moments"));
 const AIChat = lazy(() => import("./pages/AIChat"));
-const Ledger = lazy(() => import("./pages/Ledger"));
-const LedgerDetail = lazy(() => import("./pages/LedgerDetail"));
+const LedgerContainer = lazy(() => import("./pages/LedgerContainer"));
 const AddTransaction = lazy(() => import("./pages/AddTransaction"));
 const LedgerCategories = lazy(() => import("./pages/LedgerCategories"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
@@ -151,7 +150,7 @@ function Router() {
         {/* 底部导航栏页面 */}
         <Route path="/moments" component={Moments} />
         <Route path="/ai" component={AIChat} />
-        <Route path="/ledger" component={Ledger} />
+        <Route path="/ledger" component={LedgerContainer} />
         <Route path="/ledger/create-type" component={CreateLedgerType} />
         <Route path="/ledger/create" component={CreateLedger} />
         <Route path="/ledger/join/:token" component={JoinLedger} />
@@ -163,7 +162,7 @@ function Router() {
         <Route path="/ledger/:id/add" component={AddTransaction} />
         <Route path="/ledger/:id/categories" component={LedgerCategories} />
         <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
-        <Route path="/ledger/:id" component={LedgerDetail} />
+        <Route path="/ledger/:id" component={LedgerContainer} />
         <Route path="/profile" component={Profile} />
         
         {/* 404 */}
