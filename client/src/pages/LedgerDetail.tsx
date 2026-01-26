@@ -175,12 +175,16 @@ export default function LedgerDetail() {
         {/* 搜索框、成员头像和设置按钮 */}
         <div className="px-4 py-2 flex items-center gap-3">
           {/* 搜索框 */}
-          <div className="flex-1 flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-sm">
+          <div 
+            className="flex-1 flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-sm cursor-pointer"
+            onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+          >
             <Search className="w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="搜索账单"
-              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400 cursor-pointer"
+              readOnly
             />
           </div>
           
