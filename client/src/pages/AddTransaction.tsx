@@ -135,9 +135,16 @@ const AddTransaction = () => {
 
   // 处理分类选择
   const handleCategorySelect = (categoryId: number, level: number) => {
-    // 更新选中路径：保留到当前层级，移除后续层级
-    const newPath = [...selectedCategoryPath.slice(0, level), categoryId];
-    setSelectedCategoryPath(newPath);
+    // 如果点击的是已经选中的分类，则取消选中并收起下级分类
+    if (selectedCategoryPath[level] === categoryId) {
+      // 取消选中：移除当前层级及之后的所有选择
+      const newPath = selectedCategoryPath.slice(0, level);
+      setSelectedCategoryPath(newPath);
+    } else {
+      // 选中新分类：更新选中路径，保留到当前层级，移除后续层级
+      const newPath = [...selectedCategoryPath.slice(0, level), categoryId];
+      setSelectedCategoryPath(newPath);
+    }
   };
 
   // 获取当前选中的分类名称（用于显示）
@@ -355,7 +362,7 @@ const AddTransaction = () => {
       <div className="flex-1 overflow-y-auto">
         {/* 多级分类选择 */}
         <div className="bg-white mt-1 p-3">
-          <div className="text-xs text-gray-500 mb-2">请选择分类</div>
+          <div className="text-xs text-gray-500 mb-2">选择分类</div>
           
           {/* 渲染每一级分类 */}
           {categoryLevels.map((categories, level) => {
