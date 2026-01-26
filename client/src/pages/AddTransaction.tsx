@@ -275,20 +275,34 @@ const AddTransaction = () => {
 
   // 处理数字键盘输入
   const handleNumberInput = (num: string) => {
-    if (num === "." && amount.includes(".")) {
-      return; // 已经有小数点了
+    // 如果是小数点
+    if (num === ".") {
+      if (amount.includes(".")) {
+        return; // 已经有小数点了
+      }
+      // 如果当前是0.00，替换为0.
+      if (amount === "0.00") {
+        setAmount("0.");
+      } else {
+        setAmount(amount + ".");
+      }
+      return;
     }
     
     // 检查小数点后是否已有两位
     if (amount.includes(".")) {
-      const decimalPart = amount.split(".")[1];
-      if (decimalPart && decimalPart.length >= 2) {
+      const parts = amount.split(".");
+      if (parts[1] && parts[1].length >= 2) {
         return; // 小数点后已有两位，不再接受输入
       }
+      // 在小数点后追加数字
+      setAmount(amount + num);
+      return;
     }
     
+    // 如果当前是0.00或单独的0，替换为新数字
     if (amount === "0.00" || amount === "0") {
-      setAmount(num === "." ? "0." : num);
+      setAmount(num);
     } else {
       setAmount(amount + num);
     }
