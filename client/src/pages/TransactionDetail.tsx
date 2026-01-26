@@ -1,4 +1,5 @@
-import { useRoute, useLocation } from "wouter";
+import { useState, useRef } from "react";
+import { Link, useLocation, useRoute } from "wouter";
 import { ChevronLeft, ChevronRight, Edit, Image, PenTool } from "lucide-react";
 
 export default function TransactionDetail() {
@@ -7,6 +8,38 @@ export default function TransactionDetail() {
 
   const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
   const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
+
+  // 手势滑动返回功能
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - swipeStartRef.current.x;
+    const deltaY = touch.clientY - swipeStartRef.current.y;
+
+    // 只处理向右滑动（deltaX > 0），禁止向左滑动
+    if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      e.preventDefault();
+      setSwipeOffset(Math.min(deltaX, window.innerWidth));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    // 如果滑动距离超过屏幕宽度的30%，触发返回
+    if (swipeOffset > window.innerWidth * 0.3) {
+      setLocation(`/ledger/${ledgerId}`);
+    } else {
+      // 否则回弹
+      setSwipeOffset(0);
+    }
+  };
 
   // 模拟数据
   const transaction = {
@@ -33,7 +66,17 @@ export default function TransactionDetail() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div 
+      ref={containerRef}
+      className="min-h-screen bg-gray-50 flex flex-col"
+      style={{
+        transform: `translateX(${swipeOffset}px)`,
+        transition: swipeOffset === 0 ? 'transform 0.3s ease-out' : 'none',
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* 顶部导航栏 */}
       <div className="bg-[#bde4f4] text-[#404969]">
         <div className="flex items-center justify-between px-4 py-3">
