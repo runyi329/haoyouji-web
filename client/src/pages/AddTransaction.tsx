@@ -491,7 +491,7 @@ const AddTransaction = () => {
                 const day = pendingDate.getDate().toString().padStart(2, '0');
                 const currentYear = new Date().getFullYear();
                 const yearText = year !== currentYear ? `${year}年` : '';
-                return `您选择的 ${year}-${month}-${day}, ${yearText}不是今年呀，确定吗？`;
+                return `您选择的 ${year}-${month}-${day}, ${yearText}不是今天呀，确定吗？`;
               })()}
             </AlertDialogTitle>
           </AlertDialogHeader>
