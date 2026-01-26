@@ -65,8 +65,6 @@ const ContactsList = lazy(() => import("./pages/ContactsList"));
 const RegionMap = lazy(() => import("./pages/RegionMap"));
 const TagSearch = lazy(() => import("./pages/TagSearch"));
 const DataComparison = lazy(() => import("./pages/DataComparison"));
-const LedgerList = lazy(() => import("./pages/LedgerList"));
-const LedgerDetail = lazy(() => import("./pages/LedgerDetail"));
 const ContactDetail = lazy(() => import("./pages/ContactDetail"));
 const AddContact = lazy(() => import("./pages/AddContact"));
 const ExportContacts = lazy(() => import("./pages/ExportContacts"));
@@ -132,8 +130,6 @@ function Router() {
         <Route path="/parent/contacts/:id" component={ContactDetail} />
         <Route path="/parent/contacts/:contactId/referral-chain" component={ReferralChainVisualization} />
         <Route path="/parent/contacts/:contactId/referrals/:type" component={ReferralList} />
-        <Route path="/ledger" component={LedgerList} />
-        <Route path="/ledger/:id" component={LedgerDetail} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />

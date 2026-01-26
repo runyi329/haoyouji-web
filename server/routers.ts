@@ -4965,15 +4965,6 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
-  // 账本管理
-  ledger: router({
-    create: protectedProcedure.input(z.object({ name: z.string(), description: z.string().optional() })).mutation(async ({ ctx, input }) => { const { createLedger } = await import("./db-ledger"); return await createLedger({ ...input, creatorId: ctx.user.id }); }),
-    list: protectedProcedure.query(async ({ ctx }) => { const { getUserLedgers } = await import("./db-ledger"); return await getUserLedgers(ctx.user.id); }),
-    detail: protectedProcedure.input(z.object({ ledgerId: z.number() })).query(async ({ ctx, input }) => { const { getLedgerDetail } = await import("./db-ledger"); return await getLedgerDetail(input.ledgerId, ctx.user.id); }),
-    addTransaction: protectedProcedure.input(z.object({ ledgerId: z.number(), type: z.enum(["income", "expense"]), amount: z.string(), category: z.string(), description: z.string().optional(), transactionDate: z.date() })).mutation(async ({ ctx, input }) => { const { createTransaction } = await import("./db-ledger"); return await createTransaction({ ...input, userId: ctx.user.id }); }),
-    transactions: protectedProcedure.input(z.object({ ledgerId: z.number() })).query(async ({ ctx, input }) => { const { getLedgerTransactions } = await import("./db-ledger"); return await getLedgerTransactions(input.ledgerId, ctx.user.id); }),
-    stats: protectedProcedure.input(z.object({ ledgerId: z.number() })).query(async ({ ctx, input }) => { const { getLedgerStats } = await import("./db-ledger"); return await getLedgerStats(input.ledgerId, ctx.user.id); }),
-  }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

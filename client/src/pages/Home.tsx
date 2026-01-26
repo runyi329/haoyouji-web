@@ -603,13 +603,13 @@ export default function Home() {
             </div>
           </Link>
           
-          {/* 账本 */}
+          {/* 发现 */}
           <div 
             className="nav-item cursor-pointer" 
-            onClick={() => window.location.href = "/ledger"}
+            onClick={() => toast.info('功能开发中，敬请期待！')}
           >
-            <BookOpen className="w-6 h-6" />
-            <span className="text-xs">账本</span>
+            <Search className="w-6 h-6" />
+            <span className="text-xs">发现</span>
           </div>
           
           {/* 消息 */}
