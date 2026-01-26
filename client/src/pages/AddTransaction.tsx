@@ -314,7 +314,7 @@ const AddTransaction = () => {
       {/* 顶部导航 */}
       <div className="bg-blue-500 text-white p-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setLocation(`/ledger/${id}`)}>
-          <ArrowLeft className="w-5 h-5" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="text-base font-semibold">添加账目</h1>
         <div className="w-5" /> {/* 占位 */}
