@@ -96,6 +96,13 @@ const AddTransaction = () => {
     { id: -3, name: "购物", icon: "🛒", color: "bg-green-500" },
   ];
 
+  // 预设子分类
+  const defaultSubCategories: Record<number, any[]> = {
+    "-1": [{ id: -11, name: "外卖", icon: "🍜", color: "bg-blue-400", parentId: -1 }],
+    "-2": [{ id: -21, name: "地铁", icon: "🚇", color: "bg-orange-400", parentId: -2 }],
+    "-3": [{ id: -31, name: "淘宝", icon: "🛒", color: "bg-green-400", parentId: -3 }],
+  };
+
   // 获取顶级分类（parentId = null）
   const { data: topCategories = [], isLoading: isLoadingTop } = trpc.ledger.getCategories.useQuery({
     ledgerId,
@@ -112,12 +119,19 @@ const AddTransaction = () => {
   
   // 为每一级已选中的分类获取其子分类
   selectedCategoryPath.forEach((parentId, index) => {
-    const { data: subCategories = [] } = trpc.ledger.getCategories.useQuery({
-      ledgerId,
-      type: transactionType,
-      parentId,
-    });
-    categoryLevels.push(subCategories);
+    // 如果是预设分类（负数ID），使用预设子分类
+    if (parentId < 0) {
+      const subCats = defaultSubCategories[parentId.toString()] || [];
+      categoryLevels.push(subCats);
+    } else {
+      // 否则从数据库获取
+      const { data: subCategories = [] } = trpc.ledger.getCategories.useQuery({
+        ledgerId,
+        type: transactionType,
+        parentId,
+      });
+      categoryLevels.push(subCategories);
+    }
   });
 
   // 处理分类选择
