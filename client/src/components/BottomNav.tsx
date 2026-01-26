@@ -27,7 +27,7 @@ export default function BottomNav() {
       id: "contacts",
       label: "人脉",
       icon: Users,
-      path: "/",
+      path: "/contacts",
       isLedger: false,
     },
     {

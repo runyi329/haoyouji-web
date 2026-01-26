@@ -1,0 +1,29 @@
+{
+  "query": "SELECT * FROM ledger_members WHERE userId = 4200293 LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT * FROM ledger_members WHERE userId = 4200293 LIMIT 1;",
+  "rows": [
+    {
+      "id": "1",
+      "ledgerId": "3",
+      "userId": "4200293",
+      "role": "owner",
+      "nickname": "NULL",
+      "member_type": "real",
+      "avatar_type": "NULL",
+      "permission_view": "all",
+      "permission_add": "all",
+      "permission_edit": "own",
+      "permission_delete": "own",
+      "canEdit": "1",
+      "canDelete": "0",
+      "canInvite": "0",
+      "invitedBy": "NULL",
+      "createdAt": "2026-01-26 11:04:23",
+      "updatedAt": "2026-01-26 11:04:23"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tledgerId\tuserId\trole\tnickname\tmember_type\tavatar_type\tpermission_view\tpermission_add\tpermission_edit\tpermission_delete\tcanEdit\tcanDelete\tcanInvite\tinvitedBy\tcreatedAt\tupdatedAt\n1\t3\t4200293\towner\tNULL\treal\tNULL\tall\tall\town\town\t1\t0\t0\tNULL\t2026-01-26 11:04:23\t2026-01-26 11:04:23\n",
+  "stderr": "",
+  "execution_time_ms": 1632
+}

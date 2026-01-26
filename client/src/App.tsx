@@ -115,8 +115,10 @@ function Router() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        {/* 首页 = 好友记Dashboard */}
-        <Route path="/" component={ContactsManagement} />
+        {/* 首页 - 根据用户账本访问记录跳转 */}
+        <Route path="/" component={lazy(() => import("./pages/Home"))} />
+        {/* 脉动Dashboard */}
+        <Route path="/contacts" component={ContactsManagement} />
         <Route path="/login" component={Login} />
         
         {/* 后台管理 */}
