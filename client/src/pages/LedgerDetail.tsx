@@ -165,35 +165,40 @@ export default function LedgerDetail() {
               <span>切换账本</span>
             </button>
           </div>
-          <div className="w-6"></div>
+          {/* 报表按钮 */}
+          <button className="flex flex-col items-center gap-0.5">
+            <BarChart3 className="w-5 h-5" />
+            <span className="text-xs">报表</span>
+          </button>
+        </div>
+
+        {/* 搜索框 */}
+        <div className="px-4 py-2">
+          <div className="flex items-center gap-2 bg-white/90 rounded-full px-4 py-2 shadow-sm">
+            <Search className="w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索账单"
+              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+            />
+          </div>
         </div>
 
         {/* 成员头像和设置按钮 */}
-        <div className="px-4 py-2 flex items-center justify-between">
-          {/* 成员头像 */}
-          <div className="flex items-center gap-2">
-            {[1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
-              >
-                R{i}
-              </div>
-            ))}
-            <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
-              <Settings 
-                className="w-5 h-5 text-white cursor-pointer" 
-                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-              />
+        <div className="px-4 py-2 flex items-center gap-2">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+            >
+              R{i}
             </div>
-          </div>
-
-          {/* 功能按钮 */}
-          <div className="flex items-center gap-4">
-            <button className="flex flex-col items-center gap-0.5">
-              <BarChart3 className="w-5 h-5" />
-              <span className="text-xs">报表</span>
-            </button>
+          ))}
+          <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
+            <Settings 
+              className="w-5 h-5 text-white cursor-pointer" 
+              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+            />
           </div>
         </div>
 
@@ -214,17 +219,7 @@ export default function LedgerDetail() {
         </div>
       </div>
 
-      {/* 搜索框 */}
-      <div className="px-4 py-3 bg-gray-50">
-        <div className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 shadow-sm">
-          <Search className="w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="搜索账单"
-            className="flex-1 text-sm outline-none bg-transparent"
-          />
-        </div>
-      </div>
+
 
       {/* 记账记录列表 */}
       <div className="flex-1 px-4 pb-20 space-y-3">
