@@ -381,21 +381,7 @@ const AddTransaction = () => {
       {/* 金额显示 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
         <div className="text-5xl font-light text-gray-800">
-          {(() => {
-            // 如果正在输入小数点或小数，显示原始输入
-            if (amount.includes(".")) {
-              const parts = amount.split(".");
-              if (parts[1] === undefined || parts[1] === "") {
-                return amount; // 显示 "123."
-              } else if (parts[1].length === 1) {
-                return amount; // 显示 "123.5"
-              } else {
-                return amount; // 显示 "123.50"
-              }
-            }
-            // 没有小数点，显示两位小数
-            return parseFloat(amount || "0").toFixed(2);
-          })()}
+          {amount || "0.00"}
         </div>
       </div>
 
