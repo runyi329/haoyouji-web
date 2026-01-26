@@ -556,3 +556,13 @@
   - 检查网络请求是否成功
   - 检查前端渲染逻辑
 - [ ] 修复问题并测试
+
+
+---
+
+## 修复 Vite WebSocket 连接错误
+
+- [x] 检查 vite.config.ts 配置
+- [x] 修复 HMR WebSocket 配置
+- [x] 重启服务器测试（WebSocket 错误已修复，但 React 错误仍然存在）
+- [ ] 保存修复后的版本
