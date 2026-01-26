@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import DraggableAddButton from "@/components/DraggableAddButton";
 
 import {
   ChevronLeft,
@@ -227,7 +228,7 @@ export default function LedgerDetail() {
 
 
       {/* 记账记录列表 */}
-      <div className="flex-1 px-4 pb-20 space-y-3">
+      <div className="flex-1 px-4 pb-20 space-y-2">
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">还没有记账记录</div>
@@ -237,7 +238,7 @@ export default function LedgerDetail() {
           mockRecords.map((dayRecord) => (
             <div key={dayRecord.date}>
               {/* 日期标题 */}
-              <div className="flex items-center justify-between py-2 text-sm text-gray-500">
+              <div className="flex items-center justify-between py-1 text-xs text-gray-500">
                 <span>
                   {dayRecord.date} {dayRecord.dayOfWeek}
                 </span>
@@ -247,34 +248,34 @@ export default function LedgerDetail() {
               </div>
 
               {/* 当天的记录 */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {dayRecord.records.map((record) => (
                   <div
                     key={record.id}
-                    className="bg-white rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
                     onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
                   >
                     {/* 用户头像 */}
-                    <div className="w-10 h-10 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                       U
                     </div>
 
                     {/* 分类信息 */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
-                        <span className="text-sm text-gray-900">
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                        <span className="text-xs text-gray-900 font-normal">
                           {record.category}
                           {record.subcategory && `–${record.subcategory}`}
                         </span>
                       </div>
                       {record.note && (
-                        <div className="text-xs text-gray-500 mt-0.5 ml-3.5">{record.note}</div>
+                        <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.note}</div>
                       )}
                     </div>
 
                     {/* 金额 */}
-                    <div className="text-base font-medium text-gray-900 flex-shrink-0">
+                    <div className="text-sm font-normal text-gray-900 flex-shrink-0">
                       {record.amount.toFixed(2)}
                     </div>
                   </div>
@@ -285,18 +286,8 @@ export default function LedgerDetail() {
         )}
       </div>
 
-      {/* 底部固定按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <div className="flex items-center justify-center py-2">
-          <Button
-            size="icon"
-            className="w-14 h-14 rounded-full bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] shadow-lg"
-            onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-          >
-            <Plus className="w-7 h-7" />
-          </Button>
-        </div>
-      </div>
+      {/* 可拖动悬浮加号按钮 */}
+      <DraggableAddButton onClick={() => setLocation(`/ledger/${ledgerId}/add`)} />
     </div>
   );
 }
