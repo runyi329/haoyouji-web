@@ -577,33 +577,37 @@ const AddTransaction = () => {
         <SheetContent side="bottom" className="h-auto max-h-[70vh]">
           <div className="p-4">
             {/* 月份导航 */}
-            {/* 年份控制 - 外层 */}
-            <div className="flex items-center justify-between mb-2">
-              <button onClick={prevYear} className="p-2">
-                <ChevronLeft className="w-6 h-6 text-gray-600" />
+            {/* 日期导航 - 复刻参考图片样式 */}
+            <div className="flex items-center justify-center mb-4 relative">
+              {/* 外层箭头 - 控制年份 */}
+              <button onClick={prevYear} className="p-2 absolute left-0">
+                <ChevronLeft className="w-6 h-6 text-gray-400" />
               </button>
+              
+              {/* 内层箭头 - 控制月份 */}
+              <button onClick={prevMonth} className="p-2 absolute left-12">
+                <ChevronLeft className="w-6 h-6 text-blue-500" />
+              </button>
+              
+              {/* 年月显示 */}
               <div className="text-lg font-medium">
-                {calendarMonth.getFullYear()}年
+                {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
               </div>
-              <button onClick={nextYear} className="p-2">
-                <ChevronRight className="w-6 h-6 text-gray-600" />
+              
+              {/* 内层箭头 - 控制月份 */}
+              <button onClick={nextMonth} className="p-2 absolute right-12">
+                <ChevronRight className="w-6 h-6 text-blue-500" />
               </button>
-            </div>
-            
-            {/* 月份控制 - 内层 */}
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={prevMonth} className="p-2">
-                <ChevronLeft className="w-5 h-5 text-gray-500" />
+              
+              {/* 外层箭头 - 控制年份 */}
+              <button onClick={nextYear} className="p-2 absolute right-0">
+                <ChevronRight className="w-6 h-6 text-gray-400" />
               </button>
-              <div className="text-base font-medium text-gray-700">
-                {calendarMonth.getMonth() + 1}月
-              </div>
-              <button onClick={nextMonth} className="p-2">
-                <ChevronRight className="w-5 h-5 text-gray-500" />
-              </button>
+              
+              {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="ml-2 px-3 py-1 text-xs text-blue-500 border border-blue-500 rounded-full"
+                className="absolute -right-2 px-4 py-1.5 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
               >
                 今天
               </button>
