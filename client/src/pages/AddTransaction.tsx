@@ -380,7 +380,7 @@ const AddTransaction = () => {
                     return (
                       <button
                         key={category.id}
-                        className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+                        className={`px-3 py-1.5 rounded text-xs transition-colors ${
                           isSelected
                             ? `${colorClass} text-white`
                             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -395,7 +395,7 @@ const AddTransaction = () => {
                   {/* 只在第一级显示"+"按钮 */}
                   {level === 0 && (
                     <button
-                      className="px-3 py-1.5 rounded-full text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
+                      className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
                       onClick={() => setLocation(`/ledger/${id}/categories`)}
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -441,7 +441,7 @@ const AddTransaction = () => {
             {accounts.map((account) => (
               <button
                 key={account}
-                className={`px-3 py-1.5 rounded-full text-xs ${
+                className={`px-3 py-1.5 rounded text-xs ${
                   selectedAccount === account
                     ? "bg-blue-500 text-white"
                     : "bg-gray-100 text-gray-700"

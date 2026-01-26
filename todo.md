@@ -697,3 +697,10 @@
 - [x] 为“外卖”添加三级分类“饿了么”
 - [x] 实现点击“外卖”后显示三级分类（已通过defaultSubCategories实现）
 - [ ] 测试验证功能
+
+## 修改分类和付款方式标签样式（2026-01-26）
+
+- [x] 将分类标签从 rounded-full 改为 rounded
+- [x] 将付款方式标签从 rounded-full 改为 rounded
+- [x] 将“+”按钮从 rounded-full 改为 rounded
+- [ ] 测试验证样式效果
