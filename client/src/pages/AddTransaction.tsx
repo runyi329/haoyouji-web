@@ -293,38 +293,38 @@ const AddTransaction = () => {
 
       {/* 支出人选择抽屉 */}
       <Sheet open={isPayerSheetOpen} onOpenChange={setIsPayerSheetOpen}>
-        <SheetContent side="bottom" className="h-[60vh]">
+        <SheetContent side="bottom" className="h-auto max-h-[40vh]">
           <SheetHeader>
             <SheetTitle className="flex items-center justify-between">
-              <span>请选择支出人：</span>
+              <span className="text-sm">请选择支出人：</span>
               <button
                 onClick={() => setIsPayerSheetOpen(false)}
-                className="text-blue-500"
+                className="text-blue-500 text-sm"
               >
                 完成
               </button>
             </SheetTitle>
           </SheetHeader>
-          <div className="mt-6 space-y-4">
+          <div className="mt-3 space-y-2">
             {members.map((member) => (
               <button
                 key={member.id}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg"
+                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 rounded"
                 onClick={() => {
                   setPayer(member.name);
                   setIsPayerSheetOpen(false);
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <img
                     src={member.avatar}
                     alt={member.name}
-                    className="w-10 h-10 rounded-full"
+                    className="w-5 h-5 rounded-full"
                   />
-                  <span className="text-lg">{member.name}</span>
+                  <span className="text-sm">{member.name}</span>
                 </div>
                 {payer === member.name && (
-                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
                 )}
               </button>
             ))}
