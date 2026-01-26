@@ -320,28 +320,30 @@ const AddTransaction = () => {
         <div className="w-5" /> {/* 占位 */}
       </div>
 
-      {/* 类型标签页 */}
-      <div className="bg-white flex flex-shrink-0">
-        <button
-          className={`flex-1 py-2.5 text-sm text-center ${
-            transactionType === "expense"
-              ? "bg-blue-500 text-white font-semibold"
-              : "text-gray-600"
-          }`}
-          onClick={() => setTransactionType("expense")}
-        >
-          支出 ▼
-        </button>
-        <button
-          className={`flex-1 py-2.5 text-sm text-center ${
-            transactionType === "income"
-              ? "bg-blue-500 text-white font-semibold"
-              : "text-gray-600"
-          }`}
-          onClick={() => setTransactionType("income")}
-        >
-          收入
-        </button>
+      {/* 类型标签页 - 独立白色容器 */}
+      <div className="px-4 py-3 flex-shrink-0">
+        <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
+          <button
+            className={`flex-1 py-2.5 text-sm text-center transition-colors ${
+              transactionType === "expense"
+                ? "bg-blue-500 text-white font-semibold"
+                : "text-gray-600 bg-white"
+            }`}
+            onClick={() => setTransactionType("expense")}
+          >
+            支出 {transactionType === "expense" ? "▼" : ""}
+          </button>
+          <button
+            className={`flex-1 py-2.5 text-sm text-center transition-colors ${
+              transactionType === "income"
+                ? "bg-blue-500 text-white font-semibold"
+                : "text-gray-600 bg-white"
+            }`}
+            onClick={() => setTransactionType("income")}
+          >
+            收入
+          </button>
+        </div>
       </div>
 
       {/* 金额显示 - 缩小高度和字体 */}
