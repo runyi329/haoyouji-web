@@ -357,3 +357,14 @@
 - [x] 修改 App.tsx 将根路由改为 Home 组件
 - [x] 修改 BottomNav 将人脉导航路径改为 /contacts
 - [ ] 测试首页跳转功能
+
+## 修复公司征信报告上传 DeepSeek API 认证失败问题
+- [x] 定位公司征信报告上传的代码位置（server/company-reports.ts）
+- [x] 检查 DeepSeek API key 的配置和使用
+- [x] 发现问题：ENV 对象中没有导出 DEEPSEEK_API_KEY
+- [x] 在 server/_core/env.ts 中添加 deepseekApiKey 字段
+- [x] 修改 company-reports.ts 直接使用 process.env.DEEPSEEK_API_KEY
+- [x] 添加详细的调试日志（ENV启动日志、上传路由日志、formatCompanyReport日志）
+- [x] 发现新问题：服务器日志中完全没有收到上传请求
+- [ ] 排查前端上传请求为什么没有发送到后端
+- [ ] 测试公司报告上传功能

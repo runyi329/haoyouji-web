@@ -121,11 +121,24 @@ let customPrompt = DEFAULT_COMPANY_REPORT_PROMPT;
  */
 async function formatCompanyReport(rawText: string): Promise<string> {
   try {
+    // 调试：检查 API key
+    // 直接从 process.env 读取，避免 ENV 对象的加载顺序问题
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    console.log('[formatCompanyReport] API Key 检查:', {
+      defined: apiKey ? 'yes' : 'no',
+      length: apiKey ? apiKey.length : 0,
+      prefix: apiKey ? apiKey.substring(0, 10) : 'undefined',
+    });
+    
+    // 验证 API key 是否存在
+    if (!apiKey) {
+      throw new Error('DEEPSEEK_API_KEY 环境变量未配置，请联系管理员配置');
+    }
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
@@ -296,6 +309,7 @@ router.put('/api/company-reports/prompt', async (req, res) => {
  * 上传企查查 PDF 报告
  */
 router.post('/api/company-reports/upload', upload.single('file'), async (req, res) => {
+  console.log('[upload] 收到上传请求');
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -327,7 +341,9 @@ router.post('/api/company-reports/upload', upload.single('file'), async (req, re
     }
 
     // 2. 调用 DeepSeek API 格式化
+    console.log('[upload] 开始调用 formatCompanyReport');
     const formattedContent = await formatCompanyReport(rawText);
+    console.log('[upload] formatCompanyReport 调用成功');
 
     // 3. 保存到数据库（不保存文件 URL）
     const db = await getDb();
