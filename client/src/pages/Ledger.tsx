@@ -3,14 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Settings,
-  FileDown,
-  FileText,
-  BarChart3,
-  UserPlus,
-  Crown,
-} from "lucide-react";
+import { Crown } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 // 模拟账本数据
@@ -152,65 +145,60 @@ export default function Ledger() {
               </div>
 
               {/* 操作按钮 */}
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs px-3 py-1 h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 打开设置
                   }}
                 >
-                  <Settings className="w-3 h-3 mr-1" />
                   设置
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs px-3 py-1 h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 导出
                   }}
                 >
-                  <FileDown className="w-3 h-3 mr-1" />
                   导出
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs px-3 py-1 h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看明细
                   }}
                 >
-                  <FileText className="w-3 h-3 mr-1" />
                   明细
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs px-3 py-1 h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 查看报表
                   }}
                 >
-                  <BarChart3 className="w-3 h-3 mr-1" />
                   报表
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs"
+                  className="text-xs px-3 py-1 h-7"
                   onClick={(e) => {
                     e.stopPropagation();
                     // TODO: 邀请成员
                   }}
                 >
-                  <UserPlus className="w-3 h-3 mr-1" />
                   邀请
                 </Button>
               </div>
