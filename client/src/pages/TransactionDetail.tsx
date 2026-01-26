@@ -11,12 +11,16 @@ export default function TransactionDetail() {
 
   // 手势滑动返回功能
   const [swipeOffset, setSwipeOffset] = useState(0);
-  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const swipeStartRef = useRef({ x: 0, y: 0, time: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
-    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+    swipeStartRef.current = { 
+      x: touch.clientX, 
+      y: touch.clientY,
+      time: Date.now()
+    };
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -32,8 +36,15 @@ export default function TransactionDetail() {
   };
 
   const handleTouchEnd = () => {
-    // 如果滑动距离超过屏幕宽度的30%，触发返回
-    if (swipeOffset > window.innerWidth * 0.3) {
+    // 计算滑动速度（像素/毫秒）
+    const deltaTime = Date.now() - swipeStartRef.current.time;
+    const velocity = swipeOffset / deltaTime;
+
+    // 降低距离阈值到15%，或者快速滑动（速度>0.5px/ms）也能触发
+    const distanceThreshold = window.innerWidth * 0.15;
+    const velocityThreshold = 0.5;
+
+    if (swipeOffset > distanceThreshold || velocity > velocityThreshold) {
       setLocation(`/ledger/${ledgerId}`);
     } else {
       // 否则回弹

@@ -16,7 +16,7 @@ export default function LedgerSwipeContainer({
 }: LedgerSwipeContainerProps) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const swipeStartRef = useRef({ x: 0, y: 0 });
+  const swipeStartRef = useRef({ x: 0, y: 0, time: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 计算当前页面的基础偏移量
@@ -25,7 +25,11 @@ export default function LedgerSwipeContainer({
   // 处理触摸开始
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
-    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+    swipeStartRef.current = { 
+      x: touch.clientX, 
+      y: touch.clientY,
+      time: Date.now()
+    };
     setIsDragging(true);
   };
 
@@ -52,11 +56,17 @@ export default function LedgerSwipeContainer({
   const handleTouchEnd = () => {
     setIsDragging(false);
 
-    // 如果滑动距离超过屏幕宽度的30%，切换页面
-    const threshold = window.innerWidth * 0.3;
+    // 计算滑动速度（像素/毫秒）
+    const deltaTime = Date.now() - swipeStartRef.current.time;
+    const velocity = swipeOffset / deltaTime;
+
+    // 降低距离阈值到15%，或者快速滑动（速度>0.5px/ms）也能触发
+    const distanceThreshold = window.innerWidth * 0.15;
+    const velocityThreshold = 0.5;
 
     // 只处理详情页向右滑动返回列表页
-    if (currentView === "detail" && swipeOffset > threshold) {
+    if (currentView === "detail" && 
+        (swipeOffset > distanceThreshold || velocity > velocityThreshold)) {
       onViewChange("list");
     }
 
