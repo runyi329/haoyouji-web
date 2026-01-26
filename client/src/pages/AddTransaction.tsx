@@ -355,7 +355,7 @@ const AddTransaction = () => {
 
       {/* 金额显示 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
-        <div className="text-5xl font-bold text-gray-800">¥{amount}</div>
+        <div className="text-5xl font-light text-gray-800">{amount}</div>
       </div>
 
       {/* 可滚动内容区域 */}
