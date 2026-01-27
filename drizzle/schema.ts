@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal, tinyint, boolean } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const addition20Challenges = mysqlTable("addition20_challenges", {
@@ -458,27 +458,53 @@ export const knowledgeItems = mysqlTable("knowledge_items", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
+export const ledgerCategories = mysqlTable("ledger_categories", {
+	id: int().autoincrement().notNull(),
+	ledgerId: int().notNull(),
+	name: varchar({ length: 50 }).notNull(),
+	type: mysqlEnum(['income','expense']).notNull(),
+	parentId: int(),
+	icon: text(),
+	color: varchar({ length: 20 }),
+	sortOrder: int().default(0).notNull(),
+	isDefault: tinyint().default(0).notNull(),
+	createdBy: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
 export const ledgerMembers = mysqlTable("ledger_members", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
-	userId: int().notNull(), // AI雇员的userId为0
+	userId: int().notNull(),
 	role: mysqlEnum(['owner','member']).default('member').notNull(),
 	nickname: varchar({ length: 50 }),
-	// AI雇员相关字段
-	memberType: mysqlEnum('member_type', ['real','ai']).default('real').notNull(), // 成员类型：真实成员/AI雇员
-	avatarType: varchar('avatar_type', { length: 50 }), // AI雇员的头像类型（如'grandfather', 'father', 'mother'等）
-	// 权限字段：'all' = 全部，'own' = 仅自己
-	permissionView: mysqlEnum('permission_view', ['all','own']).default('all').notNull(), // 查看账目
-	permissionAdd: mysqlEnum('permission_add', ['all','own']).default('all').notNull(), // 添加账目
-	permissionEdit: mysqlEnum('permission_edit', ['all','own']).default('own').notNull(), // 修改账目
-	permissionDelete: mysqlEnum('permission_delete', ['all','own']).default('own').notNull(), // 删除账目
-	// 保留旧字段以兼容现有代码
+	memberType: mysqlEnum("member_type", ['real','ai']).default('real').notNull(),
+	avatarType: varchar("avatar_type", { length: 50 }),
+	permissionView: mysqlEnum("permission_view", ['all','own']).default('all').notNull(),
+	permissionAdd: mysqlEnum("permission_add", ['all','own']).default('all').notNull(),
+	permissionEdit: mysqlEnum("permission_edit", ['all','own']).default('own').notNull(),
+	permissionDelete: mysqlEnum("permission_delete", ['all','own']).default('own').notNull(),
 	canEdit: tinyint().default(1).notNull(),
 	canDelete: tinyint().default(0).notNull(),
 	canInvite: tinyint().default(0).notNull(),
 	invitedBy: int(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+export const ledgerRecords = mysqlTable("ledger_records", {
+	id: int().autoincrement().notNull(),
+	ledgerId: int().notNull(),
+	categoryId: int().notNull(),
+	amount: decimal({ precision: 10, scale: 2 }).notNull(),
+	type: mysqlEnum(['income','expense']).notNull(),
+	// you can use { mode: 'date' }, if you want to have Date as type for this column
+	date: date({ mode: 'string' }).notNull(),
+	description: text(),
+	createdBy: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
 export const ledgers = mysqlTable("ledgers", {
@@ -488,52 +514,13 @@ export const ledgers = mysqlTable("ledgers", {
 	type: varchar({ length: 50 }).default('personal').notNull(),
 	currency: varchar({ length: 10 }).default('CNY').notNull(),
 	icon: text(),
-	createdBy: int().notNull(),
+	createdBy: int().default(0).notNull(),
 	ownerId: int().notNull(),
 	isVip: tinyint().default(0).notNull(),
 	isArchived: tinyint().default(0).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
-
-export type Ledger = typeof ledgers.$inferSelect;
-export type InsertLedger = typeof ledgers.$inferInsert;
-
-// 账本分类表定义
-export const ledgerCategories = mysqlTable("ledger_categories", {
-  id: int().autoincrement().notNull(),
-  ledgerId: int().notNull(),
-  name: varchar({ length: 50 }).notNull(),
-  type: mysqlEnum(['income', 'expense']).notNull(),
-  parentId: int(),
-  icon: text(),
-  color: varchar({ length: 20 }),
-  sortOrder: int().default(0).notNull(),
-  isDefault: tinyint().default(0).notNull(),
-  createdBy: int().notNull(),
-  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-});
-
-export type LedgerCategory = typeof ledgerCategories.$inferSelect;
-export type InsertLedgerCategory = typeof ledgerCategories.$inferInsert;
-
-// 账本记录表定义
-export const ledgerRecords = mysqlTable("ledger_records", {
-  id: int().autoincrement().notNull(),
-  ledgerId: int().notNull(),
-  categoryId: int().notNull(),
-  amount: decimal({ precision: 10, scale: 2 }).notNull(),
-  type: mysqlEnum(['income', 'expense']).notNull(),
-  date: date().notNull(),
-  description: text(),
-  createdBy: int().notNull(),
-  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-});
-
-export type LedgerRecord = typeof ledgerRecords.$inferSelect;
-export type InsertLedgerRecord = typeof ledgerRecords.$inferInsert;
 
 export const loginAttempts = mysqlTable("login_attempts", {
 	id: int().autoincrement().notNull(),

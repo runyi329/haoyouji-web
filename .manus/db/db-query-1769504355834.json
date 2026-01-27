@@ -1,0 +1,27 @@
+{
+  "query": "SHOW CREATE TABLE ledger_records;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SHOW CREATE TABLE ledger_records;",
+  "rows": [
+    {
+      "Table": "ledger_records",
+      "Create Table": "CREATE TABLE `ledger_records` ("
+    }
+  ],
+  "messages": [
+    "  `id` int(11) NOT NULL AUTO_INCREMENT,",
+    "  `ledgerId` int(11) NOT NULL,",
+    "  `categoryId` int(11) NOT NULL,",
+    "  `amount` decimal(10,2) NOT NULL,",
+    "  `type` enum('income','expense') COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `date` date NOT NULL,",
+    "  `description` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `createdBy` int(11) NOT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  ],
+  "stdout": "Table\tCreate Table\nledger_records\tCREATE TABLE `ledger_records` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `ledgerId` int(11) NOT NULL,\n  `categoryId` int(11) NOT NULL,\n  `amount` decimal(10,2) NOT NULL,\n  `type` enum('income','expense') COLLATE utf8mb4_unicode_ci NOT NULL,\n  `date` date NOT NULL,\n  `description` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `createdBy` int(11) NOT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci\n",
+  "stderr": "",
+  "execution_time_ms": 1516
+}

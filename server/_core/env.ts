@@ -1,5 +1,10 @@
 export const ENV = {
   cookieSecret: process.env.JWT_SECRET ?? "",
+  // 主数据库（腾讯云）- 用于人脉和生产环境的账本
+  mainDatabaseUrl: process.env.ORIGINAL_DATABASE_URL ?? process.env.DATABASE_URL ?? "",
+  // 开发数据库（临时库）- 仅开发环境的账本使用
+  devDatabaseUrl: process.env.DATABASE_URL ?? "",
+  // 兼容旧代码
   databaseUrl: process.env.DATABASE_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",

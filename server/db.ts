@@ -66,17 +66,23 @@ export async function getDb() {
 }
 
 /**
- * 获取账本专用数据库连接（使用 Manus 临时数据库）
+ * 获取账本专用数据库连接
+ * - 开发环境：使用 Manus 临时数据库 (DATABASE_URL)
+ * - 生产环境：使用腾讯云数据库 (ORIGINAL_DATABASE_URL)
  */
 export async function getLedgerDb() {
   if (!_ledgerDb) {
-    // 账本功能使用 Manus 临时数据库
-    const dbUrl = process.env.DATABASE_URL;
+    const isProduction = process.env.NODE_ENV === "production";
+    // 生产环境使用腾讯云，开发环境使用临时库
+    const dbUrl = isProduction 
+      ? (process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL)
+      : process.env.DATABASE_URL;
     
     if (dbUrl) {
       try {
         _ledgerDb = drizzle(dbUrl);
-        console.log("[LedgerDatabase] 成功连接到 Manus 临时数据库（账本专用）");
+        const dbType = isProduction ? "腾讯云数据库（生产）" : "Manus临时数据库（开发）";
+        console.log(`[LedgerDatabase] 成功连接到${dbType}`);
       } catch (error) {
         console.warn("[LedgerDatabase] Failed to connect:", error);
         _ledgerDb = null;
