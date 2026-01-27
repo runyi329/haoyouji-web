@@ -39,6 +39,14 @@ export default function LedgerFilter() {
   const [showAmountRange, setShowAmountRange] = useState(false);
   const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
   const [showCustomDate, setShowCustomDate] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [showCategories, setShowCategories] = useState(false);
+
+  // 获取账本分类
+  const { data: categoriesData } = trpc.ledger.getCategories.useQuery({ 
+    ledgerId,
+    type: selectedType === "all" ? undefined : (selectedType as "income" | "expense")
+  });
 
   // 账目类型选项
   const transactionTypes = [
@@ -107,6 +115,7 @@ export default function LedgerFilter() {
     setAmountMax("");
     setSelectedType("all");
     setSelectedAccounts(["all"]);
+    setSelectedCategories([]);
     setNote("");
   };
 
@@ -306,6 +315,105 @@ export default function LedgerFilter() {
               </Button>
             ))}
           </div>
+        </div>
+
+        {/* 账目分类 */}
+        <div className="bg-white rounded-lg p-3 shadow-sm">
+          <button
+            onClick={() => setShowCategories(!showCategories)}
+            className="w-full flex items-center justify-between mb-2"
+          >
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">账目分类</label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">
+                {showCategories ? "点击收起" : "点击展开"}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
+                  showCategories ? "rotate-180" : ""
+                }`}
+              />
+            </div>
+          </button>
+          {showCategories && categoriesData && (
+            <div className="space-y-2">
+              {categoriesData.map((category: any) => (
+                <div key={category.id} className="space-y-1">
+                  <Button
+                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
+                    size="sm"
+                    className={`h-7 px-3 text-xs rounded-full ${
+                      selectedCategories.includes(category.id)
+                        ? "bg-blue-500 text-white hover:opacity-90"
+                        : "border-gray-200"
+                    }`}
+                    onClick={() => {
+                      setSelectedCategories(prev =>
+                        prev.includes(category.id)
+                          ? prev.filter(id => id !== category.id)
+                          : [...prev, category.id]
+                      );
+                    }}
+                  >
+                    {category.name}
+                  </Button>
+                  {/* 子分类 */}
+                  {category.children && category.children.length > 0 && (
+                    <div className="ml-4 flex flex-wrap gap-1.5">
+                      {category.children.map((subCategory: any) => (
+                        <div key={subCategory.id} className="space-y-1">
+                          <Button
+                            variant={selectedCategories.includes(subCategory.id) ? "default" : "outline"}
+                            size="sm"
+                            className={`h-6 px-2 text-xs rounded-full ${
+                              selectedCategories.includes(subCategory.id)
+                                ? "bg-blue-400 text-white hover:opacity-90"
+                                : "border-gray-200 text-gray-600"
+                            }`}
+                            onClick={() => {
+                              setSelectedCategories(prev =>
+                                prev.includes(subCategory.id)
+                                  ? prev.filter(id => id !== subCategory.id)
+                                  : [...prev, subCategory.id]
+                              );
+                            }}
+                          >
+                            {subCategory.name}
+                          </Button>
+                          {/* 三级分类 */}
+                          {subCategory.children && subCategory.children.length > 0 && (
+                            <div className="ml-4 flex flex-wrap gap-1">
+                              {subCategory.children.map((thirdCategory: any) => (
+                                <Button
+                                  key={thirdCategory.id}
+                                  variant={selectedCategories.includes(thirdCategory.id) ? "default" : "outline"}
+                                  size="sm"
+                                  className={`h-5 px-2 text-xs rounded-full ${
+                                    selectedCategories.includes(thirdCategory.id)
+                                      ? "bg-blue-300 text-white hover:opacity-90"
+                                      : "border-gray-200 text-gray-500"
+                                  }`}
+                                  onClick={() => {
+                                    setSelectedCategories(prev =>
+                                      prev.includes(thirdCategory.id)
+                                        ? prev.filter(id => id !== thirdCategory.id)
+                                        : [...prev, thirdCategory.id]
+                                    );
+                                  }}
+                                >
+                                  {thirdCategory.name}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 支付方式 */}
