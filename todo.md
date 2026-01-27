@@ -1420,3 +1420,8 @@
   - 问题：从账本列表点击进入账本详情页时，显示"An unexpected error occurred"
   - 原因：member.nickname为null时，调用.charAt(0)导致错误
   - 解决：添加空值检查，nickname为null时显示'?'作为默认头像
+
+- [x] 修复账本详情页崩溃问题（第二轮修复）
+  - 问题：从账本列表进入详情页仍然显示"An unexpected error occurred"
+  - 可能原因：membersData可能不是数组或为undefined，导致map函数调用失败
+  - 解决方案：添加Array.isArray检查和length > 0检查，确保只在有有效数据时才调用map
