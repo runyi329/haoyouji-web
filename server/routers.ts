@@ -5173,9 +5173,10 @@ export const appRouter = router({
         ledgerId: z.number(),
         year: z.number(),
         month: z.number(),
+        memberIds: z.array(z.number()).optional(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getCalendarData(input.ledgerId, ctx.user.id, input.year, input.month);
+        return await dbLedger.getCalendarData(input.ledgerId, ctx.user.id, input.year, input.month, input.memberIds);
       }),
 
     // 获取指定日期的记账记录
@@ -5183,9 +5184,10 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         date: z.string(),
+        memberIds: z.array(z.number()).optional(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date);
+        return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date, input.memberIds);
       }),
   }),
 });

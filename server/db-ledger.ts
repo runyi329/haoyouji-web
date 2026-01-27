@@ -1259,7 +1259,8 @@ export async function getCalendarData(
   ledgerId: number,
   requestUserId: number,
   year: number,
-  month: number
+  month: number,
+  memberIds?: number[]
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -1286,6 +1287,11 @@ export async function getCalendarData(
   const lastDay = new Date(year, month, 0).getDate();
   const monthEnd = `${year}-${monthStr}-${lastDay}`;
   
+  // 构建成员筛选条件
+  const memberCondition = memberIds && memberIds.length > 0
+    ? sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+    : undefined;
+  
   // 获取月度总统计
   const monthlyStatsRaw = await db
     .select({
@@ -1297,7 +1303,8 @@ export async function getCalendarData(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.date} >= ${monthStart}`,
-        sql`${ledgerRecords.date} <= ${monthEnd}`
+        sql`${ledgerRecords.date} <= ${monthEnd}`,
+        memberCondition
       )
     );
   
@@ -1318,7 +1325,8 @@ export async function getCalendarData(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.date} >= ${monthStart}`,
-        sql`${ledgerRecords.date} <= ${monthEnd}`
+        sql`${ledgerRecords.date} <= ${monthEnd}`,
+        memberCondition
       )
     )
     .groupBy(ledgerRecords.date);
@@ -1346,7 +1354,8 @@ export async function getCalendarData(
 export async function getDayRecords(
   ledgerId: number,
   requestUserId: number,
-  date: string
+  date: string,
+  memberIds?: number[]
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -1367,6 +1376,11 @@ export async function getDayRecords(
     throw new Error("您不是该账本的成员");
   }
   
+  // 构建成员筛选条件
+  const memberCondition = memberIds && memberIds.length > 0
+    ? sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+    : undefined;
+  
   // 获取指定日期的记录
   const records = await db
     .select({
@@ -1382,7 +1396,8 @@ export async function getDayRecords(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} = ${date}`
+        sql`${ledgerRecords.date} = ${date}`,
+        memberCondition
       )
     )
     .orderBy(desc(ledgerRecords.createdAt));
