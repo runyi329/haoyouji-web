@@ -1,0 +1,31 @@
+{
+  "query": "SELECT id, username, openId, role, familyId FROM users WHERE username IN ('hyy329', 'jiang', 'yunting');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, username, openId, role, familyId FROM users WHERE username IN ('hyy329', 'jiang', 'yunting');",
+  "rows": [
+    {
+      "id": "28",
+      "username": "hyy329",
+      "openId": "legacy_28_ce956a21bd83fb7d",
+      "role": "super_admin",
+      "familyId": "NULL"
+    },
+    {
+      "id": "870413",
+      "username": "jiang",
+      "openId": "legacy_870413_9e32d70bc0dcca31",
+      "role": "super_admin",
+      "familyId": "NULL"
+    },
+    {
+      "id": "540801",
+      "username": "yunting",
+      "openId": "legacy_540801_61b77a3545408c55",
+      "role": "parent",
+      "familyId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\topenId\trole\tfamilyId\n28\thyy329\tlegacy_28_ce956a21bd83fb7d\tsuper_admin\tNULL\n870413\tjiang\tlegacy_870413_9e32d70bc0dcca31\tsuper_admin\tNULL\n540801\tyunting\tlegacy_540801_61b77a3545408c55\tparent\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 1508
+}

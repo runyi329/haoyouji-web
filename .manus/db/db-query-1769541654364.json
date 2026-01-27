@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, username, name, role, isLocked, familyId, failedLoginAttempts, createdAt FROM users WHERE username IN ('hyy329', 'jiang', 'yunting');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, username, name, role, isLocked, familyId, failedLoginAttempts, createdAt FROM users WHERE username IN ('hyy329', 'jiang', 'yunting');",
+  "rows": [
+    {
+      "id": "28",
+      "username": "hyy329",
+      "name": "hyy329",
+      "role": "super_admin",
+      "isLocked": "0",
+      "familyId": "NULL",
+      "failedLoginAttempts": "0",
+      "createdAt": "2026-01-07 22:34:22"
+    },
+    {
+      "id": "870413",
+      "username": "jiang",
+      "name": "jiang",
+      "role": "super_admin",
+      "isLocked": "0",
+      "familyId": "NULL",
+      "failedLoginAttempts": "0",
+      "createdAt": "2026-01-11 17:41:14"
+    },
+    {
+      "id": "540801",
+      "username": "yunting",
+      "name": "Yunting",
+      "role": "parent",
+      "isLocked": "0",
+      "familyId": "NULL",
+      "failedLoginAttempts": "0",
+      "createdAt": "2026-01-10 03:25:17"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\trole\tisLocked\tfamilyId\tfailedLoginAttempts\tcreatedAt\n28\thyy329\thyy329\tsuper_admin\t0\tNULL\t0\t2026-01-07 22:34:22\n870413\tjiang\tjiang\tsuper_admin\t0\tNULL\t0\t2026-01-11 17:41:14\n540801\tyunting\tYunting\tparent\t0\tNULL\t0\t2026-01-10 03:25:17\n",
+  "stderr": "",
+  "execution_time_ms": 1550
+}

@@ -102,7 +102,7 @@ export const appRouter = router({
         }
         
         // 创建session token
-        const sessionToken = await sdk.createSessionToken(user.openId, {
+        const sessionToken = await sdk.createSessionToken(user.id.toString(), {
           expiresInMs: ONE_YEAR_MS,
           name: user.name || user.username || "",
         });
@@ -161,7 +161,7 @@ export const appRouter = router({
         }
         
         // 自动登录
-        const sessionToken = await sdk.createSessionToken(user.openId, {
+        const sessionToken = await sdk.createSessionToken(user.id.toString(), {
           expiresInMs: ONE_YEAR_MS,
           name: user.name || user.username || "",
         });
@@ -267,7 +267,7 @@ export const appRouter = router({
           }
           
           const { sdk } = await import("./_core/sdk");
-          const sessionToken = await sdk.createSessionToken(targetUser.openId, {
+          const sessionToken = await sdk.createSessionToken(targetUser.id.toString(), {
             name: targetUser.name || targetUser.username || "",
             expiresInMs: 24 * 60 * 60 * 1000,
           });
@@ -308,7 +308,7 @@ export const appRouter = router({
           }
           
           const { sdk } = await import("./_core/sdk");
-          const sessionToken = await sdk.createSessionToken(targetUser.openId, {
+          const sessionToken = await sdk.createSessionToken(targetUser.id.toString(), {
             name: targetUser.name || targetUser.username || "",
             expiresInMs: 24 * 60 * 60 * 1000,
           });
@@ -365,7 +365,7 @@ export const appRouter = router({
           }
           
           const { sdk } = await import("./_core/sdk");
-          const sessionToken = await sdk.createSessionToken(targetUser.openId, {
+          const sessionToken = await sdk.createSessionToken(targetUser.id.toString(), {
             name: targetUser.name || targetUser.username || "",
             expiresInMs: 24 * 60 * 60 * 1000,
           });
@@ -2330,7 +2330,7 @@ export const appRouter = router({
         }
         
         // 创建session token
-        const sessionToken = await sdk.createSessionToken(user.openId, {
+        const sessionToken = await sdk.createSessionToken(user.id.toString(), {
           expiresInMs: ONE_YEAR_MS,
           name: user.name || user.username || '',
         });
@@ -2589,7 +2589,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         // 验证家长密码
-        const user = await db.getUserByOpenId(ctx.user.openId);
+        const user = await db.getUserById(ctx.user.id);
         if (!user || !user.passwordHash) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "请先设置家长密码" });
         }
@@ -2622,7 +2622,7 @@ export const appRouter = router({
         }
 
         // 获取当前用户的密码哈希
-        const user = await db.getUserByOpenId(ctx.user.openId);
+        const user = await db.getUserById(ctx.user.id);
         if (!user || !user.passwordHash) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "未设置密码" });
         }

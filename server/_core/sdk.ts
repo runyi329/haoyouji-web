@@ -12,7 +12,7 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
 export type SessionPayload = {
-  openId: string;
+  userId: string;
   appId: string;
   name: string;
 };
@@ -38,12 +38,12 @@ class SDKServer {
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
   async createSessionToken(
-    openId: string,
+    userId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
     return this.signSession(
       {
-        openId,
+        userId,
         appId: "local-app",
         name: options.name || "",
       },
@@ -61,7 +61,7 @@ class SDKServer {
     const secretKey = this.getSessionSecret();
 
     return new SignJWT({
-      openId: payload.openId,
+      userId: payload.userId,
       appId: payload.appId,
       name: payload.name,
     })
@@ -72,7 +72,7 @@ class SDKServer {
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  ): Promise<{ userId: string; appId: string; name: string } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;
@@ -83,19 +83,19 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { userId, appId, name } = payload as Record<string, unknown>;
 
       if (
-        !isNonEmptyString(openId) ||
+        !isNonEmptyString(userId) ||
         !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
+        typeof name !== 'string'
       ) {
-        console.warn("[Auth] Session payload missing required fields");
+        console.warn("[Auth] Session payload missing required fields", { userId, appId, name });
         return null;
       }
 
       return {
-        openId,
+        userId,
         appId,
         name,
       };
@@ -115,18 +115,15 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.openId;
+    const sessionUserId = session.userId;
     const signedInAt = new Date();
-    const user = await db.getUserByOpenId(sessionUserId);
+    const user = await db.getUserById(parseInt(sessionUserId));
 
     if (!user) {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    await db.updateUserLastSignedIn(user.id, signedInAt);
 
     return user;
   }

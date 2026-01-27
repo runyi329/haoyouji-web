@@ -1518,3 +1518,20 @@
 - [x] 移除在forEach循环中调用useQuery的代码
 - [x] 暂时只使用一级分类，避免Hooks规则违反
 - [x] 测试添加记账和新建账本功能
+
+## 修复登录问题：将session系统从基于openId改为基于userId（2026-01-27）
+
+- [ ] 修改sdk.ts中的SessionPayload类型（openId → userId）
+- [ ] 修改createSessionToken函数接受userId
+- [ ] 修改authenticateRequest使用userId查找用户
+- [ ] 修改routers.ts中所有createSessionToken调用（user.openId → user.id.toString()）
+- [ ] 测试jiang和yunting账号登录
+
+## 彻底移除Manus OAuth，改为基于userId的session认证（2026-01-27）
+
+- [ ] 修改sdk.ts中的SessionPayload类型（openId → userId）
+- [ ] 修改createSessionToken函数接受userId参数
+- [ ] 修改authenticateRequest使用userId查找用户
+- [ ] 修改routers.ts中所有createSessionToken调用（user.openId → user.id.toString()）
+- [ ] 测试jiang和yunting账号登录
+- [ ] 测试hyy329账号登录
