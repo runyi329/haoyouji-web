@@ -5315,6 +5315,20 @@ export const appRouter = router({
         );
       }),
 
+    // 获取单条记账详情
+    getTransactionDetail: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        transactionId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getTransactionDetail(
+          input.ledgerId,
+          input.transactionId,
+          ctx.user.id
+        );
+      }),
+
     // 获取待审批的记账列表
     getPendingApprovals: protectedProcedure
       .input(z.object({

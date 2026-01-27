@@ -1541,10 +1541,8 @@ export async function getTransactionsList(
     conditions.push(eq(ledgerRecords.memberId, options.memberId));
   }
   
-  // 添加审批状态过滤：只显示已审批或不需审批的记录
-  conditions.push(
-    sql`(${ledgerRecords.approvalStatus} = 'approved' OR ${ledgerRecords.approvalStatus} = 'not_required')`
-  );
+  // 注意：不过滤审批状态，返回所有记账（包括待审批的）
+  // 前端会根据 approvalStatus 字段显示不同的状态图标
   
   // 获取记录
   const records = await db
@@ -1662,6 +1660,129 @@ export async function getTransactionsList(
   }));
   
   return result;
+}
+
+/**
+ * 获取单条记账详情
+ */
+export async function getTransactionDetail(
+  ledgerId: number,
+  transactionId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取记账详情
+  const record = await db
+    .select({
+      id: ledgerRecords.id,
+      ledgerId: ledgerRecords.ledgerId,
+      categoryId: ledgerRecords.categoryId,
+      amount: ledgerRecords.amount,
+      type: ledgerRecords.type,
+      date: ledgerRecords.date,
+      description: ledgerRecords.description,
+      createdBy: ledgerRecords.createdBy,
+      approvalStatus: ledgerRecords.approvalStatus,
+      createdAt: ledgerRecords.createdAt,
+      updatedAt: ledgerRecords.updatedAt,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.id, transactionId),
+        eq(ledgerRecords.ledgerId, ledgerId)
+      )
+    )
+    .limit(1);
+  
+  if (record.length === 0) {
+    throw new Error("记账不存在");
+  }
+  
+  const transaction = record[0];
+  
+  // 获取分类信息
+  const category = await db
+    .select({
+      id: ledgerCategories.id,
+      name: ledgerCategories.name,
+      parentId: ledgerCategories.parentId,
+    })
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, transaction.categoryId))
+    .limit(1);
+  
+  let categoryName = '';
+  let subcategoryName = '';
+  
+  if (category.length > 0) {
+    if (category[0].parentId) {
+      // 这是二级分类，需要获取父分类
+      const parentCategory = await db
+        .select({ name: ledgerCategories.name })
+        .from(ledgerCategories)
+        .where(eq(ledgerCategories.id, category[0].parentId))
+        .limit(1);
+      
+      if (parentCategory.length > 0) {
+        categoryName = parentCategory[0].name;
+        subcategoryName = category[0].name;
+      }
+    } else {
+      // 这是一级分类
+      categoryName = category[0].name;
+    }
+  }
+  
+  // 获取成员信息
+  const member = await db
+    .select({
+      userId: ledgerMembers.userId,
+      nickname: ledgerMembers.nickname,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, transaction.createdBy)
+      )
+    )
+    .limit(1);
+  
+  return {
+    id: transaction.id,
+    ledgerId: transaction.ledgerId,
+    amount: transaction.amount,
+    type: transaction.type,
+    date: transaction.date,
+    description: transaction.description,
+    category: categoryName,
+    subcategory: subcategoryName,
+    createdBy: transaction.createdBy,
+    approvalStatus: transaction.approvalStatus,
+    createdAt: transaction.createdAt,
+    updatedAt: transaction.updatedAt,
+    member: member.length > 0 ? member[0] : null,
+  };
 }
 
 /**

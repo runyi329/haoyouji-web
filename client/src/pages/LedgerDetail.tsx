@@ -39,6 +39,11 @@ export default function LedgerDetail() {
     limit: 100,
   });
 
+  // 获取待审批记账数量
+  const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
+    ledgerId: Number(ledgerId),
+  });
+
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   
@@ -279,6 +284,20 @@ export default function LedgerDetail() {
 
 
 
+      {/* 待审批提示 */}
+      {pendingApprovals.length > 0 && (
+        <div 
+          className="mx-4 mt-3 mb-2 bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-orange-100 transition-colors"
+          onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
+        >
+          <Search className="w-4 h-4 text-orange-600 flex-shrink-0" />
+          <span className="text-sm text-orange-800">
+            你有 <span className="font-semibold">{pendingApprovals.length}</span> 个待审批账目
+          </span>
+          <ChevronRight className="w-4 h-4 text-orange-600 ml-auto" />
+        </div>
+      )}
+
       {/* 记账记录列表 */}
       <div className="flex-1 px-4 pb-20 space-y-2">
         {!hasRecords ? (
@@ -326,6 +345,16 @@ export default function LedgerDetail() {
                             {record.category}
                             {record.subcategory && `–${record.subcategory}`}
                           </span>
+                          {/* 待审批图标 */}
+                          {record.approvalStatus === 'pending' && (
+                            <span className="ml-1 text-red-500 text-xs flex items-center gap-0.5">
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="12" cy="12" r="10" opacity="0.2" />
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
+                                <text x="12" y="16" textAnchor="middle" fontSize="10" fill="currentColor" fontWeight="bold">审</text>
+                              </svg>
+                            </span>
+                          )}
                         </div>
                         {record.description && (
                           <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>

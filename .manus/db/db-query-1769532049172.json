@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE ledger_records ADD COLUMN approvalStatus ENUM('pending','approved','rejected','not_required') NOT NULL DEFAULT 'not_required' AFTER createdBy;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute ALTER TABLE ledger_records ADD COLUMN approvalStatus ENUM('pending','approved','rejected','not_required') NOT NULL DEFAULT 'not_required' AFTER createdBy;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2188
+}
