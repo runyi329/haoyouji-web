@@ -716,7 +716,7 @@ export async function getRecentLoginAttempts(ipAddress: string, minutes: number 
   return db.select().from(loginAttempts)
     .where(and(
       eq(loginAttempts.ipAddress, ipAddress),
-      eq(loginAttempts.success, 0),
+      eq(loginAttempts.success, false),
       gte(loginAttempts.attemptedAt, cutoff)
     ));
 }
