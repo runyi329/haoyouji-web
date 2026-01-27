@@ -292,6 +292,18 @@ function ChartViewContent({
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [timeDimension, setTimeDimension] = useState<'month' | 'year' | 'custom'>('month');
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  
+  // 获取显示的时间范围文本
+  const getTimeRangeText = () => {
+    if (timeDimension === 'year') return `${chartYear}年`;
+    if (timeDimension === 'month') return `${chartYear}年${chartMonth}月`;
+    if (timeDimension === 'custom' && customStartDate && customEndDate) {
+      return `${customStartDate} 至 ${customEndDate}`;
+    }
+    return `${chartYear}年${chartMonth}月`;
+  };
   
   // 获取账本成员
   const { data: membersData } = trpc.ledger.getMembers.useQuery({ ledgerId });
@@ -341,26 +353,19 @@ function ChartViewContent({
       {/* 筛选器区域 */}
       <div className="bg-gradient-to-b from-blue-500 to-blue-600 text-white px-4 py-3">
         <div className="flex items-center justify-between gap-2">
-          {/* 日期选择器 */}
+          {/* 显示选择的时间范围 */}
           <div className="flex items-center gap-1 text-sm">
             <Calendar className="w-4 h-4" />
-            <span>{chartYear}年{chartMonth}月</span>
-            <button onClick={() => {
-              if (chartMonth === 12) {
-                setChartYear(chartYear + 1);
-                setChartMonth(1);
-              } else {
-                setChartMonth(chartMonth + 1);
-              }
-            }} className="p-0.5">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <span>{getTimeRangeText()}</span>
           </div>
           
           {/* 时间维度切换按钮 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
-              onClick={() => setTimeDimension('month')}
+              onClick={() => {
+                setTimeDimension('month');
+                setShowTimePicker(true);
+              }}
               className={`px-2 py-1 text-xs ${
                 timeDimension === 'month' 
                   ? "bg-white text-blue-600" 
@@ -370,7 +375,10 @@ function ChartViewContent({
               自然月
             </button>
             <button
-              onClick={() => setTimeDimension('year')}
+              onClick={() => {
+                setTimeDimension('year');
+                setShowTimePicker(true);
+              }}
               className={`px-2 py-1 text-xs ${
                 timeDimension === 'year' 
                   ? "bg-white text-blue-600" 
@@ -526,11 +534,15 @@ function ChartViewContent({
                 <div className="space-y-2">
                   <input
                     type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
                     className="w-full p-2 border border-gray-200 rounded"
                     placeholder="开始日期"
                   />
                   <input
                     type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
                     className="w-full p-2 border border-gray-200 rounded"
                     placeholder="结束日期"
                   />
