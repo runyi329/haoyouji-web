@@ -127,6 +127,7 @@ export default function LedgerReport() {
             selectedYear={selectedYear}
             monthlyData={monthlyData}
             formatAmount={formatAmount}
+            ledgerId={ledgerId}
           />
         )}
         {activeTab === "calendar" && (
@@ -276,13 +277,23 @@ function ChartViewContent({
   reportData,
   selectedYear,
   monthlyData,
-  formatAmount 
+  formatAmount,
+  ledgerId 
 }: { 
   reportData: any;
   selectedYear: number;
   monthlyData: any[];
   formatAmount: (n: number) => string;
+  ledgerId: number;
 }) {
+  const [chartYear, setChartYear] = useState(selectedYear);
+  const [chartMonth, setChartMonth] = useState(new Date().getMonth() + 1);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+  
+  // 获取账本成员
+  const { data: membersData } = trpc.ledger.getMembers.useQuery({ ledgerId });
+  
   const yearIncome = reportData?.yearlyStats?.income || 0;
   const yearExpense = reportData?.yearlyStats?.expense || 0;
   
@@ -299,9 +310,122 @@ function ChartViewContent({
   // 支出分类数据
   const expenseCategories = reportData?.categoryStats?.expense || [];
   const incomeCategories = reportData?.categoryStats?.income || [];
+  
+  // 成员显示文本
+  const getMemberDisplayText = () => {
+    if (selectedMemberIds.length === 0) return "全部成员";
+    if (selectedMemberIds.length === 1 && membersData) {
+      const member = membersData.find((m: any) => m.id === selectedMemberIds[0]);
+      return member?.nickname || "成员";
+    }
+    return "多选";
+  };
+  
+  // 切换成员选择
+  const toggleMember = (memberId: number) => {
+    if (memberId === 0) {
+      setSelectedMemberIds([]);
+    } else {
+      setSelectedMemberIds(prev => 
+        prev.includes(memberId) 
+          ? prev.filter(id => id !== memberId)
+          : [...prev, memberId]
+      );
+    }
+  };
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-4">
+      {/* 筛选器区域 */}
+      <div className="bg-gradient-to-b from-blue-500 to-blue-600 text-white px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          {/* 日期选择器 */}
+          <div className="flex items-center gap-1 text-sm">
+            <Calendar className="w-4 h-4" />
+            <span>{chartYear}年{chartMonth}月</span>
+            <button onClick={() => {
+              if (chartMonth === 12) {
+                setChartYear(chartYear + 1);
+                setChartMonth(1);
+              } else {
+                setChartMonth(chartMonth + 1);
+              }
+            }} className="p-0.5">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {/* 成员筛选按钮 */}
+          <button
+            onClick={() => setShowMemberPicker(true)}
+            className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
+          >
+            {(() => {
+              if (selectedMemberIds.length === 0) {
+                return <span className="text-[8px] leading-tight">全部<br />成员</span>;
+              }
+              if (selectedMemberIds.length === 1 && membersData) {
+                const member = membersData.find((m: any) => m.id === selectedMemberIds[0]);
+                if (member?.avatarUrl) {
+                  return <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />;
+                }
+                return <span className="text-[10px]">{member?.nickname?.charAt(0) || 'U'}</span>;
+              }
+              return <span className="text-[9px]">多选</span>;
+            })()}
+          </button>
+        </div>
+      </div>
+      
+      {/* 成员选择弹窗 */}
+      {showMemberPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowMemberPicker(false)}>
+          <div className="bg-white rounded-lg p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-medium mb-3">选择成员</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              <div 
+                onClick={() => toggleMember(0)}
+                className={`flex items-center p-2 rounded cursor-pointer ${
+                  selectedMemberIds.length === 0 ? 'bg-blue-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm mr-2">
+                  全
+                </div>
+                <span>全部成员</span>
+                {selectedMemberIds.length === 0 && <span className="ml-auto text-blue-600">✓</span>}
+              </div>
+              {membersData?.map((member: any) => (
+                <div 
+                  key={member.id}
+                  onClick={() => toggleMember(member.id)}
+                  className={`flex items-center p-2 rounded cursor-pointer ${
+                    selectedMemberIds.includes(member.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-sm mr-2">
+                      {member.nickname?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                  <span>{member.nickname}</span>
+                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-blue-600">✓</span>}
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={() => setShowMemberPicker(false)}
+              className="w-full mt-4 bg-blue-600 text-white py-2 rounded"
+            >
+              确定
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <div className="p-4 space-y-4">
       {/* 收支曲线 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
@@ -484,6 +608,7 @@ function ChartViewContent({
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );
