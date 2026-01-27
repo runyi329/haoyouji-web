@@ -1,0 +1,9 @@
+{
+  "query": "SELECT id, ipAddress, username, success, attemptedAt FROM login_attempts WHERE ipAddress = '::ffff:10.214.200.1' AND success = 0 AND attemptedAt >= '2026-01-27 17:46:16' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, ipAddress, username, success, attemptedAt FROM login_attempts WHERE ipAddress = '::ffff:10.214.200.1' AND success = 0 AND attemptedAt >= '2026-01-27 17:46:16' LIMIT 5;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1561
+}
