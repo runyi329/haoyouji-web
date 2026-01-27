@@ -22,10 +22,13 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
 
   const [position, setPosition] = useState(getInitialPosition);
   const [isDragging, setIsDragging] = useState(false);
+  const [isLongPressing, setIsLongPressing] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const currentPosRef = useRef(position);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const rafRef = useRef<number>();
+  const longPressTimerRef = useRef<NodeJS.Timeout>();
+  const hasMoved = useRef(false);
 
   // 同步position到ref
   useEffect(() => {
@@ -50,29 +53,64 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     };
   }, []);
 
+  // 清除长按定时器
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = undefined;
+    }
+  }, []);
+
   // 处理触摸开始
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
     e.stopPropagation();
     
     const touch = e.touches[0];
-    setIsDragging(true);
+    hasMoved.current = false;
     dragStartRef.current = {
       x: touch.clientX - currentPosRef.current.x,
       y: touch.clientY - currentPosRef.current.y,
     };
+
+    // 启动长按定时器（300ms后进入拖动模式）
+    longPressTimerRef.current = setTimeout(() => {
+      setIsLongPressing(true);
+      setIsDragging(true);
+      // 添加触觉反馈（如果支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, 300);
   }, []);
 
   // 处理触摸移动
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
     e.stopPropagation();
-
-    if (!isDragging) return;
 
     const touch = e.touches[0];
     const newX = touch.clientX - dragStartRef.current.x;
     const newY = touch.clientY - dragStartRef.current.y;
+
+    // 如果移动距离超过10px，认为是拖动意图，清除长按定时器
+    const moveDistance = Math.sqrt(
+      Math.pow(newX - currentPosRef.current.x, 2) +
+      Math.pow(newY - currentPosRef.current.y, 2)
+    );
+
+    if (moveDistance > 10) {
+      hasMoved.current = true;
+    }
+
+    // 只有在长按模式下才允许拖动
+    if (!isLongPressing) {
+      // 如果移动了但还没进入长按模式，清除定时器
+      if (hasMoved.current) {
+        clearLongPressTimer();
+      }
+      return;
+    }
+
+    e.preventDefault();
 
     // 使用 requestAnimationFrame 优化性能
     if (rafRef.current) {
@@ -88,38 +126,70 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
         buttonRef.current.style.transform = `translate(${constrained.x}px, ${constrained.y}px)`;
       }
     });
-  }, [isDragging, constrainPosition]);
+  }, [isLongPressing, constrainPosition, clearLongPressTimer]);
 
   // 处理触摸结束
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    e.preventDefault();
     e.stopPropagation();
     
-    setIsDragging(false);
-    // 触摸结束后更新 state，保存位置
-    setPosition(currentPosRef.current);
-  }, []);
+    clearLongPressTimer();
+
+    // 如果是拖动模式，保存位置
+    if (isDragging) {
+      e.preventDefault();
+      setIsDragging(false);
+      setIsLongPressing(false);
+      setPosition(currentPosRef.current);
+    } else if (!hasMoved.current) {
+      // 如果没有移动且不是拖动模式，触发点击事件
+      onClick();
+    }
+
+    hasMoved.current = false;
+  }, [isDragging, onClick, clearLongPressTimer]);
 
   // 处理鼠标开始（PC端）
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
     e.stopPropagation();
     
-    setIsDragging(true);
+    hasMoved.current = false;
     dragStartRef.current = {
       x: e.clientX - currentPosRef.current.x,
       y: e.clientY - currentPosRef.current.y,
     };
+
+    // 启动长按定时器（300ms后进入拖动模式）
+    longPressTimerRef.current = setTimeout(() => {
+      setIsLongPressing(true);
+      setIsDragging(true);
+    }, 300);
   }, []);
 
   // 处理鼠标移动（PC端）
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      e.preventDefault();
-
       const newX = e.clientX - dragStartRef.current.x;
       const newY = e.clientY - dragStartRef.current.y;
+
+      // 如果移动距离超过10px，认为是拖动意图
+      const moveDistance = Math.sqrt(
+        Math.pow(newX - currentPosRef.current.x, 2) +
+        Math.pow(newY - currentPosRef.current.y, 2)
+      );
+
+      if (moveDistance > 10) {
+        hasMoved.current = true;
+      }
+
+      // 只有在长按模式下才允许拖动
+      if (!isLongPressing) {
+        if (hasMoved.current) {
+          clearLongPressTimer();
+        }
+        return;
+      }
+
+      e.preventDefault();
 
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
@@ -136,13 +206,21 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     };
 
     const handleMouseUp = () => {
+      clearLongPressTimer();
+
       if (isDragging) {
         setIsDragging(false);
+        setIsLongPressing(false);
         setPosition(currentPosRef.current);
+      } else if (!hasMoved.current) {
+        // 如果没有移动且不是拖动模式，触发点击事件
+        onClick();
       }
+
+      hasMoved.current = false;
     };
 
-    if (isDragging) {
+    if (isDragging || longPressTimerRef.current) {
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
     }
@@ -154,32 +232,27 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isDragging, constrainPosition]);
-
-  // 处理点击事件
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClick();
-  }, [onClick]);
+  }, [isDragging, isLongPressing, onClick, constrainPosition, clearLongPressTimer]);
 
   return (
     <Button
       ref={buttonRef}
       size="icon"
-      className="fixed w-14 h-14 rounded-full bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] shadow-lg z-50 select-none"
+      className={`fixed w-14 h-14 rounded-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white shadow-lg z-50 select-none transition-transform ${
+        isLongPressing ? "scale-110" : ""
+      }`}
       style={{
         left: 0,
         top: 0,
         transform: `translate(${position.x}px, ${position.y}px)`,
         touchAction: "none",
         willChange: "transform",
-        cursor: isDragging ? "grabbing" : "grab",
+        cursor: isDragging ? "grabbing" : "pointer",
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
-      onClick={handleClick}
     >
       <Plus className="w-7 h-7" />
     </Button>
