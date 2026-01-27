@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 
@@ -35,6 +35,7 @@ export default function LedgerFilter() {
   const [selectedType, setSelectedType] = useState("all");
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [note, setNote] = useState("");
+  const [showAmountRange, setShowAmountRange] = useState(false);
 
   // 账目类型选项
   const transactionTypes = [
@@ -134,24 +135,41 @@ export default function LedgerFilter() {
 
         {/* 金额范围 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">金额范围</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="最小金额"
-              value={amountMin}
-              onChange={(e) => setAmountMin(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-            />
-            <span className="text-gray-400 text-xs">至</span>
-            <input
-              type="text"
-              placeholder="最大金额"
-              value={amountMax}
-              onChange={(e) => setAmountMax(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-            />
-          </div>
+          <button
+            onClick={() => setShowAmountRange(!showAmountRange)}
+            className="w-full flex items-center justify-between mb-2"
+          >
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">金额范围</label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">
+                {showAmountRange ? "点击收起" : "点击展开"}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
+                  showAmountRange ? "rotate-180" : ""
+                }`}
+              />
+            </div>
+          </button>
+          {showAmountRange && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="最小金额"
+                value={amountMin}
+                onChange={(e) => setAmountMin(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              />
+              <span className="text-gray-400 text-xs">至</span>
+              <input
+                type="text"
+                placeholder="最大金额"
+                value={amountMax}
+                onChange={(e) => setAmountMax(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              />
+            </div>
+          )}
         </div>
 
         {/* 账目类型 */}
