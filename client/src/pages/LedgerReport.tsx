@@ -290,6 +290,8 @@ function ChartViewContent({
   const [chartMonth, setChartMonth] = useState(new Date().getMonth() + 1);
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [timeDimension, setTimeDimension] = useState<'month' | 'year' | 'custom'>('month');
+  const [showTimePicker, setShowTimePicker] = useState(false);
   
   // 获取账本成员
   const { data: membersData } = trpc.ledger.getMembers.useQuery({ ledgerId });
@@ -352,6 +354,43 @@ function ChartViewContent({
               }
             }} className="p-0.5">
               <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {/* 时间维度切换按钮 */}
+          <div className="flex bg-white/20 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setTimeDimension('month')}
+              className={`px-2 py-1 text-xs ${
+                timeDimension === 'month' 
+                  ? "bg-white text-blue-600" 
+                  : "text-white"
+              }`}
+            >
+              自然月
+            </button>
+            <button
+              onClick={() => setTimeDimension('year')}
+              className={`px-2 py-1 text-xs ${
+                timeDimension === 'year' 
+                  ? "bg-white text-blue-600" 
+                  : "text-white"
+              }`}
+            >
+              自然年
+            </button>
+            <button
+              onClick={() => {
+                setTimeDimension('custom');
+                setShowTimePicker(true);
+              }}
+              className={`px-2 py-1 text-xs ${
+                timeDimension === 'custom' 
+                  ? "bg-white text-blue-600" 
+                  : "text-white"
+              }`}
+            >
+              自定义
             </button>
           </div>
           
@@ -421,6 +460,99 @@ function ChartViewContent({
             >
               确定
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 时间选择弹窗 */}
+      {showTimePicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTimePicker(false)}>
+          <div className="bg-white rounded-lg p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-medium mb-3">选择时间范围</h3>
+            
+            {/* 时间维度切换 */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setTimeDimension('month')}
+                className={`flex-1 py-2 rounded ${
+                  timeDimension === 'month' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                自然月
+              </button>
+              <button
+                onClick={() => setTimeDimension('year')}
+                className={`flex-1 py-2 rounded ${
+                  timeDimension === 'year' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                自然年
+              </button>
+              <button
+                onClick={() => setTimeDimension('custom')}
+                className={`flex-1 py-2 rounded ${
+                  timeDimension === 'custom' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                自定义
+              </button>
+            </div>
+            
+            {/* 时间输入 */}
+            <div className="mb-4">
+              {timeDimension === 'year' && (
+                <input
+                  type="text"
+                  value={`${chartYear}年`}
+                  readOnly
+                  className="w-full p-3 border border-gray-200 rounded text-center text-blue-600"
+                />
+              )}
+              {timeDimension === 'month' && (
+                <input
+                  type="text"
+                  value={`${chartYear}年${chartMonth}月`}
+                  readOnly
+                  className="w-full p-3 border border-gray-200 rounded text-center text-blue-600"
+                />
+              )}
+              {timeDimension === 'custom' && (
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    className="w-full p-2 border border-gray-200 rounded"
+                    placeholder="开始日期"
+                  />
+                  <input
+                    type="date"
+                    className="w-full p-2 border border-gray-200 rounded"
+                    placeholder="结束日期"
+                  />
+                </div>
+              )}
+            </div>
+            
+            {/* 按钮 */}
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowTimePicker(false)}
+                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => setShowTimePicker(false)}
+                className="flex-1 bg-blue-600 text-white py-2 rounded"
+              >
+                确定
+              </button>
+            </div>
           </div>
         </div>
       )}
