@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-
+import DraggableAddButton from "@/components/DraggableAddButton";
 import MembersDialog from "@/components/MembersDialog";
 
 import {
@@ -374,18 +374,8 @@ export default function LedgerDetail() {
         )}
       </div>
 
-      {/* 固定底部中间的添加账目按钮 */}
-      <Button
-        onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-        style={{ backgroundColor: '#f97316' }}
-        size="icon"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </Button>
+      {/* 可拖动悬浮加号按钮 */}
+      <DraggableAddButton onClick={() => setLocation(`/ledger/${ledgerId}/add`)} />
 
       {/* 成员列表弹窗 */}
       {membersData && (
