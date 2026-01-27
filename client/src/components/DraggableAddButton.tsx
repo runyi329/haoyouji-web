@@ -69,11 +69,15 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     hasMoved.current = false;
     startPosRef.current = { x: touch.clientX, y: touch.clientY };
     
-    // 计算手指相对于按钮左上角的偏移
-    dragOffsetRef.current = {
-      x: touch.clientX - currentPosRef.current.x,
-      y: touch.clientY - currentPosRef.current.y,
-    };
+    // 从 DOM 获取按钮的当前位置
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      // 计算手指相对于按钮左上角的偏移
+      dragOffsetRef.current = {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    }
 
     // 启动长按定时器（300ms后进入拖动模式）
     longPressTimerRef.current = setTimeout(() => {
@@ -154,11 +158,15 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     hasMoved.current = false;
     startPosRef.current = { x: e.clientX, y: e.clientY };
     
-    // 计算鼠标相对于按钮左上角的偏移
-    dragOffsetRef.current = {
-      x: e.clientX - currentPosRef.current.x,
-      y: e.clientY - currentPosRef.current.y,
-    };
+    // 从 DOM 获取按钮的当前位置
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      // 计算鼠标相对于按钮左上角的偏移
+      dragOffsetRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    }
 
     // 启动长按定时器（300ms后进入拖动模式）
     longPressTimerRef.current = setTimeout(() => {
