@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, ledger_id, name, parent_id, type, sort_order \nFROM ledger_categories \nORDER BY ledger_id, parent_id, sort_order \nLIMIT 50;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, ledger_id, name, parent_id, type, sort_order \nFROM ledger_categories \nORDER BY ledger_id, parent_id, sort_order \nLIMIT 50;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'ledger_id' in 'field list'"
+  ]
+}

@@ -356,10 +356,8 @@ export async function getLedgerCategories(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 如果提供userId，验证用户是否是账本成员
-  if (userId) {
-    await verifyLedgerMember(ledgerId, userId);
-  }
+  // 预设分类（ledgerId=0）对所有用户可见，不需要验证成员身份
+  // 用户自定义分类由后续逻辑处理
   
   // 构建查询条件：同时查询预设分类（ledgerId=0）和用户自定义分类（ledgerId=具体账本ID）
   const ledgerConditions = [eq(ledgerCategories.ledgerId, ledgerId)];
