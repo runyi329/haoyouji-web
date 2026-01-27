@@ -1,0 +1,29 @@
+{
+  "query": "SELECT * FROM ledger_members WHERE ledgerId = 60008;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT * FROM ledger_members WHERE ledgerId = 60008;",
+  "rows": [
+    {
+      "id": "60006",
+      "ledgerId": "60008",
+      "userId": "28",
+      "role": "owner",
+      "nickname": "'",
+      "member_type": "real",
+      "avatar_type": "NULL",
+      "permission_view": "all",
+      "permission_add": "all",
+      "permission_edit": "all",
+      "permission_delete": "all",
+      "canEdit": "1",
+      "canDelete": "1",
+      "canInvite": "1",
+      "invitedBy": "NULL",
+      "createdAt": "2026-01-26 18:25:54",
+      "updatedAt": "2026-01-27 02:57:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tledgerId\tuserId\trole\tnickname\tmember_type\tavatar_type\tpermission_view\tpermission_add\tpermission_edit\tpermission_delete\tcanEdit\tcanDelete\tcanInvite\tinvitedBy\tcreatedAt\tupdatedAt\n60006\t60008\t28\towner\t'\treal\tNULL\tall\tall\tall\tall\t1\t1\t1\tNULL\t2026-01-26 18:25:54\t2026-01-27 02:57:00\n",
+  "stderr": "",
+  "execution_time_ms": 1598
+}

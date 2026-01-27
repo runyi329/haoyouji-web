@@ -355,11 +355,10 @@ export default function LedgerFilter() {
             </div>
           </button>
           {showCategories && categoryTree.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {categoryTree.map((category: any) => (
-                <div key={category.id} className="flex items-start gap-2">
-                  <div className="flex-shrink-0">
-                    <Button
+                <div key={category.id} className="space-y-1">
+                  <Button
                     variant={selectedCategories.includes(category.id) ? "default" : "outline"}
                     size="sm"
                     className={`h-7 px-3 text-xs rounded-full ${
@@ -377,21 +376,17 @@ export default function LedgerFilter() {
                   >
                     {category.name}
                   </Button>
-                  </div>
-                  {/* 二级和三级分类 */}
+                  {/* 子分类 */}
                   {category.children && category.children.length > 0 && (
-                    <div className="flex-1 flex items-start gap-2">
-                      <span className="text-gray-400 text-xs mt-1.5">→</span>
-                      <div className="flex-1 space-y-2">
+                    <div className="ml-4 flex flex-wrap gap-1.5">
                       {category.children.map((subCategory: any) => (
-                        <div key={subCategory.id} className="flex items-start gap-2">
-                          <div className="flex-shrink-0">
-                            <Button
+                        <div key={subCategory.id} className="space-y-1">
+                          <Button
                             variant={selectedCategories.includes(subCategory.id) ? "default" : "outline"}
                             size="sm"
-                            className={`h-6 px-2.5 text-xs rounded-full ${
+                            className={`h-6 px-2 text-xs rounded-full ${
                               selectedCategories.includes(subCategory.id)
-                                ? "bg-orange-500 text-white hover:opacity-90"
+                                ? "bg-blue-400 text-white hover:opacity-90"
                                 : "border-gray-200 text-gray-600"
                             }`}
                             onClick={() => {
@@ -404,20 +399,17 @@ export default function LedgerFilter() {
                           >
                             {subCategory.name}
                           </Button>
-                          </div>
                           {/* 三级分类 */}
                           {subCategory.children && subCategory.children.length > 0 && (
-                            <div className="flex-1 flex items-center gap-2">
-                              <span className="text-gray-300 text-xs">→</span>
-                              <div className="flex flex-wrap gap-1.5">
+                            <div className="ml-4 flex flex-wrap gap-1">
                               {subCategory.children.map((thirdCategory: any) => (
                                 <Button
                                   key={thirdCategory.id}
                                   variant={selectedCategories.includes(thirdCategory.id) ? "default" : "outline"}
                                   size="sm"
-                                  className={`h-6 px-2 text-xs rounded-full ${
+                                  className={`h-5 px-2 text-xs rounded-full ${
                                     selectedCategories.includes(thirdCategory.id)
-                                      ? "bg-green-500 text-white hover:opacity-90"
+                                      ? "bg-blue-300 text-white hover:opacity-90"
                                       : "border-gray-200 text-gray-500"
                                   }`}
                                   onClick={() => {
@@ -432,11 +424,9 @@ export default function LedgerFilter() {
                                 </Button>
                               ))}
                             </div>
-                          </div>
                           )}
                         </div>
                       ))}
-                      </div>
                     </div>
                   )}
                 </div>
