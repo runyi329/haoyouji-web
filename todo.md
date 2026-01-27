@@ -1518,3 +1518,10 @@
 - [x] 移除在forEach循环中调用useQuery的代码
 - [x] 暂时只使用一级分类，避免Hooks规则违反
 - [x] 测试添加记账和新建账本功能
+
+
+## 修复临时手机预览页登录错误（2026-01-28）
+
+- [x] 检查数据库schema中login_attempts表是否存在
+- [x] 手动创建login_attempts表（因为db:push失败）
+- [x] 测试登录功能
