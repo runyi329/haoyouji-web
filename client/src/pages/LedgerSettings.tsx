@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft, X, Pencil, Check } from "lucide-react";
+import { ChevronRight, ChevronLeft, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -36,8 +34,6 @@ export default function LedgerSettings() {
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [newLedgerName, setNewLedgerName] = useState("");
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -53,19 +49,6 @@ export default function LedgerSettings() {
     },
   });
 
-  // 更新账本名称的mutation
-  const updateLedgerNameMutation = trpc.ledger.update.useMutation({
-    onSuccess: () => {
-      toast.success("账本名称已更新");
-      utils.ledger.getById.invalidate({ ledgerId });
-      utils.ledger.list.invalidate();
-      setIsEditingName(false);
-    },
-    onError: (error) => {
-      toast.error(error.message || "更新失败");
-    },
-  });
-
   // 处理移除成员
   const handleRemoveMember = () => {
     if (memberToRemove) {
@@ -74,30 +57,6 @@ export default function LedgerSettings() {
         userId: memberToRemove.userId,
       });
     }
-  };
-
-  // 开始编辑账本名称
-  const handleStartEditName = () => {
-    setNewLedgerName(ledgerData?.name || "");
-    setIsEditingName(true);
-  };
-
-  // 保存账本名称
-  const handleSaveName = () => {
-    if (!newLedgerName.trim()) {
-      toast.error("账本名称不能为空");
-      return;
-    }
-    updateLedgerNameMutation.mutate({
-      ledgerId,
-      name: newLedgerName.trim(),
-    });
-  };
-
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setIsEditingName(false);
-    setNewLedgerName("");
   };
 
   if (isLoading) {
@@ -187,50 +146,18 @@ export default function LedgerSettings() {
 
       {/* 基本设置 */}
       <div className="bg-white mt-3">
-        {/* 账本名称编辑 */}
-        {isEditingName ? (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <span className="text-[15px] text-gray-900">账本名称</span>
-            <div className="flex items-center gap-2">
-              <Input
-                value={newLedgerName}
-                onChange={(e) => setNewLedgerName(e.target.value)}
-                className="h-8 w-32 text-sm"
-                placeholder="输入账本名称"
-                autoFocus
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0"
-                onClick={handleSaveName}
-                disabled={updateLedgerNameMutation.isPending}
-              >
-                <Check className="w-4 h-4 text-green-600" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0"
-                onClick={handleCancelEdit}
-              >
-                <X className="w-4 h-4 text-gray-500" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div 
-            className="flex items-center justify-between px-4 py-3 border-b border-gray-100 cursor-pointer active:bg-gray-50"
-            onClick={handleStartEditName}
-          >
-            <span className="text-[15px] text-gray-900">账本名称</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] text-gray-500">{ledgerData.name}</span>
-              <Pencil className="w-4 h-4 text-gray-400" />
-            </div>
-          </div>
-        )}
-        <SettingItem label="我在账本的昵称" value={members?.[0]?.nickname || "未设置"} />
+        <SettingItem 
+          label="账本名称" 
+          value={ledgerData.name} 
+          showIcon 
+          onClick={() => setLocation(`/ledger/${ledgerId}/edit-name`)}
+        />
+        <SettingItem 
+          label="我在账本的昵称" 
+          value={members?.[0]?.nickname || "未设置"} 
+          showIcon 
+          onClick={() => setLocation(`/ledger/${ledgerId}/edit-nickname`)}
+        />
         <SettingItem label="账本二维码（邀请伙伴）" showIcon />
         <SettingItem label="定时提醒记账" showIcon />
         <SettingItem 
