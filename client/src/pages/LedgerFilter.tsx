@@ -38,16 +38,11 @@ export default function LedgerFilter() {
   const [note, setNote] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // 账目类型选项（使用账本主题颜色）
+  // 账目类型选项
   const transactionTypes = [
     { value: "all", label: "不限制", color: "bg-blue-500" },
     { value: "expense", label: "支出", color: "bg-orange-500" },
     { value: "income", label: "收入", color: "bg-green-500" },
-    { value: "transfer", label: "内部转账", color: "bg-purple-500" },
-    { value: "receivable", label: "待收", color: "bg-blue-400" },
-    { value: "payable", label: "待支", color: "bg-orange-400" },
-    { value: "lend", label: "借出", color: "bg-green-400" },
-    { value: "borrow", label: "借入", color: "bg-purple-400" },
   ];
 
   // 资金账户选项
