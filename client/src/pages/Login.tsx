@@ -28,30 +28,19 @@ export default function Login() {
 
   const utils = trpc.useUtils();
 
-  // 游客模式登录
-  const guestLoginMutation = trpc.auth.guestLogin.useMutation({
-    onSuccess: (data) => {
-      toast.success("已以游客模式进入！");
-      // 先刷新认证状态
-      utils.auth.me.invalidate();
-      // 给浏览器200ms时间处理cookie
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 200);
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const handleGuestLogin = () => {
-    guestLoginMutation.mutate();
+  // 纯前端预览模式（不调用后端API）
+  const handlePreviewMode = () => {
+    toast.success("已进入预览模式！");
+    // 直接跳转到主页，不调用任何后端API
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 500);
   };
   
   // 处理长按开始
   const handlePressStart = () => {
     const timer = setTimeout(() => {
-      handleGuestLogin();
+      handlePreviewMode();
     }, 2000); // 2秒
     setPressTimer(timer);
   };
@@ -153,7 +142,7 @@ export default function Login() {
               onTouchStart={handlePressStart}
               onTouchEnd={handlePressEnd}
               onTouchCancel={handlePressEnd}
-              title="长按2秒进入游客模式"
+              title="长按2秒进入预览模式"
             >
               <img 
                 src="/maidong-hyy.png" 
