@@ -50,8 +50,30 @@ export default function AddContact() {
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
+  // 模糊查询相关状态
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  
   // 获取所有可用的字段类目（树状结构）
   const { data: fieldCategories } = trpc.contacts.fieldValues.categories.useQuery();
+  
+  // 模糊搜索已有人脉
+  const { data: suggestions } = trpc.contacts.list.useQuery(
+    { searchQuery: searchQuery || undefined },
+    { enabled: searchQuery.length > 0 && !isEditMode } // 只在添加模式下启用
+  );
+  
+  // 处理姓名输入变化
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setSearchQuery(value);
+    setShowSuggestions(value.length > 0);
+  };
+  
+  // 点击建议项跳转到详情页
+  const handleSuggestionClick = (contactId: number) => {
+    setLocation(`/parent/contacts/${contactId}`);
+  };
   
   // 编辑模式：加载现有数据
   const { data: existingContact } = trpc.contacts.get.useQuery(
@@ -242,16 +264,52 @@ export default function AddContact() {
             <CardTitle>基本信息</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="name">
                 姓名 <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
+                onFocus={() => setShowSuggestions(searchQuery.length > 0)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 placeholder="请输入姓名"
               />
+              
+              {/* 模糊查询下拉框 */}
+              {showSuggestions && suggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
+                    找到 {suggestions.length} 个相似的人脉，点击查看详情
+                  </div>
+                  {suggestions.map((contact: any) => (
+                    <div
+                      key={contact.id}
+                      onClick={() => handleSuggestionClick(contact.id)}
+                      className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    >
+                      <div className="font-medium text-sm">{contact.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
+                        {contact.title && <div>称呼：{contact.title}</div>}
+                        {contact.fieldValues && contact.fieldValues.length > 0 && (
+                          <div>
+                            {contact.fieldValues
+                              .slice(0, 3)
+                              .map((fv: any, idx: number) => (
+                                <span key={idx}>
+                                  {fv.categoryName}：{fv.value}
+                                  {idx < Math.min(contact.fieldValues.length, 3) - 1 && ' · '}
+                                </span>
+                              ))}
+                          </div>
+                        )}
+                        {contact.region && <div>所在地：{contact.region}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

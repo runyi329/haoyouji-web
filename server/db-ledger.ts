@@ -121,36 +121,7 @@ export async function createLedger(data: {
     canInvite: 1,
   });
 
-  // 创建默认分类
-  const defaultCategories = [
-    // 收入分类
-    { name: "工资", type: "income" as const, icon: "💰", color: "#10b981" },
-    { name: "奖金", type: "income" as const, icon: "🎁", color: "#10b981" },
-    { name: "投资收益", type: "income" as const, icon: "📈", color: "#10b981" },
-    { name: "其他收入", type: "income" as const, icon: "💵", color: "#10b981" },
-    // 支出分类
-    { name: "餐饮", type: "expense" as const, icon: "🍜", color: "#ef4444" },
-    { name: "交通", type: "expense" as const, icon: "🚗", color: "#ef4444" },
-    { name: "购物", type: "expense" as const, icon: "🛍️", color: "#ef4444" },
-    { name: "娱乐", type: "expense" as const, icon: "🎮", color: "#ef4444" },
-    { name: "医疗", type: "expense" as const, icon: "💊", color: "#ef4444" },
-    { name: "教育", type: "expense" as const, icon: "📚", color: "#ef4444" },
-    { name: "住房", type: "expense" as const, icon: "🏠", color: "#ef4444" },
-    { name: "其他支出", type: "expense" as const, icon: "💸", color: "#ef4444" },
-  ];
-
-  await db.insert(ledgerCategories).values(
-    defaultCategories.map((cat, index) => ({
-      ledgerId: newLedgerId,
-      name: cat.name,
-      type: cat.type,
-      icon: cat.icon,
-      color: cat.color,
-      sortOrder: index,
-      isDefault: true,
-      createdBy: data.createdBy,
-    }))
-  );
+  // 不再创建默认分类，用户可以自己添加或使用全局预设分类（ledgerId=0）
 
   return { id: newLedgerId, name: data.name };
 }

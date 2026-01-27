@@ -4,14 +4,14 @@ import { Loader2 } from "lucide-react";
 
 /**
  * 首页组件
- * 直接跳转到账本列表页
+ * 直接跳转到脉动首页（联系人管理）
  */
 export default function Home() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    // 直接跳转到账本列表页
-    setLocation("/ledger");
+    // 直接跳转到脉动首页
+    setLocation("/contacts");
   }, [setLocation]);
 
   // 显示加载状态

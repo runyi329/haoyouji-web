@@ -3292,7 +3292,7 @@ export const appRouter = router({
           fieldValues,
           lastInteractionDate: interactionInfo.lastInteraction,
           daysSinceLastInteraction: interactionInfo.lastInteraction 
-            ? Math.floor((Date.now() - interactionInfo.lastInteraction) / (1000 * 60 * 60 * 24))
+            ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
             : null,
           hasTodayInteraction: interactionInfo.hasTodayInteraction,
           hasReferrer: contact.referrerId !== null && contact.referrerId !== undefined,
@@ -3362,7 +3362,7 @@ export const appRouter = router({
         interactions,
         lastInteractionDate: lastInteraction,
         daysSinceLastInteraction: lastInteraction 
-          ? Math.floor((Date.now() - lastInteraction) / (1000 * 60 * 60 * 24))
+          ? Math.floor((Date.now() - new Date(lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
           : null,
         hasTodayInteraction,
         hasReferrer: contact.referrerId !== null && contact.referrerId !== undefined,
@@ -4607,7 +4607,7 @@ export const appRouter = router({
             // 联络信息始终显示（让接收方知道分享者的联络情况）
             result.lastInteractionDate = interactionInfo.lastInteraction;
             result.daysSinceLastInteraction = interactionInfo.lastInteraction 
-              ? Math.floor((Date.now() - interactionInfo.lastInteraction) / (1000 * 60 * 60 * 24))
+              ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
               : null;
             result.hasTodayInteraction = interactionInfo.hasTodayInteraction;
             result.totalInteractions = interactionStats?.totalInteractions || 0;
