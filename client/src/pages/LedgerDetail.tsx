@@ -163,14 +163,8 @@ export default function LedgerDetail() {
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-2 flex-1 justify-center">
+          <div className="flex items-center flex-1">
             <h1 className="text-lg font-medium">{ledgerData.name}</h1>
-            <button
-              onClick={() => setLocation("/ledger")}
-              className="flex items-center justify-center p-1"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
           </div>
         </div>
 
