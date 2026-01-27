@@ -1078,3 +1078,175 @@ export async function updateMemberNickname(
   
   return { success: true };
 }
+
+/**
+ * 获取账本报表数据
+ */
+export async function getLedgerReport(
+  ledgerId: number,
+  requestUserId: number,
+  year: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取年度统计数据
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  
+  // 获取年度总收入和支出
+  const yearlyStats = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${yearStart}`,
+        sql`${ledgerRecords.date} <= ${yearEnd}`
+      )
+    );
+  
+  const income = Number(yearlyStats[0]?.totalIncome || 0);
+  const expense = Number(yearlyStats[0]?.totalExpense || 0);
+  
+  // 获取成员统计数据
+  const memberStatsRaw = await db
+    .select({
+      userId: ledgerRecords.createdBy,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${yearStart}`,
+        sql`${ledgerRecords.date} <= ${yearEnd}`
+      )
+    )
+    .groupBy(ledgerRecords.createdBy);
+  
+  // 获取成员昵称
+  const members = await db
+    .select({
+      userId: ledgerMembers.userId,
+      nickname: ledgerMembers.nickname,
+    })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.ledgerId, ledgerId));
+  
+  const memberNicknameMap = new Map(members.map((m: any) => [m.userId, m.nickname]));
+  
+  const memberStats = memberStatsRaw.map((stat: any) => ({
+    userId: stat.userId,
+    nickname: memberNicknameMap.get(stat.userId) || '未知用户',
+    income: Number(stat.totalIncome || 0),
+    expense: Number(stat.totalExpense || 0),
+  }));
+  
+  // 获取月度统计数据
+  const monthlyStatsRaw = await db
+    .select({
+      month: sql<number>`MONTH(${ledgerRecords.date})`,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${yearStart}`,
+        sql`${ledgerRecords.date} <= ${yearEnd}`
+      )
+    )
+    .groupBy(sql`MONTH(${ledgerRecords.date})`);
+  
+  const monthlyStats = Array.from({ length: 12 }, (_, i) => {
+    const monthData = monthlyStatsRaw.find((m: any) => Number(m.month) === i + 1);
+    return {
+      month: i + 1,
+      income: Number(monthData?.totalIncome || 0),
+      expense: Number(monthData?.totalExpense || 0),
+    };
+  });
+  
+  // 获取分类统计数据
+  const categoryStatsRaw = await db
+    .select({
+      categoryId: ledgerRecords.categoryId,
+      type: ledgerRecords.type,
+      totalAmount: sql<number>`COALESCE(SUM(${ledgerRecords.amount}), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${yearStart}`,
+        sql`${ledgerRecords.date} <= ${yearEnd}`
+      )
+    )
+    .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
+  
+  // 获取分类名称
+  const categoryIds = categoryStatsRaw.map((c: any) => c.categoryId);
+  let categories: any[] = [];
+  if (categoryIds.length > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
+  const expenseCategories = categoryStatsRaw
+    .filter((c: any) => c.type === 'expense')
+    .map((c: any) => ({
+      category: categoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  const incomeCategories = categoryStatsRaw
+    .filter((c: any) => c.type === 'income')
+    .map((c: any) => ({
+      category: categoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  return {
+    yearlyStats: {
+      income,
+      expense,
+    },
+    memberStats,
+    monthlyStats,
+    categoryStats: {
+      expense: expenseCategories,
+      income: incomeCategories,
+    },
+  };
+}

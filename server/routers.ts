@@ -5156,6 +5156,16 @@ export const appRouter = router({
           ctx.user.id
         );
       }),
+
+    // 获取报表数据
+    getReport: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        year: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerReport(input.ledgerId, ctx.user.id, input.year);
+      }),
   }),
 });
 
