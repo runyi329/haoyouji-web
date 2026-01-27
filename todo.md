@@ -1494,3 +1494,11 @@
 - [x] 分析问题：首页左右滑动会误触退出登录
 - [x] 在ContactsManagement页面添加CSS样式禁用滑动手势（touchAction: 'pan-y pinch-zoom'）
 - [x] 测试验证修复效果
+
+## 修改账本详情页添加账目按钮（2026-01-28）
+
+- [x] 定位账本详情页文件（LedgerDetail页面）
+- [x] 将可拖动的橙色按钮改为固定在底部中间（fixed bottom-20 left-1/2）
+- [x] 去掉白边，让按钮悬浮显示（shadow-lg + z-50）
+- [x] 移除DraggableAddButton组件导入
+- [x] 测试验证修复效果
