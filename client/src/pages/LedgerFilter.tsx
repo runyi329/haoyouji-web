@@ -36,6 +36,8 @@ export default function LedgerFilter() {
   const [selectedAccount, setSelectedAccount] = useState("all");
   const [note, setNote] = useState("");
   const [showAmountRange, setShowAmountRange] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
+  const [showCustomDate, setShowCustomDate] = useState(false);
 
   // 账目类型选项
   const transactionTypes = [
@@ -64,8 +66,16 @@ export default function LedgerFilter() {
   // 重置所有条件
   const handleReset = () => {
     setSelectedMemberIds([]);
-    setDateStart("");
-    setDateEnd("");
+    setSelectedDateRange("week");
+    setShowCustomDate(false);
+    // 重置为过去一周
+    const today = new Date();
+    const endDate = today.toISOString().split("T")[0];
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const startDate = weekAgo.toISOString().split("T")[0];
+    setDateStart(startDate);
+    setDateEnd(endDate);
     setAmountMin("");
     setAmountMax("");
     setSelectedType("all");
@@ -114,23 +124,78 @@ export default function LedgerFilter() {
         {/* 账目时间 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <label className="block text-sm font-medium text-gray-700 mb-2">账目时间</label>
-          <div className="flex items-center gap-2 w-full">
-            <input
-              type="text"
-              placeholder="开始日期"
-              value={dateStart}
-              onChange={(e) => setDateStart(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-            />
-            <span className="text-gray-400 text-xs flex-shrink-0">至</span>
-            <input
-              type="text"
-              placeholder="结束日期"
-              value={dateEnd}
-              onChange={(e) => setDateEnd(e.target.value)}
-              className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-            />
+          <div className="flex flex-wrap gap-2 mb-2">
+            {[
+              { value: "week", label: "过去一周" },
+              { value: "month", label: "过去1月" },
+              { value: "year", label: "过去一年" },
+              { value: "ytd", label: "今年至今" },
+              { value: "custom", label: "自定义" },
+            ].map((range) => (
+              <Button
+                key={range.value}
+                variant={selectedDateRange === range.value ? "default" : "outline"}
+                size="sm"
+                className={`text-xs h-7 ${
+                  selectedDateRange === range.value
+                    ? "bg-blue-500 text-white hover:bg-blue-600"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                }`}
+                onClick={() => {
+                  setSelectedDateRange(range.value);
+                  if (range.value === "custom") {
+                    setShowCustomDate(true);
+                  } else {
+                    setShowCustomDate(false);
+                    // 计算快捷时间范围
+                    const today = new Date();
+                    const endDate = today.toISOString().split("T")[0];
+                    let startDate = "";
+                    
+                    if (range.value === "week") {
+                      const weekAgo = new Date(today);
+                      weekAgo.setDate(weekAgo.getDate() - 7);
+                      startDate = weekAgo.toISOString().split("T")[0];
+                    } else if (range.value === "month") {
+                      const monthAgo = new Date(today);
+                      monthAgo.setMonth(monthAgo.getMonth() - 1);
+                      startDate = monthAgo.toISOString().split("T")[0];
+                    } else if (range.value === "year") {
+                      const yearAgo = new Date(today);
+                      yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                      startDate = yearAgo.toISOString().split("T")[0];
+                    } else if (range.value === "ytd") {
+                      startDate = `${today.getFullYear()}-01-01`;
+                    }
+                    
+                    setDateStart(startDate);
+                    setDateEnd(endDate);
+                  }
+                }}
+              >
+                {range.label}
+              </Button>
+            ))}
           </div>
+          {showCustomDate && (
+            <div className="flex items-center gap-2 w-full">
+              <input
+                type="text"
+                placeholder="开始日期"
+                value={dateStart}
+                onChange={(e) => setDateStart(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              />
+              <span className="text-gray-400 text-xs flex-shrink-0">至</span>
+              <input
+                type="text"
+                placeholder="结束日期"
+                value={dateEnd}
+                onChange={(e) => setDateEnd(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              />
+            </div>
+          )}
         </div>
 
         {/* 金额范围 */}
