@@ -113,26 +113,8 @@ const AddTransaction = () => {
   // 如果没有分类，使用预设分类
   const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
 
-  // 根据选中的分类路径，获取各级子分类
-  // 例如：如果选中了一级分类，获取其子分类；如果选中了二级分类，获取其子分类
+  // 暂时只使用一级分类，避免React Hooks规则违反
   const categoryLevels: any[][] = [displayCategories];
-  
-  // 为每一级已选中的分类获取其子分类
-  selectedCategoryPath.forEach((parentId, index) => {
-    // 如果是预设分类（负数ID），使用预设子分类
-    if (parentId < 0) {
-      const subCats = defaultSubCategories[parentId.toString()] || [];
-      categoryLevels.push(subCats);
-    } else {
-      // 否则从数据库获取
-      const { data: subCategories = [] } = trpc.ledger.getCategories.useQuery({
-        ledgerId,
-        type: transactionType,
-        parentId,
-      });
-      categoryLevels.push(subCategories);
-    }
-  });
 
   // 处理分类选择
   const handleCategorySelect = (categoryId: number, level: number) => {
@@ -325,6 +307,17 @@ const AddTransaction = () => {
     }
   };
 
+  // 添加记账mutation
+  const addTransactionMutation = trpc.ledger.addTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("记账成功！");
+      setLocation(`/ledger/${id}`);
+    },
+    onError: (error) => {
+      toast.error("记账失败：" + error.message);
+    },
+  });
+
   // 处理保存
   const handleSave = () => {
     if (selectedCategoryPath.length === 0) {
@@ -333,8 +326,16 @@ const AddTransaction = () => {
     }
     // 允许零金额提交
 
-    toast.success("记账成功！");
-    setLocation(`/ledger/${id}`);
+    // 调用后端API保存记账
+    addTransactionMutation.mutate({
+      ledgerId,
+      amount: parseFloat(amount) || 0,
+      type: transactionType,
+      categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
+      date: selectedDate.toISOString(),
+      note: note || undefined,
+      account: selectedAccount,
+    });
   };
 
   const calendarDays = getCalendarDays();

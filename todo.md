@@ -1494,3 +1494,27 @@
 - [x] 分析问题：首页左右滑动会误触退出登录
 - [x] 在ContactsManagement页面添加CSS样式禁用滑动手势（touchAction: 'pan-y pinch-zoom'）
 - [x] 测试验证修复效果
+
+## 修改账本详情页添加账目按钮（2026-01-28）
+
+- [x] 定位账本详情页文件（LedgerDetail页面）
+- [x] 将可拖动的橙色按钮改为固定在底部中间（fixed bottom-20 left-1/2）
+- [x] 去掉白边，让按钮悬浮显示（shadow-lg + z-50）
+- [x] 移除DraggableAddButton组件导入
+- [x] 测试验证修复效果
+
+## 修复添加记账后页面报错和记账不显示的问题（2026-01-28）
+
+- [x] 检查browserConsole.log日志文件定位错误原因
+- [x] 发现handleSave函数没有调用后端API保存数据
+- [x] 添加trpc.ledger.addTransaction.useMutation()调用
+- [x] 修复handleSave函数，调用addTransactionMutation.mutate()
+- [x] 测试添加记账流程
+
+
+## 回滚并修复React Hooks规则违反问题（2026-01-28）
+
+- [x] 回滚到cb526128版本（禁用首页滑动后的稳定版本）
+- [x] 移除在forEach循环中调用useQuery的代码
+- [x] 暂时只使用一级分类，避免Hooks规则违反
+- [x] 测试添加记账和新建账本功能
