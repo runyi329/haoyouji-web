@@ -231,8 +231,8 @@ export const appRouter = router({
     // 游客模式登录（开发专用）
     guestLogin: publicProcedure
       .mutation(async ({ ctx }) => {        
-        // 使用固定的游客用户ID（yunting的ID）
-        const guestUserId = 870414;
+        // 使用专门的游客用户ID（guest_dev）
+        const guestUserId = 5070293;
         
         // 获取游客用户信息
         const user = await db.getUserById(guestUserId);

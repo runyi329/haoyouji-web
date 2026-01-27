@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO users (username, name, role, passwordHash, openId, points, sharingEnabled, failedLoginAttempts, createdAt) VALUES ('guest_dev', '游客', 'parent', NULL, 'guest_dev_openid', 0, 0, 0, NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute INSERT INTO users (username, name, role, passwordHash, openId, points, sharingEnabled, failedLoginAttempts, createdAt) VALUES ('guest_dev', '游客', 'parent', NULL, 'guest_dev_openid', 0, 0, 0, NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1640
+}
