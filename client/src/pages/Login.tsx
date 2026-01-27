@@ -22,8 +22,47 @@ export default function Login() {
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [regName, setRegName] = useState("");
+  
+  // 长按计时器
+  const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
   const utils = trpc.useUtils();
+
+  // 游客模式登录
+  const guestLoginMutation = trpc.auth.guestLogin.useMutation({
+    onSuccess: (data) => {
+      toast.success("已以游客模式进入！");
+      // 先刷新认证状态
+      utils.auth.me.invalidate();
+      // 给浏览器200ms时间处理cookie
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 200);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleGuestLogin = () => {
+    guestLoginMutation.mutate();
+  };
+  
+  // 处理长按开始
+  const handlePressStart = () => {
+    const timer = setTimeout(() => {
+      handleGuestLogin();
+    }, 2000); // 2秒
+    setPressTimer(timer);
+  };
+  
+  // 处理长按结束
+  const handlePressEnd = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      setPressTimer(null);
+    }
+  };
 
   const loginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: (data) => {
@@ -104,9 +143,18 @@ export default function Login() {
       {/* 主内容区域 - 扩大到整个屏幕 */}
       <main className="flex-1 flex items-center justify-center px-6 py-20">
         <div className="w-full max-w-md">
-          {/* Logo区域 - 使用新图标 */}
+          {/* Logo区域 - 使用新图标，点击进入游客模式 */}
           <div className="text-center mb-8">
-            <div className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden shadow-lg">
+            <div 
+              className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden shadow-lg cursor-pointer hover:shadow-xl transition-shadow active:scale-95"
+              onMouseDown={handlePressStart}
+              onMouseUp={handlePressEnd}
+              onMouseLeave={handlePressEnd}
+              onTouchStart={handlePressStart}
+              onTouchEnd={handlePressEnd}
+              onTouchCancel={handlePressEnd}
+              title="长按2秒进入游客模式"
+            >
               <img 
                 src="/maidong-hyy.png" 
                 alt="脉动" 

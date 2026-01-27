@@ -228,6 +228,42 @@ export const appRouter = router({
         return { success: true, avatarUrl: url };
       }),
     
+    // 游客模式登录（开发专用）
+    guestLogin: publicProcedure
+      .mutation(async ({ ctx }) => {        
+        // 使用固定的游客用户ID（yunting的ID）
+        const guestUserId = 870414;
+        
+        // 获取游客用户信息
+        const user = await db.getUserById(guestUserId);
+        if (!user) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "游客用户不存在" });
+        }
+        
+        // 创建session token
+        const sessionToken = await sdk.createSessionToken(user.id.toString(), {
+          expiresInMs: ONE_YEAR_MS,
+          name: user.name || user.username || "游客",
+        });
+        
+        // 设置cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+        
+        return {
+          success: true,
+          user: {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            role: user.role,
+          },
+        };
+      }),
+    
     // 修改密码
     changePassword: protectedProcedure
       .input(z.object({

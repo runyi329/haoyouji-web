@@ -1535,3 +1535,11 @@
 - [ ] 修改routers.ts中所有createSessionToken调用（user.openId → user.id.toString()）
 - [ ] 测试jiang和yunting账号登录
 - [ ] 测试hyy329账号登录
+
+## 游客模式开发入口（2026-01-27）
+
+- [x] 创建游客模式后端API（无需用户名密码，直接创建临时session）
+- [x] 在登录页面logo图标上添加隐蔽的长按事件（2秒）
+- [x] 长按logo后直接进入系统（无需注册和登录）
+- [x] 游客模式使用固定的yunting用户ID（870414）
+- [x] 游客模式已实现，等待用户手动测试
