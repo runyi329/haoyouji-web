@@ -85,7 +85,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
   // 处理点击事件
   const onChartClick = (params: any) => {
     if (params.componentType === 'series') {
-      onProvinceClick(params.name);
+      // 将长名字转换为短名字，因为后端查询需要短名字
+      const shortName = provinceShortNames[params.name] || params.name;
+      onProvinceClick(shortName);
     }
   };
 
