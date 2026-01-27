@@ -992,3 +992,89 @@ export async function removeAIEmployee(
   
   return { success: true };
 }
+
+/**
+ * 更新账本信息
+ */
+export async function updateLedger(
+  ledgerId: number,
+  requestUserId: number,
+  data: {
+    name?: string;
+    description?: string;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 更新账本信息
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  
+  if (Object.keys(updateData).length > 0) {
+    await db
+      .update(ledgers)
+      .set(updateData)
+      .where(eq(ledgers.id, ledgerId));
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 更新成员昵称
+ */
+export async function updateMemberNickname(
+  ledgerId: number,
+  requestUserId: number,
+  nickname: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 更新成员昵称
+  await db
+    .update(ledgerMembers)
+    .set({ nickname })
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    );
+  
+  return { success: true };
+}

@@ -990,3 +990,13 @@
 - [x] 移除固定定位，使用普通布局
 - [x] 按钮在输入框下方，所有元素在同一容器内
 - [ ] 测试按钮位置调整后的效果
+
+## 修夏ledger.update接口缺失问题（2026-01-27）
+
+- [x] 检查server/routers.ts中是否有ledger.update procedure
+- [x] 添加ledger.update procedure（支持更新名称和描述）
+- [x] 添加ledger.updateMemberNickname procedure（支持更新成员昵称）
+- [x] 在db-ledger.ts中添加updateLedger函数
+- [x] 在db-ledger.ts中添加updateMemberNickname函数
+- [ ] 测试账本名称更新功能
+- [ ] 测试成员昵称更新功能

@@ -4987,6 +4987,32 @@ export const appRouter = router({
         return ledger;
       }),
 
+    // 更新账本信息
+    update: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        name: z.string().min(1).max(50).optional(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.updateLedger(input.ledgerId, ctx.user.id, {
+          name: input.name,
+          description: input.description,
+        });
+        return { success: true };
+      }),
+
+    // 更新成员昵称
+    updateMemberNickname: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        nickname: z.string().min(1).max(20),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.updateMemberNickname(input.ledgerId, ctx.user.id, input.nickname);
+        return { success: true };
+      }),
+
     // 存档/取消存档账本
     archive: protectedProcedure
       .input(z.object({
