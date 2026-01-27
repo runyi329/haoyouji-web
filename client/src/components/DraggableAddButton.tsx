@@ -85,8 +85,6 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
 
   // 处理触摸移动
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    e.stopPropagation();
-
     const touch = e.touches[0];
     const newX = touch.clientX - dragStartRef.current.x;
     const newY = touch.clientY - dragStartRef.current.y;
@@ -110,22 +108,18 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
       return;
     }
 
+    // 进入拖动模式后立即阻止默认行为
     e.preventDefault();
+    e.stopPropagation();
 
-    // 使用 requestAnimationFrame 优化性能
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
+    // 直接更新位置，不使用 requestAnimationFrame
+    const constrained = constrainPosition(newX, newY);
+    currentPosRef.current = constrained;
+    
+    // 直接更新 transform，不触发 React 重渲染
+    if (buttonRef.current) {
+      buttonRef.current.style.transform = `translate(${constrained.x}px, ${constrained.y}px)`;
     }
-
-    rafRef.current = requestAnimationFrame(() => {
-      const constrained = constrainPosition(newX, newY);
-      currentPosRef.current = constrained;
-      
-      // 直接更新 transform，不触发 React 重渲染
-      if (buttonRef.current) {
-        buttonRef.current.style.transform = `translate(${constrained.x}px, ${constrained.y}px)`;
-      }
-    });
   }, [isLongPressing, constrainPosition, clearLongPressTimer]);
 
   // 处理触摸结束
@@ -191,18 +185,13 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
 
       e.preventDefault();
 
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
+      // 直接更新位置，不使用 requestAnimationFrame
+      const constrained = constrainPosition(newX, newY);
+      currentPosRef.current = constrained;
+      
+      if (buttonRef.current) {
+        buttonRef.current.style.transform = `translate(${constrained.x}px, ${constrained.y}px)`;
       }
-
-      rafRef.current = requestAnimationFrame(() => {
-        const constrained = constrainPosition(newX, newY);
-        currentPosRef.current = constrained;
-        
-        if (buttonRef.current) {
-          buttonRef.current.style.transform = `translate(${constrained.x}px, ${constrained.y}px)`;
-        }
-      });
     };
 
     const handleMouseUp = () => {
