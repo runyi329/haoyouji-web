@@ -1532,3 +1532,12 @@
 - [x] 查找login_attempts表查询代码
 - [x] 修复success字段使用false而不是0的问题（server/db.ts第719行）
 - [x] 测试登录功能
+
+
+## 彻底修复登录查询中所有使用布尔值的地方（2026-01-28）
+
+- [x] 查找所有使用loginAttempts.success的地方
+- [x] 检查是否有其他地方使用了布尔值false/true
+- [x] 修夏server/auth.ts中的recordLoginAttempt调用（第50、89、117行）
+- [x] 保留返回值中的success字段为布尔值（符合TypeScript接口定义）
+- [x] 测试登录功能

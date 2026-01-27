@@ -47,7 +47,7 @@ export async function loginWithPassword(
     await db.recordLoginAttempt({
       ipAddress,
       username,
-      success: false,
+      success: 0,
     });
     
     return {
@@ -86,7 +86,7 @@ export async function loginWithPassword(
     await db.recordLoginAttempt({
       ipAddress,
       username,
-      success: false,
+      success: 0,
     });
 
     // 检查是否需要锁定账户
@@ -114,7 +114,7 @@ export async function loginWithPassword(
   await db.recordLoginAttempt({
     ipAddress,
     username,
-    success: true,
+    success: 1,
   });
 
   return {
