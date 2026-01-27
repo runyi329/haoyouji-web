@@ -114,21 +114,21 @@ export default function LedgerFilter() {
         {/* 账目时间 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <label className="block text-sm font-medium text-gray-700 mb-2">账目时间</label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full">
             <input
               type="text"
               placeholder="开始日期"
               value={dateStart}
               onChange={(e) => setDateStart(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
             />
-            <span className="text-gray-400 text-xs">至</span>
+            <span className="text-gray-400 text-xs flex-shrink-0">至</span>
             <input
               type="text"
               placeholder="结束日期"
               value={dateEnd}
               onChange={(e) => setDateEnd(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+              className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
             />
           </div>
         </div>
@@ -152,21 +152,21 @@ export default function LedgerFilter() {
             </div>
           </button>
           {showAmountRange && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full">
               <input
                 type="text"
                 placeholder="最小金额"
                 value={amountMin}
                 onChange={(e) => setAmountMin(e.target.value)}
-                className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
               />
-              <span className="text-gray-400 text-xs">至</span>
+              <span className="text-gray-400 text-xs flex-shrink-0">至</span>
               <input
                 type="text"
                 placeholder="最大金额"
                 value={amountMax}
                 onChange={(e) => setAmountMax(e.target.value)}
-                className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
               />
             </div>
           )}
