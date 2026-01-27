@@ -29,8 +29,6 @@ export default function LedgerSettings() {
   const { data: members } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
   const [shareCategories, setShareCategories] = useState(true);
-  const [shareAccounts, setShareAccounts] = useState(true);
-  const [recordNotification, setRecordNotification] = useState(false);
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
@@ -158,17 +156,9 @@ export default function LedgerSettings() {
           showIcon 
           onClick={() => setLocation(`/ledger/${ledgerId}/edit-nickname`)}
         />
-        <SettingItem label="账本二维码（邀请伙伴）" showIcon />
-        <SettingItem label="定时提醒记账" showIcon />
-        <SettingItem 
-          label="账本变动通知" 
-          rightContent={
-            <Switch 
-              checked={recordNotification} 
-              onCheckedChange={setRecordNotification}
-            />
-          }
-        />
+
+
+
         <SettingItem 
           label="AI雇员" 
           showIcon 
@@ -181,7 +171,7 @@ export default function LedgerSettings() {
           hasHelp 
           onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
         />
-        <SettingItem label="记账默认类型" value="默认:支出,显示转账" hasHelp />
+
         <SettingItem label="首页统计方式" value="自然月统计" />
         <SettingItem label="账目锁定" value="不限制" />
         <SettingItem 
@@ -220,26 +210,17 @@ export default function LedgerSettings() {
           }
           hasHelp
         />
-        <SettingItem label="账本收入条目" showIcon />
-        <SettingItem label="账本支出条目" showIcon />
-        <SettingItem 
-          label="共享账本资金账户" 
-          rightContent={
-            <Switch 
-              checked={shareAccounts} 
-              onCheckedChange={setShareAccounts}
-            />
-          }
-          hasHelp
-        />
-        <SettingItem label="账本资金账户" showIcon />
+
+
+
+
       </div>
 
       {/* 账本管理 */}
       <div className="bg-white mt-3">
         <SettingItem label="账本状态(封账)" value="使用中" />
-        <SettingItem label="账本统计" value="0条账目" />
-        <SettingItem label="账单搜索" showIcon />
+
+
         <SettingItem label="删除账单找回" showIcon />
         <SettingItem label="账本日志" showIcon />
         <SettingItem label="账本图片查看" showIcon />
