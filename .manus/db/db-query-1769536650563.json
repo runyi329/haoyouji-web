@@ -1,0 +1,22 @@
+{
+  "query": "SHOW CREATE TABLE login_attempts;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SHOW CREATE TABLE login_attempts;",
+  "rows": [
+    {
+      "Table": "login_attempts",
+      "Create Table": "CREATE TABLE `login_attempts` ("
+    }
+  ],
+  "messages": [
+    "  `id` int(11) NOT NULL AUTO_INCREMENT,",
+    "  `ipAddress` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `username` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `success` tinyint(1) NOT NULL DEFAULT '0',",
+    "  `attemptedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=360001"
+  ],
+  "stdout": "Table\tCreate Table\nlogin_attempts\tCREATE TABLE `login_attempts` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `ipAddress` varchar(45) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `username` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `success` tinyint(1) NOT NULL DEFAULT '0',\n  `attemptedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=360001\n",
+  "stderr": "",
+  "execution_time_ms": 1509
+}
