@@ -527,7 +527,7 @@ export const loginAttempts = mysqlTable("login_attempts", {
 	id: int().autoincrement().notNull(),
 	ipAddress: varchar({ length: 45 }).notNull(),
 	username: varchar({ length: 50 }),
-	success: tinyint().default(0).notNull(),
+	success: boolean().default(false).notNull(),
 	attemptedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 

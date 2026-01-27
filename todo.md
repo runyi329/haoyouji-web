@@ -1541,3 +1541,12 @@
 - [x] 修夏server/auth.ts中的recordLoginAttempt调用（第50、89、117行）
 - [x] 保留返回值中的success字段为布尔值（符合TypeScript接口定义）
 - [x] 测试登录功能
+
+
+## 检查数据库login_attempts表结构并修复查询问题（2026-01-28）
+
+- [x] 检查login_attempts表的success字段实际类型：tinyint(1)
+- [x] 将schema中的success字段从 tinyint() 改为 boolean()
+- [x] 恢复server/auth.ts中所有recordLoginAttempt调用使用布尔值true/false
+- [x] 恢复server/db.ts中 getRecentLoginAttempts 函数使用布尔值false
+- [x] 测试登录功能
