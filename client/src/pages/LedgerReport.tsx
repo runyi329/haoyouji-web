@@ -300,7 +300,7 @@ function ChartViewContent({
     if (timeDimension === 'year') return `${chartYear}年`;
     if (timeDimension === 'month') return `${chartYear}年${chartMonth}月`;
     if (timeDimension === 'custom' && customStartDate && customEndDate) {
-      return `${customStartDate} 至 ${customEndDate}`;
+      return null; // 自定义时间范围单独处理
     }
     return `${chartYear}年${chartMonth}月`;
   };
@@ -355,8 +355,15 @@ function ChartViewContent({
         <div className="flex items-center justify-between gap-2">
           {/* 显示选择的时间范围 */}
           <div className="flex items-center gap-1 text-sm">
-            <Calendar className="w-4 h-4" />
-            <span>{getTimeRangeText()}</span>
+            <Calendar className="w-4 h-4 flex-shrink-0" />
+            {timeDimension === 'custom' && customStartDate && customEndDate ? (
+              <div className="flex flex-col text-xs leading-tight">
+                <span>{customStartDate}</span>
+                <span>{customEndDate}</span>
+              </div>
+            ) : (
+              <span>{getTimeRangeText()}</span>
+            )}
           </div>
           
           {/* 时间维度切换按钮 */}
@@ -557,19 +564,19 @@ function ChartViewContent({
                 </div>
               )}
               {timeDimension === 'custom' && (
-                <div className="space-y-2">
+                <div className="space-y-2 px-2">
                   <input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded"
+                    className="w-full max-w-full p-2 border border-gray-200 rounded text-sm"
                     placeholder="开始日期"
                   />
                   <input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full p-2 border border-gray-200 rounded"
+                    className="w-full max-w-full p-2 border border-gray-200 rounded text-sm"
                     placeholder="结束日期"
                   />
                 </div>
