@@ -187,7 +187,7 @@ export default function LedgerDetail() {
                 className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
                 style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
               >
-                {member.nickname.charAt(0)}
+                {member.nickname ? member.nickname.charAt(0) : '?'}
               </div>
             ))}
             {/* 显示更多按钮 */}

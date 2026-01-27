@@ -1416,3 +1416,7 @@
   - 问题：地图显示正确（浙江25人），但点击后抽屉显示“浙江省 共 0 位人脉”
   - 原因：点击地图时传递的是长名字（“浙江省”），但后端查询需要短名字（“浙江”）
   - 解决：在ChinaMap组件的onChartClick事件中，使用provinceShortNames将长名字转换为短名字
+- [x] 修复进入账本详情页时出现的错误
+  - 问题：从账本列表点击进入账本详情页时，显示"An unexpected error occurred"
+  - 原因：member.nickname为null时，调用.charAt(0)导致错误
+  - 解决：添加空值检查，nickname为null时显示'?'作为默认头像
