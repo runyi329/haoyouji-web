@@ -4967,6 +4967,15 @@ export const appRouter = router({
         return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
       }),
 
+    // 获取账本金额范围
+    getAmountRange: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerAmountRange(input.ledgerId, ctx.user.id);
+      }),
+
     // 创建新账本
     create: protectedProcedure
       .input(z.object({

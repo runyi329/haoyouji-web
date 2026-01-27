@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { trpc } from "@/lib/trpc";
 
 export default function LedgerFilter() {
@@ -33,7 +34,7 @@ export default function LedgerFilter() {
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [selectedType, setSelectedType] = useState("all");
-  const [selectedAccount, setSelectedAccount] = useState("all");
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["all"]);
   const [note, setNote] = useState("");
   const [showAmountRange, setShowAmountRange] = useState(false);
   const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
@@ -63,6 +64,32 @@ export default function LedgerFilter() {
     return "支付方式";
   };
 
+  // 切换支付方式选择
+  const toggleAccount = (accountValue: string) => {
+    if (accountValue === "all") {
+      // 点击全部：如果已全选则取消全选，否则全选
+      if (selectedAccounts.includes("all")) {
+        setSelectedAccounts([]);
+      } else {
+        setSelectedAccounts(["all"]);
+      }
+    } else {
+      // 点击单个支付方式
+      setSelectedAccounts(prev => {
+        // 如果当前是全选状态，则取消全选并只选中当前项
+        if (prev.includes("all")) {
+          return [accountValue];
+        }
+        // 切换选中状态
+        if (prev.includes(accountValue)) {
+          return prev.filter(v => v !== accountValue);
+        } else {
+          return [...prev, accountValue];
+        }
+      });
+    }
+  };
+
   // 重置所有条件
   const handleReset = () => {
     setSelectedMemberIds([]);
@@ -79,7 +106,7 @@ export default function LedgerFilter() {
     setAmountMin("");
     setAmountMax("");
     setSelectedType("all");
-    setSelectedAccount("all");
+    setSelectedAccounts(["all"]);
     setNote("");
   };
 
@@ -224,22 +251,37 @@ export default function LedgerFilter() {
             </div>
           </button>
           {showAmountRange && (
-            <div className="flex items-center gap-2 w-full">
-              <input
-                type="text"
-                placeholder="最小金额"
-                value={amountMin}
-                onChange={(e) => setAmountMin(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-              />
-              <span className="text-gray-400 text-xs flex-shrink-0">至</span>
-              <input
-                type="text"
-                placeholder="最大金额"
-                value={amountMax}
-                onChange={(e) => setAmountMax(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-              />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 w-full">
+                <input
+                  type="number"
+                  placeholder="最小金额"
+                  value={amountMin}
+                  onChange={(e) => setAmountMin(e.target.value)}
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+                />
+                <span className="text-gray-400 text-xs flex-shrink-0">至</span>
+                <input
+                  type="number"
+                  placeholder="最大金额"
+                  value={amountMax}
+                  onChange={(e) => setAmountMax(e.target.value)}
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
+                />
+              </div>
+              <div className="px-1">
+                <Slider
+                  min={0}
+                  max={10000}
+                  step={10}
+                  value={[Number(amountMin) || 0, Number(amountMax) || 10000]}
+                  onValueChange={(values) => {
+                    setAmountMin(values[0].toString());
+                    setAmountMax(values[1].toString());
+                  }}
+                  className="w-full"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -273,14 +315,14 @@ export default function LedgerFilter() {
             {accountTypes.map((account) => (
               <Button
                 key={account.value}
-                variant={selectedAccount === account.value ? "default" : "outline"}
+                variant={selectedAccounts.includes(account.value) ? "default" : "outline"}
                 size="sm"
                 className={`h-7 px-3 text-xs rounded-full ${
-                  selectedAccount === account.value
+                  selectedAccounts.includes(account.value)
                     ? `${account.color} text-white hover:opacity-90`
                     : "border-gray-200"
                 }`}
-                onClick={() => setSelectedAccount(account.value)}
+                onClick={() => toggleAccount(account.value)}
               >
                 {account.label}
               </Button>
