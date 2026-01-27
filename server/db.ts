@@ -72,16 +72,13 @@ export async function getDb() {
  */
 export async function getLedgerDb() {
   if (!_ledgerDb) {
-    const isProduction = process.env.NODE_ENV === "production";
-    // 生产环境使用腾讯云，开发环境使用临时库
-    const dbUrl = isProduction 
-      ? (process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL)
-      : process.env.DATABASE_URL;
+    // 开发和生产环境都优先使用腾讯云数据库
+    const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL;
     
     if (dbUrl) {
       try {
         _ledgerDb = drizzle(dbUrl);
-        const dbType = isProduction ? "腾讯云数据库（生产）" : "Manus临时数据库（开发）";
+        const dbType = process.env.ORIGINAL_DATABASE_URL ? "腾讯云数据库" : "Manus临时数据库";
         console.log(`[LedgerDatabase] 成功连接到${dbType}`);
       } catch (error) {
         console.warn("[LedgerDatabase] Failed to connect:", error);
