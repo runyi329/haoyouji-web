@@ -11,6 +11,7 @@ import {
   BarChart3,
   Plus,
   Search,
+  Calendar,
 } from "lucide-react";
 
 // 模拟记账记录数据
@@ -208,6 +209,12 @@ export default function LedgerDetail() {
               onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
             >
               <BarChart3 className="w-5 h-5 text-white" />
+            </div>
+            <div 
+              className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer"
+              onClick={() => setLocation(`/ledger/${ledgerId}/calendar`)}
+            >
+              <Calendar className="w-5 h-5 text-white" />
             </div>
           </div>
         </div>

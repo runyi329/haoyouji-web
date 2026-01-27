@@ -104,12 +104,8 @@ export default function LedgerReport() {
           {/* 标签页切换 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
-              onClick={() => setActiveTab("calendar")}
-              className={`px-3 py-1 text-sm ${
-                activeTab === "calendar" 
-                  ? "bg-white text-blue-600" 
-                  : "text-white"
-              }`}
+              onClick={() => setLocation(`/ledger/${ledgerId}/calendar`)}
+              className="px-3 py-1 text-sm text-white"
             >
               日历
             </button>

@@ -5166,6 +5166,27 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbLedger.getLedgerReport(input.ledgerId, ctx.user.id, input.year);
       }),
+
+    // 获取日历数据（指定月份的每日收支统计）
+    getCalendarData: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        year: z.number(),
+        month: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getCalendarData(input.ledgerId, ctx.user.id, input.year, input.month);
+      }),
+
+    // 获取指定日期的记账记录
+    getDayRecords: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        date: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date);
+      }),
   }),
 });
 

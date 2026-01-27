@@ -1250,3 +1250,161 @@ export async function getLedgerReport(
     },
   };
 }
+
+
+/**
+ * 获取日历数据（指定月份的每日收支统计）
+ */
+export async function getCalendarData(
+  ledgerId: number,
+  requestUserId: number,
+  year: number,
+  month: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 构建日期范围
+  const monthStr = String(month).padStart(2, '0');
+  const monthStart = `${year}-${monthStr}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthEnd = `${year}-${monthStr}-${lastDay}`;
+  
+  // 获取月度总统计
+  const monthlyStatsRaw = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${monthStart}`,
+        sql`${ledgerRecords.date} <= ${monthEnd}`
+      )
+    );
+  
+  const monthlyStats = {
+    income: Number(monthlyStatsRaw[0]?.totalIncome || 0),
+    expense: Number(monthlyStatsRaw[0]?.totalExpense || 0),
+  };
+  
+  // 获取每日统计
+  const dailyStatsRaw = await db
+    .select({
+      recordDate: ledgerRecords.date,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} >= ${monthStart}`,
+        sql`${ledgerRecords.date} <= ${monthEnd}`
+      )
+    )
+    .groupBy(ledgerRecords.date);
+  
+  const dailyStats = dailyStatsRaw.map((day: any) => {
+    // 从日期字符串中提取天数
+    const dateStr = String(day.recordDate);
+    const dayNum = parseInt(dateStr.split('-')[2], 10);
+    return {
+      day: dayNum,
+      income: Number(day.totalIncome || 0),
+      expense: Number(day.totalExpense || 0),
+    };
+  });
+  
+  return {
+    monthlyStats,
+    dailyStats,
+  };
+}
+
+/**
+ * 获取指定日期的记账记录
+ */
+export async function getDayRecords(
+  ledgerId: number,
+  requestUserId: number,
+  date: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取指定日期的记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.date,
+      createdBy: ledgerRecords.createdBy,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.date} = ${date}`
+      )
+    )
+    .orderBy(desc(ledgerRecords.createdAt));
+  
+  // 获取分类名称
+  const categoryIds = records.map((r: any) => r.categoryId).filter((id: any) => id);
+  let categories: any[] = [];
+  if (categoryIds.length > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
+  return records.map((record: any) => ({
+    ...record,
+    amount: Number(record.amount),
+    categoryName: categoryNameMap.get(record.categoryId) || '未分类',
+  }));
+}
