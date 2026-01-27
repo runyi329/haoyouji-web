@@ -78,30 +78,30 @@ export default function EditLedgerName() {
 
       {/* 编辑区域 */}
       <div className="bg-white mt-3 p-4">
-        <div className="space-y-2">
-          <label className="text-sm text-gray-600">账本名称</label>
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="请输入账本名称"
-            className="text-base"
-            maxLength={20}
-          />
-          <div className="text-xs text-gray-400 text-right">
-            {newName.length}/20
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-gray-600">账本名称</label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="请输入账本名称"
+              className="text-base"
+              maxLength={20}
+            />
+            <div className="text-xs text-gray-400 text-right">
+              {newName.length}/20
+            </div>
           </div>
+          
+          {/* 确定按钮 */}
+          <Button
+            onClick={handleSave}
+            disabled={updateLedgerNameMutation.isPending || !newName.trim()}
+            className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+          >
+            {updateLedgerNameMutation.isPending ? "保存中..." : "确定"}
+          </Button>
         </div>
-      </div>
-
-      {/* 底部确定按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
-        <Button
-          onClick={handleSave}
-          disabled={updateLedgerNameMutation.isPending || !newName.trim()}
-          className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
-        >
-          {updateLedgerNameMutation.isPending ? "保存中..." : "确定"}
-        </Button>
       </div>
     </div>
   );

@@ -75,33 +75,33 @@ export default function EditNickname() {
 
       {/* 编辑区域 */}
       <div className="bg-white mt-3 p-4">
-        <div className="space-y-2">
-          <label className="text-sm text-gray-600">我在账本的昵称</label>
-          <Input
-            value={newNickname}
-            onChange={(e) => setNewNickname(e.target.value)}
-            placeholder="请输入昵称"
-            className="text-base"
-            maxLength={10}
-          />
-          <div className="text-xs text-gray-400 text-right">
-            {newNickname.length}/10
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm text-gray-600">我的昵称</label>
+            <Input
+              value={newNickname}
+              onChange={(e) => setNewNickname(e.target.value)}
+              placeholder="请输入昵称"
+              className="text-base"
+              maxLength={10}
+            />
+            <div className="text-xs text-gray-400 text-right">
+              {newNickname.length}/10
+            </div>
+            <p className="text-xs text-gray-500">
+              昵称将显示在账本成员列表和交易记录中
+            </p>
           </div>
-          <div className="text-xs text-gray-500 mt-2">
-            昵称将显示在账本成员列表和交易记录中
-          </div>
+          
+          {/* 确定按钮 */}
+          <Button
+            onClick={handleSave}
+            disabled={updateNicknameMutation.isPending || !newNickname.trim()}
+            className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+          >
+            {updateNicknameMutation.isPending ? "保存中..." : "确定"}
+          </Button>
         </div>
-      </div>
-
-      {/* 底部确定按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
-        <Button
-          onClick={handleSave}
-          disabled={updateNicknameMutation.isPending || !newNickname.trim()}
-          className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
-        >
-          {updateNicknameMutation.isPending ? "保存中..." : "确定"}
-        </Button>
       </div>
     </div>
   );
