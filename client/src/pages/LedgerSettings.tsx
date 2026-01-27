@@ -172,7 +172,6 @@ export default function LedgerSettings() {
           onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
         />
 
-        <SettingItem label="首页统计方式" value="自然月统计" />
         <SettingItem label="账目锁定" value="不限制" />
         <SettingItem 
           label="记账必须上传图片" 
@@ -184,7 +183,12 @@ export default function LedgerSettings() {
           }
           hasHelp
         />
-        <SettingItem label="成员记账审批" showIcon hasHelp />
+        <SettingItem 
+          label="成员记账审批" 
+          showIcon 
+          hasHelp 
+          onClick={() => setLocation(`/ledger/${ledgerId}/approval-settings`)}
+        />
         <SettingItem label="账本预算&目标" showIcon hasHelp />
       </div>
 

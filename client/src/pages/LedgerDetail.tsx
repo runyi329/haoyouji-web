@@ -14,95 +14,6 @@ import {
   Search,
 } from "lucide-react";
 
-// 模拟记账记录数据
-const mockRecords = [
-  {
-    date: "2026-01-11",
-    dayOfWeek: "周天",
-    income: 0,
-    expense: 38,
-    balance: -38,
-    records: [
-      {
-        id: 1,
-        category: "交通",
-        subcategory: "停车费",
-        amount: -38.0,
-        user: { name: "用户1", avatar: "" },
-      },
-    ],
-  },
-  {
-    date: "2026-01-06",
-    dayOfWeek: "周二",
-    income: 0,
-    expense: 1279,
-    balance: -1279,
-    records: [
-      {
-        id: 2,
-        category: "购物",
-        subcategory: "",
-        amount: -25.0,
-        user: { name: "用户1", avatar: "" },
-      },
-      {
-        id: 3,
-        category: "其他",
-        subcategory: "喵喵",
-        amount: -144.0,
-        user: { name: "用户1", avatar: "" },
-        note: "餐费",
-      },
-      {
-        id: 4,
-        category: "其他",
-        subcategory: "旺旺",
-        amount: -1110.0,
-        user: { name: "用户1", avatar: "" },
-        note: "学费",
-      },
-    ],
-  },
-  {
-    date: "2026-01-02",
-    dayOfWeek: "周五",
-    income: 0,
-    expense: 503.6,
-    balance: -503.6,
-    records: [
-      {
-        id: 5,
-        category: "交通",
-        subcategory: "加油",
-        amount: -414.6,
-        user: { name: "用户1", avatar: "" },
-      },
-      {
-        id: 6,
-        category: "交通",
-        subcategory: "停车费",
-        amount: -9.0,
-        user: { name: "用户1", avatar: "" },
-      },
-      {
-        id: 7,
-        category: "其他",
-        subcategory: "电费",
-        amount: -50.0,
-        user: { name: "用户1", avatar: "" },
-      },
-      {
-        id: 8,
-        category: "其他",
-        subcategory: "话费",
-        amount: -30.0,
-        user: { name: "用户1", avatar: "" },
-      },
-    ],
-  },
-];
-
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
@@ -122,8 +33,18 @@ export default function LedgerDetail() {
     ledgerId: Number(ledgerId),
   });
 
+  // 获取记账记录列表
+  const { data: transactionsData } = trpc.ledger.getTransactions.useQuery({
+    ledgerId: Number(ledgerId),
+    limit: 100,
+  });
+
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
+  
+  // 统计周期状态
+  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
 
   // 记录最后访问的账本ID到localStorage
   useEffect(() => {
@@ -148,15 +69,57 @@ export default function LedgerDetail() {
     );
   }
   
-  // 使用模拟数据展示
-  const hasRecords = mockRecords && mockRecords.length > 0;
+  // 使用真实数据
+  const hasRecords = transactionsData && transactionsData.length > 0;
 
-  // 计算月度统计
+  // 根据选择的周期计算统计数据
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentYear = `${now.getFullYear()}`;
+  
+  // 计算本周的开始日期（周一）
+  const getWeekStart = (date: Date) => {
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // 周日调整为上周最后一天
+    const weekStart = new Date(date);
+    weekStart.setDate(diff);
+    return `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+  };
+  const weekStart = getWeekStart(now);
+  
   const monthlyStats = {
     income: 0,
-    expense: 1820.6,
-    balance: -1820.6,
+    expense: 0,
+    balance: 0,
   };
+  
+  if (transactionsData) {
+    transactionsData.forEach((day: any) => {
+      let shouldInclude = false;
+      
+      switch (statsPeriod) {
+        case 'day':
+          shouldInclude = day.date === today;
+          break;
+        case 'week':
+          shouldInclude = day.date >= weekStart && day.date <= today;
+          break;
+        case 'month':
+          shouldInclude = day.date.startsWith(currentMonth);
+          break;
+        case 'year':
+          shouldInclude = day.date.startsWith(currentYear);
+          break;
+      }
+      
+      if (shouldInclude) {
+        monthlyStats.income += day.income || 0;
+        monthlyStats.expense += day.expense || 0;
+      }
+    });
+    monthlyStats.balance = monthlyStats.income - monthlyStats.expense;
+  }
 
 
 
@@ -222,23 +185,94 @@ export default function LedgerDetail() {
             >
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
-
           </div>
         </div>
 
-        {/* 月度统计 */}
-        <div className="px-4 pt-2 grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-xs opacity-90">1月总收入</div>
-            <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-xs opacity-90">1月总结余</div>
-            <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-xs opacity-90">1月总支出</div>
-            <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
+        {/* 统计区域 */}
+        <div className="px-4 pt-2 relative">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="relative">
+              <div className="text-xs opacity-90 flex items-center justify-center gap-1">
+                <span>
+                  {statsPeriod === 'day' && '今日'}
+                  {statsPeriod === 'week' && '本周'}
+                  {statsPeriod === 'month' && '1月'}
+                  {statsPeriod === 'year' && '今年'}
+                  总收入
+                </span>
+                <button 
+                  onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+                  className="inline-flex items-center justify-center w-4 h-4"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 12 12">
+                    <path d="M6 8L2 4h8z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
+              
+              {/* 周期选择菜单 */}
+              {showPeriodMenu && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 w-[5.5rem]">
+                  <button
+                    onClick={() => {
+                      setStatsPeriod('day');
+                      setShowPeriodMenu(false);
+                    }}
+                    className="w-full px-2 py-2.5 text-sm text-gray-900 active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                  >
+                    按天
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStatsPeriod('week');
+                      setShowPeriodMenu(false);
+                    }}
+                    className="w-full px-2 py-2.5 text-sm text-gray-900 active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                  >
+                    按自然周
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStatsPeriod('month');
+                      setShowPeriodMenu(false);
+                    }}
+                    className="w-full px-2 py-2.5 text-sm text-gray-900 active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                  >
+                    按自然月
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStatsPeriod('year');
+                      setShowPeriodMenu(false);
+                    }}
+                    className="w-full px-2 py-2.5 text-sm text-gray-900 active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                  >
+                    按自然年
+                  </button>
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-xs opacity-90">
+                {statsPeriod === 'day' && '今日'}
+                {statsPeriod === 'week' && '本周'}
+                {statsPeriod === 'month' && '1月'}
+                {statsPeriod === 'year' && '今年'}
+                总结余
+              </div>
+              <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs opacity-90">
+                {statsPeriod === 'day' && '今日'}
+                {statsPeriod === 'week' && '本周'}
+                {statsPeriod === 'month' && '1月'}
+                {statsPeriod === 'year' && '今年'}
+                总支出
+              </div>
+              <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -253,54 +287,61 @@ export default function LedgerDetail() {
             <div className="text-gray-400 text-sm">点击下方"+"按钮开始记账</div>
           </div>
         ) : (
-          mockRecords.map((dayRecord) => (
-            <div key={dayRecord.date}>
-              {/* 日期标题 */}
-              <div className="flex items-center justify-between py-1 text-xs text-gray-500">
-                <span>
-                  {dayRecord.date} {dayRecord.dayOfWeek}
-                </span>
-                <span className="text-xs">
-                  收:{dayRecord.income}, 支:{dayRecord.expense}, 余:{dayRecord.balance}
-                </span>
-              </div>
+          transactionsData.map((dayRecord: any) => {
+            // 计算星期
+            const date = new Date(dayRecord.date);
+            const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const dayOfWeek = weekDays[date.getDay()];
+            
+            return (
+              <div key={dayRecord.date}>
+                {/* 日期标题 */}
+                <div className="flex items-center justify-between py-1 text-xs text-gray-500">
+                  <span>
+                    {dayRecord.date} {dayOfWeek}
+                  </span>
+                  <span className="text-xs">
+                    收:{dayRecord.income.toFixed(2)}, 支:{dayRecord.expense.toFixed(2)}, 余:{dayRecord.balance.toFixed(2)}
+                  </span>
+                </div>
 
-              {/* 当天的记录 */}
-              <div className="space-y-1.5">
-                {dayRecord.records.map((record) => (
-                  <div
-                    key={record.id}
-                    className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
-                  >
-                    {/* 用户头像 */}
-                    <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                      U
-                    </div>
-
-                    {/* 分类信息 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
-                        <span className="text-xs text-gray-900 font-normal">
-                          {record.category}
-                          {record.subcategory && `–${record.subcategory}`}
-                        </span>
+                {/* 当天的记录 */}
+                <div className="space-y-1.5">
+                  {dayRecord.records.map((record: any) => (
+                    <div
+                      key={record.id}
+                      className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
+                    >
+                      {/* 成员头像 */}
+                      <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                        {record.member?.nickname ? record.member.nickname.charAt(0) : 'U'}
                       </div>
-                      {record.note && (
-                        <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.note}</div>
-                      )}
-                    </div>
 
-                    {/* 金额 */}
-                    <div className="text-sm font-normal text-gray-900 flex-shrink-0">
-                      {record.amount.toFixed(2)}
+                      {/* 分类信息 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                          <span className="text-xs text-gray-900 font-normal">
+                            {record.category}
+                            {record.subcategory && `–${record.subcategory}`}
+                          </span>
+                        </div>
+                        {record.description && (
+                          <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
+                        )}
+                      </div>
+
+                      {/* 金额 */}
+                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-red-600' : 'text-green-600'}`}>
+                        {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

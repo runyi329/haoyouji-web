@@ -5115,7 +5115,7 @@ export const appRouter = router({
         ledgerId: z.number(),
         memberId: z.number(),
         permissionType: z.enum(['view', 'add', 'edit', 'delete']),
-        permissionValue: z.enum(['all', 'own']),
+        permissionValue: z.enum(['all', 'own', 'none']),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.updateMemberPermission(
@@ -5197,6 +5197,131 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date, input.memberIds);
+      }),
+
+    // 添加记账记录
+    addTransaction: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        type: z.enum(['income', 'expense']),
+        amount: z.number().positive(),
+        categoryId: z.number(),
+        subcategoryId: z.number().optional(),
+        description: z.string().optional(),
+        transactionDate: z.string(),
+        images: z.array(z.string()).optional(),
+        memberId: z.number().optional(),
+        accountId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.addTransaction({
+          ...input,
+          userId: ctx.user.id,
+        });
+      }),
+
+    // 获取记账记录列表（按日期分组）
+    getTransactions: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        type: z.enum(['income', 'expense']).optional(),
+        categoryId: z.number().optional(),
+        memberId: z.number().optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { ledgerId, ...options } = input;
+        return await dbLedger.getTransactionsList(ledgerId, ctx.user.id, options);
+      }),
+
+    // 删除记账记录
+    deleteTransaction: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.deleteTransaction(input.recordId, ctx.user.id);
+      }),
+
+    // 更新记账记录
+    updateTransaction: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+        type: z.enum(['income', 'expense']).optional(),
+        amount: z.number().positive().optional(),
+        categoryId: z.number().optional(),
+        subcategoryId: z.number().optional(),
+        description: z.string().optional(),
+        transactionDate: z.string().optional(),
+        images: z.array(z.string()).optional(),
+        memberId: z.number().optional(),
+        accountId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { recordId, ...data } = input;
+        return await dbLedger.updateTransaction(recordId, ctx.user.id, data);
+      }),
+
+    // ==================== 审批相关 ====================
+    
+    // 获取审批规则
+    getApprovalRules: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getApprovalRules(input.ledgerId, ctx.user.id);
+      }),
+
+    // 保存审批规则
+    saveApprovalRules: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        rules: z.array(z.object({
+          recorderId: z.number().nullable(),
+          approverType: z.enum(['all', 'specific']),
+          approverIds: z.array(z.number()).optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.saveApprovalRules(input.ledgerId, ctx.user.id, input.rules);
+      }),
+
+    // 删除审批规则
+    deleteApprovalRule: protectedProcedure
+      .input(z.object({
+        ruleId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.deleteApprovalRule(input.ruleId, ctx.user.id);
+      }),
+
+    // 审批记账
+    approveTransaction: protectedProcedure
+      .input(z.object({
+        transactionId: z.number(),
+        action: z.enum(['approved', 'rejected']),
+        comment: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.approveTransaction(
+          input.transactionId,
+          ctx.user.id,
+          input.action,
+          input.comment
+        );
+      }),
+
+    // 获取待审批的记账列表
+    getPendingApprovals: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getPendingApprovals(input.ledgerId, ctx.user.id);
       }),
   }),
 });

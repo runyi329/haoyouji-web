@@ -503,6 +503,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	date: date({ mode: 'string' }).notNull(),
 	description: text(),
 	createdBy: int().notNull(),
+	approvalStatus: mysqlEnum(['pending','approved','rejected','not_required']).default('not_required').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
@@ -900,3 +901,35 @@ export const wrongQuestions = mysqlTable("wrong_questions", {
 	reviewed: tinyint().default(0).notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
+
+// 账目审批规则表
+export const ledgerApprovalRules = mysqlTable("ledger_approval_rules", {
+	id: int().autoincrement().notNull(),
+	ledgerId: int().notNull(),
+	// 记账人 ID，如果为 null 表示默认规则（全部&新加入成员）
+	recorderId: int(),
+	// 审批人类型：all=需全部成员审批，specific=指定成员审批
+	approverType: mysqlEnum(['all','specific']).default('all').notNull(),
+	// 审批人 ID列表（JSON格式），当 approverType='specific' 时使用
+	approverIds: json(),
+	// 是否启用
+	isEnabled: tinyint().default(1).notNull(),
+	createdBy: int().notNull(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 账目审批记录表
+export const ledgerApprovalRecords = mysqlTable("ledger_approval_records", {
+	id: int().autoincrement().notNull(),
+	ledgerId: int().notNull(),
+	transactionId: int().notNull(),
+	approverId: int().notNull(),
+	// 审批状态：pending=待审批，approved=已通过，rejected=已拒绝
+	status: mysqlEnum(['pending','approved','rejected']).default('pending').notNull(),
+	comment: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 修改 transactions 表，添加审批状态字段（注：这里只是记录，实际需要通过数据库迁移添加）

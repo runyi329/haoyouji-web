@@ -1392,3 +1392,666 @@ export async function getDayRecords(
     categoryName: categoryNameMap.get(record.categoryId) || '未分类',
   }));
 }
+
+/**
+ * 添加记账记录
+ */
+export async function addTransaction(data: {
+  ledgerId: number;
+  userId: number;
+  type: 'income' | 'expense';
+  amount: number;
+  categoryId: number;
+  subcategoryId?: number;
+  description?: string;
+  transactionDate: string;
+  images?: string[];
+  memberId?: number; // 为谁记账（默认为自己）
+  accountId?: number; // 付款/收款方式
+}) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, data.ledgerId),
+        eq(ledgerMembers.userId, data.userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 检查是否需要审批
+  const approvalCheck = await checkNeedApproval(data.ledgerId, data.userId);
+  
+  // 确定审批状态
+  let approvalStatus: 'pending' | 'approved' | 'rejected' | 'not_required' = 'not_required';
+  let approverIds: number[] = [];
+  
+  if (approvalCheck.needApproval && approvalCheck.rule) {
+    approvalStatus = 'pending';
+    
+    // 获取审批人列表
+    if (approvalCheck.rule.approverType === 'all') {
+      // 需要全部成员审批（除了记账人自己）
+      const allMembers = await db
+        .select({ userId: ledgerMembers.userId })
+        .from(ledgerMembers)
+        .where(eq(ledgerMembers.ledgerId, data.ledgerId));
+      
+      approverIds = allMembers
+        .map(m => m.userId)
+        .filter(id => id !== data.userId);
+    } else if (approvalCheck.rule.approverType === 'specific') {
+      // 指定审批人
+      const approverIdsJson = approvalCheck.rule.approverIds as any;
+      approverIds = typeof approverIdsJson === 'string' 
+        ? JSON.parse(approverIdsJson) 
+        : approverIdsJson || [];
+    }
+  }
+  
+  // 插入记账记录
+  const result = await db.insert(ledgerRecords).values({
+    ledgerId: data.ledgerId,
+    type: data.type,
+    amount: data.amount.toString(),
+    categoryId: data.categoryId,
+    subcategoryId: data.subcategoryId,
+    description: data.description,
+    date: data.transactionDate,
+    images: data.images ? JSON.stringify(data.images) : null,
+    memberId: data.memberId || membership[0].id, // 默认为自己
+    accountId: data.accountId,
+    createdBy: data.userId,
+    approvalStatus,
+  });
+  
+  // 如果需要审批，创建审批记录
+  if (approvalStatus === 'pending' && approverIds.length > 0) {
+    await createApprovalRecords(data.ledgerId, result.insertId, approverIds);
+  }
+  
+  return {
+    id: result.insertId,
+    success: true,
+    needApproval: approvalStatus === 'pending',
+    approverIds,
+  };
+}
+
+/**
+ * 获取账本的记账记录列表（按日期分组）
+ */
+export async function getTransactionsList(
+  ledgerId: number,
+  userId: number,
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    type?: 'income' | 'expense';
+    categoryId?: number;
+    memberId?: number;
+    limit?: number;
+    offset?: number;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 构建查询条件
+  const conditions = [eq(ledgerRecords.ledgerId, ledgerId)];
+  
+  if (options?.startDate) {
+    conditions.push(sql`${ledgerRecords.date} >= ${options.startDate}`);
+  }
+  if (options?.endDate) {
+    conditions.push(sql`${ledgerRecords.date} <= ${options.endDate}`);
+  }
+  if (options?.type) {
+    conditions.push(eq(ledgerRecords.type, options.type));
+  }
+  if (options?.categoryId) {
+    conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
+  }
+  if (options?.memberId) {
+    conditions.push(eq(ledgerRecords.memberId, options.memberId));
+  }
+  
+  // 添加审批状态过滤：只显示已审批或不需审批的记录
+  conditions.push(
+    sql`(${ledgerRecords.approvalStatus} = 'approved' OR ${ledgerRecords.approvalStatus} = 'not_required')`
+  );
+  
+  // 获取记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      subcategoryId: ledgerRecords.subcategoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.date,
+      images: ledgerRecords.images,
+      memberId: ledgerRecords.memberId,
+      accountId: ledgerRecords.accountId,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      approvalStatus: ledgerRecords.approvalStatus,
+    })
+    .from(ledgerRecords)
+    .where(and(...conditions))
+    .orderBy(desc(ledgerRecords.date), desc(ledgerRecords.createdAt))
+    .limit(options?.limit || 100)
+    .offset(options?.offset || 0);
+  
+  // 获取所有涉及的分类ID
+  const categoryIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+    if (r.subcategoryId) categoryIds.add(r.subcategoryId);
+  });
+  
+  // 获取分类信息
+  let categories: any[] = [];
+  if (categoryIds.size > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+        icon: ledgerCategories.icon,
+        parentId: ledgerCategories.parentId,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(categoryIds).map(id => sql`${id}`), sql`, `)})`);
+  }
+  
+  const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
+  
+  // 获取所有涉及的成员ID
+  const memberIds = new Set(records.map((r: any) => r.memberId).filter(Boolean));
+  
+  // 获取成员信息
+  let members: any[] = [];
+  if (memberIds.size > 0) {
+    members = await db
+      .select({
+        id: ledgerMembers.id,
+        userId: ledgerMembers.userId,
+        nickname: ledgerMembers.nickname,
+      })
+      .from(ledgerMembers)
+      .where(sql`${ledgerMembers.id} IN (${sql.join(Array.from(memberIds).map(id => sql`${id}`), sql`, `)})`);
+  }
+  
+  const memberMap = new Map(members.map((m: any) => [m.id, m]));
+  
+  // 按日期分组
+  const groupedRecords: Record<string, any> = {};
+  
+  records.forEach((record: any) => {
+    const date = record.date;
+    
+    if (!groupedRecords[date]) {
+      groupedRecords[date] = {
+        date,
+        records: [],
+        income: 0,
+        expense: 0,
+      };
+    }
+    
+    const category = categoryMap.get(record.categoryId);
+    const subcategory = record.subcategoryId ? categoryMap.get(record.subcategoryId) : null;
+    const member = memberMap.get(record.memberId);
+    
+    const amount = Number(record.amount);
+    
+    groupedRecords[date].records.push({
+      id: record.id,
+      type: record.type,
+      amount,
+      category: category?.name || '未分类',
+      categoryIcon: category?.icon,
+      subcategory: subcategory?.name,
+      description: record.description,
+      images: record.images ? JSON.parse(record.images) : [],
+      member: member ? {
+        id: member.id,
+        userId: member.userId,
+        nickname: member.nickname,
+      } : null,
+      createdAt: record.createdAt,
+    });
+    
+    if (record.type === 'income') {
+      groupedRecords[date].income += amount;
+    } else {
+      groupedRecords[date].expense += amount;
+    }
+  });
+  
+  // 转换为数组并计算每日余额
+  const result = Object.values(groupedRecords).map((day: any) => ({
+    ...day,
+    balance: day.income - day.expense,
+  }));
+  
+  return result;
+}
+
+/**
+ * 删除记账记录
+ */
+export async function deleteTransaction(
+  recordId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取记录信息
+  const record = await db
+    .select({
+      id: ledgerRecords.id,
+      ledgerId: ledgerRecords.ledgerId,
+      createdBy: ledgerRecords.createdBy,
+    })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId))
+    .limit(1);
+  
+  if (record.length === 0) {
+    throw new Error("记录不存在");
+  }
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record[0].ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 删除记录
+  await db
+    .delete(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId));
+  
+  return { success: true };
+}
+
+/**
+ * 更新记账记录
+ */
+export async function updateTransaction(
+  recordId: number,
+  userId: number,
+  data: {
+    type?: 'income' | 'expense';
+    amount?: number;
+    categoryId?: number;
+    subcategoryId?: number;
+    description?: string;
+    transactionDate?: string;
+    images?: string[];
+    memberId?: number;
+    accountId?: number;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取记录信息
+  const record = await db
+    .select({
+      id: ledgerRecords.id,
+      ledgerId: ledgerRecords.ledgerId,
+      createdBy: ledgerRecords.createdBy,
+    })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId))
+    .limit(1);
+  
+  if (record.length === 0) {
+    throw new Error("记录不存在");
+  }
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record[0].ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 构建更新数据
+  const updateData: any = {};
+  if (data.type) updateData.type = data.type;
+  if (data.amount !== undefined) updateData.amount = data.amount.toString();
+  if (data.categoryId) updateData.categoryId = data.categoryId;
+  if (data.subcategoryId !== undefined) updateData.subcategoryId = data.subcategoryId;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.transactionDate) updateData.date = data.transactionDate;
+  if (data.images) updateData.images = JSON.stringify(data.images);
+  if (data.memberId) updateData.memberId = data.memberId;
+  if (data.accountId !== undefined) updateData.accountId = data.accountId;
+  
+  // 更新记录
+  await db
+    .update(ledgerRecords)
+    .set(updateData)
+    .where(eq(ledgerRecords.id, recordId));
+  
+  return { success: true };
+}
+
+// ==================== 审批相关函数 ====================
+
+/**
+ * 获取账本的审批规则列表
+ */
+export async function getApprovalRules(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgerMembers, ledgers } = await import("../drizzle/schema.js");
+  
+  // 验证用户权限
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
+    throw new Error("只有账本创建者可以查看审批规则");
+  }
+  
+  // 获取审批规则
+  const rules = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.ledgerId, ledgerId));
+  
+  return rules;
+}
+
+/**
+ * 保存审批规则
+ */
+export async function saveApprovalRules(
+  ledgerId: number,
+  userId: number,
+  rules: Array<{
+    recorderId: number | null;
+    approverType: 'all' | 'specific';
+    approverIds?: number[];
+  }>
+) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgers } = await import("../drizzle/schema.js");
+  
+  // 验证用户权限
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
+    throw new Error("只有账本创建者可以设置审批规则");
+  }
+  
+  // 删除旧规则
+  await db
+    .delete(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.ledgerId, ledgerId));
+  
+  // 插入新规则
+  for (const rule of rules) {
+    await db.insert(ledgerApprovalRules).values({
+      ledgerId,
+      recorderId: rule.recorderId,
+      approverType: rule.approverType,
+      approverIds: rule.approverIds ? JSON.stringify(rule.approverIds) : null,
+      isEnabled: 1,
+      createdBy: userId,
+    });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 删除审批规则
+ */
+export async function deleteApprovalRule(ruleId: number, userId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgers } = await import("../drizzle/schema.js");
+  
+  // 获取规则
+  const rule = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.id, ruleId))
+    .limit(1);
+  
+  if (rule.length === 0) {
+    throw new Error("规则不存在");
+  }
+  
+  // 验证用户权限
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, rule[0].ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
+    throw new Error("只有账本创建者可以删除审批规则");
+  }
+  
+  // 删除规则
+  await db
+    .delete(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.id, ruleId));
+  
+  return { success: true };
+}
+
+/**
+ * 检查记账是否需要审批
+ */
+export async function checkNeedApproval(ledgerId: number, recorderId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules } = await import("../drizzle/schema.js");
+  
+  // 查找特殊规则（recorderId 匹配）
+  const specificRule = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(
+      and(
+        eq(ledgerApprovalRules.ledgerId, ledgerId),
+        eq(ledgerApprovalRules.recorderId, recorderId),
+        eq(ledgerApprovalRules.isEnabled, 1)
+      )
+    )
+    .limit(1);
+  
+  if (specificRule.length > 0) {
+    return {
+      needApproval: true,
+      rule: specificRule[0],
+    };
+  }
+  
+  // 查找默认规则（recorderId 为 null）
+  const defaultRule = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(
+      and(
+        eq(ledgerApprovalRules.ledgerId, ledgerId),
+        isNull(ledgerApprovalRules.recorderId),
+        eq(ledgerApprovalRules.isEnabled, 1)
+      )
+    )
+    .limit(1);
+  
+  if (defaultRule.length > 0) {
+    return {
+      needApproval: true,
+      rule: defaultRule[0],
+    };
+  }
+  
+  return {
+    needApproval: false,
+    rule: null,
+  };
+}
+
+/**
+ * 创建审批记录
+ */
+export async function createApprovalRecords(
+  ledgerId: number,
+  transactionId: number,
+  approverIds: number[]
+) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
+  
+  // 为每个审批人创建审批记录
+  for (const approverId of approverIds) {
+    await db.insert(ledgerApprovalRecords).values({
+      ledgerId,
+      transactionId,
+      approverId,
+      status: 'pending',
+    });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 审批记账
+ */
+export async function approveTransaction(
+  transactionId: number,
+  userId: number,
+  action: 'approved' | 'rejected',
+  comment?: string
+) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
+  
+  // 更新审批记录
+  await db
+    .update(ledgerApprovalRecords)
+    .set({
+      status: action,
+      comment: comment || null,
+    })
+    .where(
+      and(
+        eq(ledgerApprovalRecords.transactionId, transactionId),
+        eq(ledgerApprovalRecords.approverId, userId)
+      )
+    );
+  
+  // 检查是否所有审批人都已审批
+  const allRecords = await db
+    .select()
+    .from(ledgerApprovalRecords)
+    .where(eq(ledgerApprovalRecords.transactionId, transactionId));
+  
+  const allApproved = allRecords.every(r => r.status === 'approved');
+  const anyRejected = allRecords.some(r => r.status === 'rejected');
+  
+  // 更新交易状态
+  if (allApproved) {
+    await db
+      .update(transactions)
+      .set({ approvalStatus: 'approved' })
+      .where(eq(transactions.id, transactionId));
+  } else if (anyRejected) {
+    await db
+      .update(transactions)
+      .set({ approvalStatus: 'rejected' })
+      .where(eq(transactions.id, transactionId));
+  }
+  
+  return { success: true, allApproved, anyRejected };
+}
+
+/**
+ * 获取待审批的记账列表
+ */
+export async function getPendingApprovals(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
+  
+  // 获取待审批的记录
+  const records = await db
+    .select({
+      id: ledgerApprovalRecords.id,
+      transactionId: ledgerApprovalRecords.transactionId,
+      status: ledgerApprovalRecords.status,
+      comment: ledgerApprovalRecords.comment,
+      createdAt: ledgerApprovalRecords.createdAt,
+      transaction: transactions,
+    })
+    .from(ledgerApprovalRecords)
+    .leftJoin(transactions, eq(ledgerApprovalRecords.transactionId, transactions.id))
+    .where(
+      and(
+        eq(ledgerApprovalRecords.ledgerId, ledgerId),
+        eq(ledgerApprovalRecords.approverId, userId),
+        eq(ledgerApprovalRecords.status, 'pending')
+      )
+    );
+  
+  return records;
+}

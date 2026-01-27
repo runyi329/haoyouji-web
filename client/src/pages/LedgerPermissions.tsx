@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-type Permission = "all" | "own";
+type Permission = "all" | "own" | "none";
 
 interface MemberPermission {
   id: number;
@@ -18,10 +18,25 @@ interface MemberPermission {
   permissionDelete: Permission;
 }
 
+interface PermissionMenuState {
+  show: boolean;
+  memberId: number | null;
+  permissionType: "view" | "add" | "edit" | "delete" | null;
+  position: { top: number; left: number };
+}
+
 const LedgerPermissions = () => {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
+
+  // 权限菜单状态
+  const [permissionMenu, setPermissionMenu] = useState<PermissionMenuState>({
+    show: false,
+    memberId: null,
+    permissionType: null,
+    position: { top: 0, left: 0 },
+  });
 
   // 获取账本成员权限列表
   const { data: members = [], refetch } = trpc.ledger.getMemberPermissions.useQuery({
@@ -32,38 +47,69 @@ const LedgerPermissions = () => {
   const updatePermissionMutation = trpc.ledger.updateMemberPermission.useMutation({
     onSuccess: () => {
       refetch();
+      setPermissionMenu({ show: false, memberId: null, permissionType: null, position: { top: 0, left: 0 } });
     },
     onError: (error) => {
       toast.error(error.message || "更新权限失败");
     },
   });
 
-  // 切换权限
-  const togglePermission = (
+  // 显示权限选择菜单
+  const showPermissionMenu = (
+    event: React.MouseEvent,
     memberId: number,
-    permissionType: "view" | "add" | "edit" | "delete",
-    currentValue: Permission
+    permissionType: "view" | "add" | "edit" | "delete"
   ) => {
-    const newValue: Permission = currentValue === "all" ? "own" : "all";
-    
-    updatePermissionMutation.mutate({
-      ledgerId,
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPermissionMenu({
+      show: true,
       memberId,
       permissionType,
-      permissionValue: newValue,
+      position: {
+        top: rect.bottom + window.scrollY,
+        left: rect.left + rect.width / 2,
+      },
     });
+  };
+
+  // 选择权限
+  const selectPermission = (permission: Permission) => {
+    if (permissionMenu.memberId && permissionMenu.permissionType) {
+      updatePermissionMutation.mutate({
+        ledgerId,
+        memberId: permissionMenu.memberId,
+        permissionType: permissionMenu.permissionType,
+        permissionValue: permission,
+      });
+    }
   };
 
   // 获取权限显示文本
   const getPermissionText = (permission: Permission) => {
-    return permission === "all" ? "全部" : "仅自己";
+    switch (permission) {
+      case "all":
+        return "全部";
+      case "own":
+        return "仅自己";
+      case "none":
+        return "不允许";
+      default:
+        return "全部";
+    }
   };
 
   // 获取权限按钮样式
   const getPermissionButtonClass = (permission: Permission) => {
-    return permission === "all"
-      ? "text-green-600 font-medium"
-      : "text-orange-500 font-medium";
+    switch (permission) {
+      case "all":
+        return "text-green-600 font-medium text-sm";
+      case "own":
+        return "text-orange-500 font-medium text-sm";
+      case "none":
+        return "text-red-500 font-medium text-sm";
+      default:
+        return "text-green-600 font-medium text-sm";
+    }
   };
 
   return (
@@ -74,34 +120,26 @@ const LedgerPermissions = () => {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="flex-1 text-center text-base font-semibold pr-5">
-          {members[0]?.ledgerName || "家庭记账"}
+          家庭记账
         </h1>
       </div>
 
       {/* 权限表格 */}
       <div className="bg-white">
         {/* 表头 */}
-        <div className="grid grid-cols-5 border-b border-gray-200 text-xs text-gray-700 font-medium">
-          <div className="p-3 text-center">成员</div>
-          <div className="p-3 text-center border-l border-gray-200">
-            查看
-            <br />
-            账目
+        <div className="grid grid-cols-5 border-b border-gray-200 text-sm text-gray-700 font-medium">
+          <div className="py-3 px-2 text-center flex items-center justify-center">成员</div>
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
+            <span className="leading-tight">查看<br />账目</span>
           </div>
-          <div className="p-3 text-center border-l border-gray-200">
-            添加
-            <br />
-            账目
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
+            <span className="leading-tight">添加<br />账目</span>
           </div>
-          <div className="p-3 text-center border-l border-gray-200">
-            修改
-            <br />
-            账目
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
+            <span className="leading-tight">修改<br />账目</span>
           </div>
-          <div className="p-3 text-center border-l border-gray-200">
-            删除
-            <br />
-            账目
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
+            <span className="leading-tight">删除<br />账目</span>
           </div>
         </div>
 
@@ -109,10 +147,10 @@ const LedgerPermissions = () => {
         {members.map((member) => (
           <div
             key={member.id}
-            className="grid grid-cols-5 border-b border-gray-100 text-sm"
+            className="grid grid-cols-5 border-b border-gray-100"
           >
             {/* 成员信息 */}
-            <div className="p-3 flex items-center justify-center">
+            <div className="py-4 px-2 flex items-center justify-center">
               <img
                 src={member.userAvatar}
                 alt={member.userName}
@@ -121,14 +159,12 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 查看账目权限 */}
-            <div className="p-3 flex items-center justify-center border-l border-gray-100">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium">全部</span>
+                <span className="text-green-600 font-medium text-sm">全部</span>
               ) : (
                 <button
-                  onClick={() =>
-                    togglePermission(member.id, "view", member.permissionView)
-                  }
+                  onClick={(e) => showPermissionMenu(e, member.id, "view")}
                   className={getPermissionButtonClass(member.permissionView)}
                   disabled={updatePermissionMutation.isPending}
                 >
@@ -138,14 +174,12 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 添加账目权限 */}
-            <div className="p-3 flex items-center justify-center border-l border-gray-100">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium">全部</span>
+                <span className="text-green-600 font-medium text-sm">全部</span>
               ) : (
                 <button
-                  onClick={() =>
-                    togglePermission(member.id, "add", member.permissionAdd)
-                  }
+                  onClick={(e) => showPermissionMenu(e, member.id, "add")}
                   className={getPermissionButtonClass(member.permissionAdd)}
                   disabled={updatePermissionMutation.isPending}
                 >
@@ -155,14 +189,12 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 修改账目权限 */}
-            <div className="p-3 flex items-center justify-center border-l border-gray-100">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium">全部</span>
+                <span className="text-green-600 font-medium text-sm">全部</span>
               ) : (
                 <button
-                  onClick={() =>
-                    togglePermission(member.id, "edit", member.permissionEdit)
-                  }
+                  onClick={(e) => showPermissionMenu(e, member.id, "edit")}
                   className={getPermissionButtonClass(member.permissionEdit)}
                   disabled={updatePermissionMutation.isPending}
                 >
@@ -172,14 +204,12 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 删除账目权限 */}
-            <div className="p-3 flex items-center justify-center border-l border-gray-100">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium">全部</span>
+                <span className="text-green-600 font-medium text-sm">全部</span>
               ) : (
                 <button
-                  onClick={() =>
-                    togglePermission(member.id, "delete", member.permissionDelete)
-                  }
+                  onClick={(e) => showPermissionMenu(e, member.id, "delete")}
                   className={getPermissionButtonClass(member.permissionDelete)}
                   disabled={updatePermissionMutation.isPending}
                 >
@@ -191,23 +221,21 @@ const LedgerPermissions = () => {
         ))}
 
         {/* 新加入成员（占位） */}
-        <div className="grid grid-cols-5 border-b border-gray-100 text-sm bg-gray-50">
-          <div className="p-3 flex items-center justify-center text-gray-500 text-xs">
-            新加入
-            <br />
-            成员
+        <div className="grid grid-cols-5 border-b border-gray-100 bg-gray-50">
+          <div className="py-4 px-2 flex items-center justify-center text-gray-500 text-sm">
+            <span className="leading-tight">新加入<br />成员</span>
           </div>
-          <div className="p-3 flex items-center justify-center border-l border-gray-100">
-            <span className="text-green-600 font-medium text-xs">全部</span>
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
+            <span className="text-green-600 font-medium text-sm">全部</span>
           </div>
-          <div className="p-3 flex items-center justify-center border-l border-gray-100">
-            <span className="text-green-600 font-medium text-xs">全部</span>
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
+            <span className="text-green-600 font-medium text-sm">全部</span>
           </div>
-          <div className="p-3 flex items-center justify-center border-l border-gray-100">
-            <span className="text-orange-500 font-medium text-xs">仅自己</span>
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
+            <span className="text-orange-500 font-medium text-sm">仅自己</span>
           </div>
-          <div className="p-3 flex items-center justify-center border-l border-gray-100">
-            <span className="text-orange-500 font-medium text-xs">仅自己</span>
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
+            <span className="text-orange-500 font-medium text-sm">仅自己</span>
           </div>
         </div>
       </div>
@@ -221,6 +249,47 @@ const LedgerPermissions = () => {
           <span className="text-orange-500 font-medium">仅自己</span>：只能查看/操作自己添加的账目
         </p>
       </div>
+
+      {/* 权限选择菜单 */}
+      {permissionMenu.show && (
+        <>
+          {/* 遮罩层 */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setPermissionMenu({ show: false, memberId: null, permissionType: null, position: { top: 0, left: 0 } })}
+          />
+          
+          {/* 菜单 */}
+          <div
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden"
+            style={{
+              top: `${permissionMenu.position.top}px`,
+              left: `${permissionMenu.position.left}px`,
+              transform: "translateX(-50%)",
+              minWidth: "100px",
+            }}
+          >
+            <button
+              onClick={() => selectPermission("all")}
+              className="w-full px-4 py-3 text-sm text-green-600 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+            >
+              全部
+            </button>
+            <button
+              onClick={() => selectPermission("own")}
+              className="w-full px-4 py-3 text-sm text-orange-500 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+            >
+              仅自己
+            </button>
+            <button
+              onClick={() => selectPermission("none")}
+              className="w-full px-4 py-3 text-sm text-red-500 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+            >
+              不允许
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 };
