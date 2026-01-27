@@ -83,7 +83,10 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'item',
-        formatter: '{b}<br/>好友人数: {c}',
+        formatter: (params: any) => {
+          const value = params.value || 0;
+          return `${params.name}<br/>好友人数: ${value}`;
+        },
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
         borderColor: '#e4e4e7',
         textStyle: {

@@ -1749,37 +1749,34 @@ export async function getRegionStats(parentUserId: number) {
     regionMap.set(region, currentCount + (Number(r.value) || 0));
   }
   
-  // 添加海外统计
+  // 计算海外和其他的数量
   const overseasCount = (Number(ownOverseas?.value) || 0) + (Number(sharedOverseas?.value) || 0);
-  if (overseasCount > 0) {
-    regionMap.set('海外', overseasCount);
-  }
-  
-  // 添加其他(未选择地域)统计
   const otherCount = (Number(ownOther?.value) || 0) + (Number(sharedOther?.value) || 0);
-  if (otherCount > 0) {
-    regionMap.set('其他', otherCount);
-  }
   
-  // 返回格式：[{ name: '北京市', value: 5 }, ...]
-  // 排序逻辑：海外和其他固定排最后，其他省份按人脉数量降序
-  const results = Array.from(regionMap.entries()).map(([name, value]) => ({
-    name,
-    value,
+  // 所有34个省级行政区（使用短名字）
+  const allProvinces = [
+    '北京', '天津', '上海', '重庆',
+    '河北', '山西', '辽宁', '吉林', '黑龙江',
+    '江苏', '浙江', '安徽', '福建', '江西', '山东',
+    '河南', '湖北', '湖南', '广东', '海南',
+    '四川', '贵州', '云南', '陕西', '甘肃', '青海',
+    '内蒙古', '广西', '西藏', '宁夏', '新疆',
+    '台湾', '香港', '澳门'
+  ];
+  
+  // 创建完整的省份列表，包括0人的省份
+  const normalRegions = allProvinces.map(province => ({
+    name: province,
+    value: regionMap.get(province) || 0
   }));
   
-  // 分离海外和其他
-  const overseas = results.find(r => r.name === '海外');
-  const other = results.find(r => r.name === '其他');
-  const normalRegions = results.filter(r => r.name !== '海外' && r.name !== '其他');
-  
-  // 其他省份按人脉数量降序排列
+  // 按人脉数量降序排列
   normalRegions.sort((a, b) => b.value - a.value);
   
-  // 合并结果：正常省份 + 海外 + 其他
+  // 添加海外和其他
   const finalResults = [...normalRegions];
-  if (overseas) finalResults.push(overseas);
-  if (other) finalResults.push(other);
+  finalResults.push({ name: '海外', value: overseasCount });
+  finalResults.push({ name: '其他', value: otherCount });
   
   return finalResults;
 }
