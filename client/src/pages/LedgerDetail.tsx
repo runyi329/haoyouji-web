@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import DraggableAddButton from "@/components/DraggableAddButton";
+import MembersDialog from "@/components/MembersDialog";
 
 import {
   ChevronLeft,
@@ -116,6 +117,14 @@ export default function LedgerDetail() {
     ledgerId: Number(ledgerId),
   });
 
+  // 获取成员列表
+  const { data: membersData } = trpc.ledger.getMembers.useQuery({
+    ledgerId: Number(ledgerId),
+  });
+
+  // 成员弹窗状态
+  const [showMembersDialog, setShowMembersDialog] = useState(false);
+
   // 记录最后访问的账本ID到localStorage
   useEffect(() => {
     if (ledgerId) {
@@ -170,16 +179,27 @@ export default function LedgerDetail() {
 
         {/* 成员头像和功能按钮 */}
         <div className="px-4 py-2 flex items-center justify-between">
-          {/* 成员头像（靠左） */}
-          <div className="flex items-center gap-2">
-            {[1, 2].map((i) => (
+          {/* 成员头像（靠左，堆叠显示） */}
+          <div className="flex items-center">
+            {membersData && membersData.slice(0, 5).map((member, index) => (
               <div
-                key={i}
-                className="w-10 h-10 rounded-full bg-gray-800 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+                key={member.userId}
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+                style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
               >
-                R{i}
+                {member.nickname.charAt(0)}
               </div>
             ))}
+            {/* 显示更多按钮 */}
+            {membersData && membersData.length > 0 && (
+              <div
+                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-gray-600 text-lg font-medium cursor-pointer hover:bg-gray-50"
+                style={{ marginLeft: membersData.length > 0 ? '-12px' : 0, zIndex: 0 }}
+                onClick={() => setShowMembersDialog(true)}
+              >
+                +
+              </div>
+            )}
           </div>
           
           {/* 功能按钮（靠右） */}
@@ -286,6 +306,15 @@ export default function LedgerDetail() {
 
       {/* 可拖动悬浮加号按钮 */}
       <DraggableAddButton onClick={() => setLocation(`/ledger/${ledgerId}/add`)} />
+
+      {/* 成员列表弹窗 */}
+      {membersData && (
+        <MembersDialog
+          open={showMembersDialog}
+          onOpenChange={setShowMembersDialog}
+          members={membersData}
+        />
+      )}
     </div>
   );
 }
