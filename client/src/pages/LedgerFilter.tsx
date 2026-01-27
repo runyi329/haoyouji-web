@@ -48,6 +48,25 @@ export default function LedgerFilter() {
     type: selectedType === "all" ? undefined : (selectedType as "income" | "expense")
   });
 
+  // 构建分类层级关系
+  const buildCategoryTree = (categories: any[]) => {
+    if (!categories) return [];
+    
+    // 找出所有顶级分类（parentId为null）
+    const topLevel = categories.filter(c => c.parentId === null);
+    
+    // 为每个顶级分类找子分类
+    return topLevel.map(parent => ({
+      ...parent,
+      children: categories.filter(c => c.parentId === parent.id).map(child => ({
+        ...child,
+        children: categories.filter(c => c.parentId === child.id)
+      }))
+    }));
+  };
+
+  const categoryTree = buildCategoryTree(categoriesData || []);
+
   // 账目类型选项
   const transactionTypes = [
     { value: "all", label: "不限制", color: "bg-blue-500" },
@@ -335,9 +354,9 @@ export default function LedgerFilter() {
               />
             </div>
           </button>
-          {showCategories && categoriesData && (
+          {showCategories && categoryTree.length > 0 && (
             <div className="space-y-2">
-              {categoriesData.map((category: any) => (
+              {categoryTree.map((category: any) => (
                 <div key={category.id} className="space-y-1">
                   <Button
                     variant={selectedCategories.includes(category.id) ? "default" : "outline"}
