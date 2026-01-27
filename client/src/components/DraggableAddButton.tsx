@@ -23,12 +23,12 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
   const [position, setPosition] = useState(getInitialPosition);
   const [isDragging, setIsDragging] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragOffsetRef = useRef({ x: 0, y: 0 }); // 手指相对于按钮左上角的偏移
   const currentPosRef = useRef(position);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const rafRef = useRef<number>();
   const longPressTimerRef = useRef<NodeJS.Timeout>();
   const hasMoved = useRef(false);
+  const startPosRef = useRef({ x: 0, y: 0 }); // 记录开始触摸的位置
 
   // 同步position到ref
   useEffect(() => {
@@ -67,7 +67,10 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     
     const touch = e.touches[0];
     hasMoved.current = false;
-    dragStartRef.current = {
+    startPosRef.current = { x: touch.clientX, y: touch.clientY };
+    
+    // 计算手指相对于按钮左上角的偏移
+    dragOffsetRef.current = {
       x: touch.clientX - currentPosRef.current.x,
       y: touch.clientY - currentPosRef.current.y,
     };
@@ -86,13 +89,11 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
   // 处理触摸移动
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
-    const newX = touch.clientX - dragStartRef.current.x;
-    const newY = touch.clientY - dragStartRef.current.y;
-
-    // 如果移动距离超过10px，认为是拖动意图，清除长按定时器
+    
+    // 检查是否移动了
     const moveDistance = Math.sqrt(
-      Math.pow(newX - currentPosRef.current.x, 2) +
-      Math.pow(newY - currentPosRef.current.y, 2)
+      Math.pow(touch.clientX - startPosRef.current.x, 2) +
+      Math.pow(touch.clientY - startPosRef.current.y, 2)
     );
 
     if (moveDistance > 10) {
@@ -112,7 +113,11 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     e.preventDefault();
     e.stopPropagation();
 
-    // 直接更新位置，不使用 requestAnimationFrame
+    // 计算新位置：手指位置 - 偏移量 = 按钮左上角位置
+    const newX = touch.clientX - dragOffsetRef.current.x;
+    const newY = touch.clientY - dragOffsetRef.current.y;
+    
+    // 约束位置在屏幕范围内
     const constrained = constrainPosition(newX, newY);
     currentPosRef.current = constrained;
     
@@ -147,7 +152,10 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     e.stopPropagation();
     
     hasMoved.current = false;
-    dragStartRef.current = {
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    
+    // 计算鼠标相对于按钮左上角的偏移
+    dragOffsetRef.current = {
       x: e.clientX - currentPosRef.current.x,
       y: e.clientY - currentPosRef.current.y,
     };
@@ -162,13 +170,10 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
   // 处理鼠标移动（PC端）
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      const newX = e.clientX - dragStartRef.current.x;
-      const newY = e.clientY - dragStartRef.current.y;
-
-      // 如果移动距离超过10px，认为是拖动意图
+      // 检查是否移动了
       const moveDistance = Math.sqrt(
-        Math.pow(newX - currentPosRef.current.x, 2) +
-        Math.pow(newY - currentPosRef.current.y, 2)
+        Math.pow(e.clientX - startPosRef.current.x, 2) +
+        Math.pow(e.clientY - startPosRef.current.y, 2)
       );
 
       if (moveDistance > 10) {
@@ -185,7 +190,11 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
 
       e.preventDefault();
 
-      // 直接更新位置，不使用 requestAnimationFrame
+      // 计算新位置：鼠标位置 - 偏移量 = 按钮左上角位置
+      const newX = e.clientX - dragOffsetRef.current.x;
+      const newY = e.clientY - dragOffsetRef.current.y;
+      
+      // 约束位置在屏幕范围内
       const constrained = constrainPosition(newX, newY);
       currentPosRef.current = constrained;
       
@@ -217,9 +226,6 @@ export default function DraggableAddButton({ onClick }: DraggableAddButtonProps)
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
     };
   }, [isDragging, isLongPressing, onClick, constrainPosition, clearLongPressTimer]);
 
