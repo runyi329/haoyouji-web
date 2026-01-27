@@ -515,20 +515,46 @@ function ChartViewContent({
             {/* 时间输入 */}
             <div className="mb-4">
               {timeDimension === 'year' && (
-                <input
-                  type="text"
-                  value={`${chartYear}年`}
-                  readOnly
-                  className="w-full p-3 border border-gray-200 rounded text-center text-blue-600"
-                />
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">选择年份</label>
+                  <select
+                    value={chartYear}
+                    onChange={(e) => setChartYear(Number(e.target.value))}
+                    className="w-full p-2 border border-gray-200 rounded"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                      <option key={year} value={year}>{year}年</option>
+                    ))}
+                  </select>
+                </div>
               )}
               {timeDimension === 'month' && (
-                <input
-                  type="text"
-                  value={`${chartYear}年${chartMonth}月`}
-                  readOnly
-                  className="w-full p-3 border border-gray-200 rounded text-center text-blue-600"
-                />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">选择年份</label>
+                    <select
+                      value={chartYear}
+                      onChange={(e) => setChartYear(Number(e.target.value))}
+                      className="w-full p-2 border border-gray-200 rounded"
+                    >
+                      {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                        <option key={year} value={year}>{year}年</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">选择月份</label>
+                    <select
+                      value={chartMonth}
+                      onChange={(e) => setChartMonth(Number(e.target.value))}
+                      className="w-full p-2 border border-gray-200 rounded"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                        <option key={month} value={month}>{month}月</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               )}
               {timeDimension === 'custom' && (
                 <div className="space-y-2">
