@@ -45,15 +45,22 @@ export default function LedgerFilter() {
     { value: "income", label: "收入", color: "bg-green-500" },
   ];
 
-  // 资金账户选项
+  // 支付方式选项（与添加账目页面保持一致）
   const accountTypes = [
     { value: "all", label: "全部", color: "bg-blue-500" },
-    { value: "bank", label: "银行转账", color: "bg-orange-500" },
-    { value: "cash", label: "现金", color: "bg-green-500" },
-    { value: "cmb", label: "招行转账", color: "bg-purple-500" },
+    { value: "wechat", label: "微信", color: "bg-green-500" },
     { value: "alipay", label: "支付宝", color: "bg-blue-400" },
-    { value: "wechat", label: "微信钱包", color: "bg-orange-400" },
+    { value: "bank", label: "银行卡", color: "bg-orange-500" },
+    { value: "digital", label: "数字钱包", color: "bg-purple-500" },
+    { value: "cash", label: "现金", color: "bg-gray-500" },
   ];
+
+  // 根据账目类型动态显示标签
+  const getAccountLabel = () => {
+    if (selectedType === "expense") return "付款账户";
+    if (selectedType === "income") return "收款账户";
+    return "支付方式";
+  };
 
   // 重置所有条件
   const handleReset = () => {
@@ -172,9 +179,9 @@ export default function LedgerFilter() {
           </div>
         </div>
 
-        {/* 资金账户 */}
+        {/* 支付方式 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">资金账户</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{getAccountLabel()}</label>
           <div className="flex flex-wrap gap-2">
             {accountTypes.map((account) => (
               <Button
