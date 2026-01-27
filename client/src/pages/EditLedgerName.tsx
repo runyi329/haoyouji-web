@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -19,9 +19,11 @@ export default function EditLedgerName() {
   const [newName, setNewName] = useState("");
 
   // 初始化名称
-  if (ledgerData?.name && !newName) {
-    setNewName(ledgerData.name);
-  }
+  useEffect(() => {
+    if (ledgerData?.name && !newName) {
+      setNewName(ledgerData.name);
+    }
+  }, [ledgerData?.name, newName]);
 
   // 更新账本名称的mutation
   const utils = trpc.useUtils();
@@ -56,11 +58,6 @@ export default function EditLedgerName() {
         <div className="text-gray-500">加载中...</div>
       </div>
     );
-  }
-
-  // 当数据加载完成后，设置初始值
-  if (ledgerData?.name && !newName) {
-    setNewName(ledgerData.name);
   }
 
   return (
