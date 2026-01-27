@@ -1525,3 +1525,10 @@
 - [x] 检查数据库schema中login_attempts表是否存在
 - [x] 手动创建login_attempts表（因为db:push失败）
 - [x] 测试登录功能
+
+
+## 修复登录查询中的布尔值类型不匹配问题（2026-01-28）
+
+- [x] 查找login_attempts表查询代码
+- [x] 修复success字段使用false而不是0的问题（server/db.ts第719行）
+- [x] 测试登录功能
