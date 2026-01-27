@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 
@@ -34,9 +34,7 @@ export default function LedgerFilter() {
   const [amountMax, setAmountMax] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedAccount, setSelectedAccount] = useState("all");
-  const [selectedCurrency, setSelectedCurrency] = useState("all");
   const [note, setNote] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // 账目类型选项
   const transactionTypes = [
@@ -71,7 +69,6 @@ export default function LedgerFilter() {
     setAmountMax("");
     setSelectedType("all");
     setSelectedAccount("all");
-    setSelectedCurrency("all");
     setNote("");
   };
 
@@ -201,23 +198,6 @@ export default function LedgerFilter() {
           </div>
         </div>
 
-        {/* 货币种类 */}
-        <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">货币种类</label>
-            <Button
-              variant={selectedCurrency === "all" ? "default" : "outline"}
-              size="sm"
-              className={`h-7 px-3 text-xs rounded-full ${
-                selectedCurrency === "all" ? "bg-green-500 hover:bg-green-600" : ""
-              }`}
-              onClick={() => setSelectedCurrency("all")}
-            >
-              不限制
-            </Button>
-          </div>
-        </div>
-
         {/* 备注信息 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <label className="block text-sm font-medium text-gray-700 mb-2">备注信息</label>
@@ -230,22 +210,6 @@ export default function LedgerFilter() {
           />
         </div>
 
-        {/* 高级选项 */}
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full flex items-center justify-center gap-2 py-2 text-gray-600 text-sm"
-        >
-          <span>高级选项</span>
-          <ChevronDown
-            className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
-          />
-        </button>
-
-        {showAdvanced && (
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <p className="text-xs text-gray-500 text-center">暂无高级选项</p>
-          </div>
-        )}
       </div>
 
       {/* 底部按钮 */}
