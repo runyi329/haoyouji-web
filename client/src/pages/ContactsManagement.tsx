@@ -982,7 +982,7 @@ export default function ContactsManagement() {
   };
 
   return (
-    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-20">
+    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-20" style={{ touchAction: 'pan-y pinch-zoom' }}>
       {/* 页面标题 - 手机端更紧凑 */}
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">

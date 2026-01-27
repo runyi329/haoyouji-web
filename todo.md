@@ -1488,3 +1488,9 @@
 - [x] 添加getTransactionDetail后端API
 - [x] 修改getTransactionsList，移除审批状态过滤，返回所有记账
 - [ ] 测试完整审批流程
+
+## 禁用脉动首页左右滑动手势（2026-01-28）
+
+- [x] 分析问题：首页左右滑动会误触退出登录
+- [x] 在ContactsManagement页面添加CSS样式禁用滑动手势（touchAction: 'pan-y pinch-zoom'）
+- [x] 测试验证修复效果
