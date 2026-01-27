@@ -2,14 +2,32 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
 
 export default function LedgerFilter() {
   const [, params] = useRoute("/ledger/:id/filter");
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id;
+  const ledgerId = parseInt(params?.id || "0");
+
+  // 获取账本成员
+  const { data: membersData } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
   // 筛选条件状态
-  const [selectedMember, setSelectedMember] = useState("all");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+
+  // 切换成员选择
+  const toggleMember = (memberId: number) => {
+    if (memberId === 0) {
+      setSelectedMemberIds([]);
+    } else {
+      setSelectedMemberIds(prev => 
+        prev.includes(memberId) 
+          ? prev.filter(id => id !== memberId)
+          : [...prev, memberId]
+      );
+    }
+  };
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [amountMin, setAmountMin] = useState("");
@@ -44,7 +62,7 @@ export default function LedgerFilter() {
 
   // 重置所有条件
   const handleReset = () => {
-    setSelectedMember("all");
+    setSelectedMemberIds([]);
     setDateStart("");
     setDateEnd("");
     setAmountMin("");
@@ -78,16 +96,18 @@ export default function LedgerFilter() {
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-gray-700">记账人</label>
-            <Button
-              variant={selectedMember === "all" ? "default" : "outline"}
-              size="sm"
-              className={`h-7 px-3 text-xs rounded-full ${
-                selectedMember === "all" ? "bg-blue-500 hover:bg-blue-600" : ""
-              }`}
-              onClick={() => setSelectedMember("all")}
+            <button
+              onClick={() => setShowMemberPicker(true)}
+              className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
             >
-              全部成员
-            </Button>
+              {selectedMemberIds.length === 0 ? (
+                <span className="text-[8px] leading-tight">全部<br />成员</span>
+              ) : selectedMemberIds.length === 1 ? (
+                <span className="text-[10px]">成员</span>
+              ) : (
+                <span className="text-[10px]">多选</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -242,6 +262,54 @@ export default function LedgerFilter() {
           确定搜索
         </Button>
       </div>
+
+      {/* 成员选择弹窗 */}
+      {showMemberPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowMemberPicker(false)}>
+          <div className="bg-white rounded-lg p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-medium mb-3">选择成员</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              <div 
+                onClick={() => toggleMember(0)}
+                className={`flex items-center p-2 rounded cursor-pointer ${
+                  selectedMemberIds.length === 0 ? 'bg-blue-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm mr-2">
+                  全
+                </div>
+                <span>全部成员</span>
+                {selectedMemberIds.length === 0 && <span className="ml-auto text-blue-600">✓</span>}
+              </div>
+              {membersData?.map((member: any) => (
+                <div 
+                  key={member.id}
+                  onClick={() => toggleMember(member.id)}
+                  className={`flex items-center p-2 rounded cursor-pointer ${
+                    selectedMemberIds.includes(member.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-sm mr-2">
+                      {member.nickname?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                  <span>{member.nickname}</span>
+                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-blue-600">✓</span>}
+                </div>
+              ))}
+            </div>
+            <button 
+              onClick={() => setShowMemberPicker(false)}
+              className="w-full mt-4 bg-blue-600 text-white py-2 rounded"
+            >
+              确定
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
