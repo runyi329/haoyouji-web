@@ -131,11 +131,11 @@ export default function LedgerFilter() {
               </span>
             )}
           </div>
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="flex gap-1.5 mb-2">
             {[
-              { value: "week", label: "过去一周" },
-              { value: "month", label: "过去1月" },
-              { value: "year", label: "过去一年" },
+              { value: "week", label: "近一周" },
+              { value: "month", label: "近一月" },
+              { value: "year", label: "近一年" },
               { value: "ytd", label: "今年至今" },
               { value: "custom", label: "自定义" },
             ].map((range) => (
