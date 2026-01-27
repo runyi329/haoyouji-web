@@ -123,7 +123,14 @@ export default function LedgerFilter() {
 
         {/* 账目时间 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">账目时间</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium text-gray-700">账目时间</label>
+            {dateStart && dateEnd && (
+              <span className="text-xs text-gray-400">
+                {dateStart} 至 {dateEnd}
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2 mb-2">
             {[
               { value: "week", label: "过去一周" },
