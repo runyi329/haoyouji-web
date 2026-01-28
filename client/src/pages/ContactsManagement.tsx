@@ -58,7 +58,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing 
 }
 
 // 功能2卡片 - 本周新增
-function WeeklyNewCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -76,7 +76,7 @@ function WeeklyNewCard({ count, onClick, dragListeners }: { count: number; onCli
 }
 
 // 功能3卡片 - 本月新增
-function MonthlyNewCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -94,7 +94,7 @@ function MonthlyNewCard({ count, onClick, dragListeners }: { count: number; onCl
 }
 
 // 功能4卡片 - 本年新增
-function YearlyNewCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -112,7 +112,7 @@ function YearlyNewCard({ count, onClick, dragListeners }: { count: number; onCli
 }
 
 // 功能5卡片 - 平均联络间隔
-function AverageIntervalCard({ days, dragListeners }: { days: number; dragListeners?: any }) {
+function AverageIntervalCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center">
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 md:cursor-grab md:active:cursor-grabbing">
@@ -126,7 +126,7 @@ function AverageIntervalCard({ days, dragListeners }: { days: number; dragListen
 }
 
 // 功能6卡片 - 需要关注
-function NeedsAttentionCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -144,7 +144,7 @@ function NeedsAttentionCard({ count, onClick, dragListeners }: { count: number; 
 }
 
 // 功能7卡片 - 本月活跃
-function MonthlyActiveCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function MonthlyActiveCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -162,7 +162,7 @@ function MonthlyActiveCard({ count, onClick, dragListeners }: { count: number; o
 }
 
 // 功能8卡片 - 本周活跃
-function WeeklyActiveCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function WeeklyActiveCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -180,7 +180,7 @@ function WeeklyActiveCard({ count, onClick, dragListeners }: { count: number; on
 }
 
 // 功能9卡片 - 今年活跃
-function YearlyActiveCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -198,7 +198,7 @@ function YearlyActiveCard({ count, onClick, dragListeners }: { count: number; on
 }
 
 // 功能10卡片 - 拉黑名单
-function BlacklistCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function BlacklistCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -216,7 +216,7 @@ function BlacklistCard({ count, onClick, dragListeners }: { count: number; onCli
 }
 
 // 功能11卡片 - 今日提醒
-function TodayRemindersCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function TodayRemindersCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -234,7 +234,7 @@ function TodayRemindersCard({ count, onClick, dragListeners }: { count: number; 
 }
 
 // 功能12卡片 - 本周提醒
-function WeekRemindersCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function WeekRemindersCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -252,7 +252,7 @@ function WeekRemindersCard({ count, onClick, dragListeners }: { count: number; o
 }
 
 // 功能13卡片 - 本月提醒
-function MonthRemindersCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function MonthRemindersCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -270,7 +270,7 @@ function MonthRemindersCard({ count, onClick, dragListeners }: { count: number; 
 }
 
 // 功能14卡片 - 今日活跃
-function TodayActiveCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function TodayActiveCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -288,7 +288,7 @@ function TodayActiveCard({ count, onClick, dragListeners }: { count: number; onC
 }
 
 // 功能15卡片 - 休眠名单
-function DormantCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function DormantCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -306,7 +306,7 @@ function DormantCard({ count, onClick, dragListeners }: { count: number; onClick
 }
 
 // 功能16卡片 - 公司数量
-function CompanyCountCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function CompanyCountCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -324,7 +324,7 @@ function CompanyCountCard({ count, onClick, dragListeners }: { count: number; on
 }
 
 // 功能17卡片 - 累计联络
-function TotalInteractionCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function TotalInteractionCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -342,7 +342,7 @@ function TotalInteractionCard({ count, onClick, dragListeners }: { count: number
 }
 
 // 功能18卡片 - 累计标签
-function TotalTagCard({ count, onClick, dragListeners }: { count: number; onClick?: () => void; dragListeners?: any }) {
+function TotalTagCard({ count, onClick, dragListeners, isBreathing }: { count: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -360,7 +360,7 @@ function TotalTagCard({ count, onClick, dragListeners }: { count: number; onClic
 }
 
 // 功能19卡片 - 累计使用天数
-function TotalUsageDaysCard({ days, dragListeners }: { days: number; dragListeners?: any }) {
+function TotalUsageDaysCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -377,7 +377,7 @@ function TotalUsageDaysCard({ days, dragListeners }: { days: number; dragListene
 }
 
 // 功能20卡片 - 我的积分
-function MyPointsCard({ points, onClick, dragListeners }: { points: number; onClick?: () => void; dragListeners?: any }) {
+function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
@@ -739,7 +739,7 @@ export default function ContactsManagement() {
       // 随机选择1-20之间的卡片ID
       const randomId = Math.floor(Math.random() * 20) + 1;
       setBreathingCardId(randomId);
-    }, 2000); // 每2秒切换一次
+    }, 1000); // 每1秒切换一次
     
     return () => clearInterval(interval);
   }, []);
