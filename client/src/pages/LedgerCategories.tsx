@@ -36,6 +36,11 @@ const LedgerCategories = () => {
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<CategoryType>("expense");
   
+  // 记录当前操作的一级分类ID和选择的操作类型
+  const [currentCategoryId, setCurrentCategoryId] = useState<number | null>(null);
+  const [selectedAction, setSelectedAction] = useState<'level1' | 'level2' | 'level3' | null>(null);
+  const [showSubCategorySelect, setShowSubCategorySelect] = useState(false);
+  
   // 展开/收起状态
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
@@ -145,7 +150,11 @@ const LedgerCategories = () => {
                   </button>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleAddSubCategory(category.id, category.name)}
+                      onClick={() => {
+                        setCurrentCategoryId(category.id);
+                        setSelectedAction(null);
+                        setIsAddDialogOpen(true);
+                      }}
                       className="w-8 h-8 flex items-center justify-center border border-blue-500 text-blue-500 rounded hover:bg-blue-50"
                     >
                       <Plus className="w-4 h-4" />
@@ -231,30 +240,148 @@ const LedgerCategories = () => {
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="top-[5%] translate-y-0">
           <DialogHeader>
-            <DialogTitle>选择要添加的分类类型</DialogTitle>
+            <DialogTitle>
+              {!selectedAction && "选择要添加的分类类型"}
+              {selectedAction === 'level1' && "增加一级分类"}
+              {selectedAction === 'level2' && "增加二级分类"}
+              {selectedAction === 'level3' && !showSubCategorySelect && "选择二级分类"}
+              {selectedAction === 'level3' && showSubCategorySelect && "增加三级分类"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <button
-              onClick={() => toast.info("增加一级分类功能待实现")}
-              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
-            >
-              增加一级分类
-            </button>
-            <div className="border-t border-gray-200"></div>
-            <button
-              onClick={() => toast.info("增加二级分类功能待实现")}
-              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
-            >
-              增加二级分类
-            </button>
-            <div className="border-t border-gray-200"></div>
-            <button
-              onClick={() => toast.info("增加三级分类功能待实现")}
-              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
-            >
-              增加三级分类
-            </button>
-          </div>
+          
+          {/* 选择操作类型 */}
+          {!selectedAction && (
+            <div className="py-4">
+              <button
+                onClick={() => setSelectedAction('level1')}
+                className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+              >
+                增加一级分类
+              </button>
+              <div className="border-t border-gray-200"></div>
+              <button
+                onClick={() => setSelectedAction('level2')}
+                className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+              >
+                增加二级分类
+              </button>
+              <div className="border-t border-gray-200"></div>
+              <button
+                onClick={() => setSelectedAction('level3')}
+                className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+              >
+                增加三级分类
+              </button>
+            </div>
+          )}
+          
+          {/* 输入分类名称 (一级和二级) */}
+          {(selectedAction === 'level1' || selectedAction === 'level2') && (
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="categoryName">分类名称</Label>
+                <Input
+                  id="categoryName"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="请输入分类名称"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setIsAddDialogOpen(false);
+                    setSelectedAction(null);
+                    setNewCategoryName("");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  取消
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!newCategoryName.trim()) {
+                      toast.error("请输入分类名称");
+                      return;
+                    }
+                    toast.success(`已添加${selectedAction === 'level1' ? '一' : '二'}级分类: ${newCategoryName}`);
+                    setIsAddDialogOpen(false);
+                    setSelectedAction(null);
+                    setNewCategoryName("");
+                  }}
+                  className="flex-1"
+                >
+                  确定
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {/* 选择二级分类 (三级) */}
+          {selectedAction === 'level3' && !showSubCategorySelect && (
+            <div className="py-4">
+              {categories.find(c => c.id === currentCategoryId)?.children?.map((subCat) => (
+                <div key={subCat.id}>
+                  <button
+                    onClick={() => {
+                      setSelectedParentId(subCat.id);
+                      setShowSubCategorySelect(true);
+                    }}
+                    className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+                  >
+                    {subCat.name}
+                  </button>
+                  <div className="border-t border-gray-200"></div>
+                </div>
+              )) || <div className="text-center text-gray-400 py-4">暂无二级分类</div>}
+            </div>
+          )}
+          
+          {/* 输入三级分类名称 */}
+          {selectedAction === 'level3' && showSubCategorySelect && (
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="categoryName">分类名称</Label>
+                <Input
+                  id="categoryName"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="请输入分类名称"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    setIsAddDialogOpen(false);
+                    setSelectedAction(null);
+                    setShowSubCategorySelect(false);
+                    setNewCategoryName("");
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  取消
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!newCategoryName.trim()) {
+                      toast.error("请输入分类名称");
+                      return;
+                    }
+                    toast.success(`已添加三级分类: ${newCategoryName}`);
+                    setIsAddDialogOpen(false);
+                    setSelectedAction(null);
+                    setShowSubCategorySelect(false);
+                    setNewCategoryName("");
+                  }}
+                  className="flex-1"
+                >
+                  确定
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
