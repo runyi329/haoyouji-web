@@ -182,8 +182,51 @@ export default function LedgerFilter() {
 
   // 确定搜索
   const handleSearch = () => {
-    // TODO: 实现搜索逻辑，将筛选条件传递给账本详情页面
-    setLocation(`/ledger/${ledgerId}`);
+    // 构建筛选条件对象
+    const filters: any = {};
+    
+    // 时间范围
+    if (dateStart) filters.startDate = dateStart;
+    if (dateEnd) filters.endDate = dateEnd;
+    
+    // 金额范围
+    if (amountMin) filters.amountMin = amountMin;
+    if (amountMax) filters.amountMax = amountMax;
+    
+    // 账目类型
+    if (selectedType && selectedType !== 'all') {
+      filters.type = selectedType;
+    }
+    
+    // 账目分类
+    if (selectedCategories.length > 0) {
+      filters.categoryIds = selectedCategories.join(',');
+    }
+    
+    // 记账人
+    if (selectedMemberIds.length > 0) {
+      filters.memberIds = selectedMemberIds.join(',');
+    }
+    
+    // 支付方式
+    if (selectedAccounts.length > 0 && !selectedAccounts.includes('all')) {
+      filters.accounts = selectedAccounts.join(',');
+    }
+    
+    // 备注
+    if (note.trim()) {
+      filters.note = note.trim();
+    }
+    
+    // 将筛选条件序列化为URL参数
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      params.set(key, filters[key]);
+    });
+    
+    // 跳转到账本详情页并传递筛选条件
+    const queryString = params.toString();
+    setLocation(`/ledger/${ledgerId}${queryString ? `?${queryString}` : ''}`);
   };
 
   return (

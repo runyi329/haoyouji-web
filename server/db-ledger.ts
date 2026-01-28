@@ -1531,6 +1531,8 @@ export async function getTransactionsList(
     type?: 'income' | 'expense';
     categoryId?: number;
     memberId?: number;
+    amountMin?: string;
+    amountMax?: string;
     limit?: number;
     offset?: number;
   }
@@ -1568,6 +1570,12 @@ export async function getTransactionsList(
   }
   if (options?.categoryId) {
     conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
+  }
+  if (options?.amountMin) {
+    conditions.push(sql`${ledgerRecords.amount} >= ${options.amountMin}`);
+  }
+  if (options?.amountMax) {
+    conditions.push(sql`${ledgerRecords.amount} <= ${options.amountMax}`);
   }
   
   // 注意：不过滤审批状态，返回所有记账（包括待审批的）

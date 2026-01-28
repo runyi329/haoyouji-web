@@ -19,10 +19,40 @@ export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
 
-
-
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   console.log('[LedgerDetail] params:', params, 'ledgerId:', ledgerId);
+  
+  // 读取URL查询参数
+  const urlParams = new URLSearchParams(window.location.search);
+  const filters: any = {
+    ledgerId: Number(ledgerId),
+    limit: 100,
+  };
+  
+  // 从 URL 参数中读取筛选条件
+  if (urlParams.has('startDate')) filters.startDate = urlParams.get('startDate')!;
+  if (urlParams.has('endDate')) filters.endDate = urlParams.get('endDate')!;
+  if (urlParams.has('type')) filters.type = urlParams.get('type') as 'income' | 'expense';
+  if (urlParams.has('amountMin')) filters.amountMin = urlParams.get('amountMin')!;
+  if (urlParams.has('amountMax')) filters.amountMax = urlParams.get('amountMax')!;
+  
+  // 处理分类 ID（只使用第一个）
+  if (urlParams.has('categoryIds')) {
+    const categoryIds = urlParams.get('categoryIds')!.split(',').map(Number);
+    if (categoryIds.length > 0) {
+      filters.categoryId = categoryIds[0];
+    }
+  }
+  
+  // 处理成员 ID（只使用第一个）
+  if (urlParams.has('memberIds')) {
+    const memberIds = urlParams.get('memberIds')!.split(',').map(Number);
+    if (memberIds.length > 0) {
+      filters.memberId = memberIds[0];
+    }
+  }
+  
+  console.log('[LedgerDetail] filters:', filters);
   
   // 使用 tRPC
   const { data: ledgerData, isLoading, error } = trpc.ledger.getById.useQuery({
@@ -34,11 +64,8 @@ export default function LedgerDetail() {
     ledgerId: Number(ledgerId),
   });
 
-  // 获取记账记录列表
-  const { data: transactionsData } = trpc.ledger.getTransactions.useQuery({
-    ledgerId: Number(ledgerId),
-    limit: 100,
-  });
+  // 获取记账记录列表（应用筛选条件）
+  const { data: transactionsData } = trpc.ledger.getTransactions.useQuery(filters);
 
   // 获取待审批记账数量
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({

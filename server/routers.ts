@@ -5299,6 +5299,8 @@ export const appRouter = router({
         type: z.enum(['income', 'expense']).optional(),
         categoryId: z.number().optional(),
         memberId: z.number().optional(),
+        amountMin: z.string().optional(),
+        amountMax: z.string().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
       }))
