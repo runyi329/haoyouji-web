@@ -713,7 +713,8 @@ export default function ContactDetail() {
     if (interactionToEdit) {
       updateInteraction.mutate({
         interactionId: interactionToEdit.id,
-        note: editInteractionNote,
+        // 如果用户没有输入(留空),自动保存为"快捷联络"
+        note: editInteractionNote.trim() || "快捷联络",
       });
       setShowEditNoteDialog(false);
     }
@@ -1264,7 +1265,8 @@ export default function ContactDetail() {
                           <DropdownMenuItem
                             onClick={() => {
                               setInteractionToEdit(interaction);
-                              setEditInteractionNote(interaction.note || "");
+                              // 如果备注是"快捷联络",输入框为空,否则显示原值
+                              setEditInteractionNote(interaction.note === "快捷联络" ? "" : (interaction.note || ""));
                               setEditInteractionDate(format(new Date(interaction.interactionDate), "yyyy-MM-dd'T'HH:mm"));
                               setShowEditNoteDialog(true);
                             }}
