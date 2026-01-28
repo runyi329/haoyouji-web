@@ -40,11 +40,19 @@ export default function LedgerFilter() {
   const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
+  const [showCategories, setShowCategories] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
 
-  // 切换一级分类展开/收起
-  const toggleCategory = (categoryId: number) => {
+  // 点击一级分类:选中/取消选中,并切换展开/收起
+  const handleCategoryClick = (categoryId: number) => {
+    // 切换选中状态
+    setSelectedCategories(prev =>
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+    // 切换展开状态
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
       if (newSet.has(categoryId)) {
@@ -56,8 +64,15 @@ export default function LedgerFilter() {
     });
   };
 
-  // 切换二级分类展开/收起
-  const toggleSubCategory = (subCategoryId: number) => {
+  // 点击二级分类:选中/取消选中,并切换展开/收起
+  const handleSubCategoryClick = (subCategoryId: number) => {
+    // 切换选中状态
+    setSelectedCategories(prev =>
+      prev.includes(subCategoryId)
+        ? prev.filter(id => id !== subCategoryId)
+        : [...prev, subCategoryId]
+    );
+    // 切换展开状态
     setExpandedSubCategories(prev => {
       const newSet = new Set(prev);
       if (newSet.has(subCategoryId)) {
@@ -365,10 +380,23 @@ export default function LedgerFilter() {
 
         {/* 账目分类 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="mb-2">
-            <label className="text-sm font-medium text-gray-700">账目分类</label>
-          </div>
-          {categoryTree.length > 0 && (
+          <button
+            onClick={() => setShowCategories(!showCategories)}
+            className="w-full flex items-center justify-between mb-2"
+          >
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">账目分类</label>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">
+                {showCategories ? "点击收起" : "点击展开"}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
+                  showCategories ? "rotate-180" : ""
+                }`}
+              />
+            </div>
+          </button>
+          {showCategories && categoryTree.length > 0 && (
             <div className="space-y-2">
               {categoryTree.map((category: any) => (
                 <div key={category.id}>
@@ -377,30 +405,16 @@ export default function LedgerFilter() {
                   
                   {/* 一级分类 */}
                   <div className="bg-white p-1">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleCategory(category.id)}
-                        className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
-                      >
-                        {category.name}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedCategories(prev =>
-                            prev.includes(category.id)
-                              ? prev.filter(id => id !== category.id)
-                              : [...prev, category.id]
-                          );
-                        }}
-                        className={`px-3 py-2 rounded text-xs border ${
-                          selectedCategories.includes(category.id)
-                            ? "bg-blue-500 text-white border-blue-500"
-                            : "border-blue-500 text-blue-500 hover:bg-blue-50"
-                        }`}
-                      >
-                        {selectedCategories.includes(category.id) ? "✓" : "选"}
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleCategoryClick(category.id)}
+                      className={`px-4 py-2 rounded text-sm border ${
+                        selectedCategories.includes(category.id)
+                          ? "bg-blue-500 text-white border-blue-500"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {category.name}
+                    </button>
                   </div>
 
                   {/* 二级分类 */}
@@ -410,30 +424,17 @@ export default function LedgerFilter() {
                       <div className="bg-white p-1">
                         <div className="flex flex-wrap gap-2">
                           {category.children.map((subCategory: any) => (
-                            <div key={subCategory.id} className="flex items-center gap-1">
-                              <button
-                                onClick={() => toggleSubCategory(subCategory.id)}
-                                className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
-                              >
-                                {subCategory.name}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCategories(prev =>
-                                    prev.includes(subCategory.id)
-                                      ? prev.filter(id => id !== subCategory.id)
-                                      : [...prev, subCategory.id]
-                                  );
-                                }}
-                                className={`px-2 py-2 rounded text-xs border ${
-                                  selectedCategories.includes(subCategory.id)
-                                    ? "bg-blue-500 text-white border-blue-500"
-                                    : "border-blue-500 text-blue-500 hover:bg-blue-50"
-                                }`}
-                              >
-                                {selectedCategories.includes(subCategory.id) ? "✓" : "选"}
-                              </button>
-                            </div>
+                            <button
+                              key={subCategory.id}
+                              onClick={() => handleSubCategoryClick(subCategory.id)}
+                              className={`px-4 py-2 rounded text-sm border ${
+                                selectedCategories.includes(subCategory.id)
+                                  ? "bg-blue-500 text-white border-blue-500"
+                                  : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                              }`}
+                            >
+                              {subCategory.name}
+                            </button>
                           ))}
                         </div>
                       </div>
