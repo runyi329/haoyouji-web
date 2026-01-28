@@ -3201,8 +3201,10 @@ export const appRouter = router({
       if (!firstContactCreatedAt) {
         return 0;
       }
+      // 将字符串日期转换为Date对象，然后获取毫秒时间戳
+      const firstContactDate = new Date(firstContactCreatedAt).getTime();
       const now = Date.now();
-      const diffInMs = now - firstContactCreatedAt;
+      const diffInMs = now - firstContactDate;
       const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
       return diffInDays;
     }),
