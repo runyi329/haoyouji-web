@@ -357,76 +357,92 @@ export default function LedgerFilter() {
           {showCategories && categoryTree.length > 0 && (
             <div className="space-y-2">
               {categoryTree.map((category: any) => (
-                <div key={category.id} className="space-y-1">
-                  <Button
-                    variant={selectedCategories.includes(category.id) ? "default" : "outline"}
-                    size="sm"
-                    className={`h-7 px-3 text-xs rounded-full ${
-                      selectedCategories.includes(category.id)
-                        ? "bg-blue-500 text-white hover:opacity-90"
-                        : "border-gray-200"
-                    }`}
-                    onClick={() => {
-                      setSelectedCategories(prev =>
-                        prev.includes(category.id)
-                          ? prev.filter(id => id !== category.id)
-                          : [...prev, category.id]
-                      );
-                    }}
-                  >
-                    {category.name}
-                  </Button>
-                  {/* 子分类 */}
+                <div key={category.id}>
+                  {/* 一级分类标题 */}
+                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">一级分类</div>
+                  
+                  {/* 一级分类 */}
+                  <div className="bg-white p-1">
+                    <button
+                      onClick={() => {
+                        setSelectedCategories(prev =>
+                          prev.includes(category.id)
+                            ? prev.filter(id => id !== category.id)
+                            : [...prev, category.id]
+                        );
+                      }}
+                      className={`px-4 py-2 rounded text-sm border ${
+                        selectedCategories.includes(category.id)
+                          ? "bg-blue-500 text-white border-blue-500"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {category.name}
+                    </button>
+                  </div>
+
+                  {/* 二级分类 */}
                   {category.children && category.children.length > 0 && (
-                    <div className="ml-4 flex flex-wrap gap-1.5">
-                      {category.children.map((subCategory: any) => (
-                        <div key={subCategory.id} className="space-y-1">
-                          <Button
-                            variant={selectedCategories.includes(subCategory.id) ? "default" : "outline"}
-                            size="sm"
-                            className={`h-6 px-2 text-xs rounded-full ${
-                              selectedCategories.includes(subCategory.id)
-                                ? "bg-blue-400 text-white hover:opacity-90"
-                                : "border-gray-200 text-gray-600"
-                            }`}
-                            onClick={() => {
-                              setSelectedCategories(prev =>
-                                prev.includes(subCategory.id)
-                                  ? prev.filter(id => id !== subCategory.id)
-                                  : [...prev, subCategory.id]
-                              );
-                            }}
-                          >
-                            {subCategory.name}
-                          </Button>
-                          {/* 三级分类 */}
-                          {subCategory.children && subCategory.children.length > 0 && (
-                            <div className="ml-4 flex flex-wrap gap-1">
-                              {subCategory.children.map((thirdCategory: any) => (
-                                <Button
-                                  key={thirdCategory.id}
-                                  variant={selectedCategories.includes(thirdCategory.id) ? "default" : "outline"}
-                                  size="sm"
-                                  className={`h-5 px-2 text-xs rounded-full ${
-                                    selectedCategories.includes(thirdCategory.id)
-                                      ? "bg-blue-300 text-white hover:opacity-90"
-                                      : "border-gray-200 text-gray-500"
-                                  }`}
-                                  onClick={() => {
-                                    setSelectedCategories(prev =>
-                                      prev.includes(thirdCategory.id)
-                                        ? prev.filter(id => id !== thirdCategory.id)
-                                        : [...prev, thirdCategory.id]
-                                    );
-                                  }}
-                                >
-                                  {thirdCategory.name}
-                                </Button>
-                              ))}
+                    <div>
+                      <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
+                      <div className="bg-white p-1">
+                        <div className="flex flex-wrap gap-2">
+                          {category.children.map((subCategory: any) => (
+                            <div key={subCategory.id}>
+                              <button
+                                onClick={() => {
+                                  setSelectedCategories(prev =>
+                                    prev.includes(subCategory.id)
+                                      ? prev.filter(id => id !== subCategory.id)
+                                      : [...prev, subCategory.id]
+                                  );
+                                }}
+                                className={`px-4 py-2 rounded text-sm border ${
+                                  selectedCategories.includes(subCategory.id)
+                                    ? "bg-blue-500 text-white border-blue-500"
+                                    : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                                }`}
+                              >
+                                {subCategory.name}
+                              </button>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
+                      </div>
+
+                      {/* 三级分类 */}
+                      {category.children.some((sub: any) => sub.children && sub.children.length > 0) && (
+                        <div>
+                          <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
+                          <div className="bg-white p-1">
+                            <div className="flex flex-wrap gap-2">
+                              {category.children.map((subCategory: any) => 
+                                subCategory.children && subCategory.children.length > 0 ? (
+                                  subCategory.children.map((thirdCategory: any) => (
+                                    <button
+                                      key={thirdCategory.id}
+                                      onClick={() => {
+                                        setSelectedCategories(prev =>
+                                          prev.includes(thirdCategory.id)
+                                            ? prev.filter(id => id !== thirdCategory.id)
+                                            : [...prev, thirdCategory.id]
+                                        );
+                                      }}
+                                      className={`px-4 py-2 rounded text-sm border ${
+                                        selectedCategories.includes(thirdCategory.id)
+                                          ? "bg-blue-500 text-white border-blue-500"
+                                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                                      }`}
+                                    >
+                                      {thirdCategory.name}
+                                    </button>
+                                  ))
+                                ) : null
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
