@@ -44,11 +44,45 @@ import {
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _guestDb: ReturnType<typeof drizzle> | null = null;
 let _ledgerDb: ReturnType<typeof drizzle> | null = null;
 
+const GUEST_USER_ID = 5070293;
+
+// 全局变量，用于存储当前请求是否是游客
+let _currentIsGuest = false;
+
+/**
+ * 设置当前请求是否是游客
+ */
+export function setCurrentIsGuest(isGuest: boolean) {
+  _currentIsGuest = isGuest;
+}
+
+/**
+ * 获取数据库连接
+ * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
+ */
 export async function getDb() {
+  // 如果是游客用户，使用Manus临时数据库
+  if (_currentIsGuest) {
+    if (!_guestDb) {
+      const dbUrl = process.env.DATABASE_URL;
+      if (dbUrl) {
+        try {
+          _guestDb = drizzle(dbUrl);
+          console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
+        } catch (error) {
+          console.warn("[GuestDatabase] Failed to connect:", error);
+          _guestDb = null;
+        }
+      }
+    }
+    return _guestDb;
+  }
+  
+  // 真实用户使用腾讯云数据库
   if (!_db) {
-    // 优先使用原数据库 (ORIGINAL_DATABASE_URL) - 用于原有功能
     const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL;
     
     if (dbUrl) {
@@ -67,26 +101,11 @@ export async function getDb() {
 
 /**
  * 获取账本专用数据库连接
- * - 开发环境：使用 Manus 临时数据库 (DATABASE_URL)
- * - 生产环境：使用腾讯云数据库 (ORIGINAL_DATABASE_URL)
+ * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
  */
 export async function getLedgerDb() {
-  if (!_ledgerDb) {
-    // 开发和生产环境都优先使用腾讯云数据库
-    const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL;
-    
-    if (dbUrl) {
-      try {
-        _ledgerDb = drizzle(dbUrl);
-        const dbType = process.env.ORIGINAL_DATABASE_URL ? "腾讯云数据库" : "Manus临时数据库";
-        console.log(`[LedgerDatabase] 成功连接到${dbType}`);
-      } catch (error) {
-        console.warn("[LedgerDatabase] Failed to connect:", error);
-        _ledgerDb = null;
-      }
-    }
-  }
-  return _ledgerDb;
+  // 游客用户使用与getDb相同的数据库
+  return getDb();
 }
 
 // ==================== 用户相关 ====================

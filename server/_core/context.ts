@@ -6,6 +6,7 @@ export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
   user: User | null;
+  isGuest: boolean; // 是否是游客用户
 };
 
 export async function createContext(
@@ -20,9 +21,13 @@ export async function createContext(
     user = null;
   }
 
+  const GUEST_USER_ID = 5070293;
+  const isGuest = user?.id === GUEST_USER_ID;
+
   return {
     req: opts.req,
     res: opts.res,
     user,
+    isGuest,
   };
 }

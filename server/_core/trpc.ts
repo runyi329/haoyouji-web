@@ -2,13 +2,22 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
+import { setCurrentIsGuest } from "../db";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+// 在每个请求开始时设置isGuest标记
+const setGuestContext = t.middleware(async opts => {
+  const { ctx, next } = opts;
+  setCurrentIsGuest(ctx.isGuest);
+  return next();
+});
+
+export const publicProcedure = t.procedure.use(setGuestContext);
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -25,7 +34,7 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = t.procedure.use(setGuestContext).use(requireUser);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
