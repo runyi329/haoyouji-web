@@ -43,7 +43,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing 
     <Card 
       {...dragListeners}
       className={`group hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? 'animate-breathing-border' : ''
+        isBreathing ? "animate-breathing-border-blue" : ""
       }`}
       onClick={onClick}
     >
@@ -63,7 +63,7 @@ function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-green" : ""
       }`}
       onClick={onClick}
     >
@@ -83,7 +83,7 @@ function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count:
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-orange" : ""
       }`}
       onClick={onClick}
     >
@@ -103,7 +103,7 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-purple" : ""
       }`}
       onClick={onClick}
     >
@@ -121,7 +121,7 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
 function AverageIntervalCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-teal" : ""
       }`}>
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 md:cursor-grab md:active:cursor-grabbing">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">联络频率</p>
@@ -139,7 +139,7 @@ function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { co
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-red" : ""
       }`}
       onClick={onClick}
     >
@@ -159,7 +159,7 @@ function MonthlyActiveCard({ count, onClick, dragListeners, isBreathing }: { cou
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-indigo" : ""
       }`}
       onClick={onClick}
     >
@@ -179,7 +179,7 @@ function WeeklyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-teal" : ""
       }`}
       onClick={onClick}
     >
@@ -219,7 +219,7 @@ function BlacklistCard({ count, onClick, dragListeners, isBreathing }: { count: 
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-red" : ""
       }`}
       onClick={onClick}
     >
@@ -339,7 +339,7 @@ function CompanyCountCard({ count, onClick, dragListeners, isBreathing }: { coun
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-teal" : ""
       }`}
       onClick={onClick}
     >
@@ -359,7 +359,7 @@ function TotalInteractionCard({ count, onClick, dragListeners, isBreathing }: { 
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200 dark:border-pink-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-pink" : ""
       }`}
       onClick={onClick}
     >
@@ -379,7 +379,7 @@ function TotalTagCard({ count, onClick, dragListeners, isBreathing }: { count: n
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-indigo" : ""
       }`}
       onClick={onClick}
     >
@@ -418,7 +418,7 @@ function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points:
     <Card 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-200 dark:border-yellow-800 flex flex-col justify-center cursor-pointer select-none ${
-        isBreathing ? "animate-breathing-border" : ""
+        isBreathing ? "animate-breathing-border-yellow" : ""
       }`}
       onClick={onClick}
     >

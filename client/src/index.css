@@ -448,8 +448,8 @@ input[type="range"].slider::-moz-range-thumb {
   animation: shake 0.5s ease-in-out;
 }
 
-/* 呼吸灯边框动画 */
-@keyframes breathing-border {
+/* 呼吸灯边框动画 - 蓝色 */
+@keyframes breathing-border-blue {
   0%, 100% {
     border-color: rgb(191, 219, 254); /* blue-200 */
     box-shadow: 0 0 0 rgba(59, 130, 246, 0);
@@ -460,6 +460,150 @@ input[type="range"].slider::-moz-range-thumb {
   }
 }
 
-.animate-breathing-border {
-  animation: breathing-border 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+/* 呼吸灯边框动画 - 绿色 */
+@keyframes breathing-border-green {
+  0%, 100% {
+    border-color: rgb(187, 247, 208); /* green-200 */
+    box-shadow: 0 0 0 rgba(34, 197, 94, 0);
+  }
+  50% {
+    border-color: rgb(34, 197, 94); /* green-500 */
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 橙色 */
+@keyframes breathing-border-orange {
+  0%, 100% {
+    border-color: rgb(254, 215, 170); /* orange-200 */
+    box-shadow: 0 0 0 rgba(249, 115, 22, 0);
+  }
+  50% {
+    border-color: rgb(249, 115, 22); /* orange-500 */
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 紫色 */
+@keyframes breathing-border-purple {
+  0%, 100% {
+    border-color: rgb(233, 213, 255); /* purple-200 */
+    box-shadow: 0 0 0 rgba(168, 85, 247, 0);
+  }
+  50% {
+    border-color: rgb(168, 85, 247); /* purple-500 */
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 青色 */
+@keyframes breathing-border-teal {
+  0%, 100% {
+    border-color: rgb(153, 246, 228); /* teal-200 */
+    box-shadow: 0 0 0 rgba(20, 184, 166, 0);
+  }
+  50% {
+    border-color: rgb(20, 184, 166); /* teal-500 */
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 红色 */
+@keyframes breathing-border-red {
+  0%, 100% {
+    border-color: rgb(254, 202, 202); /* red-200 */
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+  }
+  50% {
+    border-color: rgb(239, 68, 68); /* red-500 */
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 粉色 */
+@keyframes breathing-border-pink {
+  0%, 100% {
+    border-color: rgb(251, 207, 232); /* pink-200 */
+    box-shadow: 0 0 0 rgba(236, 72, 153, 0);
+  }
+  50% {
+    border-color: rgb(236, 72, 153); /* pink-500 */
+    box-shadow: 0 0 20px rgba(236, 72, 153, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 黄色 */
+@keyframes breathing-border-yellow {
+  0%, 100% {
+    border-color: rgb(254, 240, 138); /* yellow-200 */
+    box-shadow: 0 0 0 rgba(234, 179, 8, 0);
+  }
+  50% {
+    border-color: rgb(234, 179, 8); /* yellow-500 */
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 靛蓝色 */
+@keyframes breathing-border-indigo {
+  0%, 100% {
+    border-color: rgb(199, 210, 254); /* indigo-200 */
+    box-shadow: 0 0 0 rgba(99, 102, 241, 0);
+  }
+  50% {
+    border-color: rgb(99, 102, 241); /* indigo-500 */
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+  }
+}
+
+/* 呼吸灯边框动画 - 玫瑰色 */
+@keyframes breathing-border-rose {
+  0%, 100% {
+    border-color: rgb(254, 205, 211); /* rose-200 */
+    box-shadow: 0 0 0 rgba(244, 63, 94, 0);
+  }
+  50% {
+    border-color: rgb(244, 63, 94); /* rose-500 */
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
+  }
+}
+
+.animate-breathing-border-blue {
+  animation: breathing-border-blue 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-green {
+  animation: breathing-border-green 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-orange {
+  animation: breathing-border-orange 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-purple {
+  animation: breathing-border-purple 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-teal {
+  animation: breathing-border-teal 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-red {
+  animation: breathing-border-red 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-pink {
+  animation: breathing-border-pink 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-yellow {
+  animation: breathing-border-yellow 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-indigo {
+  animation: breathing-border-indigo 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-breathing-border-rose {
+  animation: breathing-border-rose 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
