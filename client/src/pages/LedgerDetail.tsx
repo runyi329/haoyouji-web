@@ -153,7 +153,6 @@ export default function LedgerDetail() {
             {membersData && Array.isArray(membersData) && membersData.length > 0 && membersData.slice(0, 5).map((member, index) => (
               <div
                 key={member.userId}
-                className="border-2 border-white"
                 style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
               >
                 <UserAvatar
