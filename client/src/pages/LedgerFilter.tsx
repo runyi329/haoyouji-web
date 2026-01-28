@@ -604,8 +604,9 @@ export default function LedgerFilter() {
                   }`}
                 >
                   <UserAvatar 
-                    src={member.avatar} 
-                    alt={member.nickname || member.username}
+                    avatar={member.avatar}
+                    username={member.username}
+                    nickname={member.nickname}
                     size="sm"
                     className="mr-2"
                   />
