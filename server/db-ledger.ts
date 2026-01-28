@@ -1747,14 +1747,17 @@ export async function getTransactionDetail(
     }
   }
   
-  // 获取成员信息
-  const member = await db
+  // 获取成员信息(关联users表)
+  const memberResult = await db
     .select({
       userId: ledgerMembers.userId,
       nickname: ledgerMembers.nickname,
       role: ledgerMembers.role,
+      username: users.username,
+      avatar: users.avatar,
     })
     .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
     .where(
       and(
         eq(ledgerMembers.ledgerId, ledgerId),
@@ -1763,34 +1766,7 @@ export async function getTransactionDetail(
     )
     .limit(1);
   
-  // 获取用户头像
-  let memberWithAvatar = null;
-  if (member.length > 0) {
-    const mainDb = await getDb();
-    if (mainDb) {
-      const userInfo = await mainDb
-        .select({
-          id: users.id,
-          username: users.username,
-          avatar: users.avatar,
-        })
-        .from(users)
-        .where(eq(users.id, member[0].userId))
-        .limit(1);
-      
-      if (userInfo.length > 0) {
-        memberWithAvatar = {
-          ...member[0],
-          username: userInfo[0].username,
-          avatar: userInfo[0].avatar,
-        };
-      } else {
-        memberWithAvatar = member[0];
-      }
-    } else {
-      memberWithAvatar = member[0];
-    }
-  }
+  const memberWithAvatar = memberResult.length > 0 ? memberResult[0] : null;
   
   return {
     id: transaction.id,
@@ -1802,7 +1778,6 @@ export async function getTransactionDetail(
     category: categoryName,
     subcategory: subcategoryName,
     createdBy: transaction.createdBy,
-    approvalStatus: transaction.approvalStatus,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt,
     member: memberWithAvatar,
