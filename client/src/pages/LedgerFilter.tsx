@@ -41,6 +41,34 @@ export default function LedgerFilter() {
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategories, setShowCategories] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
+
+  // 切换一级分类展开/收起
+  const toggleCategory = (categoryId: number) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  // 切换二级分类展开/收起
+  const toggleSubCategory = (subCategoryId: number) => {
+    setExpandedSubCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subCategoryId)) {
+        newSet.delete(subCategoryId);
+      } else {
+        newSet.add(subCategoryId);
+      }
+      return newSet;
+    });
+  };
 
   // 获取账本分类
   const { data: categoriesData } = trpc.ledger.getCategories.useQuery({ 
@@ -363,32 +391,46 @@ export default function LedgerFilter() {
                   
                   {/* 一级分类 */}
                   <div className="bg-white p-1">
-                    <button
-                      onClick={() => {
-                        setSelectedCategories(prev =>
-                          prev.includes(category.id)
-                            ? prev.filter(id => id !== category.id)
-                            : [...prev, category.id]
-                        );
-                      }}
-                      className={`px-4 py-2 rounded text-sm border ${
-                        selectedCategories.includes(category.id)
-                          ? "bg-blue-500 text-white border-blue-500"
-                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                      }`}
-                    >
-                      {category.name}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleCategory(category.id)}
+                        className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                      >
+                        {category.name}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCategories(prev =>
+                            prev.includes(category.id)
+                              ? prev.filter(id => id !== category.id)
+                              : [...prev, category.id]
+                          );
+                        }}
+                        className={`px-3 py-2 rounded text-xs border ${
+                          selectedCategories.includes(category.id)
+                            ? "bg-blue-500 text-white border-blue-500"
+                            : "border-blue-500 text-blue-500 hover:bg-blue-50"
+                        }`}
+                      >
+                        {selectedCategories.includes(category.id) ? "✓" : "选"}
+                      </button>
+                    </div>
                   </div>
 
                   {/* 二级分类 */}
-                  {category.children && category.children.length > 0 && (
+                  {expandedCategories.has(category.id) && category.children && category.children.length > 0 && (
                     <div>
                       <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
                       <div className="bg-white p-1">
                         <div className="flex flex-wrap gap-2">
                           {category.children.map((subCategory: any) => (
-                            <div key={subCategory.id}>
+                            <div key={subCategory.id} className="flex items-center gap-1">
+                              <button
+                                onClick={() => toggleSubCategory(subCategory.id)}
+                                className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                              >
+                                {subCategory.name}
+                              </button>
                               <button
                                 onClick={() => {
                                   setSelectedCategories(prev =>
@@ -397,13 +439,13 @@ export default function LedgerFilter() {
                                       : [...prev, subCategory.id]
                                   );
                                 }}
-                                className={`px-4 py-2 rounded text-sm border ${
+                                className={`px-2 py-2 rounded text-xs border ${
                                   selectedCategories.includes(subCategory.id)
                                     ? "bg-blue-500 text-white border-blue-500"
-                                    : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                                    : "border-blue-500 text-blue-500 hover:bg-blue-50"
                                 }`}
                               >
-                                {subCategory.name}
+                                {selectedCategories.includes(subCategory.id) ? "✓" : "选"}
                               </button>
                             </div>
                           ))}
@@ -411,13 +453,13 @@ export default function LedgerFilter() {
                       </div>
 
                       {/* 三级分类 */}
-                      {category.children.some((sub: any) => sub.children && sub.children.length > 0) && (
+                      {category.children.some((sub: any) => expandedSubCategories.has(sub.id) && sub.children && sub.children.length > 0) && (
                         <div>
                           <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
                           <div className="bg-white p-1">
                             <div className="flex flex-wrap gap-2">
                               {category.children.map((subCategory: any) => 
-                                subCategory.children && subCategory.children.length > 0 ? (
+                                expandedSubCategories.has(subCategory.id) && subCategory.children && subCategory.children.length > 0 ? (
                                   subCategory.children.map((thirdCategory: any) => (
                                     <button
                                       key={thirdCategory.id}
