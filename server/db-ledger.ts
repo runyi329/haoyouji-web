@@ -76,6 +76,7 @@ export async function createLedger(data: {
   type?: string;
   currency?: string;
   createdBy: number;
+  memberNickname?: string;
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -112,6 +113,7 @@ export async function createLedger(data: {
     userId: data.createdBy,
     role: "owner",
     memberType: "real",
+    nickname: data.memberNickname || null,
     permissionView: "all",
     permissionAdd: "all",
     permissionEdit: "all",
