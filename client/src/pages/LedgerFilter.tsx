@@ -40,7 +40,6 @@ export default function LedgerFilter() {
   const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
   const [showCustomDate, setShowCustomDate] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
-  const [showCategories, setShowCategories] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
 
@@ -366,23 +365,10 @@ export default function LedgerFilter() {
 
         {/* 账目分类 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <button
-            onClick={() => setShowCategories(!showCategories)}
-            className="w-full flex items-center justify-between mb-2"
-          >
-            <label className="text-sm font-medium text-gray-700 cursor-pointer">账目分类</label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">
-                {showCategories ? "点击收起" : "点击展开"}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                  showCategories ? "rotate-180" : ""
-                }`}
-              />
-            </div>
-          </button>
-          {showCategories && categoryTree.length > 0 && (
+          <div className="mb-2">
+            <label className="text-sm font-medium text-gray-700">账目分类</label>
+          </div>
+          {categoryTree.length > 0 && (
             <div className="space-y-2">
               {categoryTree.map((category: any) => (
                 <div key={category.id}>
