@@ -459,9 +459,28 @@ export async function batchUpdateCategorySortOrder(updates: { id: number; sortOr
 }
 
 /**
- * 删除分类
+ * 递归获取所有子分类ID
  */
-export async function deleteLedgerCategory(categoryId: number, userId: number) {
+async function getAllChildCategoryIds(db: any, parentId: number): Promise<number[]> {
+  const children = await db
+    .select({ id: ledgerCategories.id })
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.parentId, parentId));
+  
+  let allIds: number[] = [];
+  for (const child of children) {
+    allIds.push(child.id);
+    const grandChildren = await getAllChildCategoryIds(db, child.id);
+    allIds = allIds.concat(grandChildren);
+  }
+  
+  return allIds;
+}
+
+/**
+ * 删除分类(支持级联删除)
+ */
+export async function deleteLedgerCategory(categoryId: number, userId: number, cascade: boolean = false) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -481,32 +500,39 @@ export async function deleteLedgerCategory(categoryId: number, userId: number) {
     throw new Error("默认分类不能删除");
   }
   
-  // 检查是否有子分类
-  const hasChildren = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(ledgerCategories)
-    .where(eq(ledgerCategories.parentId, categoryId))
-    .then((rows: any[]) => rows[0]?.count || 0);
+  // 获取所有子分类ID
+  const childIds = await getAllChildCategoryIds(db, categoryId);
   
-  if (hasChildren > 0) {
-    throw new Error("请先删除子分类");
+  // 如果有子分类且不是级联删除,抛出错误
+  if (childIds.length > 0 && !cascade) {
+    throw new Error("此分类下有子分类，请确认是否级联删除");
   }
   
-  // 检查是否有记录使用此分类
-  const hasRecords = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(ledgerRecords)
-    .where(eq(ledgerRecords.categoryId, categoryId))
-    .then((rows: any[]) => rows[0]?.count || 0);
+  // 收集所有要删除的分类ID(包括当前分类和所有子分类)
+  const allIdsToDelete = [categoryId, ...childIds];
   
-  if (hasRecords > 0) {
-    throw new Error("此分类下有记录，不能删除");
+  // 检查是否有记录使用这些分类
+  for (const id of allIdsToDelete) {
+    const hasRecords = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ledgerRecords)
+      .where(eq(ledgerRecords.categoryId, id))
+      .then((rows: any[]) => rows[0]?.count || 0);
+    
+    if (hasRecords > 0) {
+      throw new Error("此分类或其子分类下有记录，不能删除");
+    }
   }
   
-  // 删除分类
+  // 删除所有子分类(从最深层开始删除)
+  for (const id of childIds.reverse()) {
+    await db.delete(ledgerCategories).where(eq(ledgerCategories.id, id));
+  }
+  
+  // 删除当前分类
   await db.delete(ledgerCategories).where(eq(ledgerCategories.id, categoryId));
   
-  return true;
+  return { success: true, deletedCount: allIdsToDelete.length };
 }
 
 /**

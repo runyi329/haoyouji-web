@@ -5141,6 +5141,20 @@ export const appRouter = router({
         });
       }),
 
+    // 删除账本分类
+    deleteCategory: protectedProcedure
+      .input(z.object({
+        categoryId: z.number(),
+        cascade: z.boolean().optional().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.deleteLedgerCategory(
+          input.categoryId,
+          ctx.user.id,
+          input.cascade
+        );
+      }),
+
     // 获取成员权限列表
     getMemberPermissions: protectedProcedure
       .input(z.object({

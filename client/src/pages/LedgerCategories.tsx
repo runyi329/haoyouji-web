@@ -46,6 +46,11 @@ const LedgerCategories = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
   const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
   
+  // 删除模式状态
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
@@ -84,6 +89,19 @@ const LedgerCategories = () => {
     },
     onError: (error) => {
       toast.error(`添加失败: ${error.message}`);
+    },
+  });
+
+  // 删除分类的mutation
+  const deleteCategoryMutation = trpc.ledger.deleteCategory.useMutation({
+    onSuccess: (data) => {
+      toast.success(`删除成功，共删除${data.deletedCount}个分类`);
+      refetchCategories();
+      setShowDeleteConfirm(false);
+      setCategoryToDelete(null);
+    },
+    onError: (error) => {
+      toast.error(`删除失败: ${error.message}`);
     },
   });
 
@@ -159,9 +177,21 @@ const LedgerCategories = () => {
               <div className="bg-white p-1">
                 <div className="flex items-center justify-between">
                   <button
-                    onClick={() => toggleCategory(category.id)}
-                    className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                    onClick={() => {
+                      if (isDeleteMode) {
+                        setCategoryToDelete(category);
+                        setShowDeleteConfirm(true);
+                      } else {
+                        toggleCategory(category.id);
+                      }
+                    }}
+                    className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                   >
+                    {isDeleteMode && (
+                      <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                        -
+                      </span>
+                    )}
                     {category.name}
                   </button>
                   <div className="flex items-center gap-2">
@@ -176,8 +206,12 @@ const LedgerCategories = () => {
                       <Plus className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => toast.info("删除功能待实现")}
-                      className="w-8 h-8 flex items-center justify-center border border-blue-500 text-blue-500 rounded hover:bg-blue-50"
+                      onClick={() => setIsDeleteMode(!isDeleteMode)}
+                      className={`w-8 h-8 flex items-center justify-center border rounded hover:bg-blue-50 ${
+                        isDeleteMode 
+                          ? 'border-red-500 text-red-500 bg-red-50' 
+                          : 'border-blue-500 text-blue-500'
+                      }`}
                     >
                       <Minus className="w-4 h-4" />
                     </button>
@@ -200,9 +234,21 @@ const LedgerCategories = () => {
                     <div className="bg-white p-1">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => toggleSubCategory(child.id)}
-                          className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                          onClick={() => {
+                            if (isDeleteMode) {
+                              setCategoryToDelete(child);
+                              setShowDeleteConfirm(true);
+                            } else {
+                              toggleSubCategory(child.id);
+                            }
+                          }}
+                          className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                         >
+                          {isDeleteMode && (
+                            <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                              -
+                            </span>
+                          )}
                           {child.name}
                         </button>
                       </div>
@@ -219,12 +265,23 @@ const LedgerCategories = () => {
                           <div className="bg-white p-1">
                           <div className="flex flex-wrap gap-2">
                             {child.children.map((subChild: any) => (
-                              <div
+                              <button
                                 key={subChild.id}
-                                className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200"
+                                onClick={() => {
+                                  if (isDeleteMode) {
+                                    setCategoryToDelete(subChild);
+                                    setShowDeleteConfirm(true);
+                                  }
+                                }}
+                                className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                               >
+                                {isDeleteMode && (
+                                  <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                                    -
+                                  </span>
+                                )}
                                 <span>{subChild.name}</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                           </div>
@@ -449,6 +506,66 @@ const LedgerCategories = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="top-[5%] translate-y-0">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <p className="text-gray-700">
+              确认要删除分类 "{categoryToDelete?.name}" 吗？
+            </p>
+            
+            {/* 如果是一级或二级分类，显示级联删除提示 */}
+            {categoryToDelete && (
+              (categoryToDelete.parentId === null || 
+               (categoryToDelete.children && categoryToDelete.children.length > 0))
+            ) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ 一旦删除，下面的子分类将全部被删除
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setCategoryToDelete(null);
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!categoryToDelete) return;
+                  
+                  // 判断是否需要级联删除
+                  const needsCascade = categoryToDelete.parentId === null || 
+                                      (categoryToDelete.children && categoryToDelete.children.length > 0);
+                  
+                  await deleteCategoryMutation.mutateAsync({
+                    categoryId: categoryToDelete.id,
+                    cascade: needsCascade,
+                  });
+                  
+                  setIsDeleteMode(false);
+                }}
+                className="flex-1 bg-red-500 hover:bg-red-600"
+                disabled={deleteCategoryMutation.isPending}
+              >
+                {deleteCategoryMutation.isPending ? "正在删除..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
