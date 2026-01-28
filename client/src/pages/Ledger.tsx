@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Crown, BookOpen, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
+import { UserAvatar } from "@/components/UserAvatar";
 
 
 // 模拟账本数据
@@ -150,11 +151,16 @@ export default function Ledger() {
                 <div className="flex -space-x-2">
                   {ledger.members.slice(0, 4).map((member, index) => (
                     <div
-                      key={member.id}
-                      className="w-8 h-8 rounded-full bg-[#bde4f4] border-2 border-white flex items-center justify-center text-[#404969] text-xs font-medium"
+                      key={member.userId}
+                      className="border-2 border-white"
                       style={{ zIndex: ledger.members.length - index }}
                     >
-                      {index + 1}
+                      <UserAvatar
+                        username={member.username}
+                        avatar={member.avatar}
+                        nickname={member.nickname}
+                        size="sm"
+                      />
                     </div>
                   ))}
                 </div>

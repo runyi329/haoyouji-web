@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { ChevronRight, ChevronLeft, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,8 +103,14 @@ export default function LedgerSettings() {
           {members?.map((member, index) => (
             <div key={member.userId} className="flex flex-col items-center flex-shrink-0 relative group">
               <div className="relative">
-                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white text-xl font-medium">
-                  {member.nickname?.[0] || "U"}
+                <div className="w-16 h-16 rounded-lg overflow-hidden">
+                  <UserAvatar
+                    username={member.username}
+                    avatar={member.avatar}
+                    nickname={member.nickname}
+                    size="lg"
+                    className="w-full h-full rounded-lg"
+                  />
                 </div>
                 {member.role === 'owner' && (
                   <div className="absolute -top-1 -left-1 bg-[#ff7f50] text-white text-xs px-1.5 py-0.5 rounded">

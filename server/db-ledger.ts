@@ -1,5 +1,5 @@
 import { getLedgerDb } from "./db";
-import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords } from "../drizzle/schema";
+import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
 
 /**
@@ -174,15 +174,18 @@ export async function getLedgerById(ledgerId: number, userId: number) {
       throw new Error("账本不存在");
     }
 
-    // 获取所有成员
+    // 获取所有成员，关联users表获取username和avatar
     console.log('[getLedgerById] 开始查询成员列表...');
     const members = await db
       .select({
         userId: ledgerMembers.userId,
         role: ledgerMembers.role,
         nickname: ledgerMembers.nickname,
+        username: users.username,
+        avatar: users.avatar,
       })
       .from(ledgerMembers)
+      .leftJoin(users, eq(ledgerMembers.userId, users.id))
       .where(eq(ledgerMembers.ledgerId, ledgerId));
 
     console.log('[getLedgerById] 成员列表:', members);
@@ -550,7 +553,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
     throw new Error("您不是此账本的成员");
   }
   
-  // 获取所有成员
+  // 获取所有成员，关联users表获取username和avatar
   const members = await db
     .select({
       userId: ledgerMembers.userId,
@@ -560,8 +563,11 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
       canDelete: ledgerMembers.canDelete,
       canInvite: ledgerMembers.canInvite,
       createdAt: ledgerMembers.createdAt,
+      username: users.username,
+      avatar: users.avatar,
     })
     .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
     .where(eq(ledgerMembers.ledgerId, ledgerId))
     .orderBy(ledgerMembers.createdAt);
   
@@ -1578,7 +1584,26 @@ export async function getTransactionsList(
   
   const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
   
-  // 成员信息不在ledger_records表中，可以通过createdBy获取
+  // 获取所有涉及的创建者ID
+  const creatorIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.createdBy) creatorIds.add(r.createdBy);
+  });
+  
+  // 获取创建者用户信息
+  let creators: any[] = [];
+  if (creatorIds.size > 0) {
+    creators = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(Array.from(creatorIds).map(id => sql`${id}`), sql`, `)})`);
+  }
+  
+  const creatorMap = new Map(creators.map((c: any) => [c.id, c]));
   
   // 按日期分组
   const groupedRecords: Record<string, any> = {};
@@ -1596,6 +1621,7 @@ export async function getTransactionsList(
     }
     
     const category = categoryMap.get(record.categoryId);
+    const creator = creatorMap.get(record.createdBy);
     
     const amount = Number(record.amount);
     
@@ -1607,6 +1633,10 @@ export async function getTransactionsList(
       categoryIcon: category?.icon,
       description: record.description,
       createdAt: record.createdAt,
+      member: creator ? {
+        username: creator.username,
+        avatar: creator.avatar,
+      } : null,
     });
     
     if (record.type === 'income') {

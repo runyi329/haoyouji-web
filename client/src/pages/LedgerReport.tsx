@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, ChevronDown, Calendar, List, BarChart3 } from "lucide-react";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   Select,
   SelectContent,
@@ -202,10 +203,15 @@ function ListViewContent({
               reportData.memberStats.map((member: any, index: number) => (
                 <tr key={index} className="border-t border-gray-100">
                   <td className="py-3 flex items-center">
-                    <span className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs mr-2">
-                      👤
-                    </span>
-                    {member.nickname || "匿名用户"}
+                    <div className="mr-2">
+                      <UserAvatar
+                        username={member.username}
+                        avatar={member.avatar}
+                        nickname={member.nickname}
+                        size="sm"
+                      />
+                    </div>
+                    {member.nickname || member.username || "匿名用户"}
                   </td>
                   <td className="py-3 text-right text-green-600">
                     {formatAmount(member.income || 0)}
@@ -419,11 +425,12 @@ function ChartViewContent({
                 return <span className="text-[8px] leading-tight">全部<br />成员</span>;
               }
               if (selectedMemberIds.length === 1 && membersData) {
-                const member = membersData.find((m: any) => m.id === selectedMemberIds[0]);
-                if (member?.avatarUrl) {
-                  return <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />;
+                const member = membersData.find((m: any) => m.userId === selectedMemberIds[0]);
+                if (member?.avatar) {
+                  return <img src={member.avatar} alt="" className="w-full h-full object-cover" />;
                 }
-                return <span className="text-[10px]">{member?.nickname?.charAt(0) || 'U'}</span>;
+                const displayName = member?.nickname || member?.username || 'U';
+                return <span className="text-[10px]">{displayName.charAt(0)}</span>;
               }
               return <span className="text-[9px]">多选</span>;
             })()}
@@ -457,13 +464,14 @@ function ChartViewContent({
                     selectedMemberIds.includes(member.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                  {member.avatarUrl ? (
-                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-sm mr-2">
-                      {member.nickname?.charAt(0) || 'U'}
-                    </div>
-                  )}
+                  <div className="mr-2">
+                    <UserAvatar
+                      username={member.username}
+                      avatar={member.avatar}
+                      nickname={member.nickname}
+                      size="sm"
+                    />
+                  </div>
                   <span>{member.nickname}</span>
                   {selectedMemberIds.includes(member.id) && <span className="ml-auto text-blue-600">✓</span>}
                 </div>
@@ -1109,12 +1117,13 @@ function CalendarViewContent({
                 className="flex items-center px-4 py-3 border-b cursor-pointer hover:bg-gray-50"
                 onClick={() => toggleMember(member.id)}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 mr-3 overflow-hidden">
-                  {member.avatarUrl ? (
-                    <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{member.nickname?.charAt(0) || 'U'}</span>
-                  )}
+                <div className="mr-3">
+                  <UserAvatar
+                    username={member.username}
+                    avatar={member.avatar}
+                    nickname={member.nickname}
+                    size="md"
+                  />
                 </div>
                 <span className="flex-1 text-gray-800">{member.nickname || '未命名'}</span>
                 {selectedMemberIds.includes(member.id) && (
@@ -1179,11 +1188,12 @@ function CalendarViewContent({
                 return <span className="text-[8px] leading-tight">全部<br />成员</span>;
               }
               if (selectedMemberIds.length === 1 && membersData) {
-                const member = membersData.find((m: any) => m.id === selectedMemberIds[0]);
-                if (member?.avatarUrl) {
-                  return <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />;
+                const member = membersData.find((m: any) => m.userId === selectedMemberIds[0]);
+                if (member?.avatar) {
+                  return <img src={member.avatar} alt="" className="w-full h-full object-cover" />;
                 }
-                return <span className="text-[10px]">{member?.nickname?.charAt(0) || 'U'}</span>;
+                const displayName = member?.nickname || member?.username || 'U';
+                return <span className="text-[10px]">{displayName.charAt(0)}</span>;
               }
               return <span className="text-[9px]">多选</span>;
             })()}
@@ -1281,8 +1291,12 @@ function CalendarViewContent({
                 className="px-4 py-3 border-b border-gray-100 cursor-pointer flex items-center"
                 onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-200 mr-3 flex items-center justify-center">
-                  <span className="text-gray-400 text-sm">U</span>
+                <div className="mr-3">
+                  <UserAvatar
+                    username={record.createdBy?.username}
+                    avatar={record.createdBy?.avatar}
+                    size="md"
+                  />
                 </div>
                 
                 <div className="flex-1">

@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
 import MembersDialog from "@/components/MembersDialog";
+import { UserAvatar } from "@/components/UserAvatar";
 
 import {
   ChevronLeft,
@@ -152,10 +153,15 @@ export default function LedgerDetail() {
             {membersData && Array.isArray(membersData) && membersData.length > 0 && membersData.slice(0, 5).map((member, index) => (
               <div
                 key={member.userId}
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 border-2 border-white flex items-center justify-center text-white text-sm font-medium"
+                className="border-2 border-white"
                 style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
               >
-                {member.nickname ? member.nickname.charAt(0) : '?'}
+                <UserAvatar
+                  username={member.username}
+                  avatar={member.avatar}
+                  nickname={member.nickname}
+                  size="md"
+                />
               </div>
             ))}
             {/* 显示更多按钮 */}
@@ -333,8 +339,13 @@ export default function LedgerDetail() {
                       onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
                     >
                       {/* 成员头像 */}
-                      <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                        {record.member?.nickname ? record.member.nickname.charAt(0) : 'U'}
+                      <div className="flex-shrink-0">
+                        <UserAvatar
+                          username={record.member?.username}
+                          avatar={record.member?.avatar}
+                          nickname={record.member?.nickname}
+                          size="sm"
+                        />
                       </div>
 
                       {/* 分类信息 */}
