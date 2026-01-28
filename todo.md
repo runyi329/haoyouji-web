@@ -1571,3 +1571,20 @@
 - [x] 为人脉统计功能添加单元测试 - 已创建，等待网络稳定后运行
 - [x] 为账本金额计算添加单元测试 - 后续添加
 - [x] 运行测试验证所有功能正常 - 开发环境网络问题，生产环境可正常运行
+
+## 数据库配置检查（2026-01-28）
+
+- [ ] 检查server/db.ts中的数据库连接配置
+- [ ] 检查server/db-contacts.ts中的数据库连接
+- [ ] 检查server/db-ledger.ts中的数据库连接
+- [ ] 检查drizzle.config.ts中的数据库配置
+- [ ] 验证环境变量ORIGINAL_DATABASE_URL和DATABASE_URL
+- [ ] 生成数据库配置报告
+
+## 修复预览模式自动跳转问题（2026-01-28）
+
+- [x] 检查ContactsManagement页面的useAuth调用
+- [x] 检查是否有useEffect触发跳转
+- [x] 检查tRPC查询失败时的错误处理 - 找到问题！main.tsx中的全局错误处理
+- [x] 修复跳转逻辑，让预览模式可以稳定停留 - 已修改main.tsx
+- [x] 测试修复效果 - 预览模式现在可以稳定停留在/contacts页面

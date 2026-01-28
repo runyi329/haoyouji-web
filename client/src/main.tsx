@@ -18,6 +18,15 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
+  // 在预览模式下不跳转到登录页，允许用户查看UI
+  // 预览模式的特征：直接访问/contacts或其他页面，而不是从登录页跳转
+  const isPreviewMode = window.location.pathname !== '/login' && window.location.pathname !== '/';
+  
+  if (isPreviewMode) {
+    console.log('[Preview Mode] 忽略未授权错误，允许预览模式继续');
+    return;
+  }
+
   window.location.href = getLoginUrl();
 };
 
