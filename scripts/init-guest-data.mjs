@@ -5,7 +5,7 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import { users, contacts, ledgers, ledgerMembers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
-import crypto from "crypto";
+import bcrypt from "bcrypt";
 
 // 使用Manus临时数据库
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -21,9 +21,9 @@ const GUEST_USER_ID = 5070293;
 const GUEST_USERNAME = "guest_dev";
 const GUEST_PASSWORD = "guest123"; // 简单密码，仅用于开发
 
-// 生成密码哈希
-function hashPassword(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
+// 生成密码哈希（使用bcrypt，与登录验证保持一致）
+async function hashPassword(password) {
+  return bcrypt.hash(password, 10);
 }
 
 async function main() {
@@ -31,7 +31,7 @@ async function main() {
 
   // 1. 创建游客用户
   console.log("👤 创建游客用户...");
-  const passwordHash = hashPassword(GUEST_PASSWORD);
+  const passwordHash = await hashPassword(GUEST_PASSWORD);
   
   try {
     // 先删除已存在的游客用户

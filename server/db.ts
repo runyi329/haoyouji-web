@@ -62,10 +62,11 @@ export function setCurrentIsGuest(isGuest: boolean) {
 /**
  * 获取数据库连接
  * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
+ * @param forceGuest - 强制使用游客数据库
  */
-export async function getDb() {
+export async function getDb(forceGuest: boolean = false) {
   // 如果是游客用户，使用Manus临时数据库
-  if (_currentIsGuest) {
+  if (forceGuest || _currentIsGuest) {
     if (!_guestDb) {
       const dbUrl = process.env.DATABASE_URL;
       if (dbUrl) {
@@ -658,11 +659,28 @@ export async function initializeDefaultData() {
 import { loginAttempts, InsertLoginAttempt } from "../drizzle/schema";
 
 export async function getUserByUsername(username: string) {
-  const db = await getDb();
- if (!db) throw new Error("Database not available");
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  // 如果是游客用户，直接使用Manus数据库
+  const isGuest = username === 'guest_dev';
+  
+  try {
+    const db = await getDb(isGuest);
+    if (!db) throw new Error("Database not available");
+    if (!db) return undefined;
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    
+    // 如果是游客用户且未找到，抛出详细错误
+    if (isGuest && result.length === 0) {
+      throw new Error(`游客用户不存在于Manus数据库中！请检查是否正确初始化游客数据。`);
+    }
+    
+    return result.length > 0 ? result[0] : undefined;
+  } catch (error) {
+    // 如果是游客用户，抛出详细错误
+    if (isGuest) {
+      throw new Error(`查询游客用户失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    throw error;
+  }
 }
 
 export async function createUserWithPassword(data: {

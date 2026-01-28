@@ -40,7 +40,9 @@ export async function loginWithPassword(
   const requiresCaptcha = ipFailedCount >= MAX_FAILED_ATTEMPTS_BEFORE_CAPTCHA;
 
   // 查找用户
+  console.log(`[loginWithPassword] 开始查询用户: ${username}`);
   const user = await db.getUserByUsername(username);
+  console.log(`[loginWithPassword] 查询结果:`, user ? `找到用户 ID=${user.id}` : '未找到用户');
   
   if (!user) {
     // 记录失败尝试
@@ -75,7 +77,9 @@ export async function loginWithPassword(
     };
   }
 
+  console.log(`[loginWithPassword] 开始验证密码...`);
   const isValid = await verifyPassword(password, user.passwordHash);
+  console.log(`[loginWithPassword] 密码验证结果:`, isValid ? '✅ 成功' : '❌ 失败');
 
   if (!isValid) {
     // 更新用户失败次数
