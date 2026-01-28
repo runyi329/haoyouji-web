@@ -365,7 +365,7 @@ export default function LedgerFilter() {
                 key={type.value}
                 variant={selectedType === type.value ? "default" : "outline"}
                 size="sm"
-                className={`h-7 px-3 text-xs rounded-full ${
+                className={`h-7 px-3 text-xs rounded ${
                   selectedType === type.value
                     ? `${type.color} text-white hover:opacity-90`
                     : "border-gray-200"
@@ -489,7 +489,7 @@ export default function LedgerFilter() {
                 key={account.value}
                 variant={selectedAccounts.includes(account.value) ? "default" : "outline"}
                 size="sm"
-                className={`h-7 px-3 text-xs rounded-full ${
+                className={`h-7 px-3 text-xs rounded ${
                   selectedAccounts.includes(account.value)
                     ? `${account.color} text-white hover:opacity-90`
                     : "border-gray-200"
