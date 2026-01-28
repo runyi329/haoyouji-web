@@ -5123,6 +5123,24 @@ export const appRouter = router({
         return await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, input.type, input.parentId);
       }),
 
+    // 添加账本分类
+    addCategory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        name: z.string().min(1).max(50),
+        type: z.enum(['income', 'expense']),
+        parentId: z.number().optional(),
+        icon: z.string().optional(),
+        color: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.addLedgerCategory({
+          ...input,
+          createdBy: ctx.user.id,
+        });
+      }),
+
     // 获取成员权限列表
     getMemberPermissions: protectedProcedure
       .input(z.object({

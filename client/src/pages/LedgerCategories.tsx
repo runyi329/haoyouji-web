@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import {
   Dialog,
   DialogContent,
@@ -69,36 +70,51 @@ const LedgerCategories = () => {
     });
   };
 
-  // 模拟分类数据（后续从API获取）
-  const [categories] = useState<Category[]>([
-    {
-      id: 2,
-      name: "购物",
-      type: "expense",
-      parentId: null,
-      icon: "🛍️",
-      color: "#ef4444",
-      sortOrder: 1,
-      isDefault: true,
-      children: [
-        { 
-          id: 25, 
-          name: "淘宝", 
-          type: "expense", 
-          parentId: 2, 
-          icon: "🛍️", 
-          color: "#ef4444", 
-          sortOrder: 1, 
-          isDefault: false,
-          children: [
-            { id: 251, name: "服饰", type: "expense", parentId: 25, icon: "👔", color: "#ef4444", sortOrder: 1, isDefault: false },
-            { id: 252, name: "数码", type: "expense", parentId: 25, icon: "📱", color: "#ef4444", sortOrder: 2, isDefault: false },
-            { id: 253, name: "食品", type: "expense", parentId: 25, icon: "🍞", color: "#ef4444", sortOrder: 3, isDefault: false },
-          ]
-        },
-      ],
+  // 从后端API获取分类数据
+  const { data: categoriesData, refetch: refetchCategories } = trpc.ledger.getCategories.useQuery({
+    ledgerId: Number(id),
+    type: "expense",
+  });
+
+  // 添加分类的mutation
+  const addCategoryMutation = trpc.ledger.addCategory.useMutation({
+    onSuccess: () => {
+      toast.success("分类添加成功");
+      refetchCategories();
     },
-  ]);
+    onError: (error) => {
+      toast.error(`添加失败: ${error.message}`);
+    },
+  });
+
+  // 构建分类树结构
+  const buildCategoryTree = (flatCategories: Category[]): Category[] => {
+    const categoryMap = new Map<number, Category>();
+    const rootCategories: Category[] = [];
+
+    // 初始化所有分类
+    flatCategories.forEach(cat => {
+      categoryMap.set(cat.id, { ...cat, children: [] });
+    });
+
+    // 构建树结构
+    flatCategories.forEach(cat => {
+      const category = categoryMap.get(cat.id)!;
+      if (cat.parentId === null) {
+        rootCategories.push(category);
+      } else {
+        const parent = categoryMap.get(cat.parentId);
+        if (parent) {
+          parent.children = parent.children || [];
+          parent.children.push(category);
+        }
+      }
+    });
+
+    return rootCategories;
+  };
+
+  const categories = categoriesData ? buildCategoryTree(categoriesData) : [];
 
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) {
@@ -289,7 +305,7 @@ const LedgerCategories = () => {
                   取消
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newCategoryName.trim()) {
                       toast.error("请输入分类名称");
                       return;
@@ -298,42 +314,45 @@ const LedgerCategories = () => {
                     // 添加新分类
                     if (selectedAction === 'level1') {
                       // 添加一级分类
-                      const newCategory = {
-                        id: Date.now(),
+                      await addCategoryMutation.mutateAsync({
+                        ledgerId: Number(id),
                         name: newCategoryName.trim(),
-                        children: []
-                      };
-                      setCategories([...categories, newCategory]);
-                      toast.success(`已添加一级分类: ${newCategoryName}`);
+                        type: "expense",
+                        icon: "📝",
+                        color: "#ef4444",
+                      });
                     } else if (selectedAction === 'level2') {
                       // 添加二级分类
-                      const newCategories = categories.map(cat => {
-                        if (cat.id === currentCategoryId) {
-                          return {
-                            ...cat,
-                            children: [
-                              ...(cat.children || []),
-                              {
-                                id: Date.now(),
-                                name: newCategoryName.trim(),
-                                children: []
-                              }
-                            ]
-                          };
-                        }
-                        return cat;
+                      await addCategoryMutation.mutateAsync({
+                        ledgerId: Number(id),
+                        name: newCategoryName.trim(),
+                        type: "expense",
+                        parentId: currentCategoryId!,
+                        icon: "📝",
+                        color: "#ef4444",
                       });
-                      setCategories(newCategories);
-                      toast.success(`已添加二级分类: ${newCategoryName}`);
+                    } else if (selectedAction === 'level3') {
+                      // 添加三级分类
+                      await addCategoryMutation.mutateAsync({
+                        ledgerId: Number(id),
+                        name: newCategoryName.trim(),
+                        type: "expense",
+                        parentId: selectedParentId!,
+                        icon: "📝",
+                        color: "#ef4444",
+                      });
                     }
                     
                     setIsAddDialogOpen(false);
                     setSelectedAction(null);
                     setNewCategoryName("");
+                    setShowSubCategorySelect(false);
+                    setSelectedParentId(null);
                   }}
                   className="flex-1"
+                  disabled={addCategoryMutation.isPending}
                 >
-                  确定
+                  {addCategoryMutation.isPending ? "正在添加..." : "确定"}
                 </Button>
               </div>
             </div>
