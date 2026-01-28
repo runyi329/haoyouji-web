@@ -407,7 +407,7 @@ export default function LedgerFilter() {
                   <div className="bg-white p-1">
                     <button
                       onClick={() => handleCategoryClick(category.id)}
-                      className={`px-4 py-2 rounded text-sm border ${
+                      className={`h-7 px-3 text-xs rounded border ${
                         selectedCategories.includes(category.id)
                           ? "bg-blue-500 text-white border-blue-500"
                           : "bg-gray-50 border-gray-200 hover:bg-gray-100"
@@ -427,7 +427,7 @@ export default function LedgerFilter() {
                             <button
                               key={subCategory.id}
                               onClick={() => handleSubCategoryClick(subCategory.id)}
-                              className={`px-4 py-2 rounded text-sm border ${
+                              className={`h-7 px-3 text-xs rounded border ${
                                 selectedCategories.includes(subCategory.id)
                                   ? "bg-blue-500 text-white border-blue-500"
                                   : "bg-gray-50 border-gray-200 hover:bg-gray-100"
@@ -457,7 +457,7 @@ export default function LedgerFilter() {
                                             : [...prev, thirdCategory.id]
                                         );
                                       }}
-                                      className={`px-4 py-2 rounded text-sm border ${
+                                      className={`h-7 px-3 text-xs rounded border ${
                                         selectedCategories.includes(thirdCategory.id)
                                           ? "bg-blue-500 text-white border-blue-500"
                                           : "bg-gray-50 border-gray-200 hover:bg-gray-100"
