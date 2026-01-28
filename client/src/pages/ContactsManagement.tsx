@@ -794,13 +794,20 @@ export default function ContactsManagement() {
   
   // 随机呼吸灯效果
   useEffect(() => {
-    const interval = setInterval(() => {
+    const switchCard = () => {
       // 随机选择1-20之间的卡片ID
       const randomId = Math.floor(Math.random() * 20) + 1;
       setBreathingCardId(randomId);
-    }, 1000); // 每1秒切换一次
+      
+      // 随机间隔3-5秒后切换下一个
+      const randomDelay = 3000 + Math.random() * 2000; // 3000-5000ms
+      setTimeout(switchCard, randomDelay);
+    };
     
-    return () => clearInterval(interval);
+    // 初始启动
+    switchCard();
+    
+    return () => {}; // cleanup不需要做什么,因为使用setTimeout
   }, []);
   
   // 邀请码验证相关state
