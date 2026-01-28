@@ -31,21 +31,34 @@ function parseDatabaseUrl(url) {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
-  // 解析格式: mysql://username:password@host:port/database
-  const regex = /mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/;
-  const match = url.match(regex);
+  try {
+    // 使用URL对象解析,自动处理特殊字符
+    const urlObj = new URL(url);
+    
+    return {
+      username: decodeURIComponent(urlObj.username),
+      password: decodeURIComponent(urlObj.password),
+      host: urlObj.hostname,
+      port: urlObj.port || '3306',
+      database: urlObj.pathname.slice(1) // 移除开头的 '/'
+    };
+  } catch (error) {
+    // 如果URL解析失败,尝试使用正则表达式(从最后一个@分割)
+    const regex = /mysql:\/\/([^:]+):(.+)@([^:]+):(\d+)\/(.+)/;
+    const match = url.match(regex);
 
-  if (!match) {
-    throw new Error('Invalid DATABASE_URL format');
+    if (!match) {
+      throw new Error('Invalid DATABASE_URL format. Expected: mysql://username:password@host:port/database');
+    }
+
+    return {
+      username: match[1],
+      password: match[2],
+      host: match[3],
+      port: match[4],
+      database: match[5]
+    };
   }
-
-  return {
-    username: match[1],
-    password: match[2],
-    host: match[3],
-    port: match[4],
-    database: match[5]
-  };
 }
 
 // 创建S3客户端
@@ -95,7 +108,10 @@ async function backupDatabase(dbConfig) {
     --result-file="${backupPath}"`;
 
   try {
-    const { stdout, stderr } = await execAsync(mysqldumpCmd);
+    const { stdout, stderr } = await execAsync(mysqldumpCmd, {
+      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+      timeout: 300000 // 5分钟超时
+    });
     
     if (stderr && !stderr.includes('Warning')) {
       console.error('⚠️  备份过程中出现警告:', stderr);
@@ -108,6 +124,7 @@ async function backupDatabase(dbConfig) {
     console.log(`✅ 数据库备份成功!`);
     console.log(`   文件: ${backupFilename}`);
     console.log(`   大小: ${fileSizeMB} MB`);
+    console.log(`   位置: ${backupPath}`);
 
     return {
       filename: backupFilename,
