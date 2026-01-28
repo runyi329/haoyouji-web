@@ -1534,9 +1534,6 @@ export async function getTransactionsList(
   if (options?.categoryId) {
     conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
   }
-  if (options?.memberId) {
-    conditions.push(eq(ledgerRecords.memberId, options.memberId));
-  }
   
   // 注意：不过滤审批状态，返回所有记账（包括待审批的）
   // 前端会根据 approvalStatus 字段显示不同的状态图标
@@ -1548,12 +1545,8 @@ export async function getTransactionsList(
       type: ledgerRecords.type,
       amount: ledgerRecords.amount,
       categoryId: ledgerRecords.categoryId,
-      subcategoryId: ledgerRecords.subcategoryId,
       description: ledgerRecords.description,
       date: ledgerRecords.recordDate,
-      images: ledgerRecords.images,
-      memberId: ledgerRecords.memberId,
-      accountId: ledgerRecords.accountId,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
     })
@@ -1567,7 +1560,6 @@ export async function getTransactionsList(
   const categoryIds = new Set<number>();
   records.forEach((r: any) => {
     if (r.categoryId) categoryIds.add(r.categoryId);
-    if (r.subcategoryId) categoryIds.add(r.subcategoryId);
   });
   
   // 获取分类信息
@@ -1586,23 +1578,7 @@ export async function getTransactionsList(
   
   const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
   
-  // 获取所有涉及的成员ID
-  const memberIds = new Set(records.map((r: any) => r.memberId).filter(Boolean));
-  
-  // 获取成员信息
-  let members: any[] = [];
-  if (memberIds.size > 0) {
-    members = await db
-      .select({
-        id: ledgerMembers.id,
-        userId: ledgerMembers.userId,
-        nickname: ledgerMembers.nickname,
-      })
-      .from(ledgerMembers)
-      .where(sql`${ledgerMembers.id} IN (${sql.join(Array.from(memberIds).map(id => sql`${id}`), sql`, `)})`);
-  }
-  
-  const memberMap = new Map(members.map((m: any) => [m.id, m]));
+  // 成员信息不在ledger_records表中，可以通过createdBy获取
   
   // 按日期分组
   const groupedRecords: Record<string, any> = {};
@@ -1620,8 +1596,6 @@ export async function getTransactionsList(
     }
     
     const category = categoryMap.get(record.categoryId);
-    const subcategory = record.subcategoryId ? categoryMap.get(record.subcategoryId) : null;
-    const member = memberMap.get(record.memberId);
     
     const amount = Number(record.amount);
     
@@ -1631,14 +1605,7 @@ export async function getTransactionsList(
       amount,
       category: category?.name || '未分类',
       categoryIcon: category?.icon,
-      subcategory: subcategory?.name,
       description: record.description,
-      images: record.images ? JSON.parse(record.images) : [],
-      member: member ? {
-        id: member.id,
-        userId: member.userId,
-        nickname: member.nickname,
-      } : null,
       createdAt: record.createdAt,
     });
     

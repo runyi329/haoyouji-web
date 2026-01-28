@@ -50,6 +50,7 @@ const AddTransaction = () => {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
+  const utils = trpc.useUtils();
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
@@ -356,6 +357,8 @@ const AddTransaction = () => {
   const addTransactionMutation = trpc.ledger.addTransaction.useMutation({
     onSuccess: () => {
       toast.success("记账成功！");
+      // 使缓存失效，强制重新获取数据
+      utils.ledger.getTransactions.invalidate({ ledgerId });
       setLocation(`/ledger/${id}`);
     },
     onError: (error) => {
