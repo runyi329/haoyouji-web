@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Minus, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -35,25 +35,37 @@ const LedgerCategories = () => {
   const [newCategorySortOrder, setNewCategorySortOrder] = useState("1");
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<CategoryType>("expense");
+  
+  // 展开/收起状态
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
+  const [expandedSubCategories, setExpandedSubCategories] = useState<Set<number>>(new Set());
+  
+  const toggleCategory = (categoryId: number) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+  
+  const toggleSubCategory = (subCategoryId: number) => {
+    setExpandedSubCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subCategoryId)) {
+        newSet.delete(subCategoryId);
+      } else {
+        newSet.add(subCategoryId);
+      }
+      return newSet;
+    });
+  };
 
   // 模拟分类数据（后续从API获取）
   const [categories] = useState<Category[]>([
-    {
-      id: 1,
-      name: "贷款",
-      type: "expense",
-      parentId: null,
-      icon: "💰",
-      color: "#ef4444",
-      sortOrder: 1,
-      isDefault: false,
-      children: [
-        { id: 11, name: "胡上海建行按揭", type: "expense", parentId: 1, icon: "🏦", color: "#ef4444", sortOrder: 1, isDefault: false },
-        { id: 12, name: "邮储", type: "expense", parentId: 1, icon: "📮", color: "#ef4444", sortOrder: 2, isDefault: false },
-        { id: 13, name: "胡招行经营贷", type: "expense", parentId: 1, icon: "💼", color: "#ef4444", sortOrder: 3, isDefault: false },
-        { id: 14, name: "蒋招行闪电贷", type: "expense", parentId: 1, icon: "⚡", color: "#ef4444", sortOrder: 4, isDefault: false },
-      ],
-    },
     {
       id: 2,
       name: "购物",
@@ -61,71 +73,25 @@ const LedgerCategories = () => {
       parentId: null,
       icon: "🛍️",
       color: "#ef4444",
-      sortOrder: 2,
+      sortOrder: 1,
       isDefault: true,
       children: [
-        { id: 21, name: "外出吃饭", type: "expense", parentId: 2, icon: "🍽️", color: "#ef4444", sortOrder: 1, isDefault: false },
-        { id: 22, name: "盒马", type: "expense", parentId: 2, icon: "🦞", color: "#ef4444", sortOrder: 2, isDefault: false },
-        { id: 23, name: "抖音", type: "expense", parentId: 2, icon: "📱", color: "#ef4444", sortOrder: 3, isDefault: false },
-        { id: 24, name: "拼多多", type: "expense", parentId: 2, icon: "🛒", color: "#ef4444", sortOrder: 4, isDefault: false },
-        { id: 25, name: "淘宝", type: "expense", parentId: 2, icon: "🛍️", color: "#ef4444", sortOrder: 5, isDefault: false },
-        { id: 26, name: "山姆", type: "expense", parentId: 2, icon: "🏪", color: "#ef4444", sortOrder: 6, isDefault: false },
-        { id: 27, name: "康宝莱", type: "expense", parentId: 2, icon: "🌿", color: "#ef4444", sortOrder: 7, isDefault: false },
+        { 
+          id: 25, 
+          name: "淘宝", 
+          type: "expense", 
+          parentId: 2, 
+          icon: "🛍️", 
+          color: "#ef4444", 
+          sortOrder: 1, 
+          isDefault: false,
+          children: [
+            { id: 251, name: "服饰", type: "expense", parentId: 25, icon: "👔", color: "#ef4444", sortOrder: 1, isDefault: false },
+            { id: 252, name: "数码", type: "expense", parentId: 25, icon: "📱", color: "#ef4444", sortOrder: 2, isDefault: false },
+            { id: 253, name: "食品", type: "expense", parentId: 25, icon: "🍞", color: "#ef4444", sortOrder: 3, isDefault: false },
+          ]
+        },
       ],
-    },
-    {
-      id: 3,
-      name: "交通",
-      type: "expense",
-      parentId: null,
-      icon: "🚗",
-      color: "#ef4444",
-      sortOrder: 3,
-      isDefault: true,
-      children: [
-        { id: 31, name: "停车费", type: "expense", parentId: 3, icon: "🅿️", color: "#ef4444", sortOrder: 1, isDefault: false },
-        { id: 32, name: "打车", type: "expense", parentId: 3, icon: "🚕", color: "#ef4444", sortOrder: 2, isDefault: false },
-        { id: 33, name: "地铁", type: "expense", parentId: 3, icon: "🚇", color: "#ef4444", sortOrder: 3, isDefault: false },
-        { id: 34, name: "加油", type: "expense", parentId: 3, icon: "⛽", color: "#ef4444", sortOrder: 4, isDefault: false },
-        { id: 35, name: "飞机票", type: "expense", parentId: 3, icon: "✈️", color: "#ef4444", sortOrder: 5, isDefault: false },
-        { id: 36, name: "公交", type: "expense", parentId: 3, icon: "🚌", color: "#ef4444", sortOrder: 6, isDefault: false },
-        { id: 37, name: "火车票", type: "expense", parentId: 3, icon: "🚄", color: "#ef4444", sortOrder: 7, isDefault: false },
-        { id: 38, name: "保养", type: "expense", parentId: 3, icon: "🔧", color: "#ef4444", sortOrder: 8, isDefault: false },
-      ],
-    },
-    {
-      id: 4,
-      name: "其他",
-      type: "expense",
-      parentId: null,
-      icon: "📝",
-      color: "#ef4444",
-      sortOrder: 4,
-      isDefault: true,
-      children: [
-        { id: 41, name: "话费", type: "expense", parentId: 4, icon: "📞", color: "#ef4444", sortOrder: 1, isDefault: false },
-        { id: 42, name: "网费", type: "expense", parentId: 4, icon: "🌐", color: "#ef4444", sortOrder: 2, isDefault: false },
-        { id: 43, name: "水费", type: "expense", parentId: 4, icon: "💧", color: "#ef4444", sortOrder: 3, isDefault: false },
-        { id: 44, name: "电费", type: "expense", parentId: 4, icon: "💡", color: "#ef4444", sortOrder: 4, isDefault: false },
-        { id: 45, name: "取暖费", type: "expense", parentId: 4, icon: "🔥", color: "#ef4444", sortOrder: 5, isDefault: false },
-        { id: 46, name: "保洁阿姨", type: "expense", parentId: 4, icon: "🧹", color: "#ef4444", sortOrder: 6, isDefault: false },
-        { id: 47, name: "燃气费", type: "expense", parentId: 4, icon: "🔥", color: "#ef4444", sortOrder: 7, isDefault: false },
-        { id: 48, name: "快递费", type: "expense", parentId: 4, icon: "📦", color: "#ef4444", sortOrder: 8, isDefault: false },
-        { id: 49, name: "喵喵", type: "expense", parentId: 4, icon: "🐱", color: "#ef4444", sortOrder: 9, isDefault: false },
-        { id: 410, name: "旺旺", type: "expense", parentId: 4, icon: "🐶", color: "#ef4444", sortOrder: 10, isDefault: false },
-        { id: 411, name: "喵喵+旺旺", type: "expense", parentId: 4, icon: "🐾", color: "#ef4444", sortOrder: 11, isDefault: false },
-      ],
-    },
-    {
-      id: 6,
-      name: "保险医疗",
-      type: "expense",
-      parentId: null,
-      icon: "💊",
-      color: "#ef4444",
-      sortOrder: 6,
-      isDefault: true,
-      children: [],
     },
   ]);
 
@@ -163,46 +129,85 @@ const LedgerCategories = () => {
       {/* 分类列表 */}
       <div className="p-4 space-y-4">
         {categories.map((category) => (
-          <div key={category.id} className="bg-white rounded-lg overflow-hidden">
-            {/* 一级分类 */}
-            <div className="p-4 flex items-center justify-between border-b">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{category.icon}</span>
-                <div>
-                  <div className="font-medium">{category.name}</div>
-                  <div className="text-xs text-gray-500">排序：{category.sortOrder}</div>
+          <div key={category.id}>
+            <div>
+              {/* 一级分类标题 */}
+              <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">一级分类</div>
+              
+              {/* 一级分类 */}
+              <div className="bg-white p-1">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => toggleCategory(category.id)}
+                    className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                  >
+                    {category.name}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleAddSubCategory(category.id, category.name)}
+                      className="w-8 h-8 flex items-center justify-center border border-blue-500 text-blue-500 rounded hover:bg-blue-50"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => toast.info("删除功能待实现")}
+                      className="w-8 h-8 flex items-center justify-center border border-blue-500 text-blue-500 rounded hover:bg-blue-50"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() => handleAddSubCategory(category.id, category.name)}
-                className="text-blue-500 text-sm flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                添加子分类
-              </button>
             </div>
 
             {/* 二级分类 */}
-            {category.children && category.children.length > 0 && (
-              <div className="p-4 space-y-2 bg-gray-50">
-                <div className="flex flex-wrap gap-2">
-                  {category.children.map((child) => (
-                    <div
-                      key={child.id}
-                      className="px-3 py-1.5 bg-white rounded-full text-sm border border-gray-200 flex items-center gap-1"
-                    >
-                      <span>{child.icon}</span>
-                      <span>{child.name}</span>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => handleAddSubCategory(category.id, category.name)}
-                    className="px-3 py-1.5 bg-white rounded-full text-sm border border-dashed border-blue-500 text-blue-500 flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    添加子分类
-                  </button>
+            {expandedCategories.has(category.id) && category.children && category.children.length > 0 && (
+              <div>
+                <div>
+                  {/* 二级分类标题 */}
+                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
                 </div>
+                
+                {category.children.map((child) => (
+                  <div key={child.id}>
+                    {/* 二级分类容器 */}
+                    <div className="bg-white p-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleSubCategory(child.id)}
+                          className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                        >
+                          {child.name}
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* 三级分类 */}
+                    {expandedSubCategories.has(child.id) && child.children && child.children.length > 0 && (
+                      <div>
+                        <div>
+                          {/* 三级分类标题 */}
+                          <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
+                          
+                          {/* 三级分类容器 */}
+                          <div className="bg-white p-1">
+                          <div className="flex flex-wrap gap-2">
+                            {child.children.map((subChild: any) => (
+                              <div
+                                key={subChild.id}
+                                className="px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200"
+                              >
+                                <span>{subChild.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -224,46 +229,31 @@ const LedgerCategories = () => {
 
       {/* 添加分类对话框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="top-[5%] translate-y-0">
           <DialogHeader>
-            <DialogTitle>
-              {selectedParentId ? "添加子分类" : "添加账本支出条目"}
-            </DialogTitle>
+            <DialogTitle>选择要添加的分类类型</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="categoryName" className="text-gray-500 text-sm">
-                条目名称
-              </Label>
-              <Input
-                id="categoryName"
-                placeholder="请输入条目名称"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="sortOrder" className="text-gray-500 text-sm">
-                排序
-              </Label>
-              <Input
-                id="sortOrder"
-                type="number"
-                placeholder="1"
-                value={newCategorySortOrder}
-                onChange={(e) => setNewCategorySortOrder(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={handleAddCategory}
-              className="w-full bg-blue-500 hover:bg-blue-600"
+          <div className="py-4">
+            <button
+              onClick={() => toast.info("增加一级分类功能待实现")}
+              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
             >
-              确定
-            </Button>
+              增加一级分类
+            </button>
+            <div className="border-t border-gray-200"></div>
+            <button
+              onClick={() => toast.info("增加二级分类功能待实现")}
+              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+            >
+              增加二级分类
+            </button>
+            <div className="border-t border-gray-200"></div>
+            <button
+              onClick={() => toast.info("增加三级分类功能待实现")}
+              className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
+            >
+              增加三级分类
+            </button>
           </div>
         </DialogContent>
       </Dialog>

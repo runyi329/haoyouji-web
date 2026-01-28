@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, BookOpen, ChevronLeft } from "lucide-react";
+import { Crown, Notebook, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -132,8 +132,8 @@ export default function Ledger() {
             >
               {/* 账本名称和VIP标识 */}
               <div className="flex items-center gap-2 -mb-3">
-                <BookOpen className="w-6 h-6 text-blue-500" strokeWidth={1.5} />
-                <div className="flex-1">
+                <Notebook className="w-4 h-4 text-blue-500 mt-0.5" strokeWidth={1.5} />
+                <div className="flex-1 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-base leading-none text-gray-800">{ledger.name}</h3>
                     {ledger.isVip === true && (
@@ -143,11 +143,19 @@ export default function Ledger() {
                       </Badge>
                     )}
                   </div>
+                  <div className="flex flex-col items-end gap-1 mt-3 mr-2">
+                    <div className="text-xs leading-none text-gray-400 whitespace-nowrap">
+                      开账日期 {new Date(ledger.createdAt).toLocaleDateString('zh-CN').replace(/\//g, '-')} · 至今 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
+                    </div>
+                    <div className="text-xs leading-none text-gray-400 whitespace-nowrap">
+                      账目总数 × {ledger.recordCount || 0}条
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* 成员头像 */}
-              <div className="flex items-center gap-2 -mb-3">
+              <div className="flex items-center gap-2 -mb-3 -mt-2">
                 <div className="flex -space-x-2">
                   {ledger.members.slice(0, 4).map((member, index) => (
                     <div
@@ -168,7 +176,7 @@ export default function Ledger() {
               </div>
 
               {/* 操作按钮 */}
-              <div className="flex justify-between">
+              <div className="flex justify-between -mt-2">
                 <Button
                   variant="outline"
                   size="sm"
