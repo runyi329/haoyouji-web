@@ -294,7 +294,39 @@ const LedgerCategories = () => {
                       toast.error("请输入分类名称");
                       return;
                     }
-                    toast.success(`已添加${selectedAction === 'level1' ? '一' : '二'}级分类: ${newCategoryName}`);
+                    
+                    // 添加新分类
+                    if (selectedAction === 'level1') {
+                      // 添加一级分类
+                      const newCategory = {
+                        id: Date.now(),
+                        name: newCategoryName.trim(),
+                        children: []
+                      };
+                      setCategories([...categories, newCategory]);
+                      toast.success(`已添加一级分类: ${newCategoryName}`);
+                    } else if (selectedAction === 'level2') {
+                      // 添加二级分类
+                      const newCategories = categories.map(cat => {
+                        if (cat.id === currentCategoryId) {
+                          return {
+                            ...cat,
+                            children: [
+                              ...(cat.children || []),
+                              {
+                                id: Date.now(),
+                                name: newCategoryName.trim(),
+                                children: []
+                              }
+                            ]
+                          };
+                        }
+                        return cat;
+                      });
+                      setCategories(newCategories);
+                      toast.success(`已添加二级分类: ${newCategoryName}`);
+                    }
+                    
                     setIsAddDialogOpen(false);
                     setSelectedAction(null);
                     setNewCategoryName("");
@@ -358,7 +390,34 @@ const LedgerCategories = () => {
                       toast.error("请输入分类名称");
                       return;
                     }
+                    
+                    // 添加三级分类
+                    const newCategories = categories.map(cat => {
+                      if (cat.id === currentCategoryId) {
+                        return {
+                          ...cat,
+                          children: cat.children?.map(subCat => {
+                            if (subCat.id === selectedParentId) {
+                              return {
+                                ...subCat,
+                                children: [
+                                  ...(subCat.children || []),
+                                  {
+                                    id: Date.now(),
+                                    name: newCategoryName.trim()
+                                  }
+                                ]
+                              };
+                            }
+                            return subCat;
+                          })
+                        };
+                      }
+                      return cat;
+                    });
+                    setCategories(newCategories);
                     toast.success(`已添加三级分类: ${newCategoryName}`);
+                    
                     setIsAddDialogOpen(false);
                     setSelectedAction(null);
                     setShowSubCategorySelect(false);
