@@ -260,15 +260,15 @@
 }
 
 .animate-float {
-  animation: float 3s ease-in-out infinite;
+  animation: float 3s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-pulse-soft {
-  animation: pulse-soft 2s ease-in-out infinite;
+  animation: pulse-soft 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-bounce-soft {
-  animation: bounce-soft 1s ease-in-out infinite;
+  animation: bounce-soft 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-shimmer {
@@ -445,7 +445,7 @@ input[type="range"].slider::-moz-range-thumb {
 }
 
 .animate-shake {
-  animation: shake 0.5s ease-in-out;
+  animation: shake 0.5s cubic-bezier(0.45, 0.05, 0.55, 0.95);
 }
 
 /* 呼吸灯边框动画 - 蓝色 */
@@ -569,41 +569,41 @@ input[type="range"].slider::-moz-range-thumb {
 }
 
 .animate-breathing-border-blue {
-  animation: breathing-border-blue 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-blue 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-green {
-  animation: breathing-border-green 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-green 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-orange {
-  animation: breathing-border-orange 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-orange 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-purple {
-  animation: breathing-border-purple 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-purple 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-teal {
-  animation: breathing-border-teal 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-teal 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-red {
-  animation: breathing-border-red 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-red 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-pink {
-  animation: breathing-border-pink 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-pink 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-yellow {
-  animation: breathing-border-yellow 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-yellow 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-indigo {
-  animation: breathing-border-indigo 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-indigo 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .animate-breathing-border-rose {
-  animation: breathing-border-rose 5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: breathing-border-rose 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
