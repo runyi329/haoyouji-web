@@ -240,7 +240,7 @@ export default function LedgerFilter() {
                 key={range.value}
                 variant={selectedDateRange === range.value ? "default" : "outline"}
                 size="sm"
-                className={`text-xs h-7 ${
+                className={`text-xs h-7 rounded ${
                   selectedDateRange === range.value
                     ? "bg-blue-500 text-white hover:bg-blue-600"
                     : "bg-white text-gray-700 hover:bg-gray-50"
