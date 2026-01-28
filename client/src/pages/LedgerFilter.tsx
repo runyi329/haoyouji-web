@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { trpc } from "@/lib/trpc";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export default function LedgerFilter() {
   const [, params] = useRoute("/ledger/:id/filter");
@@ -596,21 +597,20 @@ export default function LedgerFilter() {
               </div>
               {membersData?.map((member: any) => (
                 <div 
-                  key={member.id}
-                  onClick={() => toggleMember(member.id)}
+                  key={member.userId}
+                  onClick={() => toggleMember(member.userId)}
                   className={`flex items-center p-2 rounded cursor-pointer ${
-                    selectedMemberIds.includes(member.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    selectedMemberIds.includes(member.userId) ? 'bg-blue-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                  {member.avatarUrl ? (
-                    <img src={member.avatarUrl} alt="" className="w-8 h-8 rounded-full mr-2" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-sm mr-2">
-                      {member.nickname?.charAt(0) || 'U'}
-                    </div>
-                  )}
-                  <span>{member.nickname}</span>
-                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-blue-600">✓</span>}
+                  <UserAvatar 
+                    src={member.avatar} 
+                    alt={member.nickname || member.username}
+                    size="sm"
+                    className="mr-2"
+                  />
+                  <span>{member.nickname || member.username}</span>
+                  {selectedMemberIds.includes(member.userId) && <span className="ml-auto text-blue-600">✓</span>}
                 </div>
               ))}
             </div>
