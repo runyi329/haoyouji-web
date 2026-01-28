@@ -136,7 +136,7 @@ export default function Ledger() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-base leading-none text-gray-800">{ledger.name}</h3>
-                    {ledger.isVip && (
+                    {ledger.isVip === true && (
                       <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs">
                         <Crown className="w-3 h-3 mr-1" />
                         VIP
