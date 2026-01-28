@@ -461,47 +461,31 @@ const LedgerCategories = () => {
                   取消
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newCategoryName.trim()) {
                       toast.error("请输入分类名称");
                       return;
                     }
                     
-                    // 添加三级分类
-                    const newCategories = categories.map(cat => {
-                      if (cat.id === currentCategoryId) {
-                        return {
-                          ...cat,
-                          children: cat.children?.map(subCat => {
-                            if (subCat.id === selectedParentId) {
-                              return {
-                                ...subCat,
-                                children: [
-                                  ...(subCat.children || []),
-                                  {
-                                    id: Date.now(),
-                                    name: newCategoryName.trim()
-                                  }
-                                ]
-                              };
-                            }
-                            return subCat;
-                          })
-                        };
-                      }
-                      return cat;
+                    // 调用API添加三级分类
+                    await addCategoryMutation.mutateAsync({
+                      ledgerId: Number(id),
+                      name: newCategoryName.trim(),
+                      type: selectedType,
+                      parentId: selectedParentId!,
+                      sortOrder: Number(newCategorySortOrder),
                     });
-                    setCategories(newCategories);
-                    toast.success(`已添加三级分类: ${newCategoryName}`);
                     
                     setIsAddDialogOpen(false);
                     setSelectedAction(null);
                     setShowSubCategorySelect(false);
                     setNewCategoryName("");
+                    setSelectedParentId(null);
                   }}
                   className="flex-1"
+                  disabled={addCategoryMutation.isPending}
                 >
-                  确定
+                  {addCategoryMutation.isPending ? "正在添加..." : "确定"}
                 </Button>
               </div>
             </div>
