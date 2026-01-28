@@ -1091,8 +1091,8 @@ export async function getLedgerReport(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${yearStart}`,
-        sql`${ledgerRecords.date} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
       )
     );
   
@@ -1110,8 +1110,8 @@ export async function getLedgerReport(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${yearStart}`,
-        sql`${ledgerRecords.date} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
       )
     )
     .groupBy(ledgerRecords.createdBy);
@@ -1137,7 +1137,7 @@ export async function getLedgerReport(
   // 获取月度统计数据
   const monthlyStatsRaw = await db
     .select({
-      month: sql<number>`MONTH(${ledgerRecords.date})`,
+      month: sql<number>`MONTH(${ledgerRecords.recordDate})`,
       totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
       totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
     })
@@ -1145,11 +1145,11 @@ export async function getLedgerReport(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${yearStart}`,
-        sql`${ledgerRecords.date} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
       )
     )
-    .groupBy(sql`MONTH(${ledgerRecords.date})`);
+    .groupBy(sql`MONTH(${ledgerRecords.recordDate})`);
   
   const monthlyStats = Array.from({ length: 12 }, (_, i) => {
     const monthData = monthlyStatsRaw.find((m: any) => Number(m.month) === i + 1);
@@ -1171,8 +1171,8 @@ export async function getLedgerReport(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${yearStart}`,
-        sql`${ledgerRecords.date} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
       )
     )
     .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
@@ -1273,8 +1273,8 @@ export async function getCalendarData(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${monthStart}`,
-        sql`${ledgerRecords.date} <= ${monthEnd}`,
+        sql`${ledgerRecords.recordDate} >= ${monthStart}`,
+        sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
         memberCondition
       )
     );
@@ -1287,7 +1287,7 @@ export async function getCalendarData(
   // 获取每日统计
   const dailyStatsRaw = await db
     .select({
-      recordDate: ledgerRecords.date,
+      recordDate: ledgerRecords.recordDate,
       totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
       totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
     })
@@ -1295,12 +1295,12 @@ export async function getCalendarData(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} >= ${monthStart}`,
-        sql`${ledgerRecords.date} <= ${monthEnd}`,
+        sql`${ledgerRecords.recordDate} >= ${monthStart}`,
+        sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
         memberCondition
       )
     )
-    .groupBy(ledgerRecords.date);
+    .groupBy(ledgerRecords.recordDate);
   
   const dailyStats = dailyStatsRaw.map((day: any) => {
     // 从日期字符串中提取天数
@@ -1360,14 +1360,14 @@ export async function getDayRecords(
       amount: ledgerRecords.amount,
       categoryId: ledgerRecords.categoryId,
       description: ledgerRecords.description,
-      date: ledgerRecords.date,
+      date: ledgerRecords.recordDate,
       createdBy: ledgerRecords.createdBy,
     })
     .from(ledgerRecords)
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.date} = ${date}`,
+        sql`${ledgerRecords.recordDate} = ${date}`,
         memberCondition
       )
     )
@@ -1466,14 +1466,9 @@ export async function addTransaction(data: {
     type: data.type,
     amount: data.amount.toString(),
     categoryId: data.categoryId,
-    subcategoryId: data.subcategoryId,
-    description: data.description,
-    date: data.transactionDate,
-    images: data.images ? JSON.stringify(data.images) : null,
-    memberId: data.memberId || membership[0].id, // 默认为自己
-    accountId: data.accountId,
+    description: data.description || null,
+    recordDate: data.transactionDate,
     createdBy: data.userId,
-    approvalStatus,
   });
   
   // 如果需要审批，创建审批记录
@@ -1528,10 +1523,10 @@ export async function getTransactionsList(
   const conditions = [eq(ledgerRecords.ledgerId, ledgerId)];
   
   if (options?.startDate) {
-    conditions.push(sql`${ledgerRecords.date} >= ${options.startDate}`);
+    conditions.push(sql`${ledgerRecords.recordDate} >= ${options.startDate}`);
   }
   if (options?.endDate) {
-    conditions.push(sql`${ledgerRecords.date} <= ${options.endDate}`);
+    conditions.push(sql`${ledgerRecords.recordDate} <= ${options.endDate}`);
   }
   if (options?.type) {
     conditions.push(eq(ledgerRecords.type, options.type));
@@ -1555,17 +1550,16 @@ export async function getTransactionsList(
       categoryId: ledgerRecords.categoryId,
       subcategoryId: ledgerRecords.subcategoryId,
       description: ledgerRecords.description,
-      date: ledgerRecords.date,
+      date: ledgerRecords.recordDate,
       images: ledgerRecords.images,
       memberId: ledgerRecords.memberId,
       accountId: ledgerRecords.accountId,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
-      approvalStatus: ledgerRecords.approvalStatus,
     })
     .from(ledgerRecords)
     .where(and(...conditions))
-    .orderBy(desc(ledgerRecords.date), desc(ledgerRecords.createdAt))
+    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
     .limit(options?.limit || 100)
     .offset(options?.offset || 0);
   
@@ -1699,10 +1693,9 @@ export async function getTransactionDetail(
       categoryId: ledgerRecords.categoryId,
       amount: ledgerRecords.amount,
       type: ledgerRecords.type,
-      date: ledgerRecords.date,
+      date: ledgerRecords.recordDate,
       description: ledgerRecords.description,
       createdBy: ledgerRecords.createdBy,
-      approvalStatus: ledgerRecords.approvalStatus,
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
     })

@@ -372,7 +372,8 @@ const AddTransaction = () => {
     // 允许零金额提交
 
     // 调用后端API保存记账
-    const accountIdNum = parseInt(selectedAccount);
+    // selectedAccounts是数组,取第一个元素(如果存在)
+    const accountIdNum = selectedAccounts.length > 0 ? parseInt(selectedAccounts[0]) : NaN;
     // 格式化为 YYYY-MM-DD 格式，使用本地时间
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');

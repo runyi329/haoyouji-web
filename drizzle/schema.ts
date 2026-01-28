@@ -496,14 +496,12 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 export const ledgerRecords = mysqlTable("ledger_records", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
-	categoryId: int().notNull(),
-	amount: decimal({ precision: 10, scale: 2 }).notNull(),
 	type: mysqlEnum(['income','expense']).notNull(),
-	// you can use { mode: 'date' }, if you want to have Date as type for this column
-	date: date({ mode: 'string' }).notNull(),
+	amount: decimal({ precision: 10, scale: 2 }).notNull(),
+	categoryId: int(),
 	description: text(),
+	recordDate: date({ mode: 'string' }).notNull(),
 	createdBy: int().notNull(),
-	approvalStatus: mysqlEnum(['pending','approved','rejected','not_required']).default('not_required').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
