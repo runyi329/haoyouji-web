@@ -62,7 +62,9 @@ function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -80,7 +82,9 @@ function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count:
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-3 px-3">
@@ -98,7 +102,9 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -114,7 +120,9 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
 // 功能5卡片 - 平均联络间隔
 function AverageIntervalCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
-    <Card className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center">
+    <Card className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}>
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 md:cursor-grab md:active:cursor-grabbing">
         <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">联络频率</p>
         <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
@@ -130,7 +138,9 @@ function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -148,7 +158,9 @@ function MonthlyActiveCard({ count, onClick, dragListeners, isBreathing }: { cou
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -166,7 +178,9 @@ function WeeklyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -184,7 +198,9 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -202,7 +218,9 @@ function BlacklistCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -220,7 +238,9 @@ function TodayRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-300 dark:border-red-700 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-300 dark:border-red-700 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -238,7 +258,9 @@ function WeekRemindersCard({ count, onClick, dragListeners, isBreathing }: { cou
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/30 border-orange-300 dark:border-orange-700 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/30 border-orange-300 dark:border-orange-700 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -256,7 +278,9 @@ function MonthRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-300 dark:border-yellow-700 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-300 dark:border-yellow-700 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -274,7 +298,9 @@ function TodayActiveCard({ count, onClick, dragListeners, isBreathing }: { count
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/30 border-cyan-200 dark:border-cyan-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/30 border-cyan-200 dark:border-cyan-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -292,7 +318,9 @@ function DormantCard({ count, onClick, dragListeners, isBreathing }: { count: nu
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 border-gray-300 dark:border-gray-700 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 border-gray-300 dark:border-gray-700 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -310,7 +338,9 @@ function CompanyCountCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -328,7 +358,9 @@ function TotalInteractionCard({ count, onClick, dragListeners, isBreathing }: { 
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200 dark:border-pink-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200 dark:border-pink-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-2 px-3">
@@ -346,7 +378,9 @@ function TotalTagCard({ count, onClick, dragListeners, isBreathing }: { count: n
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -364,7 +398,9 @@ function TotalUsageDaysCard({ days, dragListeners, isBreathing }: { days: number
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-amber-200 dark:border-amber-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-amber-200 dark:border-amber-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
         <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">累计使用</p>
@@ -381,7 +417,9 @@ function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points:
   return (
     <Card 
       {...dragListeners}
-      className="hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-200 dark:border-yellow-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-200 dark:border-yellow-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -449,6 +487,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           onClick={() => setLocation('/parent/contacts/list')}
           dragListeners={listeners}
           isBreathing={isBreathing}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -462,6 +501,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.newThisWeek} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisWeek')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -475,6 +515,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.newThisMonth} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisMonth')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -488,6 +529,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.newThisYear} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisYear')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -510,6 +552,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.needsAttentionCount} 
           onClick={() => setLocation('/parent/contacts/list?filter=needsAttention')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -523,6 +566,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.monthlyActiveCount} 
           onClick={() => setLocation('/parent/contacts/list?filter=monthlyActive')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -536,6 +580,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.weeklyActive} 
           onClick={() => setLocation('/parent/contacts/list?filter=weeklyActive')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -549,6 +594,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.yearlyActive} 
           onClick={() => setLocation('/parent/contacts/list?filter=yearlyActive')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -562,6 +608,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.blacklistCount} 
           onClick={() => setLocation('/parent/contacts/list?filter=blacklist')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -575,6 +622,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.todayReminders} 
           onClick={() => setLocation('/parent/contacts/list?filter=todayReminders')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -588,6 +636,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.weekReminders} 
           onClick={() => setLocation('/parent/contacts/list?filter=weekReminders')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -601,6 +650,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.monthReminders} 
           onClick={() => setLocation('/parent/contacts/list?filter=monthReminders')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -614,6 +664,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           count={stats.todayActive} 
           onClick={() => setLocation('/parent/contacts/list?filter=todayActive')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -626,6 +677,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
         <DormantCard 
           count={stats.dormantCount} 
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -638,6 +690,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
         <CompanyCountCard 
           count={stats.companyCount} 
           dragListeners={listeners}
+          isBreathing={isBreathing}
           onClick={() => setLocation('/parent/contacts/list?view=company')}
         />
       </div>
@@ -651,6 +704,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
         <TotalInteractionCard 
           count={stats.totalInteractionCount} 
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -663,6 +717,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
         <TotalTagCard 
           count={stats.totalTagCount} 
           dragListeners={listeners}
+          isBreathing={isBreathing}
           onClick={() => setLocation('/parent/contacts/tag-analytics')}
         />
       </div>
@@ -676,6 +731,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
         <TotalUsageDaysCard 
           days={stats.totalUsageDays} 
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -689,6 +745,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           points={user?.points || 0} 
           onClick={() => setLocation('/parent/profile')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -697,7 +754,9 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing aspect-square">
       {/* 手机端使用更紧凑的卡片样式 */}
-      <Card className="hover:shadow-lg transition-shadow h-full">
+      <Card className={`hover:shadow-lg transition-shadow h-full ${
+        isBreathing ? "animate-breathing-border" : ""
+      }`}>
         <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
           <CardTitle className="text-center text-muted-foreground text-xs sm:text-sm md:text-base">
             {feature.title}
