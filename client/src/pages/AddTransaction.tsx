@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,7 +58,7 @@ const AddTransaction = () => {
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([]);
   
-  const [selectedAccount, setSelectedAccount] = useState("微信");
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -71,6 +71,10 @@ const AddTransaction = () => {
   
   const [payer, setPayer] = useState("我自己");
   const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
+  
+  // 图片上传相关
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
 
 
@@ -86,20 +90,16 @@ const AddTransaction = () => {
 
   // 预设分类（当数据库中没有分类时显示）
   const defaultCategories = [
-    { id: -1, name: "餐饮", icon: "🍴", color: "bg-blue-500" },
-    { id: -2, name: "交通", icon: "🚗", color: "bg-orange-500" },
-    { id: -3, name: "购物", icon: "🛒", color: "bg-green-500" },
+    { id: 2, name: "购物", icon: "🛍️", color: "bg-red-500" },
   ];
 
-  // 预设子分类
+  // 预设子分类（包括三级分类）
   const defaultSubCategories: Record<number, any[]> = {
-    "-1": [{ id: -11, name: "外卖", icon: "🍜", color: "bg-blue-400", parentId: -1 }],
-    "-2": [{ id: -21, name: "地铁", icon: "🚇", color: "bg-orange-400", parentId: -2 }],
-    "-3": [{ id: -31, name: "淘宝", icon: "🛒", color: "bg-green-400", parentId: -3 }],
-    // 三级分类：外卖的子分类
-    "-11": [
-      { id: -111, name: "美团", icon: "🐛", color: "bg-yellow-400", parentId: -11 },
-      { id: -112, name: "饿了么", icon: "🐦", color: "bg-blue-300", parentId: -11 },
+    "2": [{ id: 25, name: "淘宝", icon: "🛍️", color: "bg-red-400", parentId: 2 }],
+    "25": [
+      { id: 251, name: "服饰", icon: "👔", color: "bg-red-300", parentId: 25 },
+      { id: 252, name: "数码", icon: "📱", color: "bg-red-300", parentId: 25 },
+      { id: 253, name: "食品", icon: "🍞", color: "bg-red-300", parentId: 25 },
     ],
   };
 
@@ -113,8 +113,53 @@ const AddTransaction = () => {
   // 如果没有分类，使用预设分类
   const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
 
-  // 暂时只使用一级分类，避免React Hooks规则违反
-  const categoryLevels: any[][] = [displayCategories];
+  // 动态加载子分类 - 使用固定的3个查询(最多支持3级分类)
+  const level1Query = trpc.ledger.getCategories.useQuery(
+    {
+      ledgerId,
+      type: transactionType,
+      parentId: selectedCategoryPath[0] || null,
+    },
+    { enabled: selectedCategoryPath.length >= 1 }
+  );
+
+  const level2Query = trpc.ledger.getCategories.useQuery(
+    {
+      ledgerId,
+      type: transactionType,
+      parentId: selectedCategoryPath[1] || null,
+    },
+    { enabled: selectedCategoryPath.length >= 2 }
+  );
+
+  // 构建多级分类数据
+  const categoryLevels: any[][] = (() => {
+    const levels: any[][] = [displayCategories];
+    
+    // 添加一级子分类
+    if (selectedCategoryPath.length >= 1) {
+      const parentId = selectedCategoryPath[0];
+      const subCategories = level1Query.data && level1Query.data.length > 0 
+        ? level1Query.data 
+        : defaultSubCategories[parentId.toString()] || [];
+      if (subCategories.length > 0) {
+        levels.push(subCategories);
+      }
+    }
+    
+    // 添加二级子分类
+    if (selectedCategoryPath.length >= 2) {
+      const parentId = selectedCategoryPath[1];
+      const subCategories = level2Query.data && level2Query.data.length > 0
+        ? level2Query.data
+        : defaultSubCategories[parentId.toString()] || [];
+      if (subCategories.length > 0) {
+        levels.push(subCategories);
+      }
+    }
+    
+    return levels;
+  })();
 
   // 处理分类选择
   const handleCategorySelect = (categoryId: number, level: number) => {
@@ -327,15 +372,28 @@ const AddTransaction = () => {
     // 允许零金额提交
 
     // 调用后端API保存记账
-    addTransactionMutation.mutate({
+    const accountIdNum = parseInt(selectedAccount);
+    // 格式化为 YYYY-MM-DD 格式，使用本地时间
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day}`;
+    
+    const payload: any = {
       ledgerId,
       amount: parseFloat(amount) || 0,
       type: transactionType,
       categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
-      date: selectedDate.toISOString(),
-      note: note || undefined,
-      account: selectedAccount,
-    });
+      transactionDate: formattedDate,
+      description: note || undefined,
+    };
+    
+    // 只有当accountId是有效数字时才添加
+    if (!isNaN(accountIdNum)) {
+      payload.accountId = accountIdNum;
+    }
+    
+    addTransactionMutation.mutate(payload);
   };
 
   const calendarDays = getCalendarDays();
@@ -395,57 +453,53 @@ const AddTransaction = () => {
           {/* 一级分类标题 */}
           <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">选择分类</div>
           
-          {/* 渲染每一级分类 */}
+          {/* 渲染每一级分类 - 每级单独一行 */}
           {categoryLevels.map((categories, level) => {
             if (categories.length === 0) return null;
             
             return (
-              <div key={level}>
-                {/* 二级、三级分类标题 */}
-                {level > 0 && (
-                  <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                    {level === 1 ? "二级分类" : level === 2 ? "三级分类" : `${level + 1}级分类`}
-                  </div>
-                )}
+              <div key={level} className="border-t border-gray-100">
                 <div className="p-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {categories.map((category, index) => {
-                    const isSelected = selectedCategoryPath[level] === category.id;
-                    const colorClass = themeColors[index % themeColors.length];
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((category, index) => {
+                      const isSelected = selectedCategoryPath[level] === category.id;
+                      const colorClass = themeColors[index % themeColors.length];
+                      
+                      return (
+                        <button
+                          key={category.id}
+                          className={`px-4 py-2 rounded text-sm transition-colors ${
+                            isSelected
+                              ? `${colorClass} text-white font-medium`
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                          onClick={() => handleCategorySelect(category.id, level)}
+                        >
+                          {category.name}
+                        </button>
+                      );
+                    })}
                     
-                    return (
+                    {/* 只在第一级显示"+"按钮 */}
+                    {level === 0 && (
                       <button
-                        key={category.id}
-                        className={`px-3 py-1.5 rounded text-xs transition-colors ${
-                          isSelected
-                            ? `${colorClass} text-white`
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                        onClick={() => handleCategorySelect(category.id, level)}
+                        className="px-4 py-2 rounded text-sm bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
+                        onClick={() => setLocation(`/ledger/${id}/categories`)}
                       >
-                        {category.name}
+                        <Plus className="w-4 h-4" />
                       </button>
-                    );
-                  })}
-                  
-                  {/* 只在第一级显示"+"按钮 */}
-                  {level === 0 && (
-                    <button
-                      className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
-                      onClick={() => setLocation(`/ledger/${id}/categories`)}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
           
           {isLoadingTop && (
-            <div className="text-xs text-gray-400">加载分类中...</div>
+            <div className="text-xs text-gray-400 p-3">加载分类中...</div>
           )}
+          
+
         </div>
 
 
@@ -461,11 +515,19 @@ const AddTransaction = () => {
               <button
                 key={account}
                 className={`px-3 py-1.5 rounded text-xs ${
-                  selectedAccount === account
+                  selectedAccounts.includes(account)
                     ? "bg-blue-500 text-white"
                     : "bg-gray-100 text-gray-700"
                 }`}
-                onClick={() => setSelectedAccount(account)}
+                onClick={() => {
+                  if (selectedAccounts.includes(account)) {
+                    // 取消选中
+                    setSelectedAccounts(selectedAccounts.filter(a => a !== account));
+                  } else {
+                    // 添加选中
+                    setSelectedAccounts([...selectedAccounts, account]);
+                  }
+                }}
               >
                 {account}
               </button>
@@ -483,11 +545,60 @@ const AddTransaction = () => {
             onChange={(e) => setNote(e.target.value)}
             className="flex-1 px-3 py-3 border-none outline-none text-sm text-gray-700"
           />
-          <button className="px-6 bg-blue-500 text-white flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files) {
+                Array.from(files).forEach(file => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    if (e.target?.result) {
+                      setUploadedImages(prev => [...prev, e.target!.result as string]);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                });
+              }
+            }}
+          />
+          <button 
+            className="px-6 bg-blue-500 text-white flex items-center gap-2"
+            onClick={() => fileInputRef.current?.click()}
+          >
             <ImageIcon className="w-5 h-5" />
             <span className="text-sm font-medium">传图</span>
           </button>
         </div>
+
+        {/* 图片预览区域 */}
+        {uploadedImages.length > 0 && (
+          <div className="bg-white mt-1 p-3">
+            <div className="flex flex-wrap gap-2">
+              {uploadedImages.map((image, index) => (
+                <div key={index} className="relative w-20 h-20">
+                  <img
+                    src={image}
+                    alt={`上传图片${index + 1}`}
+                    className="w-full h-full object-cover rounded"
+                  />
+                  <button
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs"
+                    onClick={() => {
+                      setUploadedImages(prev => prev.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 底部工具栏 */}
         <div className="bg-white mt-1 p-3 mb-2">
