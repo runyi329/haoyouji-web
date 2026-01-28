@@ -38,11 +38,13 @@ interface Feature {
 }
 
 // 功能1卡片 - 人脉总数统计
-function ContactsStatsCard({ totalContacts, onClick, dragListeners }: { totalContacts: number; onClick?: () => void; dragListeners?: any }) {
+function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing }: { totalContacts: number; onClick?: () => void; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card 
       {...dragListeners}
-      className="group hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 flex flex-col justify-center cursor-pointer select-none"
+      className={`group hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 flex flex-col justify-center cursor-pointer select-none ${
+        isBreathing ? 'animate-breathing-border' : ''
+      }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -414,7 +416,7 @@ interface StatsData {
   totalUsageDays: number;
 }
 
-function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: StatsData }) {
+function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature; stats: StatsData; isBreathing: boolean }) {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const {
@@ -446,6 +448,7 @@ function SortableFeatureCard({ feature, stats }: { feature: Feature; stats: Stat
           totalContacts={stats.totalContacts} 
           onClick={() => setLocation('/parent/contacts/list')}
           dragListeners={listeners}
+          isBreathing={isBreathing}
         />
       </div>
     );
@@ -726,6 +729,20 @@ export default function ContactsManagement() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  
+  // 呼吸灯效果状态
+  const [breathingCardId, setBreathingCardId] = useState<number | null>(null);
+  
+  // 随机呼吸灯效果
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // 随机选择1-20之间的卡片ID
+      const randomId = Math.floor(Math.random() * 20) + 1;
+      setBreathingCardId(randomId);
+    }, 2000); // 每2秒切换一次
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // 邀请码验证相关state
   const [showInviteDialog, setShowInviteDialog] = useState(false);
@@ -1214,7 +1231,8 @@ export default function ContactsManagement() {
             {features.map((feature) => (
               <SortableFeatureCard 
                 key={feature.id} 
-                feature={feature} 
+                feature={feature}
+                isBreathing={breathingCardId === feature.id}
                 stats={{
                   totalContacts: totalContactsWithShared,
                   newThisWeek: stats?.newThisWeek || 0,
