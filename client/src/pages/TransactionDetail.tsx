@@ -171,9 +171,17 @@ export default function TransactionDetail() {
           label={transaction.type === 'expense' ? "支出人" : "收入人"}
           rightContent={
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
-                {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
-              </div>
+              {transaction.member?.avatar ? (
+                <img
+                  src={transaction.member.avatar}
+                  alt={transaction.member.nickname || '未知'}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
+                  {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
+                </div>
+              )}
               <span className="text-gray-900">{transaction.member?.nickname || '未知'}</span>
             </div>
           }
@@ -189,9 +197,17 @@ export default function TransactionDetail() {
           label="添加人"
           rightContent={
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
-                {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
-              </div>
+              {transaction.member?.avatar ? (
+                <img
+                  src={transaction.member.avatar}
+                  alt={transaction.member.nickname || '未知'}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
+                  {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
+                </div>
+              )}
               <span className="text-gray-900">{transaction.member?.nickname || '未知'}</span>
             </div>
           }

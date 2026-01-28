@@ -1768,6 +1768,35 @@ export async function getTransactionDetail(
     )
     .limit(1);
   
+  // 获取用户头像
+  let memberWithAvatar = null;
+  if (member.length > 0) {
+    const mainDb = await getDb();
+    if (mainDb) {
+      const userInfo = await mainDb
+        .select({
+          id: users.id,
+          username: users.username,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(eq(users.id, member[0].userId))
+        .limit(1);
+      
+      if (userInfo.length > 0) {
+        memberWithAvatar = {
+          ...member[0],
+          username: userInfo[0].username,
+          avatar: userInfo[0].avatar,
+        };
+      } else {
+        memberWithAvatar = member[0];
+      }
+    } else {
+      memberWithAvatar = member[0];
+    }
+  }
+  
   return {
     id: transaction.id,
     ledgerId: transaction.ledgerId,
@@ -1781,7 +1810,7 @@ export async function getTransactionDetail(
     approvalStatus: transaction.approvalStatus,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt,
-    member: member.length > 0 ? member[0] : null,
+    member: memberWithAvatar,
   };
 }
 
