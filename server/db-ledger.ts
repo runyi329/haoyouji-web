@@ -36,13 +36,16 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
   // 为每个账本获取成员信息
   const result = await Promise.all(
     ledgerList.map(async (ledger: any) => {
-      // 使用账本数据库连接
+      // 使用账本数据库连接,关联users表获取头像
       const members = await db
         .select({
           userId: ledgerMembers.userId,
           role: ledgerMembers.role,
+          username: users.username,
+          avatar: users.avatar,
         })
         .from(ledgerMembers)
+        .leftJoin(users, eq(ledgerMembers.userId, users.id))
         .where(eq(ledgerMembers.ledgerId, ledger.id))
         .limit(4); // 最多显示4个成员头像
 
