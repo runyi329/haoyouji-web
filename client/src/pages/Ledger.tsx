@@ -7,6 +7,8 @@ import { Crown, Notebook, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useSwipeGesture } from "@/hooks/useSwipeGesture";
+import { toast } from "sonner";
 
 
 // 模拟账本数据
@@ -61,6 +63,15 @@ const mockLedgers = [
 export default function Ledger() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  
+  // 添加滑动手势支持
+  useSwipeGesture({
+    onSwipeRight: () => {
+      // 向右滑动,切换到人脉页面
+      setLocation('/contacts');
+      toast.success('切换到人脉', { duration: 1000 });
+    },
+  });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
 

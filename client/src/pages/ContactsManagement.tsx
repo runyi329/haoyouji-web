@@ -12,6 +12,7 @@ import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import {
   DndContext,
   closestCenter,
@@ -712,6 +713,15 @@ const MAX_HISTORY_ITEMS = 5;
 
 export default function ContactsManagement() {
   const [, setLocation] = useLocation();
+  
+  // 添加滑动手势支持
+  useSwipeGesture({
+    onSwipeLeft: () => {
+      // 向左滑动,切换到钱脉页面
+      setLocation('/ledger');
+      toast.success('切换到钱脉', { duration: 1000 });
+    },
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
