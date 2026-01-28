@@ -223,18 +223,7 @@ const LedgerCategories = () => {
         ))}
       </div>
 
-      {/* 底部添加按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t">
-        <Button
-          onClick={() => {
-            setSelectedParentId(null);
-            setIsAddDialogOpen(true);
-          }}
-          className="w-full bg-blue-500 hover:bg-blue-600"
-        >
-          添加账本支出条目
-        </Button>
-      </div>
+
 
       {/* 添加分类对话框 */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
