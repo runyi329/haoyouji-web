@@ -43,7 +43,30 @@ export const themeTemplates: ThemeTemplate[] = [
       accent2: '#34A853',     // Google 绿
     },
   },
-  // 可以添加更多预设主题
+  {
+    id: 'wechat',
+    name: '微信风格',
+    colors: {
+      primary: '#07C160',     // 微信绿
+      secondary: '#10AD61',   // 深微信绿
+      background: '#EDEDED',  // 微信灰背景
+      text: '#000000',        // 黑色文字
+      accent1: '#FFFFFF',     // 白色
+      accent2: '#576B95',     // 微信蓝
+    },
+  },
+  {
+    id: 'alipay',
+    name: '支付宝风格',
+    colors: {
+      primary: '#1677FF',     // 支付宝蓝
+      secondary: '#108EE9',   // 深支付宝蓝
+      background: '#F5F5F5',  // 浅灰背景
+      text: '#333333',        // 深灰文字
+      accent1: '#FFFFFF',     // 白色
+      accent2: '#52C41A',     // 支付宝绿
+    },
+  },
 ];
 
 interface ColorThemeContextType {
