@@ -38,7 +38,7 @@ import {
   Plus,
   Minus,
 } from "lucide-react";
-import BottomNav from "@/components/BottomNav";
+
 
 // 定义所有可用的功能项
 type FeatureItem = {
@@ -342,7 +342,7 @@ export default function Profile() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
       <div className="container max-w-4xl py-8 px-4">
         {/* 顶部用户信息卡片 */}
-        <div className="p-6 mb-6">
+        <div className="p-6 mb-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-4">
             {/* 头像 */}
             <div className="relative group">
@@ -391,7 +391,7 @@ export default function Profile() {
 
         {/* 超级管理员专属功能 */}
         {user.role === "super_admin" && (
-          <div className="mb-8">
+          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
               管理功能
             </h3>
@@ -410,7 +410,7 @@ export default function Profile() {
         )}
 
         {/* 常用功能 */}
-        <div className="mb-8">
+        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
               常用功能
@@ -493,7 +493,7 @@ export default function Profile() {
 
         {/* 编辑模式：显示其他可添加的功能 */}
         {isEditMode && otherFeatures.length > 0 && (
-          <div className="mb-8">
+          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
               可添加功能
             </h3>
@@ -523,7 +523,7 @@ export default function Profile() {
 
         {/* 账户管理 - 固定分区 */}
         {!isEditMode && (
-          <div className="mb-8">
+          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
               账户管理
             </h3>
@@ -549,7 +549,7 @@ export default function Profile() {
 
         {/* 帮助与支持 - 固定分区 */}
         {!isEditMode && (
-          <div className="mb-8">
+          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
               帮助与支持
             </h3>
@@ -697,9 +697,7 @@ export default function Profile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
-      {/* 底部导航栏 */}
-      <BottomNav />
+
     </div>
   );
 }
