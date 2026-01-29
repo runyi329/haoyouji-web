@@ -164,7 +164,6 @@ export default function ThemeSettings() {
                     </span>
                   </div>
                 </button>
-              </div>
             </div>
           </Card>
         ))}
