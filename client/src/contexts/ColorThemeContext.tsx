@@ -33,14 +33,14 @@ export const themeTemplates: ThemeTemplate[] = [
   },
   {
     id: 'version-1',
-    name: '第1款',
+    name: 'Google',
     colors: {
-      primary: '#FA734F',
-      secondary: '#95DAE7',
-      background: '#F6F3E8',
-      text: '#7C645E',
-      accent1: '#FFFFFF',
-      accent2: '#797979',
+      primary: '#4285F4',     // Google 蓝
+      secondary: '#EA4335',   // Google 红
+      background: '#FFFFFF',  // 白色背景
+      text: '#202124',        // Google 黑色文字
+      accent1: '#FBBC04',     // Google 黄
+      accent2: '#34A853',     // Google 绿
     },
   },
   // 可以添加更多预设主题
