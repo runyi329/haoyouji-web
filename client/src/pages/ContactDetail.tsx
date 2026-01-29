@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { maskSensitiveInfo } from "@/lib/maskSensitiveInfo";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -427,7 +429,21 @@ export default function ContactDetail() {
   // AI 背调状态
   const [showAIBackgroundCheck, setShowAIBackgroundCheck] = useState(false);
   const [showCompanyReportDialog, setShowCompanyReportDialog] = useState(false);
-  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
+  const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
+  
+  // 扩展信息脱敏状态（从 localStorage 读取，默认为 false 表示脱敏）
+  const [showFullExtendedInfo, setShowFullExtendedInfo] = useState(() => {
+    const saved = localStorage.getItem('showFullExtendedInfo');
+    return saved === 'true';
+  });
+  
+  // 切换脱敏状态
+  const toggleExtendedInfoVisibility = () => {
+    const newValue = !showFullExtendedInfo;
+    setShowFullExtendedInfo(newValue);
+    localStorage.setItem('showFullExtendedInfo', String(newValue));
+  };
+  
   const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
   const [checkingCompanyReports, setCheckingCompanyReports] = useState<Record<string, boolean>>({});
 
@@ -970,7 +986,20 @@ export default function ContactDetail() {
               {/* 显示扩展信息字段值 */}
               {extendedFieldValues && extendedFieldValues.length > 0 && (
                 <div className="space-y-2 pt-2 border-t">
-                  <div className="text-xs font-medium text-muted-foreground mb-2">扩展信息</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-muted-foreground">扩展信息</div>
+                    <button
+                      onClick={toggleExtendedInfoVisibility}
+                      className="p-1 hover:bg-accent rounded transition-colors"
+                      title={showFullExtendedInfo ? "隐藏敏感信息" : "显示完整信息"}
+                    >
+                      {showFullExtendedInfo ? (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
                   {extendedFieldValues.map((fv: any) => (
                     <div key={fv.id} className="flex items-start text-sm">
                       {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
@@ -991,7 +1020,12 @@ export default function ContactDetail() {
                           <div className="flex items-center gap-2">
                             <div>
                               <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
-                              <span>{fv.value}</span>
+                              <span>
+                                {showFullExtendedInfo 
+                                  ? fv.value 
+                                  : maskSensitiveInfo(fv.categoryName, fv.value)
+                                }
+                              </span>
                             </div>
                           </div>
                         </>
