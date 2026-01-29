@@ -50,13 +50,13 @@ export default function ThemeSettings() {
             <div className="flex gap-2 items-center">
               {/* 配色名称按钮 */}
               <div
-                className={`w-20 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center ${
+                className={`w-10 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center ${
                   isThemeApplied(template.id)
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-300 bg-white'
                 }`}
               >
-                <span className={`text-[10px] font-bold leading-tight text-center ${
+                <span className={`text-[8px] font-bold leading-tight text-center ${
                   isThemeApplied(template.id) ? 'text-green-600' : 'text-gray-700'
                 }`}>
                   {template.name}
