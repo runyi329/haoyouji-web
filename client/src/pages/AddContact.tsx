@@ -315,12 +315,12 @@ export default function AddContact() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="title">称呼</Label>
+                <Label htmlFor="title">昵称</Label>
                 <Input
                   id="title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="请输入称呼"
+                  placeholder="请输入昵称"
                 />
               </div>
             </div>
