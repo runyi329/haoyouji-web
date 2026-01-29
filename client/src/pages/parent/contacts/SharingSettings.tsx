@@ -167,8 +167,7 @@ export default function SharingSettings() {
                 关键在于如何挖掘和连接。
               </p>
             </div>
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Tab按钮 */}
         <div className="flex gap-3">
@@ -199,8 +198,7 @@ export default function SharingSettings() {
         )}
 
         {/* 名单列表 */}
-        <Card>
-          <CardContent className="pt-6 space-y-3">
+        <div className="space-y-2">
             {activeTab === 'my' ? (
               // 我的共享连接列表
               loadingConnections ? (
@@ -217,7 +215,7 @@ export default function SharingSettings() {
                 myConnections.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -273,7 +271,7 @@ export default function SharingSettings() {
                 sharedToMe.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -292,8 +290,7 @@ export default function SharingSettings() {
                 ))
               )
             )}
-          </CardContent>
-        </Card>
+        </div>
       </div>
 
       {/* 添加连接对话框 */}
@@ -336,7 +333,7 @@ export default function SharingSettings() {
                     {searchResults.map((user: any) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                        className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                         onClick={() => handleAddConnection(user.username)}
                       >
                         <div>
