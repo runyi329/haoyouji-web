@@ -18,13 +18,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 自动检测脚本所在目录
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # 配置
-BACKUP_DIR="/home/ubuntu/database-backups"
+BACKUP_DIR="$HOME/database-backups"
 KEEP_DAYS=15
 LOG_FILE="$BACKUP_DIR/backup.log"
 
-# 从.env文件读取数据库配置
-ENV_FILE="/home/ubuntu/haoyouji-web/.env"
+# 从.env文件读取数据库配置（自动使用脚本所在目录）
+ENV_FILE="$SCRIPT_DIR/.env"
 
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${RED}❌ 错误: .env文件不存在${NC}"
