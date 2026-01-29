@@ -96,6 +96,9 @@ export default function Profile() {
 
   // 修改密码对话框
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+
+  // 退出登录确认对话框
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -341,6 +344,17 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
       <div className="container max-w-4xl py-8 px-4">
+        {/* 右上角退出登录按钮 */}
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={() => setIsLogoutDialogOpen(true)}
+            className="p-2 rounded-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-lg hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
+            title="退出登录"
+          >
+            <LogOut className="w-5 h-5 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400" />
+          </button>
+        </div>
+
         {/* 顶部用户信息卡片 */}
         <div className="p-6 mb-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-4">
@@ -573,18 +587,7 @@ export default function Profile() {
           </div>
         )}
 
-        {/* 退出登录按钮 */}
-        {!isEditMode && (
-          <Button
-            onClick={() => logoutMutation.mutate()}
-            disabled={logoutMutation.isPending}
-            variant="outline"
-            className="w-full rounded-2xl h-14 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950 border-2"
-          >
-            <LogOut className="w-5 h-5 mr-2" />
-            退出登录
-          </Button>
-        )}
+
       </div>
 
       {/* 图片裁剪对话框 */}
@@ -637,6 +640,34 @@ export default function Profile() {
               disabled={updateProfileMutation.isPending}
             >
               {updateProfileMutation.isPending ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 退出登录确认对话框 */}
+      <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>退出登录</DialogTitle>
+            <DialogDescription>确定要退出当前账户吗？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsLogoutDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                setIsLogoutDialogOpen(false);
+                logoutMutation.mutate();
+              }}
+              disabled={logoutMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {logoutMutation.isPending ? "退出中..." : "确认退出"}
             </Button>
           </DialogFooter>
         </DialogContent>
