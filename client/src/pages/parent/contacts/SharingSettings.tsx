@@ -276,6 +276,14 @@ export default function SharingSettings() {
           </DropdownMenu>
         </div>
 
+        {/* 调试信息 */}
+        <div className="text-xs text-gray-500 p-2 bg-yellow-50 rounded">
+          <p>调试: myConnections = {JSON.stringify(myConnections?.length || 0)} 条</p>
+          <p>调试: sharedToMe = {JSON.stringify(sharedToMe?.length || 0)} 条</p>
+          <p>调试: loadingConnections = {loadingConnections ? '是' : '否'}</p>
+          <p>调试: loadingSharedToMe = {loadingSharedToMe ? '是' : '否'}</p>
+        </div>
+        
         {/* 名单列表 */}
         <div className="space-y-2">
             {activeTab === 'my' ? (
