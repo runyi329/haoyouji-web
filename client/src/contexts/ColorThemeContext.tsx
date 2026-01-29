@@ -113,8 +113,8 @@ export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     root.style.setProperty('--background', colors.background);
     root.style.setProperty('--foreground', colors.text);
     
-    // 卡片颜色
-    root.style.setProperty('--card', colors.accent1);
+    // 卡片颜色 - 使用背景色混合少量主色
+    root.style.setProperty('--card', `color-mix(in srgb, ${colors.background} 95%, ${colors.primary})`);
     root.style.setProperty('--card-foreground', colors.text);
     
     // 弹出框颜色
