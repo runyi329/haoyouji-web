@@ -344,20 +344,9 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
       <div className="container max-w-4xl py-8 px-4 relative">
-        {/* 右上角退出登录按钮 */}
-        <div className="absolute top-8 right-4 z-10">
-          <button
-            onClick={() => setIsLogoutDialogOpen(true)}
-            className="p-2 rounded-full bg-white dark:bg-slate-800 shadow-md hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
-            title="退出登录"
-          >
-            <LogOut className="w-5 h-5 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400" />
-          </button>
-        </div>
-
         {/* 顶部用户信息卡片 */}
         <div className="p-6 mb-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 relative">
             {/* 头像 */}
             <div className="relative group">
               <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-blue-100 dark:ring-blue-900">
@@ -385,9 +374,19 @@ export default function Profile() {
 
             {/* 用户信息 */}
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {user.name || user.username}
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                  {user.name || user.username}
+                </h2>
+                {/* 退出登录按钮 */}
+                <button
+                  onClick={() => setIsLogoutDialogOpen(true)}
+                  className="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                  title="退出登录"
+                >
+                  <LogOut className="w-5 h-5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400" />
+                </button>
+              </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 个人资料和设置
               </p>
