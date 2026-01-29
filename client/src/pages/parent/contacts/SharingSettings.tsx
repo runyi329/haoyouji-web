@@ -42,8 +42,8 @@ export default function SharingSettings() {
   const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my'); // 当前激活的tab
   const [mySearchQuery, setMySearchQuery] = useState(""); // 我的共享连接搜索
   const [sharedSearchQuery, setSharedSearchQuery] = useState(""); // 共享给我的连接搜索
-  const [mySortBy, setMySortBy] = useState<'username' | 'count_desc' | 'count_asc'>('username'); // 我的共享连接排序
-  const [sharedSortBy, setSharedSortBy] = useState<'username' | 'count_desc' | 'count_asc'>('username'); // 共享给我的连接排序
+  const [mySortBy, setMySortBy] = useState<'default' | 'count_desc' | 'count_asc'>('default'); // 我的共享连接排序
+  const [sharedSortBy, setSharedSortBy] = useState<'default' | 'count_desc' | 'count_asc'>('default'); // 共享给我的连接排序
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
@@ -111,13 +111,12 @@ export default function SharingSettings() {
     );
     
     // 排序
-    if (mySortBy === 'username') {
-      filtered.sort((a: any, b: any) => a.receiverUsername.localeCompare(b.receiverUsername));
-    } else if (mySortBy === 'count_desc') {
+    if (mySortBy === 'count_desc') {
       filtered.sort((a: any, b: any) => (b.sharedContactCount || 0) - (a.sharedContactCount || 0));
     } else if (mySortBy === 'count_asc') {
       filtered.sort((a: any, b: any) => (a.sharedContactCount || 0) - (b.sharedContactCount || 0));
     }
+    // default 不排序
     
     return filtered;
   }, [myConnections, mySearchQuery, mySortBy]);
@@ -132,13 +131,12 @@ export default function SharingSettings() {
     );
     
     // 排序
-    if (sharedSortBy === 'username') {
-      filtered.sort((a: any, b: any) => a.sharerUsername.localeCompare(b.sharerUsername));
-    } else if (sharedSortBy === 'count_desc') {
+    if (sharedSortBy === 'count_desc') {
       filtered.sort((a: any, b: any) => (b.sharedContactCount || 0) - (a.sharedContactCount || 0));
     } else if (sharedSortBy === 'count_asc') {
       filtered.sort((a: any, b: any) => (a.sharedContactCount || 0) - (b.sharedContactCount || 0));
     }
+    // default 不排序
     
     return filtered;
   }, [sharedToMe, sharedSearchQuery, sharedSortBy]);
@@ -260,20 +258,20 @@ export default function SharingSettings() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-10 px-3 text-sm whitespace-nowrap">
                 <ArrowUpDown className="h-4 w-4 mr-1" />
-                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'username' && '按用户名'}
-                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_desc' && '共享联系人 ↓'}
-                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_asc' && '共享联系人 ↑'}
+                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'default' && '共享人数'}
+                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_desc' && '共享人数 ↓'}
+                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_asc' && '共享人数 ↑'}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('username') : setSharedSortBy('username')}>
-                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'username' ? 'font-bold' : ''}>按用户名排序</span>
+              <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('default') : setSharedSortBy('default')}>
+                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'default' ? 'font-bold' : ''}>按共享人数排序</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('count_desc') : setSharedSortBy('count_desc')}>
-                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_desc' ? 'font-bold' : ''}>共享联系人 ↓</span>
+                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_desc' ? 'font-bold' : ''}>共享人数 ↓</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('count_asc') : setSharedSortBy('count_asc')}>
-                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_asc' ? 'font-bold' : ''}>共享联系人 ↑</span>
+                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count_asc' ? 'font-bold' : ''}>共享人数 ↑</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
