@@ -217,7 +217,10 @@ export default function Login() {
 
                   <Button
                     type="submit"
-                    className="w-full h-14 text-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg shadow-md"
+                    className="w-full h-14 text-lg font-semibold text-white border-0 rounded-lg shadow-md"
+                    style={{
+                      backgroundColor: 'var(--color-primary)',
+                    }}
                     disabled={loginMutation.isPending}
                   >
                     {loginMutation.isPending ? "登录中..." : "登录"}
@@ -227,13 +230,21 @@ export default function Login() {
                   <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
                     <TabsTrigger 
                       value="login" 
-                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                      className="text-base font-medium data-[state=active]:bg-white"
+                      style={{
+                        '--tw-text-opacity': '1'
+                      }}
+                      data-active-color="var(--color-primary)"
                     >
                       登录
                     </TabsTrigger>
                     <TabsTrigger 
                       value="register"
-                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                      className="text-base font-medium data-[state=active]:bg-white"
+                      style={{
+                        '--tw-text-opacity': '1'
+                      }}
+                      data-active-color="var(--color-primary)"
                     >
                       注册
                     </TabsTrigger>
@@ -326,13 +337,21 @@ export default function Login() {
                   <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
                     <TabsTrigger 
                       value="login" 
-                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                      className="text-base font-medium data-[state=active]:bg-white"
+                      style={{
+                        '--tw-text-opacity': '1'
+                      }}
+                      data-active-color="var(--color-primary)"
                     >
                       登录
                     </TabsTrigger>
                     <TabsTrigger 
                       value="register"
-                      className="text-base font-medium data-[state=active]:bg-white data-[state=active]:text-blue-600"
+                      className="text-base font-medium data-[state=active]:bg-white"
+                      style={{
+                        '--tw-text-opacity': '1'
+                      }}
+                      data-active-color="var(--color-primary)"
                     >
                       注册
                     </TabsTrigger>
