@@ -459,7 +459,15 @@ export default function ContactDetail() {
   });
 
   // 获取人脉详情
-  const { data: contact, isLoading } = trpc.contacts.get.useQuery({ id: contactId });
+  const { data: contact, isLoading } = trpc.contacts.get.useQuery(
+    { id: contactId },
+    {
+      // 每次组件挂载时重新获取数据，确保 hasTodayInteraction 状态是最新的
+      refetchOnMount: 'always',
+      // 窗口获得焦点时也重新获取，防止用户切换标签页后数据过期
+      refetchOnWindowFocus: true,
+    }
+  );
 
   // 获取扩展信息字段值
   const { data: extendedFieldValues } = trpc.contacts.fieldValues.list.useQuery({ contactId });
