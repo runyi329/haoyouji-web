@@ -173,10 +173,10 @@ export default defineConfig({
   },
   server: {
     host: true,
-    hmr: false,
+    hmr: true,
     watch: {
-      ignored: ['**/*'],
-      usePolling: false,
+      usePolling: true,
+      interval: 1000,
     },
     allowedHosts: [
       ".manuspre.computer",

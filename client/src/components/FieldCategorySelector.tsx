@@ -33,7 +33,7 @@ export function FieldCategorySelector({
   const [selectedSubCategory, setSelectedSubCategory] = useState<FieldCategory | null>(null);
   const [fieldValue, setFieldValue] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState(''); // 银行卡号
-  const [bankName, setBankName] = useState(''); // 开户行
+  const [bankName, setBankName] = useState(''); // 开户银行
   
   // 判断是否是银行卡号字段
   const isBankCard = selectedSubCategory?.name.includes('银行卡') || selectedSubCategory?.name.includes('卡号');
@@ -74,9 +74,9 @@ export function FieldCategorySelector({
       // 如果是银行卡，组合三个字段
       if (isBankCard) {
         if (!bankAccountNumber.trim() || !bankName.trim()) {
-          return; // 银行卡号和开户行必填
+          return; // 银行卡号和开户银行必填
         }
-        // 格式：银行卡号 | 持卡人 | 开户行
+        // 格式：银行卡号 | 持卡人 | 开户银行
         value = `${bankAccountNumber.trim()} | ${contactName} | ${bankName.trim()}`;
       } else {
         if (!fieldValue.trim()) {
@@ -221,14 +221,14 @@ export function FieldCategorySelector({
                   
                   <div className="space-y-2">
                     <Label htmlFor="bankName">
-                      开户行 <span className="text-red-500">*</span>
+                      开户银行 <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="bankName"
                       type="text"
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
-                      placeholder="请输入开户行（如：中国工商银行北京分行）"
+                      placeholder="可输入支行的完整信息或银行名称即可"
                     />
                   </div>
                 </>

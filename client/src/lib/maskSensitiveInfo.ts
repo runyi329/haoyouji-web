@@ -129,7 +129,7 @@ export function maskSensitiveInfo(fieldName: string, value: string): string {
     lowerFieldName.includes('bank') ||
     lowerFieldName.includes('card')
   ) {
-    // 银行卡信息格式：卡号 | 持卡人 | 开户行
+    // 银行卡信息格式：卡号 | 持卡人 | 开户银行
     if (value.includes('|')) {
       const parts = value.split('|').map(p => p.trim());
       if (parts.length === 3) {
