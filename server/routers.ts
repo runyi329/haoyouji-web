@@ -4488,7 +4488,8 @@ export const appRouter = router({
             const receiver = await db.getUserById(conn.receiverId);
             const permissions = await db.getSharingPermissionsByConnectionId(conn.id);
             // 统计共享给该用户的人数（当前用户的所有联系人）
-            const sharedContactCount = await db.getContactCountByUserId(ctx.user.id);
+            const contacts = await dbContacts.getContactsByParent(ctx.user.id);
+            const sharedContactCount = contacts.length;
             return {
               ...conn,
               receiverName: receiver?.name || receiver?.username || '未知用户',
@@ -4499,6 +4500,7 @@ export const appRouter = router({
           })
         );
         
+        console.log('[listMyConnections] Returning data:', JSON.stringify(connectionsWithDetails));
         return connectionsWithDetails;
       }),
 
@@ -4514,7 +4516,8 @@ export const appRouter = router({
           connections.map(async (conn: any) => {
             const sharer = await db.getUserById(conn.sharerId);
             // 统计分享者共享给我的人数（分享者的所有联系人）
-            const sharedContactCount = await db.getContactCountByUserId(conn.sharerId);
+            const contacts = await dbContacts.getContactsByParent(conn.sharerId);
+            const sharedContactCount = contacts.length;
             return {
               ...conn,
               sharerName: sharer?.name || sharer?.username || '未知用户',
