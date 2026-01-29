@@ -36,6 +36,9 @@ export async function saveUserFavoriteFeatures(
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   
+  console.log('[saveUserFavoriteFeatures] userId:', userId);
+  console.log('[saveUserFavoriteFeatures] featureIds:', featureIds);
+  
   // 检查是否已有记录
   const existing = await db
     .select({ id: userPreferences.id })
@@ -43,20 +46,29 @@ export async function saveUserFavoriteFeatures(
     .where(eq(userPreferences.userId, userId))
     .limit(1);
 
+  console.log('[saveUserFavoriteFeatures] existing:', existing);
+
   if (existing.length === 0) {
     // 创建新记录
-    await db.insert(userPreferences).values({
+    console.log('[saveUserFavoriteFeatures] Inserting new record');
+    const insertData = {
       userId: userId,
-      favoriteFeatures: featureIds as any,
-      homeCardOrder: null,
-    });
+      favoriteFeatures: featureIds,
+    };
+    console.log('[saveUserFavoriteFeatures] insertData:', JSON.stringify(insertData));
+    await db.insert(userPreferences).values(insertData as any);
   } else {
     // 更新现有记录
+    console.log('[saveUserFavoriteFeatures] Updating existing record');
+    const updateData = {
+      favoriteFeatures: featureIds,
+    };
+    console.log('[saveUserFavoriteFeatures] updateData:', JSON.stringify(updateData));
     await db
       .update(userPreferences)
-      .set({
-        favoriteFeatures: featureIds as any,
-      })
+      .set(updateData as any)
       .where(eq(userPreferences.userId, userId));
   }
+  
+  console.log('[saveUserFavoriteFeatures] Save completed');
 }

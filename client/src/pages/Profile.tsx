@@ -34,9 +34,8 @@ import {
   Loader2,
   ShieldCheck,
   Smartphone,
-  Edit3,
-  Plus,
-  Minus,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 
@@ -60,24 +59,21 @@ export default function Profile() {
   // 获取当前用户积分
   const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery();
 
-  // 获取用户常用功能配置
+  // 获取用户功能顺序配置
   const { data: favoritesData, refetch: refetchFavorites } = trpc.profileFeatures.getFavorites.useQuery();
 
-  // 保存常用功能配置
+  // 保存功能顺序配置
   const saveFavoritesMutation = trpc.profileFeatures.saveFavorites.useMutation({
     onSuccess: () => {
-      toast.success("常用功能保存成功");
       refetchFavorites();
-      setIsEditMode(false);
     },
     onError: (error) => {
       toast.error(`保存失败: ${error.message}`);
     },
   });
 
-  // 编辑模式状态
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [tempFavorites, setTempFavorites] = useState<string[]>([]);
+  // 功能顺序状态
+  const [featureOrder, setFeatureOrder] = useState<string[]>([]);
 
   // 头像上传状态
   const [isUploading, setIsUploading] = useState(false);
@@ -154,10 +150,10 @@ export default function Profile() {
     },
   });
 
-  // 初始化临时常用功能列表
+  // 初始化功能顺序列表
   useEffect(() => {
     if (favoritesData?.favorites) {
-      setTempFavorites(favoritesData.favorites);
+      setFeatureOrder(favoritesData.favorites);
     }
   }, [favoritesData]);
 
@@ -249,33 +245,26 @@ export default function Profile() {
     });
   };
 
-  // 进入编辑模式
-  const handleEnterEditMode = () => {
-    setIsEditMode(true);
-    setTempFavorites(favoritesData?.favorites || []);
+  // 上移功能
+  const handleMoveUp = (featureId: string) => {
+    const currentIndex = featureOrder.indexOf(featureId);
+    if (currentIndex <= 0) return; // 已经在最前面
+
+    const newOrder = [...featureOrder];
+    [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]];
+    setFeatureOrder(newOrder);
+    saveFavoritesMutation.mutate({ featureIds: newOrder });
   };
 
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setIsEditMode(false);
-    setTempFavorites(favoritesData?.favorites || []);
-  };
+  // 下移功能
+  const handleMoveDown = (featureId: string) => {
+    const currentIndex = featureOrder.indexOf(featureId);
+    if (currentIndex === -1 || currentIndex >= featureOrder.length - 1) return; // 已经在最后面
 
-  // 保存编辑
-  const handleSaveEdit = () => {
-    saveFavoritesMutation.mutate({ featureIds: tempFavorites });
-  };
-
-  // 添加到常用功能
-  const handleAddToFavorites = (featureId: string) => {
-    if (!tempFavorites.includes(featureId)) {
-      setTempFavorites([...tempFavorites, featureId]);
-    }
-  };
-
-  // 从常用功能移除
-  const handleRemoveFromFavorites = (featureId: string) => {
-    setTempFavorites(tempFavorites.filter(id => id !== featureId));
+    const newOrder = [...featureOrder];
+    [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+    setFeatureOrder(newOrder);
+    saveFavoritesMutation.mutate({ featureIds: newOrder });
   };
 
   if (!user) {
@@ -328,7 +317,6 @@ export default function Profile() {
 
   // 账户管理功能（不包括编辑资料，已移至常用功能）
   const accountFeatures: FeatureItem[] = [
-
     { id: "change-password", icon: Shield, label: "修改密码", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", badge: null, onClick: () => toast("功能开发中") },
@@ -341,11 +329,27 @@ export default function Profile() {
     { id: "about", icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },
   ];
 
-  // 获取常用功能列表
-  const favoriteFeatures = allFeatures.filter(f => tempFavorites.includes(f.id));
-  
-  // 获取其他功能列表（不在常用功能中的）
-  const otherFeatures = allFeatures.filter(f => !tempFavorites.includes(f.id));
+  // 根据顺序排序所有功能
+  const sortedFeatures = [...allFeatures].sort((a, b) => {
+    const indexA = featureOrder.indexOf(a.id);
+    const indexB = featureOrder.indexOf(b.id);
+    
+    // 如果都在顺序列表中，按顺序排
+    if (indexA !== -1 && indexB !== -1) {
+      return indexA - indexB;
+    }
+    // 如果只有A在列表中，A排前面
+    if (indexA !== -1) return -1;
+    // 如果只有B在列表中，B排前面
+    if (indexB !== -1) return 1;
+    // 都不在列表中，保持原顺序
+    return 0;
+  });
+
+  // 常用功能：前4个
+  const favoriteFeatures = sortedFeatures.slice(0, 4);
+  // 其他功能：剩余的
+  const otherFeatures = sortedFeatures.slice(4);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
@@ -410,45 +414,18 @@ export default function Profile() {
 
         {/* 常用功能 */}
         <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-              常用功能
-            </h3>
-            {!isEditMode ? (
-              <button
-                onClick={handleEnterEditMode}
-                className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:opacity-70"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                编辑
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCancelEdit}
-                  className="text-xs text-slate-600 dark:text-slate-400 hover:opacity-70"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={saveFavoritesMutation.isPending}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:opacity-70 disabled:opacity-50"
-                >
-                  {saveFavoritesMutation.isPending ? "保存中..." : "保存"}
-                </button>
-              </div>
-            )}
-          </div>
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+            常用功能
+          </h3>
           <div className="grid grid-cols-4 gap-6">
-            {favoriteFeatures.map((item) => {
+            {favoriteFeatures.map((item, index) => {
               const Icon = item.icon;
+              const featureIndex = sortedFeatures.findIndex(f => f.id === item.id);
               return (
-                <div key={item.id} className="relative">
+                <div key={item.id} className="relative group">
                   <button
                     onClick={item.onClick}
-                    disabled={isEditMode}
-                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 disabled:opacity-50 w-full"
+                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
                   >
                     <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
                     <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
@@ -460,59 +437,80 @@ export default function Profile() {
                       </span>
                     )}
                   </button>
-                  {isEditMode && (
-                    <button
-                      onClick={() => handleRemoveFromFavorites(item.id)}
-                      className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg z-10"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                  )}
+                  {/* 排序按钮 */}
+                  <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {featureIndex > 0 && (
+                      <button
+                        onClick={() => handleMoveUp(item.id)}
+                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
+                        title="上移"
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                    )}
+                    {featureIndex < sortedFeatures.length - 1 && (
+                      <button
+                        onClick={() => handleMoveDown(item.id)}
+                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
+                        title="下移"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
-            {/* 空位占位符 */}
-            {isEditMode && favoriteFeatures.length < 4 && (
-              <>
-                {Array.from({ length: 4 - favoriteFeatures.length }).map((_, index) => (
-                  <div
-                    key={`placeholder-${index}`}
-                    className="flex flex-col items-center gap-2 opacity-30"
-                  >
-                    <div className="w-6 h-6 border-2 border-dashed border-slate-400 dark:border-slate-600 rounded" />
-                    <span className="text-xs text-slate-500 dark:text-slate-500">
-                      空位
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
           </div>
         </div>
 
-        {/* 编辑模式：显示其他可添加的功能 */}
-        {isEditMode && otherFeatures.length > 0 && (
+        {/* 其他功能 */}
+        {otherFeatures.length > 0 && (
           <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
             <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              可添加功能
+              其他功能
             </h3>
             <div className="grid grid-cols-4 gap-6">
               {otherFeatures.map((item) => {
                 const Icon = item.icon;
+                const featureIndex = sortedFeatures.findIndex(f => f.id === item.id);
                 return (
-                  <div key={item.id} className="relative">
-                    <div className="flex flex-col items-center gap-2 opacity-70">
+                  <div key={item.id} className="relative group">
+                    <button
+                      onClick={item.onClick}
+                      className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
+                    >
                       <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
                       <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
                         {item.label}
                       </span>
-                    </div>
-                    <button
-                      onClick={() => handleAddToFavorites(item.id)}
-                      className="absolute -top-2 -right-2 bg-green-500 hover:bg-green-600 text-white rounded-full p-1 shadow-lg z-10"
-                    >
-                      <Plus className="w-3 h-3" />
+                      {item.badge !== null && item.badge !== undefined && (
+                        <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+                          {item.badge}
+                        </span>
+                      )}
                     </button>
+                    {/* 排序按钮 */}
+                    <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {featureIndex > 0 && (
+                        <button
+                          onClick={() => handleMoveUp(item.id)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
+                          title="上移"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                      )}
+                      {featureIndex < sortedFeatures.length - 1 && (
+                        <button
+                          onClick={() => handleMoveDown(item.id)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
+                          title="下移"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -521,57 +519,52 @@ export default function Profile() {
         )}
 
         {/* 账户管理 - 固定分区 */}
-        {!isEditMode && (
-          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              账户管理
-            </h3>
-            <div className="grid grid-cols-4 gap-6">
-              {accountFeatures.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={item.onClick}
-                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
-                  >
-                    <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                    <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+            账户管理
+          </h3>
+          <div className="grid grid-cols-4 gap-6">
+            {accountFeatures.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={item.onClick}
+                  className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
+                >
+                  <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                  <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         {/* 帮助与支持 - 固定分区 */}
-        {!isEditMode && (
-          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              帮助与支持
-            </h3>
-            <div className="grid grid-cols-4 gap-6">
-              {helpFeatures.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={item.onClick}
-                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
-                  >
-                    <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                    <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
+            帮助与支持
+          </h3>
+          <div className="grid grid-cols-4 gap-6">
+            {helpFeatures.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={item.onClick}
+                  className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
+                >
+                  <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                  <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
-
+        </div>
 
       </div>
 
@@ -584,6 +577,34 @@ export default function Profile() {
           onCropComplete={handleCropComplete}
         />
       )}
+
+      {/* 退出登录确认对话框 */}
+      <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>退出登录</DialogTitle>
+            <DialogDescription>确定要退出当前账户吗？</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsLogoutDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={() => {
+                setIsLogoutDialogOpen(false);
+                logoutMutation.mutate();
+              }}
+              disabled={logoutMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {logoutMutation.isPending ? "退出中..." : "确认退出"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 编辑个人信息对话框 */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -625,34 +646,6 @@ export default function Profile() {
               disabled={updateProfileMutation.isPending}
             >
               {updateProfileMutation.isPending ? "保存中..." : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 退出登录确认对话框 */}
-      <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>退出登录</DialogTitle>
-            <DialogDescription>确定要退出当前账户吗？</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsLogoutDialogOpen(false)}
-            >
-              取消
-            </Button>
-            <Button
-              onClick={() => {
-                setIsLogoutDialogOpen(false);
-                logoutMutation.mutate();
-              }}
-              disabled={logoutMutation.isPending}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {logoutMutation.isPending ? "退出中..." : "确认退出"}
             </Button>
           </DialogFooter>
         </DialogContent>
