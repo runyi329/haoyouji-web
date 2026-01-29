@@ -381,10 +381,10 @@ export default function Profile() {
                 {/* 退出登录按钮 */}
                 <button
                   onClick={() => setIsLogoutDialogOpen(true)}
-                  className="p-1.5 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                  className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                   title="退出登录"
                 >
-                  <LogOut className="w-5 h-5 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400" />
+                  <LogOut className="w-6 h-6 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400" />
                 </button>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
