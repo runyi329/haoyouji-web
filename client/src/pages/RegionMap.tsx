@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import ChinaMap from '@/components/ChinaMap';
-import ChinaMapParticles from '@/components/ChinaMapParticles';
+import ChinaGlobeParticles from '@/components/ChinaGlobeParticles';
 import { trpc } from '@/lib/trpc';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -104,10 +104,10 @@ export default function RegionMap() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
         {/* 粒子动画展示区 */}
-        <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-purple-50 relative border-b border-gray-200">
-          <ChinaMapParticles particleCount={1500} />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <h2 className="text-2xl font-bold text-gray-700 opacity-50">人脉网络分布</h2>
+        <div className="w-full h-64 bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 relative border-b border-gray-800">
+          <ChinaGlobeParticles />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <h2 className="text-xl font-bold text-white opacity-30">人脉网络·全球视角</h2>
           </div>
         </div>
         

@@ -94,15 +94,16 @@ export default function ChinaMapParticles({
         particlesRef.current.push({
           x,
           y,
-          vx: (Math.random() - 0.5) * 0.2,
-          vy: (Math.random() - 0.5) * 0.2,
+          vx: (Math.random() - 0.5) * 2, // 增加速度从0.2到2
+          vy: (Math.random() - 0.5) * 2,
           color,
-          size: Math.random() * 2 + 1
+          size: Math.random() * 3 + 2 // 增大粒子尺寸
         });
       }
     };
 
     initParticles();
+    console.log('ChinaMapParticles initialized with', particlesRef.current.length, 'particles');
 
     // 动画循环
     const animate = () => {
@@ -155,6 +156,7 @@ export default function ChinaMapParticles({
       animationFrameRef.current = requestAnimationFrame(animate);
     };
 
+    console.log('Starting animation loop');
     animate();
 
     return () => {
