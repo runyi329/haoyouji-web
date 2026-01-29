@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useLocation } from "wouter";
 
 // 导入得意黑Web字体
