@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 export default function Profile() {
-  const { data: user } = trpc.auth.getUser.useQuery();
+  const { data: user } = trpc.auth.me.useQuery();
   const [, setLocation] = useLocation();
 
   if (!user) {
