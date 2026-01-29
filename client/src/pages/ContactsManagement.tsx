@@ -487,7 +487,6 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
           onClick={() => setLocation('/parent/contacts/list')}
           dragListeners={listeners}
           isBreathing={isBreathing}
-          isBreathing={isBreathing}
         />
       </div>
     );
