@@ -1851,8 +1851,12 @@ export default function ContactsList() {
                               : contact.hasTodayInteraction 
                                 ? 'text-gray-400' 
                                 : 'text-blue-500'
-                          }`} 
+                          }`}
                         />
+                        {/* 调试标记 */}
+                        <span className="text-[8px] text-red-600 font-bold ml-0.5">
+                          {contact.hasTodayInteraction ? 'T' : 'F'}
+                        </span>
                       </Button>
                       {/* 更多操作菜单 - 共享人脉不显示编辑和删除按钮 */}
                       {!contact._isShared && (

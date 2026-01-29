@@ -707,6 +707,8 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
   if (!db) return false;
   
   const { startOfDay, endOfDay } = getTodayRange();
+  const startTime = startOfDay.getTime();
+  const endTime = endOfDay.getTime();
   
   const result = await db
     .select()
@@ -714,8 +716,8 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
     .where(
       and(
         eq(contactInteractions.contactId, contactId),
-        gte(contactInteractions.interactionDate, startOfDay),
-        lt(contactInteractions.interactionDate, endOfDay)
+        gte(contactInteractions.interactionDate, startTime),
+        lt(contactInteractions.interactionDate, endTime)
       )
     )
     .limit(1);
