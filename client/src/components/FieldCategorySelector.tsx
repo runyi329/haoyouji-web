@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,11 @@ export function FieldCategorySelector({
   
   // 判断是否是银行卡号字段
   const isBankCard = selectedSubCategory?.name.includes('银行卡') || selectedSubCategory?.name.includes('卡号');
+  
+  // 调试：打印 contactName
+  useEffect(() => {
+    console.log('FieldCategorySelector contactName:', contactName);
+  }, [contactName, open]);
 
   const handleMainCategoryClick = (category: FieldCategory) => {
     setSelectedMainCategory(category);
@@ -196,6 +201,7 @@ export function FieldCategorySelector({
                       id="cardholderName"
                       type="text"
                       value={contactName}
+                      placeholder={contactName || "请先输入姓名"}
                       disabled
                       className="bg-muted cursor-not-allowed"
                     />
