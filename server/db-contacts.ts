@@ -2175,7 +2175,13 @@ export async function getInteractionInfoForContacts(contactIds: number[]): Promi
         info.lastInteraction = interaction.interactionDate;
       }
       // 检查是否今日联络
-      if (interaction.interactionDate >= startOfDay.getTime() && interaction.interactionDate <= endOfDay.getTime()) {
+      const interactionTime = typeof interaction.interactionDate === 'number' 
+        ? interaction.interactionDate 
+        : new Date(interaction.interactionDate).getTime();
+      const startTime = startOfDay.getTime();
+      const endTime = endOfDay.getTime();
+      
+      if (interactionTime >= startTime && interactionTime <= endTime) {
         info.hasTodayInteraction = true;
       }
       infoMap.set(interaction.contactId, info);
