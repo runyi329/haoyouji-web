@@ -101,7 +101,7 @@ function SortableTagItem({
           </div>
           <div
             className="w-4 h-4 rounded-full flex-shrink-0"
-            style={{ backgroundColor: tag.color || "#3b82f6" }}
+            style={{ backgroundColor: mapColorToTheme(tag.color || "#3b82f6") }}
           />
           <span className="font-medium truncate">{tag.name}</span>
           <span className="text-xs text-muted-foreground">({tag.contactCount || 0}人)</span>
@@ -130,6 +130,40 @@ function SortableTagItem({
       </div>
     </Card>
   );
+}
+
+// 将任意颜色映射到最接近的主题色
+function mapColorToTheme(color: string): string {
+  const root = document.documentElement;
+  const primary = getComputedStyle(root).getPropertyValue('--color-primary').trim() || '#9333EA';
+  const secondary = getComputedStyle(root).getPropertyValue('--color-secondary').trim() || '#A78BFA';
+  const text = getComputedStyle(root).getPropertyValue('--color-text').trim() || '#3F3852';
+  const accent2 = getComputedStyle(root).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
+  
+  // 如果颜色已经是主题色，直接返回
+  if ([primary, secondary, text, accent2].includes(color)) {
+    return color;
+  }
+  
+  // 生成主题色变化
+  const themeColors = [
+    primary,
+    `color-mix(in srgb, ${primary} 50%, white)`,
+    `color-mix(in srgb, ${primary} 80%, black)`,
+    secondary,
+    `color-mix(in srgb, ${secondary} 50%, white)`,
+    `color-mix(in srgb, ${secondary} 80%, black)`,
+    text,
+    `color-mix(in srgb, ${text} 50%, white)`,
+    `color-mix(in srgb, ${text} 80%, black)`,
+    accent2,
+    `color-mix(in srgb, ${accent2} 50%, white)`,
+    `color-mix(in srgb, ${accent2} 80%, black)`,
+  ];
+  
+  // 根据颜色的哈希值选择一个主题色（保持一致性）
+  const hash = color.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return themeColors[hash % themeColors.length];
 }
 
 // 基于主题色生成标签颜色选项
@@ -988,8 +1022,8 @@ export default function ContactsList() {
                     variant={isSelected ? "default" : "outline"}
                     className="cursor-pointer transition-all hover:scale-105"
                     style={{
-                      backgroundColor: isSelected ? tag.color : '#ffffff',
-                      borderColor: isSelected ? tag.color : '#d1d5db',
+                      backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
+                      borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
                       color: isSelected ? '#fff' : '#9ca3af',
                     }}
                     onClick={() => {
@@ -1415,7 +1449,7 @@ export default function ContactsList() {
                     >
                       <span 
                         className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
-                        style={{ backgroundColor: tag.color || '#6b7280' }}
+                        style={{ backgroundColor: mapColorToTheme(tag.color || '#6b7280') }}
                       />
                       {tag.name}
                     </DropdownMenuItem>
@@ -1483,7 +1517,7 @@ export default function ContactsList() {
                     >
                       <span 
                         className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
-                        style={{ backgroundColor: tag.color || '#6b7280' }}
+                        style={{ backgroundColor: mapColorToTheme(tag.color || '#6b7280') }}
                       />
                       {tag.name}
                     </DropdownMenuItem>
@@ -1853,8 +1887,8 @@ export default function ContactsList() {
                           variant="outline"
                           className="text-xs cursor-pointer hover:bg-opacity-10 transition-colors"
                           style={{
-                            borderColor: tag.color || '#3b82f6',
-                            color: tag.color || '#3b82f6',
+                            borderColor: mapColorToTheme(tag.color || '#3b82f6'),
+                            color: mapColorToTheme(tag.color || '#3b82f6'),
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1874,7 +1908,7 @@ export default function ContactsList() {
                           key={`personal-${tag.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-white"
                           style={{
-                            backgroundColor: tag.color || '#8b5cf6',
+                            backgroundColor: mapColorToTheme(tag.color || '#8b5cf6'),
                           }}
                         >
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
