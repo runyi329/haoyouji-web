@@ -440,21 +440,12 @@ export default function Profile() {
         background: 'linear-gradient(to bottom right, color-mix(in srgb, var(--color-background) 100%, white), color-mix(in srgb, var(--color-primary) 5%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 5%, var(--color-background)))'
       }}>
       <div className="container max-w-4xl py-8 px-4 relative">
-        {/* 返回按钮 */}
-        <button
-          onClick={() => navigate('/parent/contacts')}
-          className="flex items-center gap-2 mb-4 text-sm transition-colors"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          返回
-        </button>
-        
         {/* 顶部用户信息卡片 */}
         <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
           <div className="space-y-4">
-            {/* 头像 */}
-            <div className="relative group w-20">
+            <div className="flex items-start justify-between">
+              {/* 头像 */}
+              <div className="relative group w-20">
               <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-blue-100 dark:ring-blue-900">
                 <img
                   src={displayAvatar}
@@ -479,6 +470,17 @@ export default function Profile() {
                 onChange={handleFileChange}
                 className="hidden"
               />
+              </div>
+              
+              {/* 返回按钮 */}
+              <button
+                onClick={() => navigate('/parent/contacts')}
+                className="flex items-center gap-2 text-sm transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                返回
+              </button>
             </div>
 
             {/* 用户信息 */}
