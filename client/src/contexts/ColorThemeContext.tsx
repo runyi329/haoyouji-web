@@ -20,8 +20,20 @@ export interface ThemeTemplate {
 // 预设主题列表
 export const themeTemplates: ThemeTemplate[] = [
   {
-    id: 'coral-blue',
-    name: '珊瑚蓝',
+    id: 'basic',
+    name: '基础版',
+    colors: {
+      primary: '#9333EA',     // 紫色
+      secondary: '#A78BFA',   // 浅紫色
+      background: '#FDFCFE',  // 浅紫背景
+      text: '#3F3852',        // 深紫文字
+      accent1: '#FFFFFF',     // 白色
+      accent2: '#8B7FA0',     // 灰紫色
+    },
+  },
+  {
+    id: 'version-1',
+    name: '第1个版本',
     colors: {
       primary: '#FA734F',
       secondary: '#95DAE7',
