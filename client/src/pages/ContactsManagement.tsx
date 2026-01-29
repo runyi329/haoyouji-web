@@ -42,15 +42,14 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing 
   return (
     <Card 
       {...dragListeners}
-      className={`group hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`group hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-blue" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 25%, var(--color-background)), color-mix(in srgb, var(--color-primary) 30%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">人脉总数</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - totalContacts.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">人脉总数</p>
+        <p className="font-bold text-blue-700 dark:text-blue-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - totalContacts.toString().length * 0.175)}rem, 1.05rem)` }}>
           {totalContacts}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -63,15 +62,14 @@ function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-green" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 18%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 22%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">本周新增</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-green-600 dark:text-green-400">本周新增</p>
+        <p className="font-bold text-green-700 dark:text-green-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}
         </p>
       </CardContent>
@@ -84,15 +82,14 @@ function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count:
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-orange" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 15%, var(--color-background)), color-mix(in srgb, var(--color-primary) 18%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-3 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">本月新增</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本月新增</p>
+        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -105,15 +102,14 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-purple" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 10%, var(--color-background)), color-mix(in srgb, var(--color-primary) 15%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">今年新增</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">今年新增</p>
+        <p className="font-bold text-purple-700 dark:text-purple-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -124,13 +120,12 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
 // 功能5卡片 - 平均联络间隔
 function AverageIntervalCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
-    <Card className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center ${
+    <Card className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center ${
         isBreathing ? "animate-breathing-border-teal" : ""
-      }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 12%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 18%, var(--color-background)))", borderColor: "var(--color-secondary)" }}>
+      }`}>
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 md:cursor-grab md:active:cursor-grabbing">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">联络频率</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">联络频率</p>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
         </p>
       </CardContent>
@@ -143,15 +138,14 @@ function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-red" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 20%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 25%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-accent2)]">需要关注</p>
-        <p className="font-bold text-[var(--color-accent2)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">需要关注</p>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -164,15 +158,14 @@ function MonthlyActiveCard({ count, onClick, dragListeners, isBreathing }: { cou
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-indigo" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 12%, var(--color-background)), color-mix(in srgb, var(--color-primary) 18%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">本月活跃</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">本月活跃</p>
+        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -185,15 +178,14 @@ function WeeklyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-teal" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">本周活跃</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">本周活跃</p>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -206,15 +198,14 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 8%, var(--color-background)), color-mix(in srgb, var(--color-primary) 12%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">今年活跃</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400">今年活跃</p>
+        <p className="font-bold text-violet-700 dark:text-violet-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -227,15 +218,14 @@ function BlacklistCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-red" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 15%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 20%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-accent2)]">拉黑名单</p>
-        <p className="font-bold text-[var(--color-accent2)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">拉黑名单</p>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -248,15 +238,14 @@ function TodayRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/30 dark:to-pink-950/30 border-red-300 dark:border-red-700 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 15%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 20%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-accent2)]">今日提醒</p>
-        <p className="font-bold text-[var(--color-accent2)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">今日提醒</p>
+        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -269,15 +258,14 @@ function WeekRemindersCard({ count, onClick, dragListeners, isBreathing }: { cou
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-orange-50 to-yellow-50 dark:from-orange-950/30 dark:to-yellow-950/30 border-orange-300 dark:border-orange-700 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 8%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 12%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">本周提醒</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本周提醒</p>
+        <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -290,15 +278,14 @@ function MonthRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-300 dark:border-yellow-700 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">本月提醒</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">本月提醒</p>
+        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -311,15 +298,14 @@ function TodayActiveCard({ count, onClick, dragListeners, isBreathing }: { count
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/30 border-cyan-200 dark:border-cyan-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 12%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 18%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">今日活跃</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-cyan-600 dark:text-cyan-400">今日活跃</p>
+        <p className="font-bold text-cyan-700 dark:text-cyan-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -332,15 +318,14 @@ function DormantCard({ count, onClick, dragListeners, isBreathing }: { count: nu
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-gray-50 to-slate-50 dark:from-gray-950/30 dark:to-slate-950/30 border-gray-300 dark:border-gray-700 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 10%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 15%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-accent2)]">休眠名单</p>
-        <p className="font-bold text-[var(--color-accent2)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">休眠名单</p>
+        <p className="font-bold text-gray-700 dark:text-gray-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -353,15 +338,14 @@ function CompanyCountCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-teal" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">公司数量</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">公司数量</p>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">家</span>
         </p>
       </CardContent>
@@ -374,15 +358,14 @@ function TotalInteractionCard({ count, onClick, dragListeners, isBreathing }: { 
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200 dark:border-pink-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-pink" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 18%, var(--color-background)), color-mix(in srgb, var(--color-primary) 22%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-2 py-2 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">累计联络</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-pink-600 dark:text-pink-400">累计联络</p>
+        <p className="font-bold text-pink-700 dark:text-pink-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">次</span>
         </p>
       </CardContent>
@@ -395,15 +378,14 @@ function TotalTagCard({ count, onClick, dragListeners, isBreathing }: { count: n
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/30 dark:to-blue-950/30 border-indigo-200 dark:border-indigo-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-indigo" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 18%, var(--color-background)), color-mix(in srgb, var(--color-primary) 22%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-primary)]">累计标签</p>
-        <p className="font-bold text-[var(--color-primary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400">累计标签</p>
+        <p className="font-bold text-indigo-700 dark:text-indigo-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">个</span>
         </p>
       </CardContent>
@@ -416,14 +398,13 @@ function TotalUsageDaysCard({ days, dragListeners, isBreathing }: { days: number
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-amber-200 dark:border-amber-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">累计使用</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">累计使用</p>
+        <p className="font-bold text-amber-700 dark:text-amber-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
         </p>
       </CardContent>
@@ -436,15 +417,14 @@ function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points:
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 border-yellow-200 dark:border-yellow-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-yellow" : ""
       }`}
-      style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 8%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 12%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[var(--color-secondary)]">我的积分</p>
-        <p className="font-bold text-[var(--color-secondary)]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - points.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">我的积分</p>
+        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - points.toString().length * 0.175)}rem, 1.05rem)` }}>
           {points}<span className="text-xs sm:text-sm font-normal">分</span>
         </p>
       </CardContent>
@@ -1093,7 +1073,7 @@ export default function ContactsManagement() {
   };
 
   return (
-    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-20" style={{ touchAction: 'pan-y pinch-zoom' }}>
+    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-24" style={{ touchAction: 'pan-y pinch-zoom' }}>
       {/* 页面标题 - 手机端更紧凑 */}
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
@@ -1144,7 +1124,7 @@ export default function ContactsManagement() {
                     onClick={() => {
                       logout();
                       toast.success("已退出登录");
-                    }`}
+                    }}
                     className="text-red-600"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -1230,7 +1210,7 @@ export default function ContactsManagement() {
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs text-[var(--color-primary)] hover:underline"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     清空
                   </button>
@@ -1367,7 +1347,7 @@ export default function ContactsManagement() {
                 if (e.key === 'Enter') {
                   handleInviteCodeSubmit();
                 }
-              }`}
+              }}
               autoFocus
             />
             <p className="text-sm text-muted-foreground">

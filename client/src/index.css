@@ -61,6 +61,18 @@
   --color-accent1: #FFFFFF;
   --color-accent2: #797979;
   
+  /* 将蓝色映射到主题色 - 这样所有使用蓝色的地方都会自动变成主题色 */
+  --color-blue-50: color-mix(in srgb, var(--color-primary) 5%, var(--color-background));
+  --color-blue-100: color-mix(in srgb, var(--color-primary) 10%, var(--color-background));
+  --color-blue-200: color-mix(in srgb, var(--color-primary) 20%, var(--color-background));
+  --color-blue-300: color-mix(in srgb, var(--color-primary) 40%, var(--color-background));
+  --color-blue-400: color-mix(in srgb, var(--color-primary) 60%, var(--color-background));
+  --color-blue-500: var(--color-primary);
+  --color-blue-600: color-mix(in srgb, var(--color-primary) 80%, #000000);
+  --color-blue-700: color-mix(in srgb, var(--color-primary) 60%, #000000);
+  --color-blue-800: color-mix(in srgb, var(--color-primary) 40%, #000000);
+  --color-blue-900: color-mix(in srgb, var(--color-primary) 20%, #000000);
+  
   /* 优雅完美的紫色调主题 */
   --primary: oklch(0.65 0.18 280);
   --primary-foreground: oklch(0.98 0.01 280);
@@ -614,4 +626,117 @@ input[type="range"].slider::-moz-range-thumb {
 
 .animate-breathing-border-rose {
   animation: breathing-border-rose 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+/* 将所有蓝色类名重写为主题色 */
+@layer utilities {
+  /* 背景色 */
+  .bg-blue-50 {
+    background-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+  }
+  .bg-blue-100 {
+    background-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+  }
+  .bg-blue-200 {
+    background-color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+  }
+  .bg-blue-300 {
+    background-color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+  }
+  .bg-blue-400 {
+    background-color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+  }
+  .bg-blue-500 {
+    background-color: var(--color-primary) !important;
+  }
+  .bg-blue-600 {
+    background-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+  }
+  .bg-blue-700 {
+    background-color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+  }
+  .bg-blue-800 {
+    background-color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+  }
+  .bg-blue-900 {
+    background-color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+  }
+  
+  /* 文字颜色 */
+  .text-blue-50 {
+    color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+  }
+  .text-blue-100 {
+    color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+  }
+  .text-blue-200 {
+    color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+  }
+  .text-blue-300 {
+    color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+  }
+  .text-blue-400 {
+    color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+  }
+  .text-blue-500 {
+    color: var(--color-primary) !important;
+  }
+  .text-blue-600 {
+    color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+  }
+  .text-blue-700 {
+    color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+  }
+  .text-blue-800 {
+    color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+  }
+  .text-blue-900 {
+    color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+  }
+  
+  /* 边框颜色 */
+  .border-blue-50 {
+    border-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+  }
+  .border-blue-100 {
+    border-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+  }
+  .border-blue-200 {
+    border-color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+  }
+  .border-blue-300 {
+    border-color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+  }
+  .border-blue-400 {
+    border-color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+  }
+  .border-blue-500 {
+    border-color: var(--color-primary) !important;
+  }
+  .border-blue-600 {
+    border-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+  }
+  .border-blue-700 {
+    border-color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+  }
+  .border-blue-800 {
+    border-color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+  }
+  .border-blue-900 {
+    border-color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+  }
+  
+  /* Hover状态 */
+  .hover\:bg-blue-50:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+  }
+  .hover\:bg-blue-100:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+  }
+  .hover\:bg-blue-600:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+  }
+  .hover\:text-blue-700:hover {
+    color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+  }
 }
