@@ -161,20 +161,28 @@ export default function AddContact() {
   
   // 处理分类选择器的选择
   const handleCategorySelect = (category: any, value: string) => {
+    console.log('handleCategorySelect called:', { category, value, isEditMode, extendedFieldsLength: extendedFields.length });
+    
+    // 先更新本地状态，立即显示预览
+    setExtendedFields(prev => {
+      const newFields = [...prev, {
+        categoryId: category.id,
+        categoryName: category.name,
+        value: value,
+      }];
+      console.log('Updated extendedFields:', newFields);
+      return newFields;
+    });
+    
     if (isEditMode && contactId) {
-      // 编辑模式：直接保存到数据库
+      // 编辑模式：同时保存到数据库
       addFieldValueMutation.mutate({
         contactId,
         categoryId: category.id,
         value: value,
       });
     } else {
-      // 新增模式：添加到本地状态，保存时一起提交
-      setExtendedFields(prev => [...prev, {
-        categoryId: category.id,
-        categoryName: category.name,
-        value: value,
-      }]);
+      // 新增模式：只更新本地状态，保存时一起提交
       toast.success("扩展信息已添加");
     }
   };
