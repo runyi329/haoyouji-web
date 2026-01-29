@@ -30,6 +30,7 @@ export default function SharingSettings() {
   const utils = trpc.useUtils();
   
   // 状态
+  const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my'); // 当前激活的tab
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
@@ -164,118 +165,119 @@ export default function SharingSettings() {
           </CardContent>
         </Card>
 
-        {/* 操作按钮 */}
-        <div className="flex gap-2">
-          <Button onClick={() => setShowAddDialog(true)} className="flex-1">
-            <Plus className="h-4 w-4 mr-2" />
-            添加连接
+        {/* Tab按钮 */}
+        <div className="flex gap-3">
+          <Button 
+            onClick={() => setActiveTab('my')}
+            variant={activeTab === 'my' ? 'default' : 'outline'}
+            className="flex-1 h-10"
+          >
+            <Users className="h-4 w-4 mr-2" />
+            我的共享连接
+          </Button>
+          <Button 
+            onClick={() => setActiveTab('shared')}
+            variant={activeTab === 'shared' ? 'default' : 'outline'}
+            className="flex-1 h-10"
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            共享给我的
           </Button>
         </div>
 
-        {/* 我的共享连接列表 */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              我的共享连接
-            </CardTitle>
-            <CardDescription className="text-xs">
-              以下用户可以查看您的人脉数据
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loadingConnections ? (
-              <div className="text-center py-8 text-muted-foreground">
-                加载中...
-              </div>
-            ) : !myConnections || myConnections.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">暂无共享连接</p>
-                <p className="text-xs mt-1">点击"添加连接"开始共享您的人脉</p>
-              </div>
-            ) : (
-              myConnections.map((conn: any) => (
-                <div
-                  key={conn.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {conn.receiverName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      @{conn.receiverUsername}
-                    </p>
-                    {conn.note && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                        备注: {conn.note}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 ml-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openPermissionDialog(conn)}
-                      className="h-8 px-2"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteConnection(conn.id)}
-                      className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+        {/* 添加连接按钮（只在“我的共享连接”tab显示） */}
+        {activeTab === 'my' && (
+          <Button onClick={() => setShowAddDialog(true)} className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            添加连接
+          </Button>
+        )}
 
-        {/* 共享给我的连接列表 */}
+        {/* 名单列表 */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Share2 className="h-4 w-4" />
-              共享给我的
-            </CardTitle>
-            <CardDescription className="text-xs">
-              以下用户已将人脉数据共享给您
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loadingSharedToMe ? (
-              <div className="text-center py-8 text-muted-foreground">
-                加载中...
-              </div>
-            ) : !sharedToMe || sharedToMe.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Share2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">暂无共享给您的数据</p>
-                <p className="text-xs mt-1">当其他用户共享给您时，会显示在这里</p>
-              </div>
-            ) : (
-              sharedToMe.map((conn: any) => (
-                <div
-                  key={conn.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {conn.sharerName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      @{conn.sharerUsername}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <CardContent className="pt-6 space-y-3">
+            {activeTab === 'my' ? (
+              // 我的共享连接列表
+              loadingConnections ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  加载中...
                 </div>
-              ))
+              ) : !myConnections || myConnections.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">暂无共享连接</p>
+                  <p className="text-xs mt-1">点击“添加连接”开始共享您的人脉</p>
+                </div>
+              ) : (
+                myConnections.map((conn: any) => (
+                  <div
+                    key={conn.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {conn.receiverName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        @{conn.receiverUsername}
+                      </p>
+                      {conn.note && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                          备注: {conn.note}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 ml-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openPermissionDialog(conn)}
+                        className="h-8 px-2"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteConnection(conn.id)}
+                        className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : (
+              // 共享给我的连接列表
+              loadingSharedToMe ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  加载中...
+                </div>
+              ) : !sharedToMe || sharedToMe.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Share2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">暂无共享给您的数据</p>
+                  <p className="text-xs mt-1">当其他用户共享给您时，会显示在这里</p>
+                </div>
+              ) : (
+                sharedToMe.map((conn: any) => (
+                  <div
+                    key={conn.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {conn.sharerName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        @{conn.sharerUsername}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                ))
+              )
             )}
           </CardContent>
         </Card>
