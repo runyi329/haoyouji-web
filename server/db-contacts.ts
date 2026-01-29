@@ -707,8 +707,9 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
   if (!db) return false;
   
   const { startOfDay, endOfDay } = getTodayRange();
-  const startTime = startOfDay.getTime();
-  const endTime = endOfDay.getTime();
+  // interactionDate在数据库中是timestamp({ mode: 'string' })，需要转换为ISO字符串
+  const startTimeStr = startOfDay.toISOString();
+  const endTimeStr = endOfDay.toISOString();
   
   const result = await db
     .select()
@@ -716,8 +717,8 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
     .where(
       and(
         eq(contactInteractions.contactId, contactId),
-        gte(contactInteractions.interactionDate, startTime),
-        lt(contactInteractions.interactionDate, endTime)
+        gte(contactInteractions.interactionDate, startTimeStr),
+        lt(contactInteractions.interactionDate, endTimeStr)
       )
     )
     .limit(1);
