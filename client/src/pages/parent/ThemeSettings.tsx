@@ -76,93 +76,86 @@ export default function ThemeSettings() {
             {/* 色板展示 */}
             <div className="p-4 bg-gray-50">
               <h4 className="text-sm font-medium mb-3">配色方案</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="flex gap-2 justify-center">
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`主色: ${template.colors.primary}`);
                     handleCopyColor(template.colors.primary);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.primary }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">主色</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.primary}</span>
                 </button>
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`辅色: ${template.colors.secondary}`);
                     handleCopyColor(template.colors.secondary);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.secondary }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">辅色</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.secondary}</span>
                 </button>
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`背景色: ${template.colors.background}`);
                     handleCopyColor(template.colors.background);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.background }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">背景色</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.background}</span>
                 </button>
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`文字色: ${template.colors.text}`);
                     handleCopyColor(template.colors.text);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.text }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">文字色</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.text}</span>
                 </button>
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`强调色1: ${template.colors.accent1}`);
                     handleCopyColor(template.colors.accent1);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.accent1 }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">强调色1</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.accent1}</span>
                 </button>
                 <button
-                  className="group relative flex flex-col items-center"
+                  className="group relative"
                   onClick={(e) => {
                     e.stopPropagation();
+                    toast.success(`强调色2: ${template.colors.accent2}`);
                     handleCopyColor(template.colors.accent2);
                   }}
                 >
                   <div
-                    className="w-full aspect-square rounded-lg border-2 border-white shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                    className="w-10 h-10 rounded-lg border-2 border-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                     style={{ backgroundColor: template.colors.accent2 }}
                   />
-                  <span className="text-xs text-gray-600 mt-1">强调色2</span>
-                  <span className="text-xs text-gray-400 font-mono">{template.colors.accent2}</span>
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-3">点击色块复制颜色代码</p>
             </div>
 
             {/* 预览效果 */}
