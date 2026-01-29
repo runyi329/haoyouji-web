@@ -216,7 +216,7 @@ export default function SharingSettings() {
                 myConnections.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-100/50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -272,7 +272,7 @@ export default function SharingSettings() {
                 sharedToMe.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-100/50 dark:bg-gray-800/30"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -334,7 +334,7 @@ export default function SharingSettings() {
                     {searchResults.map((user: any) => (
                       <div
                         key={user.id}
-                        className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                        className="flex items-center justify-between p-2 rounded-lg bg-gray-100/50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
                         onClick={() => handleAddConnection(user.username)}
                       >
                         <div>
