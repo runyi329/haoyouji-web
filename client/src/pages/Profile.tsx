@@ -434,8 +434,8 @@ export default function Profile() {
                       </span>
                     )}
                   </button>
-                  {/* 排序按钮 */}
-                  <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* 排序按钮 - 移动端始终可见，桌面端悬停显示 */}
+                  <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     {featureIndex > 0 && (
                       <button
                         onClick={() => handleMoveUp(item.id)}
