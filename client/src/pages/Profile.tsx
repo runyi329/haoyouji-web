@@ -346,10 +346,7 @@ export default function Profile() {
     return 0;
   });
 
-  // 常用功能：前4个
-  const favoriteFeatures = sortedFeatures.slice(0, 4);
-  // 其他功能：剩余的
-  const otherFeatures = sortedFeatures.slice(4);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
@@ -412,13 +409,13 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* 常用功能 */}
+        {/* 功能列表 */}
         <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
           <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-            常用功能
+            功能
           </h3>
           <div className="grid grid-cols-4 gap-6">
-            {favoriteFeatures.map((item, index) => {
+            {sortedFeatures.map((item) => {
               const Icon = item.icon;
               const featureIndex = sortedFeatures.findIndex(f => f.id === item.id);
               return (
@@ -463,60 +460,6 @@ export default function Profile() {
             })}
           </div>
         </div>
-
-        {/* 其他功能 */}
-        {otherFeatures.length > 0 && (
-          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              其他功能
-            </h3>
-            <div className="grid grid-cols-4 gap-6">
-              {otherFeatures.map((item) => {
-                const Icon = item.icon;
-                const featureIndex = sortedFeatures.findIndex(f => f.id === item.id);
-                return (
-                  <div key={item.id} className="relative group">
-                    <button
-                      onClick={item.onClick}
-                      className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
-                    >
-                      <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                      <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                        {item.label}
-                      </span>
-                      {item.badge !== null && item.badge !== undefined && (
-                        <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
-                          {item.badge}
-                        </span>
-                      )}
-                    </button>
-                    {/* 排序按钮 */}
-                    <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {featureIndex > 0 && (
-                        <button
-                          onClick={() => handleMoveUp(item.id)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
-                          title="上移"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                      )}
-                      {featureIndex < sortedFeatures.length - 1 && (
-                        <button
-                          onClick={() => handleMoveDown(item.id)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
-                          title="下移"
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* 账户管理 - 固定分区 */}
         <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
