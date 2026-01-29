@@ -150,12 +150,12 @@ export default function SharingSettings() {
       <div className="container mx-auto px-4 py-6 space-y-6">
         {/* 标语卡片 */}
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
-          <CardContent className="py-4">
+          <CardContent className="py-2">
             <div className="text-center">
-              <p className="text-base font-medium text-purple-800 dark:text-purple-200">
+              <p className="text-lg font-medium text-purple-800 dark:text-purple-200" style={{ fontFamily: 'KaiTi, STKaiti, "Kaiti SC", serif' }}>
                 每个人都是一座金矿，
               </p>
-              <p className="text-base font-medium text-purple-800 dark:text-purple-200">
+              <p className="text-lg font-medium text-purple-800 dark:text-purple-200" style={{ fontFamily: 'KaiTi, STKaiti, "Kaiti SC", serif' }}>
                 关键在于如何挖掘和连接。
               </p>
             </div>
