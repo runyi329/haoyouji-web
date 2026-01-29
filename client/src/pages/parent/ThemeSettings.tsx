@@ -155,80 +155,29 @@ export default function ThemeSettings() {
                     style={{ backgroundColor: template.colors.accent2 }}
                   />
                 </button>
-              </div>
-            </div>
-
-            {/* 预览效果 */}
-            <div className="p-4 border-t">
-              <h4 className="text-sm font-medium mb-3">预览效果</h4>
-              <div
-                className="p-4 rounded-lg"
-                style={{ backgroundColor: template.colors.background }}
-              >
-                {/* 卡片示例 */}
-                <div
-                  className="p-4 rounded-lg mb-3 shadow-sm"
-                  style={{ backgroundColor: template.colors.accent1 }}
+                <button
+                  className="group relative"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApplyTheme(template.id);
+                  }}
+                  disabled={isThemeApplied(template.id)}
                 >
-                  <h5
-                    className="font-medium mb-2"
-                    style={{ color: template.colors.text }}
+                  <div
+                    className={`w-10 h-10 rounded-lg border-2 shadow-sm transition-all cursor-pointer flex items-center justify-center ${
+                      isThemeApplied(template.id)
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-white hover:scale-110 bg-blue-500'
+                    }`}
                   >
-                    示例卡片标题
-                  </h5>
-                  <p
-                    className="text-sm"
-                    style={{ color: template.colors.accent2 }}
-                  >
-                    这是卡片内容的示例文字，展示文字颜色效果
-                  </p>
-                </div>
-
-                {/* 按钮示例 */}
-                <div className="flex gap-2">
-                  <button
-                    className="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm"
-                    style={{ backgroundColor: template.colors.primary }}
-                  >
-                    主要按钮
-                  </button>
-                  <button
-                    className="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm"
-                    style={{
-                      backgroundColor: template.colors.secondary,
-                    }}
-                  >
-                    次要按钮
-                  </button>
-                </div>
-
-                {/* 标签示例 */}
-                <div className="flex gap-2 mt-3">
-                  <span
-                    className="px-3 py-1 rounded-full text-xs text-white"
-                    style={{ backgroundColor: template.colors.primary }}
-                  >
-                    标签1
-                  </span>
-                  <span
-                    className="px-3 py-1 rounded-full text-xs text-white"
-                    style={{ backgroundColor: template.colors.secondary }}
-                  >
-                    标签2
-                  </span>
-                </div>
+                    <span className={`text-[8px] font-bold leading-tight text-center ${
+                      isThemeApplied(template.id) ? 'text-green-600' : 'text-white'
+                    }`}>
+                      {isThemeApplied(template.id) ? '已应用' : '点击应用'}
+                    </span>
+                  </div>
+                </button>
               </div>
-            </div>
-
-            {/* 操作按钮 */}
-            <div className="p-4 border-t bg-white">
-              <Button
-                className="w-full"
-                onClick={() => handleApplyTheme(template.id)}
-                disabled={isThemeApplied(template.id)}
-              >
-                {isThemeApplied(template.id) ? "已应用此皮肤" : "应用此皮肤"}
-              </Button>
             </div>
           </Card>
         ))}
