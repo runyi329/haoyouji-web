@@ -708,30 +708,17 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
   
   const { startOfDay, endOfDay } = getTodayRange();
   
-  console.log('[hasTodayInteraction] 检查联络记录:', {
-    contactId,
-    startOfDay: startOfDay.toISOString(),
-    endOfDay: endOfDay.toISOString(),
-    now: new Date().toISOString()
-  });
-  
   const result = await db
     .select()
     .from(contactInteractions)
     .where(
       and(
         eq(contactInteractions.contactId, contactId),
-        gte(contactInteractions.interactionDate, new Date(startOfDay)),
-        lt(contactInteractions.interactionDate, new Date(endOfDay))
+        gte(contactInteractions.interactionDate, startOfDay),
+        lt(contactInteractions.interactionDate, endOfDay)
       )
     )
     .limit(1);
-  
-  console.log('[hasTodayInteraction] 查询结果:', {
-    found: result.length > 0,
-    count: result.length,
-    records: result
-  });
   
   return result.length > 0;
 }
@@ -2149,43 +2136,24 @@ export async function getInteractionInfoForContacts(contactIds: number[]): Promi
   if (!db) throw new Error("Database not available");
   if (!db || contactIds.length === 0) return new Map();
   
-  // 获取今天的时间范围
-  const { startOfDay, endOfDay } = getTodayRange();
-  
-  // 批量查询所有联系人的联络信息
-  const interactions = await db.select({
-    contactId: contactInteractions.contactId,
-    interactionDate: contactInteractions.interactionDate,
-  })
-    .from(contactInteractions)
-    .where(sql`${contactInteractions.contactId} IN (${sql.join(contactIds.map(id => sql`${id}`), sql`, `)})`)
-    .orderBy(desc(contactInteractions.interactionDate));
-  
-  // 处理结果
+  // 初始化结果
   const infoMap = new Map<number, { lastInteraction: number | null, hasTodayInteraction: boolean }>();
   for (const contactId of contactIds) {
     infoMap.set(contactId, { lastInteraction: null, hasTodayInteraction: false });
   }
   
-  for (const interaction of interactions) {
-    const info = infoMap.get(interaction.contactId);
-    if (info) {
-      // 更新最后联络时间（只取第一个，因为已按时间降序排列）
-      if (info.lastInteraction === null) {
-        info.lastInteraction = interaction.interactionDate;
-      }
-      // 检查是否今日联络
-      const interactionTime = typeof interaction.interactionDate === 'number' 
-        ? interaction.interactionDate 
-        : new Date(interaction.interactionDate).getTime();
-      const startTime = startOfDay.getTime();
-      const endTime = endOfDay.getTime();
-      
-      if (interactionTime >= startTime && interactionTime <= endTime) {
-        info.hasTodayInteraction = true;
-      }
-      infoMap.set(interaction.contactId, info);
-    }
+  // 对每个联系人单独检查
+  for (const contactId of contactIds) {
+    // 获取最后一次联络时间
+    const lastInteraction = await getLastInteractionDate(contactId);
+    
+    // 检查今天是否有联络
+    const hasToday = await hasTodayInteraction(contactId);
+    
+    infoMap.set(contactId, {
+      lastInteraction: lastInteraction || null,
+      hasTodayInteraction: hasToday
+    });
   }
   
   return infoMap;

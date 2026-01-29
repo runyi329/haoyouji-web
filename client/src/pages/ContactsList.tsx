@@ -1717,8 +1717,6 @@ export default function ContactsList() {
                           >
                             <Smile className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).totalInteractions}</span>
-                            {/* 调试标记 */}
-                            {contact.hasTodayInteraction && <span className="text-[10px] text-red-500 font-bold">[今]</span>}
                           </button>
                         )}
                         {/* Layers2图标×直接推荐人数 */}
@@ -1842,11 +1840,6 @@ export default function ContactsList() {
                             e.stopPropagation();
                             return; // 共享人脉不可点击
                           }
-                          console.log('[QuickContact] 点击联络按钮:', {
-                            contactId: contact.id,
-                            name: contact.name,
-                            hasTodayInteraction: contact.hasTodayInteraction
-                          });
                           handleQuickContactClick(e, contact);
                         }}
                         disabled={contact._isShared}
