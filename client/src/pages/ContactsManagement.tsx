@@ -1044,10 +1044,9 @@ export default function ContactsManagement() {
     setLocation("/parent/contacts/add");
   };
   
-  // 处理数据分析按钮点击
+  // 处理数据分析按钮点击 - 直接跳转，不需要密码验证
   const handleDataClick = () => {
-    setInviteTarget("data");
-    setShowInviteDialog(true);
+    setLocation('/parent/contacts/data-comparison');
   };
   
   // 处理共享按钮点击 - 直接跳转，不需要密码验证

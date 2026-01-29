@@ -101,9 +101,13 @@ async function getGrowthTrend(userId: number) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     
-    // 使用原始SQL查询，避免timestamp序列化问题
+    // 格式化为MySQL timestamp格式: YYYY-MM-DD HH:MM:SS
+    const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
+    const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
+    
+    // 使用原始SQL查询，使用正确的timestamp格式
     const result = await db.execute(
-      sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${userId} AND created_at >= ${date.getTime()} AND created_at <= ${nextDate.getTime()}`
+      sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${userId} AND created_at >= ${dateStr} AND created_at < ${nextDateStr}`
     );
     
     const countValue = result?.[0]?.count || 0;
