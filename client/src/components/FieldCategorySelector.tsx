@@ -189,20 +189,6 @@ export function FieldCategorySelector({
                 // 银行卡特殊处理：三个字段
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="bankAccountNumber">
-                      银行卡号 <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="bankAccountNumber"
-                      type="text"
-                      value={bankAccountNumber}
-                      onChange={(e) => setBankAccountNumber(e.target.value)}
-                      placeholder="请输入银行卡号"
-                      autoFocus
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
                     <Label htmlFor="cardholderName">
                       持卡人姓名
                     </Label>
@@ -217,6 +203,20 @@ export function FieldCategorySelector({
                     <p className="text-xs text-muted-foreground">
                       持卡人默认为当前人脉本人，不可修改
                     </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="bankAccountNumber">
+                      银行卡号 <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="bankAccountNumber"
+                      type="text"
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value)}
+                      placeholder="请输入银行卡号"
+                      autoFocus
+                    />
                   </div>
                   
                   <div className="space-y-2">
