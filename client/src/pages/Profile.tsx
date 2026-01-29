@@ -37,6 +37,23 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 
 // 定义所有可用的功能项
@@ -47,6 +64,62 @@ type FeatureItem = {
   badge?: number | null;
   onClick: () => void;
 };
+
+// 可拖拽的功能项组件
+function SortableFeatureItem({ item }: { item: FeatureItem }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const Icon = item.icon;
+
+  // 处理点击事件，确保短按时触发点击，长按时不触发
+  const handleClick = (e: React.MouseEvent) => {
+    // 如果正在拖拽，不触发点击
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    item.onClick();
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="relative group select-none"
+    >
+      <button
+        onClick={handleClick}
+        className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
+      >
+        <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+        <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+          {item.label}
+        </span>
+        {item.badge !== null && item.badge !== undefined && (
+          <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+            {item.badge}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
 
 export default function Profile() {
   const [, navigate] = useLocation();
@@ -245,26 +318,36 @@ export default function Profile() {
     });
   };
 
-  // 上移功能
-  const handleMoveUp = (featureId: string) => {
-    const currentIndex = featureOrder.indexOf(featureId);
-    if (currentIndex <= 0) return; // 已经在最前面
+  // 配置拖拽传感器（与脉动首页相同的配置）
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 250,  // 长按250ms后才激活拖拽
+        tolerance: 8,  // 允许8px的移动误差
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-    const newOrder = [...featureOrder];
-    [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]];
-    setFeatureOrder(newOrder);
-    saveFavoritesMutation.mutate({ featureIds: newOrder });
-  };
+  // 拖拽结束处理
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
 
-  // 下移功能
-  const handleMoveDown = (featureId: string) => {
-    const currentIndex = featureOrder.indexOf(featureId);
-    if (currentIndex === -1 || currentIndex >= featureOrder.length - 1) return; // 已经在最后面
+    if (over && active.id !== over.id) {
+      const oldIndex = featureOrder.indexOf(active.id as string);
+      const newIndex = featureOrder.indexOf(over.id as string);
 
-    const newOrder = [...featureOrder];
-    [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
-    setFeatureOrder(newOrder);
-    saveFavoritesMutation.mutate({ featureIds: newOrder });
+      const newOrder = arrayMove(featureOrder, oldIndex, newIndex);
+      setFeatureOrder(newOrder);
+      saveFavoritesMutation.mutate({ featureIds: newOrder });
+
+      // 震动反馈
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }
   };
 
   if (!user) {
@@ -414,51 +497,22 @@ export default function Profile() {
           <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
             功能
           </h3>
-          <div className="grid grid-cols-4 gap-6">
-            {sortedFeatures.map((item) => {
-              const Icon = item.icon;
-              const featureIndex = sortedFeatures.findIndex(f => f.id === item.id);
-              return (
-                <div key={item.id} className="relative group">
-                  <button
-                    onClick={item.onClick}
-                    className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
-                  >
-                    <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                    <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                      {item.label}
-                    </span>
-                    {item.badge !== null && item.badge !== undefined && (
-                      <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                  {/* 排序按钮 - 移动端始终可见，桌面端悬停显示 */}
-                  <div className="absolute -top-2 -right-2 flex flex-col gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    {featureIndex > 0 && (
-                      <button
-                        onClick={() => handleMoveUp(item.id)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
-                        title="上移"
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                    )}
-                    {featureIndex < sortedFeatures.length - 1 && (
-                      <button
-                        onClick={() => handleMoveDown(item.id)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-0.5 shadow-md"
-                        title="下移"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={sortedFeatures.map(f => f.id)}
+              strategy={rectSortingStrategy}
+            >
+              <div className="grid grid-cols-4 gap-6">
+                {sortedFeatures.map((item) => (
+                  <SortableFeatureItem key={item.id} item={item} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
 
         {/* 账户管理 - 固定分区 */}
