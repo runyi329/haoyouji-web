@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, Settings, Users, Share2, Search, Check, X, ChevronRight } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ArrowLeft, Plus, Trash2, Settings, Users, Share2, Search, Check, X, ChevronRight, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -39,6 +40,10 @@ export default function SharingSettings() {
   
   // 状态
   const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my'); // 当前激活的tab
+  const [mySearchQuery, setMySearchQuery] = useState(""); // 我的共享连接搜索
+  const [sharedSearchQuery, setSharedSearchQuery] = useState(""); // 共享给我的连接搜索
+  const [mySortBy, setMySortBy] = useState<'username' | 'count'>('username'); // 我的共享连接排序
+  const [sharedSortBy, setSharedSortBy] = useState<'username' | 'count'>('username'); // 共享给我的连接排序
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
@@ -95,6 +100,44 @@ export default function SharingSettings() {
       toast.error(error.message);
     },
   });
+  
+  // 过滤和排序我的共享连接
+  const filteredAndSortedMyConnections = React.useMemo(() => {
+    if (!myConnections) return [];
+    
+    // 过滤
+    let filtered = myConnections.filter((conn: any) => 
+      conn.receiverUsername.toLowerCase().includes(mySearchQuery.toLowerCase())
+    );
+    
+    // 排序
+    if (mySortBy === 'username') {
+      filtered.sort((a: any, b: any) => a.receiverUsername.localeCompare(b.receiverUsername));
+    } else if (mySortBy === 'count') {
+      filtered.sort((a: any, b: any) => (b.sharedContactCount || 0) - (a.sharedContactCount || 0));
+    }
+    
+    return filtered;
+  }, [myConnections, mySearchQuery, mySortBy]);
+  
+  // 过滤和排序共享给我的连接
+  const filteredAndSortedSharedToMe = React.useMemo(() => {
+    if (!sharedToMe) return [];
+    
+    // 过滤
+    let filtered = sharedToMe.filter((conn: any) => 
+      conn.sharerUsername.toLowerCase().includes(sharedSearchQuery.toLowerCase())
+    );
+    
+    // 排序
+    if (sharedSortBy === 'username') {
+      filtered.sort((a: any, b: any) => a.sharerUsername.localeCompare(b.sharerUsername));
+    } else if (sharedSortBy === 'count') {
+      filtered.sort((a: any, b: any) => (b.sharedContactCount || 0) - (a.sharedContactCount || 0));
+    }
+    
+    return filtered;
+  }, [sharedToMe, sharedSearchQuery, sharedSortBy]);
   
   // 打开权限配置对话框
   const openPermissionDialog = (connection: any) => {
@@ -198,6 +241,35 @@ export default function SharingSettings() {
           </Button>
         )}
 
+        {/* 搜索和排序栏 */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+            <Input
+              placeholder="搜索用户名..."
+              value={activeTab === 'my' ? mySearchQuery : sharedSearchQuery}
+              onChange={(e) => activeTab === 'my' ? setMySearchQuery(e.target.value) : setSharedSearchQuery(e.target.value)}
+              className="pl-10 h-10 text-sm"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 px-3 text-sm whitespace-nowrap">
+                <ArrowUpDown className="h-4 w-4 mr-1" />
+                {(activeTab === 'my' ? mySortBy : sharedSortBy) === 'username' ? '按用户名' : '按数量'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('username') : setSharedSortBy('username')}>
+                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'username' ? 'font-bold' : ''}>按用户名排序</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => activeTab === 'my' ? setMySortBy('count') : setSharedSortBy('count')}>
+                <span className={(activeTab === 'my' ? mySortBy : sharedSortBy) === 'count' ? 'font-bold' : ''}>按联系人数排序</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         {/* 名单列表 */}
         <div className="space-y-2">
             {activeTab === 'my' ? (
@@ -212,8 +284,14 @@ export default function SharingSettings() {
                   <p className="text-sm">暂无共享连接</p>
                   <p className="text-xs mt-1">点击“添加连接”开始共享您的人脉</p>
                 </div>
+              ) : filteredAndSortedMyConnections.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">未找到匹配的连接</p>
+                  <p className="text-xs mt-1">试试其他搜索关键词</p>
+                </div>
               ) : (
-                myConnections.map((conn: any) => (
+                filteredAndSortedMyConnections.map((conn: any) => (
                   <div
                     key={conn.id}
                     className="flex items-center justify-between p-2 rounded-lg bg-gray-100/50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -268,8 +346,14 @@ export default function SharingSettings() {
                   <p className="text-sm">暂无共享给您的数据</p>
                   <p className="text-xs mt-1">当其他用户共享给您时，会显示在这里</p>
                 </div>
+              ) : filteredAndSortedSharedToMe.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">未找到匹配的连接</p>
+                  <p className="text-xs mt-1">试试其他搜索关键词</p>
+                </div>
               ) : (
-                sharedToMe.map((conn: any) => (
+                filteredAndSortedSharedToMe.map((conn: any) => (
                   <div
                     key={conn.id}
                     className="flex items-center justify-between p-2 rounded-lg bg-gray-100/50 dark:bg-gray-800/30"
