@@ -44,10 +44,10 @@ export default function ThemeSettings() {
         {themeTemplates.map((template) => (
           <Card
             key={template.id}
-            className="p-4"
+            className="p-2"
           >
             {/* 色板展示 */}
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-1 items-center justify-center">
               {/* 配色名称按钮 */}
               <div
                 className={`w-16 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center ${
