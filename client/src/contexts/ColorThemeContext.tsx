@@ -91,12 +91,44 @@ export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // 应用主题到 CSS 变量
   const applyTheme = (colors: ThemeColors) => {
     const root = document.documentElement;
+    
+    // 设置自定义主题变量
     root.style.setProperty('--color-primary', colors.primary);
     root.style.setProperty('--color-secondary', colors.secondary);
     root.style.setProperty('--color-background', colors.background);
     root.style.setProperty('--color-text', colors.text);
     root.style.setProperty('--color-accent1', colors.accent1);
     root.style.setProperty('--color-accent2', colors.accent2);
+    
+    // 将颜色映射到 shadcn/ui 变量，让整个应用使用主题颜色
+    // 主色：用于按钮、链接等主要交互元素
+    root.style.setProperty('--primary', colors.primary);
+    root.style.setProperty('--primary-foreground', colors.accent1);
+    
+    // 辅色：用于次要按钮、标签等
+    root.style.setProperty('--secondary', colors.secondary);
+    root.style.setProperty('--secondary-foreground', colors.text);
+    
+    // 背景色
+    root.style.setProperty('--background', colors.background);
+    root.style.setProperty('--foreground', colors.text);
+    
+    // 卡片颜色
+    root.style.setProperty('--card', colors.accent1);
+    root.style.setProperty('--card-foreground', colors.text);
+    
+    // 弹出框颜色
+    root.style.setProperty('--popover', colors.accent1);
+    root.style.setProperty('--popover-foreground', colors.text);
+    
+    // 强调色
+    root.style.setProperty('--accent', colors.secondary);
+    root.style.setProperty('--accent-foreground', colors.text);
+    
+    // 边框和输入框
+    root.style.setProperty('--border', colors.accent2);
+    root.style.setProperty('--input', colors.accent2);
+    root.style.setProperty('--ring', colors.primary);
   };
 
   const setTheme = (themeId: string) => {
