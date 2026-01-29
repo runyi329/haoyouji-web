@@ -21,7 +21,7 @@ export interface ThemeTemplate {
 export const themeTemplates: ThemeTemplate[] = [
   {
     id: 'basic',
-    name: '基础版',
+    name: '基础配色',
     colors: {
       primary: '#9333EA',     // 紫色
       secondary: '#A78BFA',   // 浅紫色
