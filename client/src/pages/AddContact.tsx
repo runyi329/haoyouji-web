@@ -401,42 +401,47 @@ export default function AddContact() {
 
         {/* 扩展信息 */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div className="space-y-1">
-              <CardTitle>扩展信息</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                可添加：公司、职位、微信、电话、生日等
-              </p>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             {extendedFields.length === 0 ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowFieldSelector(true)}
-                className="gap-1 whitespace-nowrap"
-              >
-                <Plus className="h-4 w-4" />
-                添加
-              </Button>
-            ) : (
-              <div className="flex gap-2">
+              <>
+                <div className="space-y-1 flex-1">
+                  <CardTitle>扩展信息</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    可添加：公司、职位、微信、电话、生日等
+                  </p>
+                </div>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setShowFieldSelector(true)}
-                  className="gap-1 whitespace-nowrap"
+                  className="gap-1 whitespace-nowrap flex-shrink-0"
                 >
                   <Plus className="h-4 w-4" />
-                  继续添加
+                  添加
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSubmit}
-                  className="gap-1 whitespace-nowrap"
-                >
-                  一键保存
-                </Button>
-              </div>
+              </>
+            ) : (
+              <>
+                <CardTitle className="flex-shrink-0">扩展信息</CardTitle>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowFieldSelector(true)}
+                    className="gap-1 whitespace-nowrap"
+                  >
+                    <Plus className="h-4 w-4" />
+                    继续添加
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSubmit}
+                    className="gap-1 whitespace-nowrap"
+                  >
+                    一键保存
+                  </Button>
+                </div>
+              </>
             )}
           </CardHeader>
           <CardContent>
