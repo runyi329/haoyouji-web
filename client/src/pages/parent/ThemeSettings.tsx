@@ -39,44 +39,31 @@ export default function ThemeSettings() {
         </div>
       </div>
 
-      <div className="p-4 space-y-6">
-        {/* 说明 */}
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <p className="text-sm text-blue-900">
-            选择您喜欢的配色方案，点击"应用"按钮即可实时切换皮肤
-          </p>
-        </Card>
-
+      <div className="p-4 space-y-4">
         {/* 皮肤模板列表 */}
         {themeTemplates.map((template) => (
           <Card
             key={template.id}
-            className={`overflow-hidden ${
-              isThemeApplied(template.id) ? "ring-2 ring-indigo-500" : ""
-            }`}
+            className="p-4"
           >
-            {/* 模板信息 */}
-            <div className="p-4 border-b">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg">{template.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    6色配色方案，适用于全局界面
-                  </p>
-                </div>
-                {isThemeApplied(template.id) && (
-                  <span className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                    <Check className="w-3 h-3" />
-                    已应用
-                  </span>
-                )}
-              </div>
-            </div>
-
             {/* 色板展示 */}
-            <div className="p-4 bg-gray-50">
-              <h4 className="text-sm font-medium mb-3">配色方案</h4>
-              <div className="flex gap-2 justify-center">
+            <div className="flex gap-2 items-center">
+              {/* 配色名称按钮 */}
+              <div
+                className={`w-20 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center ${
+                  isThemeApplied(template.id)
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-300 bg-white'
+                }`}
+              >
+                <span className={`text-[10px] font-bold leading-tight text-center ${
+                  isThemeApplied(template.id) ? 'text-green-600' : 'text-gray-700'
+                }`}>
+                  {template.name}
+                </span>
+              </div>
+              
+              {/* 6个颜色方块 */}
                 <button
                   className="group relative"
                   onClick={(e) => {
@@ -181,11 +168,6 @@ export default function ThemeSettings() {
             </div>
           </Card>
         ))}
-
-        {/* 更多皮肤提示 */}
-        <Card className="p-4 text-center">
-          <p className="text-sm text-gray-500">更多精美皮肤即将上线...</p>
-        </Card>
       </div>
     </div>
   );
