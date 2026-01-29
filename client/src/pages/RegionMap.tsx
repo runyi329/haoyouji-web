@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import ChinaMap from '@/components/ChinaMap';
-import ChinaGlobeParticles from '@/components/ChinaGlobeParticles';
 import { trpc } from '@/lib/trpc';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -103,20 +102,11 @@ export default function RegionMap() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
-        {/* 粒子动画展示区 */}
-        <div className="w-full h-64 bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 relative border-b border-gray-800">
-          <ChinaGlobeParticles />
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <h2 className="text-xl font-bold text-white opacity-30">人脉网络·全球视角</h2>
-          </div>
-        </div>
-        
         {/* Map Area */}
         <div className={`
           relative bg-white w-full transition-all duration-300 ease-in-out
           ${isMobile ? 'h-[38vh] shrink-0 border-b border-gray-100' : 'flex-1 h-full'}
         `}>
-          {/* 地图层 */}
           <ChinaMap
             data={provinceStats}
             onProvinceClick={handleProvinceClick}
