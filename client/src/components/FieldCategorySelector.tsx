@@ -34,6 +34,7 @@ export function FieldCategorySelector({
   const [fieldValue, setFieldValue] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState(''); // 银行卡号
   const [bankName, setBankName] = useState(''); // 开户银行
+  const [tempBankCards, setTempBankCards] = useState<Array<{cardNumber: string, holderName: string, bankName: string}>>([]); // 临时银行卡列表
   
   // 判断是否是银行卡号字段
   const isBankCard = selectedSubCategory?.name.includes('银行卡') || selectedSubCategory?.name.includes('卡号');
@@ -54,6 +55,7 @@ export function FieldCategorySelector({
     setFieldValue('');
     setBankAccountNumber('');
     setBankName('');
+    setTempBankCards([]); // 重置临时卡片列表
   };
 
   const handleBack = () => {
@@ -67,17 +69,58 @@ export function FieldCategorySelector({
     }
   };
 
+  // 添加单张卡片到临时列表
+  const handleAddBankCard = () => {
+    if (!bankAccountNumber.trim() || !bankName.trim()) {
+      return;
+    }
+    
+    const newCard = {
+      cardNumber: bankAccountNumber.trim(),
+      holderName: contactName,
+      bankName: bankName.trim()
+    };
+    
+    setTempBankCards(prev => [...prev, newCard]);
+    
+    // 清空输入框
+    setBankAccountNumber('');
+    setBankName('');
+  };
+  
+  // 删除临时列表中的卡片
+  const handleRemoveTempCard = (index: number) => {
+    setTempBankCards(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  // 完成添加，提交所有卡片
+  const handleFinishAddingCards = () => {
+    if (selectedSubCategory && tempBankCards.length > 0) {
+      // 将所有临时卡片提交
+      tempBankCards.forEach(card => {
+        const value = `${card.cardNumber} | ${card.holderName} | ${card.bankName}`;
+        onSelect(selectedSubCategory, value);
+      });
+      
+      // 重置并关闭
+      setSelectedMainCategory(null);
+      setSelectedSubCategory(null);
+      setFieldValue('');
+      setBankAccountNumber('');
+      setBankName('');
+      setTempBankCards([]);
+      onOpenChange(false);
+    }
+  };
+  
   const handleAdd = (continueAdding: boolean = false) => {
     if (selectedSubCategory) {
       let value = '';
       
-      // 如果是银行卡，组合三个字段
+      // 如果是银行卡，使用新的逻辑
       if (isBankCard) {
-        if (!bankAccountNumber.trim() || !bankName.trim()) {
-          return; // 银行卡号和开户银行必填
-        }
-        // 格式：银行卡号 | 持卡人 | 开户银行
-        value = `${bankAccountNumber.trim()} | ${contactName} | ${bankName.trim()}`;
+        // 银行卡使用新的添加逻辑，这里不应该被调用
+        return;
       } else {
         if (!fieldValue.trim()) {
           return;
@@ -87,21 +130,11 @@ export function FieldCategorySelector({
       
       onSelect(selectedSubCategory, value);
       
-      // 如果是连续添加模式，只清空输入框，不关闭对话框
-      if (continueAdding) {
-        // 只清空输入字段，保持当前选中的分类
-        setFieldValue('');
-        setBankAccountNumber('');
-        setBankName('');
-      } else {
-        // 完全重置并关闭
-        setSelectedMainCategory(null);
-        setSelectedSubCategory(null);
-        setFieldValue('');
-        setBankAccountNumber('');
-        setBankName('');
-        onOpenChange(false);
-      }
+      // 完全重置并关闭
+      setSelectedMainCategory(null);
+      setSelectedSubCategory(null);
+      setFieldValue('');
+      onOpenChange(false);
     }
   };
 
@@ -231,6 +264,42 @@ export function FieldCategorySelector({
                       placeholder="可输入支行的完整信息或银行名称即可"
                     />
                   </div>
+                  
+                  {/* 添加按钮 */}
+                  <Button
+                    variant="outline"
+                    onClick={handleAddBankCard}
+                    disabled={!bankAccountNumber.trim() || !bankName.trim()}
+                    className="w-full"
+                  >
+                    + 一次添加多张卡
+                  </Button>
+                  
+                  {/* 已添加的卡片列表 */}
+                  {tempBankCards.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      <Label>已添加的银行卡（{tempBankCards.length}张）</Label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {tempBankCards.map((card, index) => (
+                          <div key={index} className="flex items-start gap-2 p-2 bg-muted rounded-lg">
+                            <div className="flex-1 text-sm">
+                              <div className="font-medium">{card.holderName}</div>
+                              <div className="text-muted-foreground">{card.cardNumber}</div>
+                              <div className="text-muted-foreground">{card.bankName}</div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveTempCard(index)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              删除
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 // 普通字段
@@ -274,24 +343,14 @@ export function FieldCategorySelector({
             )}
             {selectedSubCategory ? (
               isBankCard ? (
-                // 银行卡：显示两个按钮
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleAdd(true)}
-                    disabled={!bankAccountNumber.trim() || !bankName.trim()}
-                    className="flex-1"
-                  >
-                    添加并继续
-                  </Button>
-                  <Button
-                    onClick={() => handleAdd(false)}
-                    disabled={!bankAccountNumber.trim() || !bankName.trim()}
-                    className="flex-1"
-                  >
-                    完成
-                  </Button>
-                </>
+                // 银行卡：只显示完成按钮
+                <Button
+                  onClick={handleFinishAddingCards}
+                  disabled={tempBankCards.length === 0}
+                  className="flex-1"
+                >
+                  完成（已添加{tempBankCards.length}张）
+                </Button>
               ) : (
                 // 普通字段：只显示一个按钮
                 <Button
