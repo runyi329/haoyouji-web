@@ -4478,9 +4478,7 @@ export const appRouter = router({
     // 获取我的共享连接列表（作为分享者）
     listMyConnections: protectedProcedure
       .query(async ({ ctx }) => {
-        console.log('[listMyConnections] User ID:', ctx.user.id, 'Username:', ctx.user.username);
         const connections = await db.getSharingConnectionsBySharerId(ctx.user.id);
-        console.log('[listMyConnections] Found connections:', connections.length);
         
         // 为每个连接获取接收者信息、权限配置和共享人数
         const connectionsWithDetails = await Promise.all(
@@ -4500,16 +4498,13 @@ export const appRouter = router({
           })
         );
         
-        console.log('[listMyConnections] Returning data:', JSON.stringify(connectionsWithDetails));
         return connectionsWithDetails;
       }),
 
     // 获取共享给我的连接列表（作为接收者）
     listSharedToMe: protectedProcedure
       .query(async ({ ctx }) => {
-        console.log('[listSharedToMe] User ID:', ctx.user.id, 'Username:', ctx.user.username);
         const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
-        console.log('[listSharedToMe] Found connections:', connections.length);
         
         // 为每个连接获取分享者信息和共享人数
         const connectionsWithDetails = await Promise.all(

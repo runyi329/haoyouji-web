@@ -51,10 +51,10 @@ export default function SharingSettings() {
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   
   // 获取我的共享连接列表
-  const { data: myConnections, isLoading: loadingConnections, error: myConnectionsError } = trpc.sharing.listMyConnections.useQuery();
+  const { data: myConnections, isLoading: loadingConnections } = trpc.sharing.listMyConnections.useQuery();
   
   // 获取共享给我的连接列表
-  const { data: sharedToMe, isLoading: loadingSharedToMe, error: sharedToMeError } = trpc.sharing.listSharedToMe.useQuery();
+  const { data: sharedToMe, isLoading: loadingSharedToMe } = trpc.sharing.listSharedToMe.useQuery();
   
   // 搜索用户
   const { data: searchResults, isLoading: searching } = trpc.sharing.searchUsers.useQuery(
@@ -276,17 +276,6 @@ export default function SharingSettings() {
           </DropdownMenu>
         </div>
 
-        {/* 调试信息 */}
-        <div className="text-xs text-gray-500 p-2 bg-yellow-50 rounded max-h-40 overflow-auto">
-          <p>调试: myConnections = {JSON.stringify(myConnections?.length || 0)} 条</p>
-          <p>调试: sharedToMe = {JSON.stringify(sharedToMe?.length || 0)} 条</p>
-          <p>调试: loadingConnections = {loadingConnections ? '是' : '否'}</p>
-          <p>调试: loadingSharedToMe = {loadingSharedToMe ? '是' : '否'}</p>
-          <p>调试: myConnections 原始数据 = {JSON.stringify(myConnections)}</p>
-          <p>调试: sharedToMe 原始数据 = {JSON.stringify(sharedToMe)}</p>
-          <p className="text-red-600">调试: myConnectionsError = {myConnectionsError ? myConnectionsError.message : '无错误'}</p>
-          <p className="text-red-600">调试: sharedToMeError = {sharedToMeError ? sharedToMeError.message : '无错误'}</p>
-        </div>
         
         {/* 名单列表 */}
         <div className="space-y-2">
