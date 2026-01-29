@@ -408,15 +408,36 @@ export default function AddContact() {
                 可添加：公司、职位、微信、电话、生日等
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowFieldSelector(true)}
-              className="gap-1 whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4" />
-              添加
-            </Button>
+            {extendedFields.length === 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowFieldSelector(true)}
+                className="gap-1 whitespace-nowrap"
+              >
+                <Plus className="h-4 w-4" />
+                添加
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowFieldSelector(true)}
+                  className="gap-1 whitespace-nowrap"
+                >
+                  <Plus className="h-4 w-4" />
+                  继续添加
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  className="gap-1 whitespace-nowrap"
+                >
+                  一键保存
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {extendedFields.length === 0 ? (
