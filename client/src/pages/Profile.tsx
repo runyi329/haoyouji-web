@@ -36,6 +36,7 @@ import {
   Smartphone,
   ChevronUp,
   ChevronDown,
+  Palette,
 } from "lucide-react";
 import {
   DndContext,
@@ -407,6 +408,7 @@ export default function Profile() {
 
   // 帮助与支持功能
   const helpFeatures: FeatureItem[] = [
+    { id: "theme-settings", icon: Palette, label: "高级皮肤", badge: null, onClick: () => navigate("/parent/theme-settings") },
     { id: "academy", icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => navigate("/parent/academy") },
     { id: "help", icon: HelpCircle, label: "帮助中心", badge: null, onClick: () => toast("功能开发中") },
     { id: "about", icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },

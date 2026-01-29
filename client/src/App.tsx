@@ -74,7 +74,6 @@ const ReferralList = lazy(() => import("./pages/ReferralList"));
 const TagsManagement = lazy(() => import("./pages/TagsManagement"));
 const TagAnalytics = lazy(() => import("./pages/TagAnalytics"));
 const SharingSettings = lazy(() => import("./pages/parent/contacts/SharingSettings"));
-const ParentProfile = lazy(() => import("./pages/parent/Profile"));
 const ThemeSettings = lazy(() => import("./pages/parent/ThemeSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
@@ -147,7 +146,7 @@ function Router() {
         <Route path="/parent/contacts/tags" component={TagsManagement} />
         <Route path="/parent/contacts/tag-analytics" component={TagAnalytics} />
         <Route path="/parent/contacts/sharing" component={SharingSettings} />
-        <Route path="/parent/profile" component={ParentProfile} />
+        <Route path="/parent/profile" component={Profile} />
         <Route path="/parent/theme-settings" component={ThemeSettings} />
         <Route path="/parent/academy" component={Academy} />
         <Route path="/parent/ai-management" component={AIManagement} />
