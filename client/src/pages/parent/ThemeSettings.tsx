@@ -35,11 +35,7 @@ export default function ThemeSettings() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="w-20 h-10 rounded-lg border-2 border-gray-300 bg-white shadow-sm flex items-center justify-center">
-            <span className="text-[10px] font-bold leading-tight text-center text-gray-700">
-              高级皮肤
-            </span>
-          </div>
+          <h1 className="text-lg font-semibold">高级皮肤</h1>
         </div>
       </div>
 

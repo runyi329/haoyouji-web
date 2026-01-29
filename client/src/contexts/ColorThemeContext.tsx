@@ -33,7 +33,7 @@ export const themeTemplates: ThemeTemplate[] = [
   },
   {
     id: 'version-1',
-    name: '第1个版本',
+    name: '第1款',
     colors: {
       primary: '#FA734F',
       secondary: '#95DAE7',
