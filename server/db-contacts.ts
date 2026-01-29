@@ -708,6 +708,13 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
   
   const { startOfDay, endOfDay } = getTodayRange();
   
+  console.log('[hasTodayInteraction] 检查联络记录:', {
+    contactId,
+    startOfDay: startOfDay.toISOString(),
+    endOfDay: endOfDay.toISOString(),
+    now: new Date().toISOString()
+  });
+  
   const result = await db
     .select()
     .from(contactInteractions)
@@ -719,6 +726,12 @@ export async function hasTodayInteraction(contactId: number): Promise<boolean> {
       )
     )
     .limit(1);
+  
+  console.log('[hasTodayInteraction] 查询结果:', {
+    found: result.length > 0,
+    count: result.length,
+    records: result
+  });
   
   return result.length > 0;
 }

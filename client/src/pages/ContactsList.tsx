@@ -453,12 +453,12 @@ export default function ContactsList() {
       toast.error(error.message || "删除失败");
     },
   });
-  
-  // 记录联络mutation
+    // 记录联络 mutation
   const recordInteractionMutation = trpc.contacts.interactions.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("已记录本次联络");
-      utils.contacts.list.invalidate();
+      // 强制刷新列表数据，确保hasTodayInteraction状态更新
+      await utils.contacts.list.refetch();
       setShowQuickContactDialog(false);
       setContactToRecord(null);
     },
@@ -693,6 +693,11 @@ export default function ContactsList() {
       recordInteractionMutation.mutate({ 
         contactId: contactToRecord.id,
         note
+      }, {
+        onSuccess: () => {
+          // 立即更新本地状态，让按钮颜色变暗
+          setContactToRecord(prev => prev ? { ...prev, hasTodayInteraction: true } : null);
+        }
       });
       setQuickContactNote("");
     }
