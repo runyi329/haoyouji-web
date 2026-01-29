@@ -288,8 +288,14 @@ export default function Profile() {
 
   const displayAvatar = avatarPreview || user.avatar || "/default-avatar.png";
 
-  // 定义所有可用的功能项（不包括超级管理员专属）
+  // 定义所有可用的功能项
   const allFeatures: FeatureItem[] = [
+    // 超级管理员专属功能
+    ...(user.role === "super_admin" ? [
+      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/admin") },
+    ] : []),
+    // 编辑资料（所有用户都可用）
+    { id: "edit-profile", icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
     { 
       id: "install-app",
       icon: Smartphone, 
@@ -320,9 +326,9 @@ export default function Profile() {
     { id: "points", icon: Award, label: "我的积分", badge: user.points, onClick: () => navigate("/parent/points") },
   ];
 
-  // 账户管理功能
+  // 账户管理功能（不包括编辑资料，已移至常用功能）
   const accountFeatures: FeatureItem[] = [
-    { id: "edit-profile", icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
+
     { id: "change-password", icon: Shield, label: "修改密码", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", badge: null, onClick: () => toast("功能开发中") },
@@ -401,26 +407,6 @@ export default function Profile() {
             </div>
           </div>
         </div>
-
-        {/* 超级管理员专属功能 */}
-        {user.role === "super_admin" && (
-          <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-              管理功能
-            </h3>
-            <div className="grid grid-cols-4 gap-6">
-              <button
-                onClick={() => navigate("/admin")}
-                className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
-              >
-                <ShieldCheck className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                  后台管理
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* 常用功能 */}
         <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">

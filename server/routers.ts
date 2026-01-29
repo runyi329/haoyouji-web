@@ -4960,7 +4960,7 @@ export const appRouter = router({
     getFavorites: protectedProcedure
       .query(async ({ ctx }) => {
         const { getUserFavoriteFeatures } = await import('./db-profile-features');
-        const favorites = await getUserFavoriteFeatures(ctx.user.id);
+        const favorites = await getUserFavoriteFeatures(ctx.user.id, ctx.user.role);
         return { favorites };
       }),
     

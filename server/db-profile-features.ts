@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 /**
  * 获取用户的常用功能列表
  */
-export async function getUserFavoriteFeatures(userId: number): Promise<string[]> {
+export async function getUserFavoriteFeatures(userId: number, userRole?: string): Promise<string[]> {
   const db = await getDb();
   if (!db) throw new Error("Database connection failed");
   
@@ -16,8 +16,11 @@ export async function getUserFavoriteFeatures(userId: number): Promise<string[]>
     .limit(1);
 
   if (prefs.length === 0 || !prefs[0].favoriteFeatures) {
-    // 返回默认常用功能
-    return ["contacts", "tags", "regions", "data-comparison"];
+    // 根据用户角色返回默认常用功能
+    if (userRole === "super_admin") {
+      return ["admin-panel", "edit-profile"];
+    }
+    return ["edit-profile"];
   }
 
   return prefs[0].favoriteFeatures;
