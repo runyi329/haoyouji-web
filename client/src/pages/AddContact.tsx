@@ -264,85 +264,90 @@ export default function AddContact() {
             <CardTitle>基本信息</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2 relative">
-              <Label htmlFor="name">
-                姓名 <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                onFocus={() => setShowSuggestions(searchQuery.length > 0)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                placeholder="请输入姓名"
-              />
-              
-              {/* 模糊查询下拉框 */}
-              {showSuggestions && suggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
-                    找到 {suggestions.length} 个相似的人脉，点击查看详情
-                  </div>
-                  {suggestions.map((contact: any) => (
-                    <div
-                      key={contact.id}
-                      onClick={() => handleSuggestionClick(contact.id)}
-                      className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                    >
-                      <div className="font-medium text-sm">{contact.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
-                        {contact.title && <div>称呼：{contact.title}</div>}
-                        {contact.fieldValues && contact.fieldValues.length > 0 && (
-                          <div>
-                            {contact.fieldValues
-                              .slice(0, 3)
-                              .map((fv: any, idx: number) => (
-                                <span key={idx}>
-                                  {fv.categoryName}：{fv.value}
-                                  {idx < Math.min(contact.fieldValues.length, 3) - 1 && ' · '}
-                                </span>
-                              ))}
-                          </div>
-                        )}
-                        {contact.region && <div>所在地：{contact.region}</div>}
-                      </div>
+            {/* 第一行：姓名 + 称呼 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 relative">
+                <Label htmlFor="name">
+                  姓名 <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  onFocus={() => setShowSuggestions(searchQuery.length > 0)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="请输入姓名"
+                />
+                
+                {/* 模糊查询下拉框 */}
+                {showSuggestions && suggestions && suggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
+                      找到 {suggestions.length} 个相似的人脉，点击查看详情
                     </div>
-                  ))}
-                </div>
-              )}
+                    {suggestions.map((contact: any) => (
+                      <div
+                        key={contact.id}
+                        onClick={() => handleSuggestionClick(contact.id)}
+                        className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      >
+                        <div className="font-medium text-sm">{contact.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
+                          {contact.title && <div>称呼：{contact.title}</div>}
+                          {contact.fieldValues && contact.fieldValues.length > 0 && (
+                            <div>
+                              {contact.fieldValues
+                                .slice(0, 3)
+                                .map((fv: any, idx: number) => (
+                                  <span key={idx}>
+                                    {fv.categoryName}：{fv.value}
+                                    {idx < Math.min(contact.fieldValues.length, 3) - 1 && ' · '}
+                                  </span>
+                                ))}
+                            </div>
+                          )}
+                          {contact.region && <div>所在地：{contact.region}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="title">称呼</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="请输入称呼"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="title">称呼</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="请输入称呼"
-              />
-            </div>
+            {/* 第二行：性别 + 地区 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="gender">性别</Label>
+                <Select value={gender} onValueChange={setGender}>
+                  <SelectTrigger id="gender">
+                    <SelectValue placeholder="请选择性别" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="男">男</SelectItem>
+                    <SelectItem value="女">女</SelectItem>
+                    <SelectItem value="未知">未知</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="gender">性别</Label>
-              <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger id="gender">
-                  <SelectValue placeholder="请选择性别" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="男">男</SelectItem>
-                  <SelectItem value="女">女</SelectItem>
-                  <SelectItem value="未知">未知</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="region">所在地</Label>
-              <Select value={region} onValueChange={setRegion}>
-                <SelectTrigger id="region">
-                  <SelectValue placeholder="请选择所在地" />
-                </SelectTrigger>
-                <SelectContent>
+              <div className="space-y-2">
+                <Label htmlFor="region">地区</Label>
+                <Select value={region} onValueChange={setRegion}>
+                  <SelectTrigger id="region">
+                    <SelectValue placeholder="请选择地区" />
+                  </SelectTrigger>
+                  <SelectContent>
                   <SelectItem value="北京">北京</SelectItem>
                   <SelectItem value="天津">天津</SelectItem>
                   <SelectItem value="河北">河北</SelectItem>
