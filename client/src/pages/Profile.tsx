@@ -434,7 +434,10 @@ export default function Profile() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
+    <div className="min-h-screen pb-20"
+      style={{
+        background: 'linear-gradient(to bottom right, color-mix(in srgb, var(--color-background) 100%, white), color-mix(in srgb, var(--color-primary) 5%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 5%, var(--color-background)))'
+      }}>
       <div className="container max-w-4xl py-8 px-4 relative">
         {/* 顶部用户信息卡片 */}
         <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
@@ -451,7 +454,10 @@ export default function Profile() {
               <button
                 onClick={handleAvatarClick}
                 disabled={isUploading}
-                className="absolute bottom-0 right-0 bg-blue-400 hover:bg-blue-500 text-white rounded-full p-1.5 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+                className="absolute bottom-0 right-0 text-white rounded-full p-1.5 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+                style={{
+                  backgroundColor: 'var(--color-primary)'
+                }}
               >
                 <Camera className="w-3 h-3" />
               </button>
@@ -483,10 +489,18 @@ export default function Profile() {
                 个人资料和设置
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 15%, white)',
+                    color: 'var(--color-primary)'
+                  }}>
                   {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
                 </span>
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--color-secondary) 15%, white)',
+                    color: 'var(--color-secondary)'
+                  }}>
                   ⭐ {pointsData?.points || 0} 积分
                 </span>
               </div>
