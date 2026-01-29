@@ -151,10 +151,12 @@ export default function SharingSettings() {
         {/* 标语卡片 */}
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
           <CardContent className="py-4">
-            <div className="flex items-center justify-center gap-3">
-              <Share2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              <p className="text-base font-medium text-purple-800 dark:text-purple-200 text-center">
-                每个人都是一座金矿，关键在于如何挖掘和连接。
+            <div className="text-center">
+              <p className="text-base font-medium text-purple-800 dark:text-purple-200">
+                每个人都是一座金矿，
+              </p>
+              <p className="text-base font-medium text-purple-800 dark:text-purple-200">
+                关键在于如何挖掘和连接。
               </p>
             </div>
           </CardContent>
