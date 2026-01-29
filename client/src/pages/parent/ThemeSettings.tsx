@@ -56,10 +56,10 @@ export default function ThemeSettings() {
                     : 'border-gray-300 bg-white'
                 }`}
               >
-                <span className={`text-[9px] font-bold leading-tight text-center ${
+                <span className={`text-[9px] font-bold leading-tight text-center whitespace-pre-line ${
                   isThemeApplied(template.id) ? 'text-green-600' : 'text-gray-700'
                 }`}>
-                  {template.name}
+                  {template.name.replace(/(.{2})/, '$1\n')}
                 </span>
               </div>
               
@@ -158,7 +158,7 @@ export default function ThemeSettings() {
                     }`}
                   >
                     <span className={`text-[8px] font-bold leading-[10px] text-center whitespace-pre-line text-white`}>
-                      {isThemeApplied(template.id) ? '已经应用' : '点击\n应用'}
+                      {isThemeApplied(template.id) ? '已经\n应用' : '点击\n应用'}
                     </span>
                   </div>
                 </button>
