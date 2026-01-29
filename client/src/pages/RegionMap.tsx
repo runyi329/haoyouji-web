@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import ChinaMap from '@/components/ChinaMap';
+import ChinaMapParticles from '@/components/ChinaMapParticles';
 import { trpc } from '@/lib/trpc';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -107,6 +108,10 @@ export default function RegionMap() {
           relative bg-white w-full transition-all duration-300 ease-in-out
           ${isMobile ? 'h-[38vh] shrink-0 border-b border-gray-100' : 'flex-1 h-full'}
         `}>
+          {/* 粒子动画背景层 */}
+          <ChinaMapParticles particleCount={1500} />
+          
+          {/* 地图层 */}
           <ChinaMap
             data={provinceStats}
             onProvinceClick={handleProvinceClick}
