@@ -37,6 +37,9 @@ fi
 # 解析DATABASE_URL
 DATABASE_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" | cut -d '=' -f2-)
 
+# 移除可能的引号
+DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/^"\(.*\)"$/\1/' | sed "s/^'\(.*\)'$/\1/")
+
 if [ -z "$DATABASE_URL" ]; then
     echo -e "${RED}❌ 错误: DATABASE_URL未在.env中配置${NC}"
     exit 1
