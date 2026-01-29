@@ -3637,6 +3637,36 @@ export const appRouter = router({
     }),
 
   // 标签管理
+  // 银行列表管理
+  banks: router({
+    // 搜索银行
+    search: protectedProcedure
+      .input(z.object({
+        query: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.searchBanks(input.query);
+      }),
+    
+    // 添加或更新银行
+    addOrUpdate: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.addOrUpdateBank(input.name);
+      }),
+    
+    // 获取所有银行
+    list: protectedProcedure
+      .query(async () => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.getAllBanks();
+      }),
+  }),
+  
   tags: router({
     // 获取所有标签
     list: protectedProcedure
