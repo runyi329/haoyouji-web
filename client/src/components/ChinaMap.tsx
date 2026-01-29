@@ -137,7 +137,7 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
               padding: [0, 0, 2, 0]
             },
             count: {
-              color: '#4f46e5',
+              color: 'var(--color-primary)',
               fontSize: 11,
               fontWeight: 'bold',
               align: 'center'
@@ -154,8 +154,8 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
             show: !isMobile
           },
           itemStyle: {
-            areaColor: '#c7d2fe',
-            borderColor: '#818cf8',
+            areaColor: 'color-mix(in srgb, var(--color-primary) 30%, white)',
+            borderColor: 'color-mix(in srgb, var(--color-primary) 60%, white)',
             borderWidth: 1
           }
         },
@@ -165,8 +165,8 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
             color: '#fff'
           },
           itemStyle: {
-            areaColor: '#4f46e5',
-            borderColor: '#4f46e5',
+            areaColor: 'var(--color-primary)',
+            borderColor: 'var(--color-primary)',
             borderWidth: 1
           }
         }
@@ -185,9 +185,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
           fontSize: 10
         },
         pieces: [
-          { min: 10, label: '10+ 人', color: '#4f46e5' },
-          { min: 5, max: 9, label: '5-9 人', color: '#818cf8' },
-          { min: 1, max: 4, label: '1-4 人', color: '#c7d2fe' },
+          { min: 10, label: '10+ 人', color: 'var(--color-primary)' },
+          { min: 5, max: 9, label: '5-9 人', color: 'color-mix(in srgb, var(--color-primary) 60%, white)' },
+          { min: 1, max: 4, label: '1-4 人', color: 'color-mix(in srgb, var(--color-primary) 30%, white)' },
           { value: 0, label: '0 人', color: '#f4f4f5' }
         ],
         seriesIndex: 0 // 仅作用于第一个系列（地图）
@@ -215,9 +215,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
           },
           symbolSize: 10,
           itemStyle: {
-            color: '#4f46e5',
+            color: 'var(--color-primary)',
             shadowBlur: 10,
-            shadowColor: '#4f46e5'
+            shadowColor: 'var(--color-primary)'
           },
           zlevel: 1,
           data: selectedProvince ? data.filter(item => item.name === selectedProvince).map(item => {
