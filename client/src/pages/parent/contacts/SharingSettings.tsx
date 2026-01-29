@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-
 // 导入得意黑Web字体
 if (typeof document !== 'undefined') {
   const link = document.createElement('link');
@@ -200,10 +199,10 @@ export default function SharingSettings() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6 space-y-6">
+      <div className="container mx-auto px-4 py-4 space-y-3">
         {/* 标语卡片 */}
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
-          <CardContent className="py-1">
+          <CardContent className="py-2">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"Smiley Sans", sans-serif' }}>
                 每个人都是一座金矿，
