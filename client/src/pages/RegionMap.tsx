@@ -103,14 +103,19 @@ export default function RegionMap() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col md:flex-row relative overflow-hidden">
+        {/* 粒子动画展示区 */}
+        <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-purple-50 relative border-b border-gray-200">
+          <ChinaMapParticles particleCount={1500} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <h2 className="text-2xl font-bold text-gray-700 opacity-50">人脉网络分布</h2>
+          </div>
+        </div>
+        
         {/* Map Area */}
         <div className={`
           relative bg-white w-full transition-all duration-300 ease-in-out
           ${isMobile ? 'h-[38vh] shrink-0 border-b border-gray-100' : 'flex-1 h-full'}
         `}>
-          {/* 粒子动画背景层 */}
-          <ChinaMapParticles particleCount={1500} />
-          
           {/* 地图层 */}
           <ChinaMap
             data={provinceStats}
