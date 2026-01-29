@@ -275,7 +275,7 @@ export default function Profile() {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        uploadAvatarMutation.mutate({ avatar: base64String });
+        uploadAvatarMutation.mutate({ imageData: base64String });
       };
       reader.readAsDataURL(croppedImageBlob);
     } catch (error) {
