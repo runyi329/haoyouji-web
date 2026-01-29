@@ -67,7 +67,7 @@ export function FieldCategorySelector({
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = (continueAdding: boolean = false) => {
     if (selectedSubCategory) {
       let value = '';
       
@@ -86,13 +86,22 @@ export function FieldCategorySelector({
       }
       
       onSelect(selectedSubCategory, value);
-      // 重置状态
-      setSelectedMainCategory(null);
-      setSelectedSubCategory(null);
-      setFieldValue('');
-      setBankAccountNumber('');
-      setBankName('');
-      onOpenChange(false);
+      
+      // 如果是连续添加模式，只清空输入框，不关闭对话框
+      if (continueAdding) {
+        // 只清空输入字段，保持当前选中的分类
+        setFieldValue('');
+        setBankAccountNumber('');
+        setBankName('');
+      } else {
+        // 完全重置并关闭
+        setSelectedMainCategory(null);
+        setSelectedSubCategory(null);
+        setFieldValue('');
+        setBankAccountNumber('');
+        setBankName('');
+        onOpenChange(false);
+      }
     }
   };
 
@@ -264,13 +273,35 @@ export function FieldCategorySelector({
               </Button>
             )}
             {selectedSubCategory ? (
-              <Button
-                onClick={handleAdd}
-                disabled={!fieldValue.trim()}
-                className="flex-1"
-              >
-                添加
-              </Button>
+              isBankCard ? (
+                // 银行卡：显示两个按钮
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAdd(true)}
+                    disabled={!bankAccountNumber.trim() || !bankName.trim()}
+                    className="flex-1"
+                  >
+                    添加并继续
+                  </Button>
+                  <Button
+                    onClick={() => handleAdd(false)}
+                    disabled={!bankAccountNumber.trim() || !bankName.trim()}
+                    className="flex-1"
+                  >
+                    完成
+                  </Button>
+                </>
+              ) : (
+                // 普通字段：只显示一个按钮
+                <Button
+                  onClick={() => handleAdd(false)}
+                  disabled={!fieldValue.trim()}
+                  className="flex-1"
+                >
+                  添加
+                </Button>
+              )
             ) : (
               <Button
                 variant="outline"
