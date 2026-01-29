@@ -44,11 +44,36 @@ fi
 
 # 从URL中提取数据库信息
 # 格式: mysql://username:password@host:port/database
-DB_USER=$(echo "$DATABASE_URL" | sed -n 's|mysql://\([^:]*\):.*|\1|p')
-DB_PASS=$(echo "$DATABASE_URL" | sed -n 's|mysql://[^:]*:\([^@]*\)@.*|\1|p')
-DB_HOST=$(echo "$DATABASE_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
-DB_PORT=$(echo "$DATABASE_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
-DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+# 支持密码中包含@符号
+
+# 移除mysql://前缀
+TEMP_URL="${DATABASE_URL#mysql://}"
+
+# 提取用户名（第一个:之前）
+DB_USER="${TEMP_URL%%:*}"
+
+# 移除用户名和:
+TEMP_URL="${TEMP_URL#*:}"
+
+# 提取数据库名（最后一个/之后）
+DB_NAME="${TEMP_URL##*/}"
+# 移除可能的查询参数
+DB_NAME="${DB_NAME%%\?*}"
+
+# 移除数据库名
+TEMP_URL="${TEMP_URL%/*}"
+
+# 提取端口（最后一个:之后）
+DB_PORT="${TEMP_URL##*:}"
+
+# 移除端口
+TEMP_URL="${TEMP_URL%:*}"
+
+# 提取主机（最后一个@之后）
+DB_HOST="${TEMP_URL##*@}"
+
+# 剩下的就是密码
+DB_PASS="${TEMP_URL%@*}"
 
 # 生成备份文件名
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
