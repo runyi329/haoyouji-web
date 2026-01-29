@@ -1,5 +1,13 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+
+// 导入霞鹜文楷Web字体
+if (typeof document !== 'undefined') {
+  const link = document.createElement('link');
+  link.href = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.1.0/style.css';
+  link.rel = 'stylesheet';
+  document.head.appendChild(link);
+}
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,12 +158,12 @@ export default function SharingSettings() {
       <div className="container mx-auto px-4 py-6 space-y-6">
         {/* 标语卡片 */}
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
-          <CardContent className="py-2">
+          <CardContent className="py-1">
             <div className="text-center">
-              <p className="text-lg font-medium text-purple-800 dark:text-purple-200" style={{ fontFamily: 'KaiTi, STKaiti, "Kaiti SC", serif' }}>
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"LXGW WenKai", "LXGW WenKai Screen", serif' }}>
                 每个人都是一座金矿，
               </p>
-              <p className="text-lg font-medium text-purple-800 dark:text-purple-200" style={{ fontFamily: 'KaiTi, STKaiti, "Kaiti SC", serif' }}>
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"LXGW WenKai", "LXGW WenKai Screen", serif' }}>
                 关键在于如何挖掘和连接。
               </p>
             </div>
