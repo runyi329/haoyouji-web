@@ -169,18 +169,14 @@ export default function Ledger() {
               <div className="flex items-center gap-2 -mb-3 -mt-2">
                 <div className="flex -space-x-2">
                   {ledger.members.slice(0, 4).map((member, index) => (
-                    <div
+                    <UserAvatar
                       key={member.userId}
-                      className="border-2 border-white"
+                      username={member.username}
+                      avatar={member.avatar}
+                      nickname={member.nickname}
+                      size="sm"
                       style={{ zIndex: ledger.members.length - index }}
-                    >
-                      <UserAvatar
-                        username={member.username}
-                        avatar={member.avatar}
-                        nickname={member.nickname}
-                        size="sm"
-                      />
-                    </div>
+                    />
                   ))}
                 </div>
                 <span className="text-sm leading-none text-gray-500">{ledger.memberCount}人共享+</span>
