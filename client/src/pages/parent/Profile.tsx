@@ -1,11 +1,11 @@
-import { useUser } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Palette, User, Settings } from "lucide-react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 export default function Profile() {
-  const { user } = useUser();
+  const { data: user } = trpc.auth.getUser.useQuery();
   const [, setLocation] = useLocation();
 
   if (!user) {

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 
@@ -213,11 +214,13 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <PWAInstallPrompt />
-        </TooltipProvider>
+        <ColorThemeProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+            <PWAInstallPrompt />
+          </TooltipProvider>
+        </ColorThemeProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

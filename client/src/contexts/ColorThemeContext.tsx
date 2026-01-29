@@ -1,0 +1,120 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+// 主题颜色定义
+export interface ThemeColors {
+  primary: string;      // 主色
+  secondary: string;    // 辅色
+  background: string;   // 背景色
+  text: string;         // 文字色
+  accent1: string;      // 强调色1
+  accent2: string;      // 强调色2
+}
+
+// 预设主题
+export interface ThemeTemplate {
+  id: string;
+  name: string;
+  colors: ThemeColors;
+}
+
+// 预设主题列表
+export const themeTemplates: ThemeTemplate[] = [
+  {
+    id: 'coral-blue',
+    name: '珊瑚蓝',
+    colors: {
+      primary: '#FA734F',
+      secondary: '#95DAE7',
+      background: '#F6F3E8',
+      text: '#7C645E',
+      accent1: '#FFFFFF',
+      accent2: '#797979',
+    },
+  },
+  // 可以添加更多预设主题
+];
+
+interface ColorThemeContextType {
+  currentTheme: ThemeTemplate;
+  setTheme: (themeId: string) => void;
+  customColors: ThemeColors | null;
+  setCustomColors: (colors: ThemeColors) => void;
+}
+
+const ColorThemeContext = createContext<ColorThemeContextType | undefined>(undefined);
+
+export const useColorTheme = () => {
+  const context = useContext(ColorThemeContext);
+  if (!context) {
+    throw new Error('useColorTheme must be used within a ColorThemeProvider');
+  }
+  return context;
+};
+
+export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentTheme, setCurrentTheme] = useState<ThemeTemplate>(themeTemplates[0]);
+  const [customColors, setCustomColors] = useState<ThemeColors | null>(null);
+
+  // 从 localStorage 加载主题
+  useEffect(() => {
+    const savedThemeId = localStorage.getItem('colorThemeId');
+    const savedCustomColors = localStorage.getItem('customColors');
+
+    if (savedCustomColors) {
+      const colors = JSON.parse(savedCustomColors);
+      setCustomColors(colors);
+      applyTheme(colors);
+    } else if (savedThemeId) {
+      const theme = themeTemplates.find(t => t.id === savedThemeId);
+      if (theme) {
+        setCurrentTheme(theme);
+        applyTheme(theme.colors);
+      }
+    } else {
+      // 默认主题
+      applyTheme(currentTheme.colors);
+    }
+  }, []);
+
+  // 应用主题到 CSS 变量
+  const applyTheme = (colors: ThemeColors) => {
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', colors.primary);
+    root.style.setProperty('--color-secondary', colors.secondary);
+    root.style.setProperty('--color-background', colors.background);
+    root.style.setProperty('--color-text', colors.text);
+    root.style.setProperty('--color-accent1', colors.accent1);
+    root.style.setProperty('--color-accent2', colors.accent2);
+  };
+
+  const setTheme = (themeId: string) => {
+    const theme = themeTemplates.find(t => t.id === themeId);
+    if (theme) {
+      setCurrentTheme(theme);
+      setCustomColors(null);
+      localStorage.setItem('colorThemeId', themeId);
+      localStorage.removeItem('customColors');
+      applyTheme(theme.colors);
+    }
+  };
+
+  const handleSetCustomColors = (colors: ThemeColors) => {
+    setCustomColors(colors);
+    localStorage.setItem('customColors', JSON.stringify(colors));
+    localStorage.removeItem('colorThemeId');
+    applyTheme(colors);
+  };
+
+  return (
+    <ColorThemeContext.Provider
+      value={{
+        currentTheme,
+        setTheme,
+        customColors,
+        setCustomColors: handleSetCustomColors,
+      }}
+    >
+      {children}
+    </ColorThemeContext.Provider>
+  );
+};

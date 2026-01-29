@@ -53,6 +53,14 @@
 }
 
 :root {
+  /* 主题颜色系统 - 可通过JS动态修改 */
+  --color-primary: #FA734F;
+  --color-secondary: #95DAE7;
+  --color-background: #F6F3E8;
+  --color-text: #7C645E;
+  --color-accent1: #FFFFFF;
+  --color-accent2: #797979;
+  
   /* 优雅完美的紫色调主题 */
   --primary: oklch(0.65 0.18 280);
   --primary-foreground: oklch(0.98 0.01 280);
