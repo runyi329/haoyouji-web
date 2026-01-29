@@ -44,7 +44,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing 
       {...dragListeners}
       className={`group hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-blue" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 25%, var(--color-background)), color-mix(in srgb, var(--color-primary) 30%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -65,7 +65,7 @@ function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-green" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 18%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 22%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
@@ -86,7 +86,7 @@ function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count:
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-orange" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 15%, var(--color-background)), color-mix(in srgb, var(--color-primary) 18%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -107,7 +107,7 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-purple" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 10%, var(--color-background)), color-mix(in srgb, var(--color-primary) 15%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -145,7 +145,7 @@ function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { co
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-red" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 20%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 25%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
@@ -166,7 +166,7 @@ function MonthlyActiveCard({ count, onClick, dragListeners, isBreathing }: { cou
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-indigo" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 12%, var(--color-background)), color-mix(in srgb, var(--color-primary) 18%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -187,7 +187,7 @@ function WeeklyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-teal" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
@@ -208,7 +208,7 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 8%, var(--color-background)), color-mix(in srgb, var(--color-primary) 12%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -334,7 +334,7 @@ function DormantCard({ count, onClick, dragListeners, isBreathing }: { count: nu
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent2) 10%, var(--color-background)), color-mix(in srgb, var(--color-accent2) 15%, var(--color-background)))", borderColor: "var(--color-accent2)" }}
       onClick={onClick}
     >
@@ -355,7 +355,7 @@ function CompanyCountCard({ count, onClick, dragListeners, isBreathing }: { coun
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-teal" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
@@ -376,7 +376,7 @@ function TotalInteractionCard({ count, onClick, dragListeners, isBreathing }: { 
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-pink" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 18%, var(--color-background)), color-mix(in srgb, var(--color-primary) 22%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -397,7 +397,7 @@ function TotalTagCard({ count, onClick, dragListeners, isBreathing }: { count: n
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-indigo" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-primary) 18%, var(--color-background)), color-mix(in srgb, var(--color-primary) 22%, var(--color-background)))", borderColor: "var(--color-primary)" }}
       onClick={onClick}
     >
@@ -418,7 +418,7 @@ function TotalUsageDaysCard({ days, dragListeners, isBreathing }: { days: number
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 10%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 15%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
@@ -438,7 +438,7 @@ function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points:
       {...dragListeners}
       className={`hover:shadow-lg transition-shadow relative h-full border flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-yellow" : ""
-      }}
+      }`}
       style={{ background: "linear-gradient(to bottom right, color-mix(in srgb, var(--color-secondary) 8%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 12%, var(--color-background)))", borderColor: "var(--color-secondary)" }}
       onClick={onClick}
     >
@@ -1144,7 +1144,7 @@ export default function ContactsManagement() {
                     onClick={() => {
                       logout();
                       toast.success("已退出登录");
-                    }}
+                    }`}
                     className="text-red-600"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -1367,7 +1367,7 @@ export default function ContactsManagement() {
                 if (e.key === 'Enter') {
                   handleInviteCodeSubmit();
                 }
-              }}
+              }`}
               autoFocus
             />
             <p className="text-sm text-muted-foreground">
