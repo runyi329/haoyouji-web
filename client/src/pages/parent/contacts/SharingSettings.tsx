@@ -220,12 +220,16 @@ export default function SharingSettings() {
                     className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {conn.receiverName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        @{conn.receiverUsername}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm truncate">
+                          @{conn.receiverUsername}
+                        </p>
+                        <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>×</span>
+                          <span className="font-medium">{conn.sharedContactCount || 0}</span>
+                        </div>
+                      </div>
                       {conn.note && (
                         <p className="text-xs text-muted-foreground mt-1 truncate">
                           备注: {conn.note}
@@ -272,12 +276,16 @@ export default function SharingSettings() {
                     className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {conn.sharerName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        @{conn.sharerUsername}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm truncate">
+                          @{conn.sharerUsername}
+                        </p>
+                        <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>×</span>
+                          <span className="font-medium">{conn.sharedContactCount || 0}</span>
+                        </div>
+                      </div>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>

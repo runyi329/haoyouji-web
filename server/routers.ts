@@ -4480,16 +4480,19 @@ export const appRouter = router({
       .query(async ({ ctx }) => {
         const connections = await db.getSharingConnectionsBySharerId(ctx.user.id);
         
-        // 为每个连接获取接收者信息和权限配置
+        // 为每个连接获取接收者信息、权限配置和共享人数
         const connectionsWithDetails = await Promise.all(
           connections.map(async (conn: any) => {
             const receiver = await db.getUserById(conn.receiverId);
             const permissions = await db.getSharingPermissionsByConnectionId(conn.id);
+            // 统计共享给该用户的人数（当前用户的所有联系人）
+            const sharedContactCount = await db.getContactCountByUserId(ctx.user.id);
             return {
               ...conn,
               receiverName: receiver?.name || receiver?.username || '未知用户',
               receiverUsername: receiver?.username || '',
               permissions,
+              sharedContactCount, // 共享给对方的人数
             };
           })
         );
@@ -4502,14 +4505,17 @@ export const appRouter = router({
       .query(async ({ ctx }) => {
         const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
         
-        // 为每个连接获取分享者信息
+        // 为每个连接获取分享者信息和共享人数
         const connectionsWithDetails = await Promise.all(
           connections.map(async (conn: any) => {
             const sharer = await db.getUserById(conn.sharerId);
+            // 统计分享者共享给我的人数（分享者的所有联系人）
+            const sharedContactCount = await db.getContactCountByUserId(conn.sharerId);
             return {
               ...conn,
               sharerName: sharer?.name || sharer?.username || '未知用户',
               sharerUsername: sharer?.username || '',
+              sharedContactCount, // 对方共享给我的人数
             };
           })
         );
