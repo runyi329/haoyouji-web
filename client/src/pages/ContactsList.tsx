@@ -143,12 +143,16 @@ const COLOR_OPTIONS = [
 const SEARCH_HISTORY_KEY = "contactsSearchHistory";
 const MAX_HISTORY_ITEMS = 5;
 
-// 根据距离上次联络的天数返回颜色
+// 根据距离上次联络的天数返回颜色（使用主题色）
 function getInteractionStatusColor(days: number | null): string {
-  if (days === null) return '#9ca3af'; // 灰色：从未联络
-  if (days <= 30) return '#22c55e'; // 绿色：0-30天
-  if (days <= 90) return '#eab308'; // 黄色：31-90天
-  return '#ef4444'; // 红色：91天以上
+  const primary = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#9333EA';
+  const secondary = getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim() || '#A78BFA';
+  const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
+  
+  if (days === null) return accent2; // 从未联络：使用强调色2
+  if (days <= 30) return primary; // 0-30天：使用主色
+  if (days <= 90) return secondary; // 31-90天：使用辅色
+  return accent2; // 91天以上：使用强调色2
 }
 
 // 格式化日期为"2025年1月10日"
@@ -1288,7 +1292,12 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                    className="text-xs h-7 px-2"
+                    style={{
+                      backgroundColor: `color-mix(in srgb, var(--color-secondary) 10%, white)`,
+                      borderColor: `var(--color-secondary)`,
+                      color: `var(--color-text)`
+                    }}
                   >
                     季关注
                   </Button>
@@ -1306,7 +1315,12 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                  className="text-xs h-7 px-2"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, var(--color-secondary) 10%, white)`,
+                    borderColor: `var(--color-secondary)`,
+                    color: `var(--color-text)`
+                  }}
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
