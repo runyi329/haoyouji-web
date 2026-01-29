@@ -356,9 +356,9 @@ export default function Profile() {
               <button
                 onClick={handleAvatarClick}
                 disabled={isUploading}
-                className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-lg transition-all group-hover:scale-110 disabled:opacity-50"
+                className="absolute bottom-0 right-0 bg-blue-400 hover:bg-blue-500 text-white rounded-full p-1.5 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
               >
-                <Camera className="w-4 h-4" />
+                <Camera className="w-3 h-3" />
               </button>
               <input
                 ref={fileInputRef}
