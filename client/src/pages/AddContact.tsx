@@ -387,6 +387,7 @@ export default function AddContact() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
           </CardContent>
         </Card>
 
