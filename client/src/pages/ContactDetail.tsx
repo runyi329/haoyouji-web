@@ -944,11 +944,11 @@ export default function ContactDetail() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* 基本信息：称谓、性别、地区 */}
+              {/* 基本信息：昵称、性别、地区 */}
               {contact.title && (
                 <div className="flex items-center text-sm">
                   <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span>称谓：{contact.title}</span>
+                  <span>昵称：{contact.title}</span>
                 </div>
               )}
               
@@ -1451,7 +1451,7 @@ export default function ContactDetail() {
           <DialogHeader>
             <DialogTitle>设置介绍人</DialogTitle>
             <DialogDescription>
-              输入姓名或称谓搜索介绍人
+              输入姓名或昵称搜索介绍人
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1459,7 +1459,7 @@ export default function ContactDetail() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="搜索人脉姓名或称谓..."
+                placeholder="搜索人脉姓名或昵称..."
                 value={referrerSearchKeyword}
                 onChange={(e) => setReferrerSearchKeyword(e.target.value)}
                 className="pl-9"

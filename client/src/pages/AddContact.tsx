@@ -35,7 +35,7 @@ export default function AddContact() {
     return { contactId: id, isEditMode: mode };
   }, []);
   
-  // 基本信息（4个基础字段：姓名、称呼、所在地、性别）
+  // 基本信息（4个基础字段：姓名、昵称、性别、地区）
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [gender, setGender] = useState("");
@@ -264,7 +264,7 @@ export default function AddContact() {
             <CardTitle>基本信息</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 第一行：姓名 + 称呼 */}
+            {/* 第一行：姓名 + 昵称 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2 relative">
                 <Label htmlFor="name">
@@ -293,7 +293,7 @@ export default function AddContact() {
                       >
                         <div className="font-medium text-sm">{contact.name}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
-                          {contact.title && <div>称呼：{contact.title}</div>}
+                          {contact.title && <div>昵称：{contact.title}</div>}
                           {contact.fieldValues && contact.fieldValues.length > 0 && (
                             <div>
                               {contact.fieldValues

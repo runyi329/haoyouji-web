@@ -22,7 +22,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 // 可共享的字段列表
 const SHAREABLE_FIELDS = [
   { name: 'name', label: '姓名', required: true },
-  { name: 'title', label: '称谓', required: false },
+  { name: 'title', label: '昵称', required: false },
   { name: 'gender', label: '性别', required: false },
   { name: 'occupation', label: '职业', required: false },
   { name: 'address', label: '地址', required: false },

@@ -24,7 +24,7 @@ export default function ExportContacts() {
     // 工作表1：基础信息
     const basicInfo = data.contacts.map((c: any) => ({
       '姓名': c.name,
-      '称谓': c.title || '',
+      '昵称': c.title || '',
       '性别': c.gender === 'male' ? '男' : c.gender === 'female' ? '女' : '',
       '所在地区': c.region || '',
       '创建时间': new Date(c.createdAt).toLocaleString('zh-CN'),
@@ -196,7 +196,7 @@ export default function ExportContacts() {
             <div>
               <h3 className="font-medium mb-2">导出内容包括：</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                <li>所有人脉的基础信息（姓名、称谓、性别、地区等）</li>
+                <li>所有人脉的基础信息（姓名、昵称、性别、地区等）</li>
                 <li>所有人脉的扩展信息（公司、职位等自定义字段）</li>
                 <li>所有标签和标签关系</li>
                 <li>所有联络记录</li>
