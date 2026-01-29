@@ -158,7 +158,7 @@ export default function ThemeSettings() {
                     }`}
                   >
                     <span className={`text-[8px] font-bold leading-[10px] text-center whitespace-pre-line text-white`}>
-                      {isThemeApplied(template.id) ? '已应用' : '点击\n应用'}
+                      {isThemeApplied(template.id) ? '已经应用' : '点击\n应用'}
                     </span>
                   </div>
                 </button>
