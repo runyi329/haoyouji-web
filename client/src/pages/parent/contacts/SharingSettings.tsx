@@ -148,19 +148,14 @@ export default function SharingSettings() {
       </div>
 
       <div className="container mx-auto px-4 py-6 space-y-6">
-        {/* 说明卡片 */}
+        {/* 标语卡片 */}
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
           <CardContent className="py-4">
-            <div className="flex items-start gap-3">
-              <Share2 className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-                  人脉共享功能
-                </p>
-                <p className="text-xs text-purple-600 dark:text-purple-400">
-                  您可以将自己的人脉数据共享给其他用户查看。通过下方的连接列表管理您的共享对象，并可以精细控制每个连接可以看到哪些字段信息。
-                </p>
-              </div>
+            <div className="flex items-center justify-center gap-3">
+              <Share2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <p className="text-base font-medium text-purple-800 dark:text-purple-200 text-center">
+                每个人都是一座金矿，关键在于如何挖掘和连接。
+              </p>
             </div>
           </CardContent>
         </Card>
