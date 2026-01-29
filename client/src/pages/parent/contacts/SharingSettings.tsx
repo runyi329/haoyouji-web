@@ -167,7 +167,8 @@ export default function SharingSettings() {
                 关键在于如何挖掘和连接。
               </p>
             </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Tab按钮 */}
         <div className="flex gap-3">
