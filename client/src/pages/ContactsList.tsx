@@ -1831,6 +1831,7 @@ export default function ContactsList() {
                     {/* 右上角操作按钮 */}
                     <div className="flex items-center gap-1">
                       {/* 快捷联络按钮 - 共享人脉禁用 */}
+                      {/* 快速联络按钮 */}
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -1838,19 +1839,17 @@ export default function ContactsList() {
                         onClick={(e) => {
                           if (contact._isShared) {
                             e.stopPropagation();
-                            return; // 共享人脉不可点击
+                            return;
                           }
                           handleQuickContactClick(e, contact);
                         }}
-                        disabled={contact._isShared}
+                        disabled={contact._isShared || contact.hasTodayInteraction}
                       >
                         <MessageCircle 
-                          className={`h-4 w-4 ${
-                            contact._isShared
-                              ? 'text-gray-300' // 共享人脉显示暗色
-                              : contact.hasTodayInteraction 
-                                ? 'text-gray-400' 
-                                : 'text-blue-500'
+                          className={`h-4 w-4 transition-colors ${
+                            contact._isShared || contact.hasTodayInteraction
+                              ? 'text-gray-400 opacity-50'
+                              : 'text-blue-500 hover:text-blue-600'
                           }`}
                         />
                       </Button>
