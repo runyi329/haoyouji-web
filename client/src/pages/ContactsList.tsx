@@ -1133,7 +1133,8 @@ export default function ContactsList() {
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-xs hover:underline"
+                    style={{ color: 'var(--color-primary)' }}
                   >
                     清空
                   </button>
@@ -1186,9 +1187,13 @@ export default function ContactsList() {
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="border rounded-lg p-3 mb-4 flex flex-wrap items-center justify-between gap-2"
+             style={{ 
+               backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, white)',
+               borderColor: 'var(--color-primary)'
+             }}>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-blue-700">
+            <span className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
               已选择 {selectedContactIds.length} 人
             </span>
             <Button
@@ -1334,7 +1339,12 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                    className="text-xs h-7 px-2"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, white)',
+                      borderColor: 'var(--color-primary)',
+                      color: 'var(--color-primary)'
+                    }}
                   >
                     月关注
                   </Button>
@@ -1598,7 +1608,11 @@ export default function ContactsList() {
               return (
                 <Card 
                   key={contact.id}
-                  className={`hover:shadow-lg transition-all cursor-pointer relative ${isContactSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                  className="hover:shadow-lg transition-all cursor-pointer relative"
+                  style={isContactSelected ? {
+                    boxShadow: `0 0 0 2px var(--color-primary)`,
+                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 5%, white)'
+                  } : {}}
                   onClick={(e) => {
                     if (selectedContactIds.length > 0) {
                       // 如果已有选中的人脉，点击卡片切换选中状态
@@ -1645,7 +1659,10 @@ export default function ContactsList() {
                           setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
                         }
                       }}
-                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="w-5 h-5 rounded border-gray-300"
+                      style={{ 
+                        accentColor: 'var(--color-primary)'
+                      }}
                     />
                   </div>
                 )}
@@ -1665,8 +1682,9 @@ export default function ContactsList() {
                         {(contact as any).hasReferrer !== undefined && (
                           (contact as any).hasReferrer ? (
                             <UserCheck className={`h-4 w-4 ${
-                              contact._isShared ? 'text-gray-400' : 'text-blue-500'
-                            }`} />
+                              contact._isShared ? 'text-gray-400' : ''
+                            }`}
+                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}} />
                           ) : (
                             <UserX className="h-4 w-4 text-gray-400" />
                           )
@@ -1686,8 +1704,9 @@ export default function ContactsList() {
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
                                 ? 'text-gray-400 cursor-default' 
-                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                                : 'hover:opacity-70 cursor-pointer'
                             }`}
+                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
                             title={contact._isShared ? '' : '点击查看互动记录'}
                             disabled={contact._isShared}
                           >
@@ -1709,8 +1728,9 @@ export default function ContactsList() {
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
                                 ? 'text-gray-400 cursor-default' 
-                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                                : 'hover:opacity-70 cursor-pointer'
                             }`}
+                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
                             title={contact._isShared ? '' : '点击查看直接推荐'}
                             disabled={contact._isShared}
                           >
@@ -1732,8 +1752,9 @@ export default function ContactsList() {
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
                                 ? 'text-gray-400 cursor-default' 
-                                : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                                : 'hover:opacity-70 cursor-pointer'
                             }`}
+                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
                             title={contact._isShared ? '' : '点击查看间接推荐'}
                             disabled={contact._isShared}
                           >
@@ -1774,7 +1795,7 @@ export default function ContactsList() {
                         {/* 共享者标识 - 显示这个人脉是谁共享给我的，放在最后 */}
                         {contact._isShared && contact._sharedBy && (
                           <span className="flex items-center gap-0.5">
-                            <Handshake className="h-4 w-4 text-blue-500" />
+                            <Handshake className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
                             <span className="text-xs text-muted-foreground">{contact._sharedBy}</span>
                           </span>
                         )}
@@ -2198,22 +2219,22 @@ export default function ContactsList() {
             <AlertDialogDescription>
               {confirmDialog.type === 'add' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉批量添加「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉批量添加「
+                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'remove' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉批量移除「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉批量移除「
+                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'cycle' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉设置「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉设置「
+                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
                   」关注周期，是否继续？
                 </span>
               )}
