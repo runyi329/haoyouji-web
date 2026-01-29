@@ -46,16 +46,16 @@ export async function saveUserFavoriteFeatures(
   if (existing.length === 0) {
     // 创建新记录
     await db.insert(userPreferences).values({
-      userId,
-      favoriteFeatures: featureIds,
+      userId: userId,
+      favoriteFeatures: featureIds as any,
+      homeCardOrder: null,
     });
   } else {
     // 更新现有记录
     await db
       .update(userPreferences)
       .set({
-        favoriteFeatures: featureIds,
-        updatedAt: new Date(),
+        favoriteFeatures: featureIds as any,
       })
       .where(eq(userPreferences.userId, userId));
   }
