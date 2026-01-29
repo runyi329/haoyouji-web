@@ -277,7 +277,6 @@ export default function AddContact() {
                   onFocus={() => setShowSuggestions(searchQuery.length > 0)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   placeholder="请输入姓名"
-                  className="h-10"
                 />
                 
                 {/* 模糊查询下拉框 */}
@@ -322,7 +321,6 @@ export default function AddContact() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="请输入昵称"
-                  className="h-10"
                 />
               </div>
             </div>
@@ -332,7 +330,7 @@ export default function AddContact() {
               <div className="space-y-2">
                 <Label htmlFor="gender">性别</Label>
                 <Select value={gender} onValueChange={setGender}>
-                  <SelectTrigger id="gender" className="h-10">
+                  <SelectTrigger id="gender" className="w-full">
                     <SelectValue placeholder="请选择性别" />
                   </SelectTrigger>
                   <SelectContent>
@@ -346,7 +344,7 @@ export default function AddContact() {
               <div className="space-y-2">
                 <Label htmlFor="region">地区</Label>
                 <Select value={region} onValueChange={setRegion}>
-                  <SelectTrigger id="region" className="h-10">
+                  <SelectTrigger id="region" className="w-full">
                     <SelectValue placeholder="请选择地区" />
                   </SelectTrigger>
                   <SelectContent>
