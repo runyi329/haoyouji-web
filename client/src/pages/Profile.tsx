@@ -39,6 +39,7 @@ import {
   Palette,
   ArrowLeft,
 } from "lucide-react";
+import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
   DndContext,
   closestCenter,
@@ -397,7 +398,7 @@ export default function Profile() {
     { id: "favorites", icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
     { id: "friends", icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
     { id: "calendar", icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },
-    { id: "points", icon: Award, label: "我的积分", badge: user.points, onClick: () => navigate("/parent/points") },
+    { id: "points", icon: Award, label: "我的积分", badge: null, onClick: () => navigate("/parent/points") },
   ];
 
   // 账户管理功能（不包括编辑资料，已移至常用功能）
@@ -514,7 +515,7 @@ export default function Profile() {
                     backgroundColor: 'color-mix(in srgb, var(--color-secondary) 15%, white)',
                     color: 'var(--color-secondary)'
                   }}>
-                  ⭐ {pointsData?.points || 0} 积分
+                  <UsdtIcon size={16} /> {pointsData?.points || 0} 积分
                 </span>
               </div>
             </div>

@@ -51,6 +51,7 @@ import VocabularyMasterManager from "./admin/VocabularyMasterManager";
 import AccountRelationshipManager from "./admin/AccountRelationshipManager";
 import MasterLibraryManager from "./admin/MasterLibraryManager";
 import UserPermissionsManager from "./admin/UserPermissionsManager";
+import PointsManagement from "./admin/PointsManagement";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -255,9 +256,9 @@ export default function Admin() {
               <ListTodo className="w-4 h-4 mr-1 hidden sm:inline" />
               任务
             </TabsTrigger>
-            <TabsTrigger value="rewards" className="text-xs sm:text-sm">
+            <TabsTrigger value="points" className="text-xs sm:text-sm">
               <Gift className="w-4 h-4 mr-1 hidden sm:inline" />
-              奖励
+              积分
             </TabsTrigger>
 
             <TabsTrigger value="masterLibrary" className="text-xs sm:text-sm">
@@ -624,27 +625,8 @@ export default function Admin() {
             <MasterLibraryManager />
           </TabsContent>
 
-          <TabsContent value="rewards">
-            <Card className="p-4">
-              <h2 className="font-bold mb-4">奖励规则管理</h2>
-              <p className="text-muted-foreground text-sm">
-                在这里设置各种活动的五角星奖励规则和商城商品。
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Link href="/rewards">
-                  <Button variant="outline">
-                    <Gift className="w-4 h-4 mr-2" />
-                    前往奖励中心
-                  </Button>
-                </Link>
-                <Link href="/star-shop">
-                  <Button variant="outline">
-                    <Star className="w-4 h-4 mr-2" />
-                    前往星星商城
-                  </Button>
-                </Link>
-              </div>
-            </Card>
+          <TabsContent value="points">
+            <PointsManagement />
           </TabsContent>
 
           {/* 游戏奖励配置 */}

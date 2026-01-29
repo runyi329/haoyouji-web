@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Settings } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 
 const ACTION_TYPE_NAMES: Record<string, string> = {
   add_contact: "添加人脉",
@@ -39,6 +41,15 @@ const ACTION_TYPE_NAMES: Record<string, string> = {
   be_referrer: "被加为推荐人",
   manual_adjust: "管理员调整",
 };
+
+interface PointRule {
+  id: number;
+  actionType: string;
+  actionName: string;
+  points: number;
+  isActive: boolean;
+  description?: string;
+}
 
 export default function PointsManagement() {
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -51,6 +62,9 @@ export default function PointsManagement() {
   const [historySearchKeyword, setHistorySearchKeyword] = useState("");
   const [historyActionType, setHistoryActionType] = useState<string>("all");
   const [historyTimeRange, setHistoryTimeRange] = useState<string>("all");
+
+  // 积分规则编辑状态
+  const [editingRules, setEditingRules] = useState<Record<string, { points: number; isActive: boolean }>>({});
 
   // 获取所有用户
   const { data: usersData, isLoading, refetch } = trpc.pointSystem.getAllUsers.useQuery({
@@ -70,6 +84,23 @@ export default function PointsManagement() {
     pageSize: 100,
   });
 
+  // 获取所有积分规则
+  const { data: pointRules, isLoading: isLoadingRules, refetch: refetchRules } = trpc.pointSystem.getAllRules.useQuery();
+
+  // 初始化编辑状态
+  useEffect(() => {
+    if (pointRules) {
+      const initialState: Record<string, { points: number; isActive: boolean }> = {};
+      pointRules.forEach((rule: PointRule) => {
+        initialState[rule.actionType] = {
+          points: rule.points,
+          isActive: rule.isActive,
+        };
+      });
+      setEditingRules(initialState);
+    }
+  }, [pointRules]);
+
   // 调整积分
   const adjustMutation = trpc.pointSystem.adjustUserPoints.useMutation({
     onSuccess: () => {
@@ -82,6 +113,17 @@ export default function PointsManagement() {
     },
     onError: (error) => {
       toast.error(`调整失败：${error.message}`);
+    },
+  });
+
+  // 更新积分规则
+  const updateRuleMutation = trpc.pointSystem.updateRule.useMutation({
+    onSuccess: () => {
+      toast.success("积分规则更新成功");
+      refetchRules();
+    },
+    onError: (error) => {
+      toast.error(`更新失败：${error.message}`);
     },
   });
 
@@ -102,6 +144,39 @@ export default function PointsManagement() {
       points,
       description: adjustDescription,
     });
+  };
+
+  const handleSaveRules = () => {
+    if (!pointRules) return;
+
+    // 批量更新所有规则
+    const promises = pointRules.map((rule: PointRule) => {
+      const editedRule = editingRules[rule.actionType];
+      if (editedRule && (editedRule.points !== rule.points || editedRule.isActive !== rule.isActive)) {
+        return updateRuleMutation.mutateAsync({
+          actionType: rule.actionType,
+          points: editedRule.points,
+          isActive: editedRule.isActive,
+        });
+      }
+      return Promise.resolve();
+    });
+
+    Promise.all(promises).then(() => {
+      toast.success("所有积分规则已保存");
+    }).catch((error) => {
+      toast.error(`保存失败：${error.message}`);
+    });
+  };
+
+  const handleRuleChange = (actionType: string, field: 'points' | 'isActive', value: number | boolean) => {
+    setEditingRules(prev => ({
+      ...prev,
+      [actionType]: {
+        ...prev[actionType],
+        [field]: value,
+      },
+    }));
   };
 
   const displayUsers = searchKeyword ? searchResults : usersData?.users;
@@ -137,7 +212,7 @@ export default function PointsManagement() {
       </div>
 
       <Tabs defaultValue="users" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-3xl grid-cols-3">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             用户管理
@@ -145,6 +220,10 @@ export default function PointsManagement() {
           <TabsTrigger value="history" className="flex items-center gap-2">
             <History className="h-4 w-4" />
             历史记录
+          </TabsTrigger>
+          <TabsTrigger value="coefficients" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            积分规则
           </TabsTrigger>
         </TabsList>
 
@@ -303,6 +382,79 @@ export default function PointsManagement() {
               </Table>
             </Card>
           )}
+        </TabsContent>
+
+        {/* 积分规则标签页 */}
+        <TabsContent value="coefficients" className="mt-6">
+          <Card className="p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold mb-2">积分规则管理</h2>
+              <p className="text-sm text-muted-foreground">
+                调整不同行为的积分值和启用状态，修改后将影响所有用户的积分获取
+              </p>
+            </div>
+
+            {isLoadingRules ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4">
+                  {pointRules?.map((rule: PointRule) => (
+                    <Card key={rule.actionType} className="p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">{rule.actionName}</h3>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={editingRules[rule.actionType]?.isActive ?? rule.isActive}
+                                onCheckedChange={(checked) => handleRuleChange(rule.actionType, 'isActive', checked)}
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                {editingRules[rule.actionType]?.isActive ?? rule.isActive ? '已启用' : '已禁用'}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {rule.description || `用户${rule.actionName}时获得的积分`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={editingRules[rule.actionType]?.points ?? rule.points}
+                            onChange={(e) => handleRuleChange(rule.actionType, 'points', parseInt(e.target.value) || 0)}
+                            className="w-24 text-center"
+                          />
+                          <span className="text-sm text-muted-foreground whitespace-nowrap">积分</span>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <Button variant="outline" onClick={() => refetchRules()}>
+                    重置
+                  </Button>
+                  <Button onClick={handleSaveRules} disabled={updateRuleMutation.isPending}>
+                    {updateRuleMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        保存中...
+                      </>
+                    ) : (
+                      "保存规则"
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 
