@@ -345,10 +345,10 @@ export default function Profile() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 pb-20">
       <div className="container max-w-4xl py-8 px-4 relative">
         {/* 顶部用户信息卡片 */}
-        <div className="p-6 mb-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-4 relative">
+        <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
+          <div className="space-y-4">
             {/* 头像 */}
-            <div className="relative group">
+            <div className="relative group w-20">
               <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-blue-100 dark:ring-blue-900">
                 <img
                   src={displayAvatar}
@@ -373,7 +373,7 @@ export default function Profile() {
             </div>
 
             {/* 用户信息 */}
-            <div className="flex-1">
+            <div>
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                   {user.name || user.username}
