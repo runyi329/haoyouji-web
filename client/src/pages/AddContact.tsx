@@ -394,21 +394,26 @@ export default function AddContact() {
         {/* 扩展信息 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>扩展信息</CardTitle>
+            <div className="space-y-1">
+              <CardTitle>扩展信息</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                可添加：公司、职位、微信、电话、生日等
+              </p>
+            </div>
             <Button
               size="sm"
               variant="outline"
               onClick={() => setShowFieldSelector(true)}
-              className="gap-2"
+              className="gap-1 whitespace-nowrap"
             >
               <Plus className="h-4 w-4" />
-              添加字段
+              添加
             </Button>
           </CardHeader>
           <CardContent>
             {extendedFields.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                暂无扩展信息，点击右上角"添加字段"按钮添加
+                暂无扩展信息，点击右上角“+添加”按钮
               </p>
             ) : (
               <div className="space-y-3">
