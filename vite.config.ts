@@ -174,7 +174,10 @@ export default defineConfig({
   server: {
     host: true,
     hmr: false,
-    watch: null,
+    watch: {
+      ignored: ['**/*'],
+      usePolling: false,
+    },
     allowedHosts: [
       ".manuspre.computer",
       ".manus.computer",
