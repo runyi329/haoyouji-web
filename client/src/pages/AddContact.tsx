@@ -450,6 +450,7 @@ export default function AddContact() {
         onOpenChange={setShowFieldSelector}
         categories={fieldCategories || []}
         onSelect={handleCategorySelect}
+        contactName={name}
       />
     </div>
   );

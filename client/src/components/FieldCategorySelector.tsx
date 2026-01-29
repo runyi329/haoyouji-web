@@ -19,6 +19,7 @@ interface FieldCategorySelectorProps {
   onOpenChange: (open: boolean) => void;
   categories: FieldCategory[];
   onSelect: (category: FieldCategory, value: string) => void;
+  contactName?: string; // 当前人脉的姓名，用于银行卡持卡人
 }
 
 export function FieldCategorySelector({
@@ -26,10 +27,16 @@ export function FieldCategorySelector({
   onOpenChange,
   categories,
   onSelect,
+  contactName = '',
 }: FieldCategorySelectorProps) {
   const [selectedMainCategory, setSelectedMainCategory] = useState<FieldCategory | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<FieldCategory | null>(null);
   const [fieldValue, setFieldValue] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState(''); // 银行卡号
+  const [bankName, setBankName] = useState(''); // 开户行
+  
+  // 判断是否是银行卡号字段
+  const isBankCard = selectedSubCategory?.name.includes('银行卡') || selectedSubCategory?.name.includes('卡号');
 
   const handleMainCategoryClick = (category: FieldCategory) => {
     setSelectedMainCategory(category);
@@ -40,24 +47,46 @@ export function FieldCategorySelector({
   const handleSubCategoryClick = (category: FieldCategory) => {
     setSelectedSubCategory(category);
     setFieldValue('');
+    setBankAccountNumber('');
+    setBankName('');
   };
 
   const handleBack = () => {
     if (selectedSubCategory) {
       setSelectedSubCategory(null);
       setFieldValue('');
+      setBankAccountNumber('');
+      setBankName('');
     } else if (selectedMainCategory) {
       setSelectedMainCategory(null);
     }
   };
 
   const handleAdd = () => {
-    if (selectedSubCategory && fieldValue.trim()) {
-      onSelect(selectedSubCategory, fieldValue.trim());
+    if (selectedSubCategory) {
+      let value = '';
+      
+      // 如果是银行卡，组合三个字段
+      if (isBankCard) {
+        if (!bankAccountNumber.trim() || !bankName.trim()) {
+          return; // 银行卡号和开户行必填
+        }
+        // 格式：银行卡号 | 持卡人 | 开户行
+        value = `${bankAccountNumber.trim()} | ${contactName} | ${bankName.trim()}`;
+      } else {
+        if (!fieldValue.trim()) {
+          return;
+        }
+        value = fieldValue.trim();
+      }
+      
+      onSelect(selectedSubCategory, value);
       // 重置状态
       setSelectedMainCategory(null);
       setSelectedSubCategory(null);
       setFieldValue('');
+      setBankAccountNumber('');
+      setBankName('');
       onOpenChange(false);
     }
   };
@@ -66,6 +95,8 @@ export function FieldCategorySelector({
     setSelectedMainCategory(null);
     setSelectedSubCategory(null);
     setFieldValue('');
+    setBankAccountNumber('');
+    setBankName('');
     onOpenChange(false);
   };
 
@@ -140,19 +171,68 @@ export function FieldCategorySelector({
           {/* 输入字段值 */}
           {selectedSubCategory && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fieldValue">
-                  {selectedSubCategory.name} <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="fieldValue"
-                  type={selectedSubCategory.fieldType === 'date' ? 'date' : 'text'}
-                  value={fieldValue}
-                  onChange={(e) => setFieldValue(e.target.value)}
-                  placeholder={`请输入${selectedSubCategory.name}`}
-                  autoFocus
-                />
-              </div>
+              {isBankCard ? (
+                // 银行卡特殊处理：三个字段
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="bankAccountNumber">
+                      银行卡号 <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="bankAccountNumber"
+                      type="text"
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value)}
+                      placeholder="请输入银行卡号"
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="cardholderName">
+                      持卡人姓名
+                    </Label>
+                    <Input
+                      id="cardholderName"
+                      type="text"
+                      value={contactName}
+                      disabled
+                      className="bg-muted cursor-not-allowed"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      持卡人默认为当前人脉本人，不可修改
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="bankName">
+                      开户行 <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="bankName"
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="请输入开户行（如：中国工商银行北京分行）"
+                    />
+                  </div>
+                </>
+              ) : (
+                // 普通字段
+                <div className="space-y-2">
+                  <Label htmlFor="fieldValue">
+                    {selectedSubCategory.name} <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="fieldValue"
+                    type={selectedSubCategory.fieldType === 'date' ? 'date' : 'text'}
+                    value={fieldValue}
+                    onChange={(e) => setFieldValue(e.target.value)}
+                    placeholder={`请输入${selectedSubCategory.name}`}
+                    autoFocus
+                  />
+                </div>
+              )}
 
               <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
                 <p className="text-sm text-blue-900 dark:text-blue-100">
