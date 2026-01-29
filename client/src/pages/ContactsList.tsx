@@ -132,7 +132,32 @@ function SortableTagItem({
   );
 }
 
-// 预定义的颜色选项
+// 基于主题色生成标签颜色选项
+function getThemeBasedColorOptions(): string[] {
+  const root = document.documentElement;
+  const primary = getComputedStyle(root).getPropertyValue('--color-primary').trim() || '#9333EA';
+  const secondary = getComputedStyle(root).getPropertyValue('--color-secondary').trim() || '#A78BFA';
+  const text = getComputedStyle(root).getPropertyValue('--color-text').trim() || '#3F3852';
+  const accent1 = getComputedStyle(root).getPropertyValue('--color-accent1').trim() || '#FFFFFF';
+  const accent2 = getComputedStyle(root).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
+  
+  // 为每种主题色生成深浅变化
+  const colors = [primary, secondary, text, accent2];
+  const variations: string[] = [];
+  
+  colors.forEach(color => {
+    // 添加原色
+    variations.push(color);
+    // 添加浅色版本（混合50%白色）
+    variations.push(`color-mix(in srgb, ${color} 50%, white)`);
+    // 添加深色版本（混合20%黑色）
+    variations.push(`color-mix(in srgb, ${color} 80%, black)`);
+  });
+  
+  return variations;
+}
+
+// 预定义的颜色选项（作为默认值）
 const COLOR_OPTIONS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#ec4899", "#06b6d4", "#eab308", "#14b8a6", "#f97316",
@@ -179,6 +204,29 @@ export default function ContactsList() {
   const [selectedTag, setSelectedTag] = useState<any>(null);
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(COLOR_OPTIONS[0]);
+  
+  // 使用主题色生成的颜色选项
+  const [themeColorOptions, setThemeColorOptions] = useState<string[]>([]);
+  
+  // 初始化主题颜色选项
+  useEffect(() => {
+    const updateColorOptions = () => {
+      const options = getThemeBasedColorOptions();
+      setThemeColorOptions(options);
+      // 如果当前标签颜色是默认值，更新为主题色
+      if (tagColor === COLOR_OPTIONS[0]) {
+        setTagColor(options[0]);
+      }
+    };
+    updateColorOptions();
+    // 监听主题变化
+    const observer = new MutationObserver(updateColorOptions);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style']
+    });
+    return () => observer.disconnect();
+  }, []);
   
   // 多选模式状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -1918,12 +1966,12 @@ export default function ContactsList() {
                 onChange={(e) => setTagName(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>标签颜色</Label>
+              <div className="space-y-2">
+              <Label>标签颜色（基于当前主题）</Label>
               <div className="flex gap-2 flex-wrap">
-                {COLOR_OPTIONS.map((color) => (
+                {(themeColorOptions.length > 0 ? themeColorOptions : COLOR_OPTIONS).map((color, index) => (
                   <button
-                    key={color}
+                    key={`${color}-${index}`}
                     className={`w-8 h-8 rounded-full border-2 ${
                       tagColor === color ? "border-black" : "border-transparent"
                     }`}
@@ -1963,11 +2011,11 @@ export default function ContactsList() {
               />
             </div>
             <div className="space-y-2">
-              <Label>标签颜色</Label>
+              <Label>标签颜色（基于当前主题）</Label>
               <div className="flex gap-2 flex-wrap">
-                {COLOR_OPTIONS.map((color) => (
+                {(themeColorOptions.length > 0 ? themeColorOptions : COLOR_OPTIONS).map((color, index) => (
                   <button
-                    key={color}
+                    key={`${color}-${index}`}
                     className={`w-8 h-8 rounded-full border-2 ${
                       tagColor === color ? "border-black" : "border-transparent"
                     }`}
