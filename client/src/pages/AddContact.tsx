@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -46,6 +46,8 @@ export default function AddContact() {
   
   // 添加扩展信息对话框
   const [showFieldSelector, setShowFieldSelector] = useState(false);
+  const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
+  const [editingFieldValue, setEditingFieldValue] = useState("");
   
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
@@ -185,6 +187,52 @@ export default function AddContact() {
       // 新增模式：只更新本地状态，保存时一起提交
       toast.success("扩展信息已添加");
     }
+  };
+  
+  // 编辑扩展信息字段
+  const handleEditExtendedField = (index: number) => {
+    setEditingFieldIndex(index);
+    setEditingFieldValue(extendedFields[index].value);
+  };
+  
+  // 保存编辑
+  const handleSaveEdit = () => {
+    if (editingFieldIndex === null) return;
+    
+    if (!editingFieldValue.trim()) {
+      toast.error("请输入内容");
+      return;
+    }
+    
+    const field = extendedFields[editingFieldIndex];
+    
+    if (isEditMode && contactId && field.id) {
+      // 编辑模式：更新数据库
+      updateFieldValueMutation.mutate({
+        id: field.id,
+        value: editingFieldValue.trim(),
+      });
+    }
+    
+    // 更新本地状态
+    setExtendedFields(prev => {
+      const newFields = [...prev];
+      newFields[editingFieldIndex] = {
+        ...newFields[editingFieldIndex],
+        value: editingFieldValue.trim(),
+      };
+      return newFields;
+    });
+    
+    setEditingFieldIndex(null);
+    setEditingFieldValue("");
+    toast.success("修改成功");
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setEditingFieldIndex(null);
+    setEditingFieldValue("");
   };
   
   // 删除扩展信息字段
@@ -456,20 +504,65 @@ export default function AddContact() {
                     key={index}
                     className="flex items-center gap-3 p-3 rounded-lg border"
                   >
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-muted-foreground">
-                        {field.categoryName}
-                      </div>
-                      <div className="text-base">{field.value}</div>
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleDeleteExtendedField(index)}
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {editingFieldIndex === index ? (
+                      // 编辑模式
+                      <>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                            {field.categoryName}
+                          </div>
+                          <Input
+                            value={editingFieldValue}
+                            onChange={(e) => setEditingFieldValue(e.target.value)}
+                            placeholder="请输入内容"
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={handleSaveEdit}
+                            className="whitespace-nowrap"
+                          >
+                            保存
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}
+                            className="whitespace-nowrap"
+                          >
+                            取消
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      // 显示模式
+                      <>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-muted-foreground">
+                            {field.categoryName}
+                          </div>
+                          <div className="text-base">{field.value}</div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleEditExtendedField(index)}
+                          className="h-8 w-8 hover:text-primary"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDeleteExtendedField(index)}
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
