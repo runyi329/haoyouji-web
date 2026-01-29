@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 
-// 导入霞鹜文楷Web字体
+// 导入得意黑Web字体
 if (typeof document !== 'undefined') {
   const link = document.createElement('link');
-  link.href = 'https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.1.0/style.css';
+  link.href = 'https://cdn.jsdelivr.net/npm/smiley-sans@1.1.1/dist/smiley-sans.min.css';
   link.rel = 'stylesheet';
   document.head.appendChild(link);
 }
@@ -160,10 +160,10 @@ export default function SharingSettings() {
         <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
           <CardContent className="py-1">
             <div className="text-center">
-              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"LXGW WenKai", "LXGW WenKai Screen", serif' }}>
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"Smiley Sans", sans-serif' }}>
                 每个人都是一座金矿，
               </p>
-              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"LXGW WenKai", "LXGW WenKai Screen", serif' }}>
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"Smiley Sans", sans-serif' }}>
                 关键在于如何挖掘和连接。
               </p>
             </div>
