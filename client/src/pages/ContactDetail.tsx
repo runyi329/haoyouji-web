@@ -960,20 +960,14 @@ export default function ContactDetail() {
                       
                       {contact.gender && (
                         <div className="flex items-center">
-                          {contact.gender === '男' ? (
-                            <User className="h-4 w-4 mr-1.5 text-blue-500" />
-                          ) : contact.gender === '女' ? (
-                            <User className="h-4 w-4 mr-1.5 text-pink-500" />
-                          ) : (
-                            <UserCircle className="h-4 w-4 mr-1.5 text-muted-foreground" />
-                          )}
+                          <img src="/icon-gender.png" alt="性别" className="h-4 w-4 mr-1.5" />
                           <span title="性别">{contact.gender}</span>
                         </div>
                       )}
                       
                       {contact.region && (
                         <div className="flex items-center">
-                          <MapPin className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          <img src="/icon-region.png" alt="地区" className="h-4 w-4 mr-1.5" />
                           <span title="所在地区">{contact.region}</span>
                         </div>
                       )}
