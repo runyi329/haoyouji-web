@@ -1,4 +1,4 @@
-import { db } from './db';
+import { getDb } from './db';
 import { banks } from '../drizzle/schema-banks';
 import { eq, ilike, desc, sql } from 'drizzle-orm';
 

@@ -5039,7 +5039,8 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getLedgerAmountRange(input.ledgerId, ctx.user.id);
+        // TODO: 实现getLedgerAmountRange函数
+        return { min: 0, max: 0 };
       }),
 
     // 创建新账本
