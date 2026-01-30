@@ -79,10 +79,6 @@ export default function AddContact() {
   const [showShoeSizeDialog, setShowShoeSizeDialog] = useState(false);
   const [selectedShoeSize, setSelectedShoeSize] = useState("");
   
-  // 菜系选择对话框（多选）
-  const [showCuisineDialog, setShowCuisineDialog] = useState(false);
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
-  
   // 饮食选择对话框（多选）
   const [showDietaryDialog, setShowDietaryDialog] = useState(false);
   const [selectedDietaries, setSelectedDietaries] = useState<string[]>([]);
@@ -668,7 +664,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '菜系', '饮食', '习惯', '健康', '性格', '品牌', '娱乐']
+                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '饮食', '习惯', '健康', '性格', '品牌', '娱乐']
                 },
                 { 
                   id: 'experience', 
@@ -759,12 +755,6 @@ export default function AddContact() {
                                   setSelectedShoeSize(existingValue.value);
                                 }
                                 setShowShoeSizeDialog(true);
-                              } else if (field === '菜系') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '菜系');
-                                if (existingValue) {
-                                  setSelectedCuisines(existingValue.value.split(','));
-                                }
-                                setShowCuisineDialog(true);
                               } else if (field === '饮食') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '饮食');
                                 if (existingValue) {
@@ -1291,61 +1281,15 @@ export default function AddContact() {
           </div>
         </div>
       )}
-      
-      {/* 菜系选择对话框（多选） */}
-      {showCuisineDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCuisineDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">选择菜系（可多选）</h3>
-            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
-              {['粤菜', '本帮菜', '川菜', '湘菜', '鲁菜', '徽菜', '闽菜', '浙菜', '苏菜', '东北菜', '日料', '韩餐', '西餐', '东南亚菜', '清真菜', '火锅', '烧烤', '海鲜'].map(cuisine => (
-                <button
-                  key={cuisine}
-                  onClick={() => {
-                    setSelectedCuisines(prev => 
-                      prev.includes(cuisine) ? prev.filter(c => c !== cuisine) : [...prev, cuisine]
-                    );
-                  }}
-                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
-                    selectedCuisines.includes(cuisine)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                      : 'border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {cuisine}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '菜系');
-                setSelectedCuisines(existingValue ? existingValue.value.split(',') : []);
-                setShowCuisineDialog(false);
-              }}>取消</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedCuisines.length > 0) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '菜系');
-                    return [...filtered, { categoryId: 0, categoryName: '菜系', value: selectedCuisines.join(',') }];
-                  });
-                  toast.success(`已选择菜系：${selectedCuisines.join('、')}`);
-                  setShowCuisineDialog(false);
-                } else {
-                  toast.error("请至少选择一个菜系");
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
+
       
       {/* 饮食选择对话框（多选） */}
       {showDietaryDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDietaryDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">选择饮食（可多选）</h3>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {['免辣', '免香菜', '免葱', '免姜', '免蒜', '免海鲜', '素食', '清真'].map(dietary => (
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['粤菜', '本帮菜', '川菜', '湘菜', '鲁菜', '徽菜', '闽菜', '浙菜', '苏菜', '东北菜', '日料', '韩餐', '西餐', '东南亚菜', '清真菜', '火锅', '烧烤', '海鲜', '免辣', '免香菜', '免葱', '免姜', '免蒜', '免海鲜', '素食', '清真'].map(dietary => (
                 <button
                   key={dietary}
                   onClick={() => {
