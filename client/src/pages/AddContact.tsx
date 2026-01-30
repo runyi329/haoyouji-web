@@ -111,6 +111,31 @@ export default function AddContact() {
   const [showEntertainmentDialog, setShowEntertainmentDialog] = useState(false);
   const [selectedEntertainments, setSelectedEntertainments] = useState<string[]>([]);
   
+  // 职业字段对话框
+  const [showCompanyDialog, setShowCompanyDialog] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  
+  const [showFinanceDialog, setShowFinanceDialog] = useState(false);
+  const [selectedFinance, setSelectedFinance] = useState("");
+  
+  const [showLegalDialog, setShowLegalDialog] = useState(false);
+  const [selectedLegal, setSelectedLegal] = useState("");
+  
+  const [showLaborDialog, setShowLaborDialog] = useState(false);
+  const [selectedLabor, setSelectedLabor] = useState("");
+  
+  const [showTaxDialog, setShowTaxDialog] = useState(false);
+  const [selectedTax, setSelectedTax] = useState("");
+  
+  const [showHRDialog, setShowHRDialog] = useState(false);
+  const [selectedHR, setSelectedHR] = useState("");
+  
+  const [showPublicAccountDialog, setShowPublicAccountDialog] = useState(false);
+  const [selectedPublicAccount, setSelectedPublicAccount] = useState("");
+  
+  const [showPrivateAccountDialog, setShowPrivateAccountDialog] = useState(false);
+  const [selectedPrivateAccount, setSelectedPrivateAccount] = useState("");
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -663,7 +688,7 @@ export default function AddContact() {
                 { 
                   id: 'career', 
                   name: '职业',
-                  fields: []
+                  fields: ['公司', '财务', '法务', '劳务', '税务', '人事', '公户', '私户']
                 },
                 { 
                   id: 'information', 
@@ -775,6 +800,54 @@ export default function AddContact() {
                                   setSelectedEntertainments(existingValue.value.split(','));
                                 }
                                 setShowEntertainmentDialog(true);
+                              } else if (field === '公司') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '公司');
+                                if (existingValue) {
+                                  setSelectedCompany(existingValue.value);
+                                }
+                                setShowCompanyDialog(true);
+                              } else if (field === '财务') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '财务');
+                                if (existingValue) {
+                                  setSelectedFinance(existingValue.value);
+                                }
+                                setShowFinanceDialog(true);
+                              } else if (field === '法务') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '法务');
+                                if (existingValue) {
+                                  setSelectedLegal(existingValue.value);
+                                }
+                                setShowLegalDialog(true);
+                              } else if (field === '劳务') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '劳务');
+                                if (existingValue) {
+                                  setSelectedLabor(existingValue.value);
+                                }
+                                setShowLaborDialog(true);
+                              } else if (field === '税务') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '税务');
+                                if (existingValue) {
+                                  setSelectedTax(existingValue.value);
+                                }
+                                setShowTaxDialog(true);
+                              } else if (field === '人事') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '人事');
+                                if (existingValue) {
+                                  setSelectedHR(existingValue.value);
+                                }
+                                setShowHRDialog(true);
+                              } else if (field === '公户') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '公户');
+                                if (existingValue) {
+                                  setSelectedPublicAccount(existingValue.value);
+                                }
+                                setShowPublicAccountDialog(true);
+                              } else if (field === '私户') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '私户');
+                                if (existingValue) {
+                                  setSelectedPrivateAccount(existingValue.value);
+                                }
+                                setShowPrivateAccountDialog(true);
                               }
                             }}
                             className={`px-4 py-2 border rounded-lg text-sm transition-colors ${
@@ -1577,6 +1650,238 @@ export default function AddContact() {
                   setShowEntertainmentDialog(false);
                 } else {
                   toast.error("请至少选择一项");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 公司对话框 */}
+      {showCompanyDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCompanyDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">公司名称</h3>
+            <Input value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)} placeholder="请输入公司名称" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '公司');
+                setSelectedCompany(existingValue?.value || "");
+                setShowCompanyDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedCompany.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '公司');
+                    return [...filtered, { categoryId: 0, categoryName: '公司', value: selectedCompany }];
+                  });
+                  toast.success(`已设置公司：${selectedCompany}`);
+                  setShowCompanyDialog(false);
+                } else {
+                  toast.error("请输入公司名称");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 财务对话框 */}
+      {showFinanceDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFinanceDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">财务信息</h3>
+            <Input value={selectedFinance} onChange={(e) => setSelectedFinance(e.target.value)} placeholder="请输入财务信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '财务');
+                setSelectedFinance(existingValue?.value || "");
+                setShowFinanceDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedFinance.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '财务');
+                    return [...filtered, { categoryId: 0, categoryName: '财务', value: selectedFinance }];
+                  });
+                  toast.success(`已设置财务：${selectedFinance}`);
+                  setShowFinanceDialog(false);
+                } else {
+                  toast.error("请输入财务信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 法务对话框 */}
+      {showLegalDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLegalDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">法务信息</h3>
+            <Input value={selectedLegal} onChange={(e) => setSelectedLegal(e.target.value)} placeholder="请输入法务信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '法务');
+                setSelectedLegal(existingValue?.value || "");
+                setShowLegalDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedLegal.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '法务');
+                    return [...filtered, { categoryId: 0, categoryName: '法务', value: selectedLegal }];
+                  });
+                  toast.success(`已设置法务：${selectedLegal}`);
+                  setShowLegalDialog(false);
+                } else {
+                  toast.error("请输入法务信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 劳务对话框 */}
+      {showLaborDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLaborDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">劳务信息</h3>
+            <Input value={selectedLabor} onChange={(e) => setSelectedLabor(e.target.value)} placeholder="请输入劳务信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '劳务');
+                setSelectedLabor(existingValue?.value || "");
+                setShowLaborDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedLabor.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '劳务');
+                    return [...filtered, { categoryId: 0, categoryName: '劳务', value: selectedLabor }];
+                  });
+                  toast.success(`已设置劳务：${selectedLabor}`);
+                  setShowLaborDialog(false);
+                } else {
+                  toast.error("请输入劳务信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 税务对话框 */}
+      {showTaxDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaxDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">税务信息</h3>
+            <Input value={selectedTax} onChange={(e) => setSelectedTax(e.target.value)} placeholder="请输入税务信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '税务');
+                setSelectedTax(existingValue?.value || "");
+                setShowTaxDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedTax.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '税务');
+                    return [...filtered, { categoryId: 0, categoryName: '税务', value: selectedTax }];
+                  });
+                  toast.success(`已设置税务：${selectedTax}`);
+                  setShowTaxDialog(false);
+                } else {
+                  toast.error("请输入税务信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 人事对话框 */}
+      {showHRDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHRDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">人事信息</h3>
+            <Input value={selectedHR} onChange={(e) => setSelectedHR(e.target.value)} placeholder="请输入人事信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '人事');
+                setSelectedHR(existingValue?.value || "");
+                setShowHRDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedHR.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '人事');
+                    return [...filtered, { categoryId: 0, categoryName: '人事', value: selectedHR }];
+                  });
+                  toast.success(`已设置人事：${selectedHR}`);
+                  setShowHRDialog(false);
+                } else {
+                  toast.error("请输入人事信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 公户对话框 */}
+      {showPublicAccountDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPublicAccountDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">公户信息</h3>
+            <Input value={selectedPublicAccount} onChange={(e) => setSelectedPublicAccount(e.target.value)} placeholder="请输入公户信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '公户');
+                setSelectedPublicAccount(existingValue?.value || "");
+                setShowPublicAccountDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedPublicAccount.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '公户');
+                    return [...filtered, { categoryId: 0, categoryName: '公户', value: selectedPublicAccount }];
+                  });
+                  toast.success(`已设置公户：${selectedPublicAccount}`);
+                  setShowPublicAccountDialog(false);
+                } else {
+                  toast.error("请输入公户信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 私户对话框 */}
+      {showPrivateAccountDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPrivateAccountDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">私户信息</h3>
+            <Input value={selectedPrivateAccount} onChange={(e) => setSelectedPrivateAccount(e.target.value)} placeholder="请输入私户信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '私户');
+                setSelectedPrivateAccount(existingValue?.value || "");
+                setShowPrivateAccountDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedPrivateAccount.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '私户');
+                    return [...filtered, { categoryId: 0, categoryName: '私户', value: selectedPrivateAccount }];
+                  });
+                  toast.success(`已设置私户：${selectedPrivateAccount}`);
+                  setShowPrivateAccountDialog(false);
+                } else {
+                  toast.error("请输入私户信息");
                 }
               }}>确定</Button>
             </div>
