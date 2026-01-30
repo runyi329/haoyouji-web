@@ -629,6 +629,11 @@ export default function AddContact() {
                             key={field}
                             onClick={() => {
                               if (field === '星座') {
+                                // 如果已经有值，预填充到选择器中
+                                const existingValue = extendedFields.find(f => f.categoryName === '星座');
+                                if (existingValue) {
+                                  setSelectedConstellation(existingValue.value);
+                                }
                                 setShowConstellationDialog(true);
                               }
                               // 其他字段的处理将在后续添加
