@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical, Copy, Users, Contact, UserCircle } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical, Copy, Users, Contact, UserCircle, Mars, Venus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -960,14 +960,18 @@ export default function ContactDetail() {
                       
                       {contact.gender && (
                         <div className="flex items-center">
-                          <img src="/icon-gender.png" alt="性别" className="h-4 w-4 mr-1.5" />
+                          {contact.gender === '男' ? (
+                            <Mars className="h-4 w-4 mr-1.5 text-blue-500" />
+                          ) : (
+                            <Venus className="h-4 w-4 mr-1.5 text-pink-500" />
+                          )}
                           <span title="性别">{contact.gender}</span>
                         </div>
                       )}
                       
                       {contact.region && (
                         <div className="flex items-center">
-                          <img src="/icon-region.png" alt="地区" className="h-4 w-4 mr-1.5" />
+                          <MapPin className="h-4 w-4 mr-1.5 text-muted-foreground" />
                           <span title="所在地区">{contact.region}</span>
                         </div>
                       )}
