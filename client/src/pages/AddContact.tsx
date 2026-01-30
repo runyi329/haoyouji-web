@@ -15,7 +15,7 @@ import { ArrowLeft, Trash2, Plus, Pencil, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
-import { InlineFieldSelector } from "@/components/InlineFieldSelector";
+// import { InlineFieldSelector } from "@/components/InlineFieldSelector";
 
 // 扩展信息字段值
 interface ExtendedFieldValue {
@@ -122,7 +122,22 @@ export default function AddContact() {
   
   // 创建人脉API
   const createContactMutation = trpc.contacts.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // 如果有扩展信息，逐个保存
+      if (extendedFields.length > 0) {
+        try {
+          for (const field of extendedFields) {
+            await addFieldValueMutation.mutateAsync({
+              contactId: data.id,
+              categoryId: field.categoryId,
+              value: field.value,
+            });
+          }
+        } catch (error) {
+          console.error('保存扩展信息失败:', error);
+          toast.error("扩展信息保存失败");
+        }
+      }
       toast.success("人脉添加成功");
       setLocation(`/parent/contacts/${data.id}`);
     },
@@ -306,17 +321,12 @@ export default function AddContact() {
         });
       }
     } else {
-      // 新增模式：创建人脉
+      // 新增模式：创建人脉（不传扩展信息，在onSuccess中保存）
       createContactMutation.mutate({
         name: name.trim(),
         title: title.trim() || undefined,
         gender: gender || undefined,
         region: region || undefined,
-        // 扩展信息字段值
-        extendedFields: extendedFields.map(f => ({
-          categoryId: f.categoryId,
-          value: f.value,
-        })),
       });
     }
   };
@@ -567,11 +577,15 @@ export default function AddContact() {
               </div>
             )}
             
-            {/* 内联分类选择器 */}
-            <InlineFieldSelector 
-              onSelect={handleCategorySelect}
-              onCategoryClick={() => setIsBasicInfoCollapsed(true)}
-            />
+            {/* 添加扩展信息按钮 */}
+            <Button
+              variant="outline"
+              onClick={() => setShowFieldSelector(true)}
+              className="w-full gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              添加扩展信息
+            </Button>
           </CardContent>
         </Card>
       </div>

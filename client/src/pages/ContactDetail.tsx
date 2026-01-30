@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical, Copy, Users, Contact, UserCircle, Mars, Venus } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical, Copy, Users, Contact, UserCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -961,9 +961,9 @@ export default function ContactDetail() {
                       {contact.gender && (
                         <div className="flex items-center">
                           {contact.gender === '男' ? (
-                            <Mars className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                            <User className="h-4 w-4 mr-1.5 text-blue-500" />
                           ) : contact.gender === '女' ? (
-                            <Venus className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                            <User className="h-4 w-4 mr-1.5 text-pink-500" />
                           ) : (
                             <UserCircle className="h-4 w-4 mr-1.5 text-muted-foreground" />
                           )}
@@ -1057,7 +1057,16 @@ export default function ContactDetail() {
                       )}
                     </button>
                   </div>
-                  {extendedFieldValues.map((fv: any) => (
+                  {extendedFieldValues
+                    .sort((a: any, b: any) => {
+                      // 银行卡类字段排在最后
+                      const aIsBankCard = isBankCardField(a.categoryName);
+                      const bIsBankCard = isBankCardField(b.categoryName);
+                      if (aIsBankCard && !bIsBankCard) return 1;
+                      if (!aIsBankCard && bIsBankCard) return -1;
+                      return 0;
+                    })
+                    .map((fv: any) => (
                     <div key={fv.id} className={`flex items-start text-sm ${isBankCardField(fv.categoryName) ? 'border-b border-gray-200 last:border-0 py-1' : ''}`}>
                       {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
                       {fv.categoryName === '公司名称' ? (
@@ -1085,7 +1094,9 @@ export default function ContactDetail() {
                                 : info.cardNumber.replace(/.(?=.{4})/g, '*');
                               const displayHolderName = showFullExtendedInfo 
                                 ? info.holderName 
-                                : info.holderName.charAt(0) + '*'.repeat(info.holderName.length - 1);
+                                : (info.holderName && info.holderName.length > 0) 
+                                  ? info.holderName.charAt(0) + '*'.repeat(info.holderName.length - 1)
+                                  : '';
                               
                               return (
                                 <>
@@ -1155,8 +1166,7 @@ export default function ContactDetail() {
                   <span>{contact.wechat}</span>
                 </div>
               )}
-              
-              {contact.address && (
+                            {contact.address && (
                 <div className="flex items-start text-sm">
                   <MapPin className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
                   <span>{contact.address}</span>
