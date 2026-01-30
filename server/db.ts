@@ -666,14 +666,14 @@ export async function getUserByUsername(username: string) {
     const db = await getDb(isGuest);
     if (!db) throw new Error("Database not available");
     if (!db) return undefined;
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const [result] = await db.select().from(users).where(eq(users.username, username));
     
     // 如果是游客用户且未找到，抛出详细错误
-    if (isGuest && result.length === 0) {
+    if (isGuest && !result) {
       throw new Error(`游客用户不存在于Manus数据库中！请检查是否正确初始化游客数据。`);
     }
     
-    return result.length > 0 ? result[0] : undefined;
+    return result || undefined;
   } catch (error) {
     // 如果是游客用户，抛出详细错误
     if (isGuest) {
