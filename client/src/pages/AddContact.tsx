@@ -580,17 +580,54 @@ export default function AddContact() {
             {/* 一级分类标题 */}
             <div className="space-y-4 mt-4">
               {[
-                { id: 'preference', name: '偏好' },
-                { id: 'experience', name: '履历' },
-                { id: 'finance', name: '财务' },
-                { id: 'relationship', name: '关系' },
-                { id: 'career', name: '职业' },
-                { id: 'information', name: '信息' },
+                { 
+                  id: 'preference', 
+                  name: '偏好',
+                  fields: ['星座', '生日', '年龄']
+                },
+                { 
+                  id: 'experience', 
+                  name: '履历',
+                  fields: []
+                },
+                { 
+                  id: 'finance', 
+                  name: '财务',
+                  fields: []
+                },
+                { 
+                  id: 'relationship', 
+                  name: '关系',
+                  fields: []
+                },
+                { 
+                  id: 'career', 
+                  name: '职业',
+                  fields: []
+                },
+                { 
+                  id: 'information', 
+                  name: '信息',
+                  fields: ['电话', '微信', '地址']
+                },
               ].map(category => (
                 <div key={category.id} className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">{category.name}</h3>
-                  {/* 二级字段将在这里显示 */}
-                  <div className="text-xs text-muted-foreground">暂无字段</div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">{category.name}</h3>
+                  {/* 二级字段方框 */}
+                  {category.fields.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {category.fields.map(field => (
+                        <button
+                          key={field}
+                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                        >
+                          {field}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">暂无字段</div>
+                  )}
                 </div>
               ))}
             </div>
