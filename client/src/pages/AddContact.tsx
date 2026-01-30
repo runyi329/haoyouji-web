@@ -63,6 +63,14 @@ export default function AddContact() {
   const [showBloodTypeDialog, setShowBloodTypeDialog] = useState(false);
   const [selectedBloodType, setSelectedBloodType] = useState("");
   
+  // 属相选择对话框
+  const [showZodiacDialog, setShowZodiacDialog] = useState(false);
+  const [selectedZodiac, setSelectedZodiac] = useState("");
+  
+  // 年龄选择对话框
+  const [showAgeDialog, setShowAgeDialog] = useState(false);
+  const [selectedAge, setSelectedAge] = useState("");
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -595,7 +603,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄', '血型']
+                  fields: ['星座', '生日', '年龄', '血型', '属相']
                 },
                 { 
                   id: 'experience', 
@@ -655,6 +663,19 @@ export default function AddContact() {
                                   setSelectedBloodType(existingValue.value);
                                 }
                                 setShowBloodTypeDialog(true);
+                              } else if (field === '属相') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '属相');
+                                if (existingValue) {
+                                  setSelectedZodiac(existingValue.value);
+                                }
+                                setShowZodiacDialog(true);
+                              } else if (field === '年龄') {
+                                // 年龄字段的处理：打开年龄选择对话框
+                                const existingValue = extendedFields.find(f => f.categoryName === '年龄');
+                                if (existingValue) {
+                                  setSelectedAge(existingValue.value);
+                                }
+                                setShowAgeDialog(true);
                               }
                               // 其他字段的处理将在后续添加
                             }}
@@ -848,6 +869,139 @@ export default function AddContact() {
                     setSelectedBloodType("");
                   } else {
                     toast.error("请选择血型");
+                  }
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 属相选择对话框 */}
+      {showZodiacDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowZodiacDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择属相</h3>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'].map(zodiac => (
+                <button
+                  key={zodiac}
+                  onClick={() => setSelectedZodiac(zodiac)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedZodiac === zodiac
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {zodiac}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowZodiacDialog(false);
+                  setSelectedZodiac("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedZodiac) {
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '属相');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '属相',
+                        value: selectedZodiac,
+                      }];
+                    });
+                    toast.success(`已选择属相：${selectedZodiac}`);
+                    setShowZodiacDialog(false);
+                    setSelectedZodiac("");
+                  } else {
+                    toast.error("请选择属相");
+                  }
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 年龄选择对话框 */}
+      {showAgeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAgeDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择出生年份</h3>
+            <div className="mb-4">
+              <Input
+                type="number"
+                placeholder="请输入出生年份（如：1990）"
+                value={selectedAge}
+                onChange={(e) => setSelectedAge(e.target.value)}
+                className="w-full"
+                min="1900"
+                max={new Date().getFullYear()}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowAgeDialog(false);
+                  setSelectedAge("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedAge && !isNaN(Number(selectedAge))) {
+                    const birthYear = Number(selectedAge);
+                    const currentYear = new Date().getFullYear();
+                    const age = currentYear - birthYear;
+                    
+                    // 保存年龄
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '年龄');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '年龄',
+                        value: String(age),
+                      }];
+                    });
+                    
+                    // 根据出生年份计算属相
+                    const zodiacAnimals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+                    const zodiacIndex = (birthYear - 1900) % 12;
+                    const zodiacAnimal = zodiacAnimals[zodiacIndex];
+                    
+                    // 自动填充属相
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '属相');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '属相',
+                        value: zodiacAnimal,
+                      }];
+                    });
+                    
+                    toast.success(`已设置年龄：${age}岁，属相：${zodiacAnimal}`);
+                    setShowAgeDialog(false);
+                    setSelectedAge("");
+                  } else {
+                    toast.error("请输入有效的年份");
                   }
                 }}
               >
