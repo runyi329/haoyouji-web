@@ -111,6 +111,18 @@ export default function AddContact() {
   const [showCompanyDialog, setShowCompanyDialog] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
   
+  const [showIndustryDialog, setShowIndustryDialog] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState("");
+  
+  const [showTypeDialog, setShowTypeDialog] = useState(false);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  
+  const [showOccupationDialog, setShowOccupationDialog] = useState(false);
+  const [selectedOccupation, setSelectedOccupation] = useState("");
+  
+  const [showCreditDialog, setShowCreditDialog] = useState(false);
+  const [selectedCredit, setSelectedCredit] = useState("");
+  
   const [showFinanceDialog, setShowFinanceDialog] = useState(false);
   const [selectedFinance, setSelectedFinance] = useState("");
   
@@ -669,7 +681,7 @@ export default function AddContact() {
                 { 
                   id: 'career', 
                   name: '职业',
-                  fields: ['公司', '财务', '法务', '劳务', '税务', '人事', '公户', '私户']
+                  fields: ['公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', '税务', '人事', '公户', '私户']
                 },
                 { 
                   id: 'information', 
@@ -787,6 +799,30 @@ export default function AddContact() {
                                   setSelectedCompany(existingValue.value);
                                 }
                                 setShowCompanyDialog(true);
+                              } else if (field === '行业') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '行业');
+                                if (existingValue) {
+                                  setSelectedIndustry(existingValue.value);
+                                }
+                                setShowIndustryDialog(true);
+                              } else if (field === '类型') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '类型');
+                                if (existingValue) {
+                                  setSelectedTypes(existingValue.value.split(','));
+                                }
+                                setShowTypeDialog(true);
+                              } else if (field === '职业') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '职业');
+                                if (existingValue) {
+                                  setSelectedOccupation(existingValue.value);
+                                }
+                                setShowOccupationDialog(true);
+                              } else if (field === '征信') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '征信');
+                                if (existingValue) {
+                                  setSelectedCredit(existingValue.value);
+                                }
+                                setShowCreditDialog(true);
                               } else if (field === '财务') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '财务');
                                 if (existingValue) {
@@ -1817,6 +1853,140 @@ export default function AddContact() {
                   setShowPrivateAccountDialog(false);
                 } else {
                   toast.error("请输入私户信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 行业对话框 */}
+      {showIndustryDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowIndustryDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">行业</h3>
+            <Input value={selectedIndustry} onChange={(e) => setSelectedIndustry(e.target.value)} placeholder="请输入行业" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '行业');
+                setSelectedIndustry(existingValue?.value || "");
+                setShowIndustryDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedIndustry.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '行业');
+                    return [...filtered, { categoryId: 0, categoryName: '行业', value: selectedIndustry }];
+                  });
+                  toast.success(`已设置行业：${selectedIndustry}`);
+                  setShowIndustryDialog(false);
+                } else {
+                  toast.error("请输入行业");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 类型对话框（多选） */}
+      {showTypeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTypeDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择类型（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['出口', '进口', '制造', '研发', '中介', '渠道', '销售', '代理'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => {
+                    setSelectedTypes(prev => 
+                      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedTypes.includes(type)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '类型');
+                setSelectedTypes(existingValue ? existingValue.value.split(',') : []);
+                setShowTypeDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedTypes.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '类型');
+                    return [...filtered, { categoryId: 0, categoryName: '类型', value: selectedTypes.join(',') }];
+                  });
+                  toast.success(`已选择类型：${selectedTypes.join('、')}`);
+                  setShowTypeDialog(false);
+                } else {
+                  toast.error("请至少选择一种类型");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 职业对话框 */}
+      {showOccupationDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowOccupationDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">职业</h3>
+            <Input value={selectedOccupation} onChange={(e) => setSelectedOccupation(e.target.value)} placeholder="请输入职业" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '职业');
+                setSelectedOccupation(existingValue?.value || "");
+                setShowOccupationDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedOccupation.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '职业');
+                    return [...filtered, { categoryId: 0, categoryName: '职业', value: selectedOccupation }];
+                  });
+                  toast.success(`已设置职业：${selectedOccupation}`);
+                  setShowOccupationDialog(false);
+                } else {
+                  toast.error("请输入职业");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 征信对话框 */}
+      {showCreditDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreditDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">征信</h3>
+            <Input value={selectedCredit} onChange={(e) => setSelectedCredit(e.target.value)} placeholder="请输入征信信息" className="mb-4" />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '征信');
+                setSelectedCredit(existingValue?.value || "");
+                setShowCreditDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedCredit.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '征信');
+                    return [...filtered, { categoryId: 0, categoryName: '征信', value: selectedCredit }];
+                  });
+                  toast.success(`已设置征信：${selectedCredit}`);
+                  setShowCreditDialog(false);
+                } else {
+                  toast.error("请输入征信信息");
                 }
               }}>确定</Button>
             </div>
