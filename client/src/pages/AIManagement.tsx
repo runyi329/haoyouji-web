@@ -17,16 +17,27 @@ interface PromptsConfig {
   maxTokens: number;
 }
 
+interface AIAssistantConfig {
+  segment1: string;
+  segment2: string;
+  segment3: string;
+  segment4: string;
+}
+
 export default function AIManagement() {
   const [, setLocation] = useLocation();
   // toast is imported from sonner
   const [config, setConfig] = useState<PromptsConfig | null>(null);
+  const [assistantConfig, setAssistantConfig] = useState<AIAssistantConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+  const [isAssistantSaving, setIsAssistantSaving] = useState(false);
 
   // 加载配置
   useEffect(() => {
     loadConfig();
+    loadAssistantConfig();
   }, []);
 
   const loadConfig = async () => {
@@ -133,6 +144,111 @@ export default function AIManagement() {
     }
   };
 
+  // AI助手配置管理
+  const loadAssistantConfig = async () => {
+    try {
+      setIsAssistantLoading(true);
+      const response = await fetch('/api/ai/assistant/prompts');
+      const result = await response.json();
+      
+      if (result.success) {
+        setAssistantConfig(result.data);
+      } else {
+        toast({
+          title: '加载失败',
+          description: result.error || '无法加载 AI 助手配置',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('加载 AI 助手配置错误:', error);
+      toast({
+        title: '加载失败',
+        description: '网络错误，请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAssistantLoading(false);
+    }
+  };
+
+  const handleAssistantSave = async () => {
+    if (!assistantConfig) return;
+
+    try {
+      setIsAssistantSaving(true);
+      const response = await fetch('/api/ai/assistant/prompts', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(assistantConfig),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: '保存成功',
+          description: 'AI 助手配置已更新',
+        });
+      } else {
+        toast({
+          title: '保存失败',
+          description: result.error || '无法保存 AI 助手配置',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('保存 AI 助手配置错误:', error);
+      toast({
+        title: '保存失败',
+        description: '网络错误，请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAssistantSaving(false);
+    }
+  };
+
+  const handleAssistantReset = async () => {
+    if (!confirm('确定要重置为默认配置吗？此操作不可撤销。')) {
+      return;
+    }
+
+    try {
+      setIsAssistantLoading(true);
+      const response = await fetch('/api/ai/assistant/prompts/reset', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAssistantConfig(result.data);
+        toast({
+          title: '重置成功',
+          description: 'AI 助手配置已恢复为默认值',
+        });
+      } else {
+        toast({
+          title: '重置失败',
+          description: result.error || '无法重置 AI 助手配置',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('重置 AI 助手配置错误:', error);
+      toast({
+        title: '重置失败',
+        description: '网络错误，请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAssistantLoading(false);
+    }
+  };
+
   if (isLoading || !config) {
     return (
       <div className="container max-w-4xl py-8">
@@ -189,14 +305,121 @@ export default function AIManagement() {
       </div>
 
       {/* 内容 */}
-      <Tabs defaultValue="prompts" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="prompts">提示词管理</TabsTrigger>
+      <Tabs defaultValue="assistant" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="assistant">AI助手</TabsTrigger>
+          <TabsTrigger value="prompts">企业认证</TabsTrigger>
           <TabsTrigger value="parameters">参数配置</TabsTrigger>
           <TabsTrigger value="companyReports">企业报告</TabsTrigger>
         </TabsList>
 
-        {/* 提示词管理 */}
+        {/* AI助手 */}
+        <TabsContent value="assistant" className="space-y-6">
+          {isAssistantLoading ? (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : assistantConfig ? (
+            <>
+              <div className="flex justify-end gap-2 mb-4">
+                <Button
+                  variant="outline"
+                  onClick={handleAssistantReset}
+                  disabled={isAssistantSaving}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  重置
+                </Button>
+                <Button
+                  onClick={handleAssistantSave}
+                  disabled={isAssistantSaving}
+                >
+                  {isAssistantSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      保存
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>核心角色定义</CardTitle>
+                  <CardDescription>
+                    定义 AI 助手的基本角色和职责，说明它是什么、做什么。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={assistantConfig.segment1}
+                    onChange={(e) => setAssistantConfig({ ...assistantConfig, segment1: e.target.value })}
+                    placeholder="例：你是一个专业的人脉管理助手，帮助用户查询和分析他们的人脉数据..."
+                    className="min-h-[120px] font-mono text-sm"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>行为规则</CardTitle>
+                  <CardDescription>
+                    定义 AI 助手的行为准则，包括如何处理查询、哪些事情可以做、哪些不可以做。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={assistantConfig.segment2}
+                    onChange={(e) => setAssistantConfig({ ...assistantConfig, segment2: e.target.value })}
+                    placeholder="例：1. 只回答用户问的问题，不要提供无关信息\n2. 如果找到了，直接列出结果..."
+                    className="min-h-[150px] font-mono text-sm"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>输出格式要求</CardTitle>
+                  <CardDescription>
+                    定义 AI 助手的回答格式，包括如何组织信息、使用什么样式。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={assistantConfig.segment3}
+                    onChange={(e) => setAssistantConfig({ ...assistantConfig, segment3: e.target.value })}
+                    placeholder="例：使用清晰的列表格式，每个结果包含姓名、公司、职位..."
+                    className="min-h-[120px] font-mono text-sm"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>示例演示</CardTitle>
+                  <CardDescription>
+                    提供具体的问答示例，帮助 AI 理解期望的回答方式。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    value={assistantConfig.segment4}
+                    onChange={(e) => setAssistantConfig({ ...assistantConfig, segment4: e.target.value })}
+                    placeholder="例：用户问：有没有北京的人脉？\n回答：找到 2 位北京的人脉：\n1. 张三..."
+                    className="min-h-[200px] font-mono text-sm"
+                  />
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </TabsContent>
+
+        {/* 企业认证 */}
         <TabsContent value="prompts" className="space-y-6">
           <Card>
             <CardHeader>

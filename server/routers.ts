@@ -3637,36 +3637,6 @@ export const appRouter = router({
     }),
 
   // 标签管理
-  // 银行列表管理
-  banks: router({
-    // 搜索银行
-    search: protectedProcedure
-      .input(z.object({
-        query: z.string(),
-      }))
-      .query(async ({ input }) => {
-        const dbBanks = await import('./db-banks');
-        return await dbBanks.searchBanks(input.query);
-      }),
-    
-    // 添加或更新银行
-    addOrUpdate: protectedProcedure
-      .input(z.object({
-        name: z.string(),
-      }))
-      .mutation(async ({ input }) => {
-        const dbBanks = await import('./db-banks');
-        return await dbBanks.addOrUpdateBank(input.name);
-      }),
-    
-    // 获取所有银行
-    list: protectedProcedure
-      .query(async () => {
-        const dbBanks = await import('./db-banks');
-        return await dbBanks.getAllBanks();
-      }),
-  }),
-  
   tags: router({
     // 获取所有标签
     list: protectedProcedure
@@ -5455,6 +5425,80 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return await dbLedger.getPendingApprovals(input.ledgerId, ctx.user.id);
+      }),
+  }),
+  
+  // 银行列表管理
+  banks: router({
+    // 搜索银行
+    search: protectedProcedure
+      .input(z.object({
+        query: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.searchBanks(input.query);
+      }),
+    
+    // 更新银行使用次数（仅预置银行）
+    updateUsage: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.updateBankUsage(input.name);
+      }),
+    
+    // 获取所有银行
+    list: protectedProcedure
+      .query(async () => {
+        const dbBanks = await import('./db-banks');
+        return await dbBanks.getAllBanks();
+      }),
+  }),
+  
+  // AI智能助手
+  aiAssistant: router({
+    // AI查询
+    query: protectedProcedure
+      .input(z.object({
+        query: z.string(),
+        history: z.array(z.object({
+          role: z.string(),
+          content: z.string(),
+        })).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbAI = await import('./db-ai-assistant');
+        return await dbAI.queryWithAI(ctx.user.id, input.query, input.history);
+      }),
+    
+    // 获取AI助手的提示词配置
+    getPrompts: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const dbAI = await import('./db-ai-assistant');
+        return await dbAI.getAssistantPrompts();
+      }),
+    
+    // 保存AI助手的提示词配置
+    savePrompts: protectedProcedure
+      .input(z.object({
+        role: z.string(),
+        rules: z.string(),
+        format: z.string(),
+        examples: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const dbAI = await import('./db-ai-assistant');
+        await dbAI.saveAssistantPrompts(input);
+        return { success: true };
       }),
   }),
 });
