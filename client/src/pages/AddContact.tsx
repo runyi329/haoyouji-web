@@ -71,6 +71,30 @@ export default function AddContact() {
   const [showAgeDialog, setShowAgeDialog] = useState(false);
   const [selectedAge, setSelectedAge] = useState("");
   
+  // 身高选择对话框
+  const [showHeightDialog, setShowHeightDialog] = useState(false);
+  const [selectedHeight, setSelectedHeight] = useState("");
+  
+  // 鞋码选择对话框
+  const [showShoeSizeDialog, setShowShoeSizeDialog] = useState(false);
+  const [selectedShoeSize, setSelectedShoeSize] = useState("");
+  
+  // 口味选择对话框（多选）
+  const [showTasteDialog, setShowTasteDialog] = useState(false);
+  const [selectedTastes, setSelectedTastes] = useState<string[]>([]);
+  
+  // 习惯选择对话框（多选）
+  const [showHabitDialog, setShowHabitDialog] = useState(false);
+  const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
+  
+  // 健康选择对话框（多选）
+  const [showHealthDialog, setShowHealthDialog] = useState(false);
+  const [selectedHealths, setSelectedHealths] = useState<string[]>([]);
+  
+  // 性格选择对话框（多选）
+  const [showPersonalityDialog, setShowPersonalityDialog] = useState(false);
+  const [selectedPersonalities, setSelectedPersonalities] = useState<string[]>([]);
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -603,7 +627,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄', '血型', '属相']
+                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '口味', '习惯', '健康', '性格']
                 },
                 { 
                   id: 'experience', 
@@ -670,14 +694,48 @@ export default function AddContact() {
                                 }
                                 setShowZodiacDialog(true);
                               } else if (field === '年龄') {
-                                // 年龄字段的处理：打开年龄选择对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === '年龄');
                                 if (existingValue) {
                                   setSelectedAge(existingValue.value);
                                 }
                                 setShowAgeDialog(true);
+                              } else if (field === '身高') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '身高');
+                                if (existingValue) {
+                                  setSelectedHeight(existingValue.value);
+                                }
+                                setShowHeightDialog(true);
+                              } else if (field === '鞋码') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '鞋码');
+                                if (existingValue) {
+                                  setSelectedShoeSize(existingValue.value);
+                                }
+                                setShowShoeSizeDialog(true);
+                              } else if (field === '口味') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '口味');
+                                if (existingValue) {
+                                  setSelectedTastes(existingValue.value.split(','));
+                                }
+                                setShowTasteDialog(true);
+                              } else if (field === '习惯') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '习惯');
+                                if (existingValue) {
+                                  setSelectedHabits(existingValue.value.split(','));
+                                }
+                                setShowHabitDialog(true);
+                              } else if (field === '健康') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '健康');
+                                if (existingValue) {
+                                  setSelectedHealths(existingValue.value.split(','));
+                                }
+                                setShowHealthDialog(true);
+                              } else if (field === '性格') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '性格');
+                                if (existingValue) {
+                                  setSelectedPersonalities(existingValue.value.split(','));
+                                }
+                                setShowPersonalityDialog(true);
                               }
-                              // 其他字段的处理将在后续添加
                             }}
                             className={`px-4 py-2 border rounded-lg text-sm transition-colors ${
                               hasValue 
@@ -1007,6 +1065,262 @@ export default function AddContact() {
               >
                 确定
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 身高选择对话框 */}
+      {showHeightDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHeightDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择身高</h3>
+            <div className="grid grid-cols-2 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['150cm以下', '150-155cm', '155-160cm', '160-165cm', '165-170cm', '170-175cm', '175-180cm', '180-185cm', '185-190cm', '190cm以上'].map(height => (
+                <button
+                  key={height}
+                  onClick={() => setSelectedHeight(height)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedHeight === height
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {height}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowHeightDialog(false); setSelectedHeight(""); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedHeight) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '身高');
+                    return [...filtered, { categoryId: 0, categoryName: '身高', value: selectedHeight }];
+                  });
+                  toast.success(`已选择身高：${selectedHeight}`);
+                  setShowHeightDialog(false);
+                  setSelectedHeight("");
+                } else {
+                  toast.error("请选择身高");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 鞋码选择对话框 */}
+      {showShoeSizeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowShoeSizeDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择鞋码</h3>
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45'].map(size => (
+                <button
+                  key={size}
+                  onClick={() => setSelectedShoeSize(size)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedShoeSize === size
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowShoeSizeDialog(false); setSelectedShoeSize(""); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedShoeSize) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '鞋码');
+                    return [...filtered, { categoryId: 0, categoryName: '鞋码', value: selectedShoeSize }];
+                  });
+                  toast.success(`已选择鞋码：${selectedShoeSize}`);
+                  setShowShoeSizeDialog(false);
+                  setSelectedShoeSize("");
+                } else {
+                  toast.error("请选择鞋码");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 口味选择对话框（多选） */}
+      {showTasteDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTasteDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择口味（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['甜', '咸', '辣', '酸', '苦', '鲜', '清淡', '重口'].map(taste => (
+                <button
+                  key={taste}
+                  onClick={() => {
+                    setSelectedTastes(prev => 
+                      prev.includes(taste) ? prev.filter(t => t !== taste) : [...prev, taste]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedTastes.includes(taste)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {taste}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowTasteDialog(false); setSelectedTastes([]); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedTastes.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '口味');
+                    return [...filtered, { categoryId: 0, categoryName: '口味', value: selectedTastes.join(',') }];
+                  });
+                  toast.success(`已选择口味：${selectedTastes.join('、')}`);
+                  setShowTasteDialog(false);
+                  setSelectedTastes([]);
+                } else {
+                  toast.error("请至少选择一个口味");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 习惯选择对话框（多选） */}
+      {showHabitDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHabitDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择习惯（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['早起', '晚睡', '运动', '阅读', '喝咖啡', '喝茶', '抽烟', '喝酒', '素食', '健身'].map(habit => (
+                <button
+                  key={habit}
+                  onClick={() => {
+                    setSelectedHabits(prev => 
+                      prev.includes(habit) ? prev.filter(h => h !== habit) : [...prev, habit]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedHabits.includes(habit)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {habit}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowHabitDialog(false); setSelectedHabits([]); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedHabits.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '习惯');
+                    return [...filtered, { categoryId: 0, categoryName: '习惯', value: selectedHabits.join(',') }];
+                  });
+                  toast.success(`已选择习惯：${selectedHabits.join('、')}`);
+                  setShowHabitDialog(false);
+                  setSelectedHabits([]);
+                } else {
+                  toast.error("请至少选择一个习惯");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 健康选择对话框（多选） */}
+      {showHealthDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHealthDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择健康状况（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['健康', '过敏体质', '高血压', '糖尿病', '心脏病', '胃病', '失眠', '颈椎病', '腰椎病'].map(health => (
+                <button
+                  key={health}
+                  onClick={() => {
+                    setSelectedHealths(prev => 
+                      prev.includes(health) ? prev.filter(h => h !== health) : [...prev, health]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedHealths.includes(health)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {health}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowHealthDialog(false); setSelectedHealths([]); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedHealths.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '健康');
+                    return [...filtered, { categoryId: 0, categoryName: '健康', value: selectedHealths.join(',') }];
+                  });
+                  toast.success(`已选择健康状况：${selectedHealths.join('、')}`);
+                  setShowHealthDialog(false);
+                  setSelectedHealths([]);
+                } else {
+                  toast.error("请至少选择一项");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 性格选择对话框（多选） */}
+      {showPersonalityDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPersonalityDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择性格（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['外向', '内向', '乐观', '悉观', '细心', '粗心', '幽默', '严肃', '温和', '急躁', '理性', '感性'].map(personality => (
+                <button
+                  key={personality}
+                  onClick={() => {
+                    setSelectedPersonalities(prev => 
+                      prev.includes(personality) ? prev.filter(p => p !== personality) : [...prev, personality]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedPersonalities.includes(personality)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {personality}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowPersonalityDialog(false); setSelectedPersonalities([]); }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedPersonalities.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '性格');
+                    return [...filtered, { categoryId: 0, categoryName: '性格', value: selectedPersonalities.join(',') }];
+                  });
+                  toast.success(`已选择性格：${selectedPersonalities.join('、')}`);
+                  setShowPersonalityDialog(false);
+                  setSelectedPersonalities([]);
+                } else {
+                  toast.error("请至少选择一个性格");
+                }
+              }}>确定</Button>
             </div>
           </div>
         </div>
