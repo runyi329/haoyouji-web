@@ -953,7 +953,7 @@ export default function ContactDetail() {
                     <div className="flex items-center gap-3 text-sm mt-2">
                       {contact.title && (
                         <div className="flex items-center max-w-[200px]">
-                          <User className="h-4 w-4 mr-1.5 text-muted-foreground flex-shrink-0" />
+                          <User className="h-4 w-4 mr-1.5 text-purple-600 flex-shrink-0" />
                           <span className="truncate" title={contact.title}>{contact.title}</span>
                         </div>
                       )}
@@ -971,7 +971,7 @@ export default function ContactDetail() {
                       
                       {contact.region && (
                         <div className="flex items-center">
-                          <MapPin className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          <MapPin className="h-4 w-4 mr-1.5 text-green-600" />
                           <span title="所在地区">{contact.region}</span>
                         </div>
                       )}
@@ -1166,7 +1166,7 @@ export default function ContactDetail() {
               )}
                             {contact.address && (
                 <div className="flex items-start text-sm">
-                  <MapPin className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
+                  <MapPin className="h-4 w-4 mr-2 mt-0.5 text-green-600 flex-shrink-0" />
                   <span>{contact.address}</span>
                 </div>
               )}
