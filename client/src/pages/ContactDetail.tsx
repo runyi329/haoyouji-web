@@ -1040,7 +1040,7 @@ export default function ContactDetail() {
             <CardContent className="space-y-4">
               {/* 显示扩展信息字段值 */}
               {extendedFieldValues && extendedFieldValues.length > 0 && (
-                <div className="space-y-2 pt-2">
+                <div className="pt-2">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="text-xs font-medium text-muted-foreground">扩展信息</div>
                     <button
@@ -1055,6 +1055,7 @@ export default function ContactDetail() {
                       )}
                     </button>
                   </div>
+                  <div className="grid grid-cols-3 gap-0 border border-gray-200">
                   {extendedFieldValues
                     .sort((a: any, b: any) => {
                       // 银行卡类字段排在最后
@@ -1065,7 +1066,7 @@ export default function ContactDetail() {
                       return 0;
                     })
                     .map((fv: any) => (
-                    <div key={fv.id} className={`flex items-start text-sm ${isBankCardField(fv.categoryName) ? 'border-b border-gray-200 last:border-0 py-1' : ''}`}>
+                    <div key={fv.id} className="flex items-start text-sm border-r border-b border-gray-200 p-2 last:border-r-0">
                       {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
                       {fv.categoryName === '公司名称' ? (
                         <div className="flex items-center gap-2 w-full">
@@ -1131,23 +1132,19 @@ export default function ContactDetail() {
                         </div>
                       ) : (
                         /* 普通字段显示 */
-                        <>
-                          <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
-                          <div className="flex items-center gap-2">
-                            <div>
-                              <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
-                              <span>
-                                {showFullExtendedInfo 
-                                  ? fv.value
-                                  : maskSensitiveInfo(fv.categoryName, fv.value)
-                                }
-                              </span>
-                            </div>
-                          </div>
-                        </>
+                        <div className="w-full">
+                          <span className="font-medium text-muted-foreground">{fv.categoryName}: </span>
+                          <span>
+                            {showFullExtendedInfo 
+                              ? fv.value
+                              : maskSensitiveInfo(fv.categoryName, fv.value)
+                            }
+                          </span>
+                        </div>
                       )}
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
               

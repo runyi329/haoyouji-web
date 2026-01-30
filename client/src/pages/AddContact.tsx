@@ -686,7 +686,7 @@ export default function AddContact() {
                 { 
                   id: 'information', 
                   name: '信息',
-                  fields: ['电话', '微信', '地址']
+                  fields: ['电话', '微信', '邮箱', '地址']
                 },
               ].map(category => (
                 <div key={category.id} className="border-t pt-4">
