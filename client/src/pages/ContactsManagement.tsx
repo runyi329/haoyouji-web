@@ -821,7 +821,12 @@ export default function ContactsManagement() {
   });
   
   // 获取人脉统计数据
-  const { data: stats } = trpc.contacts.stats.useQuery();
+  const { data: stats, error: statsError, isLoading: statsLoading } = trpc.contacts.stats.useQuery();
+  
+  // 调试日志
+  console.log('[ContactsManagement] stats数据:', stats);
+  console.log('[ContactsManagement] stats错误:', statsError);
+  console.log('[ContactsManagement] stats加载中:', statsLoading);
   
   // 获取人脉健康度统计数据
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined);

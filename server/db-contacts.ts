@@ -1029,6 +1029,7 @@ export async function getTotalTagCount(parentUserId: number): Promise<number> {
  * 获取人脉统计数据
  */
 export async function getContactStats(parentUserId: number) {
+  console.log('[getContactStats] 开始获取统计数据，用户ID:', parentUserId);
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return {
@@ -1265,6 +1266,7 @@ export async function getContactStats(parentUserId: number) {
     companyCount = uniqueCompanies.size;
   }
   
+  console.log('[getContactStats] 统计结果:', { totalContacts, newThisWeek, newThisMonth, newThisYear });
   return {
     totalContacts,
     newThisWeek,

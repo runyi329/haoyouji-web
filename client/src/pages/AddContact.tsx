@@ -11,10 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, Pencil } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Pencil, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
+import { InlineFieldSelector } from "@/components/InlineFieldSelector";
 
 // 扩展信息字段值
 interface ExtendedFieldValue {
@@ -26,6 +27,7 @@ interface ExtendedFieldValue {
 
 export default function AddContact() {
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
   
   // 使用useMemo缓存URL参数，避免每次渲染都重新创建
   const { contactId, isEditMode } = useMemo(() => {
@@ -51,6 +53,9 @@ export default function AddContact() {
   
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
+  
+  // 基本信息折叠状态
+  const [isBasicInfoCollapsed, setIsBasicInfoCollapsed] = useState(false);
   
   // 模糊查询相关状态
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -128,8 +133,11 @@ export default function AddContact() {
   
   // 更新人脉API
   const updateContactMutation = trpc.contacts.update.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("人脉更新成功");
+      // 使缓存失效，强制重新获取数据
+      await utils.contacts.get.invalidate({ id: contactId! });
+      await utils.contacts.fieldValues.list.invalidate({ contactId: contactId! });
       setLocation(`/parent/contacts/${contactId}`);
     },
     onError: (error) => {
@@ -139,11 +147,12 @@ export default function AddContact() {
   
   // 添加扩展信息字段值API
   const addFieldValueMutation = trpc.contacts.fieldValues.add.useMutation({
-    onSuccess: (newFieldValue) => {
+    onSuccess: async (newFieldValue) => {
       toast.success("扩展信息已添加");
       // 刷新字段值列表
       if (isEditMode && contactId) {
-        // 编辑模式会自动重新获取数据
+        // 使缓存失效，强制重新获取数据
+        await utils.contacts.fieldValues.list.invalidate({ contactId: contactId });
       }
     },
     onError: (error) => {
@@ -151,42 +160,52 @@ export default function AddContact() {
     },
   });
   
-  // 删除扩展信息字段值API
+  // 更新扩展信息字段值 API
+  const updateFieldValueMutation = trpc.contacts.fieldValues.update.useMutation({
+    onSuccess: async () => {
+      toast.success("扩展信息已更新");
+      // 刷新字段值列表
+      if (isEditMode && contactId) {
+        // 使缓存失效，强制重新获取数据
+        await utils.contacts.fieldValues.list.invalidate({ contactId: contactId });
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || "更新扩展信息失败");
+    },
+  });
+  
+  // 删除扩展信息字段值 API
   const deleteFieldValueMutation = trpc.contacts.fieldValues.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("扩展信息已删除");
+      // 刷新字段值列表
+      if (isEditMode && contactId) {
+        // 使缓存失效，强制重新获取数据
+        await utils.contacts.fieldValues.list.invalidate({ contactId: contactId });
+      }
     },
     onError: (error) => {
       toast.error(error.message || "删除扩展信息失败");
     },
-  });
-  
+  });  
   // 处理分类选择器的选择
   const handleCategorySelect = (category: any, value: string) => {
     console.log('handleCategorySelect called:', { category, value, isEditMode, extendedFieldsLength: extendedFields.length });
     
-    // 先更新本地状态，立即显示预览
+    // 更新本地状态，显示为“待确认”状态
     setExtendedFields(prev => {
       const newFields = [...prev, {
         categoryId: category.id,
         categoryName: category.name,
         value: value,
+        // 没有id表示待确认，点击保存时才会真正保存到数据库
       }];
       console.log('Updated extendedFields:', newFields);
       return newFields;
     });
     
-    if (isEditMode && contactId) {
-      // 编辑模式：同时保存到数据库
-      addFieldValueMutation.mutate({
-        contactId,
-        categoryId: category.id,
-        value: value,
-      });
-    } else {
-      // 新增模式：只更新本地状态，保存时一起提交
-      toast.success("扩展信息已添加");
-    }
+    toast.success("扩展信息已添加，请点击保存按钮");
   };
   
   // 编辑扩展信息字段
@@ -262,13 +281,30 @@ export default function AddContact() {
     
     if (isEditMode && contactId) {
       // 编辑模式：更新人脉
-      updateContactMutation.mutate({
+      const updateData = {
         id: contactId,
         name: name.trim(),
         title: title.trim() || undefined,
         gender: gender || undefined,
         region: region || undefined,
-      });
+      };
+      console.log('[AddContact] 提交更新数据:', updateData);
+      console.log('[AddContact] 当前状态:', { name, title, gender, region });
+      
+      // 保存基本信息
+      updateContactMutation.mutate(updateData);
+      
+      // 保存所有待确认的扩展信息（没有id的字段）
+      const pendingFields = extendedFields.filter(f => !f.id);
+      console.log('[AddContact] 待确认的扩展信息:', pendingFields);
+      
+      for (const field of pendingFields) {
+        addFieldValueMutation.mutate({
+          contactId: contactId,
+          categoryId: field.categoryId,
+          value: field.value,
+        });
+      }
     } else {
       // 新增模式：创建人脉
       createContactMutation.mutate({
@@ -293,7 +329,7 @@ export default function AddContact() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setLocation("/parent/contacts")}
+            onClick={() => window.history.back()}
             className="gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -316,9 +352,18 @@ export default function AddContact() {
       <div className="container py-6 space-y-6">
         {/* 基本信息 */}
         <Card>
-          <CardHeader>
-            <CardTitle>基本信息</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setIsBasicInfoCollapsed(!isBasicInfoCollapsed)}>
+            <div className="flex items-center gap-2">
+              <CardTitle>基本信息</CardTitle>
+              {isBasicInfoCollapsed && name && (
+                <span className="text-base font-normal text-gray-600">{name}</span>
+              )}
+            </div>
+            <div className="flex-shrink-0">
+              <ChevronDown className={`h-6 w-6 text-gray-700 z-50 transition-transform ${isBasicInfoCollapsed ? 'rotate-180' : ''}`} />
+            </div>
           </CardHeader>
+          {!isBasicInfoCollapsed && (
           <CardContent className="space-y-4">
             {/* 第一行：姓名 + 昵称 */}
             <div className="grid grid-cols-2 gap-4">
@@ -445,121 +490,75 @@ export default function AddContact() {
             </div>
           </div>
           </CardContent>
+          )}
         </Card>
 
         {/* 扩展信息 */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            {extendedFields.length === 0 ? (
-              <>
-                <div className="space-y-1 flex-1">
-                  <CardTitle>扩展信息</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    可添加：公司、职位、微信、电话、生日等
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowFieldSelector(true)}
-                  className="gap-1 whitespace-nowrap flex-shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                  添加
-                </Button>
-              </>
-            ) : (
-              <>
-                <CardTitle className="flex-shrink-0">扩展信息</CardTitle>
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowFieldSelector(true)}
-                    className="gap-1 whitespace-nowrap"
-                  >
-                    <Plus className="h-4 w-4" />
-                    继续添加
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSubmit}
-                    className="gap-1 whitespace-nowrap"
-                  >
-                    一键保存
-                  </Button>
-                </div>
-              </>
-            )}
+          <CardHeader>
+            <CardTitle>扩展信息</CardTitle>
           </CardHeader>
           <CardContent>
-            {extendedFields.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                暂无扩展信息，点击右上角“+添加”按钮
-              </p>
-            ) : (
-              <div className="space-y-3">
+            {/* 已添加的扩展信息 */}
+            {extendedFields.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
                 {extendedFields.map((field, index) => (
                   <div
                     key={index}
-                    className="flex items-center gap-3 p-3 rounded-lg border"
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-full border bg-white hover:bg-gray-50 transition-colors"
                   >
                     {editingFieldIndex === index ? (
                       // 编辑模式
                       <>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-muted-foreground mb-2">
-                            {field.categoryName}
-                          </div>
-                          <Input
-                            value={editingFieldValue}
-                            onChange={(e) => setEditingFieldValue(e.target.value)}
-                            placeholder="请输入内容"
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={handleSaveEdit}
-                            className="whitespace-nowrap"
-                          >
-                            保存
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCancelEdit}
-                            className="whitespace-nowrap"
-                          >
-                            取消
-                          </Button>
-                        </div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {field.categoryName}:
+                        </span>
+                        <Input
+                          value={editingFieldValue}
+                          onChange={(e) => setEditingFieldValue(e.target.value)}
+                          placeholder="请输入内容"
+                          className="h-6 w-32 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          className="h-6 px-2 text-xs"
+                        >
+                          保存
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className="h-6 px-2 text-xs"
+                        >
+                          取消
+                        </Button>
                       </>
                     ) : (
                       // 显示模式
                       <>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-muted-foreground">
-                            {field.categoryName}
-                          </div>
-                          <div className="text-base">{field.value}</div>
-                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {field.categoryName}
+                        </span>
+                        <span className="text-sm font-medium">
+                          {field.value}
+                        </span>
                         <Button
                           size="icon"
                           variant="ghost"
                           onClick={() => handleEditExtendedField(index)}
-                          className="h-8 w-8 hover:text-primary"
+                          className="h-5 w-5 hover:text-primary"
                         >
-                          <Pencil className="h-4 w-4" />
+                          <Pencil className="h-3 w-3" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
                           onClick={() => handleDeleteExtendedField(index)}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-5 w-5 text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </>
                     )}
@@ -567,6 +566,12 @@ export default function AddContact() {
                 ))}
               </div>
             )}
+            
+            {/* 内联分类选择器 */}
+            <InlineFieldSelector 
+              onSelect={handleCategorySelect}
+              onCategoryClick={() => setIsBasicInfoCollapsed(true)}
+            />
           </CardContent>
         </Card>
       </div>

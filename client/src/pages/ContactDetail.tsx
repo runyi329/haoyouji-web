@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { maskSensitiveInfo } from "@/lib/maskSensitiveInfo";
+import { formatBankCardDisplay, isBankCardField, parseBankCardInfo, formatBankCardForCopy } from "@/lib/bank-utils";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical } from "lucide-react";
+import { ArrowLeft, Phone, MessageCircle, MapPin, Briefcase, Calendar, Tag, Clock, Plus, Bell, Trash2, Check, X, Search, UserCheck, UserX, Network, User, Pencil, MoreVertical, Copy, Users, Contact, UserCircle, Mars, Venus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -437,11 +438,32 @@ export default function ContactDetail() {
     return saved === 'true';
   });
   
+  // 复制提示状态（记录哪个银行卡刚被复制）
+  const [copiedBankCardId, setCopiedBankCardId] = useState<number | null>(null);
+  
   // 切换脱敏状态
   const toggleExtendedInfoVisibility = () => {
     const newValue = !showFullExtendedInfo;
     setShowFullExtendedInfo(newValue);
     localStorage.setItem('showFullExtendedInfo', String(newValue));
+  };
+
+  // 复制银行卡信息
+  const copyBankCardInfo = (value: string, fieldId: number) => {
+    // 触感反馈
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    
+    const formattedText = formatBankCardForCopy(value);
+    navigator.clipboard.writeText(formattedText).then(() => {
+      // 显示复制成功状态
+      setCopiedBankCardId(fieldId);
+      // 1秒后清除状态
+      setTimeout(() => setCopiedBankCardId(null), 1000);
+    }).catch(() => {
+      toast.error('复制失败');
+    });
   };
   
   const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
@@ -914,24 +936,58 @@ export default function ContactDetail() {
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-2xl">{contact.name}</CardTitle>
-                  {contact.hasReferrer !== undefined && (
-                    contact.hasReferrer ? (
-                      <UserCheck className="h-5 w-5 text-blue-500 flex-shrink-0" title="有推荐人" />
-                    ) : (
-                      <UserX className="h-5 w-5 text-gray-400 flex-shrink-0" title="无推荐人" />
-                    )
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-2xl">{contact.name}</CardTitle>
+                    {contact.hasReferrer !== undefined && (
+                      contact.hasReferrer ? (
+                        <UserCheck className="h-5 w-5 text-blue-500 flex-shrink-0" title="有推荐人" />
+                      ) : (
+                        <UserX className="h-5 w-5 text-gray-400 flex-shrink-0" title="无推荐人" />
+                      )
+                    )}
+                  </div>
+                  
+                  {/* 基本信息：昵称、性别、地区 */}
+                  {(contact.title || contact.gender || contact.region) && (
+                    <div className="flex items-center gap-3 text-sm mt-2">
+                      {contact.title && (
+                        <div className="flex items-center max-w-[200px]">
+                          <User className="h-4 w-4 mr-1.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate" title={contact.title}>{contact.title}</span>
+                        </div>
+                      )}
+                      
+                      {contact.gender && (
+                        <div className="flex items-center">
+                          {contact.gender === '男' ? (
+                            <Mars className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          ) : contact.gender === '女' ? (
+                            <Venus className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          ) : (
+                            <UserCircle className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          )}
+                          <span title="性别">{contact.gender}</span>
+                        </div>
+                      )}
+                      
+                      {contact.region && (
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                          <span title="所在地区">{contact.region}</span>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </div>
-                <div>
+                  
                   {contact.occupation && (
-                    <CardDescription className="text-base mt-1">
+                    <CardDescription className="text-base mt-2">
                       <Briefcase className="inline h-4 w-4 mr-1" />
                       {contact.occupation}
                     </CardDescription>
                   )}
                 </div>
+                
                 <div className="flex items-center gap-2">
                   <Button 
                     size="icon"
@@ -959,34 +1015,35 @@ export default function ContactDetail() {
                 </div>
               </div>
             </CardHeader>
+            
+            {/* 编辑信息按钮区域 */}
+            <div className="px-6 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocation(`/parent/contacts/add?id=${contactId}&mode=edit`)}
+                  className="flex-1"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  编辑信息
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAIBackgroundCheck(true)}
+                  className="flex-1"
+                >
+                  AI情报
+                </Button>
+              </div>
+            </div>
+            
             <CardContent className="space-y-4">
-              {/* 基本信息：昵称、性别、地区 */}
-              {contact.title && (
-                <div className="flex items-center text-sm">
-                  <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span>昵称：{contact.title}</span>
-                </div>
-              )}
-              
-              {contact.gender && (
-                <div className="flex items-center text-sm">
-                  <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span>性别：{contact.gender}</span>
-                </div>
-              )}
-              
-              {/* 显示地区 */}
-              {contact.region && (
-                <div className="flex items-center text-sm">
-                  <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
-                  <span>所在地区：{contact.region}</span>
-                </div>
-              )}
-              
               {/* 显示扩展信息字段值 */}
               {extendedFieldValues && extendedFieldValues.length > 0 && (
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2 mb-2">
                     <div className="text-xs font-medium text-muted-foreground">扩展信息</div>
                     <button
                       onClick={toggleExtendedInfoVisibility}
@@ -1001,7 +1058,7 @@ export default function ContactDetail() {
                     </button>
                   </div>
                   {extendedFieldValues.map((fv: any) => (
-                    <div key={fv.id} className="flex items-start text-sm">
+                    <div key={fv.id} className={`flex items-start text-sm ${isBankCardField(fv.categoryName) ? 'border-b border-gray-200 last:border-0 py-1' : ''}`}>
                       {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
                       {fv.categoryName === '公司名称' ? (
                         <div className="flex items-center gap-2 w-full">
@@ -1014,7 +1071,57 @@ export default function ContactDetail() {
                             }}
                           />
                         </div>
+                      ) : isBankCardField(fv.categoryName) ? (
+                        /* 银行卡特殊布局：两行显示 */
+                        <div className="flex items-start gap-2 w-full">
+                          <div className="flex-1 min-w-0 text-sm space-y-1">
+                            {(() => {
+                              const info = parseBankCardInfo(fv.value);
+                              if (!info) return <span>{fv.value}</span>;
+                              
+                              // 根据 showFullExtendedInfo 状态决定是否脱敏
+                              const displayCardNumber = showFullExtendedInfo 
+                                ? info.cardNumber 
+                                : info.cardNumber.replace(/.(?=.{4})/g, '*');
+                              const displayHolderName = showFullExtendedInfo 
+                                ? info.holderName 
+                                : info.holderName.charAt(0) + '*'.repeat(info.holderName.length - 1);
+                              
+                              return (
+                                <>
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">卡号 </span>
+                                    <span>{displayCardNumber}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-muted-foreground">户名 </span>
+                                    <span>{displayHolderName}</span>
+                                    <span className="font-medium text-muted-foreground ml-2">开户行 </span>
+                                    <span>{info.bankName}</span>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                          {/* 复制按钮 */}
+                          <div className="relative flex-shrink-0">
+                            <button
+                              onClick={() => copyBankCardInfo(fv.value, fv.id)}
+                              className="p-1 hover:bg-accent rounded transition-colors"
+                              title="复制银行卡信息"
+                            >
+                              <Copy className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                            {/* 复制成功提示 */}
+                            {copiedBankCardId === fv.id && (
+                              <div className="absolute -top-8 right-0 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                                复制成功
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       ) : (
+                        /* 普通字段显示 */
                         <>
                           <Tag className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground flex-shrink-0" />
                           <div className="flex items-center gap-2">
@@ -1022,7 +1129,7 @@ export default function ContactDetail() {
                               <span className="font-medium text-muted-foreground">{fv.categoryName}：</span>
                               <span>
                                 {showFullExtendedInfo 
-                                  ? fv.value 
+                                  ? fv.value
                                   : maskSensitiveInfo(fv.categoryName, fv.value)
                                 }
                               </span>
@@ -1056,29 +1163,9 @@ export default function ContactDetail() {
                 </div>
               )}
 
-              {/* 联络统计信息 - 可拖拽排序 */}
+              {/* 统计卡片 - 可拖拽排序 */}
               {stats && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-muted-foreground">联络统计</h3>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation(`/parent/contacts/add?id=${contactId}&mode=edit`)}
-                      >
-                        编辑信息
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAIBackgroundCheck(true)}
-                      >
-                        AI情报
-                      </Button>
-
-                    </div>
-                  </div>
+                <div className="space-y-3 pt-4 border-t">
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -1180,11 +1267,13 @@ export default function ContactDetail() {
                 <div className="space-y-3">
                   {customFields.map((field) => (
                     <div key={field.id} className="flex items-start gap-2">
-                      <div className="text-sm font-medium text-muted-foreground min-w-[80px]">
+                      <div className="text-sm font-medium text-gray-900 min-w-[80px]">
                         {field.fieldName}:
                       </div>
-                      <div className="text-sm flex-1">
-                        {field.fieldValue}
+                      <div className="text-sm flex-1 text-gray-900">
+                        {isBankCardField(field.fieldName) 
+                          ? formatBankCardDisplay(field.fieldValue)
+                          : field.fieldValue}
                       </div>
                     </div>
                   ))}
