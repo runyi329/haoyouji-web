@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, Pencil, ChevronDown, UserStar } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Pencil, ChevronDown, Stethoscope, UserStar } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -698,7 +698,8 @@ export default function AddContact() {
               ].map(category => (
                 <div key={category.id} className="border-t pt-4">
                   <div className="flex items-center gap-2 mb-3">
-                    {category.id === 'preference' && <UserStar className="h-5 w-5 text-gray-700" />}
+                    {category.id === 'preference' && <Stethoscope className="h-5 w-5 text-gray-700" />}
+                    {category.id === 'experience' && <UserStar className="h-5 w-5 text-gray-700" />}
                     {/* 其他分类图标将在后续添加 */}
                   </div>
                   {/* 二级字段方框 */}
