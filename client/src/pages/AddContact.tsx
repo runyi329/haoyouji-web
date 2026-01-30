@@ -840,7 +840,8 @@ export default function AddContact() {
                 type="date"
                 value={selectedBirthday}
                 onChange={(e) => setSelectedBirthday(e.target.value)}
-                className="w-full"
+                className="w-full text-base"
+                style={{ maxWidth: '100%' }}
               />
             </div>
             <div className="flex gap-2">
