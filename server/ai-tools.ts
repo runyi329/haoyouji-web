@@ -8,6 +8,7 @@ import {
   contactFieldCategories,
 } from "../drizzle/schema";
 import { eq, and, like, inArray, sql, desc } from "drizzle-orm";
+import { checkRateLimit, logAIOperation } from "./ai-rate-limit";
 
 /**
  * 获取用户所有可见的人脉ID列表
@@ -130,6 +131,9 @@ export async function addContact(
     gender?: string;
   }
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "add_contact");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -142,6 +146,9 @@ export async function addContact(
     region: data.region || null,
     gender: data.gender || null,
   });
+
+  // 记录操作日志
+  await logAIOperation(userId, "add_contact", { contactId: result[0].insertId, name: data.name });
 
   return {
     id: result[0].insertId,
@@ -164,6 +171,9 @@ export async function updateContact(
     gender?: string;
   }
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "update_contact");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -193,6 +203,9 @@ export async function updateContact(
  * 删除人脉
  */
 export async function deleteContact(userId: number, contactId: number) {
+  // 检查速率限制
+  await checkRateLimit(userId, "delete_contact");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -227,6 +240,9 @@ export async function addContactInteraction(
   contactId: number,
   note: string
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "add_interaction");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -338,6 +354,9 @@ export async function addTagToContact(
   contactId: number,
   tagName: string
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "tag_operation");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -399,6 +418,9 @@ export async function removeTagFromContact(
   contactId: number,
   tagName: string
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "tag_operation");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -441,6 +463,9 @@ export async function updateContactField(
   categoryName: string,
   value: string
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "field_operation");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -512,6 +537,9 @@ export async function deleteContactField(
   contactId: number,
   categoryName: string
 ) {
+  // 检查速率限制
+  await checkRateLimit(userId, "field_operation");
+
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 

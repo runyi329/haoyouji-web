@@ -306,8 +306,9 @@ export default function AIManagement() {
 
       {/* 内容 */}
       <Tabs defaultValue="assistant" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="assistant">AI助手</TabsTrigger>
+          <TabsTrigger value="code-memo">代码备忘录</TabsTrigger>
           <TabsTrigger value="prompts">企业认证</TabsTrigger>
           <TabsTrigger value="parameters">参数配置</TabsTrigger>
           <TabsTrigger value="companyReports">企业报告</TabsTrigger>
@@ -417,6 +418,138 @@ export default function AIManagement() {
               </Card>
             </>
           ) : null}
+        </TabsContent>
+
+        {/* 代码备忘录 */}
+        <TabsContent value="code-memo" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>📝 代码层面的安全限制</CardTitle>
+              <CardDescription>
+                以下是在代码中实现的安全限制，这些是强制执行的，无法通过提示词绕过。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* 速率限制 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">① 速率限制（Rate Limiting）</h3>
+                <p className="text-sm text-muted-foreground">
+                  防止用户恶意批量操作，限制每个用户在一定时间内的操作次数。
+                </p>
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="font-medium text-sm">添加人脉</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 10次 | 每小时: 50次 | 每天: 200次
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">修改人脉</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 20次 | 每小时: 100次 | 每天: 500次
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">删除人脉</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 5次 | 每小时: 20次 | 每天: 50次
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">添加联络记录</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 15次 | 每小时: 100次 | 每天: 500次
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">标签操作</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 20次 | 每小时: 100次 | 每天: 500次
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">扩展字段操作</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        每分钟: 20次 | 每小时: 100次 | 每天: 500次
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>修改方法：</strong>
+                    </p>
+                    <ol className="text-xs text-muted-foreground mt-2 space-y-1 list-decimal list-inside">
+                      <li>打开文件：<code className="bg-background px-1 py-0.5 rounded">server/ai-rate-limit.ts</code></li>
+                      <li>找到 <code className="bg-background px-1 py-0.5 rounded">RATE_LIMITS</code> 配置对象</li>
+                      <li>修改对应操作的 <code className="bg-background px-1 py-0.5 rounded">perMinute</code> / <code className="bg-background px-1 py-0.5 rounded">perHour</code> / <code className="bg-background px-1 py-0.5 rounded">perDay</code> 数值</li>
+                      <li>重新构建：<code className="bg-background px-1 py-0.5 rounded">pnpm run build</code></li>
+                      <li>重启服务器</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              {/* 操作日志 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">② 操作日志（Operation Logs）</h3>
+                <p className="text-sm text-muted-foreground">
+                  记录所有AI操作，便于追溯和审计。
+                </p>
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <p className="text-sm">每次AI执行操作时，会自动记录以下信息：</p>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>用户ID</li>
+                    <li>操作类型（添加/修改/删除等）</li>
+                    <li>操作详情（如：添加了哪个人脉）</li>
+                    <li>操作时间</li>
+                  </ul>
+                  <div className="pt-3 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>查看日志：</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      连接数据库，查询 <code className="bg-background px-1 py-0.5 rounded">ai_operation_logs</code> 表
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 权限检查 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">③ 权限检查（Permission Check）</h3>
+                <p className="text-sm text-muted-foreground">
+                  确保用户只能操作自己的数据，无法跨账户操作。
+                </p>
+                <div className="rounded-lg bg-muted p-4 space-y-3">
+                  <p className="text-sm">所有操作函数都会检查：</p>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>用户是否有权访问该人脉</li>
+                    <li>人脉是否属于该用户</li>
+                    <li>是否是共享给该用户的人脉（VIP 3功能）</li>
+                  </ul>
+                  <div className="pt-3 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>实现位置：</strong>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      <code className="bg-background px-1 py-0.5 rounded">server/ai-tools.ts</code> 中的 <code className="bg-background px-1 py-0.5 rounded">getAllVisibleContactIds()</code> 函数
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 提示 */}
+              <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4">
+                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+                  ⚠️ 重要提示
+                </p>
+                <p className="text-xs text-yellow-800 dark:text-yellow-300 mt-2">
+                  以上限制是在<strong>代码层面</strong>强制执行的，无法通过修改提示词绕过。如需调整，必须修改代码并重新部署。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* 企业认证 */}
