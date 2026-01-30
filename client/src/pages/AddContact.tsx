@@ -51,6 +51,10 @@ export default function AddContact() {
   const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
   const [editingFieldValue, setEditingFieldValue] = useState("");
   
+  // 星座选择对话框
+  const [showConstellationDialog, setShowConstellationDialog] = useState(false);
+  const [selectedConstellation, setSelectedConstellation] = useState("");
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -616,14 +620,29 @@ export default function AddContact() {
                   {/* 二级字段方框 */}
                   {category.fields.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {category.fields.map(field => (
-                        <button
-                          key={field}
-                          className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-                        >
-                          {field}
-                        </button>
-                      ))}
+                      {category.fields.map(field => {
+                        // 检查该字段是否已填写
+                        const hasValue = extendedFields.some(f => f.categoryName === field);
+                        
+                        return (
+                          <button
+                            key={field}
+                            onClick={() => {
+                              if (field === '星座') {
+                                setShowConstellationDialog(true);
+                              }
+                              // 其他字段的处理将在后续添加
+                            }}
+                            className={`px-4 py-2 border rounded-lg text-sm transition-colors ${
+                              hasValue 
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {field}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground">暂无字段</div>
@@ -643,6 +662,67 @@ export default function AddContact() {
         onSelect={handleCategorySelect}
         contactName={name}
       />
+      
+      {/* 星座选择对话框 */}
+      {showConstellationDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConstellationDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择星座</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', 
+                '天秤座', '天蝎座', '射手座', '摩羯座', '水瓶座', '双鱼座'].map(constellation => (
+                <button
+                  key={constellation}
+                  onClick={() => setSelectedConstellation(constellation)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedConstellation === constellation
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {constellation}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowConstellationDialog(false);
+                  setSelectedConstellation("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedConstellation) {
+                    // 添加到extendedFields
+                    setExtendedFields(prev => {
+                      // 删除旧的星座记录（如果有）
+                      const filtered = prev.filter(f => f.categoryName !== '星座');
+                      return [...filtered, {
+                        categoryId: 0, // 临时ID，后续会从数据库获取
+                        categoryName: '星座',
+                        value: selectedConstellation,
+                      }];
+                    });
+                    toast.success(`已选择星座：${selectedConstellation}`);
+                    setShowConstellationDialog(false);
+                    setSelectedConstellation("");
+                  } else {
+                    toast.error("请选择一个星座");
+                  }
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
