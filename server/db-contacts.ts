@@ -2455,3 +2455,32 @@ export async function getCompanyList(parentUserId: number) {
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
+
+/**
+ * 创建扩展信息分类
+ * @param name 分类名称
+ * @param icon 分类图标
+ * @param parentCategoryId 父分类ID（null表示一级分类）
+ * @returns 新创建的分类记录
+ */
+export async function createFieldCategory(name: string, icon: string = '', parentCategoryId: number | null = null) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db
+    .insert(contactFieldCategories)
+    .values({
+      name,
+      icon,
+      parentCategoryId,
+      parentUserId: 0, // 系统级分类
+      sortOrder: 0,
+    });
+  
+  return {
+    id: Number(result.insertId),
+    name,
+    icon,
+    parentCategoryId,
+  };
+}

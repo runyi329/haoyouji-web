@@ -3941,6 +3941,17 @@ export const appRouter = router({
         return await dbContacts.getFieldCategories();
       }),
 
+    // 创建字段类目
+    createCategory: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, "分类名称不能为空"),
+        icon: z.string().default(''),
+        parentCategoryId: z.number().nullable().default(null),
+      }))
+      .mutation(async ({ input }) => {
+        return await dbContacts.createFieldCategory(input.name, input.icon, input.parentCategoryId);
+      }),
+
     // 获取人脉的所有字段值
     list: protectedProcedure
       .input(z.object({ contactId: z.number() }))
