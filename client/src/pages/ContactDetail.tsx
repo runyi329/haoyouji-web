@@ -1161,7 +1161,7 @@ export default function ContactDetail() {
                       )}
                     </div>
                     );
-                  })
+                  })}
                   </div>
                 </div>
               )}
