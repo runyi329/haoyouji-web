@@ -835,13 +835,13 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBirthdayDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">选择生日</h3>
-            <div className="mb-4">
+            <div className="mb-4 flex justify-center">
               <Input
                 type="date"
                 value={selectedBirthday}
                 onChange={(e) => setSelectedBirthday(e.target.value)}
-                className="w-full text-base"
-                style={{ maxWidth: '100%' }}
+                className="text-base"
+                style={{ width: '50%' }}
               />
             </div>
             <div className="flex gap-2">
