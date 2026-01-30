@@ -1072,11 +1072,11 @@ export default function ContactDetail() {
                       
                       if (isBankCardField(fv.categoryName)) {
                         colSpan = 12; // 银行卡占满一行
-                      } else if (contentLength <= 5) {
+                      } else if (contentLength <= 4) {
                         colSpan = 3; // 短内容：一行4个
-                      } else if (contentLength <= 10) {
+                      } else if (contentLength <= 7) {
                         colSpan = 4; // 中等内容：一行3个
-                      } else if (contentLength <= 15) {
+                      } else if (contentLength <= 12) {
                         colSpan = 6; // 较长内容：一行2个
                       } else {
                         colSpan = 12; // 很长内容：独占一行
