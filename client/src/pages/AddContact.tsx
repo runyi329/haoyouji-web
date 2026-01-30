@@ -577,15 +577,23 @@ export default function AddContact() {
               </div>
             )}
             
-            {/* 添加扩展信息按钮 */}
-            <Button
-              variant="outline"
-              onClick={() => setShowFieldSelector(true)}
-              className="w-full gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              添加扩展信息
-            </Button>
+            {/* 一级分类标题 */}
+            <div className="space-y-4 mt-4">
+              {[
+                { id: 'preference', name: '偏好' },
+                { id: 'experience', name: '履历' },
+                { id: 'finance', name: '财务' },
+                { id: 'relationship', name: '关系' },
+                { id: 'career', name: '职业' },
+                { id: 'information', name: '信息' },
+              ].map(category => (
+                <div key={category.id} className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">{category.name}</h3>
+                  {/* 二级字段将在这里显示 */}
+                  <div className="text-xs text-muted-foreground">暂无字段</div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
