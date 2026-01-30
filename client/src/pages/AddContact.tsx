@@ -793,8 +793,10 @@ export default function AddContact() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
+                  // 恢复到原始值
+                  const existingValue = extendedFields.find(f => f.categoryName === '星座');
+                  setSelectedConstellation(existingValue?.value || "");
                   setShowConstellationDialog(false);
-                  setSelectedConstellation("");
                 }}
               >
                 取消
@@ -815,7 +817,7 @@ export default function AddContact() {
                     });
                     toast.success(`已选择星座：${selectedConstellation}`);
                     setShowConstellationDialog(false);
-                    setSelectedConstellation("");
+                    // 不清空选择状态，下次打开时显示当前值
                   } else {
                     toast.error("请选择一个星座");
                   }
@@ -846,8 +848,9 @@ export default function AddContact() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
+                  const existingValue = extendedFields.find(f => f.categoryName === '生日');
+                  setSelectedBirthday(existingValue?.value || "");
                   setShowBirthdayDialog(false);
-                  setSelectedBirthday("");
                 }}
               >
                 取消
@@ -866,7 +869,6 @@ export default function AddContact() {
                     });
                     toast.success(`已选择生日：${selectedBirthday}`);
                     setShowBirthdayDialog(false);
-                    setSelectedBirthday("");
                   } else {
                     toast.error("请选择生日");
                   }
@@ -904,8 +906,9 @@ export default function AddContact() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
+                  const existingValue = extendedFields.find(f => f.categoryName === '血型');
+                  setSelectedBloodType(existingValue?.value || "");
                   setShowBloodTypeDialog(false);
-                  setSelectedBloodType("");
                 }}
               >
                 取消
@@ -924,7 +927,6 @@ export default function AddContact() {
                     });
                     toast.success(`已选择血型：${selectedBloodType}`);
                     setShowBloodTypeDialog(false);
-                    setSelectedBloodType("");
                   } else {
                     toast.error("请选择血型");
                   }
@@ -962,8 +964,9 @@ export default function AddContact() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
+                  const existingValue = extendedFields.find(f => f.categoryName === '属相');
+                  setSelectedZodiac(existingValue?.value || "");
                   setShowZodiacDialog(false);
-                  setSelectedZodiac("");
                 }}
               >
                 取消
@@ -982,7 +985,6 @@ export default function AddContact() {
                     });
                     toast.success(`已选择属相：${selectedZodiac}`);
                     setShowZodiacDialog(false);
-                    setSelectedZodiac("");
                   } else {
                     toast.error("请选择属相");
                   }
@@ -1016,8 +1018,16 @@ export default function AddContact() {
                 variant="outline"
                 className="flex-1"
                 onClick={() => {
+                  const existingValue = extendedFields.find(f => f.categoryName === '年龄');
+                  if (existingValue) {
+                    // 恢复为出生年份
+                    const currentYear = new Date().getFullYear();
+                    const birthYear = currentYear - Number(existingValue.value);
+                    setSelectedAge(String(birthYear));
+                  } else {
+                    setSelectedAge("");
+                  }
                   setShowAgeDialog(false);
-                  setSelectedAge("");
                 }}
               >
                 取消
@@ -1057,7 +1067,6 @@ export default function AddContact() {
                     
                     toast.success(`已设置年龄：${age}岁，属相：${zodiacAnimal}`);
                     setShowAgeDialog(false);
-                    setSelectedAge("");
                   } else {
                     toast.error("请输入有效的年份");
                   }
@@ -1091,7 +1100,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowHeightDialog(false); setSelectedHeight(""); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '身高');
+                setSelectedHeight(existingValue?.value || "");
+                setShowHeightDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHeight) {
                   setExtendedFields(prev => {
@@ -1100,7 +1113,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择身高：${selectedHeight}`);
                   setShowHeightDialog(false);
-                  setSelectedHeight("");
                 } else {
                   toast.error("请选择身高");
                 }
@@ -1131,7 +1143,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowShoeSizeDialog(false); setSelectedShoeSize(""); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '鞋码');
+                setSelectedShoeSize(existingValue?.value || "");
+                setShowShoeSizeDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedShoeSize) {
                   setExtendedFields(prev => {
@@ -1140,7 +1156,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择鞋码：${selectedShoeSize}`);
                   setShowShoeSizeDialog(false);
-                  setSelectedShoeSize("");
                 } else {
                   toast.error("请选择鞋码");
                 }
@@ -1175,7 +1190,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowTasteDialog(false); setSelectedTastes([]); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '口味');
+                setSelectedTastes(existingValue ? existingValue.value.split(',') : []);
+                setShowTasteDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedTastes.length > 0) {
                   setExtendedFields(prev => {
@@ -1184,7 +1203,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择口味：${selectedTastes.join('、')}`);
                   setShowTasteDialog(false);
-                  setSelectedTastes([]);
                 } else {
                   toast.error("请至少选择一个口味");
                 }
@@ -1219,7 +1237,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowHabitDialog(false); setSelectedHabits([]); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '习惯');
+                setSelectedHabits(existingValue ? existingValue.value.split(',') : []);
+                setShowHabitDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHabits.length > 0) {
                   setExtendedFields(prev => {
@@ -1228,7 +1250,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择习惯：${selectedHabits.join('、')}`);
                   setShowHabitDialog(false);
-                  setSelectedHabits([]);
                 } else {
                   toast.error("请至少选择一个习惯");
                 }
@@ -1263,7 +1284,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowHealthDialog(false); setSelectedHealths([]); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '健康');
+                setSelectedHealths(existingValue ? existingValue.value.split(',') : []);
+                setShowHealthDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHealths.length > 0) {
                   setExtendedFields(prev => {
@@ -1272,7 +1297,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择健康状况：${selectedHealths.join('、')}`);
                   setShowHealthDialog(false);
-                  setSelectedHealths([]);
                 } else {
                   toast.error("请至少选择一项");
                 }
@@ -1307,7 +1331,11 @@ export default function AddContact() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowPersonalityDialog(false); setSelectedPersonalities([]); }}>取消</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '性格');
+                setSelectedPersonalities(existingValue ? existingValue.value.split(',') : []);
+                setShowPersonalityDialog(false);
+              }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedPersonalities.length > 0) {
                   setExtendedFields(prev => {
@@ -1316,7 +1344,6 @@ export default function AddContact() {
                   });
                   toast.success(`已选择性格：${selectedPersonalities.join('、')}`);
                   setShowPersonalityDialog(false);
-                  setSelectedPersonalities([]);
                 } else {
                   toast.error("请至少选择一个性格");
                 }
