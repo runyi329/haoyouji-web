@@ -709,6 +709,9 @@ export default function AddContact() {
                           <button
                             key={field}
                             onClick={() => {
+                              // 点击扩展信息字段时，自动收起基本信息区域
+                              setIsBasicInfoCollapsed(true);
+                              
                               if (field === '星座') {
                                 // 如果已经有值，预填充到选择器中
                                 const existingValue = extendedFields.find(f => f.categoryName === '星座');
