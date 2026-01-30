@@ -1003,16 +1003,22 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAgeDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">选择出生年份</h3>
-            <div className="mb-4">
-              <Input
-                type="number"
-                placeholder="请输入出生年份（如：1990）"
-                value={selectedAge}
-                onChange={(e) => setSelectedAge(e.target.value)}
-                className="w-full"
-                min="1900"
-                max={new Date().getFullYear()}
-              />
+            <div className="mb-4 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-4 gap-2">
+                {Array.from({ length: new Date().getFullYear() - 1900 + 1 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                  <button
+                    key={year}
+                    onClick={() => setSelectedAge(String(year))}
+                    className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                      selectedAge === String(year)
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex gap-2">
               <Button
