@@ -1055,7 +1055,7 @@ export default function ContactDetail() {
                       )}
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-0 border border-gray-200">
+                  <div className="grid grid-cols-12 gap-0 border border-gray-200">
                   {extendedFieldValues
                     .sort((a: any, b: any) => {
                       // 银行卡类字段排在最后
@@ -1065,8 +1065,25 @@ export default function ContactDetail() {
                       if (!aIsBankCard && bIsBankCard) return -1;
                       return 0;
                     })
-                    .map((fv: any) => (
-                    <div key={fv.id} className="flex items-start text-sm border-r border-b border-gray-200 p-2 last:border-r-0">
+                    .map((fv: any) => {
+                      // 根据内容长度计算占据的列数（12列网格）
+                      const contentLength = (fv.categoryName + fv.value).length;
+                      let colSpan = 4; // 默认占据4列（一行3个）
+                      
+                      if (isBankCardField(fv.categoryName)) {
+                        colSpan = 12; // 银行卡占满一行
+                      } else if (contentLength <= 5) {
+                        colSpan = 3; // 短内容：一行4个
+                      } else if (contentLength <= 10) {
+                        colSpan = 4; // 中等内容：一行3个
+                      } else if (contentLength <= 15) {
+                        colSpan = 6; // 较长内容：一行2个
+                      } else {
+                        colSpan = 12; // 很长内容：独占一行
+                      }
+                      
+                      return (
+                    <div key={fv.id} className={`flex items-start text-sm border-r border-b border-gray-200 p-2 col-span-${colSpan}`} style={{ gridColumn: `span ${colSpan}` }}>
                       {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
                       {fv.categoryName === '公司名称' ? (
                         <div className="flex items-center gap-2 w-full">
@@ -1143,7 +1160,8 @@ export default function ContactDetail() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })
                   </div>
                 </div>
               )}
