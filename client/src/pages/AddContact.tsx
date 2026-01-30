@@ -83,7 +83,7 @@ export default function AddContact() {
   const [showCuisineDialog, setShowCuisineDialog] = useState(false);
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   
-  // 饮食禁忌选择对话框（多选）
+  // 饮食选择对话框（多选）
   const [showDietaryDialog, setShowDietaryDialog] = useState(false);
   const [selectedDietaries, setSelectedDietaries] = useState<string[]>([]);
   
@@ -643,7 +643,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '菜系', '饮食禁忌', '习惯', '健康', '性格', '品牌', '娱乐']
+                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '菜系', '饮食', '习惯', '健康', '性格', '品牌', '娱乐']
                 },
                 { 
                   id: 'experience', 
@@ -733,8 +733,8 @@ export default function AddContact() {
                                   setSelectedCuisines(existingValue.value.split(','));
                                 }
                                 setShowCuisineDialog(true);
-                              } else if (field === '饮食禁忌') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '饮食禁忌');
+                              } else if (field === '饮食') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '饮食');
                                 if (existingValue) {
                                   setSelectedDietaries(existingValue.value.split(','));
                                 }
@@ -1259,11 +1259,11 @@ export default function AddContact() {
         </div>
       )}
       
-      {/* 饮食禁忌选择对话框（多选） */}
+      {/* 饮食选择对话框（多选） */}
       {showDietaryDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDietaryDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">选择饮食禁忌（可多选）</h3>
+            <h3 className="text-lg font-semibold mb-4">选择饮食（可多选）</h3>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {['免辣', '免香菜', '免葱', '免姜', '免蒜', '免海鲜', '素食', '清真'].map(dietary => (
                 <button
@@ -1285,17 +1285,17 @@ export default function AddContact() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '饮食禁忌');
+                const existingValue = extendedFields.find(f => f.categoryName === '饮食');
                 setSelectedDietaries(existingValue ? existingValue.value.split(',') : []);
                 setShowDietaryDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedDietaries.length > 0) {
                   setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '饮食禁忌');
-                    return [...filtered, { categoryId: 0, categoryName: '饮食禁忌', value: selectedDietaries.join(',') }];
+                    const filtered = prev.filter(f => f.categoryName !== '饮食');
+                    return [...filtered, { categoryId: 0, categoryName: '饮食', value: selectedDietaries.join(',') }];
                   });
-                  toast.success(`已选择饮食禁忌：${selectedDietaries.join('、')}`);
+                  toast.success(`已选择饮食：${selectedDietaries.join('、')}`);
                   setShowDietaryDialog(false);
                 } else {
                   toast.error("请至少选择一项");
