@@ -79,9 +79,13 @@ export default function AddContact() {
   const [showShoeSizeDialog, setShowShoeSizeDialog] = useState(false);
   const [selectedShoeSize, setSelectedShoeSize] = useState("");
   
-  // 口味选择对话框（多选）
-  const [showTasteDialog, setShowTasteDialog] = useState(false);
-  const [selectedTastes, setSelectedTastes] = useState<string[]>([]);
+  // 菜系选择对话框（多选）
+  const [showCuisineDialog, setShowCuisineDialog] = useState(false);
+  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  
+  // 饮食禁忌选择对话框（多选）
+  const [showDietaryDialog, setShowDietaryDialog] = useState(false);
+  const [selectedDietaries, setSelectedDietaries] = useState<string[]>([]);
   
   // 习惯选择对话框（多选）
   const [showHabitDialog, setShowHabitDialog] = useState(false);
@@ -94,6 +98,18 @@ export default function AddContact() {
   // 性格选择对话框（多选）
   const [showPersonalityDialog, setShowPersonalityDialog] = useState(false);
   const [selectedPersonalities, setSelectedPersonalities] = useState<string[]>([]);
+  
+  // 民族选择对话框
+  const [showEthnicDialog, setShowEthnicDialog] = useState(false);
+  const [selectedEthnic, setSelectedEthnic] = useState("");
+  
+  // 品牌选择对话框（多选）
+  const [showBrandDialog, setShowBrandDialog] = useState(false);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  
+  // 娱乐选择对话框（多选）
+  const [showEntertainmentDialog, setShowEntertainmentDialog] = useState(false);
+  const [selectedEntertainments, setSelectedEntertainments] = useState<string[]>([]);
   
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
@@ -627,7 +643,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '口味', '习惯', '健康', '性格']
+                  fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '菜系', '饮食禁忌', '习惯', '健康', '性格', '品牌', '娱乐']
                 },
                 { 
                   id: 'experience', 
@@ -711,12 +727,18 @@ export default function AddContact() {
                                   setSelectedShoeSize(existingValue.value);
                                 }
                                 setShowShoeSizeDialog(true);
-                              } else if (field === '口味') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '口味');
+                              } else if (field === '菜系') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '菜系');
                                 if (existingValue) {
-                                  setSelectedTastes(existingValue.value.split(','));
+                                  setSelectedCuisines(existingValue.value.split(','));
                                 }
-                                setShowTasteDialog(true);
+                                setShowCuisineDialog(true);
+                              } else if (field === '饮食禁忌') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '饮食禁忌');
+                                if (existingValue) {
+                                  setSelectedDietaries(existingValue.value.split(','));
+                                }
+                                setShowDietaryDialog(true);
                               } else if (field === '习惯') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '习惯');
                                 if (existingValue) {
@@ -735,6 +757,24 @@ export default function AddContact() {
                                   setSelectedPersonalities(existingValue.value.split(','));
                                 }
                                 setShowPersonalityDialog(true);
+                              } else if (field === '民族') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '民族');
+                                if (existingValue) {
+                                  setSelectedEthnic(existingValue.value);
+                                }
+                                setShowEthnicDialog(true);
+                              } else if (field === '品牌') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '品牌');
+                                if (existingValue) {
+                                  setSelectedBrands(existingValue.value.split(','));
+                                }
+                                setShowBrandDialog(true);
+                              } else if (field === '娱乐') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '娱乐');
+                                if (existingValue) {
+                                  setSelectedEntertainments(existingValue.value.split(','));
+                                }
+                                setShowEntertainmentDialog(true);
                               }
                             }}
                             className={`px-4 py-2 border rounded-lg text-sm transition-colors ${
@@ -1172,46 +1212,93 @@ export default function AddContact() {
         </div>
       )}
       
-      {/* 口味选择对话框（多选） */}
-      {showTasteDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTasteDialog(false)}>
+      {/* 菜系选择对话框（多选） */}
+      {showCuisineDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCuisineDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">选择口味（可多选）</h3>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {['甜', '咸', '辣', '酸', '苦', '鲜', '清淡', '重口'].map(taste => (
+            <h3 className="text-lg font-semibold mb-4">选择菜系（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['粤菜', '本帮菜', '川菜', '湘菜', '鲁菜', '徽菜', '闽菜', '浙菜', '苏菜', '东北菜', '日料', '韩餐', '西餐', '东南亚菜', '清真菜', '火锅', '烧烤', '海鲜'].map(cuisine => (
                 <button
-                  key={taste}
+                  key={cuisine}
                   onClick={() => {
-                    setSelectedTastes(prev => 
-                      prev.includes(taste) ? prev.filter(t => t !== taste) : [...prev, taste]
+                    setSelectedCuisines(prev => 
+                      prev.includes(cuisine) ? prev.filter(c => c !== cuisine) : [...prev, cuisine]
                     );
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
-                    selectedTastes.includes(taste)
+                    selectedCuisines.includes(cuisine)
                       ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  {taste}
+                  {cuisine}
                 </button>
               ))}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '口味');
-                setSelectedTastes(existingValue ? existingValue.value.split(',') : []);
-                setShowTasteDialog(false);
+                const existingValue = extendedFields.find(f => f.categoryName === '菜系');
+                setSelectedCuisines(existingValue ? existingValue.value.split(',') : []);
+                setShowCuisineDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
-                if (selectedTastes.length > 0) {
+                if (selectedCuisines.length > 0) {
                   setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '口味');
-                    return [...filtered, { categoryId: 0, categoryName: '口味', value: selectedTastes.join(',') }];
+                    const filtered = prev.filter(f => f.categoryName !== '菜系');
+                    return [...filtered, { categoryId: 0, categoryName: '菜系', value: selectedCuisines.join(',') }];
                   });
-                  toast.success(`已选择口味：${selectedTastes.join('、')}`);
-                  setShowTasteDialog(false);
+                  toast.success(`已选择菜系：${selectedCuisines.join('、')}`);
+                  setShowCuisineDialog(false);
                 } else {
-                  toast.error("请至少选择一个口味");
+                  toast.error("请至少选择一个菜系");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 饮食禁忌选择对话框（多选） */}
+      {showDietaryDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDietaryDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择饮食禁忌（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['免辣', '免香菜', '免葱', '免姜', '免蒜', '免海鲜', '素食', '清真'].map(dietary => (
+                <button
+                  key={dietary}
+                  onClick={() => {
+                    setSelectedDietaries(prev => 
+                      prev.includes(dietary) ? prev.filter(d => d !== dietary) : [...prev, dietary]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedDietaries.includes(dietary)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {dietary}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '饮食禁忌');
+                setSelectedDietaries(existingValue ? existingValue.value.split(',') : []);
+                setShowDietaryDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedDietaries.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '饮食禁忌');
+                    return [...filtered, { categoryId: 0, categoryName: '饮食禁忌', value: selectedDietaries.join(',') }];
+                  });
+                  toast.success(`已选择饮食禁忌：${selectedDietaries.join('、')}`);
+                  setShowDietaryDialog(false);
+                } else {
+                  toast.error("请至少选择一项");
                 }
               }}>确定</Button>
             </div>
@@ -1353,6 +1440,143 @@ export default function AddContact() {
                   setShowPersonalityDialog(false);
                 } else {
                   toast.error("请至少选择一个性格");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 民族选择对话框 */}
+      {showEthnicDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEthnicDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择民族</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['汉族', '回族', '维吴尔族', '藏族', '蒙古族', '苗族', '壮族', '朝鲜族', '满族', '侗族', '白族', '土家族', '哈萨克族', '大族', '黎族', '佤僳族', '佤伬族', '佤伬族', '瑶族', '东乡族', '高山族', '景颇族', '柯尔克孜族', '土族', '达斡尔族', '仲家族', '布朗族', '撒拉族', '毛南族', '信德族', '水族', '纳西族', '羌族', '普米族', '阿昌族', '怒族', '基诺族', '德昂族', '保安族', '俄罗斯族', '裕固族', '京族', '塔塔尔族', '独龙族', '鄂伦春族', '赫哲族', '门巴族', '珞巴族', '基诺族', '鄂温克族', '塔吉克族', '乌兹别克族', '俄罗斯族', '鄂伦春族', '塔塔尔族'].slice(0, 30).map(ethnic => (
+                <button
+                  key={ethnic}
+                  onClick={() => setSelectedEthnic(ethnic)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedEthnic === ethnic
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {ethnic}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '民族');
+                setSelectedEthnic(existingValue?.value || "");
+                setShowEthnicDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedEthnic) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '民族');
+                    return [...filtered, { categoryId: 0, categoryName: '民族', value: selectedEthnic }];
+                  });
+                  toast.success(`已选择民族：${selectedEthnic}`);
+                  setShowEthnicDialog(false);
+                } else {
+                  toast.error("请选择民族");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 品牌选择对话框（多选） */}
+      {showBrandDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBrandDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择品牌偏好（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['苹果', '华为', '小米', '耐克', '阿迪达斯', '安踏', '奔驰', '宝马', '奥迪', '保时捷', '雅诗兰黛', '香奈儿', 'LV', '爱马仕', '古驰', '星巴克', '喜茶', '肇德基', '麦当劳', '海底捞', '外婆家'].map(brand => (
+                <button
+                  key={brand}
+                  onClick={() => {
+                    setSelectedBrands(prev => 
+                      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedBrands.includes(brand)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '品牌');
+                setSelectedBrands(existingValue ? existingValue.value.split(',') : []);
+                setShowBrandDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedBrands.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '品牌');
+                    return [...filtered, { categoryId: 0, categoryName: '品牌', value: selectedBrands.join(',') }];
+                  });
+                  toast.success(`已选择品牌：${selectedBrands.join('、')}`);
+                  setShowBrandDialog(false);
+                } else {
+                  toast.error("请至少选择一个品牌");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 娱乐选择对话框（多选） */}
+      {showEntertainmentDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEntertainmentDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择娱乐偏好（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {['电影', '音乐', '运动', '旅游', '游戏', '阅读', 'KTV', '剔本杀', '密室逃脱', '摄影', '书法', '绘画', '舞蹈', '瑜伽', '健身', '钓鱼', '登山', '游泳'].map(entertainment => (
+                <button
+                  key={entertainment}
+                  onClick={() => {
+                    setSelectedEntertainments(prev => 
+                      prev.includes(entertainment) ? prev.filter(e => e !== entertainment) : [...prev, entertainment]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedEntertainments.includes(entertainment)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {entertainment}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '娱乐');
+                setSelectedEntertainments(existingValue ? existingValue.value.split(',') : []);
+                setShowEntertainmentDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedEntertainments.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '娱乐');
+                    return [...filtered, { categoryId: 0, categoryName: '娱乐', value: selectedEntertainments.join(',') }];
+                  });
+                  toast.success(`已选择娱乐：${selectedEntertainments.join('、')}`);
+                  setShowEntertainmentDialog(false);
+                } else {
+                  toast.error("请至少选择一项");
                 }
               }}>确定</Button>
             </div>
