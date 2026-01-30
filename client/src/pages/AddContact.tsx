@@ -55,6 +55,14 @@ export default function AddContact() {
   const [showConstellationDialog, setShowConstellationDialog] = useState(false);
   const [selectedConstellation, setSelectedConstellation] = useState("");
   
+  // 生日选择对话框
+  const [showBirthdayDialog, setShowBirthdayDialog] = useState(false);
+  const [selectedBirthday, setSelectedBirthday] = useState("");
+  
+  // 血型选择对话框
+  const [showBloodTypeDialog, setShowBloodTypeDialog] = useState(false);
+  const [selectedBloodType, setSelectedBloodType] = useState("");
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -587,7 +595,7 @@ export default function AddContact() {
                 { 
                   id: 'preference', 
                   name: '偏好',
-                  fields: ['星座', '生日', '年龄']
+                  fields: ['星座', '生日', '年龄', '血型']
                 },
                 { 
                   id: 'experience', 
@@ -635,6 +643,18 @@ export default function AddContact() {
                                   setSelectedConstellation(existingValue.value);
                                 }
                                 setShowConstellationDialog(true);
+                              } else if (field === '生日') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '生日');
+                                if (existingValue) {
+                                  setSelectedBirthday(existingValue.value);
+                                }
+                                setShowBirthdayDialog(true);
+                              } else if (field === '血型') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '血型');
+                                if (existingValue) {
+                                  setSelectedBloodType(existingValue.value);
+                                }
+                                setShowBloodTypeDialog(true);
                               }
                               // 其他字段的处理将在后续添加
                             }}
@@ -719,6 +739,115 @@ export default function AddContact() {
                     setSelectedConstellation("");
                   } else {
                     toast.error("请选择一个星座");
+                  }
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 生日选择对话框 */}
+      {showBirthdayDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBirthdayDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择生日</h3>
+            <div className="mb-4">
+              <Input
+                type="date"
+                value={selectedBirthday}
+                onChange={(e) => setSelectedBirthday(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowBirthdayDialog(false);
+                  setSelectedBirthday("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedBirthday) {
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '生日');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '生日',
+                        value: selectedBirthday,
+                      }];
+                    });
+                    toast.success(`已选择生日：${selectedBirthday}`);
+                    setShowBirthdayDialog(false);
+                    setSelectedBirthday("");
+                  } else {
+                    toast.error("请选择生日");
+                  }
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 血型选择对话框 */}
+      {showBloodTypeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBloodTypeDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择血型</h3>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {['A型', 'B型', 'AB型', 'O型'].map(bloodType => (
+                <button
+                  key={bloodType}
+                  onClick={() => setSelectedBloodType(bloodType)}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedBloodType === bloodType
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {bloodType}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowBloodTypeDialog(false);
+                  setSelectedBloodType("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedBloodType) {
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '血型');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '血型',
+                        value: selectedBloodType,
+                      }];
+                    });
+                    toast.success(`已选择血型：${selectedBloodType}`);
+                    setShowBloodTypeDialog(false);
+                    setSelectedBloodType("");
+                  } else {
+                    toast.error("请选择血型");
                   }
                 }}
               >
