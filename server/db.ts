@@ -1,5 +1,6 @@
 import { eq, desc, asc, and, or, sql, isNull, isNotNull, like, inArray, gte, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import {
   InsertUser, users,
   childProfiles, InsertChildProfile,
@@ -70,9 +71,15 @@ export async function getDb(forceGuest: boolean = false) {
     if (!_guestDb) {
       const dbUrl = process.env.DATABASE_URL;
       if (dbUrl) {
-        try {
-          _guestDb = drizzle(dbUrl);
-          console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
+      try {
+        const connection = await mysql.createConnection({
+          uri: dbUrl,
+          connectTimeout: 30000,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 0,
+        });
+        _guestDb = drizzle(connection);
+        console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
         } catch (error) {
           console.warn("[GuestDatabase] Failed to connect:", error);
           _guestDb = null;
@@ -88,7 +95,13 @@ export async function getDb(forceGuest: boolean = false) {
     
     if (dbUrl) {
       try {
-        _db = drizzle(dbUrl);
+        const connection = await mysql.createConnection({
+          uri: dbUrl,
+          connectTimeout: 30000,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 0,
+        });
+        _db = drizzle(connection);
         const dbType = process.env.ORIGINAL_DATABASE_URL ? "原数据库(腾讯云)" : "Manus数据库";
         console.log(`[Database] 成功连接到${dbType}`);
       } catch (error) {
