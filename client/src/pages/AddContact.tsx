@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, Pencil, ChevronDown, Stethoscope } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, ChevronDown, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -116,8 +116,6 @@ export default function AddContact() {
   
   // 添加扩展信息对话框
   const [showFieldSelector, setShowFieldSelector] = useState(false);
-  const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
-  const [editingFieldValue, setEditingFieldValue] = useState("");
   
   // 星座选择对话框
   const [showConstellationDialog, setShowConstellationDialog] = useState(false);
@@ -449,51 +447,6 @@ export default function AddContact() {
     setDialogMessage({type: "success", text: "扩展信息已添加，请点击保存按钮"});
   };
   
-  // 编辑扩展信息字段
-  const handleEditExtendedField = (index: number) => {
-    setEditingFieldIndex(index);
-    setEditingFieldValue(extendedFields[index].value);
-  };
-  
-  // 保存编辑
-  const handleSaveEdit = () => {
-    if (editingFieldIndex === null) return;
-    
-    if (!editingFieldValue.trim()) {
-      setDialogMessage({type: "error", text: "请输入内容"});
-      return;
-    }
-    
-    const field = extendedFields[editingFieldIndex];
-    
-    if (isEditMode && contactId && field.id) {
-      // 编辑模式：更新数据库
-      updateFieldValueMutation.mutate({
-        id: field.id,
-        value: editingFieldValue.trim(),
-      });
-    }
-    
-    // 更新本地状态
-    setExtendedFields(prev => {
-      const newFields = [...prev];
-      newFields[editingFieldIndex] = {
-        ...newFields[editingFieldIndex],
-        value: editingFieldValue.trim(),
-      };
-      return newFields;
-    });
-    
-    setEditingFieldIndex(null);
-    setEditingFieldValue("");
-    setDialogMessage({type: "success", text: "修改成功"});
-  };
-  
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setEditingFieldIndex(null);
-    setEditingFieldValue("");
-  };
   
   // 配置拖拽传感器（长按250ms激活）
   const sensors = useSensors(
@@ -804,73 +757,6 @@ export default function AddContact() {
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* 已添加的扩展信息 */}
-            {extendedFields.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                {extendedFields.map((field, index) => (
-                  <div
-                    key={index}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-full border bg-white hover:bg-gray-50 transition-colors"
-                  >
-                    {editingFieldIndex === index ? (
-                      // 编辑模式
-                      <>
-                        <span className="text-sm font-medium text-muted-foreground">
-                          {field.categoryName}:
-                        </span>
-                        <Input
-                          value={editingFieldValue}
-                          onChange={(e) => setEditingFieldValue(e.target.value)}
-                          placeholder="请输入内容"
-                          className="h-6 w-32 text-sm"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={handleSaveEdit}
-                          className="h-6 px-2 text-xs"
-                        >
-                          保存
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleCancelEdit}
-                          className="h-6 px-2 text-xs"
-                        >
-                          取消
-                        </Button>
-                      </>
-                    ) : (
-                      // 显示模式
-                      <>
-                        <span className="text-sm text-muted-foreground">
-                          {field.categoryName}
-                        </span>
-                        <span className="text-sm font-medium">
-                          {field.value}
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleEditExtendedField(index)}
-                          className="h-5 w-5 hover:text-primary"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDeleteExtendedField(index)}
-                          className="h-5 w-5 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
             
             {/* 扩展字段 - 可拖拽排序 */}
             <div className="mt-4">
