@@ -271,6 +271,96 @@ export async function deleteLedger(ledgerId: number, userId: number) {
 }
 
 /**
+ * 邀请用户加入账本（通过用户名）
+ */
+export async function inviteMemberByUsername(ledgerId: number, inviterUserId: number, inviteeUsername: string) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查邀请者是否有权限邀请
+  const inviterMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, inviterUserId)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviterMember) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  if (!inviterMember.canInvite && inviterMember.role !== "owner" && inviterMember.role !== "admin") {
+    throw new Error("您没有权限邀请成员");
+  }
+
+  // 从主数据库查找被邀请用户
+  const { getDb } = await import("./db");
+  const mainDb = await getDb();
+  if (!mainDb) throw new Error("Main database connection failed");
+
+  const inviteeUser = await mainDb
+    .select()
+    .from(users)
+    .where(eq(users.username, inviteeUsername))
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviteeUser) {
+    throw new Error("用户不存在");
+  }
+
+  // 不能邀请自己
+  if (inviteeUser.id === inviterUserId) {
+    throw new Error("不能邀请自己");
+  }
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, inviteeUser.id)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (existingMember) {
+    throw new Error("该用户已经是账本成员");
+  }
+
+  // 添加为成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId: inviteeUser.id,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+    canEdit: true,
+    canDelete: false,
+    canInvite: false,
+    invitedBy: inviterUserId,
+  });
+
+  return {
+    success: true,
+    member: {
+      userId: inviteeUser.id,
+      username: inviteeUser.username,
+      name: inviteeUser.name,
+      avatar: inviteeUser.avatar,
+    },
+  };
+}
+
+/**
  * 加入账本（通过邀请码）
  */
 export async function joinLedger(ledgerId: number, userId: number, invitedBy: number) {

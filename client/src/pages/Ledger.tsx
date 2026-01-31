@@ -3,8 +3,9 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
@@ -73,14 +74,66 @@ export default function Ledger() {
     },
   });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [archivingLedgerId, setArchivingLedgerId] = useState<number | null>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [invitingLedgerId, setInvitingLedgerId] = useState<number | null>(null);
+  const [searchUsername, setSearchUsername] = useState("");
 
 
   // 从后端API获取账本列表
-  const { data: ledgers, isLoading } = trpc.ledger.list.useQuery({
+  const { data: ledgers, isLoading, refetch } = trpc.ledger.list.useQuery({
     isArchived: activeTab === "archived",
   });
 
   const filteredLedgers = ledgers || [];
+
+  // 存档账本的mutation
+  const archiveMutation = trpc.ledger.archive.useMutation({
+    onSuccess: () => {
+      toast.success('账本已存档');
+      refetch();
+      setShowArchiveDialog(false);
+      setArchivingLedgerId(null);
+    },
+    onError: (error) => {
+      toast.error(`存档失败: ${error.message}`);
+    },
+  });
+
+  // 处理存档确认
+  const handleArchiveConfirm = () => {
+    if (archivingLedgerId) {
+      archiveMutation.mutate({ ledgerId: archivingLedgerId, isArchived: true });
+    }
+  };
+
+  // 搜索用户
+  const { data: searchResults } = trpc.sharing.searchUsers.useQuery(
+    { query: searchUsername },
+    { enabled: searchUsername.length > 0 }
+  );
+
+  // 邀请成员的mutation
+  const inviteMutation = trpc.ledger.inviteMember.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已成功邀请 ${data.member.username} 加入账本`);
+      setShowInviteDialog(false);
+      setSearchUsername("");
+      setInvitingLedgerId(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`邀请失败: ${error.message}`);
+    },
+  });
+
+  // 处理邀请用户
+  const handleInviteUser = (username: string) => {
+    if (invitingLedgerId) {
+      inviteMutation.mutate({ ledgerId: invitingLedgerId, username });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#e0fcff] pb-20">
@@ -183,62 +236,105 @@ export default function Ledger() {
               </div>
 
               {/* 操作按钮 */}
-              <div className="flex justify-between -mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm leading-none px-3 py-1 h-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLocation(`/ledger/${ledger.id}/settings`);
-                  }}
-                >
-                  设置
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm leading-none px-3 py-1 h-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // TODO: 导出
-                  }}
-                >
-                  导出
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm leading-none px-3 py-1 h-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // TODO: 查看明细
-                  }}
-                >
-                  明细
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm leading-none px-3 py-1 h-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // TODO: 查看报表
-                  }}
-                >
-                  报表
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm leading-none px-3 py-1 h-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // TODO: 邀请成员
-                  }}
-                >
-                  邀请
-                </Button>
+              <div className="flex gap-1 -mt-2">
+                {activeTab === "active" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/ledger/${ledger.id}/settings`);
+                      }}
+                    >
+                      设置
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 导出
+                      }}
+                    >
+                      导出
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 查看明细
+                      }}
+                    >
+                      明细
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 查看报表
+                      }}
+                    >
+                      报表
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInvitingLedgerId(ledger.id);
+                        setShowInviteDialog(true);
+                      }}
+                    >
+                      邀请
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setArchivingLedgerId(ledger.id);
+                        setShowArchiveDialog(true);
+                      }}
+                    >
+                      存档
+                    </Button>
+                  </>
+                )}
+                {activeTab === "archived" && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 导出
+                      }}
+                    >
+                      导出
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 查看明细
+                      }}
+                    >
+                      明细
+                    </Button>
+                  </>
+                )}
               </div>
             </Card>
           ))
@@ -296,6 +392,109 @@ export default function Ledger() {
           >
             取消
           </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* 存档确认对话框 */}
+      <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
+        <DialogContent className="w-[85%] rounded-lg p-0 gap-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">存档账本</DialogTitle>
+          <div className="p-6 text-center">
+            <div className="text-2xl mb-4">⚠️</div>
+            <p className="text-gray-800 mb-2 font-medium">一旦存档将不可以再修改</p>
+            <p className="text-sm text-gray-500">存档后的账本只能查看和导出，无法继续编辑</p>
+          </div>
+          <button
+            onClick={handleArchiveConfirm}
+            disabled={archiveMutation.isPending}
+            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {archiveMutation.isPending ? '存档中...' : '确认存档'}
+          </button>
+          <button
+            onClick={() => {
+              setShowArchiveDialog(false);
+              setArchivingLedgerId(null);
+            }}
+            disabled={archiveMutation.isPending}
+            className="w-full text-center py-3.5 text-gray-600 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            取消
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* 邀请成员对话框 */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
+          <DialogTitle className="text-lg font-semibold mb-4">邀请成员</DialogTitle>
+          <div className="space-y-4">
+            {/* 搜索输入框 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="输入用户名搜索..."
+                value={searchUsername}
+                onChange={(e) => setSearchUsername(e.target.value)}
+                className="pl-10 pr-4"
+              />
+            </div>
+
+            {/* 搜索结果 */}
+            <div className="max-h-[300px] overflow-y-auto space-y-2">
+              {searchUsername.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  请输入用户名进行搜索
+                </div>
+              ) : searchResults && searchResults.length > 0 ? (
+                searchResults.map((user: any) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <UserAvatar
+                        username={user.username}
+                        avatar={user.avatar}
+                        size="sm"
+                      />
+                      <div>
+                        <p className="font-medium text-gray-800">{user.name || user.username}</p>
+                        <p className="text-sm text-gray-500">@{user.username}</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleInviteUser(user.username)}
+                      disabled={inviteMutation.isPending}
+                      className="bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      添加
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  未找到用户
+                </div>
+              )}
+            </div>
+
+            {/* 关闭按钮 */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setShowInviteDialog(false);
+                setSearchUsername("");
+                setInvitingLedgerId(null);
+              }}
+            >
+              关闭
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

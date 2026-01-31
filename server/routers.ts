@@ -5168,6 +5168,16 @@ export const appRouter = router({
         return ledger;
       }),
 
+    // 邀请成员加入账本（通过用户名）
+    inviteMember: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        username: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
+      }),
+
     // 移除账本成员
     removeMember: protectedProcedure
       .input(z.object({
