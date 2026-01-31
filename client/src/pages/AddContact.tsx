@@ -2616,28 +2616,103 @@ export default function AddContact() {
       {showCreditDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreditDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">征信</h3>
-            <Input value={selectedCredit} onChange={(e) => setSelectedCredit(e.target.value)} placeholder="请输入征信信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '征信');
-                setSelectedCredit(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowCreditDialog(false);
-              }}>取消</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedCredit.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '征信');
-                    return [...filtered, { categoryId: 0, categoryName: '征信', value: selectedCredit }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置征信：${selectedCredit}`});
-                  setShowCreditDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入征信信息"});
-                }
-              }}>确定</Button>
-            </div>
+            <h3 className="text-lg font-semibold mb-4">征信 - 芝麻信用</h3>
+            
+            {(() => {
+              const existingValue = extendedFields.find(f => f.categoryName === '征信');
+              const hasValue = existingValue?.value;
+              let score = '';
+              let timestamp = '';
+              
+              if (hasValue) {
+                // 解析格式：分数 | 时间
+                const parts = hasValue.split('|').map(p => p.trim());
+                score = parts[0] || '';
+                timestamp = parts[1] || '';
+              }
+              
+              return (
+                <>
+                  {hasValue ? (
+                    <div className="mb-4">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600 mb-2">{score}</div>
+                        <div className="text-sm text-gray-500">输入时间：{timestamp}</div>
+                        <div className="text-xs text-orange-600 mt-2">⚠️ 芝麻信用分只能输入一次，不可修改</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4">
+                      <label className="text-sm text-gray-600 mb-2 block">芝麻信用分</label>
+                      <Input 
+                        type="number"
+                        value={selectedCredit} 
+                        onChange={(e) => setSelectedCredit(e.target.value)} 
+                        placeholder="请输入芝麻信用分（350-950）" 
+                        min="350"
+                        max="950"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">⚠️ 注意：只能输入一次，输入后不可修改</div>
+                    </div>
+                  )}
+                  
+                  {/* 提示信息 */}
+                  {dialogMessage && (
+                    <div className={`mb-3 p-3 rounded-lg text-sm ${
+                      dialogMessage.type === 'error' 
+                        ? 'bg-red-50 text-red-700 border border-red-200' 
+                        : 'bg-green-50 text-green-700 border border-green-200'
+                    }`}>
+                      {dialogMessage.text}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => { 
+                      setSelectedCredit('');
+                      setDialogMessage(null);
+                      setShowCreditDialog(false);
+                    }}>取消</Button>
+                    
+                    {!hasValue && (
+                      <Button className="flex-1" onClick={() => {
+                        const creditScore = parseInt(selectedCredit.trim());
+                        if (!selectedCredit.trim()) {
+                          setDialogMessage({type: "error", text: "请输入芝麻信用分"});
+                          return;
+                        }
+                        if (isNaN(creditScore) || creditScore < 350 || creditScore > 950) {
+                          setDialogMessage({type: "error", text: "芝麻信用分范围为350-950"});
+                          return;
+                        }
+                        
+                        // 记录当前时间
+                        const now = new Date();
+                        const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                        const value = `${creditScore} | ${timeStr}`;
+                        
+                        setExtendedFields(prev => {
+                          const filtered = prev.filter(f => f.categoryName !== '征信');
+                          return [...filtered, { categoryId: 0, categoryName: '征信', value }];
+                        });
+                        setDialogMessage({type: "success", text: `已设置芝麻信用分：${creditScore}`});
+                        setTimeout(() => {
+                          setDialogMessage(null);
+                          setShowCreditDialog(false);
+                        }, 1000);
+                      }}>确定</Button>
+                    )}
+                    
+                    {hasValue && (
+                      <Button className="flex-1" onClick={() => {
+                        setDialogMessage(null);
+                        setShowCreditDialog(false);
+                      }}>关闭</Button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
