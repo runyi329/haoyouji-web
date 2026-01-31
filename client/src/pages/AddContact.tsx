@@ -207,6 +207,7 @@ export default function AddContact() {
   const [selectedPublicAccount, setSelectedPublicAccount] = useState("");
   
   const [showPrivateAccountDialog, setShowPrivateAccountDialog] = useState(false);
+  const [privateAccountList, setPrivateAccountList] = useState<{bank: string, number: string, name: string}[]>([]);
   const [privateAccountBank, setPrivateAccountBank] = useState("");
   const [privateAccountNumber, setPrivateAccountNumber] = useState("");
   const [privateAccountName, setPrivateAccountName] = useState("");
@@ -998,16 +999,22 @@ export default function AddContact() {
                               } else if (field === '私户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '私户');
                                 if (existingValue?.value) {
-                                  // 解析格式：银行 | 卡号 | 名字
-                                  const parts = existingValue.value.split('|').map(p => p.trim());
-                                  setPrivateAccountBank(parts[0] || '');
-                                  setPrivateAccountNumber(parts[1] || '');
-                                  setPrivateAccountName(parts[2] || '');
+                                  // 解析格式：多个银行卡信息，以分号分隔，每个银行卡格式：银行|卡号|名字
+                                  const accounts = existingValue.value.split(';').map(account => {
+                                    const parts = account.split('|').map(p => p.trim());
+                                    return {
+                                      bank: parts[0] || '',
+                                      number: parts[1] || '',
+                                      name: parts[2] || ''
+                                    };
+                                  }).filter(acc => acc.bank || acc.number || acc.name);
+                                  setPrivateAccountList(accounts);
                                 } else {
-                                  setPrivateAccountBank('');
-                                  setPrivateAccountNumber('');
-                                  setPrivateAccountName('');
+                                  setPrivateAccountList([]);
                                 }
+                                setPrivateAccountBank('');
+                                setPrivateAccountNumber('');
+                                setPrivateAccountName('');
                                 setShowPrivateAccountDialog(true);
                               } else if (field === '邮箱') {
                                 // 邮箱字段使用专门的对话框，支持多个邮箱和格式验证
@@ -2205,32 +2212,85 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPrivateAccountDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">私户信息</h3>
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">银行</label>
-                <Input 
-                  value={privateAccountBank} 
-                  onChange={(e) => setPrivateAccountBank(e.target.value)} 
-                  placeholder="请输入银行名称" 
-                />
+            
+            {/* 已添加的银行卡列表 */}
+            {privateAccountList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已添加的银行卡：</p>
+                <div className="space-y-2">
+                  {privateAccountList.map((account, index) => (
+                    <div key={index} className="flex items-start gap-2 bg-gray-50 p-3 rounded border border-gray-200">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{account.bank}</div>
+                        <div className="text-xs text-gray-600 mt-1">卡号：{account.number}</div>
+                        <div className="text-xs text-gray-600">户名：{account.name}</div>
+                      </div>
+                      <button
+                        onClick={() => setPrivateAccountList(prev => prev.filter((_, i) => i !== index))}
+                        className="text-red-500 hover:text-red-700 mt-1"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">卡号</label>
-                <Input 
-                  value={privateAccountNumber} 
-                  onChange={(e) => setPrivateAccountNumber(e.target.value)} 
-                  placeholder="请输入银行卡号" 
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">名字</label>
-                <Input 
-                  value={privateAccountName} 
-                  onChange={(e) => setPrivateAccountName(e.target.value)} 
-                  placeholder="请输入户名" 
-                />
+            )}
+            
+            {/* 添加新银行卡 */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">添加新银行卡：</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">银行</label>
+                  <Input 
+                    value={privateAccountBank} 
+                    onChange={(e) => setPrivateAccountBank(e.target.value)} 
+                    placeholder="请输入银行名称" 
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">卡号</label>
+                  <Input 
+                    value={privateAccountNumber} 
+                    onChange={(e) => setPrivateAccountNumber(e.target.value)} 
+                    placeholder="请输入银行卡号" 
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600 mb-1 block">户名</label>
+                  <Input 
+                    value={privateAccountName} 
+                    onChange={(e) => setPrivateAccountName(e.target.value)} 
+                    placeholder="请输入户名" 
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => {
+                    if (!privateAccountBank.trim() || !privateAccountNumber.trim() || !privateAccountName.trim()) {
+                      setDialogMessage({type: "error", text: "请填写完整的银行卡信息"});
+                      return;
+                    }
+                    setPrivateAccountList(prev => [...prev, {
+                      bank: privateAccountBank.trim(),
+                      number: privateAccountNumber.trim(),
+                      name: privateAccountName.trim()
+                    }]);
+                    setPrivateAccountBank('');
+                    setPrivateAccountNumber('');
+                    setPrivateAccountName('');
+                    setDialogMessage({type: "success", text: "银行卡已添加"});
+                  }}
+                >
+                  + 添加银行卡
+                </Button>
               </div>
             </div>
+            
             {/* 提示信息 */}
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
@@ -2248,16 +2308,19 @@ export default function AddContact() {
                 setShowPrivateAccountDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
-                if (!privateAccountBank.trim() || !privateAccountNumber.trim() || !privateAccountName.trim()) {
-                  setDialogMessage({type: "error", text: "请填写完整的银行卡信息"});
+                if (privateAccountList.length === 0) {
+                  setDialogMessage({type: "error", text: "请至少添加一个银行卡"});
                   return;
                 }
-                const value = `${privateAccountBank.trim()} | ${privateAccountNumber.trim()} | ${privateAccountName.trim()}`;
+                // 将多个银行卡信息用分号分隔
+                const value = privateAccountList.map(acc => 
+                  `${acc.bank} | ${acc.number} | ${acc.name}`
+                ).join('; ');
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '私户');
                   return [...filtered, { categoryId: 0, categoryName: '私户', value }];
                 });
-                setDialogMessage({type: "success", text: `已设置私户信息`});
+                setDialogMessage({type: "success", text: `已设置${privateAccountList.length}个银行卡`});
                 setTimeout(() => {
                   setDialogMessage(null);
                   setShowPrivateAccountDialog(false);
