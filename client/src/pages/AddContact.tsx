@@ -261,6 +261,27 @@ export default function AddContact() {
   // 获取所有可用的字段类目（树状结构）
   const { data: fieldCategories } = trpc.contacts.fieldValues.categories.useQuery();
   
+  // 辅助函数：根据分类名称获取categoryId
+  const getCategoryId = (categoryName: string): number => {
+    if (!fieldCategories) return 0;
+    
+    // 递归查找函数
+    const findCategory = (categories: any[]): number => {
+      for (const cat of categories) {
+        if (cat.name === categoryName) {
+          return cat.id;
+        }
+        if (cat.children && cat.children.length > 0) {
+          const childId = findCategory(cat.children);
+          if (childId !== 0) return childId;
+        }
+      }
+      return 0;
+    };
+    
+    return findCategory(fieldCategories);
+  };
+  
   // 模糊搜索已有人脉
   const { data: suggestions } = trpc.contacts.list.useQuery(
     { searchQuery: searchQuery || undefined },
@@ -1152,7 +1173,7 @@ export default function AddContact() {
                       // 删除旧的星座记录（如果有）
                       const filtered = prev.filter(f => f.categoryName !== '星座');
                       return [...filtered, {
-                        categoryId: 0, // 临时ID，后续会从数据库获取
+                        categoryId: getCategoryId('星座'),
                         categoryName: '星座',
                         value: selectedConstellation,
                       }];
@@ -1217,7 +1238,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '生日');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('生日'),
                         categoryName: '生日',
                         value: selectedBirthday,
                       }];
@@ -1233,7 +1254,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '属相');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('属相'),
                         categoryName: '属相',
                         value: zodiacAnimal,
                       }];
@@ -1303,7 +1324,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '血型');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('血型'),
                         categoryName: '血型',
                         value: selectedBloodType,
                       }];
@@ -1389,7 +1410,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '属相');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('属相'),
                         categoryName: '属相',
                         value: selectedZodiac,
                       }];
@@ -1472,7 +1493,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '年龄');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('年龄'),
                         categoryName: '年龄',
                         value: String(age),
                       }];
@@ -1487,7 +1508,7 @@ export default function AddContact() {
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '属相');
                       return [...filtered, {
-                        categoryId: 0,
+                        categoryId: getCategoryId('属相'),
                         categoryName: '属相',
                         value: zodiacAnimal,
                       }];
@@ -1549,7 +1570,8 @@ export default function AddContact() {
                 if (selectedHeight) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '身高');
-                    return [...filtered, { categoryId: 0, categoryName: '身高', value: selectedHeight }];
+                    return [...filtered, { categoryId: getCategoryId('身高'),
+                        categoryName: '身高', value: selectedHeight }];
                   });
                   setDialogMessage({type: "success", text: `已选择身高：${selectedHeight}`});
                   setShowHeightDialog(false);
@@ -1604,7 +1626,8 @@ export default function AddContact() {
                 if (selectedShoeSize) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '鞋码');
-                    return [...filtered, { categoryId: 0, categoryName: '鞋码', value: selectedShoeSize }];
+                    return [...filtered, { categoryId: getCategoryId('鞋码'),
+                        categoryName: '鞋码', value: selectedShoeSize }];
                   });
                   setDialogMessage({type: "success", text: `已选择鞋码：${selectedShoeSize}`});
                   setShowShoeSizeDialog(false);
@@ -1664,7 +1687,8 @@ export default function AddContact() {
                 if (selectedDietaries.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '饮食');
-                    return [...filtered, { categoryId: 0, categoryName: '饮食', value: selectedDietaries.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('饮食'),
+                        categoryName: '饮食', value: selectedDietaries.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择饮食：${selectedDietaries.join('、')}`});
                   setShowDietaryDialog(false);
@@ -1723,7 +1747,8 @@ export default function AddContact() {
                 if (selectedHabits.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '习惯');
-                    return [...filtered, { categoryId: 0, categoryName: '习惯', value: selectedHabits.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('习惯'),
+                        categoryName: '习惯', value: selectedHabits.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择习惯：${selectedHabits.join('、')}`});
                   setShowHabitDialog(false);
@@ -1782,7 +1807,8 @@ export default function AddContact() {
                 if (selectedHealths.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '健康');
-                    return [...filtered, { categoryId: 0, categoryName: '健康', value: selectedHealths.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('健康'),
+                        categoryName: '健康', value: selectedHealths.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择健康状况：${selectedHealths.join('、')}`});
                   setShowHealthDialog(false);
@@ -1841,7 +1867,8 @@ export default function AddContact() {
                 if (selectedPersonalities.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '性格');
-                    return [...filtered, { categoryId: 0, categoryName: '性格', value: selectedPersonalities.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('性格'),
+                        categoryName: '性格', value: selectedPersonalities.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择性格：${selectedPersonalities.join('、')}`});
                   setShowPersonalityDialog(false);
@@ -1896,7 +1923,8 @@ export default function AddContact() {
                 if (selectedEthnic) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '民族');
-                    return [...filtered, { categoryId: 0, categoryName: '民族', value: selectedEthnic }];
+                    return [...filtered, { categoryId: getCategoryId('民族'),
+                        categoryName: '民族', value: selectedEthnic }];
                   });
                   setDialogMessage({type: "success", text: `已选择民族：${selectedEthnic}`});
                   setShowEthnicDialog(false);
@@ -1955,7 +1983,8 @@ export default function AddContact() {
                 if (selectedBrands.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '品牌');
-                    return [...filtered, { categoryId: 0, categoryName: '品牌', value: selectedBrands.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('品牌'),
+                        categoryName: '品牌', value: selectedBrands.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择品牌：${selectedBrands.join('、')}`});
                   setShowBrandDialog(false);
@@ -2014,7 +2043,8 @@ export default function AddContact() {
                 if (selectedEntertainments.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '娱乐');
-                    return [...filtered, { categoryId: 0, categoryName: '娱乐', value: selectedEntertainments.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('娱乐'),
+                        categoryName: '娱乐', value: selectedEntertainments.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择娱乐：${selectedEntertainments.join('、')}`});
                   setShowEntertainmentDialog(false);
@@ -2044,7 +2074,8 @@ export default function AddContact() {
                 if (selectedCompany.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '公司');
-                    return [...filtered, { categoryId: 0, categoryName: '公司', value: selectedCompany }];
+                    return [...filtered, { categoryId: getCategoryId('公司'),
+                        categoryName: '公司', value: selectedCompany }];
                   });
                   setDialogMessage({type: "success", text: `已设置公司：${selectedCompany}`});
                   setShowCompanyDialog(false);
@@ -2074,7 +2105,8 @@ export default function AddContact() {
                 if (selectedFinance.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '财务');
-                    return [...filtered, { categoryId: 0, categoryName: '财务', value: selectedFinance }];
+                    return [...filtered, { categoryId: getCategoryId('财务'),
+                        categoryName: '财务', value: selectedFinance }];
                   });
                   setDialogMessage({type: "success", text: `已设置财务：${selectedFinance}`});
                   setShowFinanceDialog(false);
@@ -2104,7 +2136,8 @@ export default function AddContact() {
                 if (selectedLegal.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '法务');
-                    return [...filtered, { categoryId: 0, categoryName: '法务', value: selectedLegal }];
+                    return [...filtered, { categoryId: getCategoryId('法务'),
+                        categoryName: '法务', value: selectedLegal }];
                   });
                   setDialogMessage({type: "success", text: `已设置法务：${selectedLegal}`});
                   setShowLegalDialog(false);
@@ -2134,7 +2167,8 @@ export default function AddContact() {
                 if (selectedLabor.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '劳务');
-                    return [...filtered, { categoryId: 0, categoryName: '劳务', value: selectedLabor }];
+                    return [...filtered, { categoryId: getCategoryId('劳务'),
+                        categoryName: '劳务', value: selectedLabor }];
                   });
                   setDialogMessage({type: "success", text: `已设置劳务：${selectedLabor}`});
                   setShowLaborDialog(false);
@@ -2164,7 +2198,8 @@ export default function AddContact() {
                 if (selectedTax.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '税务');
-                    return [...filtered, { categoryId: 0, categoryName: '税务', value: selectedTax }];
+                    return [...filtered, { categoryId: getCategoryId('税务'),
+                        categoryName: '税务', value: selectedTax }];
                   });
                   setDialogMessage({type: "success", text: `已设置税务：${selectedTax}`});
                   setShowTaxDialog(false);
@@ -2194,7 +2229,8 @@ export default function AddContact() {
                 if (selectedHR.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '人事');
-                    return [...filtered, { categoryId: 0, categoryName: '人事', value: selectedHR }];
+                    return [...filtered, { categoryId: getCategoryId('人事'),
+                        categoryName: '人事', value: selectedHR }];
                   });
                   setDialogMessage({type: "success", text: `已设置人事：${selectedHR}`});
                   setShowHRDialog(false);
@@ -2224,7 +2260,8 @@ export default function AddContact() {
                 if (selectedPublicAccount.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '公户');
-                    return [...filtered, { categoryId: 0, categoryName: '公户', value: selectedPublicAccount }];
+                    return [...filtered, { categoryId: getCategoryId('公户'),
+                        categoryName: '公户', value: selectedPublicAccount }];
                   });
                   setDialogMessage({type: "success", text: `已设置公户：${selectedPublicAccount}`});
                   setShowPublicAccountDialog(false);
@@ -2360,7 +2397,8 @@ export default function AddContact() {
                   ).join('; ');
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '私户');
-                    return [...filtered, { categoryId: 0, categoryName: '私户', value }];
+                    return [...filtered, { categoryId: getCategoryId('私户'),
+                        categoryName: '私户', value }];
                   });
                   setDialogMessage({type: "success", text: `已添加${allAccounts.length}个银行卡`});
                   setTimeout(() => {
@@ -2379,7 +2417,8 @@ export default function AddContact() {
                   ).join('; ');
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '私户');
-                    return [...filtered, { categoryId: 0, categoryName: '私户', value }];
+                    return [...filtered, { categoryId: getCategoryId('私户'),
+                        categoryName: '私户', value }];
                   });
                   setDialogMessage({type: "success", text: `已添加${privateAccountList.length}个银行卡`});
                   setTimeout(() => {
@@ -2414,7 +2453,7 @@ export default function AddContact() {
                 if (genericFieldValue.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== genericFieldName);
-                    return [...filtered, { categoryId: 0, categoryName: genericFieldName, value: genericFieldValue }];
+                    return [...filtered, { categoryId: getCategoryId(genericFieldName), categoryName: genericFieldName, value: genericFieldValue }];
                   });
                   setDialogMessage({type: "success", text: `已设置${genericFieldName}：${genericFieldValue}`});
                   setShowGenericFieldDialog(false);
@@ -2514,7 +2553,8 @@ export default function AddContact() {
                 }
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '邮箱');
-                  return [...filtered, { categoryId: 0, categoryName: '邮箱', value: emailList.join(', ') }];
+                  return [...filtered, { categoryId: getCategoryId('邮箱'),
+                        categoryName: '邮箱', value: emailList.join(', ') }];
                 });
                 setDialogMessage({type: "success", text: `已设置邮箱：${emailList.join(', ')}`});
                 setTimeout(() => {
@@ -2608,7 +2648,8 @@ export default function AddContact() {
                 }
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '微信');
-                  return [...filtered, { categoryId: 0, categoryName: '微信', value: wechatList.join(', ') }];
+                  return [...filtered, { categoryId: getCategoryId('微信'),
+                        categoryName: '微信', value: wechatList.join(', ') }];
                 });
                 setDialogMessage({type: "success", text: `已设置微信号：${wechatList.join(', ')}`});
                 setShowWechatDialog(false);
@@ -2635,7 +2676,8 @@ export default function AddContact() {
                 if (selectedIndustry.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '行业');
-                    return [...filtered, { categoryId: 0, categoryName: '行业', value: selectedIndustry }];
+                    return [...filtered, { categoryId: getCategoryId('行业'),
+                        categoryName: '行业', value: selectedIndustry }];
                   });
                   setDialogMessage({type: "success", text: `已设置行业：${selectedIndustry}`});
                   setShowIndustryDialog(false);
@@ -2694,7 +2736,8 @@ export default function AddContact() {
                 if (selectedTypes.length > 0) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '类型');
-                    return [...filtered, { categoryId: 0, categoryName: '类型', value: selectedTypes.join(',') }];
+                    return [...filtered, { categoryId: getCategoryId('类型'),
+                        categoryName: '类型', value: selectedTypes.join(',') }];
                   });
                   setDialogMessage({type: "success", text: `已选择类型：${selectedTypes.join('、')}`});
                   setShowTypeDialog(false);
@@ -2724,7 +2767,8 @@ export default function AddContact() {
                 if (selectedOccupation.trim()) {
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '职业');
-                    return [...filtered, { categoryId: 0, categoryName: '职业', value: selectedOccupation }];
+                    return [...filtered, { categoryId: getCategoryId('职业'),
+                        categoryName: '职业', value: selectedOccupation }];
                   });
                   setDialogMessage({type: "success", text: `已设置职业：${selectedOccupation}`});
                   setShowOccupationDialog(false);
@@ -2818,7 +2862,8 @@ export default function AddContact() {
                         
                         setExtendedFields(prev => {
                           const filtered = prev.filter(f => f.categoryName !== '征信');
-                          return [...filtered, { categoryId: 0, categoryName: '征信', value }];
+                          return [...filtered, { categoryId: getCategoryId('征信'),
+                        categoryName: '征信', value }];
                         });
                         setDialogMessage({type: "success", text: `已设置芝麻信用分：${creditScore}`});
                         setTimeout(() => {
