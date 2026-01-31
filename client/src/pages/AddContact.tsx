@@ -165,6 +165,9 @@ export default function AddContact() {
   const [showEthnicDialog, setShowEthnicDialog] = useState(false);
   const [selectedEthnic, setSelectedEthnic] = useState("");
   
+  const [showFamilyDialog, setShowFamilyDialog] = useState(false);
+  const [selectedFamily, setSelectedFamily] = useState<string[]>([]);
+  
   // 品牌选择对话框（多选）
   const [showBrandDialog, setShowBrandDialog] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
@@ -242,7 +245,7 @@ export default function AddContact() {
   
   // 扩展字段列表（用于拖拽排序）
   const defaultFieldList = [
-    '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', 
+    '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '家庭',
     '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
     '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', 
     '税务', '人事', '公户', '私户',
@@ -875,6 +878,13 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowEthnicDialog(true);
+                              } else if (field === '家庭') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '家庭');
+                                if (existingValue) {
+                                  setSelectedFamily(existingValue.value.split(','));
+                                }
+                                setDialogMessage(null);
+                                setShowFamilyDialog(true);
                               } else if (field === '品牌') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '品牌');
                                 if (existingValue) {
@@ -1853,6 +1863,66 @@ export default function AddContact() {
                   setShowEthnicDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请选择民族"});
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 家庭选择对话框（多选） */}
+      {showFamilyDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFamilyDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择家庭（可多选）</h3>
+            <div className="grid grid-cols-3 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {['未婚', '已婚', '离异', '丧偶', '再婚', '独生子女', '儿子', '女儿', '子女', '父母健在', '单亲家庭', '三代同堂', '独居'].map(family => (
+                <button
+                  key={family}
+                  onClick={() => {
+                    setSelectedFamily(prev => 
+                      prev.includes(family) ? prev.filter(f => f !== family) : [...prev, family]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedFamily.includes(family)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {family}
+                </button>
+              ))}
+            </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '家庭');
+                setSelectedFamily(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
+                setShowFamilyDialog(false);
+              }}>{extendedFields.some(f => f.categoryName === '家庭') ? '返回' : '取消'}</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedFamily.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '家庭');
+                    return [...filtered, { categoryId: getCategoryId('家庭'),
+                        categoryName: '家庭', value: selectedFamily.join(',') }];
+                  });
+                  setDialogMessage({type: "success", text: `已选择家庭：${selectedFamily.join('、')}`});
+                  setShowFamilyDialog(false);
+                } else {
+                  setDialogMessage({type: "error", text: "请至少选择一项"});
                 }
               }}>确定</Button>
             </div>
