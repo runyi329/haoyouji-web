@@ -190,12 +190,15 @@ export default function LedgerSettings() {
           }
           hasHelp
         />
-        <SettingItem 
-          label="成员记账审批" 
-          showIcon 
-          hasHelp 
-          onClick={() => setLocation(`/ledger/${ledgerId}/approval-settings`)}
-        />
+        {/* 只有账本创建人(owner)和管理员(admin)才能看到成员记账审批 */}
+        {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+          <SettingItem 
+            label="成员记账审批" 
+            showIcon 
+            hasHelp 
+            onClick={() => setLocation(`/ledger/${ledgerId}/approval-settings`)}
+          />
+        )}
         <SettingItem label="账本预算&目标" showIcon hasHelp />
       </div>
 

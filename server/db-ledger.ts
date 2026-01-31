@@ -2039,15 +2039,20 @@ export async function getApprovalRules(ledgerId: number, userId: number) {
   const db = await getLedgerDb();
   const { ledgerApprovalRules, ledgerMembers, ledgers } = await import("../drizzle/schema.js");
   
-  // 验证用户权限
-  const ledger = await db
+  // 验证用户权限 - 只有账本创建人(owner)和管理员(admin)才能查看审批规则
+  const member = await db
     .select()
-    .from(ledgers)
-    .where(eq(ledgers.id, ledgerId))
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
     .limit(1);
   
-  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
-    throw new Error("只有账本创建者可以查看审批规则");
+  if (member.length === 0 || (member[0].role !== 'owner' && member[0].role !== 'admin')) {
+    throw new Error("只有账本创建人和管理员可以查看审批规则");
   }
   
   // 获取审批规则
@@ -2072,17 +2077,22 @@ export async function saveApprovalRules(
   }>
 ) {
   const db = await getLedgerDb();
-  const { ledgerApprovalRules, ledgers } = await import("../drizzle/schema.js");
+  const { ledgerApprovalRules, ledgerMembers } = await import("../drizzle/schema.js");
   
-  // 验证用户权限
-  const ledger = await db
+  // 验证用户权限 - 只有账本创建人(owner)和管理员(admin)才能设置审批规则
+  const member = await db
     .select()
-    .from(ledgers)
-    .where(eq(ledgers.id, ledgerId))
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
     .limit(1);
   
-  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
-    throw new Error("只有账本创建者可以设置审批规则");
+  if (member.length === 0 || (member[0].role !== 'owner' && member[0].role !== 'admin')) {
+    throw new Error("只有账本创建人和管理员可以设置审批规则");
   }
   
   // 删除旧规则
