@@ -1154,6 +1154,7 @@ export default function AddContact() {
                 className="flex-1"
                 onClick={() => {
                   if (selectedBirthday) {
+                    // 保存生日
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '生日');
                       return [...filtered, {
@@ -1162,7 +1163,24 @@ export default function AddContact() {
                         value: selectedBirthday,
                       }];
                     });
-                    toast.success(`已选择生日：${selectedBirthday}`);
+                    
+                    // 根据生日计算属相
+                    const birthYear = new Date(selectedBirthday).getFullYear();
+                    const zodiacAnimals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+                    const zodiacIndex = (birthYear - 1900) % 12;
+                    const zodiacAnimal = zodiacAnimals[zodiacIndex];
+                    
+                    // 自动更新属相
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '属相');
+                      return [...filtered, {
+                        categoryId: 0,
+                        categoryName: '属相',
+                        value: zodiacAnimal,
+                      }];
+                    });
+                    
+                    toast.success(`已选择生日：${selectedBirthday}，属相：${zodiacAnimal}`);
                     setShowBirthdayDialog(false);
                   } else {
                     toast.error("请选择生日");
@@ -1270,6 +1288,23 @@ export default function AddContact() {
                 className="flex-1"
                 onClick={() => {
                   if (selectedZodiac) {
+                    // 检查是否有生日信息
+                    const birthdayField = extendedFields.find(f => f.categoryName === '生日');
+                    if (birthdayField?.value) {
+                      // 根据生日计算应该的属相
+                      const birthYear = new Date(birthdayField.value).getFullYear();
+                      const zodiacAnimals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+                      const zodiacIndex = (birthYear - 1900) % 12;
+                      const correctZodiac = zodiacAnimals[zodiacIndex];
+                      
+                      // 验证是否匹配
+                      if (selectedZodiac !== correctZodiac) {
+                        toast.error(`属相与生日不匹配！根据生日${birthdayField.value}，属相应为「${correctZodiac}」`);
+                        return;
+                      }
+                    }
+                    
+                    // 验证通过，保存属相
                     setExtendedFields(prev => {
                       const filtered = prev.filter(f => f.categoryName !== '属相');
                       return [...filtered, {
