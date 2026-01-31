@@ -519,6 +519,10 @@ export const ledgers = mysqlTable("ledgers", {
 	ownerId: int().notNull(),
 	isVip: tinyint().default(0).notNull(),
 	isArchived: tinyint().default(0).notNull(),
+	defaultPermissionView: mysqlEnum("default_permission_view", ['all','own','none']).default('own').notNull(),
+	defaultPermissionAdd: mysqlEnum("default_permission_add", ['all','own','none']).default('own').notNull(),
+	defaultPermissionEdit: mysqlEnum("default_permission_edit", ['all','own','none']).default('own').notNull(),
+	defaultPermissionDelete: mysqlEnum("default_permission_delete", ['all','own','none']).default('own').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });

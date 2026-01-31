@@ -21,7 +21,7 @@ interface MemberPermission {
 
 interface PermissionMenuState {
   show: boolean;
-  memberId: number | null;
+  memberId: number | 'default' | null;
   permissionType: "view" | "add" | "edit" | "delete" | null;
   position: { top: number; left: number };
 }
@@ -40,9 +40,17 @@ const LedgerPermissions = () => {
   });
 
   // 获取账本成员权限列表
-  const { data: members = [], refetch } = trpc.ledger.getMemberPermissions.useQuery({
+  const { data, refetch } = trpc.ledger.getMemberPermissions.useQuery({
     ledgerId,
   });
+  
+  const members = data?.members || [];
+  const defaultPermissions = data?.defaultPermissions || {
+    view: 'own' as Permission,
+    add: 'own' as Permission,
+    edit: 'own' as Permission,
+    delete: 'own' as Permission,
+  };
 
   // 更新成员权限
   const updatePermissionMutation = trpc.ledger.updateMemberPermission.useMutation({
@@ -54,11 +62,22 @@ const LedgerPermissions = () => {
       toast.error(error.message || "更新权限失败");
     },
   });
+  
+  // 更新默认成员权限
+  const updateDefaultPermissionMutation = trpc.ledger.updateDefaultPermission.useMutation({
+    onSuccess: () => {
+      refetch();
+      setPermissionMenu({ show: false, memberId: null, permissionType: null, position: { top: 0, left: 0 } });
+    },
+    onError: (error) => {
+      toast.error(error.message || "更新默认权限失败");
+    },
+  });
 
   // 显示权限选择菜单
   const showPermissionMenu = (
     event: React.MouseEvent,
-    memberId: number,
+    memberId: number | 'default',
     permissionType: "view" | "add" | "edit" | "delete"
   ) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -76,12 +95,22 @@ const LedgerPermissions = () => {
   // 选择权限
   const selectPermission = (permission: Permission) => {
     if (permissionMenu.memberId && permissionMenu.permissionType) {
-      updatePermissionMutation.mutate({
-        ledgerId,
-        memberId: permissionMenu.memberId,
-        permissionType: permissionMenu.permissionType,
-        permissionValue: permission,
-      });
+      if (permissionMenu.memberId === 'default') {
+        // 更新默认权限
+        updateDefaultPermissionMutation.mutate({
+          ledgerId,
+          permissionType: permissionMenu.permissionType,
+          permissionValue: permission,
+        });
+      } else {
+        // 更新成员权限
+        updatePermissionMutation.mutate({
+          ledgerId,
+          memberId: permissionMenu.memberId,
+          permissionType: permissionMenu.permissionType,
+          permissionValue: permission,
+        });
+      }
     }
   };
 
@@ -224,22 +253,46 @@ const LedgerPermissions = () => {
           </div>
         ))}
 
-        {/* 新加入成员（占位） */}
+        {/* 新加入成员 */}
         <div className="grid grid-cols-5 border-b border-gray-100 bg-gray-50">
           <div className="py-4 px-2 flex items-center justify-center text-gray-500 text-sm">
             <span className="leading-tight">新加入<br />成员</span>
           </div>
           <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
-            <span className="text-green-600 font-medium text-sm">全部</span>
+            <button
+              onClick={(e) => showPermissionMenu(e, 'default', "view")}
+              className={getPermissionButtonClass(defaultPermissions.view)}
+              disabled={updateDefaultPermissionMutation.isPending}
+            >
+              {getPermissionText(defaultPermissions.view)}
+            </button>
           </div>
           <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
-            <span className="text-green-600 font-medium text-sm">全部</span>
+            <button
+              onClick={(e) => showPermissionMenu(e, 'default', "add")}
+              className={getPermissionButtonClass(defaultPermissions.add)}
+              disabled={updateDefaultPermissionMutation.isPending}
+            >
+              {getPermissionText(defaultPermissions.add)}
+            </button>
           </div>
           <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
-            <span className="text-orange-500 font-medium text-sm">仅自己</span>
+            <button
+              onClick={(e) => showPermissionMenu(e, 'default', "edit")}
+              className={getPermissionButtonClass(defaultPermissions.edit)}
+              disabled={updateDefaultPermissionMutation.isPending}
+            >
+              {getPermissionText(defaultPermissions.edit)}
+            </button>
           </div>
           <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
-            <span className="text-orange-500 font-medium text-sm">仅自己</span>
+            <button
+              onClick={(e) => showPermissionMenu(e, 'default', "delete")}
+              className={getPermissionButtonClass(defaultPermissions.delete)}
+              disabled={updateDefaultPermissionMutation.isPending}
+            >
+              {getPermissionText(defaultPermissions.delete)}
+            </button>
           </div>
         </div>
       </div>

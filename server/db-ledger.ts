@@ -861,6 +861,12 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
   return {
     ledgerName: ledger[0].name,
     members,
+    defaultPermissions: {
+      view: ledger[0].defaultPermissionView,
+      add: ledger[0].defaultPermissionAdd,
+      edit: ledger[0].defaultPermissionEdit,
+      delete: ledger[0].defaultPermissionDelete,
+    },
   };
 }
 
@@ -934,6 +940,58 @@ export async function updateMemberPermission(
     .update(ledgerMembers)
     .set(updateData)
     .where(eq(ledgerMembers.id, memberId));
+  
+  return { success: true };
+}
+
+/**
+ * 更新默认成员权限
+ */
+export async function updateDefaultPermission(
+  ledgerId: number,
+  permissionType: "view" | "add" | "edit" | "delete",
+  permissionValue: "all" | "own" | "none",
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  if (ledger[0].createdBy !== requestUserId) {
+    throw new Error("只有账本创建者可以修改默认权限设置");
+  }
+  
+  // 根据权限类型更新对应字段
+  const updateData: any = {};
+  switch (permissionType) {
+    case "view":
+      updateData.defaultPermissionView = permissionValue;
+      break;
+    case "add":
+      updateData.defaultPermissionAdd = permissionValue;
+      break;
+    case "edit":
+      updateData.defaultPermissionEdit = permissionValue;
+      break;
+    case "delete":
+      updateData.defaultPermissionDelete = permissionValue;
+      break;
+  }
+  
+  await db
+    .update(ledgers)
+    .set(updateData)
+    .where(eq(ledgers.id, ledgerId));
   
   return { success: true };
 }

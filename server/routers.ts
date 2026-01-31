@@ -5274,6 +5274,22 @@ export const appRouter = router({
         );
       }),
 
+    // 更新默认成员权限
+    updateDefaultPermission: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        permissionType: z.enum(['view', 'add', 'edit', 'delete']),
+        permissionValue: z.enum(['all', 'own', 'none']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.updateDefaultPermission(
+          input.ledgerId,
+          input.permissionType,
+          input.permissionValue,
+          ctx.user.id
+        );
+      }),
+
     // 获取AI雇员列表
     getAIEmployees: protectedProcedure
       .input(z.object({
