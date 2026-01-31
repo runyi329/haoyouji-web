@@ -38,6 +38,7 @@ export default function LedgerSettings() {
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [searchUsername, setSearchUsername] = useState("");
+  const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -72,13 +73,17 @@ export default function LedgerSettings() {
   // 邀请成员的mutation
   const inviteMutation = trpc.ledger.inviteMember.useMutation({
     onSuccess: (data) => {
-      toast.success(`已成功邀请 ${data.member.username} 加入账本`);
-      setShowInviteDialog(false);
-      setSearchUsername("");
+      setInviteMessage({ type: 'success', text: `已成功邀请 ${data.member.username} 加入账本` });
+      setTimeout(() => {
+        setShowInviteDialog(false);
+        setSearchUsername("");
+        setInviteMessage(null);
+      }, 1500);
       utils.ledger.getMembers.invalidate({ ledgerId });
     },
     onError: (error) => {
-      toast.error(`邀请失败: ${error.message}`);
+      setInviteMessage({ type: 'error', text: `邀请失败: ${error.message}` });
+      setTimeout(() => setInviteMessage(null), 3000);
     },
   });
 
@@ -303,6 +308,17 @@ export default function LedgerSettings() {
                 className="pl-10"
               />
             </div>
+
+            {/* 提示信息 */}
+            {inviteMessage && (
+              <div className={`p-3 rounded-lg text-sm ${
+                inviteMessage.type === 'success' 
+                  ? 'bg-green-50 text-green-700 border border-green-200' 
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {inviteMessage.text}
+              </div>
+            )}
 
             {/* 搜索结果 */}
             {searchUsername && (
