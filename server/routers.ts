@@ -3940,8 +3940,8 @@ export const appRouter = router({
   fieldValues: router({
     // 获取所有可用的字段类目
     categories: protectedProcedure
-      .query(async () => {
-        return await dbContacts.getFieldCategories();
+      .query(async ({ ctx }) => {
+        return await dbContacts.getFieldCategories(ctx.user.id);
       }),
 
     // 创建字段类目
@@ -3984,10 +3984,11 @@ export const appRouter = router({
       .input(z.object({
         contactId: z.number(),
         categoryId: z.number(),
+        categoryName: z.string(),
         value: z.string(),
       }))
       .mutation(async ({ input }) => {
-        const newFieldValue = await dbContacts.addFieldValue(input.contactId, input.categoryId, input.value);
+        const newFieldValue = await dbContacts.addFieldValue(input.contactId, input.categoryId, input.categoryName, input.value);
         return newFieldValue;
       }),
 

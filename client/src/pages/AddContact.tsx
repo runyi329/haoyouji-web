@@ -351,6 +351,7 @@ export default function AddContact() {
             await addFieldValueMutation.mutateAsync({
               contactId: data.id,
               categoryId: field.categoryId,
+              categoryName: field.categoryName,
               value: field.value,
             });
           }
@@ -587,6 +588,7 @@ export default function AddContact() {
         addFieldValueMutation.mutate({
           contactId: contactId,
           categoryId: field.categoryId,
+          categoryName: field.categoryName,
           value: field.value,
         });
       }

@@ -2220,15 +2220,22 @@ export async function getFieldValuesForContacts(contactIds: number[]): Promise<M
  * 获取所有扩展信息类目（树状结构）
  * @returns 主分类列表，每个主分类包含 children 字段
  */
-export async function getFieldCategories() {
+export async function getFieldCategories(userId?: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 获取所有类目
+  // 获取所有类目（包括公共分类和用户分类）
   const allCategories = await db
     .select()
     .from(contactFieldCategories)
-    .where(eq(contactFieldCategories.parentUserId, 0))
+    .where(
+      userId 
+        ? or(
+            eq(contactFieldCategories.parentUserId, 0),
+            eq(contactFieldCategories.parentUserId, userId)
+          )
+        : eq(contactFieldCategories.parentUserId, 0)
+    )
     .orderBy(contactFieldCategories.sortOrder);
   
   // 分离主分类和子分类
@@ -2244,12 +2251,13 @@ export async function getFieldCategories() {
 
 /**
  * 添加扩展信息字段值
- * @param contactId 联系人ID
- * @param categoryId 类目ID
+ * @param contactId 联系人 ID
+ * @param categoryId 类目 ID
+ * @param categoryName 类目名称（按钮名称）
  * @param value 字段值
  * @returns 新增的字段值记录
  */
-export async function addFieldValue(contactId: number, categoryId: number, value: string) {
+export async function addFieldValue(contactId: number, categoryId: number, categoryName: string, value: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
@@ -2258,6 +2266,7 @@ export async function addFieldValue(contactId: number, categoryId: number, value
     .values({
       contactId,
       categoryId,
+      categoryName,
       value,
     });
   
@@ -2314,30 +2323,22 @@ export async function getContactFieldValues(contactId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 先获取字段值
+  // 直接获取字段值（包含categoryName）
   const fieldValues = await db
     .select()
     .from(contactFieldValues)
     .where(eq(contactFieldValues.contactId, contactId));
   
-  // 获取所有类目
-  const categories = await db
-    .select()
-    .from(contactFieldCategories);
-  
-  // 手动关联类目信息
-  const result = fieldValues.map(fv => {
-    const category = categories.find(c => c.id === fv.categoryId);
-    return {
+  // 直接返回，不需要关联查询
+  const result = fieldValues.map(fv => ({
       id: fv.id,
       contactId: fv.contactId,
       categoryId: fv.categoryId,
-      categoryName: category?.name || '',
-      categoryKey: category?.name || '', // 使用 name 作为 key
+      categoryName: fv.categoryName || '', // 直接使用数据库中的categoryName
+      categoryKey: fv.categoryName || '', // 使用 categoryName 作为 key
       value: fv.value,
       createdAt: fv.createdAt,
-    };
-  });
+    }));
   
   return result;
 }

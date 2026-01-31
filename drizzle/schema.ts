@@ -178,6 +178,7 @@ export const contactFieldValues = mysqlTable("contact_field_values", {
 	id: int().autoincrement().notNull(),
 	contactId: int().notNull(),
 	categoryId: int().notNull(),
+	categoryName: varchar({ length: 50 }).default(''),
 	value: text(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
