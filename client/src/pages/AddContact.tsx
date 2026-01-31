@@ -264,7 +264,7 @@ export default function AddContact() {
   // 获取所有可用的字段类目（树状结构）
   const { data: fieldCategories } = trpc.contacts.fieldValues.categories.useQuery();
   
-  // 辅助函数：根据分类名称获取categoryId
+  // 辅助函数：根据分类名称获叽categoryId
   const getCategoryId = (categoryName: string): number => {
     if (!fieldCategories) return 0;
     

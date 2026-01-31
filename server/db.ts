@@ -649,6 +649,30 @@ export async function initializeDefaultData() {
     }
   }
 
+  // 检查并创建联系人字段分类
+  const { contactFieldCategories } = await import('../drizzle/schema');
+  const existingFieldCategories = await db.select().from(contactFieldCategories).limit(1);
+  if (existingFieldCategories.length === 0) {
+    // 创建默认字段分类
+    const defaultFieldCategories = [
+      '星座', '生日', '血型', '属相', '年龄', '身高', '鞋码', '民族',
+      '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
+      '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务',
+      '税务', '人事', '公户', '私户',
+      '电话', '微信', '邮箱', '地址'
+    ];
+    for (const name of defaultFieldCategories) {
+      await db.insert(contactFieldCategories).values({
+        name,
+        icon: '',
+        parentCategoryId: null,
+        parentUserId: null,
+        createdAt: new Date(),
+      });
+    }
+    console.log(`初始化了 ${defaultFieldCategories.length} 个联系人字段分类`);
+  }
+  
   // 检查是否已有勋章
   const existingBadges = await getAllBadges();
   if (existingBadges.length === 0) {

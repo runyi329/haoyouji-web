@@ -509,6 +509,11 @@ export default function ContactDetail() {
 
   // 获取扩展信息字段值
   const { data: extendedFieldValues } = trpc.contacts.fieldValues.list.useQuery({ contactId });
+  
+  // 调试：查看扩展信息数据
+  if (extendedFieldValues && extendedFieldValues.length > 0) {
+    // console.log('[详情页] 扩展信息数据:', extendedFieldValues);lice(0, 3));
+  }
 
   // 获取所有标签
   const { data: allTags } = trpc.contacts.tags.list.useQuery();
@@ -1038,6 +1043,7 @@ export default function ContactDetail() {
             </div>
             
             <CardContent className="space-y-4">
+              
               {/* 显示扩展信息字段值 */}
               {extendedFieldValues && extendedFieldValues.length > 0 && (
                 <div className="pt-2">
