@@ -4,10 +4,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface Member {
   userId: number;
-  nickname: string;
+  username: string;
+  nickname?: string | null;
+  avatar?: string | null;
   role: string;
 }
 
@@ -35,17 +38,20 @@ export default function MembersDialog({
               className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50"
             >
               {/* 成员头像 */}
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-medium text-lg flex-shrink-0">
-                {member.nickname ? member.nickname.charAt(0) : '?'}
-              </div>
+              <UserAvatar
+                username={member.username}
+                avatar={member.avatar}
+                nickname={member.nickname}
+                size="md"
+              />
               
               {/* 成员信息 */}
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-gray-900 truncate">
-                  {member.nickname || '未设置昵称'}
+                  {member.nickname || member.username}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {member.role === "owner" ? "账本所有者" : "成员"}
+                  @{member.username} · {member.role === "owner" ? "账本所有者" : "成员"}
                 </div>
               </div>
             </div>
