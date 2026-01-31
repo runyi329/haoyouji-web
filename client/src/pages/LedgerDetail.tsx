@@ -163,7 +163,7 @@ export default function LedgerDetail() {
         {/* 标题栏 */}
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <button
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/ledger")}
             className="p-1 -ml-2"
           >
             <ChevronLeft className="w-6 h-6" />
