@@ -79,7 +79,7 @@ function SortableFieldButton({
           onClick();
         }
       }}
-      className={`px-2 py-1 border rounded-lg text-xs transition-colors ${
+      className={`px-2 py-1.5 border rounded-lg text-sm transition-colors w-full ${
         hasValue 
           ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
           : 'border-gray-300 hover:bg-gray-50'
@@ -804,7 +804,7 @@ export default function AddContact() {
                 onDragEnd={handleFieldDragEnd}
               >
                 <SortableContext items={extendedFieldList} strategy={rectSortingStrategy}>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="grid grid-cols-5 gap-1.5">
                     {extendedFieldList.map(field => {
                         // 检查该字段是否已填写
                         const hasValue = extendedFields.some(f => f.categoryName === field);
