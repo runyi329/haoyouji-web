@@ -168,6 +168,9 @@ export default function AddContact() {
   const [showFamilyDialog, setShowFamilyDialog] = useState(false);
   const [selectedFamily, setSelectedFamily] = useState<string[]>([]);
   
+  const [showIdentityDialog, setShowIdentityDialog] = useState(false);
+  const [selectedIdentity, setSelectedIdentity] = useState<string[]>([]);
+  
   // 品牌选择对话框（多选）
   const [showBrandDialog, setShowBrandDialog] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
@@ -245,7 +248,7 @@ export default function AddContact() {
   
   // 扩展字段列表（用于拖拽排序）
   const defaultFieldList = [
-    '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '家庭',
+    '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '家庭', '身份',
     '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
     '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', 
     '税务', '人事', '公户', '私户',
@@ -255,7 +258,19 @@ export default function AddContact() {
   // 从 localStorage加载或使用默认配置
   const [extendedFieldList, setExtendedFieldList] = useState<string[]>(() => {
     const saved = localStorage.getItem('extendedFieldList');
-    return saved ? JSON.parse(saved) : defaultFieldList;
+    if (saved) {
+      const savedList = JSON.parse(saved);
+      // 检测是否有新字段需要添加
+      const newFields = defaultFieldList.filter(field => !savedList.includes(field));
+      if (newFields.length > 0) {
+        // 将新字段添加到已保存列表的末尾
+        const mergedList = [...savedList, ...newFields];
+        localStorage.setItem('extendedFieldList', JSON.stringify(mergedList));
+        return mergedList;
+      }
+      return savedList;
+    }
+    return defaultFieldList;
   });
   
   // 模糊查询相关状态
@@ -885,6 +900,13 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowFamilyDialog(true);
+                              } else if (field === '身份') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '身份');
+                                if (existingValue) {
+                                  setSelectedIdentity(existingValue.value.split(','));
+                                }
+                                setDialogMessage(null);
+                                setShowIdentityDialog(true);
                               } else if (field === '品牌') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '品牌');
                                 if (existingValue) {
@@ -1921,6 +1943,83 @@ export default function AddContact() {
                   });
                   setDialogMessage({type: "success", text: `已选择家庭：${selectedFamily.join('、')}`});
                   setShowFamilyDialog(false);
+                } else {
+                  setDialogMessage({type: "error", text: "请至少选择一项"});
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 身份选择对话框（多选） */}
+      {showIdentityDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowIdentityDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">选择身份（可多选）</h3>
+            <div className="grid grid-cols-5 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {[
+                // 家庭角色
+                '子女', '父母', '配偶', '兄弟', '姐妹', '叔姨',
+                // 职业身份
+                '学生', '雇主', '雇员',
+                // 社会身份
+                '党员', '志愿者', '义工', '红十字会员', '慈善家', '捐赠人',
+                '业主', '租客', '房东', '二房东', '邻居',
+                '股东', '投资人', '合伙人', '债权人', '债务人',
+                '客户', '供应商', '经销商', '代理商', '中介',
+                // 特殊身份
+                '退休人员', '自由职业者', '创业者', '兼职者',
+                '残疾人', '人大代表', '政协委员', '劳模',
+                '烈士家属', '军属', '侨胞', '归侨', '港澳台同胞',
+                // 其他身份
+                '会长', '理事', '秘书长', '顾问', '名誉会长',
+                '董事长', '监事', '独立董事', '总裁', '副总裁'
+              ].map(identity => (
+                <button
+                  key={identity}
+                  onClick={() => {
+                    setSelectedIdentity(prev => 
+                      prev.includes(identity) ? prev.filter(i => i !== identity) : [...prev, identity]
+                    );
+                  }}
+                  className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
+                    selectedIdentity.includes(identity)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {identity}
+                </button>
+              ))}
+            </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                const existingValue = extendedFields.find(f => f.categoryName === '身份');
+                setSelectedIdentity(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
+                setShowIdentityDialog(false);
+              }}>{extendedFields.some(f => f.categoryName === '身份') ? '返回' : '取消'}</Button>
+              <Button className="flex-1" onClick={() => {
+                if (selectedIdentity.length > 0) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '身份');
+                    return [...filtered, { categoryId: getCategoryId('身份'),
+                        categoryName: '身份', value: selectedIdentity.join(',') }];
+                  });
+                  setDialogMessage({type: "success", text: `已选择身份：${selectedIdentity.join('、')}`});
+                  setShowIdentityDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
                 }
