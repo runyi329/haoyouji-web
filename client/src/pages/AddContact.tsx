@@ -1170,7 +1170,7 @@ export default function AddContact() {
                   setShowConstellationDialog(false);
                 }}
               >
-                取消
+                {extendedFields.some(f => f.categoryName === '星座') ? '返回' : '取消'}
               </Button>
               <Button
                 className="flex-1"
@@ -1236,7 +1236,7 @@ export default function AddContact() {
                   setShowBirthdayDialog(false);
                 }}
               >
-                取消
+                {extendedFields.some(f => f.categoryName === '生日') ? '返回' : '取消'}
               </Button>
               <Button
                 className="flex-1"
@@ -1323,7 +1323,7 @@ export default function AddContact() {
                   setShowBloodTypeDialog(false);
                 }}
               >
-                取消
+                {extendedFields.some(f => f.categoryName === '血型') ? '返回' : '取消'}
               </Button>
               <Button
                 className="flex-1"
@@ -1392,7 +1392,7 @@ export default function AddContact() {
                   setShowZodiacDialog(false);
                 }}
               >
-                取消
+                {extendedFields.some(f => f.categoryName === '属相') ? '返回' : '取消'}
               </Button>
               <Button
                 className="flex-1"
@@ -1487,7 +1487,7 @@ export default function AddContact() {
                   setShowAgeDialog(false);
                 }}
               >
-                取消
+                {extendedFields.some(f => f.categoryName === '年龄') ? '返回' : '取消'}
               </Button>
               <Button
                 className="flex-1"
@@ -1573,7 +1573,7 @@ export default function AddContact() {
                 setSelectedHeight(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowHeightDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '身高') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHeight) {
                   setExtendedFields(prev => {
@@ -1629,7 +1629,7 @@ export default function AddContact() {
                 setSelectedShoeSize(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowShoeSizeDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '鞋码') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedShoeSize) {
                   setExtendedFields(prev => {
@@ -1690,7 +1690,7 @@ export default function AddContact() {
                 setSelectedDietaries(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowDietaryDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '饮食') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedDietaries.length > 0) {
                   setExtendedFields(prev => {
@@ -1750,7 +1750,7 @@ export default function AddContact() {
                 setSelectedHabits(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowHabitDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '习惯') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHabits.length > 0) {
                   setExtendedFields(prev => {
@@ -1810,7 +1810,7 @@ export default function AddContact() {
                 setSelectedHealths(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowHealthDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '健康') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHealths.length > 0) {
                   setExtendedFields(prev => {
@@ -1870,7 +1870,7 @@ export default function AddContact() {
                 setSelectedPersonalities(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowPersonalityDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '性格') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedPersonalities.length > 0) {
                   setExtendedFields(prev => {
@@ -1926,7 +1926,7 @@ export default function AddContact() {
                 setSelectedEthnic(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowEthnicDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '民族') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedEthnic) {
                   setExtendedFields(prev => {
@@ -1986,7 +1986,7 @@ export default function AddContact() {
                 setSelectedBrands(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowBrandDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '品牌') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedBrands.length > 0) {
                   setExtendedFields(prev => {
@@ -2046,7 +2046,7 @@ export default function AddContact() {
                 setSelectedEntertainments(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowEntertainmentDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '娱乐') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedEntertainments.length > 0) {
                   setExtendedFields(prev => {
@@ -2077,7 +2077,7 @@ export default function AddContact() {
                 setSelectedCompany(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowCompanyDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '公司') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedCompany.trim()) {
                   setExtendedFields(prev => {
@@ -2108,7 +2108,7 @@ export default function AddContact() {
                 setSelectedFinance(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowFinanceDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '财务') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedFinance.trim()) {
                   setExtendedFields(prev => {
@@ -2139,7 +2139,7 @@ export default function AddContact() {
                 setSelectedLegal(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowLegalDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '法务') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedLegal.trim()) {
                   setExtendedFields(prev => {
@@ -2170,7 +2170,7 @@ export default function AddContact() {
                 setSelectedLabor(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowLaborDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '劳务') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedLabor.trim()) {
                   setExtendedFields(prev => {
@@ -2201,7 +2201,7 @@ export default function AddContact() {
                 setSelectedTax(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowTaxDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '税务') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedTax.trim()) {
                   setExtendedFields(prev => {
@@ -2232,7 +2232,7 @@ export default function AddContact() {
                 setSelectedHR(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowHRDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '人事') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedHR.trim()) {
                   setExtendedFields(prev => {
@@ -2263,7 +2263,7 @@ export default function AddContact() {
                 setSelectedPublicAccount(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowPublicAccountDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '公户') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedPublicAccount.trim()) {
                   setExtendedFields(prev => {
@@ -2380,7 +2380,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 setDialogMessage(null);
                 setShowPrivateAccountDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '私户') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 // 检查当前输入框是否有内容
                 const hasCurrentInput = privateAccountBank.trim() || privateAccountNumber.trim() || privateAccountName.trim();
@@ -2456,7 +2456,7 @@ export default function AddContact() {
                 setGenericFieldValue("");
                 setDialogMessage(null);
                 setShowGenericFieldDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === genericFieldName) ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (genericFieldValue.trim()) {
                   setExtendedFields(prev => {
@@ -2553,7 +2553,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 setDialogMessage(null);
                 setShowEmailDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '邮箱') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (emailList.length === 0) {
                   setDialogMessage({type: "error", text: '请至少添加一个邮箱'});
@@ -2648,7 +2648,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 setDialogMessage(null);
                 setShowWechatDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '微信') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (wechatList.length === 0) {
                   setDialogMessage({type: "error", text: '请至少添加一个微信号'});
@@ -2679,7 +2679,7 @@ export default function AddContact() {
                 setSelectedIndustry(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowIndustryDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '行业') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedIndustry.trim()) {
                   setExtendedFields(prev => {
@@ -2739,7 +2739,7 @@ export default function AddContact() {
                 setSelectedTypes(existingValue ? existingValue.value.split(',') : []);
                 setDialogMessage(null);
                 setShowTypeDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '类型') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedTypes.length > 0) {
                   setExtendedFields(prev => {
@@ -2770,7 +2770,7 @@ export default function AddContact() {
                 setSelectedOccupation(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowOccupationDialog(false);
-              }}>取消</Button>
+              }}>{extendedFields.some(f => f.categoryName === '职业') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 if (selectedOccupation.trim()) {
                   setExtendedFields(prev => {
@@ -2845,11 +2845,11 @@ export default function AddContact() {
                   )}
                   
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => { 
+                    <Button variant="outline" className="flex-1" onClick={() => {
                       setSelectedCredit('');
                       setDialogMessage(null);
                       setShowCreditDialog(false);
-                    }}>取消</Button>
+                    }}>{extendedFields.some(f => f.categoryName === '征信') ? '返回' : '取消'}</Button>
                     
                     {!hasValue && (
                       <Button className="flex-1" onClick={() => {
