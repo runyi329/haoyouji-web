@@ -2312,7 +2312,7 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '私户');
                     return [...filtered, { categoryId: 0, categoryName: '私户', value }];
                   });
-                  setDialogMessage({type: "success", text: `已设置${allAccounts.length}个银行卡`});
+                  setDialogMessage({type: "success", text: `已添加${allAccounts.length}个银行卡`});
                   setTimeout(() => {
                     setDialogMessage(null);
                     setShowPrivateAccountDialog(false);
@@ -2331,7 +2331,7 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '私户');
                     return [...filtered, { categoryId: 0, categoryName: '私户', value }];
                   });
-                  setDialogMessage({type: "success", text: `已设置${privateAccountList.length}个银行卡`});
+                  setDialogMessage({type: "success", text: `已添加${privateAccountList.length}个银行卡`});
                   setTimeout(() => {
                     setDialogMessage(null);
                     setShowPrivateAccountDialog(false);
