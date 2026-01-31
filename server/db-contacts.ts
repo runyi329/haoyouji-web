@@ -2290,6 +2290,22 @@ export async function deleteFieldValue(fieldValueId: number) {
 }
 
 /**
+ * 批量删除联系人的所有扩展信息
+ * @param contactId 联系人ID
+ * @returns 是否删除成功
+ */
+export async function deleteAllFieldValues(contactId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db
+    .delete(contactFieldValues)
+    .where(eq(contactFieldValues.contactId, contactId));
+  
+  return true;
+}
+
+/**
  * 获取联系人的所有扩展信息字段值（包含类目信息）
  * @param contactId 联系人ID
  * @returns 字段值列表（包含类目名称）

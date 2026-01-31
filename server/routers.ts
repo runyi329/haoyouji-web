@@ -4001,6 +4001,17 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+
+    // 批量删除联系人的所有扩展信息
+    deleteAll: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .mutation(async ({ input }) => {
+        const success = await dbContacts.deleteAllFieldValues(input.contactId);
+        if (!success) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "删除扩展信息失败" });
+        }
+        return { success: true };
+      }),
   }),
 
   // 联络记录

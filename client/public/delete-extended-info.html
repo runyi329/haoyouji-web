@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>删除扩展信息</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #dc2626;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #b91c1c;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .success {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+    .error {
+      background-color: #fee2e2;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <h1>删除联系人扩展信息</h1>
+  <p>联系人ID: 1590105 (胡永许)</p>
+  <button onclick="deleteExtendedInfo()">删除所有扩展信息</button>
+  <div id="result"></div>
+
+  <script>
+    async function deleteExtendedInfo() {
+      const resultDiv = document.getElementById('result');
+      resultDiv.textContent = '正在删除...';
+      resultDiv.className = '';
+
+      try {
+        const response = await fetch('/trpc/contacts.fieldValues.deleteAll', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contactId: 1590105
+          }),
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          resultDiv.textContent = '删除成功！请刷新人脉详情页查看。';
+          resultDiv.className = 'success';
+        } else {
+          const error = await response.text();
+          resultDiv.textContent = '删除失败：' + error;
+          resultDiv.className = 'error';
+        }
+      } catch (error) {
+        resultDiv.textContent = '删除失败：' + error.message;
+        resultDiv.className = 'error';
+      }
+    }
+  </script>
+</body>
+</html>
