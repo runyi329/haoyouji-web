@@ -1027,10 +1027,11 @@ export default function AddContact() {
                                 setDialogMessage(null);
                                 setShowPrivateAccountDialog(true);
                               } else if (field === '邮箱') {
-                                // 邮箱字段使用专门的对话框，支持多个邮箱和格式验证
+                                // 邮箱字段使用历史记录模式
                                 const existingValue = extendedFields.find(f => f.categoryName === '邮箱');
                                 if (existingValue?.value) {
-                                  setEmailList(existingValue.value.split(',').map(e => e.trim()));
+                                  // 解析分号分隔的邮箱列表
+                                  setEmailList(existingValue.value.split(';').map(e => e.trim()).filter(e => e));
                                 } else {
                                   setEmailList([]);
                                 }
@@ -2651,23 +2652,39 @@ export default function AddContact() {
         </div>
       )}
       
-      {/* 邮箱对话框（支持多个邮箱和格式验证） */}
+      {/* 邮箱对话框（历史记录模式） */}
       {showEmailDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEmailDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">邮箱</h3>
             
-            {/* 已有邮箱列表 */}
+            {/* 历史记录列表 */}
             {emailList.length > 0 && (
               <div className="mb-4">
-                <p className="text-sm text-gray-600 mb-2">已添加的邮箱：</p>
+                <p className="text-sm text-gray-600 mb-2">历史记录：</p>
                 <div className="space-y-2">
                   {emailList.map((email, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                      <span className="flex-1 text-sm">{email}</span>
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-3 rounded-lg border">
+                      <span className="flex-1 text-sm break-all">{email}</span>
                       <button
-                        onClick={() => setEmailList(prev => prev.filter((_, i) => i !== index))}
-                        className="text-red-500 hover:text-red-700"
+                        onClick={() => {
+                          setCurrentEmail(email);
+                          setDialogMessage({type: "success", text: '已加载到输入框'});
+                        }}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        title="选择此邮箱"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEmailList(prev => prev.filter((_, i) => i !== index));
+                          setDialogMessage({type: "success", text: '已删除'});
+                        }}
+                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        title="删除此邮箱"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2679,40 +2696,15 @@ export default function AddContact() {
               </div>
             )}
             
-            {/* 添加新邮箱 */}
+            {/* 输入邮箱 */}
             <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">添加新邮箱：</p>
+              <label className="text-sm text-gray-600 mb-2 block">邮箱地址</label>
               <Input 
                 type="email"
                 value={currentEmail} 
                 onChange={(e) => setCurrentEmail(e.target.value)} 
                 placeholder="请输入邮箱地址（如：example@email.com）" 
-                className="mb-2" 
               />
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => {
-                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                  if (!currentEmail.trim()) {
-                    setDialogMessage({type: "error", text: '请输入邮箱地址'});
-                    return;
-                  }
-                  if (!emailRegex.test(currentEmail.trim())) {
-                    setDialogMessage({type: "error", text: '邮箱格式不正确，请输入有效的邮箱地址'});
-                    return;
-                  }
-                  if (emailList.includes(currentEmail.trim())) {
-                    setDialogMessage({type: "error", text: '该邮箱已存在'});
-                    return;
-                  }
-                  setEmailList(prev => [...prev, currentEmail.trim()]);
-                  setCurrentEmail('');
-                  setDialogMessage({type: "success", text: '邮箱已添加'});
-                }}
-              >
-                + 添加邮箱
-              </Button>
             </div>
             
             {/* 提示信息 */}
@@ -2732,19 +2724,37 @@ export default function AddContact() {
                 setShowEmailDialog(false);
               }}>{extendedFields.some(f => f.categoryName === '邮箱') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
-                if (emailList.length === 0) {
-                  setDialogMessage({type: "error", text: '请至少添加一个邮箱'});
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!currentEmail.trim()) {
+                  setDialogMessage({type: "error", text: '请输入邮箱地址'});
                   return;
                 }
+                if (!emailRegex.test(currentEmail.trim())) {
+                  setDialogMessage({type: "error", text: '邮箱格式不正确，请输入有效的邮箱地址'});
+                  return;
+                }
+                
+                // 添加到列表（如果不存在）
+                if (!emailList.includes(currentEmail.trim())) {
+                  setEmailList(prev => [...prev, currentEmail.trim()]);
+                }
+                
+                // 保存到扩展字段
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '邮箱');
-                  return [...filtered, { categoryId: getCategoryId('邮箱'),
-                        categoryName: '邮箱', value: emailList.join(', ') }];
+                  const allEmails = emailList.includes(currentEmail.trim()) ? emailList : [...emailList, currentEmail.trim()];
+                  return [...filtered, { 
+                    categoryId: getCategoryId('邮箱'),
+                    categoryName: '邮箱', 
+                    value: allEmails.join('; ') 
+                  }];
                 });
-                setDialogMessage({type: "success", text: `已设置邮箱：${emailList.join(', ')}`});
+                
+                setDialogMessage({type: "success", text: `已保存邮箱：${currentEmail.trim()}`});
                 setTimeout(() => {
                   setDialogMessage(null);
                   setShowEmailDialog(false);
+                  setCurrentEmail('');
                 }, 1000);
               }}>确定</Button>
             </div>
