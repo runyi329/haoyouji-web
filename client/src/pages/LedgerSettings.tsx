@@ -342,15 +342,25 @@ export default function LedgerSettings() {
                           )}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleInviteUser(user.username)}
-                        disabled={inviteMutation.isPending}
-                        className="bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
-                      >
-                        <UserPlus className="w-4 h-4 mr-1" />
-                        添加
-                      </Button>
+                      {(() => {
+                        const isMember = ledgerData?.members?.some(
+                          (m: any) => m.userId === user.id
+                        );
+                        return (
+                          <Button
+                            size="sm"
+                            onClick={() => !isMember && handleInviteUser(user.username)}
+                            disabled={isMember || inviteMutation.isPending}
+                            className={isMember 
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+                            }
+                          >
+                            <UserPlus className="w-4 h-4 mr-1" />
+                            {isMember ? '已添加' : '添加'}
+                          </Button>
+                        );
+                      })()}
                     </div>
                   ))
                 ) : (
