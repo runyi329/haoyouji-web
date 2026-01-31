@@ -12,9 +12,15 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
 
   useEffect(() => {
+    // 等待加载完成
+    if (loading) return;
+    
     // 如果已登录，跳转到脉动首页
-    if (isAuthenticated && !loading) {
+    if (isAuthenticated) {
       setLocation("/contacts");
+    } else {
+      // 如果未登录，跳转到登录页
+      setLocation("/login");
     }
   }, [isAuthenticated, loading, setLocation]);
 
