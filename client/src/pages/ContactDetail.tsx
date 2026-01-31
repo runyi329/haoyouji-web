@@ -90,15 +90,13 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
       const timestamp = parts[1] || '';
       
       return (
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs text-muted-foreground">芝麻信用</span>
-            <span className="text-sm font-semibold text-blue-600">{score}</span>
-          </div>
+        <span className="text-sm">
+          <span className="font-semibold">{score}分</span>
+          <span className="text-muted-foreground"> (芝麻信用)</span>
           {timestamp && (
-            <span className="text-xs text-gray-400">{timestamp}</span>
+            <span className="text-xs text-gray-400 ml-2">{timestamp}</span>
           )}
-        </div>
+        </span>
       );
     }
     
@@ -122,9 +120,7 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
       {...listeners}
     >
       <div className="flex-1 min-w-0">
-        {fv.categoryName !== '征信' && (
-          <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
-        )}
+        <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
         {renderValue()}
       </div>
     </div>
