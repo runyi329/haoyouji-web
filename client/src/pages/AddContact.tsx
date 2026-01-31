@@ -229,6 +229,9 @@ export default function AddContact() {
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
+  // 对话框提示信息（统一管理）
+  const [dialogMessage, setDialogMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  
   // 基本信息折叠状态
   const [isBasicInfoCollapsed, setIsBasicInfoCollapsed] = useState(false);
   
@@ -325,35 +328,35 @@ export default function AddContact() {
           }
         } catch (error) {
           console.error('保存扩展信息失败:', error);
-          toast.error("扩展信息保存失败");
+          setDialogMessage({type: "error", text: "扩展信息保存失败"});
         }
       }
-      toast.success("人脉添加成功");
+      setDialogMessage({type: "success", text: "人脉添加成功"});
       setLocation(`/parent/contacts/${data.id}`);
     },
     onError: (error) => {
-      toast.error(error.message || "添加失败");
+      setDialogMessage({type: "error", text: error.message || "添加失败"});
     },
   });
   
   // 更新人脉API
   const updateContactMutation = trpc.contacts.update.useMutation({
     onSuccess: async (data) => {
-      toast.success("人脉更新成功");
+      setDialogMessage({type: "success", text: "人脉更新成功"});
       // 使缓存失效，强制重新获取数据
       await utils.contacts.get.invalidate({ id: contactId! });
       await utils.contacts.fieldValues.list.invalidate({ contactId: contactId! });
       setLocation(`/parent/contacts/${contactId}`);
     },
     onError: (error) => {
-      toast.error(error.message || "更新失败");
+      setDialogMessage({type: "error", text: error.message || "更新失败"});
     },
   });
   
   // 添加扩展信息字段值API
   const addFieldValueMutation = trpc.contacts.fieldValues.add.useMutation({
     onSuccess: async (newFieldValue) => {
-      toast.success("扩展信息已添加");
+      setDialogMessage({type: "success", text: "扩展信息已添加"});
       // 刷新字段值列表
       if (isEditMode && contactId) {
         // 使缓存失效，强制重新获取数据
@@ -361,14 +364,14 @@ export default function AddContact() {
       }
     },
     onError: (error) => {
-      toast.error(error.message || "添加扩展信息失败");
+      setDialogMessage({type: "error", text: error.message || "添加扩展信息失败"});
     },
   });
   
   // 更新扩展信息字段值 API
   const updateFieldValueMutation = trpc.contacts.fieldValues.update.useMutation({
     onSuccess: async () => {
-      toast.success("扩展信息已更新");
+      setDialogMessage({type: "success", text: "扩展信息已更新"});
       // 刷新字段值列表
       if (isEditMode && contactId) {
         // 使缓存失效，强制重新获取数据
@@ -376,14 +379,14 @@ export default function AddContact() {
       }
     },
     onError: (error) => {
-      toast.error(error.message || "更新扩展信息失败");
+      setDialogMessage({type: "error", text: error.message || "更新扩展信息失败"});
     },
   });
   
   // 删除扩展信息字段值 API
   const deleteFieldValueMutation = trpc.contacts.fieldValues.delete.useMutation({
     onSuccess: async () => {
-      toast.success("扩展信息已删除");
+      setDialogMessage({type: "success", text: "扩展信息已删除"});
       // 刷新字段值列表
       if (isEditMode && contactId) {
         // 使缓存失效，强制重新获取数据
@@ -391,7 +394,7 @@ export default function AddContact() {
       }
     },
     onError: (error) => {
-      toast.error(error.message || "删除扩展信息失败");
+      setDialogMessage({type: "error", text: error.message || "删除扩展信息失败"});
     },
   });  
   // 处理分类选择器的选择
@@ -410,7 +413,7 @@ export default function AddContact() {
       return newFields;
     });
     
-    toast.success("扩展信息已添加，请点击保存按钮");
+    setDialogMessage({type: "success", text: "扩展信息已添加，请点击保存按钮"});
   };
   
   // 编辑扩展信息字段
@@ -424,7 +427,7 @@ export default function AddContact() {
     if (editingFieldIndex === null) return;
     
     if (!editingFieldValue.trim()) {
-      toast.error("请输入内容");
+      setDialogMessage({type: "error", text: "请输入内容"});
       return;
     }
     
@@ -450,7 +453,7 @@ export default function AddContact() {
     
     setEditingFieldIndex(null);
     setEditingFieldValue("");
-    toast.success("修改成功");
+    setDialogMessage({type: "success", text: "修改成功"});
   };
   
   // 取消编辑
@@ -496,7 +499,7 @@ export default function AddContact() {
       
       return newFields;
     });
-    toast.success("位置已调整");
+    setDialogMessage({type: "success", text: "位置已调整"});
   };
   
 
@@ -513,7 +516,7 @@ export default function AddContact() {
     } else {
       // 新增模式：从本地状态删除
       setExtendedFields(prev => prev.filter((_, i) => i !== index));
-      toast.success("扩展信息已删除");
+      setDialogMessage({type: "success", text: "扩展信息已删除"});
     }
   };
   
@@ -522,7 +525,7 @@ export default function AddContact() {
     e.preventDefault();
     
     if (!name.trim()) {
-      toast.error("请输入姓名");
+      setDialogMessage({type: "error", text: "请输入姓名"});
       return;
     }
     
@@ -1082,11 +1085,19 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
+              <Button variant="outline" className="flex-1" onClick={() => { 
                   // 恢复到原始值
                   const existingValue = extendedFields.find(f => f.categoryName === '星座');
                   setSelectedConstellation(existingValue?.value || "");
@@ -1109,11 +1120,11 @@ export default function AddContact() {
                         value: selectedConstellation,
                       }];
                     });
-                    toast.success(`已选择星座：${selectedConstellation}`);
+                    setDialogMessage({type: "success", text: `已选择星座：${selectedConstellation}`});
                     setShowConstellationDialog(false);
                     // 不清空选择状态，下次打开时显示当前值
                   } else {
-                    toast.error("请选择一个星座");
+                    setDialogMessage({type: "error", text: "请选择一个星座"});
                   }
                 }}
               >
@@ -1138,6 +1149,17 @@ export default function AddContact() {
                 style={{ width: '50%' }}
               />
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -1180,10 +1202,10 @@ export default function AddContact() {
                       }];
                     });
                     
-                    toast.success(`已选择生日：${selectedBirthday}，属相：${zodiacAnimal}`);
+                    setDialogMessage({type: "success", text: `已选择生日：${selectedBirthday}，属相：${zodiacAnimal}`});
                     setShowBirthdayDialog(false);
                   } else {
-                    toast.error("请选择生日");
+                    setDialogMessage({type: "error", text: "请选择生日"});
                   }
                 }}
               >
@@ -1214,6 +1236,17 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -1238,10 +1271,10 @@ export default function AddContact() {
                         value: selectedBloodType,
                       }];
                     });
-                    toast.success(`已选择血型：${selectedBloodType}`);
+                    setDialogMessage({type: "success", text: `已选择血型：${selectedBloodType}`});
                     setShowBloodTypeDialog(false);
                   } else {
-                    toast.error("请选择血型");
+                    setDialogMessage({type: "error", text: "请选择血型"});
                   }
                 }}
               >
@@ -1272,6 +1305,17 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -1299,7 +1343,7 @@ export default function AddContact() {
                       
                       // 验证是否匹配
                       if (selectedZodiac !== correctZodiac) {
-                        toast.error(`属相与生日不匹配！根据生日${birthdayField.value}，属相应为「${correctZodiac}」`);
+                        setDialogMessage({type: "error", text: `属相与生日不匹配！根据生日${birthdayField.value}，属相应为「${correctZodiac}」`});
                         return;
                       }
                     }
@@ -1313,10 +1357,10 @@ export default function AddContact() {
                         value: selectedZodiac,
                       }];
                     });
-                    toast.success(`已选择属相：${selectedZodiac}`);
+                    setDialogMessage({type: "success", text: `已选择属相：${selectedZodiac}`});
                     setShowZodiacDialog(false);
                   } else {
-                    toast.error("请选择属相");
+                    setDialogMessage({type: "error", text: "请选择属相"});
                   }
                 }}
               >
@@ -1349,6 +1393,17 @@ export default function AddContact() {
                 ))}
               </div>
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -1401,10 +1456,10 @@ export default function AddContact() {
                       }];
                     });
                     
-                    toast.success(`已设置年龄：${age}岁，属相：${zodiacAnimal}`);
+                    setDialogMessage({type: "success", text: `已设置年龄：${age}岁，属相：${zodiacAnimal}`});
                     setShowAgeDialog(false);
                   } else {
-                    toast.error("请输入有效的年份");
+                    setDialogMessage({type: "error", text: "请输入有效的年份"});
                   }
                 }}
               >
@@ -1435,10 +1490,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '身高');
                 setSelectedHeight(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowHeightDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1447,10 +1514,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '身高');
                     return [...filtered, { categoryId: 0, categoryName: '身高', value: selectedHeight }];
                   });
-                  toast.success(`已选择身高：${selectedHeight}`);
+                  setDialogMessage({type: "success", text: `已选择身高：${selectedHeight}`});
                   setShowHeightDialog(false);
                 } else {
-                  toast.error("请选择身高");
+                  setDialogMessage({type: "error", text: "请选择身高"});
                 }
               }}>确定</Button>
             </div>
@@ -1478,10 +1545,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '鞋码');
                 setSelectedShoeSize(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowShoeSizeDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1490,10 +1569,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '鞋码');
                     return [...filtered, { categoryId: 0, categoryName: '鞋码', value: selectedShoeSize }];
                   });
-                  toast.success(`已选择鞋码：${selectedShoeSize}`);
+                  setDialogMessage({type: "success", text: `已选择鞋码：${selectedShoeSize}`});
                   setShowShoeSizeDialog(false);
                 } else {
-                  toast.error("请选择鞋码");
+                  setDialogMessage({type: "error", text: "请选择鞋码"});
                 }
               }}>确定</Button>
             </div>
@@ -1526,10 +1605,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '饮食');
                 setSelectedDietaries(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowDietaryDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1538,10 +1629,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '饮食');
                     return [...filtered, { categoryId: 0, categoryName: '饮食', value: selectedDietaries.join(',') }];
                   });
-                  toast.success(`已选择饮食：${selectedDietaries.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择饮食：${selectedDietaries.join('、')}`});
                   setShowDietaryDialog(false);
                 } else {
-                  toast.error("请至少选择一项");
+                  setDialogMessage({type: "error", text: "请至少选择一项"});
                 }
               }}>确定</Button>
             </div>
@@ -1573,10 +1664,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '习惯');
                 setSelectedHabits(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowHabitDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1585,10 +1688,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '习惯');
                     return [...filtered, { categoryId: 0, categoryName: '习惯', value: selectedHabits.join(',') }];
                   });
-                  toast.success(`已选择习惯：${selectedHabits.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择习惯：${selectedHabits.join('、')}`});
                   setShowHabitDialog(false);
                 } else {
-                  toast.error("请至少选择一个习惯");
+                  setDialogMessage({type: "error", text: "请至少选择一个习惯"});
                 }
               }}>确定</Button>
             </div>
@@ -1620,10 +1723,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '健康');
                 setSelectedHealths(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowHealthDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1632,10 +1747,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '健康');
                     return [...filtered, { categoryId: 0, categoryName: '健康', value: selectedHealths.join(',') }];
                   });
-                  toast.success(`已选择健康状况：${selectedHealths.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择健康状况：${selectedHealths.join('、')}`});
                   setShowHealthDialog(false);
                 } else {
-                  toast.error("请至少选择一项");
+                  setDialogMessage({type: "error", text: "请至少选择一项"});
                 }
               }}>确定</Button>
             </div>
@@ -1667,10 +1782,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '性格');
                 setSelectedPersonalities(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowPersonalityDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1679,10 +1806,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '性格');
                     return [...filtered, { categoryId: 0, categoryName: '性格', value: selectedPersonalities.join(',') }];
                   });
-                  toast.success(`已选择性格：${selectedPersonalities.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择性格：${selectedPersonalities.join('、')}`});
                   setShowPersonalityDialog(false);
                 } else {
-                  toast.error("请至少选择一个性格");
+                  setDialogMessage({type: "error", text: "请至少选择一个性格"});
                 }
               }}>确定</Button>
             </div>
@@ -1710,10 +1837,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '民族');
                 setSelectedEthnic(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowEthnicDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1722,10 +1861,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '民族');
                     return [...filtered, { categoryId: 0, categoryName: '民族', value: selectedEthnic }];
                   });
-                  toast.success(`已选择民族：${selectedEthnic}`);
+                  setDialogMessage({type: "success", text: `已选择民族：${selectedEthnic}`});
                   setShowEthnicDialog(false);
                 } else {
-                  toast.error("请选择民族");
+                  setDialogMessage({type: "error", text: "请选择民族"});
                 }
               }}>确定</Button>
             </div>
@@ -1757,10 +1896,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '品牌');
                 setSelectedBrands(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowBrandDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1769,10 +1920,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '品牌');
                     return [...filtered, { categoryId: 0, categoryName: '品牌', value: selectedBrands.join(',') }];
                   });
-                  toast.success(`已选择品牌：${selectedBrands.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择品牌：${selectedBrands.join('、')}`});
                   setShowBrandDialog(false);
                 } else {
-                  toast.error("请至少选择一个品牌");
+                  setDialogMessage({type: "error", text: "请至少选择一个品牌"});
                 }
               }}>确定</Button>
             </div>
@@ -1804,10 +1955,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '娱乐');
                 setSelectedEntertainments(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowEntertainmentDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1816,10 +1979,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '娱乐');
                     return [...filtered, { categoryId: 0, categoryName: '娱乐', value: selectedEntertainments.join(',') }];
                   });
-                  toast.success(`已选择娱乐：${selectedEntertainments.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择娱乐：${selectedEntertainments.join('、')}`});
                   setShowEntertainmentDialog(false);
                 } else {
-                  toast.error("请至少选择一项");
+                  setDialogMessage({type: "error", text: "请至少选择一项"});
                 }
               }}>确定</Button>
             </div>
@@ -1837,6 +2000,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '公司');
                 setSelectedCompany(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowCompanyDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1845,10 +2009,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '公司');
                     return [...filtered, { categoryId: 0, categoryName: '公司', value: selectedCompany }];
                   });
-                  toast.success(`已设置公司：${selectedCompany}`);
+                  setDialogMessage({type: "success", text: `已设置公司：${selectedCompany}`});
                   setShowCompanyDialog(false);
                 } else {
-                  toast.error("请输入公司名称");
+                  setDialogMessage({type: "error", text: "请输入公司名称"});
                 }
               }}>确定</Button>
             </div>
@@ -1866,6 +2030,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '财务');
                 setSelectedFinance(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowFinanceDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1874,10 +2039,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '财务');
                     return [...filtered, { categoryId: 0, categoryName: '财务', value: selectedFinance }];
                   });
-                  toast.success(`已设置财务：${selectedFinance}`);
+                  setDialogMessage({type: "success", text: `已设置财务：${selectedFinance}`});
                   setShowFinanceDialog(false);
                 } else {
-                  toast.error("请输入财务信息");
+                  setDialogMessage({type: "error", text: "请输入财务信息"});
                 }
               }}>确定</Button>
             </div>
@@ -1895,6 +2060,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '法务');
                 setSelectedLegal(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowLegalDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1903,10 +2069,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '法务');
                     return [...filtered, { categoryId: 0, categoryName: '法务', value: selectedLegal }];
                   });
-                  toast.success(`已设置法务：${selectedLegal}`);
+                  setDialogMessage({type: "success", text: `已设置法务：${selectedLegal}`});
                   setShowLegalDialog(false);
                 } else {
-                  toast.error("请输入法务信息");
+                  setDialogMessage({type: "error", text: "请输入法务信息"});
                 }
               }}>确定</Button>
             </div>
@@ -1924,6 +2090,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '劳务');
                 setSelectedLabor(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowLaborDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1932,10 +2099,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '劳务');
                     return [...filtered, { categoryId: 0, categoryName: '劳务', value: selectedLabor }];
                   });
-                  toast.success(`已设置劳务：${selectedLabor}`);
+                  setDialogMessage({type: "success", text: `已设置劳务：${selectedLabor}`});
                   setShowLaborDialog(false);
                 } else {
-                  toast.error("请输入劳务信息");
+                  setDialogMessage({type: "error", text: "请输入劳务信息"});
                 }
               }}>确定</Button>
             </div>
@@ -1953,6 +2120,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '税务');
                 setSelectedTax(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowTaxDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1961,10 +2129,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '税务');
                     return [...filtered, { categoryId: 0, categoryName: '税务', value: selectedTax }];
                   });
-                  toast.success(`已设置税务：${selectedTax}`);
+                  setDialogMessage({type: "success", text: `已设置税务：${selectedTax}`});
                   setShowTaxDialog(false);
                 } else {
-                  toast.error("请输入税务信息");
+                  setDialogMessage({type: "error", text: "请输入税务信息"});
                 }
               }}>确定</Button>
             </div>
@@ -1982,6 +2150,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '人事');
                 setSelectedHR(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowHRDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -1990,10 +2159,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '人事');
                     return [...filtered, { categoryId: 0, categoryName: '人事', value: selectedHR }];
                   });
-                  toast.success(`已设置人事：${selectedHR}`);
+                  setDialogMessage({type: "success", text: `已设置人事：${selectedHR}`});
                   setShowHRDialog(false);
                 } else {
-                  toast.error("请输入人事信息");
+                  setDialogMessage({type: "error", text: "请输入人事信息"});
                 }
               }}>确定</Button>
             </div>
@@ -2011,6 +2180,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '公户');
                 setSelectedPublicAccount(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowPublicAccountDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2019,10 +2189,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '公户');
                     return [...filtered, { categoryId: 0, categoryName: '公户', value: selectedPublicAccount }];
                   });
-                  toast.success(`已设置公户：${selectedPublicAccount}`);
+                  setDialogMessage({type: "success", text: `已设置公户：${selectedPublicAccount}`});
                   setShowPublicAccountDialog(false);
                 } else {
-                  toast.error("请输入公户信息");
+                  setDialogMessage({type: "error", text: "请输入公户信息"});
                 }
               }}>确定</Button>
             </div>
@@ -2061,13 +2231,25 @@ export default function AddContact() {
                 />
               </div>
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
+                setDialogMessage(null);
                 setShowPrivateAccountDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (!privateAccountBank.trim() || !privateAccountNumber.trim() || !privateAccountName.trim()) {
-                  toast.error("请填写完整的银行卡信息");
+                  setDialogMessage({type: "error", text: "请填写完整的银行卡信息"});
                   return;
                 }
                 const value = `${privateAccountBank.trim()} | ${privateAccountNumber.trim()} | ${privateAccountName.trim()}`;
@@ -2075,8 +2257,11 @@ export default function AddContact() {
                   const filtered = prev.filter(f => f.categoryName !== '私户');
                   return [...filtered, { categoryId: 0, categoryName: '私户', value }];
                 });
-                toast.success(`已设置私户信息`);
-                setShowPrivateAccountDialog(false);
+                setDialogMessage({type: "success", text: `已设置私户信息`});
+                setTimeout(() => {
+                  setDialogMessage(null);
+                  setShowPrivateAccountDialog(false);
+                }, 1000);
               }}>确定</Button>
             </div>
           </div>
@@ -2097,6 +2282,7 @@ export default function AddContact() {
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 setGenericFieldValue("");
+                setDialogMessage(null);
                 setShowGenericFieldDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2105,10 +2291,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== genericFieldName);
                     return [...filtered, { categoryId: 0, categoryName: genericFieldName, value: genericFieldValue }];
                   });
-                  toast.success(`已设置${genericFieldName}：${genericFieldValue}`);
+                  setDialogMessage({type: "success", text: `已设置${genericFieldName}：${genericFieldValue}`});
                   setShowGenericFieldDialog(false);
                 } else {
-                  toast.error(`请输入${genericFieldName}`);
+                  setDialogMessage({type: "error", text: `请输入${genericFieldName}`});
                 }
               }}>确定</Button>
             </div>
@@ -2160,41 +2346,56 @@ export default function AddContact() {
                 onClick={() => {
                   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                   if (!currentEmail.trim()) {
-                    toast.error('请输入邮箱地址');
+                    setDialogMessage({type: "error", text: '请输入邮箱地址'});
                     return;
                   }
                   if (!emailRegex.test(currentEmail.trim())) {
-                    toast.error('邮箱格式不正确，请输入有效的邮箱地址');
+                    setDialogMessage({type: "error", text: '邮箱格式不正确，请输入有效的邮箱地址'});
                     return;
                   }
                   if (emailList.includes(currentEmail.trim())) {
-                    toast.error('该邮箱已存在');
+                    setDialogMessage({type: "error", text: '该邮箱已存在'});
                     return;
                   }
                   setEmailList(prev => [...prev, currentEmail.trim()]);
                   setCurrentEmail('');
-                  toast.success('邮箱已添加');
+                  setDialogMessage({type: "success", text: '邮箱已添加'});
                 }}
               >
                 + 添加邮箱
               </Button>
             </div>
             
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
+                setDialogMessage(null);
                 setShowEmailDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (emailList.length === 0) {
-                  toast.error('请至少添加一个邮箱');
+                  setDialogMessage({type: "error", text: '请至少添加一个邮箱'});
                   return;
                 }
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '邮箱');
                   return [...filtered, { categoryId: 0, categoryName: '邮箱', value: emailList.join(', ') }];
                 });
-                toast.success(`已设置邮箱：${emailList.join(', ')}`);
-                setShowEmailDialog(false);
+                setDialogMessage({type: "success", text: `已设置邮箱：${emailList.join(', ')}`});
+                setTimeout(() => {
+                  setDialogMessage(null);
+                  setShowEmailDialog(false);
+                }, 1000);
               }}>确定</Button>
             </div>
           </div>
@@ -2243,36 +2444,48 @@ export default function AddContact() {
                 className="w-full"
                 onClick={() => {
                   if (!currentWechat.trim()) {
-                    toast.error('请输入微信号');
+                    setDialogMessage({type: "error", text: '请输入微信号'});
                     return;
                   }
                   if (wechatList.includes(currentWechat.trim())) {
-                    toast.error('该微信号已存在');
+                    setDialogMessage({type: "error", text: '该微信号已存在'});
                     return;
                   }
                   setWechatList(prev => [...prev, currentWechat.trim()]);
                   setCurrentWechat('');
-                  toast.success('微信号已添加');
+                  setDialogMessage({type: "success", text: '微信号已添加'});
                 }}
               >
                 + 添加微信号
               </Button>
             </div>
             
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
+                setDialogMessage(null);
                 setShowWechatDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
                 if (wechatList.length === 0) {
-                  toast.error('请至少添加一个微信号');
+                  setDialogMessage({type: "error", text: '请至少添加一个微信号'});
                   return;
                 }
                 setExtendedFields(prev => {
                   const filtered = prev.filter(f => f.categoryName !== '微信');
                   return [...filtered, { categoryId: 0, categoryName: '微信', value: wechatList.join(', ') }];
                 });
-                toast.success(`已设置微信号：${wechatList.join(', ')}`);
+                setDialogMessage({type: "success", text: `已设置微信号：${wechatList.join(', ')}`});
                 setShowWechatDialog(false);
               }}>确定</Button>
             </div>
@@ -2290,6 +2503,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '行业');
                 setSelectedIndustry(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowIndustryDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2298,10 +2512,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '行业');
                     return [...filtered, { categoryId: 0, categoryName: '行业', value: selectedIndustry }];
                   });
-                  toast.success(`已设置行业：${selectedIndustry}`);
+                  setDialogMessage({type: "success", text: `已设置行业：${selectedIndustry}`});
                   setShowIndustryDialog(false);
                 } else {
-                  toast.error("请输入行业");
+                  setDialogMessage({type: "error", text: "请输入行业"});
                 }
               }}>确定</Button>
             </div>
@@ -2333,10 +2547,22 @@ export default function AddContact() {
                 </button>
               ))}
             </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '类型');
                 setSelectedTypes(existingValue ? existingValue.value.split(',') : []);
+                setDialogMessage(null);
                 setShowTypeDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2345,10 +2571,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '类型');
                     return [...filtered, { categoryId: 0, categoryName: '类型', value: selectedTypes.join(',') }];
                   });
-                  toast.success(`已选择类型：${selectedTypes.join('、')}`);
+                  setDialogMessage({type: "success", text: `已选择类型：${selectedTypes.join('、')}`});
                   setShowTypeDialog(false);
                 } else {
-                  toast.error("请至少选择一种类型");
+                  setDialogMessage({type: "error", text: "请至少选择一种类型"});
                 }
               }}>确定</Button>
             </div>
@@ -2366,6 +2592,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '职业');
                 setSelectedOccupation(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowOccupationDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2374,10 +2601,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '职业');
                     return [...filtered, { categoryId: 0, categoryName: '职业', value: selectedOccupation }];
                   });
-                  toast.success(`已设置职业：${selectedOccupation}`);
+                  setDialogMessage({type: "success", text: `已设置职业：${selectedOccupation}`});
                   setShowOccupationDialog(false);
                 } else {
-                  toast.error("请输入职业");
+                  setDialogMessage({type: "error", text: "请输入职业"});
                 }
               }}>确定</Button>
             </div>
@@ -2395,6 +2622,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 const existingValue = extendedFields.find(f => f.categoryName === '征信');
                 setSelectedCredit(existingValue?.value || "");
+                setDialogMessage(null);
                 setShowCreditDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
@@ -2403,10 +2631,10 @@ export default function AddContact() {
                     const filtered = prev.filter(f => f.categoryName !== '征信');
                     return [...filtered, { categoryId: 0, categoryName: '征信', value: selectedCredit }];
                   });
-                  toast.success(`已设置征信：${selectedCredit}`);
+                  setDialogMessage({type: "success", text: `已设置征信：${selectedCredit}`});
                   setShowCreditDialog(false);
                 } else {
-                  toast.error("请输入征信信息");
+                  setDialogMessage({type: "error", text: "请输入征信信息"});
                 }
               }}>确定</Button>
             </div>
