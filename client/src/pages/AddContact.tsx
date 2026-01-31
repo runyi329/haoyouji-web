@@ -602,13 +602,25 @@ export default function AddContact() {
           <h1 className="text-lg font-semibold">
             {isEditMode ? "编辑人脉" : "添加人脉"}
           </h1>
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={createContactMutation.isPending || updateContactMutation.isPending}
-          >
-            保存
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* 提示信息显示在保存按钮左边 */}
+            {dialogMessage && (
+              <div className={`px-3 py-1 rounded text-sm ${
+                dialogMessage.type === "error" 
+                  ? "bg-red-50 text-red-700 border border-red-200" 
+                  : "bg-green-50 text-green-700 border border-green-200"
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            <Button
+              size="sm"
+              onClick={handleSubmit}
+              disabled={createContactMutation.isPending || updateContactMutation.isPending}
+            >
+              保存
+            </Button>
+          </div>
         </div>
       </div>
 
