@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { Switch } from "@/components/ui/switch";
-import { ChevronRight, ChevronLeft, X } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, Search, UserPlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +36,8 @@ export default function LedgerSettings() {
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [searchUsername, setSearchUsername] = useState("");
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -56,6 +61,30 @@ export default function LedgerSettings() {
         userId: memberToRemove.userId,
       });
     }
+  };
+
+  // 搜索用户
+  const { data: searchResults } = trpc.sharing.searchUsers.useQuery(
+    { query: searchUsername },
+    { enabled: searchUsername.length > 0 }
+  );
+
+  // 邀请成员的mutation
+  const inviteMutation = trpc.ledger.inviteMember.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已成功邀请 ${data.member.username} 加入账本`);
+      setShowInviteDialog(false);
+      setSearchUsername("");
+      utils.ledger.getMembers.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error(`邀请失败: ${error.message}`);
+    },
+  });
+
+  // 处理邀请用户
+  const handleInviteUser = (username: string) => {
+    inviteMutation.mutate({ ledgerId, username });
   };
 
   if (isLoading) {
@@ -138,7 +167,7 @@ export default function LedgerSettings() {
           
           {/* 邀请按钮 */}
           <button 
-            onClick={() => setLocation(`/ledger/${ledgerId}/invite`)}
+            onClick={() => setShowInviteDialog(true)}
             className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
           >
             <div className="w-16 h-16 rounded-lg border-2 border-dashed border-[#ff7f50] flex items-center justify-center">
@@ -258,6 +287,78 @@ export default function LedgerSettings() {
           退出账本
         </button>
       </div>
+
+      {/* 邀请成员对话框 */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
+          <DialogTitle className="text-lg font-semibold mb-4">邀请成员</DialogTitle>
+          <div className="space-y-4">
+            {/* 搜索输入框 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="搜索用户名"
+                value={searchUsername}
+                onChange={(e) => setSearchUsername(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* 搜索结果 */}
+            {searchUsername && (
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {searchResults && searchResults.length > 0 ? (
+                  searchResults.map((user: any) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserAvatar
+                          username={user.username}
+                          avatar={user.avatar}
+                          size="sm"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">{user.username}</div>
+                          {user.name && (
+                            <div className="text-sm text-gray-500">{user.name}</div>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleInviteUser(user.username)}
+                        disabled={inviteMutation.isPending}
+                        className="bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+                      >
+                        <UserPlus className="w-4 h-4 mr-1" />
+                        添加
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-4">
+                    未找到用户
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 关闭按钮 */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setShowInviteDialog(false);
+                setSearchUsername("");
+              }}
+            >
+              关闭
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 移除成员确认对话框 */}
       <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
