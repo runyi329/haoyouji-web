@@ -4013,6 +4013,29 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+
+    // 更新字段值的排序
+    updateSortOrder: protectedProcedure
+      .input(z.object({
+        updates: z.array(z.object({
+          id: z.number(),
+          sortOrder: z.number(),
+        })),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+        
+        // 批量更新sortOrder
+        for (const update of input.updates) {
+          await db
+            .update(contactFieldValues)
+            .set({ sortOrder: update.sortOrder })
+            .where(eq(contactFieldValues.id, update.id));
+        }
+        
+        return { success: true };
+      }),
   }),
 
   // 联络记录

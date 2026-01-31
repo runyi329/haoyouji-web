@@ -64,6 +64,44 @@ function HighlightText({ text, keyword }: { text: string; keyword: string }) {
   );
 }
 
+// 可拖拽的字段项组件
+function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolean }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: fv.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center justify-between p-3 bg-background border rounded-lg cursor-move hover:shadow-md transition-all"
+      {...attributes}
+      {...listeners}
+    >
+      <div className="flex-1 min-w-0">
+        <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
+        <span className="text-sm">
+          {showFullInfo 
+            ? fv.value
+            : maskSensitiveInfo(fv.categoryName, fv.value)
+          }
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // 定义统计卡片类型
 type StatCard = {
   id: string;
@@ -441,6 +479,10 @@ export default function ContactDetail() {
   // 复制提示状态（记录哪个银行卡刚被复制）
   const [copiedBankCardId, setCopiedBankCardId] = useState<number | null>(null);
   
+  // 扩展信息排序相关state
+  const [sortedFieldValues, setSortedFieldValues] = useState<any[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  
   // 切换脱敏状态
   const toggleExtendedInfoVisibility = () => {
     const newValue = !showFullExtendedInfo;
@@ -635,6 +677,13 @@ export default function ContactDetail() {
     }
   }, [stats]);
 
+  // 初始化sortedFieldValues
+  useEffect(() => {
+    if (extendedFieldValues) {
+      setSortedFieldValues(extendedFieldValues);
+    }
+  }, [extendedFieldValues]);
+
   // 查询所有公司名称是否有报告
   useEffect(() => {
     const companyNames = extendedFieldValues?.filter(f => f.categoryName === '公司名称').map(f => f.value) || [];
@@ -669,6 +718,7 @@ export default function ContactDetail() {
   // 处理拖拽结束
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setIsDragging(false);
 
     if (over && active.id !== over.id) {
       setStatCards((items) => {
@@ -681,6 +731,29 @@ export default function ContactDetail() {
           `contact-stats-order-${contactId}`,
           JSON.stringify(newItems.map((item) => item.id))
         );
+
+        return newItems;
+      });
+    }
+  };
+
+  // 处理扩展信息拖拽结束
+  const handleFieldValueDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setIsDragging(false);
+
+    if (over && active.id !== over.id) {
+      setSortedFieldValues((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        const newItems = arrayMove(items, oldIndex, newIndex);
+
+        // 保存排序到数据库
+        const updates = newItems.map((item, index) => ({
+          id: item.id,
+          sortOrder: index,
+        }));
+        updateFieldValuesSortOrder.mutate({ updates });
 
         return newItems;
       });
@@ -780,6 +853,16 @@ export default function ContactDetail() {
       setShowEditDateDialog(false);
     }
   };
+
+  // 更新扩展信息排序
+  const updateFieldValuesSortOrder = trpc.contacts.fieldValues.updateSortOrder.useMutation({
+    onSuccess: () => {
+      utils.contacts.fieldValues.list.invalidate({ contactId });
+    },
+    onError: (error) => {
+      toast.error("排序保存失败");
+    },
+  });
 
   // 添加标签
   const addTag = trpc.contacts.tags.addToContact.useMutation({
@@ -1044,11 +1127,11 @@ export default function ContactDetail() {
             
             <CardContent className="space-y-4">
               
-              {/* 显示扩展信息字段值 */}
-              {extendedFieldValues && extendedFieldValues.length > 0 && (
+              {/* 显示扩展信息字段值 - 可拖拽排序 */}
+              {sortedFieldValues && sortedFieldValues.length > 0 && (
                 <div className="pt-2">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="text-xs font-medium text-muted-foreground">扩展信息</div>
+                    <div className="text-xs font-medium text-muted-foreground">扩展信息（长按拖动排序）</div>
                     <button
                       onClick={toggleExtendedInfoVisibility}
                       className="p-1 hover:bg-accent rounded transition-colors"
@@ -1061,126 +1144,27 @@ export default function ContactDetail() {
                       )}
                     </button>
                   </div>
-                  <div className="grid grid-cols-12 gap-0 border border-gray-200">
-                  {(() => {
-                    // 按 categoryName 分组，保持原有顺序
-                    const grouped = extendedFieldValues.reduce((acc: any, fv: any) => {
-                      if (!acc[fv.categoryName]) {
-                        acc[fv.categoryName] = [];
-                      }
-                      acc[fv.categoryName].push(fv);
-                      return acc;
-                    }, {});
-                    
-                    // 按照第一个字段出现的顺序排列分组
-                    const orderedGroups: any[] = [];
-                    const seenCategories = new Set();
-                    extendedFieldValues.forEach((fv: any) => {
-                      if (!seenCategories.has(fv.categoryName)) {
-                        seenCategories.add(fv.categoryName);
-                        orderedGroups.push(...grouped[fv.categoryName]);
-                      }
-                    });
-                    
-                    return orderedGroups.map((fv: any) => {
-                      // 根据内容长度计算占据的列数（12列网格）
-                      const contentLength = (fv.categoryName + fv.value).length;
-                      let colSpan = 4; // 默认占据4列（一行3个）
-                      
-                      if (isBankCardField(fv.categoryName)) {
-                        colSpan = 12; // 银行卡占满一行
-                      } else if (contentLength <= 4) {
-                        colSpan = 3; // 短内容：一行4个
-                      } else if (contentLength <= 7) {
-                        colSpan = 4; // 中等内容：一行3个
-                      } else if (contentLength <= 12) {
-                        colSpan = 6; // 较长内容：一行2个
-                      } else {
-                        colSpan = 12; // 很长内容：独占一行
-                      }
-                      
-                      return (
-                    <div key={fv.id} className={`flex items-start text-sm border-r border-b border-gray-200 p-2 col-span-${colSpan}`} style={{ gridColumn: `span ${colSpan}` }}>
-                      {/* 公司名称特殊处理：直接显示公司名称和图标，不显示标签图标和字段名 */}
-                      {fv.categoryName === '公司名称' ? (
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="flex-1 truncate">{fv.value}</span>
-                          <CompanyReportIcon
-                            hasReport={!!companyReportExistsMap[fv.value]}
-                            onClick={() => {
-                              setSelectedCompanyName(fv.value);
-                              setShowCompanyReportDialog(true);
-                            }}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleFieldValueDragEnd}
+                    onDragStart={() => setIsDragging(true)}
+                  >
+                    <SortableContext
+                      items={sortedFieldValues.map(fv => fv.id)}
+                      strategy={rectSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {sortedFieldValues.map((fv: any) => (
+                          <SortableFieldItem
+                            key={fv.id}
+                            fv={fv}
+                            showFullInfo={showFullExtendedInfo}
                           />
-                        </div>
-                      ) : isBankCardField(fv.categoryName) ? (
-                        /* 银行卡特殊布局：两行显示 */
-                        <div className="flex items-start gap-2 w-full">
-                          <div className="flex-1 min-w-0 text-sm space-y-1">
-                            {(() => {
-                              const info = parseBankCardInfo(fv.value);
-                              if (!info) return <span>{fv.value}</span>;
-                              
-                              // 根据 showFullExtendedInfo 状态决定是否脱敏
-                              const displayCardNumber = showFullExtendedInfo 
-                                ? info.cardNumber 
-                                : info.cardNumber.replace(/.(?=.{4})/g, '*');
-                              const displayHolderName = showFullExtendedInfo 
-                                ? info.holderName 
-                                : (info.holderName && info.holderName.length > 0) 
-                                  ? info.holderName.charAt(0) + '*'.repeat(info.holderName.length - 1)
-                                  : '';
-                              
-                              return (
-                                <>
-                                  <div>
-                                    <span className="font-medium text-muted-foreground">卡号 </span>
-                                    <span>{displayCardNumber}</span>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-muted-foreground">户名 </span>
-                                    <span>{displayHolderName}</span>
-                                    <span className="font-medium text-muted-foreground ml-2">开户行 </span>
-                                    <span>{info.bankName}</span>
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                          {/* 复制按钮 */}
-                          <div className="relative flex-shrink-0">
-                            <button
-                              onClick={() => copyBankCardInfo(fv.value, fv.id)}
-                              className="p-1 hover:bg-accent rounded transition-colors"
-                              title="复制银行卡信息"
-                            >
-                              <Copy className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                            {/* 复制成功提示 */}
-                            {copiedBankCardId === fv.id && (
-                              <div className="absolute -top-8 right-0 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                                复制成功
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        /* 普通字段显示 */
-                        <div className="w-full">
-                          <span className="font-medium text-muted-foreground">{fv.categoryName}: </span>
-                          <span>
-                            {showFullExtendedInfo 
-                              ? fv.value
-                              : maskSensitiveInfo(fv.categoryName, fv.value)
-                            }
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    );
-                    });
-                  })()}
-                  </div>
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 </div>
               )}
               

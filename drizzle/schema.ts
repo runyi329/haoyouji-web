@@ -180,6 +180,7 @@ export const contactFieldValues = mysqlTable("contact_field_values", {
 	categoryId: int().notNull(),
 	categoryName: varchar({ length: 50 }).default(''),
 	value: text(),
+	sortOrder: int().default(0),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });

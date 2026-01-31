@@ -2323,11 +2323,12 @@ export async function getContactFieldValues(contactId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 直接获取字段值（包含categoryName）
+  // 直接获取字段值（包含categoryName），按sortOrder和id排序
   const fieldValues = await db
     .select()
     .from(contactFieldValues)
-    .where(eq(contactFieldValues.contactId, contactId));
+    .where(eq(contactFieldValues.contactId, contactId))
+    .orderBy(contactFieldValues.sortOrder, contactFieldValues.id);
   
   // 直接返回，不需要关联查询
   const result = fieldValues.map(fv => ({
@@ -2337,6 +2338,7 @@ export async function getContactFieldValues(contactId: number) {
       categoryName: fv.categoryName || '', // 直接使用数据库中的categoryName
       categoryKey: fv.categoryName || '', // 使用 categoryName 作为 key
       value: fv.value,
+      sortOrder: fv.sortOrder || 0,
       createdAt: fv.createdAt,
     }));
   
