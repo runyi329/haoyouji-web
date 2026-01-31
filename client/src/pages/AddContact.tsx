@@ -111,6 +111,9 @@ export default function AddContact() {
   // 扩展信息字段值列表
   const [extendedFields, setExtendedFields] = useState<ExtendedFieldValue[]>([]);
   
+  // 新创建的联系人ID（用于新增模式下的返回）
+  const [createdContactId, setCreatedContactId] = useState<number | null>(null);
+  
   // 添加扩展信息对话框
   const [showFieldSelector, setShowFieldSelector] = useState(false);
   const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
@@ -332,6 +335,8 @@ export default function AddContact() {
           setDialogMessage({type: "error", text: "扩展信息保存失败"});
         }
       }
+      // 记录新创建的联系人ID
+      setCreatedContactId(data.id);
       setDialogMessage({type: "success", text: "人脉添加成功"});
       // 保存成功后不跳转，留在当前页面
       // setLocation(`/parent/contacts/${data.id}`);
@@ -577,7 +582,18 @@ export default function AddContact() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => window.history.back()}
+            onClick={() => {
+              // 获取要返回的联系人ID：编辑模式用contactId，新增模式用createdContactId
+              const targetId = isEditMode ? contactId : createdContactId;
+              
+              if (targetId) {
+                // 返回到该联系人的详情页
+                setLocation(`/parent/contacts/${targetId}`);
+              } else {
+                // 如果没有ID（还未保存），返回列表页
+                setLocation('/parent/contacts');
+              }
+            }}
             className="gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
