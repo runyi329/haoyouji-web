@@ -98,18 +98,9 @@ export default function ExportContacts() {
     }
     
     // 生成Excel文件
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    
-    // 创建下载链接
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contacts_backup_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 使用writeFile方法直接下载,避免打包后的兼容性问题
+    const filename = `contacts_backup_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, filename);
   };
 
   const handleExport = async () => {
