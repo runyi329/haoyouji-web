@@ -333,7 +333,8 @@ export default function AddContact() {
         }
       }
       setDialogMessage({type: "success", text: "人脉添加成功"});
-      setLocation(`/parent/contacts/${data.id}`);
+      // 保存成功后不跳转，留在当前页面
+      // setLocation(`/parent/contacts/${data.id}`);
     },
     onError: (error) => {
       setDialogMessage({type: "error", text: error.message || "添加失败"});
@@ -347,7 +348,8 @@ export default function AddContact() {
       // 使缓存失效，强制重新获取数据
       await utils.contacts.get.invalidate({ id: contactId! });
       await utils.contacts.fieldValues.list.invalidate({ contactId: contactId! });
-      setLocation(`/parent/contacts/${contactId}`);
+      // 保存成功后不跳转，留在当前页面
+      // setLocation(`/parent/contacts/${contactId}`);
     },
     onError: (error) => {
       setDialogMessage({type: "error", text: error.message || "更新失败"});
