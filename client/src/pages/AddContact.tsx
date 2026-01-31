@@ -209,6 +209,11 @@ export default function AddContact() {
   const [showPrivateAccountDialog, setShowPrivateAccountDialog] = useState(false);
   const [selectedPrivateAccount, setSelectedPrivateAccount] = useState("");
   
+  // 通用字段对话框（用于电话、微信、邮箱、地址）
+  const [showGenericFieldDialog, setShowGenericFieldDialog] = useState(false);
+  const [genericFieldName, setGenericFieldName] = useState("");
+  const [genericFieldValue, setGenericFieldValue] = useState("");
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -981,6 +986,12 @@ export default function AddContact() {
                                   setSelectedPrivateAccount(existingValue.value);
                                 }
                                 setShowPrivateAccountDialog(true);
+                              } else if (field === '电话' || field === '微信' || field === '邮箱' || field === '地址') {
+                                // 对于电话、微信、邮箱、地址，使用通用的文本输入对话框
+                                const existingValue = extendedFields.find(f => f.categoryName === field);
+                                setGenericFieldName(field);
+                                setGenericFieldValue(existingValue?.value || '');
+                                setShowGenericFieldDialog(true);
                           }
                         };
                         
@@ -1966,6 +1977,39 @@ export default function AddContact() {
                   setShowPrivateAccountDialog(false);
                 } else {
                   toast.error("请输入私户信息");
+                }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 通用字段对话框（电话、微信、邮箱、地址） */}
+      {showGenericFieldDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGenericFieldDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">{genericFieldName}</h3>
+            <Input 
+              value={genericFieldValue} 
+              onChange={(e) => setGenericFieldValue(e.target.value)} 
+              placeholder={`请输入${genericFieldName}`} 
+              className="mb-4" 
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                setGenericFieldValue("");
+                setShowGenericFieldDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (genericFieldValue.trim()) {
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== genericFieldName);
+                    return [...filtered, { categoryId: 0, categoryName: genericFieldName, value: genericFieldValue }];
+                  });
+                  toast.success(`已设置${genericFieldName}：${genericFieldValue}`);
+                  setShowGenericFieldDialog(false);
+                } else {
+                  toast.error(`请输入${genericFieldName}`);
                 }
               }}>确定</Button>
             </div>
