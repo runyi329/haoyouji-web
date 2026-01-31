@@ -5246,8 +5246,8 @@ export const appRouter = router({
             const user = await db.getUserById(member.userId);
             return {
               ...member,
-              userName: user?.name || '未知用户',
-              userAvatar: user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
+              userName: user?.name || user?.username || '未知用户',
+              userAvatar: user?.avatar || null,
               ledgerName: result.ledgerName,
             };
           })
