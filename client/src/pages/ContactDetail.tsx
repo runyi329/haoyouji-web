@@ -1056,16 +1056,27 @@ export default function ContactDetail() {
                     </button>
                   </div>
                   <div className="grid grid-cols-12 gap-0 border border-gray-200">
-                  {extendedFieldValues
-                    .sort((a: any, b: any) => {
-                      // 银行卡类字段排在最后
-                      const aIsBankCard = isBankCardField(a.categoryName);
-                      const bIsBankCard = isBankCardField(b.categoryName);
-                      if (aIsBankCard && !bIsBankCard) return 1;
-                      if (!aIsBankCard && bIsBankCard) return -1;
-                      return 0;
-                    })
-                    .map((fv: any) => {
+                  {(() => {
+                    // 按 categoryName 分组，保持原有顺序
+                    const grouped = extendedFieldValues.reduce((acc: any, fv: any) => {
+                      if (!acc[fv.categoryName]) {
+                        acc[fv.categoryName] = [];
+                      }
+                      acc[fv.categoryName].push(fv);
+                      return acc;
+                    }, {});
+                    
+                    // 按照第一个字段出现的顺序排列分组
+                    const orderedGroups: any[] = [];
+                    const seenCategories = new Set();
+                    extendedFieldValues.forEach((fv: any) => {
+                      if (!seenCategories.has(fv.categoryName)) {
+                        seenCategories.add(fv.categoryName);
+                        orderedGroups.push(...grouped[fv.categoryName]);
+                      }
+                    });
+                    
+                    return orderedGroups.map((fv: any) => {
                       // 根据内容长度计算占据的列数（12列网格）
                       const contentLength = (fv.categoryName + fv.value).length;
                       let colSpan = 4; // 默认占据4列（一行3个）
@@ -1161,7 +1172,8 @@ export default function ContactDetail() {
                       )}
                     </div>
                     );
-                  })}
+                    });
+                  })()}
                   </div>
                 </div>
               )}
