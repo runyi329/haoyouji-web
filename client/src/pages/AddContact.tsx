@@ -207,7 +207,9 @@ export default function AddContact() {
   const [selectedPublicAccount, setSelectedPublicAccount] = useState("");
   
   const [showPrivateAccountDialog, setShowPrivateAccountDialog] = useState(false);
-  const [selectedPrivateAccount, setSelectedPrivateAccount] = useState("");
+  const [privateAccountBank, setPrivateAccountBank] = useState("");
+  const [privateAccountNumber, setPrivateAccountNumber] = useState("");
+  const [privateAccountName, setPrivateAccountName] = useState("");
   
   // 通用字段对话框（用于电话、微信、地址）
   const [showGenericFieldDialog, setShowGenericFieldDialog] = useState(false);
@@ -218,6 +220,11 @@ export default function AddContact() {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [emailList, setEmailList] = useState<string[]>([]);
   const [currentEmail, setCurrentEmail] = useState("");
+  
+  // 微信号对话框（支持多个微信号）
+  const [showWechatDialog, setShowWechatDialog] = useState(false);
+  const [wechatList, setWechatList] = useState<string[]>([]);
+  const [currentWechat, setCurrentWechat] = useState("");
   
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
@@ -987,8 +994,16 @@ export default function AddContact() {
                                 setShowPublicAccountDialog(true);
                               } else if (field === '私户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '私户');
-                                if (existingValue) {
-                                  setSelectedPrivateAccount(existingValue.value);
+                                if (existingValue?.value) {
+                                  // 解析格式：银行 | 卡号 | 名字
+                                  const parts = existingValue.value.split('|').map(p => p.trim());
+                                  setPrivateAccountBank(parts[0] || '');
+                                  setPrivateAccountNumber(parts[1] || '');
+                                  setPrivateAccountName(parts[2] || '');
+                                } else {
+                                  setPrivateAccountBank('');
+                                  setPrivateAccountNumber('');
+                                  setPrivateAccountName('');
                                 }
                                 setShowPrivateAccountDialog(true);
                               } else if (field === '邮箱') {
@@ -1001,8 +1016,18 @@ export default function AddContact() {
                                 }
                                 setCurrentEmail('');
                                 setShowEmailDialog(true);
-                              } else if (field === '电话' || field === '微信' || field === '地址') {
-                                // 对于电话、微信、地址，使用通用的文本输入对话框
+                              } else if (field === '微信') {
+                                // 微信号使用多选对话框
+                                const existingValue = extendedFields.find(f => f.categoryName === '微信');
+                                if (existingValue?.value) {
+                                  setWechatList(existingValue.value.split(',').map(w => w.trim()));
+                                } else {
+                                  setWechatList([]);
+                                }
+                                setCurrentWechat('');
+                                setShowWechatDialog(true);
+                              } else if (field === '电话' || field === '地址') {
+                                // 对于电话、地址，使用通用的文本输入对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === field);
                                 setGenericFieldName(field);
                                 setGenericFieldValue(existingValue?.value || '');
@@ -1726,7 +1751,7 @@ export default function AddContact() {
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">选择娱乐偏好（可多选）</h3>
             <div className="grid grid-cols-3 gap-2 mb-4">
-              {['电影', '音乐', '运动', '旅游', '游戏', '阅读', 'KTV', '剔本杀', '密室逃脱', '摄影', '书法', '绘画', '舞蹈', '瑜伽', '健身', '钓鱼', '登山', '游泳'].map(entertainment => (
+              {['电影', '音乐', '运动', '旅游', '游戏', '阅读', 'KTV', '剧本杀', '密室逃脱', '摄影', '书法', '绘画', '舞蹈', '瑜伽', '健身', '钓鱼', '登山', '游泳', '上网', '攀岩', '乐器', '睡觉'].map(entertainment => (
                 <button
                   key={entertainment}
                   onClick={() => {
@@ -1975,24 +2000,48 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPrivateAccountDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">私户信息</h3>
-            <Input value={selectedPrivateAccount} onChange={(e) => setSelectedPrivateAccount(e.target.value)} placeholder="请输入私户信息" className="mb-4" />
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">银行</label>
+                <Input 
+                  value={privateAccountBank} 
+                  onChange={(e) => setPrivateAccountBank(e.target.value)} 
+                  placeholder="请输入银行名称" 
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">卡号</label>
+                <Input 
+                  value={privateAccountNumber} 
+                  onChange={(e) => setPrivateAccountNumber(e.target.value)} 
+                  placeholder="请输入银行卡号" 
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600 mb-1 block">名字</label>
+                <Input 
+                  value={privateAccountName} 
+                  onChange={(e) => setPrivateAccountName(e.target.value)} 
+                  placeholder="请输入户名" 
+                />
+              </div>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '私户');
-                setSelectedPrivateAccount(existingValue?.value || "");
                 setShowPrivateAccountDialog(false);
               }}>取消</Button>
               <Button className="flex-1" onClick={() => {
-                if (selectedPrivateAccount.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '私户');
-                    return [...filtered, { categoryId: 0, categoryName: '私户', value: selectedPrivateAccount }];
-                  });
-                  toast.success(`已设置私户：${selectedPrivateAccount}`);
-                  setShowPrivateAccountDialog(false);
-                } else {
-                  toast.error("请输入私户信息");
+                if (!privateAccountBank.trim() || !privateAccountNumber.trim() || !privateAccountName.trim()) {
+                  toast.error("请填写完整的银行卡信息");
+                  return;
                 }
+                const value = `${privateAccountBank.trim()} | ${privateAccountNumber.trim()} | ${privateAccountName.trim()}`;
+                setExtendedFields(prev => {
+                  const filtered = prev.filter(f => f.categoryName !== '私户');
+                  return [...filtered, { categoryId: 0, categoryName: '私户', value }];
+                });
+                toast.success(`已设置私户信息`);
+                setShowPrivateAccountDialog(false);
               }}>确定</Button>
             </div>
           </div>
@@ -2111,6 +2160,85 @@ export default function AddContact() {
                 });
                 toast.success(`已设置邮箱：${emailList.join(', ')}`);
                 setShowEmailDialog(false);
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 微信号对话框（支持多个微信号） */}
+      {showWechatDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowWechatDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">微信号</h3>
+            
+            {/* 已有微信号列表 */}
+            {wechatList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已添加的微信号：</p>
+                <div className="space-y-2">
+                  {wechatList.map((wechat, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                      <span className="flex-1 text-sm">{wechat}</span>
+                      <button
+                        onClick={() => setWechatList(prev => prev.filter((_, i) => i !== index))}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 添加新微信号 */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">添加新微信号：</p>
+              <Input 
+                value={currentWechat} 
+                onChange={(e) => setCurrentWechat(e.target.value)} 
+                placeholder="请输入微信号" 
+                className="mb-2" 
+              />
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  if (!currentWechat.trim()) {
+                    toast.error('请输入微信号');
+                    return;
+                  }
+                  if (wechatList.includes(currentWechat.trim())) {
+                    toast.error('该微信号已存在');
+                    return;
+                  }
+                  setWechatList(prev => [...prev, currentWechat.trim()]);
+                  setCurrentWechat('');
+                  toast.success('微信号已添加');
+                }}
+              >
+                + 添加微信号
+              </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                setShowWechatDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (wechatList.length === 0) {
+                  toast.error('请至少添加一个微信号');
+                  return;
+                }
+                setExtendedFields(prev => {
+                  const filtered = prev.filter(f => f.categoryName !== '微信');
+                  return [...filtered, { categoryId: 0, categoryName: '微信', value: wechatList.join(', ') }];
+                });
+                toast.success(`已设置微信号：${wechatList.join(', ')}`);
+                setShowWechatDialog(false);
               }}>确定</Button>
             </div>
           </div>
