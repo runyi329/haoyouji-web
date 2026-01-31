@@ -81,6 +81,38 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // 处理征信字段的特殊显示
+  const renderValue = () => {
+    if (fv.categoryName === '征信') {
+      // 解析格式：分数 | 时间
+      const parts = fv.value.split('|').map((p: string) => p.trim());
+      const score = parts[0] || '';
+      const timestamp = parts[1] || '';
+      
+      return (
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs text-muted-foreground">芝麻信用</span>
+            <span className="text-sm font-semibold text-blue-600">{score}</span>
+          </div>
+          {timestamp && (
+            <span className="text-xs text-gray-400">{timestamp}</span>
+          )}
+        </div>
+      );
+    }
+    
+    // 其他字段的正常显示
+    return (
+      <span className="text-sm">
+        {showFullInfo 
+          ? fv.value
+          : maskSensitiveInfo(fv.categoryName, fv.value)
+        }
+      </span>
+    );
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -90,13 +122,10 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
       {...listeners}
     >
       <div className="flex-1 min-w-0">
-        <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
-        <span className="text-sm">
-          {showFullInfo 
-            ? fv.value
-            : maskSensitiveInfo(fv.categoryName, fv.value)
-          }
-        </span>
+        {fv.categoryName !== '征信' && (
+          <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
+        )}
+        {renderValue()}
       </div>
     </div>
   );
