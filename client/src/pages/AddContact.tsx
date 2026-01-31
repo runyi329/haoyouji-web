@@ -805,7 +805,18 @@ export default function AddContact() {
               >
                 <SortableContext items={extendedFieldList} strategy={rectSortingStrategy}>
                   <div className="grid grid-cols-5 gap-1.5">
-                    {extendedFieldList.map(field => {
+                    {extendedFieldList
+                      .slice()
+                      .sort((a, b) => {
+                        const aHasValue = extendedFields.some(f => f.categoryName === a);
+                        const bHasValue = extendedFields.some(f => f.categoryName === b);
+                        // 已填写的排在前面
+                        if (aHasValue && !bHasValue) return -1;
+                        if (!aHasValue && bHasValue) return 1;
+                        // 如果都填写或都未填写，保持原顺序
+                        return extendedFieldList.indexOf(a) - extendedFieldList.indexOf(b);
+                      })
+                      .map(field => {
                         // 检查该字段是否已填写
                         const hasValue = extendedFields.some(f => f.categoryName === field);
                         
