@@ -236,6 +236,9 @@ export default function AddContact() {
   // 对话框提示信息（统一管理）
   const [dialogMessage, setDialogMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
+  // 保存提示信息（显示在保存按钮左边）
+  const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  
   // 基本信息折叠状态
   const [isBasicInfoCollapsed, setIsBasicInfoCollapsed] = useState(false);
   
@@ -353,24 +356,24 @@ export default function AddContact() {
           }
         } catch (error) {
           console.error('保存扩展信息失败:', error);
-          setDialogMessage({type: "error", text: "扩展信息保存失败"});
+          setSaveMessage({type: "error", text: "扩展信息保存失败"});
         }
       }
       // 记录新创建的联系人ID
       setCreatedContactId(data.id);
-      setDialogMessage({type: "success", text: "人脉添加成功"});
+      setSaveMessage({type: "success", text: "人脉添加成功"});
       // 保存成功后不跳转，留在当前页面
       // setLocation(`/parent/contacts/${data.id}`);
     },
     onError: (error) => {
-      setDialogMessage({type: "error", text: error.message || "添加失败"});
+      setSaveMessage({type: "error", text: error.message || "添加失败"});
     },
   });
   
   // 更新人脉API
   const updateContactMutation = trpc.contacts.update.useMutation({
     onSuccess: async (data) => {
-      setDialogMessage({type: "success", text: "人脉更新成功"});
+      setSaveMessage({type: "success", text: "人脉更新成功"});
       // 使缓存失效，强制重新获取数据
       await utils.contacts.get.invalidate({ id: contactId! });
       await utils.contacts.fieldValues.list.invalidate({ contactId: contactId! });
@@ -378,7 +381,7 @@ export default function AddContact() {
       // setLocation(`/parent/contacts/${contactId}`);
     },
     onError: (error) => {
-      setDialogMessage({type: "error", text: error.message || "更新失败"});
+      setSaveMessage({type: "error", text: error.message || "更新失败"});
     },
   });
   
@@ -553,8 +556,11 @@ export default function AddContact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // 清除旧的保存提示
+    setSaveMessage(null);
+    
     if (!name.trim()) {
-      setDialogMessage({type: "error", text: "请输入姓名"});
+      setSaveMessage({type: "error", text: "请输入姓名"});
       return;
     }
     
@@ -624,14 +630,14 @@ export default function AddContact() {
             {isEditMode ? "编辑人脉" : "添加人脉"}
           </h1>
           <div className="flex items-center gap-2">
-            {/* 提示信息显示在保存按钮左边 */}
-            {dialogMessage && (
+            {/* 保存提示信息显示在保存按钮左边 */}
+            {saveMessage && (
               <div className={`px-3 py-1 rounded text-sm ${
-                dialogMessage.type === "error" 
+                saveMessage.type === "error" 
                   ? "bg-red-50 text-red-700 border border-red-200" 
                   : "bg-green-50 text-green-700 border border-green-200"
               }`}>
-                {dialogMessage.text}
+                {saveMessage.text}
               </div>
             )}
             <Button
