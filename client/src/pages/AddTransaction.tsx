@@ -390,6 +390,7 @@ const AddTransaction = () => {
       categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
       transactionDate: formattedDate,
       description: note || undefined,
+      imageUrl: uploadedImages.length > 0 ? uploadedImages[0] : undefined,
     };
     
     // 只有当accountId是有效数字时才添加

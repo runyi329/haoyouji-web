@@ -382,6 +382,10 @@ export default function LedgerDetail() {
                             {record.category}
                             {record.subcategory && `–${record.subcategory}`}
                           </span>
+                          {/* 图片图标 */}
+                          {record.imageUrl && (
+                            <span className="text-gray-400 text-xs ml-0.5">📷</span>
+                          )}
                           {/* 待审批图标 */}
                           {record.approvalStatus === 'pending' && (
                             <span className="ml-1 text-red-500 text-xs flex items-center gap-0.5">

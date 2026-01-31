@@ -5371,6 +5371,7 @@ export const appRouter = router({
         categoryId: z.number(),
         subcategoryId: z.number().optional(),
         description: z.string().optional(),
+        imageUrl: z.string().optional(),
         transactionDate: z.string(),
         images: z.array(z.string()).optional(),
         memberId: z.number().optional(),

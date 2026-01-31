@@ -1589,6 +1589,7 @@ export async function addTransaction(data: {
   categoryId: number;
   subcategoryId?: number;
   description?: string;
+  imageUrl?: string;
   transactionDate: string;
   images?: string[];
   memberId?: number; // 为谁记账（默认为自己）
@@ -1650,6 +1651,7 @@ export async function addTransaction(data: {
     amount: data.amount.toString(),
     categoryId: data.categoryId,
     description: data.description || null,
+    imageUrl: data.imageUrl || null,
     recordDate: data.transactionDate,
     createdBy: data.userId,
   });
@@ -1737,6 +1739,7 @@ export async function getTransactionsList(
       amount: ledgerRecords.amount,
       categoryId: ledgerRecords.categoryId,
       description: ledgerRecords.description,
+      imageUrl: ledgerRecords.imageUrl,
       date: ledgerRecords.recordDate,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
@@ -1817,6 +1820,7 @@ export async function getTransactionsList(
       category: category?.name || '未分类',
       categoryIcon: category?.icon,
       description: record.description,
+      imageUrl: record.imageUrl,
       createdAt: record.createdAt,
       member: creator ? {
         username: creator.username,
@@ -1877,6 +1881,7 @@ export async function getTransactionDetail(
       type: ledgerRecords.type,
       date: ledgerRecords.recordDate,
       description: ledgerRecords.description,
+      imageUrl: ledgerRecords.imageUrl,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
@@ -1957,6 +1962,7 @@ export async function getTransactionDetail(
     type: transaction.type,
     date: transaction.date,
     description: transaction.description,
+    imageUrl: transaction.imageUrl,
     category: categoryName,
     subcategory: subcategoryName,
     createdBy: transaction.createdBy,
