@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Permission = "all" | "own" | "none";
 
@@ -150,12 +151,15 @@ const LedgerPermissions = () => {
             className="grid grid-cols-5 border-b border-gray-100"
           >
             {/* 成员信息 */}
-            <div className="py-4 px-2 flex items-center justify-center">
-              <img
-                src={member.userAvatar}
-                alt={member.userName}
-                className="w-10 h-10 rounded-full"
+            <div className="py-4 px-2 flex flex-col items-center justify-center gap-1">
+              <UserAvatar
+                username={member.userName}
+                avatar={member.userAvatar}
+                size="sm"
               />
+              <span className="text-xs text-gray-600 truncate max-w-[60px]">
+                {member.userName}
+              </span>
             </div>
 
             {/* 查看账目权限 */}
