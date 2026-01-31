@@ -182,6 +182,7 @@ export default function AddContact() {
   // 职业字段对话框
   const [showCompanyDialog, setShowCompanyDialog] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState("");
+  const [companyList, setCompanyList] = useState<string[]>([]);
   
   const [showIndustryDialog, setShowIndustryDialog] = useState(false);
   const [selectedIndustry, setSelectedIndustry] = useState("");
@@ -924,7 +925,13 @@ export default function AddContact() {
                               } else if (field === '公司') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公司');
                                 if (existingValue) {
-                                  setSelectedCompany(existingValue.value);
+                                  // 解析历史记录，格式：公司1; 公司2; 公司3
+                                  const companies = existingValue.value.split(';').map(c => c.trim()).filter(c => c);
+                                  setCompanyList(companies);
+                                  setSelectedCompany('');
+                                } else {
+                                  setCompanyList([]);
+                                  setSelectedCompany('');
                                 }
                                 setDialogMessage(null);
                                 setShowCompanyDialog(true);
@@ -2154,25 +2161,111 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCompanyDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">公司名称</h3>
-            <Input value={selectedCompany} onChange={(e) => setSelectedCompany(e.target.value)} placeholder="请输入公司名称" className="mb-4" />
+            
+            {/* 历史记录列表 */}
+            {companyList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">历史记录：</p>
+                <div className="space-y-2">
+                  {companyList.map((company, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-3 rounded border border-gray-200">
+                      <div className="flex-1 text-sm font-medium text-gray-900">{company}</div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedCompany(company);
+                            setDialogMessage({type: "success", text: "已加载到输入框"});
+                          }}
+                          className="text-blue-500 hover:text-blue-700"
+                          title="选择"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCompanyList(prev => prev.filter((_, i) => i !== index));
+                            setDialogMessage({type: "success", text: "已删除"});
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                          title="删除"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 输入框 */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">{companyList.length > 0 ? '添加新公司：' : '公司名称：'}</p>
+              <Input 
+                value={selectedCompany} 
+                onChange={(e) => setSelectedCompany(e.target.value)} 
+                placeholder="请输入公司名称" 
+              />
+            </div>
+            
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '公司');
-                setSelectedCompany(existingValue?.value || "");
                 setDialogMessage(null);
                 setShowCompanyDialog(false);
               }}>{extendedFields.some(f => f.categoryName === '公司') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
-                if (selectedCompany.trim()) {
+                // 检查当前输入框是否有内容
+                const hasCurrentInput = selectedCompany.trim();
+                
+                if (hasCurrentInput) {
+                  // 将当前输入框的内容添加到列表
+                  const allCompanies = [...companyList, selectedCompany.trim()];
+                  
+                  // 保存所有公司
+                  const value = allCompanies.join('; ');
                   setExtendedFields(prev => {
                     const filtered = prev.filter(f => f.categoryName !== '公司');
                     return [...filtered, { categoryId: getCategoryId('公司'),
-                        categoryName: '公司', value: selectedCompany }];
+                        categoryName: '公司', value }];
                   });
-                  setDialogMessage({type: "success", text: `已设置公司：${selectedCompany}`});
-                  setShowCompanyDialog(false);
+                  setDialogMessage({type: "success", text: `已添加${allCompanies.length}个公司`});
+                  setTimeout(() => {
+                    setDialogMessage(null);
+                    setShowCompanyDialog(false);
+                  }, 1000);
                 } else {
-                  setDialogMessage({type: "error", text: "请输入公司名称"});
+                  // 如果输入框没有内容，检查是否有历史记录
+                  if (companyList.length === 0) {
+                    setDialogMessage({type: "error", text: "请至少添加一个公司"});
+                    return;
+                  }
+                  // 保存已有的公司
+                  const value = companyList.join('; ');
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '公司');
+                    return [...filtered, { categoryId: getCategoryId('公司'),
+                        categoryName: '公司', value }];
+                  });
+                  setDialogMessage({type: "success", text: `已添加${companyList.length}个公司`});
+                  setTimeout(() => {
+                    setDialogMessage(null);
+                    setShowCompanyDialog(false);
+                  }, 1000);
                 }
               }}>确定</Button>
             </div>
