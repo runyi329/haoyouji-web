@@ -106,18 +106,10 @@ export async function getDb(forceGuest: boolean = false) {
           keepAliveInitialDelay: 0,
         });
         _db = drizzle(connection);
-        // 判断数据库类型
-        const useDevDb = process.env.USE_DEV_DB === 'true';
+        // 判断数据库类型：如果dbUrl包含腾讯云IP或域名，则是腾讯云数据库
         const isTencentCloud = dbUrl.includes('124.223.54.69') || dbUrl.includes('tencentcloud');
-        const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
-        
-        let dbType = "Manus数据库";
-        if (isTencentCloud) dbType = "腾讯云数据库";
-        else if (isLocalhost) dbType = "本地开发数据库";
-        
-        const mode = useDevDb ? '开发模式' : '生产模式';
+        const dbType = isTencentCloud ? "腾讯云数据库" : "Manus数据库";
         console.log(`[Database] 成功连接到${dbType}`);
-        console.log(`[Database] 模式: ${mode}`);
         console.log(`[Database] 连接URL: ${dbUrl.replace(/\/\/.*:.*@/, '//***:***@')}`);
       } catch (error) {
         console.warn("[Database] Failed to connect:", error);
