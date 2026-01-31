@@ -871,7 +871,7 @@ export async function updateMemberPermission(
   ledgerId: number,
   memberId: number,
   permissionType: "view" | "add" | "edit" | "delete",
-  permissionValue: "all" | "own",
+  permissionValue: "all" | "own" | "none",
   requestUserId: number
 ) {
   const db = await getLedgerDb();
