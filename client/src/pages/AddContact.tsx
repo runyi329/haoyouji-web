@@ -90,49 +90,6 @@ function SortableFieldButton({
   );
 }
 
-// 可拖拽的区域组件
-function SortableCategory({ 
-  category, 
-  children 
-}: { 
-  category: { id: string; name: string }; 
-  children: React.ReactNode;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: category.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.8 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="border-t pt-4"
-    >
-      {/* 区域拖拽手柄（隐藏，但可以长按区域标题拖拽） */}
-      <div 
-        {...attributes}
-        {...listeners}
-        className="flex items-center gap-2 mb-3 cursor-move touch-none"
-      >
-        {category.id === 'preference' && <Stethoscope className="h-5 w-5 text-gray-700" />}
-        {/* 其他分类图标将在后续添加 */}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export default function AddContact() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -258,43 +215,20 @@ export default function AddContact() {
   // 基本信息折叠状态
   const [isBasicInfoCollapsed, setIsBasicInfoCollapsed] = useState(false);
   
-  // 扩展字段区域和字段排序配置
-  interface FieldCategory {
-    id: string;
-    name: string;
-    fields: string[];
-  }
-  
-  // 默认字段配置
-  const defaultCategories: FieldCategory[] = [
-    { 
-      id: 'preference', 
-      name: '偏好',
-      fields: ['星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '饮食', '习惯', '健康', '性格', '品牌', '娱乐']
-    },
-    { 
-      id: 'career', 
-      name: '职业',
-      fields: ['公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', '税务', '人事', '公户', '私户']
-    },
-    { 
-      id: 'information', 
-      name: '信息',
-      fields: ['电话', '微信', '邮箱', '地址']
-    },
+  // 扩展字段列表（用于拖拽排序）
+  const defaultFieldList = [
+    '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', 
+    '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
+    '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', 
+    '税务', '人事', '公户', '私户',
+    '电话', '微信', '邮箱', '地址'
   ];
   
-  // 从localStorage加载或使用默认配置
-  const [extendedFieldConfig, setExtendedFieldConfig] = useState<FieldCategory[]>(() => {
-    const saved = localStorage.getItem('extendedFieldCategories');
-    return saved ? JSON.parse(saved) : defaultCategories;
+  // 从 localStorage加载或使用默认配置
+  const [extendedFieldList, setExtendedFieldList] = useState<string[]>(() => {
+    const saved = localStorage.getItem('extendedFieldList');
+    return saved ? JSON.parse(saved) : defaultFieldList;
   });
-  
-  // 保存配置到localStorage
-  const saveFieldConfig = (config: FieldCategory[]) => {
-    setExtendedFieldConfig(config);
-    localStorage.setItem('extendedFieldCategories', JSON.stringify(config));
-  };
   
   // 模糊查询相关状态
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -529,49 +463,26 @@ export default function AddContact() {
   };
   
   // 处理字段拖拽结束
-  const handleFieldDragEnd = (categoryId: string) => (event: DragEndEvent) => {
+  const handleFieldDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
-    if (over && active.id !== over.id) {
-      setExtendedFieldConfig((categories) => {
-        const categoryIndex = categories.findIndex(c => c.id === categoryId);
-        const category = categories[categoryIndex];
-        
-        const oldIndex = category.fields.findIndex((field) => field === active.id);
-        const newIndex = category.fields.findIndex((field) => field === over.id);
-        
-        const newFields = arrayMove(category.fields, oldIndex, newIndex);
-        const newCategories = [...categories];
-        newCategories[categoryIndex] = { ...category, fields: newFields };
-        
-        // 保存到localStorage
-        localStorage.setItem('extendedFieldCategories', JSON.stringify(newCategories));
-        
-        return newCategories;
-      });
-      toast.success("位置已调整");
-    }
+    if (!over || active.id === over.id) return;
+    
+    setExtendedFieldList((fields) => {
+      const oldIndex = fields.findIndex(f => f === active.id);
+      const newIndex = fields.findIndex(f => f === over.id);
+      
+      const newFields = arrayMove(fields, oldIndex, newIndex);
+      
+      // 保存到localStorage
+      localStorage.setItem('extendedFieldList', JSON.stringify(newFields));
+      
+      return newFields;
+    });
+    toast.success("位置已调整");
   };
   
-  // 处理区域拖拽结束
-  const handleCategoryDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      setExtendedFieldConfig((categories) => {
-        const oldIndex = categories.findIndex((cat) => cat.id === active.id);
-        const newIndex = categories.findIndex((cat) => cat.id === over.id);
-        
-        const newCategories = arrayMove(categories, oldIndex, newIndex);
-        
-        // 保存到localStorage
-        localStorage.setItem('extendedFieldCategories', JSON.stringify(newCategories));
-        
-        return newCategories;
-      });
-      toast.success("区域位置已调整");
-    }
-  };
+
   
   // 删除扩展信息字段
   const handleDeleteExtendedField = (index: number) => {
@@ -881,28 +792,20 @@ export default function AddContact() {
               </div>
             )}
             
-            {/* 一级分类标题 - 可拖拽区域 */}
-            <div className="space-y-4 mt-4">
+            {/* 扩展字段 - 可拖拽排序 */}
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Stethoscope className="h-5 w-5 text-gray-700" />
+              </div>
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragStart={handleDragStart}
-                onDragEnd={handleCategoryDragEnd}
+                onDragEnd={handleFieldDragEnd}
               >
-                <SortableContext items={extendedFieldConfig.map(c => c.id)}>
-                  {extendedFieldConfig.map(category => (
-                    <SortableCategory key={category.id} category={category}>
-                      {/* 二级字段方框 - 可拖拽字段 */}
-                      {category.fields.length > 0 ? (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragStart={handleDragStart}
-                          onDragEnd={handleFieldDragEnd(category.id)}
-                        >
-                          <SortableContext items={category.fields} strategy={rectSortingStrategy}>
-                            <div className="flex flex-wrap gap-2">
-                              {category.fields.map(field => {
+                <SortableContext items={extendedFieldList} strategy={rectSortingStrategy}>
+                  <div className="flex flex-wrap gap-2">
+                    {extendedFieldList.map(field => {
                         // 检查该字段是否已填写
                         const hasValue = extendedFields.some(f => f.categoryName === field);
                         
@@ -1077,16 +980,9 @@ export default function AddContact() {
                             hasValue={hasValue}
                             onClick={handleFieldClick}
                           />
-                        );
-                              })}
-                            </div>
-                          </SortableContext>
-                        </DndContext>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">暂无字段</div>
-                      )}
-                    </SortableCategory>
-                  ))}
+                      );
+                    })}
+                  </div>
                 </SortableContext>
               </DndContext>
             </div>
