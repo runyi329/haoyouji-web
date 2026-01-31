@@ -796,150 +796,175 @@ export default function AddContact() {
                                 if (existingValue) {
                                   setSelectedConstellation(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowConstellationDialog(true);
                               } else if (field === '生日') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '生日');
                                 if (existingValue) {
                                   setSelectedBirthday(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowBirthdayDialog(true);
                               } else if (field === '血型') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '血型');
                                 if (existingValue) {
                                   setSelectedBloodType(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowBloodTypeDialog(true);
                               } else if (field === '属相') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '属相');
                                 if (existingValue) {
                                   setSelectedZodiac(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowZodiacDialog(true);
                               } else if (field === '年龄') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '年龄');
                                 if (existingValue) {
                                   setSelectedAge(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowAgeDialog(true);
                               } else if (field === '身高') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '身高');
                                 if (existingValue) {
                                   setSelectedHeight(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowHeightDialog(true);
                               } else if (field === '鞋码') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '鞋码');
                                 if (existingValue) {
                                   setSelectedShoeSize(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowShoeSizeDialog(true);
                               } else if (field === '饮食') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '饮食');
                                 if (existingValue) {
                                   setSelectedDietaries(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowDietaryDialog(true);
                               } else if (field === '习惯') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '习惯');
                                 if (existingValue) {
                                   setSelectedHabits(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowHabitDialog(true);
                               } else if (field === '健康') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '健康');
                                 if (existingValue) {
                                   setSelectedHealths(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowHealthDialog(true);
                               } else if (field === '性格') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '性格');
                                 if (existingValue) {
                                   setSelectedPersonalities(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowPersonalityDialog(true);
                               } else if (field === '民族') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '民族');
                                 if (existingValue) {
                                   setSelectedEthnic(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowEthnicDialog(true);
                               } else if (field === '品牌') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '品牌');
                                 if (existingValue) {
                                   setSelectedBrands(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowBrandDialog(true);
                               } else if (field === '娱乐') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '娱乐');
                                 if (existingValue) {
                                   setSelectedEntertainments(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowEntertainmentDialog(true);
                               } else if (field === '公司') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公司');
                                 if (existingValue) {
                                   setSelectedCompany(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowCompanyDialog(true);
                               } else if (field === '行业') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '行业');
                                 if (existingValue) {
                                   setSelectedIndustry(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowIndustryDialog(true);
                               } else if (field === '类型') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '类型');
                                 if (existingValue) {
                                   setSelectedTypes(existingValue.value.split(','));
                                 }
+                                setDialogMessage(null);
                                 setShowTypeDialog(true);
                               } else if (field === '职业') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '职业');
                                 if (existingValue) {
                                   setSelectedOccupation(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowOccupationDialog(true);
                               } else if (field === '征信') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '征信');
                                 if (existingValue) {
                                   setSelectedCredit(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowCreditDialog(true);
                               } else if (field === '财务') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '财务');
                                 if (existingValue) {
                                   setSelectedFinance(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowFinanceDialog(true);
                               } else if (field === '法务') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '法务');
                                 if (existingValue) {
                                   setSelectedLegal(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowLegalDialog(true);
                               } else if (field === '劳务') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '劳务');
                                 if (existingValue) {
                                   setSelectedLabor(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowLaborDialog(true);
                               } else if (field === '税务') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '税务');
                                 if (existingValue) {
                                   setSelectedTax(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowTaxDialog(true);
                               } else if (field === '人事') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '人事');
                                 if (existingValue) {
                                   setSelectedHR(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowHRDialog(true);
                               } else if (field === '公户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公户');
                                 if (existingValue) {
                                   setSelectedPublicAccount(existingValue.value);
                                 }
+                                setDialogMessage(null);
                                 setShowPublicAccountDialog(true);
                               } else if (field === '私户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '私户');
@@ -960,6 +985,7 @@ export default function AddContact() {
                                 setPrivateAccountBank('');
                                 setPrivateAccountNumber('');
                                 setPrivateAccountName('');
+                                setDialogMessage(null);
                                 setShowPrivateAccountDialog(true);
                               } else if (field === '邮箱') {
                                 // 邮箱字段使用专门的对话框，支持多个邮箱和格式验证
@@ -970,6 +996,7 @@ export default function AddContact() {
                                   setEmailList([]);
                                 }
                                 setCurrentEmail('');
+                                setDialogMessage(null);
                                 setShowEmailDialog(true);
                               } else if (field === '微信') {
                                 // 微信号使用多选对话框
@@ -980,12 +1007,14 @@ export default function AddContact() {
                                   setWechatList([]);
                                 }
                                 setCurrentWechat('');
+                                setDialogMessage(null);
                                 setShowWechatDialog(true);
                               } else if (field === '电话' || field === '地址') {
                                 // 对于电话、地址，使用通用的文本输入对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === field);
                                 setGenericFieldName(field);
                                 setGenericFieldValue(existingValue?.value || '');
+                                setDialogMessage(null);
                                 setShowGenericFieldDialog(true);
                           }
                         };
