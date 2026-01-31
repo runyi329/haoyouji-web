@@ -209,10 +209,15 @@ export default function AddContact() {
   const [showPrivateAccountDialog, setShowPrivateAccountDialog] = useState(false);
   const [selectedPrivateAccount, setSelectedPrivateAccount] = useState("");
   
-  // 通用字段对话框（用于电话、微信、邮箱、地址）
+  // 通用字段对话框（用于电话、微信、地址）
   const [showGenericFieldDialog, setShowGenericFieldDialog] = useState(false);
   const [genericFieldName, setGenericFieldName] = useState("");
   const [genericFieldValue, setGenericFieldValue] = useState("");
+  
+  // 邮箱对话框（支持多个邮箱和格式验证）
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailList, setEmailList] = useState<string[]>([]);
+  const [currentEmail, setCurrentEmail] = useState("");
   
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
@@ -986,8 +991,18 @@ export default function AddContact() {
                                   setSelectedPrivateAccount(existingValue.value);
                                 }
                                 setShowPrivateAccountDialog(true);
-                              } else if (field === '电话' || field === '微信' || field === '邮箱' || field === '地址') {
-                                // 对于电话、微信、邮箱、地址，使用通用的文本输入对话框
+                              } else if (field === '邮箱') {
+                                // 邮箱字段使用专门的对话框，支持多个邮箱和格式验证
+                                const existingValue = extendedFields.find(f => f.categoryName === '邮箱');
+                                if (existingValue?.value) {
+                                  setEmailList(existingValue.value.split(',').map(e => e.trim()));
+                                } else {
+                                  setEmailList([]);
+                                }
+                                setCurrentEmail('');
+                                setShowEmailDialog(true);
+                              } else if (field === '电话' || field === '微信' || field === '地址') {
+                                // 对于电话、微信、地址，使用通用的文本输入对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === field);
                                 setGenericFieldName(field);
                                 setGenericFieldValue(existingValue?.value || '');
@@ -2011,6 +2026,91 @@ export default function AddContact() {
                 } else {
                   toast.error(`请输入${genericFieldName}`);
                 }
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 邮箱对话框（支持多个邮箱和格式验证） */}
+      {showEmailDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEmailDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">邮箱</h3>
+            
+            {/* 已有邮箱列表 */}
+            {emailList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已添加的邮箱：</p>
+                <div className="space-y-2">
+                  {emailList.map((email, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                      <span className="flex-1 text-sm">{email}</span>
+                      <button
+                        onClick={() => setEmailList(prev => prev.filter((_, i) => i !== index))}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 添加新邮箱 */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">添加新邮箱：</p>
+              <Input 
+                type="email"
+                value={currentEmail} 
+                onChange={(e) => setCurrentEmail(e.target.value)} 
+                placeholder="请输入邮箱地址（如：example@email.com）" 
+                className="mb-2" 
+              />
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (!currentEmail.trim()) {
+                    toast.error('请输入邮箱地址');
+                    return;
+                  }
+                  if (!emailRegex.test(currentEmail.trim())) {
+                    toast.error('邮箱格式不正确，请输入有效的邮箱地址');
+                    return;
+                  }
+                  if (emailList.includes(currentEmail.trim())) {
+                    toast.error('该邮箱已存在');
+                    return;
+                  }
+                  setEmailList(prev => [...prev, currentEmail.trim()]);
+                  setCurrentEmail('');
+                  toast.success('邮箱已添加');
+                }}
+              >
+                + 添加邮箱
+              </Button>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                setShowEmailDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                if (emailList.length === 0) {
+                  toast.error('请至少添加一个邮箱');
+                  return;
+                }
+                setExtendedFields(prev => {
+                  const filtered = prev.filter(f => f.categoryName !== '邮箱');
+                  return [...filtered, { categoryId: 0, categoryName: '邮箱', value: emailList.join(', ') }];
+                });
+                toast.success(`已设置邮箱：${emailList.join(', ')}`);
+                setShowEmailDialog(false);
               }}>确定</Button>
             </div>
           </div>
