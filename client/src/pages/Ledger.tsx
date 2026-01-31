@@ -278,7 +278,7 @@ export default function Ledger() {
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: 查看报表
+                        setLocation(`/ledger/${ledger.id}/report`);
                       }}
                     >
                       报表
