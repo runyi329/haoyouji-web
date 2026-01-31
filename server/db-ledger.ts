@@ -55,6 +55,13 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         .where(eq(ledgerMembers.ledgerId, ledger.id))
         .then((rows: any[]) => rows[0]?.count || 0);
 
+      // 获取账目数量
+      const recordCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(ledgerRecords)
+        .where(eq(ledgerRecords.ledgerId, ledger.id))
+        .then((rows: any[]) => rows[0]?.count || 0);
+
       // 获取当前用户在这个账本中的角色
       const userRole = memberRecords.find((m: any) => m.ledgerId === ledger.id)?.role || "member";
 
@@ -62,6 +69,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         ...ledger,
         members,
         memberCount,
+        recordCount,
         userRole,
       };
     })
