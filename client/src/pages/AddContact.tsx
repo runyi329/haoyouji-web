@@ -2987,28 +2987,32 @@ export default function AddContact() {
               
               return (
                 <>
-                  {hasValue ? (
+                  {hasValue && (
                     <div className="mb-4">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600 mb-2">{score}</div>
-                        <div className="text-sm text-gray-500">输入时间：{timestamp}</div>
-                        <div className="text-xs text-orange-600 mt-2">⚠️ 芝麻信用分只能输入一次，不可修改</div>
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div className="text-xs text-gray-500 mb-1">上一次记录</div>
+                        <div className="text-2xl font-bold text-blue-600 mb-1">{score}</div>
+                        <div className="text-sm text-gray-500">保存时间：{timestamp}</div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="mb-4">
-                      <label className="text-sm text-gray-600 mb-2 block">芝麻信用分</label>
-                      <Input 
-                        type="number"
-                        value={selectedCredit} 
-                        onChange={(e) => setSelectedCredit(e.target.value)} 
-                        placeholder="请输入芝麻信用分（350-950）" 
-                        min="350"
-                        max="950"
-                      />
-                      <div className="text-xs text-gray-500 mt-1">⚠️ 注意：只能输入一次，输入后不可修改</div>
-                    </div>
                   )}
+                  
+                  <div className="mb-4">
+                    <label className="text-sm text-gray-600 mb-2 block">
+                      {hasValue ? '更新芝麻信用分' : '芝麻信用分'}
+                    </label>
+                    <Input 
+                      type="number"
+                      value={selectedCredit} 
+                      onChange={(e) => setSelectedCredit(e.target.value)} 
+                      placeholder="请输入芝麻信用分（350-950）" 
+                      min="350"
+                      max="950"
+                    />
+                    {hasValue && (
+                      <div className="text-xs text-gray-500 mt-1">💡 输入新的分数将替换上一次的记录</div>
+                    )}
+                  </div>
                   
                   {/* 提示信息 */}
                   {dialogMessage && (
@@ -3028,8 +3032,7 @@ export default function AddContact() {
                       setShowCreditDialog(false);
                     }}>{extendedFields.some(f => f.categoryName === '征信') ? '返回' : '取消'}</Button>
                     
-                    {!hasValue && (
-                      <Button className="flex-1" onClick={() => {
+                    <Button className="flex-1" onClick={() => {
                         const creditScore = parseInt(selectedCredit.trim());
                         if (!selectedCredit.trim()) {
                           setDialogMessage({type: "error", text: "请输入芝麻信用分"});
@@ -3050,20 +3053,13 @@ export default function AddContact() {
                           return [...filtered, { categoryId: getCategoryId('征信'),
                         categoryName: '征信', value }];
                         });
-                        setDialogMessage({type: "success", text: `已设置芝麻信用分：${creditScore}`});
+                        setDialogMessage({type: "success", text: hasValue ? `已更新芝麻信用分：${creditScore}` : `已设置芝麻信用分：${creditScore}`});
                         setTimeout(() => {
                           setDialogMessage(null);
                           setShowCreditDialog(false);
+                          setSelectedCredit('');
                         }, 1000);
                       }}>确定</Button>
-                    )}
-                    
-                    {hasValue && (
-                      <Button className="flex-1" onClick={() => {
-                        setDialogMessage(null);
-                        setShowCreditDialog(false);
-                      }}>关闭</Button>
-                    )}
                   </div>
                 </>
               );
