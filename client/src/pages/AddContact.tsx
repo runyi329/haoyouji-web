@@ -1427,8 +1427,8 @@ export default function AddContact() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHeightDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">选择身高</h3>
-            <div className="grid grid-cols-2 gap-2 mb-4 max-h-96 overflow-y-auto">
-              {['150cm以下', '150-155cm', '155-160cm', '160-165cm', '165-170cm', '170-175cm', '175-180cm', '180-185cm', '185-190cm', '190cm以上'].map(height => (
+            <div className="grid grid-cols-4 gap-2 mb-4 max-h-96 overflow-y-auto">
+              {Array.from({ length: 71 }, (_, i) => `${140 + i}cm`).map(height => (
                 <button
                   key={height}
                   onClick={() => setSelectedHeight(height)}
