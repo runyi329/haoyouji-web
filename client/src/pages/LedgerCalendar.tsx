@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Calendar, Users, Plus } from "lucide-react";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 
 type ViewType = "balance" | "income" | "expense";
 
@@ -9,6 +10,10 @@ export default function LedgerCalendar() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const ledgerId = parseInt(id || "0");
+  
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
   
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -154,26 +159,33 @@ export default function LedgerCalendar() {
 
   return (
     <div className="min-h-screen bg-gray-100" style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* 顶部导航栏 */}
-      <div className="bg-white px-4 py-3" style={{ display: 'flex', alignItems: 'center' }}>
+      {/* 顶部导航栏 - 深色主题色 */}
+      <div 
+        className="px-4 py-3" 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          backgroundColor: themeColors.primary,
+          color: themeColors.accent1
+        }}
+      >
         <button 
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
-          className="text-gray-600"
+          style={{ color: themeColors.accent1 }}
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-center font-medium text-gray-800" style={{ flex: 1 }}>账本日历</h1>
+        <h1 className="text-center font-medium" style={{ flex: 1, color: themeColors.accent1 }}>账本日历</h1>
         <div style={{ width: '24px' }} />
       </div>
 
-      {/* 蓝色背景区域 */}
-      <div className="bg-gradient-to-b from-blue-500 to-blue-600 text-white pb-4">
+      {/* 主题色背景区域 */}
+      <div className="pb-4" style={{ backgroundColor: themeColors.primary, color: themeColors.accent1 }}>
         {/* 月份选择器和切换按钮 */}
         <div className="px-4 py-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button 
             onClick={goToNextMonth}
-            className="text-white"
-            style={{ display: 'flex', alignItems: 'center' }}
+            style={{ display: 'flex', alignItems: 'center', color: themeColors.accent1 }}
           >
             <Calendar className="w-4 h-4 mr-1" />
             <span>{currentYear}年{currentMonth}月</span>
@@ -181,68 +193,96 @@ export default function LedgerCalendar() {
           </button>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <div className="bg-white/20 rounded overflow-hidden" style={{ display: 'flex' }}>
+            <div 
+              className="rounded overflow-hidden" 
+              style={{ 
+                display: 'flex',
+                backgroundColor: `${themeColors.accent1}30`
+              }}
+            >
               <button
                 onClick={() => setViewType("balance")}
-                className={`px-3 py-1 text-sm ${
-                  viewType === "balance" 
-                    ? "bg-white text-blue-600" 
-                    : "text-white"
-                }`}
+                className="px-3 py-1 text-sm"
+                style={{
+                  backgroundColor: viewType === "balance" ? themeColors.accent1 : 'transparent',
+                  color: viewType === "balance" ? themeColors.primary : themeColors.accent1
+                }}
               >
                 结余
               </button>
               <button
                 onClick={() => setViewType("income")}
-                className={`px-3 py-1 text-sm ${
-                  viewType === "income" 
-                    ? "bg-white text-blue-600" 
-                    : "text-white"
-                }`}
+                className="px-3 py-1 text-sm"
+                style={{
+                  backgroundColor: viewType === "income" ? themeColors.accent1 : 'transparent',
+                  color: viewType === "income" ? themeColors.primary : themeColors.accent1
+                }}
               >
                 收入
               </button>
               <button
                 onClick={() => setViewType("expense")}
-                className={`px-3 py-1 text-sm ${
-                  viewType === "expense" 
-                    ? "bg-white text-blue-600" 
-                    : "text-white"
-                }`}
+                className="px-3 py-1 text-sm"
+                style={{
+                  backgroundColor: viewType === "expense" ? themeColors.accent1 : 'transparent',
+                  color: viewType === "expense" ? themeColors.primary : themeColors.accent1
+                }}
               >
                 支出
               </button>
             </div>
             
-            <button className="bg-red-500 text-white text-xs px-2 py-1 rounded">
+            <button 
+              className="text-xs px-2 py-1 rounded"
+              style={{ backgroundColor: themeColors.accent2, color: themeColors.accent1 }}
+            >
               多账本
             </button>
           </div>
         </div>
 
-        {/* 月度统计 */}
-        <div className="px-4 py-2 bg-blue-400/30 mx-4 rounded" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+        {/* 月度统计 - 使用稍浅的主题色背景 */}
+        <div 
+          className="px-4 py-2 mx-4 rounded" 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(3, 1fr)', 
+            gap: '8px',
+            backgroundColor: `${themeColors.secondary}80`
+          }}
+        >
           <div className="text-center">
-            <div className="text-xs opacity-80">{currentMonth}月收入</div>
+            <div className="text-xs" style={{ opacity: 0.9 }}>{currentMonth}月收入</div>
             <div className="text-lg font-semibold">{formatAmount(monthlyStats.income)}</div>
           </div>
           <div className="text-center">
-            <div className="text-xs opacity-80">{currentMonth}月支出</div>
+            <div className="text-xs" style={{ opacity: 0.9 }}>{currentMonth}月支出</div>
             <div className="text-lg font-semibold">{formatAmount(monthlyStats.expense)}</div>
           </div>
           <div className="text-center">
-            <div className="text-xs opacity-80">{currentMonth}月结余</div>
+            <div className="text-xs" style={{ opacity: 0.9 }}>{currentMonth}月结余</div>
             <div className="text-lg font-semibold">{formatAmount(monthlyStats.balance)}</div>
           </div>
         </div>
 
-        {/* 日历网格 - 使用表格布局 */}
-        <div className="mx-4 mt-3 bg-blue-600/50 rounded overflow-hidden">
+        {/* 日历网格 - 使用更浅的主题色背景 */}
+        <div 
+          className="mx-4 mt-3 rounded overflow-hidden"
+          style={{ backgroundColor: `${themeColors.primary}40` }}
+        >
           <table className="w-full border-collapse">
             <thead>
-              <tr>
+              <tr style={{ backgroundColor: `${themeColors.secondary}60` }}>
                 {weekDays.map((day) => (
-                  <th key={day} className="text-center text-xs py-2 text-white/80 font-normal border-b border-blue-400/30">
+                  <th 
+                    key={day} 
+                    className="text-center text-xs py-2 font-normal"
+                    style={{ 
+                      color: themeColors.accent1,
+                      opacity: 0.9,
+                      borderBottom: `1px solid ${themeColors.primary}30`
+                    }}
+                  >
                     {day}
                   </th>
                 ))}
@@ -256,7 +296,11 @@ export default function LedgerCalendar() {
                       return (
                         <td 
                           key={`empty-${rowIndex}-${colIndex}`}
-                          className="h-14 border-b border-r border-blue-400/20"
+                          className="h-14"
+                          style={{ 
+                            borderBottom: `1px solid ${themeColors.primary}20`,
+                            borderRight: `1px solid ${themeColors.primary}20`
+                          }}
                         />
                       );
                     }
@@ -268,22 +312,32 @@ export default function LedgerCalendar() {
                     return (
                       <td 
                         key={`day-${day}`}
-                        className={`h-14 text-center border-b border-r border-blue-400/20 cursor-pointer ${
-                          isSelected ? "bg-orange-100" : ""
-                        }`}
+                        className="h-14 text-center cursor-pointer"
+                        style={{ 
+                          borderBottom: `1px solid ${themeColors.primary}20`,
+                          borderRight: `1px solid ${themeColors.primary}20`,
+                          backgroundColor: isSelected ? `${themeColors.accent1}` : 'transparent'
+                        }}
                         onClick={() => setSelectedDate(day)}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                          <span className={`text-sm ${
-                            isSelected ? "font-bold text-blue-600" : "text-white"
-                          }`}>
+                          <span 
+                            className="text-sm"
+                            style={{
+                              fontWeight: isSelected ? 'bold' : 'normal',
+                              color: isSelected ? themeColors.primary : themeColors.accent1
+                            }}
+                          >
                             {day}
                           </span>
-                          <span className={`text-xs ${
-                            isSelected 
-                              ? (dayValue >= 0 ? "text-green-600" : "text-red-500")
-                              : "text-white/70"
-                          }`}>
+                          <span 
+                            className="text-xs"
+                            style={{
+                              color: isSelected 
+                                ? (dayValue >= 0 ? '#16a34a' : '#ef4444')
+                                : `${themeColors.accent1}90`
+                            }}
+                          >
                             {hasData ? dayValue.toFixed(0) : "0"}
                           </span>
                         </div>
@@ -299,7 +353,15 @@ export default function LedgerCalendar() {
 
       {/* 当日明细区域 */}
       <div className="bg-gray-100 overflow-auto" style={{ flex: 1 }}>
-        <div className="bg-white px-4 py-3 border-b" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div 
+          className="bg-white px-4 py-3" 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            borderBottom: `2px solid ${themeColors.primary}`
+          }}
+        >
           <span className="text-gray-800">
             {currentYear}年{currentMonth}月{selectedDate}日
           </span>
@@ -317,8 +379,16 @@ export default function LedgerCalendar() {
                 style={{ display: 'flex', alignItems: 'center' }}
                 onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-200 mr-3" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Users className="w-5 h-5 text-gray-400" />
+                <div 
+                  className="w-10 h-10 rounded-full mr-3" 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backgroundColor: `${themeColors.primary}20`
+                  }}
+                >
+                  <Users className="w-5 h-5" style={{ color: themeColors.primary }} />
                 </div>
                 
                 <div style={{ flex: 1 }}>
@@ -349,8 +419,13 @@ export default function LedgerCalendar() {
       <div style={{ position: 'fixed', bottom: '16px', right: '16px' }}>
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-          className="bg-blue-500 text-white px-6 py-3 rounded-full shadow-lg"
-          style={{ display: 'flex', alignItems: 'center' }}
+          className="px-6 py-3 rounded-full shadow-lg"
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            backgroundColor: themeColors.primary,
+            color: themeColors.accent1
+          }}
         >
           <Plus className="w-5 h-5 mr-1" />
           <span>记一笔</span>
