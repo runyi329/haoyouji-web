@@ -196,8 +196,8 @@ function AllDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       // 根据时间维度设置列数
-      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
-      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      const gridCols = timePeriod === "day" ? 7 : 4;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : "grid-cols-4";
       
       // 星期标题（只在日维度显示）
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -477,8 +477,8 @@ function MyDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       // 根据时间维度设置列数
-      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
-      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      const gridCols = timePeriod === "day" ? 7 : 4;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : "grid-cols-4";
       
       // 星期标题（只在日维度显示）
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -758,8 +758,8 @@ function SharedDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       // 根据时间维度设置列数
-      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
-      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      const gridCols = timePeriod === "day" ? 7 : 4;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : "grid-cols-4";
       
       // 星期标题（只在日维度显示）
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
