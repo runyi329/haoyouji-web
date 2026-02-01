@@ -670,11 +670,7 @@ export async function initializeDefaultData() {
   if (existingFieldCategories.length === 0) {
     // 创建默认字段分类
     const defaultFieldCategories = [
-      '星座', '生日', '血型', '属相', '年龄', '身高', '鞋码', '民族',
-      '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
-      '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务',
-      '税务', '人事', '公户', '私户',
-      '电话', '微信', '邮箱', '地址'
+      '手机', '邮箱', '快递地址', '银行账号', '公司名称', '开票信息'
     ];
     for (const name of defaultFieldCategories) {
       await db.insert(contactFieldCategories).values({
