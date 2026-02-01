@@ -307,7 +307,14 @@ function AllDataContent({ themeColors }: DataContentProps) {
                     className="flex items-baseline gap-0.5"
                     style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
                   >
-                    <span className="text-xl font-bold">{item.value}</span>
+                    <span 
+                      className="font-bold"
+                      style={{
+                        fontSize: item.value >= 100 ? 'clamp(0.9rem, 4vw, 1.1rem)' : 'clamp(1rem, 5vw, 1.25rem)'
+                      }}
+                    >
+                      {item.value}
+                    </span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -635,7 +642,14 @@ function MyDataContent({ themeColors }: DataContentProps) {
                     className="flex items-baseline gap-0.5"
                     style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
                   >
-                    <span className="text-xl font-bold">{item.value}</span>
+                    <span 
+                      className="font-bold"
+                      style={{
+                        fontSize: item.value >= 100 ? 'clamp(0.9rem, 4vw, 1.1rem)' : 'clamp(1rem, 5vw, 1.25rem)'
+                      }}
+                    >
+                      {item.value}
+                    </span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -964,7 +978,14 @@ function SharedDataContent({ themeColors }: DataContentProps) {
                     className="flex items-baseline gap-0.5"
                     style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
                   >
-                    <span className="text-xl font-bold">{item.value}</span>
+                    <span 
+                      className="font-bold"
+                      style={{
+                        fontSize: item.value >= 100 ? 'clamp(0.9rem, 4vw, 1.1rem)' : 'clamp(1rem, 5vw, 1.25rem)'
+                      }}
+                    >
+                      {item.value}
+                    </span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
