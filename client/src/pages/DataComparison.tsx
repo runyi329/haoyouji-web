@@ -140,7 +140,7 @@ function AllDataContent() {
   const renderChart = () => {
     const commonProps = {
       data: chartData,
-      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+      margin: { top: 5, right: 15, left: -10, bottom: 5 }
     };
 
     const commonAxisProps = {
@@ -418,7 +418,7 @@ function MyDataContent() {
   const renderChart = () => {
     const commonProps = {
       data: chartData,
-      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+      margin: { top: 5, right: 15, left: -10, bottom: 5 }
     };
 
     const commonAxisProps = {
@@ -696,7 +696,7 @@ function SharedDataContent() {
   const renderChart = () => {
     const commonProps = {
       data: chartData,
-      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+      margin: { top: 5, right: 15, left: -10, bottom: 5 }
     };
 
     const commonAxisProps = {
