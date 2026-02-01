@@ -451,25 +451,18 @@ function AllDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 大标题 */}
-      <div className="bg-white rounded-lg p-2.5">
-        <div className="flex items-center gap-1.5 mb-2.5">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 
-            className="font-medium"
-            style={{ 
-              fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)',
-              color: themeColors.primary 
-            }}
-          >
-            互动与关系健康度
-          </h2>
-        </div>
+      {/* 互动与关系健康度 - 绿色背景标题 */}
+      <div 
+        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        style={{ 
+          background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
+        }}
+      >
+        <h2 className="font-medium text-center">互动与关系健康度</h2>
+      </div>
 
-        {/* 占位内容 */}
+      {/* 占位内容 */}
+      <div className="bg-white rounded-lg p-2.5">
         <div className="h-[200px] flex items-center justify-center text-gray-400">
           数据开发中...
         </div>
@@ -811,25 +804,18 @@ function MyDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 大标题 */}
-      <div className="bg-white rounded-lg p-2.5">
-        <div className="flex items-center gap-1.5 mb-2.5">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 
-            className="font-medium"
-            style={{ 
-              fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)',
-              color: themeColors.primary 
-            }}
-          >
-            互动与关系健康度
-          </h2>
-        </div>
+      {/* 互动与关系健康度 - 绿色背景标题 */}
+      <div 
+        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        style={{ 
+          background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
+        }}
+      >
+        <h2 className="font-medium text-center">互动与关系健康度</h2>
+      </div>
 
-        {/* 占位内容 */}
+      {/* 占位内容 */}
+      <div className="bg-white rounded-lg p-2.5">
         <div className="h-[200px] flex items-center justify-center text-gray-400">
           数据开发中...
         </div>
@@ -1171,25 +1157,18 @@ function SharedDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 大标题 */}
-      <div className="bg-white rounded-lg p-2.5">
-        <div className="flex items-center gap-1.5 mb-2.5">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 
-            className="font-medium"
-            style={{ 
-              fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)',
-              color: themeColors.primary 
-            }}
-          >
-            互动与关系健康度
-          </h2>
-        </div>
+      {/* 互动与关系健康度 - 绿色背景标题 */}
+      <div 
+        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        style={{ 
+          background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
+        }}
+      >
+        <h2 className="font-medium text-center">互动与关系健康度</h2>
+      </div>
 
-        {/* 占位内容 */}
+      {/* 占位内容 */}
+      <div className="bg-white rounded-lg p-2.5">
         <div className="h-[200px] flex items-center justify-center text-gray-400">
           数据开发中...
         </div>
