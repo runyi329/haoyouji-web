@@ -458,11 +458,52 @@ export default function ContactsList() {
     // 记录联络 mutation
   const recordInteractionMutation = trpc.contacts.interactions.create.useMutation({
     onSuccess: async () => {
-      toast.success("已记录本次联络");
       // 播放成功音效
       const audio = new Audio('/success-sound.mp3');
       audio.volume = 0.5;
       audio.play().catch(err => console.log('音效播放失败:', err));
+      
+      // 显示笑脸图标+"+1"动画
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        animation: scaleInOut 1s ease-in-out;
+      `;
+      overlay.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+          <line x1="9" y1="9" x2="9.01" y2="9"></line>
+          <line x1="15" y1="9" x2="15.01" y2="9"></line>
+        </svg>
+        <span style="font-size: 4rem; font-weight: bold; color: #22c55e;">+1</span>
+      `;
+      
+      // 添加动画样式
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes scaleInOut {
+          0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+          50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(overlay);
+      
+      // 1秒后移除
+      setTimeout(() => {
+        document.body.removeChild(overlay);
+        document.head.removeChild(style);
+      }, 1000);
+      
       // 强制刷新列表数据，确保hasTodayInteraction状态更新
       await utils.contacts.list.refetch();
       setShowQuickContactDialog(false);
