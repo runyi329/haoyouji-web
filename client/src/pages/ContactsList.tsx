@@ -655,10 +655,10 @@ export default function ContactsList() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // 搜索框输入时显示下拉列表
+  // 搜索框输入时不显示下拉列表，直接在主列表显示搜索结果
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    setShowDropdown(e.target.value.trim().length > 0);
+    setShowDropdown(false); // 不显示下拉框
     setShowHistory(false);
   };
   
@@ -1083,17 +1083,32 @@ export default function ContactsList() {
           </div>
         )}
         
-        {/* 搜索框和添加按钮 */}
+        {/* 搜索框和按钮 */}
         <div className="flex gap-2 sm:gap-4">
           <div ref={searchRef} className="relative flex-1">
-            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground z-10" />
             <Input
               placeholder="搜索人脉..."
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={handleSearchFocus}
-              className="pl-7 sm:pl-10 h-8 sm:h-10 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  // 回车键也可以触发搜索
+                  console.log('搜索:', searchQuery);
+                }
+              }}
+              className="pr-8 h-8 sm:h-10 text-sm"
             />
+            {searchQuery && (
+              <X
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                onClick={() => {
+                  setSearchQuery("");
+                  setShowDropdown(false);
+                  setShowHistory(false);
+                }}
+              />
+            )}
             
             {/* 搜索下拉列表 */}
             {showDropdown && dropdownContacts.length > 0 && (
@@ -1162,22 +1177,6 @@ export default function ContactsList() {
               </div>
             )}
           </div>
-          
-          {selectedContactIds.length === 0 ? (
-            <Button 
-              onClick={() => {
-                // 进入批量选择模式，选中第一个人脉
-                if (filteredContacts && filteredContacts.length > 0) {
-                  setSelectedContactIds([filteredContacts[0].id]);
-                }
-              }}
-              variant="outline"
-              size="sm"
-              className="h-8 sm:h-10 text-xs sm:text-sm whitespace-nowrap"
-            >
-              <span>批量选择</span>
-            </Button>
-          ) : null}
           
           <Button 
             onClick={handleAddContact}

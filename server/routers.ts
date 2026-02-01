@@ -214,21 +214,16 @@ export const appRouter = router({
         imageData: z.string(), // base64 encoded image
       }))
       .mutation(async ({ ctx, input }) => {
-        // 将base64转换为buffer
-        const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        
-        // 上传到S3
-        const fileKey = `avatars/${ctx.user.id}-${nanoid()}.png`;
-        const { url } = await storagePut(fileKey, buffer, "image/png");
+        // 直接存储base64到数据库（不使用S3）
+        const avatarData = input.imageData;
         
         // 更新数据库
         const db_instance = await getDb();
         if (db_instance) {
-          await db_instance.update(users).set({ avatar: url }).where(eq(users.id, ctx.user.id));
+          await db_instance.update(users).set({ avatar: avatarData }).where(eq(users.id, ctx.user.id));
         }
         
-        return { success: true, avatarUrl: url };
+        return { success: true, avatarUrl: avatarData };
       }),
     
     // 游客模式登录（开发专用）
@@ -5502,6 +5497,60 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return await dbLedger.getPendingApprovals(input.ledgerId, ctx.user.id);
+      }),
+
+    // 导出账目为Excel
+    exportToExcel: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const ExcelJS = require('exceljs');
+        
+        // 获取账目数据
+        const transactions = await dbLedger.getTransactionsList({
+          ledgerId: input.ledgerId,
+          userId: ctx.user.id,
+          startDate: input.startDate,
+          endDate: input.endDate,
+        });
+
+        // 创建Excel工作簿
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('账目明细');
+
+        // 设置列
+        worksheet.columns = [
+          { header: '日期', key: 'date', width: 15 },
+          { header: '类型', key: 'type', width: 10 },
+          { header: '分类', key: 'category', width: 15 },
+          { header: '金额', key: 'amount', width: 15 },
+          { header: '备注', key: 'description', width: 30 },
+          { header: '创建人', key: 'creator', width: 15 },
+        ];
+
+        // 添加数据
+        transactions.records.forEach((record: any) => {
+          worksheet.addRow({
+            date: new Date(record.recordDate).toLocaleDateString('zh-CN'),
+            type: record.type === 'income' ? '收入' : '支出',
+            category: record.categoryName || '未分类',
+            amount: record.amount,
+            description: record.description || '',
+            creator: record.creatorName || '',
+          });
+        });
+
+        // 生成buffer
+        const buffer = await workbook.xlsx.writeBuffer();
+        const base64 = buffer.toString('base64');
+        
+        return {
+          data: base64,
+          filename: `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`,
+        };
       }),
   }),
   

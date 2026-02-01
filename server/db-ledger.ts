@@ -1963,6 +1963,17 @@ export async function getTransactionDetail(
   
   const memberWithAvatar = memberResult.length > 0 ? memberResult[0] : null;
   
+  // 构建分类路径
+  const categoryPath: number[] = [];
+  if (category.length > 0) {
+    if (category[0].parentId) {
+      // 有父分类，添加父分类 ID
+      categoryPath.push(category[0].parentId);
+    }
+    // 添加当前分类 ID
+    categoryPath.push(category[0].id);
+  }
+  
   return {
     id: transaction.id,
     ledgerId: transaction.ledgerId,
@@ -1971,12 +1982,15 @@ export async function getTransactionDetail(
     date: transaction.date,
     description: transaction.description,
     imageUrl: transaction.imageUrl,
+    categoryId: transaction.categoryId,
+    categoryPath,
     category: categoryName,
     subcategory: subcategoryName,
     createdBy: transaction.createdBy,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt,
     member: memberWithAvatar,
+    recordDate: transaction.date,
   };
 }
 

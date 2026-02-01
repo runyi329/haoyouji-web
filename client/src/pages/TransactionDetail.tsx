@@ -52,6 +52,17 @@ export default function TransactionDetail() {
     },
   });
 
+  // 删除mutation
+  const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("删除成功");
+      setLocation(`/ledger/${ledgerId}`);
+    },
+    onError: (error) => {
+      toast.error(error.message || "删除失败");
+    },
+  });
+
   // 处理审批
   const handleApprove = (action: 'approved' | 'rejected') => {
     setApprovalAction(action);
@@ -276,32 +287,29 @@ export default function TransactionDetail() {
       {/* 修改/删除按钮（非待审批状态或不是审批人时显示） */}
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
-          <button className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base">
+          <button 
+            onClick={() => {
+              // 跳转到添加账目页面，传递编辑参数
+              setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`);
+            }}
+            className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
+          >
             修改账目
           </button>
-          <button className="w-full py-3 bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] rounded-lg font-medium text-base">
+          <button 
+            onClick={() => {
+              if (confirm('确定要删除这条账目吗？')) {
+                deleteMutation.mutate({ recordId: transactionId });
+              }
+            }}
+            className="w-full py-3 bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] rounded-lg font-medium text-base"
+          >
             删除账目
           </button>
         </div>
       )}
 
-      {/* 底部工具栏 */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center gap-4">
-        <div className="flex items-center gap-2 flex-1">
-          <Edit className="w-5 h-5 text-gray-600" />
-          <span className="text-sm text-gray-600">给账目写文字评论</span>
-          <span className="text-xs text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded ml-auto">
-            VIP
-          </span>
-        </div>
-        <button className="p-2">
-          <Image className="w-5 h-5 text-gray-600" />
-        </button>
-        <button className="flex items-center gap-1 text-sm text-gray-900">
-          <PenTool className="w-4 h-4" />
-          <span>手写签字</span>
-        </button>
-      </div>
+
 
       {/* 审批对话框 */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>

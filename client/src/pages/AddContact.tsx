@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, ChevronDown, Stethoscope } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -196,20 +196,6 @@ export default function AddContact() {
   const [showCreditDialog, setShowCreditDialog] = useState(false);
   const [selectedCredit, setSelectedCredit] = useState("");
   
-  const [showFinanceDialog, setShowFinanceDialog] = useState(false);
-  const [selectedFinance, setSelectedFinance] = useState("");
-  
-  const [showLegalDialog, setShowLegalDialog] = useState(false);
-  const [selectedLegal, setSelectedLegal] = useState("");
-  
-  const [showLaborDialog, setShowLaborDialog] = useState(false);
-  const [selectedLabor, setSelectedLabor] = useState("");
-  
-  const [showTaxDialog, setShowTaxDialog] = useState(false);
-  const [selectedTax, setSelectedTax] = useState("");
-  
-  const [showHRDialog, setShowHRDialog] = useState(false);
-  const [selectedHR, setSelectedHR] = useState("");
   
   const [showPublicAccountDialog, setShowPublicAccountDialog] = useState(false);
   const [selectedPublicAccount, setSelectedPublicAccount] = useState("");
@@ -220,10 +206,19 @@ export default function AddContact() {
   const [privateAccountNumber, setPrivateAccountNumber] = useState("");
   const [privateAccountName, setPrivateAccountName] = useState("");
   
-  // 通用字段对话框（用于电话、微信、地址）
+  // 通用字段对话框（用于电话）
   const [showGenericFieldDialog, setShowGenericFieldDialog] = useState(false);
   const [genericFieldName, setGenericFieldName] = useState("");
   const [genericFieldValue, setGenericFieldValue] = useState("");
+  
+  // 地址对话框（支持多个地址和类型选择）
+  const [showAddressDialog, setShowAddressDialog] = useState(false);
+  const [addressList, setAddressList] = useState<{type: string, address: string, name?: string, phone?: string}[]>([]);
+  const [currentAddressType, setCurrentAddressType] = useState<string>(""); // '快递', '办公', '普通'
+  const [currentAddress, setCurrentAddress] = useState("");
+  const [currentAddressName, setCurrentAddressName] = useState("");
+  const [currentAddressPhone, setCurrentAddressPhone] = useState("");
+  const [showAddressTypeSelection, setShowAddressTypeSelection] = useState(true);
   
   // 邮箱对话框（支持多个邮箱和格式验证）
   const [showEmailDialog, setShowEmailDialog] = useState(false);
@@ -244,6 +239,11 @@ export default function AddContact() {
   // 保存提示信息（显示在保存按钮左边）
   const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
+  // Toast弹窗状态
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  
   // 基本信息折叠状态
   const [isBasicInfoCollapsed, setIsBasicInfoCollapsed] = useState(false);
   
@@ -251,25 +251,31 @@ export default function AddContact() {
   const defaultFieldList = [
     '星座', '生日', '年龄', '血型', '属相', '身高', '鞋码', '民族', '家庭', '身份',
     '饮食', '习惯', '健康', '性格', '品牌', '娱乐',
-    '公司', '行业', '类型', '职业', '征信', '财务', '法务', '劳务', 
-    '税务', '人事', '公户', '私户',
+    '公司', '行业', '类型', '职业', '征信', '公户', '私户',
     '电话', '微信', '邮箱', '地址'
   ];
   
   // 从 localStorage加载或使用默认配置
   const [extendedFieldList, setExtendedFieldList] = useState<string[]>(() => {
+    const removedFields = ['财务', '法务', '劳务', '税务', '人事'];
     const saved = localStorage.getItem('extendedFieldList');
     if (saved) {
       const savedList = JSON.parse(saved);
+      // 过滤掉已移除的字段
+      const filteredList = savedList.filter((field: string) => !removedFields.includes(field));
       // 检测是否有新字段需要添加
-      const newFields = defaultFieldList.filter(field => !savedList.includes(field));
+      const newFields = defaultFieldList.filter(field => !filteredList.includes(field));
       if (newFields.length > 0) {
         // 将新字段添加到已保存列表的末尾
-        const mergedList = [...savedList, ...newFields];
+        const mergedList = [...filteredList, ...newFields];
         localStorage.setItem('extendedFieldList', JSON.stringify(mergedList));
         return mergedList;
       }
-      return savedList;
+      // 如果过滤后的列表与原列表不同，更新localStorage
+      if (filteredList.length !== savedList.length) {
+        localStorage.setItem('extendedFieldList', JSON.stringify(filteredList));
+      }
+      return filteredList;
     }
     return defaultFieldList;
   });
@@ -374,32 +380,39 @@ export default function AddContact() {
           }
         } catch (error) {
           console.error('保存扩展信息失败:', error);
-          setSaveMessage({type: "error", text: "扩展信息保存失败"});
+          setToastMessage('扩展信息保存失败');
+          setToastType('error');
+          setShowToast(true);
+          return;
         }
       }
-      // 记录新创建的联系人ID
+      // 记录新创建的联系人 ID
       setCreatedContactId(data.id);
-      setSaveMessage({type: "success", text: "人脉添加成功"});
-      // 保存成功后不跳转，留在当前页面
-      // setLocation(`/parent/contacts/${data.id}`);
+      setToastMessage('联系人保存成功');
+      setToastType('success');
+      setShowToast(true);
     },
     onError: (error) => {
-      setSaveMessage({type: "error", text: error.message || "添加失败"});
+      setToastMessage(error.message || '保存失败');
+      setToastType('error');
+      setShowToast(true);
     },
   });
   
   // 更新人脉API
   const updateContactMutation = trpc.contacts.update.useMutation({
     onSuccess: async (data) => {
-      setSaveMessage({type: "success", text: "人脉更新成功"});
       // 使缓存失效，强制重新获取数据
       await utils.contacts.get.invalidate({ id: contactId! });
       await utils.contacts.fieldValues.list.invalidate({ contactId: contactId! });
-      // 保存成功后不跳转，留在当前页面
-      // setLocation(`/parent/contacts/${contactId}`);
+      setToastMessage('联系人保存成功');
+      setToastType('success');
+      setShowToast(true);
     },
     onError: (error) => {
-      setSaveMessage({type: "error", text: error.message || "更新失败"});
+      setToastMessage(error.message || '保存失败');
+      setToastType('error');
+      setShowToast(true);
     },
   });
   
@@ -779,9 +792,6 @@ export default function AddContact() {
             
             {/* 扩展字段 - 可拖拽排序 */}
             <div className="mt-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Stethoscope className="h-5 w-5 text-gray-700" />
-              </div>
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -963,41 +973,6 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowCreditDialog(true);
-                              } else if (field === '财务') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '财务');
-                                if (existingValue) {
-                                  setSelectedFinance(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowFinanceDialog(true);
-                              } else if (field === '法务') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '法务');
-                                if (existingValue) {
-                                  setSelectedLegal(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowLegalDialog(true);
-                              } else if (field === '劳务') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '劳务');
-                                if (existingValue) {
-                                  setSelectedLabor(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowLaborDialog(true);
-                              } else if (field === '税务') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '税务');
-                                if (existingValue) {
-                                  setSelectedTax(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowTaxDialog(true);
-                              } else if (field === '人事') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '人事');
-                                if (existingValue) {
-                                  setSelectedHR(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowHRDialog(true);
                               } else if (field === '公户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公户');
                                 if (existingValue) {
@@ -1049,14 +1024,45 @@ export default function AddContact() {
                                 setCurrentWechat('');
                                 setDialogMessage(null);
                                 setShowWechatDialog(true);
-                              } else if (field === '电话' || field === '地址') {
-                                // 对于电话、地址，使用通用的文本输入对话框
+              } else if (field === '电话' || field === '地址') {
+                // 对于电话、地址，使用通用的文本输入对话框
+                const existingValue = extendedFields.find(f => f.categoryName === field);
+                setGenericFieldName(field);
+                if (field === '地址' && existingValue?.value) {
+                  // 解析地址格式：多个地址用 ; 分隔，每个地址格式为 地址|姓名|电话
+                  const addresses = existingValue.value.split(';').map(a => a.trim()).filter(a => a);
+                  setAddressList(addresses.map(addr => {
+                    const parts = addr.split('|').map(p => p.trim());
+                    return {
+                      type: '',
+                      address: parts[0] || '',
+                      name: parts[1] || '',
+                      phone: parts[2] || ''
+                    };
+                  }));
+                  // 清空当前输入框
+                  setGenericFieldValue('');
+                  setCurrentAddressName('');
+                  setCurrentAddressPhone('');
+                } else if (field === '地址') {
+                  // 新建地址，清空所有字段
+                  setAddressList([]);
+                  setGenericFieldValue('');
+                  setCurrentAddressName('');
+                  setCurrentAddressPhone('');
+                } else {
+                  setGenericFieldValue(existingValue?.value || '');
+                }
+                setDialogMessage(null);
+                setShowGenericFieldDialog(true);
+                              } else {
+                                // 其他字段使用通用对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === field);
                                 setGenericFieldName(field);
                                 setGenericFieldValue(existingValue?.value || '');
                                 setDialogMessage(null);
                                 setShowGenericFieldDialog(true);
-                          }
+                              }
                         };
                         
                         return (
@@ -1141,7 +1147,6 @@ export default function AddContact() {
                         value: selectedConstellation,
                       }];
                     });
-                    setDialogMessage({type: "success", text: `已选择星座：${selectedConstellation}`});
                     setShowConstellationDialog(false);
                     // 不清空选择状态，下次打开时显示当前值
                   } else {
@@ -1223,7 +1228,6 @@ export default function AddContact() {
                       }];
                     });
                     
-                    setDialogMessage({type: "success", text: `已选择生日：${selectedBirthday}，属相：${zodiacAnimal}`});
                     setShowBirthdayDialog(false);
                   } else {
                     setDialogMessage({type: "error", text: "请选择生日"});
@@ -1292,7 +1296,6 @@ export default function AddContact() {
                         value: selectedBloodType,
                       }];
                     });
-                    setDialogMessage({type: "success", text: `已选择血型：${selectedBloodType}`});
                     setShowBloodTypeDialog(false);
                   } else {
                     setDialogMessage({type: "error", text: "请选择血型"});
@@ -1378,7 +1381,6 @@ export default function AddContact() {
                         value: selectedZodiac,
                       }];
                     });
-                    setDialogMessage({type: "success", text: `已选择属相：${selectedZodiac}`});
                     setShowZodiacDialog(false);
                   } else {
                     setDialogMessage({type: "error", text: "请选择属相"});
@@ -1477,7 +1479,6 @@ export default function AddContact() {
                       }];
                     });
                     
-                    setDialogMessage({type: "success", text: `已设置年龄：${age}岁，属相：${zodiacAnimal}`});
                     setShowAgeDialog(false);
                   } else {
                     setDialogMessage({type: "error", text: "请输入有效的年份"});
@@ -1536,7 +1537,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('身高'),
                         categoryName: '身高', value: selectedHeight }];
                   });
-                  setDialogMessage({type: "success", text: `已选择身高：${selectedHeight}`});
                   setShowHeightDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请选择身高"});
@@ -1592,7 +1592,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('鞋码'),
                         categoryName: '鞋码', value: selectedShoeSize }];
                   });
-                  setDialogMessage({type: "success", text: `已选择鞋码：${selectedShoeSize}`});
                   setShowShoeSizeDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请选择鞋码"});
@@ -1653,7 +1652,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('饮食'),
                         categoryName: '饮食', value: selectedDietaries.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择饮食：${selectedDietaries.join('、')}`});
                   setShowDietaryDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
@@ -1713,7 +1711,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('习惯'),
                         categoryName: '习惯', value: selectedHabits.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择习惯：${selectedHabits.join('、')}`});
                   setShowHabitDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一个习惯"});
@@ -1773,7 +1770,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('健康'),
                         categoryName: '健康', value: selectedHealths.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择健康状况：${selectedHealths.join('、')}`});
                   setShowHealthDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
@@ -1833,7 +1829,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('性格'),
                         categoryName: '性格', value: selectedPersonalities.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择性格：${selectedPersonalities.join('、')}`});
                   setShowPersonalityDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一个性格"});
@@ -1889,7 +1884,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('民族'),
                         categoryName: '民族', value: selectedEthnic }];
                   });
-                  setDialogMessage({type: "success", text: `已选择民族：${selectedEthnic}`});
                   setShowEthnicDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请选择民族"});
@@ -1949,7 +1943,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('家庭'),
                         categoryName: '家庭', value: selectedFamily.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择家庭：${selectedFamily.join('、')}`});
                   setShowFamilyDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
@@ -2026,7 +2019,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('身份'),
                         categoryName: '身份', value: selectedIdentity.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择身份：${selectedIdentity.join('、')}`});
                   setShowIdentityDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
@@ -2086,7 +2078,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('品牌'),
                         categoryName: '品牌', value: selectedBrands.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择品牌：${selectedBrands.join('、')}`});
                   setShowBrandDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一个品牌"});
@@ -2146,7 +2137,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('娱乐'),
                         categoryName: '娱乐', value: selectedEntertainments.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择娱乐：${selectedEntertainments.join('、')}`});
                   setShowEntertainmentDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一项"});
@@ -2244,11 +2234,7 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('公司'),
                         categoryName: '公司', value }];
                   });
-                  setDialogMessage({type: "success", text: `已添加${allCompanies.length}个公司`});
-                  setTimeout(() => {
-                    setDialogMessage(null);
-                    setShowCompanyDialog(false);
-                  }, 1000);
+                  setShowCompanyDialog(false);
                 } else {
                   // 如果输入框没有内容，检查是否有历史记录
                   if (companyList.length === 0) {
@@ -2262,166 +2248,7 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('公司'),
                         categoryName: '公司', value }];
                   });
-                  setDialogMessage({type: "success", text: `已添加${companyList.length}个公司`});
-                  setTimeout(() => {
-                    setDialogMessage(null);
-                    setShowCompanyDialog(false);
-                  }, 1000);
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 财务对话框 */}
-      {showFinanceDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFinanceDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">财务信息</h3>
-            <Input value={selectedFinance} onChange={(e) => setSelectedFinance(e.target.value)} placeholder="请输入财务信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '财务');
-                setSelectedFinance(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowFinanceDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '财务') ? '返回' : '取消'}</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedFinance.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '财务');
-                    return [...filtered, { categoryId: getCategoryId('财务'),
-                        categoryName: '财务', value: selectedFinance }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置财务：${selectedFinance}`});
-                  setShowFinanceDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入财务信息"});
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 法务对话框 */}
-      {showLegalDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLegalDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">法务信息</h3>
-            <Input value={selectedLegal} onChange={(e) => setSelectedLegal(e.target.value)} placeholder="请输入法务信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '法务');
-                setSelectedLegal(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowLegalDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '法务') ? '返回' : '取消'}</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedLegal.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '法务');
-                    return [...filtered, { categoryId: getCategoryId('法务'),
-                        categoryName: '法务', value: selectedLegal }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置法务：${selectedLegal}`});
-                  setShowLegalDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入法务信息"});
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 劳务对话框 */}
-      {showLaborDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLaborDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">劳务信息</h3>
-            <Input value={selectedLabor} onChange={(e) => setSelectedLabor(e.target.value)} placeholder="请输入劳务信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '劳务');
-                setSelectedLabor(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowLaborDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '劳务') ? '返回' : '取消'}</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedLabor.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '劳务');
-                    return [...filtered, { categoryId: getCategoryId('劳务'),
-                        categoryName: '劳务', value: selectedLabor }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置劳务：${selectedLabor}`});
-                  setShowLaborDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入劳务信息"});
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 税务对话框 */}
-      {showTaxDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaxDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">税务信息</h3>
-            <Input value={selectedTax} onChange={(e) => setSelectedTax(e.target.value)} placeholder="请输入税务信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '税务');
-                setSelectedTax(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowTaxDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '税务') ? '返回' : '取消'}</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedTax.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '税务');
-                    return [...filtered, { categoryId: getCategoryId('税务'),
-                        categoryName: '税务', value: selectedTax }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置税务：${selectedTax}`});
-                  setShowTaxDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入税务信息"});
-                }
-              }}>确定</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* 人事对话框 */}
-      {showHRDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHRDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">人事信息</h3>
-            <Input value={selectedHR} onChange={(e) => setSelectedHR(e.target.value)} placeholder="请输入人事信息" className="mb-4" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { 
-                const existingValue = extendedFields.find(f => f.categoryName === '人事');
-                setSelectedHR(existingValue?.value || "");
-                setDialogMessage(null);
-                setShowHRDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '人事') ? '返回' : '取消'}</Button>
-              <Button className="flex-1" onClick={() => {
-                if (selectedHR.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '人事');
-                    return [...filtered, { categoryId: getCategoryId('人事'),
-                        categoryName: '人事', value: selectedHR }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置人事：${selectedHR}`});
-                  setShowHRDialog(false);
-                } else {
-                  setDialogMessage({type: "error", text: "请输入人事信息"});
+                  setShowCompanyDialog(false);
                 }
               }}>确定</Button>
             </div>
@@ -2449,7 +2276,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('公户'),
                         categoryName: '公户', value: selectedPublicAccount }];
                   });
-                  setDialogMessage({type: "success", text: `已设置公户：${selectedPublicAccount}`});
                   setShowPublicAccountDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请输入公户信息"});
@@ -2586,11 +2412,7 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('私户'),
                         categoryName: '私户', value }];
                   });
-                  setDialogMessage({type: "success", text: `已添加${allAccounts.length}个银行卡`});
-                  setTimeout(() => {
-                    setDialogMessage(null);
-                    setShowPrivateAccountDialog(false);
-                  }, 1000);
+                  setShowPrivateAccountDialog(false);
                 } else {
                   // 如果输入框没有内容，检查是否有已添加的银行卡
                   if (privateAccountList.length === 0) {
@@ -2606,11 +2428,7 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('私户'),
                         categoryName: '私户', value }];
                   });
-                  setDialogMessage({type: "success", text: `已添加${privateAccountList.length}个银行卡`});
-                  setTimeout(() => {
-                    setDialogMessage(null);
-                    setShowPrivateAccountDialog(false);
-                  }, 1000);
+                  setShowPrivateAccountDialog(false);
                 }
               }}>确定</Button>
             </div>
@@ -2618,36 +2436,277 @@ export default function AddContact() {
         </div>
       )}
       
-      {/* 通用字段对话框（电话、微信、邮箱、地址） */}
-      {showGenericFieldDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGenericFieldDialog(false)}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">{genericFieldName}</h3>
-            <Input 
-              value={genericFieldValue} 
-              onChange={(e) => setGenericFieldValue(e.target.value)} 
-              placeholder={`请输入${genericFieldName}`} 
-              className="mb-4" 
-            />
+      {/* 地址对话框 */}
+      {showAddressDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddressDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">地址</h3>
+            
+            {/* 已有地址列表 */}
+            {addressList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已有地址：</p>
+                {addressList.map((addr, index) => (
+                  <div key={index} className="mb-3 p-3 bg-gray-50 rounded">
+                    <div className="text-sm mb-1">{addr.address}</div>
+                    <div className="text-xs text-gray-600 mb-2">
+                      {addr.name && <span>{addr.name}</span>}
+                      {addr.name && addr.phone && <span className="mx-1">·</span>}
+                      {addr.phone && <span>{addr.phone}</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                          setCurrentAddress(addr.address);
+                          setCurrentAddressName(addr.name);
+                          setCurrentAddressPhone(addr.phone);
+                          setAddressList(addressList.filter((_, i) => i !== index));
+                        }}
+                      >编辑</Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => {
+                          setAddressList(addressList.filter((_, i) => i !== index));
+                        }}
+                      >删除</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* 地址输入 */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">添加地址：</p>
+              <Input 
+                value={currentAddress} 
+                onChange={(e) => setCurrentAddress(e.target.value)} 
+                placeholder="请输入地址" 
+                className="mb-2"
+              />
+              <Input 
+                value={currentAddressName} 
+                onChange={(e) => setCurrentAddressName(e.target.value)} 
+                placeholder="姓名" 
+                className="mb-2"
+              />
+              <Input 
+                value={currentAddressPhone} 
+                onChange={(e) => setCurrentAddressPhone(e.target.value)} 
+                placeholder="手机" 
+                className="mb-2"
+              />
+              <Button 
+                size="sm"
+                onClick={() => {
+                  if (currentAddress.trim()) {
+                    setAddressList([...addressList, { 
+                      type: '', 
+                      address: currentAddress.trim(),
+                      name: currentAddressName.trim(),
+                      phone: currentAddressPhone.trim()
+                    }]);
+                    setCurrentAddress('');
+                    setCurrentAddressName('');
+                    setCurrentAddressPhone('');
+                    setDialogMessage({type: "success", text: "已添加地址"});
+                  } else {
+                    setDialogMessage({type: "error", text: "请输入地址"});
+                  }
+                }}
+              >添加</Button>
+            </div>
+            
+            {dialogMessage && (
+              <div className={`text-sm mb-4 ${dialogMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { 
-                setGenericFieldValue("");
+                setDialogMessage(null);
+                setShowAddressDialog(false);
+              }}>{extendedFields.some(f => f.categoryName === '地址') ? '返回' : '取消'}</Button>
+              <Button className="flex-1" onClick={() => {
+                if (addressList.length === 0) {
+                  setDialogMessage({type: "error", text: "请至少添加一个地址"});
+                  return;
+                }
+                // 保存地址列表，格式：地址|姓名|手机
+                const value = addressList.map(addr => 
+                  `${addr.address}|${addr.name || ''}|${addr.phone || ''}`
+                ).join('; ');
+                setExtendedFields(prev => {
+                  const filtered = prev.filter(f => f.categoryName !== '地址');
+                  return [...filtered, { categoryId: getCategoryId('地址'),
+                      categoryName: '地址', value }];
+                });
+                setDialogMessage({type: "success", text: `已添加${addressList.length}个地址`});
+                setTimeout(() => {
+                  setDialogMessage(null);
+                  setShowAddressDialog(false);
+                }, 1000);
+              }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+            {/* 通用字段对话框（用于电话、地址等） */}
+      {showGenericFieldDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGenericFieldDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">{genericFieldName}</h3>
+            
+            {/* 地址历史记录列表 */}
+            {genericFieldName === '地址' && addressList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已保存的地址：</p>
+                <div className="space-y-2">
+                  {addressList.map((addr, index) => (
+                    <div key={index} className="flex items-start gap-2 bg-gray-50 p-3 rounded border border-gray-200">
+                      <div className="flex-1 text-sm">
+                        <div className="font-medium text-gray-900 mb-1">{addr.address}</div>
+                        {(addr.name || addr.phone) && (
+                          <div className="text-gray-600 text-xs">{addr.name}{addr.name && addr.phone ? ' · ' : ''}{addr.phone}</div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setGenericFieldValue(addr.address);
+                            setCurrentAddressName(addr.name || '');
+                            setCurrentAddressPhone(addr.phone || '');
+                            setAddressList(addressList.filter((_, i) => i !== index));
+                            setDialogMessage({type: "success", text: "已加载到输入框"});
+                          }}
+                          className="text-blue-500 hover:text-blue-700"
+                          title="编辑"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setAddressList(addressList.filter((_, i) => i !== index));
+                            setDialogMessage({type: "success", text: "已删除"});
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                          title="删除"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 输入框 */}
+            <div className="mb-4">
+              {genericFieldName === '地址' && addressList.length > 0 && (
+                <p className="text-sm text-gray-600 mb-2">添加新地址：</p>
+              )}
+              <Input 
+                value={genericFieldValue} 
+                onChange={(e) => setGenericFieldValue(e.target.value)} 
+                placeholder={`请输入${genericFieldName}`} 
+                className="mb-2" 
+              />
+              {genericFieldName === '地址' && (
+                <div className="flex gap-2">
+                  <Input 
+                    value={currentAddressName} 
+                    onChange={(e) => setCurrentAddressName(e.target.value)} 
+                    placeholder="姓名" 
+                    className="w-[40%]" 
+                  />
+                  <Input 
+                    value={currentAddressPhone} 
+                    onChange={(e) => setCurrentAddressPhone(e.target.value)} 
+                    placeholder="联系电话" 
+                    className="w-[60%]" 
+                  />
+                </div>
+              )}
+            </div>
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
                 setDialogMessage(null);
                 setShowGenericFieldDialog(false);
               }}>{extendedFields.some(f => f.categoryName === genericFieldName) ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
-                if (genericFieldValue.trim()) {
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== genericFieldName);
-                    return [...filtered, { categoryId: getCategoryId(genericFieldName), categoryName: genericFieldName, value: genericFieldValue }];
-                  });
-                  setDialogMessage({type: "success", text: `已设置${genericFieldName}：${genericFieldValue}`});
-                  setShowGenericFieldDialog(false);
+                if (genericFieldName === '地址') {
+                  // 地址字段的特殊处理
+                  const hasCurrentInput = genericFieldValue.trim();
+                  
+                  if (hasCurrentInput) {
+                    // 将当前输入框的内容添加到列表
+                    const newAddress = {
+                      type: '',
+                      address: genericFieldValue.trim(),
+                      name: currentAddressName.trim(),
+                      phone: currentAddressPhone.trim()
+                    };
+                    const allAddresses = [...addressList, newAddress];
+                    
+                    // 保存所有地址
+                    const value = allAddresses.map(addr => 
+                      `${addr.address}|${addr.name || ''}|${addr.phone || ''}`
+                    ).join('; ');
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '地址');
+                      return [...filtered, { categoryId: getCategoryId('地址'), categoryName: '地址', value }];
+                    });
+                    setShowGenericFieldDialog(false);
+                  } else {
+                    // 如果输入框没有内容，检查是否有历史记录
+                    if (addressList.length === 0) {
+                      setDialogMessage({type: "error", text: "请至少添加一个地址"});
+                      return;
+                    }
+                    // 保存已有的地址
+                    const value = addressList.map(addr => 
+                      `${addr.address}|${addr.name || ''}|${addr.phone || ''}`
+                    ).join('; ');
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '地址');
+                      return [...filtered, { categoryId: getCategoryId('地址'), categoryName: '地址', value }];
+                    });
+                    setShowGenericFieldDialog(false);
+                  }
                 } else {
-                  setDialogMessage({type: "error", text: `请输入${genericFieldName}`});
+                  // 其他字段的处理
+                  if (genericFieldValue.trim()) {
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== genericFieldName);
+                      return [...filtered, { categoryId: getCategoryId(genericFieldName), categoryName: genericFieldName, value: genericFieldValue }];
+                    });
+                    setDialogMessage({type: "success", text: `已设置${genericFieldName}：${genericFieldValue}`});
+                    setShowGenericFieldDialog(false);
+                  } else {
+                    setDialogMessage({type: "error", text: `请输入${genericFieldName}`});
+                  }
                 }
-              }}>确定</Button>
-            </div>
+              }}>确定</Button>            </div>
           </div>
         </div>
       )}
@@ -2750,12 +2809,8 @@ export default function AddContact() {
                   }];
                 });
                 
-                setDialogMessage({type: "success", text: `已保存邮箱：${currentEmail.trim()}`});
-                setTimeout(() => {
-                  setDialogMessage(null);
-                  setShowEmailDialog(false);
-                  setCurrentEmail('');
-                }, 1000);
+                setShowEmailDialog(false);
+                setCurrentEmail('');
               }}>确定</Button>
             </div>
           </div>
@@ -2846,7 +2901,6 @@ export default function AddContact() {
                   return [...filtered, { categoryId: getCategoryId('微信'),
                         categoryName: '微信', value: wechatList.join(', ') }];
                 });
-                setDialogMessage({type: "success", text: `已设置微信号：${wechatList.join(', ')}`});
                 setShowWechatDialog(false);
               }}>确定</Button>
             </div>
@@ -2874,7 +2928,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('行业'),
                         categoryName: '行业', value: selectedIndustry }];
                   });
-                  setDialogMessage({type: "success", text: `已设置行业：${selectedIndustry}`});
                   setShowIndustryDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请输入行业"});
@@ -2934,7 +2987,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('类型'),
                         categoryName: '类型', value: selectedTypes.join(',') }];
                   });
-                  setDialogMessage({type: "success", text: `已选择类型：${selectedTypes.join('、')}`});
                   setShowTypeDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请至少选择一种类型"});
@@ -2965,7 +3017,6 @@ export default function AddContact() {
                     return [...filtered, { categoryId: getCategoryId('职业'),
                         categoryName: '职业', value: selectedOccupation }];
                   });
-                  setDialogMessage({type: "success", text: `已设置职业：${selectedOccupation}`});
                   setShowOccupationDialog(false);
                 } else {
                   setDialogMessage({type: "error", text: "请输入职业"});
@@ -3063,17 +3114,53 @@ export default function AddContact() {
                           return [...filtered, { categoryId: getCategoryId('征信'),
                         categoryName: '征信', value }];
                         });
-                        setDialogMessage({type: "success", text: hasValue ? `已更新芝麻信用分：${creditScore}` : `已设置芝麻信用分：${creditScore}`});
-                        setTimeout(() => {
-                          setDialogMessage(null);
-                          setShowCreditDialog(false);
-                          setSelectedCredit('');
-                        }, 1000);
+                        setShowCreditDialog(false);
+                        setSelectedCredit('');
                       }}>确定</Button>
                   </div>
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+      
+      {/* Toast弹窗 */}
+      {showToast && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowToast(false);
+          }
+        }}>
+          <div className="bg-white rounded-2xl p-6 max-w-[85%] w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">{toastMessage}</h3>
+            </div>
+            
+          <div className="flex gap-3">
+            <Button
+              onClick={() => {
+                setShowToast(false);
+                // 返回详情页
+                const targetId = createdContactId || contactId;
+                if (targetId) {
+                  setLocation(`/parent/contacts/${targetId}`);
+                }
+              }}
+              className="flex-1 py-3 rounded-full"
+            >
+              返回详情页
+            </Button>
+            <Button
+              onClick={() => {
+                setShowToast(false);
+              }}
+              variant="secondary"
+              className="flex-1 py-3 rounded-full"
+            >
+              继续编辑
+            </Button>
+          </div>
           </div>
         </div>
       )}

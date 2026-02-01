@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { trpc } from "@/lib/trpc";
+import { blobToBase64 } from "@/utils/imageUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -271,15 +272,11 @@ export default function Profile() {
     setIsCropDialogOpen(false);
 
     try {
-      // 转换为 base64
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        uploadAvatarMutation.mutate({ imageData: base64String });
-      };
-      reader.readAsDataURL(croppedImageBlob);
+      // 使用通用工具函数转换为 base64
+      const base64String = await blobToBase64(croppedImageBlob);
+      uploadAvatarMutation.mutate({ imageData: base64String });
     } catch (error) {
-      toast.error("图片处理失败");
+      toast.error(`图片处理失败: ${error instanceof Error ? error.message : '未知错误'}`);
       setIsUploading(false);
     }
   };

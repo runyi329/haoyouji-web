@@ -32,6 +32,46 @@ import {
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 
+// 图片压缩函数
+const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // 计算压缩后的尺寸
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('无法获取canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 转换为base64，使用指定的质量
+        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedBase64);
+      };
+      img.onerror = () => reject(new Error('图片加载失败'));
+    };
+    reader.onerror = () => reject(new Error('文件读取失败'));
+  });
+};
+
 type TransactionType = "expense" | "income";
 
 interface Category {
@@ -51,13 +91,26 @@ const AddTransaction = () => {
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
   const utils = trpc.useUtils();
+  
+  // 编辑模式：从 URL 参数获取要编辑的账目 ID
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('edit');
+  const isEditMode = !!editId;
+  const editTransactionId = editId ? parseInt(editId) : undefined;
+  
+  // 获取要编辑的账目详情
+  const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
+    { ledgerId, transactionId: editTransactionId! },
+    { enabled: isEditMode && !!editTransactionId }
+  );
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   
   
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
-  const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([]);
+  // 默认选中第一个预设分类（ID为2）
+  const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([2]);
   
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
   const [note, setNote] = useState("");
@@ -76,6 +129,30 @@ const AddTransaction = () => {
   // 图片上传相关
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 加载编辑数据
+  useEffect(() => {
+    if (isEditMode && editTransaction) {
+      setTransactionType(editTransaction.type as TransactionType);
+      setAmount(editTransaction.amount.toString());
+      setNote(editTransaction.description || "");
+      setSelectedDate(new Date(editTransaction.recordDate));
+      setDisplayDate(new Date(editTransaction.recordDate).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      
+      // 设置分类路径
+      if (editTransaction.categoryPath && editTransaction.categoryPath.length > 0) {
+        setSelectedCategoryPath(editTransaction.categoryPath);
+      } else if (editTransaction.categoryId) {
+        // 如果没有categoryPath，使用categoryId
+        setSelectedCategoryPath([editTransaction.categoryId]);
+      }
+      
+      // 加载图片
+      if (editTransaction.imageUrl) {
+        setUploadedImages([editTransaction.imageUrl]);
+      }
+    }
+  }, [isEditMode, editTransaction]);
 
 
 
@@ -113,6 +190,13 @@ const AddTransaction = () => {
 
   // 如果没有分类，使用预设分类
   const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
+  
+  // 当真实分类加载完成后，更新选中状态（仅在非编辑模式下）
+  useEffect(() => {
+    if (!isEditMode && topCategories.length > 0) {
+      setSelectedCategoryPath([topCategories[0].id]);
+    }
+  }, [isEditMode, topCategories.length > 0 ? topCategories[0]?.id : null]);
 
   // 动态加载子分类 - 使用固定的3个查询(最多支持3级分类)
   const level1Query = trpc.ledger.getCategories.useQuery(
@@ -194,10 +278,6 @@ const AddTransaction = () => {
     return "";
   };
 
-  // 切换交易类型时重置分类选择
-  useEffect(() => {
-    setSelectedCategoryPath([]);
-  }, [transactionType]);
 
   // 判断是否是今天
   const isToday = (date: Date) => {
@@ -365,6 +445,18 @@ const AddTransaction = () => {
       toast.error("记账失败：" + error.message);
     },
   });
+  
+  // 更新记账mutation
+  const updateTransactionMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("账目修改成功！");
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+      setLocation(`/ledger/${id}`);
+    },
+    onError: (error) => {
+      toast.error("修改失败：" + error.message);
+    },
+  });
 
   // 处理保存
   const handleSave = () => {
@@ -398,7 +490,16 @@ const AddTransaction = () => {
       payload.accountId = accountIdNum;
     }
     
-    addTransactionMutation.mutate(payload);
+    if (isEditMode && editTransactionId) {
+      // 编辑模式：调用更新API
+      updateTransactionMutation.mutate({
+        recordId: editTransactionId,
+        ...payload,
+      });
+    } else {
+      // 新增模式：调用添加API
+      addTransactionMutation.mutate(payload);
+    }
   };
 
   const calendarDays = getCalendarDays();
@@ -414,7 +515,7 @@ const AddTransaction = () => {
         <button onClick={() => setLocation(`/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-base font-semibold">添加账目</h1>
+        <h1 className="text-base font-semibold">{isEditMode ? "修改账目" : "添加账目"}</h1>
         <div className="w-5" /> {/* 占位 */}
       </div>
 
@@ -556,18 +657,26 @@ const AddTransaction = () => {
             accept="image/*"
             multiple
             className="hidden"
-            onChange={(e) => {
+            onChange={async (e) => {
               const files = e.target.files;
               if (files) {
-                Array.from(files).forEach(file => {
-                  const reader = new FileReader();
-                  reader.onload = (e) => {
-                    if (e.target?.result) {
-                      setUploadedImages(prev => [...prev, e.target!.result as string]);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                });
+                for (const file of Array.from(files)) {
+                  try {
+                    // 压缩图片
+                    const compressedImage = await compressImage(file, 800, 0.7);
+                    setUploadedImages(prev => [...prev, compressedImage]);
+                  } catch (error) {
+                    console.error('图片压缩失败:', error);
+                    // 如果压缩失败，使用原图
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                      if (e.target?.result) {
+                        setUploadedImages(prev => [...prev, e.target!.result as string]);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }
               }
             }}
           />

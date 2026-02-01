@@ -147,7 +147,7 @@ export default function RegionMap() {
                         {stat.value}
                       </span>
                       <span className="text-[10px] leading-none">
-                        {provinceShortNames[stat.name] || stat.name}
+                        {stat.name}
                       </span>
                     </button>
                   ))}

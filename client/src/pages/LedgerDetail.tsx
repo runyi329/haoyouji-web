@@ -384,7 +384,11 @@ export default function LedgerDetail() {
                           </span>
                           {/* 图片图标 */}
                           {record.imageUrl && (
-                            <span className="text-gray-400 text-xs ml-0.5">📷</span>
+                            <svg className="w-3.5 h-3.5 ml-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                              <circle cx="8.5" cy="8.5" r="1.5"/>
+                              <polyline points="21 15 16 10 5 21"/>
+                            </svg>
                           )}
                           {/* 待审批图标 */}
                           {record.approvalStatus === 'pending' && (

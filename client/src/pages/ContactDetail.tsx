@@ -64,22 +64,20 @@ function HighlightText({ text, keyword }: { text: string; keyword: string }) {
   );
 }
 
-// 可拖拽的字段项组件
-function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolean }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: fv.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+// 字段项组件
+function FieldItem({ 
+  fv, 
+  showFullInfo,
+  setToastMessage,
+  setToastType,
+  setShowToast
+}: { 
+  fv: any; 
+  showFullInfo: boolean;
+  setToastMessage: (msg: string) => void;
+  setToastType: (type: 'success' | 'error') => void;
+  setShowToast: (show: boolean) => void;
+}) {
 
   // 处理征信字段的特殊显示
   const renderValue = () => {
@@ -89,14 +87,51 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
       const score = parts[0] || '';
       const timestamp = parts[1] || '';
       
+      // 只显示年月日，去掉时分秒
+      let displayDate = timestamp;
+      if (timestamp) {
+        // 如果包含时间部分（空格分隔），只取日期部分
+        displayDate = timestamp.split(' ')[0];
+      }
+      
       return (
         <span className="text-sm">
           <span className="font-semibold">{score}分</span>
           <span className="text-muted-foreground"> (芝麻信用)</span>
-          {timestamp && (
-            <span className="text-xs text-gray-400 ml-2">{timestamp}</span>
+          {displayDate && (
+            <span className="text-xs text-gray-400 ml-2">{displayDate}</span>
           )}
         </span>
+      );
+    }
+    
+    // 处理地址字段的特殊显示（多个地址）
+    if (fv.categoryName === '地址') {
+      // 解析格式：多个地址，以分号分隔，每个地址格式：地址|姓名|手机
+      const addresses = fv.value.split(';').map((addr: string) => {
+        const parts = addr.split('|').map((p: string) => p.trim());
+        return {
+          address: parts[0] || '',
+          name: parts[1] || '',
+          phone: parts[2] || ''
+        };
+      }).filter((a: any) => a.address);
+      
+      return (
+        <div className="space-y-2 w-full">
+          {addresses.map((addr: any, index: number) => (
+            <div key={index} className="flex-1 min-w-0">
+              <div className="text-sm">{addr.address}</div>
+              {(addr.name || addr.phone) && (
+                <div className="text-xs text-gray-600 mt-1">
+                  {addr.name && <span>{addr.name}</span>}
+                  {addr.name && addr.phone && <span className="mx-1">·</span>}
+                  {addr.phone && <span>{addr.phone}</span>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       );
     }
     
@@ -111,18 +146,56 @@ function SortableFieldItem({ fv, showFullInfo }: { fv: any; showFullInfo: boolea
     );
   };
 
+  // 获取复制的文本
+  const getCopyText = () => {
+    if (fv.categoryName === '地址') {
+      // 地址字段：复制所有地址
+      const addresses = fv.value.split(';').map((addr: string) => {
+        const parts = addr.split('|').map((p: string) => p.trim());
+        return `${parts[0]}${parts[1] ? ' ' + parts[1] : ''}${parts[2] ? ' ' + parts[2] : ''}`;
+      }).filter((a: string) => a);
+      return addresses.join('\n');
+    }
+    
+    if (isBankCardField(fv.categoryName)) {
+      // 银行卡字段：使用格式化函数
+      return formatBankCardForCopy(fv.value);
+    }
+    
+    // 其他字段：直接复制值
+    return showFullInfo ? fv.value : maskSensitiveInfo(fv.categoryName, fv.value);
+  };
+  
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const copyText = getCopyText();
+    navigator.clipboard.writeText(copyText).then(() => {
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setToastMessage(`已复制：${copyText}`);
+      setToastType('success');
+      setShowToast(true);
+    }).catch(() => {
+      setToastMessage('复制失败');
+      setToastType('error');
+      setShowToast(true);
+    });
+  };
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center justify-between p-3 bg-background border rounded-lg cursor-move hover:shadow-md transition-all"
-      {...attributes}
-      {...listeners}
-    >
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-background border-b border-l border-r hover:bg-gray-50 transition-colors">
       <div className="flex-1 min-w-0">
         <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
         {renderValue()}
       </div>
+      <button
+        onClick={handleCopy}
+        className="p-1.5 hover:bg-gray-200 transition-colors flex-shrink-0"
+        title="复制"
+      >
+        <Copy className="w-4 h-4 text-gray-500" />
+      </button>
     </div>
   );
 }
@@ -504,6 +577,11 @@ export default function ContactDetail() {
   // 复制提示状态（记录哪个银行卡刚被复制）
   const [copiedBankCardId, setCopiedBankCardId] = useState<number | null>(null);
   
+  // Toast弹窗状态
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  
   // 扩展信息排序相关state
   const [sortedFieldValues, setSortedFieldValues] = useState<any[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -528,8 +606,14 @@ export default function ContactDetail() {
       setCopiedBankCardId(fieldId);
       // 1秒后清除状态
       setTimeout(() => setCopiedBankCardId(null), 1000);
+      // 显示Toast提示
+      setToastMessage(`已复制：${formattedText}`);
+      setToastType('success');
+      setShowToast(true);
     }).catch(() => {
-      toast.error('复制失败');
+      setToastMessage('复制失败');
+      setToastType('error');
+      setShowToast(true);
     });
   };
   
@@ -1169,27 +1253,18 @@ export default function ContactDetail() {
                       )}
                     </button>
                   </div>
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleFieldValueDragEnd}
-                    onDragStart={() => setIsDragging(true)}
-                  >
-                    <SortableContext
-                      items={sortedFieldValues.map(fv => fv.id)}
-                      strategy={rectSortingStrategy}
-                    >
-                      <div className="space-y-2">
-                        {sortedFieldValues.map((fv: any) => (
-                          <SortableFieldItem
-                            key={fv.id}
-                            fv={fv}
-                            showFullInfo={showFullExtendedInfo}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
+                  <div className="border-t">
+                    {sortedFieldValues.map((fv: any) => (
+                      <FieldItem
+                        key={fv.id}
+                        fv={fv}
+                        showFullInfo={showFullExtendedInfo}
+                        setToastMessage={setToastMessage}
+                        setToastType={setToastType}
+                        setShowToast={setShowToast}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
               
@@ -2180,6 +2255,32 @@ export default function ContactDetail() {
           onOpenChange={setShowCompanyReportDialog}
           companyName={selectedCompanyName}
         />
+      )}
+      
+      {/* Toast弹窗 */}
+      {showToast && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowToast(false);
+          }
+        }}>
+          <div className="bg-white rounded-2xl p-6 max-w-[85%] w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">{toastMessage}</h3>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setShowToast(false);
+                }}
+                className="flex-1 py-3 rounded-full"
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
