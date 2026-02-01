@@ -3083,25 +3083,15 @@ export default function AddContact() {
                         <span className="flex-1 text-sm">{phone}</span>
                       )}
                       <button
-                        onClick={() => {
-                          if (editingContactType === 'phone' && editingContactIndex === index) {
-                            // 保存编辑
-                            if (newContactPhone.trim()) {
-                              setContactPhoneList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactPhone.trim();
-                                return newList;
-                              });
-                            }
-                            setEditingContactType(null);
-                            setEditingContactIndex(null);
-                            setNewContactPhone('');
-                          } else {
-                            // 添加新手机号
-                            setShowAddContactInput('phone');
-                          }
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // 添加新手机号
+                          setShowAddContactInput('phone');
+                          setNewContactPhone('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3109,10 +3099,15 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
-                          setContactPhoneList(prev => prev.filter((_, i) => i !== index));
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // 删除当前手机号
+                          const newList = contactPhoneList.filter((_, i) => i !== index);
+                          setContactPhoneList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3120,15 +3115,16 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           if (editingContactType === 'phone' && editingContactIndex === index) {
                             // 保存编辑
                             if (newContactPhone.trim()) {
-                              setContactPhoneList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactPhone.trim();
-                                return newList;
-                              });
+                              const newList = [...contactPhoneList];
+                              newList[index] = newContactPhone.trim();
+                              setContactPhoneList(newList);
                             }
                             setEditingContactType(null);
                             setEditingContactIndex(null);
@@ -3140,7 +3136,7 @@ export default function AddContact() {
                             setNewContactPhone(phone);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'phone' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3208,23 +3204,14 @@ export default function AddContact() {
                         <span className="flex-1 text-sm">{wechat}</span>
                       )}
                       <button
-                        onClick={() => {
-                          if (editingContactType === 'wechat' && editingContactIndex === index) {
-                            if (newContactWechat.trim()) {
-                              setContactWechatList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactWechat.trim();
-                                return newList;
-                              });
-                            }
-                            setEditingContactType(null);
-                            setEditingContactIndex(null);
-                            setNewContactWechat('');
-                          } else {
-                            setShowAddContactInput('wechat');
-                          }
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowAddContactInput('wechat');
+                          setNewContactWechat('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3232,10 +3219,14 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
-                          setContactWechatList(prev => prev.filter((_, i) => i !== index));
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const newList = contactWechatList.filter((_, i) => i !== index);
+                          setContactWechatList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3243,14 +3234,15 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           if (editingContactType === 'wechat' && editingContactIndex === index) {
                             if (newContactWechat.trim()) {
-                              setContactWechatList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactWechat.trim();
-                                return newList;
-                              });
+                              const newList = [...contactWechatList];
+                              newList[index] = newContactWechat.trim();
+                              setContactWechatList(newList);
                             }
                             setEditingContactType(null);
                             setEditingContactIndex(null);
@@ -3261,7 +3253,7 @@ export default function AddContact() {
                             setNewContactWechat(wechat);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'wechat' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3328,23 +3320,14 @@ export default function AddContact() {
                         <span className="flex-1 text-sm">{email}</span>
                       )}
                       <button
-                        onClick={() => {
-                          if (editingContactType === 'email' && editingContactIndex === index) {
-                            if (newContactEmail.trim()) {
-                              setContactEmailList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactEmail.trim();
-                                return newList;
-                              });
-                            }
-                            setEditingContactType(null);
-                            setEditingContactIndex(null);
-                            setNewContactEmail('');
-                          } else {
-                            setShowAddContactInput('email');
-                          }
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowAddContactInput('email');
+                          setNewContactEmail('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3352,10 +3335,14 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
-                          setContactEmailList(prev => prev.filter((_, i) => i !== index));
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const newList = contactEmailList.filter((_, i) => i !== index);
+                          setContactEmailList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3363,14 +3350,15 @@ export default function AddContact() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           if (editingContactType === 'email' && editingContactIndex === index) {
                             if (newContactEmail.trim()) {
-                              setContactEmailList(prev => {
-                                const newList = [...prev];
-                                newList[index] = newContactEmail.trim();
-                                return newList;
-                              });
+                              const newList = [...contactEmailList];
+                              newList[index] = newContactEmail.trim();
+                              setContactEmailList(newList);
                             }
                             setEditingContactType(null);
                             setEditingContactIndex(null);
@@ -3381,7 +3369,7 @@ export default function AddContact() {
                             setNewContactEmail(email);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'email' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
