@@ -105,10 +105,14 @@ function AllDataContent() {
     return (total / chartData.length).toFixed(1);
   }, [chartData]);
 
-  // 获取标题文字
+  // 获取标题文字和统计信息
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
   const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉`;
-  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
+  const totalCount = useMemo(() => {
+    return chartData.reduce((sum, item) => sum + item.value, 0);
+  }, [chartData]);
+  const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
+  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -259,10 +263,13 @@ function AllDataContent() {
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">{titleText}</h2>
+        {/* 标题 + 统计信息 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-purple-600 rounded"></div>
+            <h2 className="text-lg font-medium">{titleText}</h2>
+          </div>
+          <div className="text-xs text-gray-600">{statsText}</div>
         </div>
 
         {/* 图表 */}
@@ -351,13 +358,6 @@ function AllDataContent() {
           </div>
         </div>
 
-        {/* 统计数据 */}
-        <div className="pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">{avgText}</span>
-            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -386,10 +386,14 @@ function MyDataContent() {
     return (total / chartData.length).toFixed(1);
   }, [chartData]);
 
-  // 获取标题文字
+  // 获取标题文字和统计信息
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
   const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉（我的）`;
-  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
+  const totalCount = useMemo(() => {
+    return chartData.reduce((sum, item) => sum + item.value, 0);
+  }, [chartData]);
+  const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
+  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -540,10 +544,13 @@ function MyDataContent() {
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">{titleText}</h2>
+        {/* 标题 + 统计信息 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-purple-600 rounded"></div>
+            <h2 className="text-lg font-medium">{titleText}</h2>
+          </div>
+          <div className="text-xs text-gray-600">{statsText}</div>
         </div>
 
         {/* 图表 */}
@@ -632,13 +639,7 @@ function MyDataContent() {
           </div>
         </div>
 
-        {/* 统计数据 */}
-        <div className="pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">{avgText}</span>
-            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
-          </div>
-        </div>
+
       </div>
     </div>
   );
@@ -667,10 +668,14 @@ function SharedDataContent() {
     return (total / chartData.length).toFixed(1);
   }, [chartData]);
 
-  // 获取标题文字
+  // 获取标题文字和统计信息
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
   const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉（共享）`;
-  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
+  const totalCount = useMemo(() => {
+    return chartData.reduce((sum, item) => sum + item.value, 0);
+  }, [chartData]);
+  const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
+  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -821,10 +826,13 @@ function SharedDataContent() {
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">{titleText}</h2>
+        {/* 标题 + 统计信息 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-purple-600 rounded"></div>
+            <h2 className="text-lg font-medium">{titleText}</h2>
+          </div>
+          <div className="text-xs text-gray-600">{statsText}</div>
         </div>
 
         {/* 图表 */}
@@ -913,13 +921,7 @@ function SharedDataContent() {
           </div>
         </div>
 
-        {/* 统计数据 */}
-        <div className="pt-3 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">{avgText}</span>
-            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
-          </div>
-        </div>
+
       </div>
     </div>
   );

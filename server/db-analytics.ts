@@ -209,6 +209,8 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
         const endDateStr = endDate.toISOString().slice(0, 19).replace('T', ' ');
         
+        console.log(`[Week ${i + 1}] startDate: ${startDateStr}, endDate: ${endDateStr}`);
+        
         // 格式化日期范围显示
         const startMonth = startDate.getMonth() + 1;
         const startDay = startDate.getDate();
@@ -222,7 +224,9 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
           const result = await db.execute(
             sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${startDateStr} AND createdAt <= ${endDateStr}`
           );
-          count += Number(result?.[0]?.count || 0);
+          const weekCount = Number(result?.[0]?.count || 0);
+          console.log(`[Week ${i + 1}] query result: ${weekCount}`);
+          count += weekCount;
         }
         
         stats.push({
