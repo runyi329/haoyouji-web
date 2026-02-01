@@ -129,6 +129,7 @@ function AllDataContent() {
               stroke="#9ca3af"
               width={45}
               tickFormatter={(value) => `${value}人`}
+              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
             />
             <Tooltip 
               contentStyle={{ 
@@ -149,9 +150,8 @@ function AllDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="inside" 
-                offset={10}
-                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
               />
             </Bar>
@@ -219,6 +219,7 @@ function MyDataContent() {
               stroke="#9ca3af"
               width={45}
               tickFormatter={(value) => `${value}人`}
+              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
             />
             <Tooltip 
               contentStyle={{ 
@@ -239,9 +240,8 @@ function MyDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="inside" 
-                offset={10}
-                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
               />
             </Bar>
@@ -309,6 +309,7 @@ function SharedDataContent() {
               stroke="#9ca3af"
               width={45}
               tickFormatter={(value) => `${value}人`}
+              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
             />
             <Tooltip 
               contentStyle={{ 
@@ -329,9 +330,8 @@ function SharedDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="inside" 
-                offset={10}
-                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
               />
             </Bar>
