@@ -3880,16 +3880,18 @@ export default function AddContact() {
                   setLocation(`/parent/contacts/${targetId}`);
                 }
               }}
-              className="flex-1 py-3 rounded-full"
+              className="flex-1 py-3 rounded-full text-white"
             >
               返回详情页
             </Button>
             <Button
-              onClick={() => {
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 setShowToast(false);
               }}
-              variant="secondary"
-              className="flex-1 py-3 rounded-full"
+              className="flex-1 py-3 rounded-full text-white"
             >
               继续编辑
             </Button>
