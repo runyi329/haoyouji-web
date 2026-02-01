@@ -53,7 +53,7 @@ export default function DataComparison() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex items-center">
-            <span className="font-medium">数据分析</span>
+            <span className="font-medium">人脉资产负债表</span>
           </div>
           {/* 标签页切换 - 放在标题右边 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
