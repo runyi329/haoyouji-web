@@ -195,16 +195,25 @@ function AllDataContent() {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
       
+      // 根据时间维度设置列数
+      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      
+      // 星期标题（只在日维度显示）
+      const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      
       return (
         <div className="bg-purple-600 p-1.5 rounded-lg">
-          {/* 星期标题 */}
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
-            ))}
-          </div>
+          {/* 星期标题（只在日维度显示） */}
+          {timePeriod === "day" && (
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {weekHeaders.map((day, i) => (
+                <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
+              ))}
+            </div>
+          )}
           {/* 日历格子 */}
-          <div className="grid grid-cols-7 gap-0.5">
+          <div className={`grid ${gridColsClass} gap-0.5`}>
             {chartData.map((item, index) => {
               const hasData = item.value > 0;
               return (
@@ -247,9 +256,19 @@ function AllDataContent() {
         </div>
 
         {/* 图表 */}
-        <ResponsiveContainer width="100%" height={250}>
-          {renderChart()}
-        </ResponsiveContainer>
+        {isLoading ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            加载中...
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            暂无数据
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={250}>
+            {renderChart()}
+          </ResponsiveContainer>
+        )}
 
         {/* 按钮区域：时间维度 + 图表类型 */}
         <div className="mt-3 mb-3 flex items-center justify-between gap-3">
@@ -447,16 +466,25 @@ function MyDataContent() {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
       
+      // 根据时间维度设置列数
+      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      
+      // 星期标题（只在日维度显示）
+      const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      
       return (
         <div className="bg-purple-600 p-1.5 rounded-lg">
-          {/* 星期标题 */}
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
-            ))}
-          </div>
+          {/* 星期标题（只在日维度显示） */}
+          {timePeriod === "day" && (
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {weekHeaders.map((day, i) => (
+                <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
+              ))}
+            </div>
+          )}
           {/* 日历格子 */}
-          <div className="grid grid-cols-7 gap-0.5">
+          <div className={`grid ${gridColsClass} gap-0.5`}>
             {chartData.map((item, index) => {
               const hasData = item.value > 0;
               return (
@@ -499,9 +527,19 @@ function MyDataContent() {
         </div>
 
         {/* 图表 */}
-        <ResponsiveContainer width="100%" height={250}>
-          {renderChart()}
-        </ResponsiveContainer>
+        {isLoading ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            加载中...
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            暂无数据
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={250}>
+            {renderChart()}
+          </ResponsiveContainer>
+        )}
 
         {/* 按钮区域：时间维度 + 图表类型 */}
         <div className="mt-3 mb-3 flex items-center justify-between gap-3">
@@ -699,16 +737,25 @@ function SharedDataContent() {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
       
+      // 根据时间维度设置列数
+      const gridCols = timePeriod === "day" ? 7 : timePeriod === "week" ? 4 : 3;
+      const gridColsClass = timePeriod === "day" ? "grid-cols-7" : timePeriod === "week" ? "grid-cols-4" : "grid-cols-3";
+      
+      // 星期标题（只在日维度显示）
+      const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+      
       return (
         <div className="bg-purple-600 p-1.5 rounded-lg">
-          {/* 星期标题 */}
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
-            ))}
-          </div>
+          {/* 星期标题（只在日维度显示） */}
+          {timePeriod === "day" && (
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {weekHeaders.map((day, i) => (
+                <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
+              ))}
+            </div>
+          )}
           {/* 日历格子 */}
-          <div className="grid grid-cols-7 gap-0.5">
+          <div className={`grid ${gridColsClass} gap-0.5`}>
             {chartData.map((item, index) => {
               const hasData = item.value > 0;
               return (
@@ -751,9 +798,19 @@ function SharedDataContent() {
         </div>
 
         {/* 图表 */}
-        <ResponsiveContainer width="100%" height={250}>
-          {renderChart()}
-        </ResponsiveContainer>
+        {isLoading ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            加载中...
+          </div>
+        ) : chartData.length === 0 ? (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            暂无数据
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={250}>
+            {renderChart()}
+          </ResponsiveContainer>
+        )}
 
         {/* 按钮区域：时间维度 + 图表类型 */}
         <div className="mt-3 mb-3 flex items-center justify-between gap-3">
