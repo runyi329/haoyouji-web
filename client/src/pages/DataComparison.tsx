@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 
 type TabType = "all" | "my" | "shared";
 type TimePeriodType = "day" | "week" | "month";
-type ChartType = "bar" | "line" | "area";
+type ChartType = "bar" | "line" | "calendar";
 
 export default function DataComparison() {
   const [, setLocation] = useLocation();
@@ -210,30 +210,31 @@ function AllDataContent() {
         </LineChart>
       );
     } else {
+      // 日历热力图
+      const maxValue = Math.max(...chartData.map(d => d.value));
+      const getColor = (value: number) => {
+        const intensity = value / maxValue;
+        if (intensity > 0.75) return '#7c3aed'; // 深紫色
+        if (intensity > 0.5) return '#a78bfa'; // 中紫色
+        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
+        return '#e9d5ff'; // 极浅紫色
+      };
+
       return (
-        <AreaChart {...commonProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis {...commonAxisProps.xAxis} />
-          <YAxis {...commonAxisProps.yAxis} />
-          <Tooltip {...commonAxisProps.tooltip} />
-          <Area 
-            type="monotone"
-            dataKey="value" 
-            stroke="#8b5cf6" 
-            strokeWidth={2}
-            fill="#8b5cf6"
-            fillOpacity={0.3}
-            animationBegin={0}
-            animationDuration={1500}
-            animationEasing="ease-out"
-          >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
-          </Area>
-        </AreaChart>
+        <div className="grid grid-cols-7 gap-1.5 p-2">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex flex-col items-center">
+              <div
+                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: getColor(item.value) }}
+                title={`${item.name}: ${item.value}人`}
+              >
+                <span className="text-white">{item.value}</span>
+              </div>
+              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
+            </div>
+          ))}
+        </div>
       );
     }
   };
@@ -312,14 +313,14 @@ function AllDataContent() {
               折线图
             </button>
             <button
-              onClick={() => setChartType("area")}
+              onClick={() => setChartType("calendar")}
               className={`px-3 py-1 text-sm ${
-                chartType === "area" 
+                chartType === "calendar"
                   ? "bg-white text-purple-600" 
                   : "text-gray-600"
               }`}
             >
-              面积图
+              日历图
             </button>
           </div>
         </div>
@@ -464,30 +465,31 @@ function MyDataContent() {
         </LineChart>
       );
     } else {
+      // 日历热力图
+      const maxValue = Math.max(...chartData.map(d => d.value));
+      const getColor = (value: number) => {
+        const intensity = value / maxValue;
+        if (intensity > 0.75) return '#7c3aed'; // 深紫色
+        if (intensity > 0.5) return '#a78bfa'; // 中紫色
+        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
+        return '#e9d5ff'; // 极浅紫色
+      };
+
       return (
-        <AreaChart {...commonProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis {...commonAxisProps.xAxis} />
-          <YAxis {...commonAxisProps.yAxis} />
-          <Tooltip {...commonAxisProps.tooltip} />
-          <Area 
-            type="monotone"
-            dataKey="value" 
-            stroke="#8b5cf6" 
-            strokeWidth={2}
-            fill="#8b5cf6"
-            fillOpacity={0.3}
-            animationBegin={0}
-            animationDuration={1500}
-            animationEasing="ease-out"
-          >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
-          </Area>
-        </AreaChart>
+        <div className="grid grid-cols-7 gap-1.5 p-2">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex flex-col items-center">
+              <div
+                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: getColor(item.value) }}
+                title={`${item.name}: ${item.value}人`}
+              >
+                <span className="text-white">{item.value}</span>
+              </div>
+              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
+            </div>
+          ))}
+        </div>
       );
     }
   };
@@ -566,14 +568,14 @@ function MyDataContent() {
               折线图
             </button>
             <button
-              onClick={() => setChartType("area")}
+              onClick={() => setChartType("calendar")}
               className={`px-3 py-1 text-sm ${
-                chartType === "area" 
+                chartType === "calendar" 
                   ? "bg-white text-purple-600" 
                   : "text-gray-600"
               }`}
             >
-              面积图
+              日历图
             </button>
           </div>
         </div>
@@ -718,30 +720,31 @@ function SharedDataContent() {
         </LineChart>
       );
     } else {
+      // 日历热力图
+      const maxValue = Math.max(...chartData.map(d => d.value));
+      const getColor = (value: number) => {
+        const intensity = value / maxValue;
+        if (intensity > 0.75) return '#7c3aed'; // 深紫色
+        if (intensity > 0.5) return '#a78bfa'; // 中紫色
+        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
+        return '#e9d5ff'; // 极浅紫色
+      };
+
       return (
-        <AreaChart {...commonProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis {...commonAxisProps.xAxis} />
-          <YAxis {...commonAxisProps.yAxis} />
-          <Tooltip {...commonAxisProps.tooltip} />
-          <Area 
-            type="monotone"
-            dataKey="value" 
-            stroke="#8b5cf6" 
-            strokeWidth={2}
-            fill="#8b5cf6"
-            fillOpacity={0.3}
-            animationBegin={0}
-            animationDuration={1500}
-            animationEasing="ease-out"
-          >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
-          </Area>
-        </AreaChart>
+        <div className="grid grid-cols-7 gap-1.5 p-2">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex flex-col items-center">
+              <div
+                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ backgroundColor: getColor(item.value) }}
+                title={`${item.name}: ${item.value}人`}
+              >
+                <span className="text-white">{item.value}</span>
+              </div>
+              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
+            </div>
+          ))}
+        </div>
       );
     }
   };
@@ -820,14 +823,14 @@ function SharedDataContent() {
               折线图
             </button>
             <button
-              onClick={() => setChartType("area")}
+              onClick={() => setChartType("calendar")}
               className={`px-3 py-1 text-sm ${
-                chartType === "area" 
+                chartType === "calendar" 
                   ? "bg-white text-purple-600" 
                   : "text-gray-600"
               }`}
             >
-              面积图
+              日历图
             </button>
           </div>
         </div>
