@@ -214,16 +214,49 @@ export const appRouter = router({
         imageData: z.string(), // base64 encoded image
       }))
       .mutation(async ({ ctx, input }) => {
-        // 直接存储base64到数据库（不使用S3）
-        const avatarData = input.imageData;
-        
-        // 更新数据库
-        const db_instance = await getDb();
-        if (db_instance) {
-          await db_instance.update(users).set({ avatar: avatarData }).where(eq(users.id, ctx.user.id));
+        try {
+          // 使用Manus存储API上传图片
+          const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // 调用Manus存储API
+          const formData = new FormData();
+          const blob = new Blob([buffer], { type: 'image/jpeg' });
+          formData.append('file', blob, `avatar-${ctx.user.id}-${Date.now()}.jpg`);
+          
+          const uploadResponse = await fetch(process.env.BUILT_IN_FORGE_API_URL || 'https://api.manus.im/api/forge', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.BUILT_IN_FORGE_API_KEY || process.env.OPENAI_API_KEY}`,
+            },
+            body: formData,
+          });
+          
+          if (!uploadResponse.ok) {
+            throw new Error('上传到存储服务失败');
+          }
+          
+          const uploadResult = await uploadResponse.json();
+          const avatarUrl = uploadResult.url || uploadResult.file_url;
+          
+          if (!avatarUrl) {
+            throw new Error('未获取到图片URL');
+          }
+          
+          // 更新数据库，存储URL而不是base64
+          const db_instance = await getDb();
+          if (db_instance) {
+            await db_instance.update(users).set({ avatar: avatarUrl }).where(eq(users.id, ctx.user.id));
+          }
+          
+          return { success: true, avatarUrl: avatarUrl };
+        } catch (error) {
+          console.error('[uploadAvatar] 错误:', error);
+          throw new TRPCError({ 
+            code: 'INTERNAL_SERVER_ERROR', 
+            message: `头像上传失败: ${error instanceof Error ? error.message : '未知错误'}` 
+          });
         }
-        
-        return { success: true, avatarUrl: avatarData };
       }),
     
     // 游客模式登录（开发专用）
