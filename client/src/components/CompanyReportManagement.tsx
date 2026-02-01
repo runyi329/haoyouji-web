@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Upload, Loader2, Eye, Edit, Trash2 } from 'lucide-react';
+import { Upload, Loader2, Eye, Edit, Trash2, FileText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { CompanyReportDialog } from '@/components/CompanyReportDialog';
 import { CompanyReportIcon } from '@/components/CompanyReportIcon';
