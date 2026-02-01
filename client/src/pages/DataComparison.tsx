@@ -245,10 +245,11 @@ function AllDataContent() {
                   }`}>
                     {item.name}
                   </div>
-                  <div className={`text-sm font-bold ${
+                  <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    {item.value}
+                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-[8px]">人</span>
                   </div>
                 </div>
               );
@@ -520,10 +521,11 @@ function MyDataContent() {
                   }`}>
                     {item.name}
                   </div>
-                  <div className={`text-sm font-bold ${
+                  <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    {item.value}
+                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-[8px]">人</span>
                   </div>
                 </div>
               );
@@ -795,10 +797,11 @@ function SharedDataContent() {
                   }`}>
                     {item.name}
                   </div>
-                  <div className={`text-sm font-bold ${
+                  <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    {item.value}
+                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-[8px]">人</span>
                   </div>
                 </div>
               );
