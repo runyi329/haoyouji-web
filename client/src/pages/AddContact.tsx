@@ -2624,37 +2624,6 @@ export default function AddContact() {
             )}
             
             <div className="flex gap-2">
-              {/* 添加/保存按钮 */}
-              <Button 
-                variant="outline" 
-                className="flex-1" 
-                onClick={() => {
-                  if (!currentPhone.trim()) {
-                    setDialogMessage({type: "error", text: '请输入电话号码'});
-                    return;
-                  }
-                  
-                  if (editingPhoneIndex !== null) {
-                    // 编辑模式：更新已有电话
-                    setPhoneList(prev => {
-                      const newList = [...prev];
-                      newList[editingPhoneIndex] = currentPhone.trim();
-                      return newList;
-                    });
-                    setEditingPhoneIndex(null);
-                    setCurrentPhone('');
-                    setDialogMessage({type: "success", text: '已更新'});
-                  } else {
-                    // 添加模式：添加新电话
-                    setPhoneList(prev => [...prev, currentPhone.trim()]);
-                    setCurrentPhone('');
-                    setDialogMessage({type: "success", text: '已添加'});
-                  }
-                }}
-              >
-                {editingPhoneIndex !== null ? '保存修改' : '添加'}
-              </Button>
-              
               {/* 取消按钮 */}
               <Button 
                 variant="outline" 
