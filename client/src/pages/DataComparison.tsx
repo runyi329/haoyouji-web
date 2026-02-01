@@ -93,7 +93,7 @@ function AllDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= count; i++) {
+      for (let i = 1; i <= 30; i++) {
         data.push({
           name: `${i}天`,
           value: Math.floor(Math.random() * 10) + 1,
@@ -125,8 +125,8 @@ function AllDataContent() {
 
   // 获取标题文字
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
-  const titleText = `最近12${periodText}新增人脉`;
-  const avgText = `12${periodText}平均新增`;
+  const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉`;
+  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
 
   // 渲染图表
   const renderChart = () => {
@@ -361,7 +361,7 @@ function MyDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= count; i++) {
+      for (let i = 1; i <= 30; i++) {
         data.push({
           name: `${i}天`,
           value: Math.floor(Math.random() * 8) + 1,
@@ -393,8 +393,8 @@ function MyDataContent() {
 
   // 获取标题文字
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
-  const titleText = `最近12${periodText}新增人脉（我的）`;
-  const avgText = `12${periodText}平均新增`;
+  const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉（我的）`;
+  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
 
   // 渲染图表
   const renderChart = () => {
@@ -629,7 +629,7 @@ function SharedDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= count; i++) {
+      for (let i = 1; i <= 30; i++) {
         data.push({
           name: `${i}天`,
           value: Math.floor(Math.random() * 5) + 1,
@@ -661,8 +661,8 @@ function SharedDataContent() {
 
   // 获取标题文字
   const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
-  const titleText = `最近12${periodText}新增人脉（共享）`;
-  const avgText = `12${periodText}平均新增`;
+  const titleText = `最近${timePeriod === "day" ? 30 : 12}${periodText}新增人脉（共享）`;
+  const avgText = `${timePeriod === "day" ? 30 : 12}${periodText}平均新增`;
 
   // 渲染图表
   const renderChart = () => {
