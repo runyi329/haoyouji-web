@@ -837,6 +837,7 @@ export default function ContactDetail() {
   const [showReferrerDialog, setShowReferrerDialog] = useState(false);
   const [showQuickContactDialog, setShowQuickContactDialog] = useState(false);
   const [quickContactNote, setQuickContactNote] = useState("");
+  const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
   const [showDeleteInteractionDialog, setShowDeleteInteractionDialog] = useState(false);
   const [interactionToDelete, setInteractionToDelete] = useState<any>(null);
   const [showEditInteractionDialog, setShowEditInteractionDialog] = useState(false);
@@ -1178,12 +1179,17 @@ export default function ContactDetail() {
     },
   });
 
-  // 快速记录联络（支持可选备注）
+  // 快速记录联络（支持可选备注和联络方式）
   const quickRecordInteraction = () => {
-    const note = quickContactNote.trim() || "快捷联络";
+    let note = quickContactNote.trim() || "快捷联络";
+    // 如果选择了联络方式，添加到备注中
+    if (contactMethod) {
+      note = `${contactMethod} - ${note}`;
+    }
     createInteraction.mutate({ contactId, note });
     setShowQuickContactDialog(false);
     setQuickContactNote("");
+    setContactMethod("");
   };
 
   // 删除联络记录
@@ -2106,6 +2112,7 @@ export default function ContactDetail() {
         setShowQuickContactDialog(open);
         if (!open) {
           setQuickContactNote("");
+          setContactMethod("");
         }
       }}>
         <DialogContent>
@@ -2119,6 +2126,48 @@ export default function ContactDetail() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-3">
+            {!contact?.hasTodayInteraction && (
+              <>
+                {/* 联络方式选择（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={contactMethod === "会面" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "会面" ? "" : "会面")}
+                      className="flex-1"
+                    >
+                      会面
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "电话" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "电话" ? "" : "电话")}
+                      className="flex-1"
+                    >
+                      电话
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "微信" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "微信" ? "" : "微信")}
+                      className="flex-1"
+                    >
+                      微信
+                    </Button>
+                  </div>
+                </div>
+                {/* 备注输入 */}
+                <div className="w-full">
+                  <Input
+                    placeholder="输入备注（可选）"
+                    value={quickContactNote}
+                    onChange={(e) => setQuickContactNote(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <Button 
               onClick={quickRecordInteraction}
               disabled={createInteraction.isPending || contact?.hasTodayInteraction}
@@ -2133,15 +2182,6 @@ export default function ContactDetail() {
             >
               取消
             </Button>
-            {!contact?.hasTodayInteraction && (
-              <div className="w-full">
-                <Input
-                  placeholder="输入备注（可选）"
-                  value={quickContactNote}
-                  onChange={(e) => setQuickContactNote(e.target.value)}
-                />
-              </div>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

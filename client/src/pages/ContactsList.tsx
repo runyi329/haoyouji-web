@@ -318,6 +318,7 @@ export default function ContactsList() {
   const [showQuickContactDialog, setShowQuickContactDialog] = useState(false);
   const [contactToRecord, setContactToRecord] = useState<any>(null);
   const [quickContactNote, setQuickContactNote] = useState("");
+  const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
   
   // 互动记录对话框状态
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
@@ -689,7 +690,11 @@ export default function ContactsList() {
   
   const confirmRecordInteraction = () => {
     if (contactToRecord) {
-      const note = quickContactNote.trim() || "快捷联络";
+      let note = quickContactNote.trim() || "快捷联络";
+      // 如果选择了联络方式，添加到备注中
+      if (contactMethod) {
+        note = `${contactMethod} - ${note}`;
+      }
       recordInteractionMutation.mutate({ 
         contactId: contactToRecord.id,
         note
@@ -700,6 +705,7 @@ export default function ContactsList() {
         }
       });
       setQuickContactNote("");
+      setContactMethod("");
     }
   };
   
@@ -2149,6 +2155,7 @@ export default function ContactsList() {
         if (!open) {
           setContactToRecord(null);
           setQuickContactNote("");
+          setContactMethod("");
         }
       }}>
         <DialogContent>
@@ -2162,6 +2169,48 @@ export default function ContactsList() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-3">
+            {!contactToRecord?.hasTodayInteraction && (
+              <>
+                {/* 联络方式选择（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={contactMethod === "会面" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "会面" ? "" : "会面")}
+                      className="flex-1"
+                    >
+                      会面
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "电话" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "电话" ? "" : "电话")}
+                      className="flex-1"
+                    >
+                      电话
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "微信" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "微信" ? "" : "微信")}
+                      className="flex-1"
+                    >
+                      微信
+                    </Button>
+                  </div>
+                </div>
+                {/* 备注输入 */}
+                <div className="w-full">
+                  <Input
+                    placeholder="输入备注（可选）"
+                    value={quickContactNote}
+                    onChange={(e) => setQuickContactNote(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <Button 
               onClick={confirmRecordInteraction}
               disabled={recordInteractionMutation.isPending || contactToRecord?.hasTodayInteraction}
@@ -2175,20 +2224,12 @@ export default function ContactsList() {
                 setShowQuickContactDialog(false);
                 setContactToRecord(null);
                 setQuickContactNote("");
+                setContactMethod("");
               }}
               className="w-full"
             >
               取消
             </Button>
-            {!contactToRecord?.hasTodayInteraction && (
-              <div className="w-full">
-                <Input
-                  placeholder="输入备注（可选）"
-                  value={quickContactNote}
-                  onChange={(e) => setQuickContactNote(e.target.value)}
-                />
-              </div>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
