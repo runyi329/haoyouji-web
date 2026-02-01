@@ -186,7 +186,7 @@ function AllDataContent() {
 
         {/* 时间维度切换按钮 */}
         <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
@@ -337,7 +337,7 @@ function MyDataContent() {
 
         {/* 时间维度切换按钮 */}
         <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
@@ -488,7 +488,7 @@ function SharedDataContent() {
 
         {/* 时间维度切换按钮 */}
         <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
