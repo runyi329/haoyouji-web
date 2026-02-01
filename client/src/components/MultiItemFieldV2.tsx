@@ -9,6 +9,7 @@ interface ExtendedFieldValue {
   categoryId: number;
   categoryName: string;
   value: string;
+  _deleted?: boolean; // 标记为待删除
 }
 
 // 多条目字段组件V2（每个条目单独存储为一条记录）
@@ -32,8 +33,8 @@ export function MultiItemFieldV2({
   const [newValue, setNewValue] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   
-  // 获取当前类别的所有条目（每个条目是一条独立记录）
-  const items = extendedFields.filter(f => f.categoryName === categoryName);
+  // 获取当前类别的所有条目（排除已标记删除的）
+  const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
   // 添加新条目
   const handleAdd = () => {
@@ -43,7 +44,7 @@ export function MultiItemFieldV2({
     if (editingId !== null) {
       // 编辑模式：更新指定条目
       setExtendedFields(prev => prev.map(f => {
-        if (f.categoryName === categoryName) {
+        if (f.categoryName === categoryName && !f._deleted) {
           // 通过id或临时标识匹配
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
           if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
@@ -79,10 +80,19 @@ export function MultiItemFieldV2({
     setEditingId(null);
   };
   
-  // 删除条目
+  // 删除条目 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    setExtendedFields(prev => prev.filter(f => f !== item));
+    
+    if (item.id) {
+      // 已保存的条目：标记为待删除，保存时会调用删除API
+      setExtendedFields(prev => prev.map(f => 
+        f === item ? { ...f, _deleted: true } : f
+      ));
+    } else {
+      // 未保存的条目：直接从状态中移除
+      setExtendedFields(prev => prev.filter(f => f !== item));
+    }
     
     // 如果删除的是正在编辑的条目，取消编辑状态
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
@@ -183,8 +193,8 @@ export function MultiAddressFieldV2({
   const [newAddress, setNewAddress] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   
-  // 获取当前类别的所有地址（每个地址是一条独立记录）
-  const items = extendedFields.filter(f => f.categoryName === categoryName);
+  // 获取当前类别的所有地址（排除已标记删除的）
+  const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
   // 解析地址值
   const parseAddress = (value: string): {name: string, phone: string, address: string} => {
@@ -204,7 +214,7 @@ export function MultiAddressFieldV2({
     if (editingId !== null) {
       // 编辑模式：更新指定条目
       setExtendedFields(prev => prev.map(f => {
-        if (f.categoryName === categoryName) {
+        if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
           if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
             return { ...f, value: valueStr };
@@ -245,10 +255,19 @@ export function MultiAddressFieldV2({
     setEditingId(null);
   };
   
-  // 删除地址
+  // 删除地址 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    setExtendedFields(prev => prev.filter(f => f !== item));
+    
+    if (item.id) {
+      // 已保存的条目：标记为待删除
+      setExtendedFields(prev => prev.map(f => 
+        f === item ? { ...f, _deleted: true } : f
+      ));
+    } else {
+      // 未保存的条目：直接从状态中移除
+      setExtendedFields(prev => prev.filter(f => f !== item));
+    }
     
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
     if (editingId === itemId) {
@@ -350,8 +369,8 @@ export function MultiBankFieldV2({
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   
-  // 获取当前类别的所有银行账号
-  const items = extendedFields.filter(f => f.categoryName === categoryName);
+  // 获取当前类别的所有银行账号（排除已标记删除的）
+  const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
   // 解析银行账号值
   const parseBank = (value: string): {accountName: string, bankName: string, accountNumber: string} => {
@@ -370,7 +389,7 @@ export function MultiBankFieldV2({
     
     if (editingId !== null) {
       setExtendedFields(prev => prev.map(f => {
-        if (f.categoryName === categoryName) {
+        if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
           if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
             return { ...f, value: valueStr };
@@ -410,10 +429,17 @@ export function MultiBankFieldV2({
     setEditingId(null);
   };
   
-  // 删除银行账号
+  // 删除银行账号 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    setExtendedFields(prev => prev.filter(f => f !== item));
+    
+    if (item.id) {
+      setExtendedFields(prev => prev.map(f => 
+        f === item ? { ...f, _deleted: true } : f
+      ));
+    } else {
+      setExtendedFields(prev => prev.filter(f => f !== item));
+    }
     
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
     if (editingId === itemId) {
@@ -514,8 +540,8 @@ export function MultiInvoiceFieldV2({
   const [newTaxNumber, setNewTaxNumber] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   
-  // 获取当前类别的所有开票信息
-  const items = extendedFields.filter(f => f.categoryName === categoryName);
+  // 获取当前类别的所有开票信息（排除已标记删除的）
+  const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
   // 解析开票信息值
   const parseInvoice = (value: string): {companyName: string, taxNumber: string} => {
@@ -534,7 +560,7 @@ export function MultiInvoiceFieldV2({
     
     if (editingId !== null) {
       setExtendedFields(prev => prev.map(f => {
-        if (f.categoryName === categoryName) {
+        if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
           if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
             return { ...f, value: valueStr };
@@ -571,10 +597,17 @@ export function MultiInvoiceFieldV2({
     setEditingId(null);
   };
   
-  // 删除开票信息
+  // 删除开票信息 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    setExtendedFields(prev => prev.filter(f => f !== item));
+    
+    if (item.id) {
+      setExtendedFields(prev => prev.map(f => 
+        f === item ? { ...f, _deleted: true } : f
+      ));
+    } else {
+      setExtendedFields(prev => prev.filter(f => f !== item));
+    }
     
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
     if (editingId === itemId) {

@@ -41,6 +41,7 @@ interface ExtendedFieldValue {
   categoryId: number;
   categoryName: string;
   value: string;
+  _deleted?: boolean; // 标记为待删除
 }
 
 // 可拖拽的字段按钮组件
@@ -1336,11 +1337,18 @@ export default function AddContact() {
       // 保存基本信息
       updateContactMutation.mutate(updateData);
       
-      // 分类处理扩展信息：新增的字段（没有id）和更新的字段（有id）
-      const newFields = extendedFields.filter(f => !f.id);
-      const existingFields = extendedFields.filter(f => f.id);
+      // 分类处理扩展信息：新增、更新、删除
+      const newFields = extendedFields.filter(f => !f.id && !f._deleted);
+      const existingFields = extendedFields.filter(f => f.id && !f._deleted);
+      const deletedFields = extendedFields.filter(f => f.id && f._deleted);
       console.log('[AddContact] 新增的扩展信息:', newFields);
       console.log('[AddContact] 更新的扩展信息:', existingFields);
+      console.log('[AddContact] 删除的扩展信息:', deletedFields);
+      
+      // 删除标记为删除的字段
+      for (const field of deletedFields) {
+        deleteFieldValueMutation.mutate({ id: field.id! });
+      }
       
       // 新增字段
       for (const field of newFields) {
