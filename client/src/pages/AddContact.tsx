@@ -124,13 +124,23 @@ function MultiItemField({
   
   const items = getItems();
   
+  // 获取当前字段的完整信息（包括id）
+  const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
+  
   // 添加新条目
   const handleAdd = () => {
     if (!newValue.trim()) return;
     const newItems = [...items, newValue.trim()];
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      // 保留原有字段的id，这样更新时可以正确识别
+      return [...filtered, { 
+        id: currentField?.id, 
+        categoryId: getCategoryId(categoryName), 
+        categoryName, 
+        value: JSON.stringify(newItems) 
+      }];
     });
     setNewValue('');
   };
@@ -138,10 +148,17 @@ function MultiItemField({
   // 删除条目
   const handleDelete = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
       if (newItems.length > 0) {
-        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+        // 保留原有字段的id
+        return [...filtered, { 
+          id: currentField?.id, 
+          categoryId: getCategoryId(categoryName), 
+          categoryName, 
+          value: JSON.stringify(newItems) 
+        }];
       }
       return filtered;
     });
@@ -225,14 +242,23 @@ function MultiAddressField({
   
   const items = getItems();
   
+  // 获取当前字段的完整信息（包括id）
+  const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
+  
   // 添加新地址
   const handleAdd = () => {
     if (!newName.trim() && !newPhone.trim() && !newAddress.trim()) return;
     const newItem = { name: newName.trim(), phone: newPhone.trim(), address: newAddress.trim() };
     const newItems = [...items, newItem];
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      return [...filtered, { 
+        id: currentField?.id,
+        categoryId: getCategoryId(categoryName), 
+        categoryName, 
+        value: JSON.stringify(newItems) 
+      }];
     });
     setNewName('');
     setNewPhone('');
@@ -242,10 +268,16 @@ function MultiAddressField({
   // 删除地址
   const handleDelete = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
       if (newItems.length > 0) {
-        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+        return [...filtered, { 
+          id: currentField?.id,
+          categoryId: getCategoryId(categoryName), 
+          categoryName, 
+          value: JSON.stringify(newItems) 
+        }];
       }
       return filtered;
     });
@@ -326,14 +358,23 @@ function MultiBankField({
   
   const items = getItems();
   
+  // 获取当前字段的完整信息（包括id）
+  const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
+  
   // 添加新银行账号
   const handleAdd = () => {
     if (!newAccountName.trim() && !newBankName.trim() && !newAccountNumber.trim()) return;
     const newItem = { accountName: newAccountName.trim(), bankName: newBankName.trim(), accountNumber: newAccountNumber.trim() };
     const newItems = [...items, newItem];
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      return [...filtered, { 
+        id: currentField?.id,
+        categoryId: getCategoryId(categoryName), 
+        categoryName, 
+        value: JSON.stringify(newItems) 
+      }];
     });
     setNewAccountName('');
     setNewBankName('');
@@ -343,10 +384,16 @@ function MultiBankField({
   // 删除银行账号
   const handleDelete = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
       if (newItems.length > 0) {
-        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+        return [...filtered, { 
+          id: currentField?.id,
+          categoryId: getCategoryId(categoryName), 
+          categoryName, 
+          value: JSON.stringify(newItems) 
+        }];
       }
       return filtered;
     });
@@ -427,14 +474,23 @@ function MultiInvoiceField({
   
   const items = getItems();
   
+  // 获取当前字段的完整信息（包括id）
+  const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
+  
   // 添加新开票信息
   const handleAdd = () => {
     if (!newCompanyName.trim() && !newTaxNumber.trim()) return;
     const newItem = { companyName: newCompanyName.trim(), taxNumber: newTaxNumber.trim() };
     const newItems = [...items, newItem];
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      return [...filtered, { 
+        id: currentField?.id,
+        categoryId: getCategoryId(categoryName), 
+        categoryName, 
+        value: JSON.stringify(newItems) 
+      }];
     });
     setNewCompanyName('');
     setNewTaxNumber('');
@@ -443,10 +499,16 @@ function MultiInvoiceField({
   // 删除开票信息
   const handleDelete = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
+    const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
       if (newItems.length > 0) {
-        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+        return [...filtered, { 
+          id: currentField?.id,
+          categoryId: getCategoryId(categoryName), 
+          categoryName, 
+          value: JSON.stringify(newItems) 
+        }];
       }
       return filtered;
     });
@@ -984,15 +1046,26 @@ export default function AddContact() {
       // 保存基本信息
       updateContactMutation.mutate(updateData);
       
-      // 保存所有待确认的扩展信息（没有id的字段）
-      const pendingFields = extendedFields.filter(f => !f.id);
-      console.log('[AddContact] 待确认的扩展信息:', pendingFields);
+      // 分类处理扩展信息：新增的字段（没有id）和更新的字段（有id）
+      const newFields = extendedFields.filter(f => !f.id);
+      const existingFields = extendedFields.filter(f => f.id);
+      console.log('[AddContact] 新增的扩展信息:', newFields);
+      console.log('[AddContact] 更新的扩展信息:', existingFields);
       
-      for (const field of pendingFields) {
+      // 新增字段
+      for (const field of newFields) {
         addFieldValueMutation.mutate({
           contactId: contactId,
           categoryId: field.categoryId,
           categoryName: field.categoryName,
+          value: field.value,
+        });
+      }
+      
+      // 更新已有字段
+      for (const field of existingFields) {
+        updateFieldValueMutation.mutate({
+          id: field.id!,
           value: field.value,
         });
       }
