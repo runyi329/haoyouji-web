@@ -188,20 +188,22 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         }
       }
     } else if (period === 'week') {
-      // 过去12周的数据（从周一开始）
-      for (let i = 11; i >= 0; i--) {
+      // 过去12周的数据（不包含本周，从上周开始）
+      // 先找到上周日
+      const lastSunday = new Date(now);
+      const currentDayOfWeek = now.getDay();
+      const daysToLastSunday = currentDayOfWeek === 0 ? 7 : currentDayOfWeek;
+      lastSunday.setDate(now.getDate() - daysToLastSunday);
+      lastSunday.setHours(23, 59, 59, 999);
+      
+      for (let i = 0; i < 12; i++) {
         // 计算该周的结束日期（周日）
-        const endDate = new Date(now);
-        endDate.setDate(now.getDate() - i * 7);
-        // 调整到周日
-        const dayOfWeek = endDate.getDay();
-        const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-        endDate.setDate(endDate.getDate() + daysToSunday);
-        endDate.setHours(23, 59, 59, 999);
+        const endDate = new Date(lastSunday);
+        endDate.setDate(lastSunday.getDate() - i * 7);
         
         // 计算该周的开始日期（周一）
         const startDate = new Date(endDate);
-        startDate.setDate(endDate.getDate() - 6);
+        startDate.setDate(startDate.getDate() - 6);
         startDate.setHours(0, 0, 0, 0);
         
         const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
@@ -224,7 +226,7 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         }
         
         stats.push({
-          name: `${12 - i}周`,
+          name: `${i + 1}周`,
           dateRange: dateRange,
           value: count,
         });
