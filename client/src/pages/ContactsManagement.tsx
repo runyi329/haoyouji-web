@@ -1164,7 +1164,7 @@ export default function ContactsManagement() {
             )}
           </div>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">管理您的社交网络，维护重要关系</p>
+        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">让人脉动起来</p>
         
 
         
