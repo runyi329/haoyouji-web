@@ -182,9 +182,27 @@ function AllDataContent({ themeColors }: DataContentProps) {
       }
     };
 
+    // 日维度时只显示非零值的标签，避免重叠
+    const renderLabel = (props: any) => {
+      const { x, y, width, value } = props;
+      if (timePeriod === 'day' && value === 0) return null;
+      return (
+        <text 
+          x={x + width / 2} 
+          y={y - 5} 
+          fill="#6b7280" 
+          textAnchor="middle" 
+          fontSize={timePeriod === 'day' ? 9 : 12}
+          fontWeight={500}
+        >
+          {value}
+        </text>
+      );
+    };
+
     if (chartType === "bar") {
       return (
-        <BarChart {...commonProps} barCategoryGap="20%">
+        <BarChart {...commonProps} barCategoryGap={timePeriod === 'day' ? '5%' : '20%'}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis {...commonAxisProps.xAxis} />
           <YAxis {...commonAxisProps.yAxis} />
@@ -200,7 +218,7 @@ function AllDataContent({ themeColors }: DataContentProps) {
             <LabelList 
               dataKey="value" 
               position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              content={renderLabel}
             />
           </Bar>
         </BarChart>
@@ -217,17 +235,19 @@ function AllDataContent({ themeColors }: DataContentProps) {
             dataKey="value" 
             stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: themeColors.primary, r: 4 }}
+            dot={timePeriod === 'day' ? false : { fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
             animationEasing="ease-out"
           >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
+            {timePeriod !== 'day' && (
+              <LabelList 
+                dataKey="value" 
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              />
+            )}
           </Line>
         </LineChart>
       );
@@ -490,9 +510,27 @@ function MyDataContent({ themeColors }: DataContentProps) {
       }
     };
 
+    // 日维度时只显示非零值的标签，避免重叠
+    const renderLabel = (props: any) => {
+      const { x, y, width, value } = props;
+      if (timePeriod === 'day' && value === 0) return null;
+      return (
+        <text 
+          x={x + width / 2} 
+          y={y - 5} 
+          fill="#6b7280" 
+          textAnchor="middle" 
+          fontSize={timePeriod === 'day' ? 9 : 12}
+          fontWeight={500}
+        >
+          {value}
+        </text>
+      );
+    };
+
     if (chartType === "bar") {
       return (
-        <BarChart {...commonProps} barCategoryGap="20%">
+        <BarChart {...commonProps} barCategoryGap={timePeriod === 'day' ? '5%' : '20%'}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis {...commonAxisProps.xAxis} />
           <YAxis {...commonAxisProps.yAxis} />
@@ -508,7 +546,7 @@ function MyDataContent({ themeColors }: DataContentProps) {
             <LabelList 
               dataKey="value" 
               position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              content={renderLabel}
             />
           </Bar>
         </BarChart>
@@ -525,17 +563,19 @@ function MyDataContent({ themeColors }: DataContentProps) {
             dataKey="value" 
             stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: themeColors.primary, r: 4 }}
+            dot={timePeriod === 'day' ? false : { fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
             animationEasing="ease-out"
           >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
+            {timePeriod !== 'day' && (
+              <LabelList 
+                dataKey="value" 
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              />
+            )}
           </Line>
         </LineChart>
       );
@@ -799,9 +839,27 @@ function SharedDataContent({ themeColors }: DataContentProps) {
       }
     };
 
+    // 日维度时只显示非零值的标签，避免重叠
+    const renderLabel = (props: any) => {
+      const { x, y, width, value } = props;
+      if (timePeriod === 'day' && value === 0) return null;
+      return (
+        <text 
+          x={x + width / 2} 
+          y={y - 5} 
+          fill="#6b7280" 
+          textAnchor="middle" 
+          fontSize={timePeriod === 'day' ? 9 : 12}
+          fontWeight={500}
+        >
+          {value}
+        </text>
+      );
+    };
+
     if (chartType === "bar") {
       return (
-        <BarChart {...commonProps} barCategoryGap="20%">
+        <BarChart {...commonProps} barCategoryGap={timePeriod === 'day' ? '5%' : '20%'}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis {...commonAxisProps.xAxis} />
           <YAxis {...commonAxisProps.yAxis} />
@@ -817,7 +875,7 @@ function SharedDataContent({ themeColors }: DataContentProps) {
             <LabelList 
               dataKey="value" 
               position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              content={renderLabel}
             />
           </Bar>
         </BarChart>
@@ -834,17 +892,19 @@ function SharedDataContent({ themeColors }: DataContentProps) {
             dataKey="value" 
             stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: themeColors.primary, r: 4 }}
+            dot={timePeriod === 'day' ? false : { fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
             animationEasing="ease-out"
           >
-            <LabelList 
-              dataKey="value" 
-              position="top" 
-              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-            />
+            {timePeriod !== 'day' && (
+              <LabelList 
+                dataKey="value" 
+                position="top" 
+                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+              />
+            )}
           </Line>
         </LineChart>
       );
