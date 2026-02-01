@@ -148,7 +148,7 @@ function AllDataContent() {
         dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
-        interval: 0
+        interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
         tick: { fontSize: 11, fill: '#6b7280' },
@@ -426,7 +426,7 @@ function MyDataContent() {
         dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
-        interval: 0
+        interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
         tick: { fontSize: 11, fill: '#6b7280' },
@@ -704,7 +704,7 @@ function SharedDataContent() {
         dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
-        interval: 0
+        interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
         tick: { fontSize: 11, fill: '#6b7280' },
