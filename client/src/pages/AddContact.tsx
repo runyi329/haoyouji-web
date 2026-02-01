@@ -90,6 +90,311 @@ function SortableFieldButton({
   );
 }
 
+// 多条目字段组件（用于手机、邮箱、公司名称、开票信息等简单字段）
+function MultiItemField({
+  label,
+  placeholder,
+  categoryName,
+  extendedFields,
+  setExtendedFields,
+  getCategoryId,
+  multiline = false
+}: {
+  label: string;
+  placeholder: string;
+  categoryName: string;
+  extendedFields: ExtendedFieldValue[];
+  setExtendedFields: React.Dispatch<React.SetStateAction<ExtendedFieldValue[]>>;
+  getCategoryId: (name: string) => number;
+  multiline?: boolean;
+}) {
+  const [newValue, setNewValue] = useState('');
+  
+  // 获取当前类别的所有值（JSON数组格式存储）
+  const getItems = (): string[] => {
+    const field = extendedFields.find(f => f.categoryName === categoryName);
+    if (!field) return [];
+    try {
+      const parsed = JSON.parse(field.value);
+      return Array.isArray(parsed) ? parsed : [field.value];
+    } catch {
+      return field.value ? [field.value] : [];
+    }
+  };
+  
+  const items = getItems();
+  
+  // 添加新条目
+  const handleAdd = () => {
+    if (!newValue.trim()) return;
+    const newItems = [...items, newValue.trim()];
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+    });
+    setNewValue('');
+  };
+  
+  // 删除条目
+  const handleDelete = (index: number) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      if (newItems.length > 0) {
+        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      }
+      return filtered;
+    });
+  };
+  
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      {/* 已保存的条目列表 */}
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item, index) => (
+            <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+              <span className="flex-1 text-sm">{item}</span>
+              <button
+                type="button"
+                onClick={() => handleDelete(index)}
+                className="p-1 text-red-500 hover:bg-red-50 rounded"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 添加新条目 */}
+      <div className="flex gap-2">
+        {multiline ? (
+          <textarea
+            className="flex-1 min-h-[60px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder={placeholder}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+          />
+        ) : (
+          <Input
+            className="flex-1"
+            placeholder={placeholder}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAdd())}
+          />
+        )}
+        <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// 多地址字段组件（用于快递地址，每个包含收件人、电话、地址）
+function MultiAddressField({
+  label,
+  categoryName,
+  extendedFields,
+  setExtendedFields,
+  getCategoryId
+}: {
+  label: string;
+  categoryName: string;
+  extendedFields: ExtendedFieldValue[];
+  setExtendedFields: React.Dispatch<React.SetStateAction<ExtendedFieldValue[]>>;
+  getCategoryId: (name: string) => number;
+}) {
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  
+  // 获取当前类别的所有地址
+  const getItems = (): {name: string, phone: string, address: string}[] => {
+    const field = extendedFields.find(f => f.categoryName === categoryName);
+    if (!field) return [];
+    try {
+      const parsed = JSON.parse(field.value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [];
+    }
+  };
+  
+  const items = getItems();
+  
+  // 添加新地址
+  const handleAdd = () => {
+    if (!newName.trim() && !newPhone.trim() && !newAddress.trim()) return;
+    const newItem = { name: newName.trim(), phone: newPhone.trim(), address: newAddress.trim() };
+    const newItems = [...items, newItem];
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+    });
+    setNewName('');
+    setNewPhone('');
+    setNewAddress('');
+  };
+  
+  // 删除地址
+  const handleDelete = (index: number) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      if (newItems.length > 0) {
+        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      }
+      return filtered;
+    });
+  };
+  
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      {/* 已保存的地址列表 */}
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item, index) => (
+            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1 text-sm flex-1">
+                  <div><span className="text-gray-500">收件人：</span>{item.name}</div>
+                  <div><span className="text-gray-500">电话：</span>{item.phone}</div>
+                  <div><span className="text-gray-500">地址：</span>{item.address}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(index)}
+                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 添加新地址 */}
+      <div className="p-3 border rounded-md space-y-2 bg-white">
+        <div className="flex gap-2">
+          <Input className="flex-1" placeholder="收件人" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <Input className="flex-1" placeholder="收件电话" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+        </div>
+        <div className="flex gap-2">
+          <Input className="flex-1" placeholder="详细地址" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
+          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 多银行账号字段组件（每个包含账户名、开户行、账号）
+function MultiBankField({
+  label,
+  categoryName,
+  extendedFields,
+  setExtendedFields,
+  getCategoryId
+}: {
+  label: string;
+  categoryName: string;
+  extendedFields: ExtendedFieldValue[];
+  setExtendedFields: React.Dispatch<React.SetStateAction<ExtendedFieldValue[]>>;
+  getCategoryId: (name: string) => number;
+}) {
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newBankName, setNewBankName] = useState('');
+  const [newAccountNumber, setNewAccountNumber] = useState('');
+  
+  // 获取当前类别的所有银行账号
+  const getItems = (): {accountName: string, bankName: string, accountNumber: string}[] => {
+    const field = extendedFields.find(f => f.categoryName === categoryName);
+    if (!field) return [];
+    try {
+      const parsed = JSON.parse(field.value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [];
+    }
+  };
+  
+  const items = getItems();
+  
+  // 添加新银行账号
+  const handleAdd = () => {
+    if (!newAccountName.trim() && !newBankName.trim() && !newAccountNumber.trim()) return;
+    const newItem = { accountName: newAccountName.trim(), bankName: newBankName.trim(), accountNumber: newAccountNumber.trim() };
+    const newItems = [...items, newItem];
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+    });
+    setNewAccountName('');
+    setNewBankName('');
+    setNewAccountNumber('');
+  };
+  
+  // 删除银行账号
+  const handleDelete = (index: number) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      if (newItems.length > 0) {
+        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      }
+      return filtered;
+    });
+  };
+  
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      {/* 已保存的银行账号列表 */}
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item, index) => (
+            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1 text-sm flex-1">
+                  <div><span className="text-gray-500">账户名：</span>{item.accountName}</div>
+                  <div><span className="text-gray-500">开户行：</span>{item.bankName}</div>
+                  <div><span className="text-gray-500">账号：</span>{item.accountNumber}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(index)}
+                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 添加新银行账号 */}
+      <div className="p-3 border rounded-md space-y-2 bg-white">
+        <div className="flex gap-2">
+          <Input className="flex-1" placeholder="账户名" value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} />
+          <Input className="flex-1" placeholder="开户行" value={newBankName} onChange={(e) => setNewBankName(e.target.value)} />
+        </div>
+        <div className="flex gap-2">
+          <Input className="flex-1" placeholder="银行账号" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} />
+          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AddContact() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -664,120 +969,64 @@ export default function AddContact() {
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 手机 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">手机</label>
-              <Input
-                placeholder="请输入手机号"
-                value={extendedFields.find(f => f.categoryName === '手机')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '手机');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('手机'), categoryName: '手机', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 手机 - 支持多个 */}
+            <MultiItemField
+              label="手机"
+              placeholder="请输入手机号"
+              categoryName="手机"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+            />
             
-            {/* 邮箱 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">邮箱</label>
-              <Input
-                placeholder="请输入邮箱"
-                value={extendedFields.find(f => f.categoryName === '邮箱')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '邮箱');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('邮箱'), categoryName: '邮箱', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 邮箱 - 支持多个 */}
+            <MultiItemField
+              label="邮箱"
+              placeholder="请输入邮箱"
+              categoryName="邮箱"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+            />
             
-            {/* 快递地址 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">快递地址</label>
-              <Input
-                placeholder="请输入快递地址"
-                value={extendedFields.find(f => f.categoryName === '快递地址')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '快递地址');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('快递地址'), categoryName: '快递地址', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 快递地址 - 支持多个，每个包含收件人、电话、地址 */}
+            <MultiAddressField
+              label="快递地址"
+              categoryName="快递地址"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+            />
             
-            {/* 银行账号 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">银行账号</label>
-              <Input
-                placeholder="请输入银行账号"
-                value={extendedFields.find(f => f.categoryName === '银行账号')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '银行账号');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('银行账号'), categoryName: '银行账号', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 银行账号 - 支持多个，每个包含账户名、开户行、账号 */}
+            <MultiBankField
+              label="银行账号"
+              categoryName="银行账号"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+            />
             
-            {/* 公司名称 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">公司名称</label>
-              <Input
-                placeholder="请输入公司名称"
-                value={extendedFields.find(f => f.categoryName === '公司名称')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '公司名称');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('公司名称'), categoryName: '公司名称', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 公司名称 - 支持多个 */}
+            <MultiItemField
+              label="公司名称"
+              placeholder="请输入公司名称"
+              categoryName="公司名称"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+            />
             
-            {/* 开票信息 */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">开票信息</label>
-              <textarea
-                className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="请输入开票信息（公司名称、税号、地址等）"
-                value={extendedFields.find(f => f.categoryName === '开票信息')?.value || ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '开票信息');
-                    if (value) {
-                      return [...filtered, { categoryId: getCategoryId('开票信息'), categoryName: '开票信息', value }];
-                    }
-                    return filtered;
-                  });
-                }}
-              />
-            </div>
+            {/* 开票信息 - 支持多个 */}
+            <MultiItemField
+              label="开票信息"
+              placeholder="请输入开票信息（公司名称、税号、地址等）"
+              categoryName="开票信息"
+              extendedFields={extendedFields}
+              setExtendedFields={setExtendedFields}
+              getCategoryId={getCategoryId}
+              multiline={true}
+            />
           </CardContent>
         </Card>
 
