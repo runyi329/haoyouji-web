@@ -228,9 +228,10 @@ function AllDataContent() {
               return (
                 <div
                   key={index}
-                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
+                  style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   <div className={`text-xs font-bold ${
@@ -496,9 +497,10 @@ function MyDataContent() {
               return (
                 <div
                   key={index}
-                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
+                  style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   <div className={`text-xs font-bold ${
@@ -764,9 +766,10 @@ function SharedDataContent() {
               return (
                 <div
                   key={index}
-                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
+                  style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   <div className={`text-xs font-bold ${
