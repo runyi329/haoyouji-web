@@ -459,6 +459,10 @@ export default function ContactsList() {
   const recordInteractionMutation = trpc.contacts.interactions.create.useMutation({
     onSuccess: async () => {
       toast.success("已记录本次联络");
+      // 播放成功音效
+      const audio = new Audio('/success-sound.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(err => console.log('音效播放失败:', err));
       // 强制刷新列表数据，确保hasTodayInteraction状态更新
       await utils.contacts.list.refetch();
       setShowQuickContactDialog(false);

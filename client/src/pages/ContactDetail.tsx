@@ -1169,6 +1169,10 @@ export default function ContactDetail() {
   const createInteraction = trpc.contacts.interactions.create.useMutation({
     onSuccess: () => {
       toast.success("联络记录已保存");
+      // 播放成功音效
+      const audio = new Audio('/success-sound.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(err => console.log('音效播放失败:', err));
       setShowInteractionDialog(false);
       setInteractionNote("");
       utils.contacts.get.invalidate({ id: contactId });
