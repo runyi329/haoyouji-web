@@ -243,7 +243,7 @@ function AllDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-lg font-bold">{item.value}</span>
+                    <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -524,7 +524,7 @@ function MyDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-lg font-bold">{item.value}</span>
+                    <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -805,7 +805,7 @@ function SharedDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-lg font-bold">{item.value}</span>
+                    <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
