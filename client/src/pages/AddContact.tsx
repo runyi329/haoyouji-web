@@ -663,301 +663,120 @@ export default function AddContact() {
           <CardHeader>
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* 手机 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">手机</label>
+              <Input
+                placeholder="请输入手机号"
+                value={extendedFields.find(f => f.categoryName === '手机')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '手机');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('手机'), categoryName: '手机', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
+            </div>
             
-            {/* 扩展字段 - 可拖拽排序 */}
-            <div className="mt-4">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragStart={handleDragStart}
-                onDragEnd={handleFieldDragEnd}
-              >
-                <SortableContext items={extendedFieldList} strategy={rectSortingStrategy}>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {extendedFieldList
-                      .slice()
-                      .sort((a, b) => {
-                        const aHasValue = extendedFields.some(f => f.categoryName === a);
-                        const bHasValue = extendedFields.some(f => f.categoryName === b);
-                        // 已填写的排在前面
-                        if (aHasValue && !bHasValue) return -1;
-                        if (!aHasValue && bHasValue) return 1;
-                        // 如果都填写或都未填写，保持原顺序
-                        return extendedFieldList.indexOf(a) - extendedFieldList.indexOf(b);
-                      })
-                      .map(field => {
-                        // 检查该字段是否已填写
-                        const hasValue = extendedFields.some(f => f.categoryName === field);
-                        
-                        const handleFieldClick = () => {
-                          // 点击扩展信息字段时，自动收起基本信息区域
-                          setIsBasicInfoCollapsed(true);
-                              
-                              if (field === '星座') {
-                                // 如果已经有值，预填充到选择器中
-                                const existingValue = extendedFields.find(f => f.categoryName === '星座');
-                                if (existingValue) {
-                                  setSelectedConstellation(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowConstellationDialog(true);
-                              } else if (field === '生日') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '生日');
-                                if (existingValue) {
-                                  setSelectedBirthday(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowBirthdayDialog(true);
-                              } else if (field === '血型') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '血型');
-                                if (existingValue) {
-                                  setSelectedBloodType(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowBloodTypeDialog(true);
-                              } else if (field === '属相') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '属相');
-                                if (existingValue) {
-                                  setSelectedZodiac(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowZodiacDialog(true);
-                              } else if (field === '年龄') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '年龄');
-                                if (existingValue) {
-                                  setSelectedAge(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowAgeDialog(true);
-                              } else if (field === '身高') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '身高');
-                                if (existingValue) {
-                                  setSelectedHeight(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowHeightDialog(true);
-                              } else if (field === '鞋码') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '鞋码');
-                                if (existingValue) {
-                                  setSelectedShoeSize(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowShoeSizeDialog(true);
-                              } else if (field === '饮食') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '饮食');
-                                if (existingValue) {
-                                  setSelectedDietaries(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowDietaryDialog(true);
-                              } else if (field === '习惯') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '习惯');
-                                if (existingValue) {
-                                  setSelectedHabits(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowHabitDialog(true);
-                              } else if (field === '健康') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '健康');
-                                if (existingValue) {
-                                  setSelectedHealths(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowHealthDialog(true);
-                              } else if (field === '性格') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '性格');
-                                if (existingValue) {
-                                  setSelectedPersonalities(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowPersonalityDialog(true);
-                              } else if (field === '民族') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '民族');
-                                if (existingValue) {
-                                  setSelectedEthnic(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowEthnicDialog(true);
-                              } else if (field === '家庭') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '家庭');
-                                if (existingValue) {
-                                  setSelectedFamily(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowFamilyDialog(true);
-                              } else if (field === '身份') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '身份');
-                                if (existingValue) {
-                                  setSelectedIdentity(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowIdentityDialog(true);
-                              } else if (field === '品牌') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '品牌');
-                                if (existingValue) {
-                                  setSelectedBrands(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowBrandDialog(true);
-                              } else if (field === '娱乐') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '娱乐');
-                                if (existingValue) {
-                                  setSelectedEntertainments(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowEntertainmentDialog(true);
-                              } else if (field === '商业') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '商业');
-                                if (existingValue) {
-                                  setCompanyList(existingValue.value.split(','));
-                                } else {
-                                  setCompanyList([]);
-                                }
-                                setSelectedCompany('');
-                                setDialogMessage(null);
-                                setShowCompanyDialog(true);
-                              } else if (field === '行业') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '行业');
-                                if (existingValue) {
-                                  setSelectedIndustry(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowIndustryDialog(true);
-                              } else if (field === '类型') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '类型');
-                                if (existingValue) {
-                                  setSelectedTypes(existingValue.value.split(','));
-                                }
-                                setDialogMessage(null);
-                                setShowTypeDialog(true);
-                              } else if (field === '征信') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '征信');
-                                if (existingValue) {
-                                  setSelectedCredit(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowCreditDialog(true);
-                              } else if (field === '职业') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '职业');
-                                if (existingValue) {
-                                  setSelectedOccupation(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowOccupationDialog(true);
-                              } else if (field === '公户') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '公户');
-                                if (existingValue) {
-                                  setSelectedPublicAccount(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowPublicAccountDialog(true);
-                              } else if (field === '私户') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '私户');
-                                if (existingValue) {
-                                  try {
-                                    const accounts = JSON.parse(existingValue.value);
-                                    setPrivateAccountList(accounts);
-                                  } catch {
-                                    setPrivateAccountList([]);
-                                  }
-                                } else {
-                                  setPrivateAccountList([]);
-                                }
-                                setPrivateAccountBank('');
-                                setPrivateAccountNumber('');
-                                setPrivateAccountName('');
-                                setDialogMessage(null);
-                                setShowPrivateAccountDialog(true);
-                              } else if (field === '电话') {
-                                // 电话字段使用专用对话框（支持多个电话）
-                                const existingValue = extendedFields.find(f => f.categoryName === '电话');
-                                if (existingValue) {
-                                  // 解析已保存的电话列表，格式：电话1,电话2,电话3
-                                  setPhoneList(existingValue.value.split(',').map(p => p.trim()).filter(p => p));
-                                } else {
-                                  setPhoneList([]);
-                                }
-                                setCurrentPhone('');
-                                setEditingPhoneIndex(null);
-                                setDialogMessage(null);
-                                setShowPhoneDialog(true);
-                              } else if (field === '地址') {
-                                // 地址字段使用专用对话框
-                                const existingValue = extendedFields.find(f => f.categoryName === '地址');
-                                if (existingValue) {
-                                  try {
-                                    const addresses = JSON.parse(existingValue.value);
-                                    setAddressList(addresses);
-                                  } catch {
-                                    // 如果不是JSON格式，尝试作为单个地址处理
-                                    setAddressList([{type: '普通', address: existingValue.value}]);
-                                  }
-                                } else {
-                                  setAddressList([]);
-                                }
-                                setCurrentAddressType('');
-                                setCurrentAddress('');
-                                setCurrentAddressName('');
-                                setCurrentAddressPhone('');
-                                setShowAddressTypeSelection(true);
-                                setDialogMessage(null);
-                                setShowAddressDialog(true);
-                              } else if (field === '邮箱') {
-                                // 邮箱字段使用专用对话框
-                                const existingValue = extendedFields.find(f => f.categoryName === '邮箱');
-                                if (existingValue) {
-                                  setEmailList(existingValue.value.split(','));
-                                } else {
-                                  setEmailList([]);
-                                }
-                                setCurrentEmail('');
-                                setDialogMessage(null);
-                                setShowEmailDialog(true);
-                              } else if (field === '微信') {
-                                // 微信字段使用专用对话框
-                                const existingValue = extendedFields.find(f => f.categoryName === '微信');
-                                if (existingValue) {
-                                  setWechatList(existingValue.value.split(','));
-                                } else {
-                                  setWechatList([]);
-                                }
-                                setCurrentWechat('');
-                                setDialogMessage(null);
-                                setShowWechatDialog(true);
-                              } else if (field === '联络') {
-                                // 联络字段使用综合对话框（管理手机、微信、邮箱）
-                                const phoneValue = extendedFields.find(f => f.categoryName === '电话');
-                                const wechatValue = extendedFields.find(f => f.categoryName === '微信');
-                                const emailValue = extendedFields.find(f => f.categoryName === '邮箱');
-                                
-                                setContactPhoneList(phoneValue ? phoneValue.value.split(',').map(p => p.trim()).filter(p => p) : []);
-                                setContactWechatList(wechatValue ? wechatValue.value.split(',').map(w => w.trim()).filter(w => w) : []);
-                                setContactEmailList(emailValue ? emailValue.value.split(',').map(e => e.trim()).filter(e => e) : []);
-                                
-                                setNewContactPhone('');
-                                setNewContactWechat('');
-                                setNewContactEmail('');
-                                setEditingContactType(null);
-                                setEditingContactIndex(null);
-                                setShowAddContactInput(null);
-                                setDialogMessage(null);
-                                setShowContactDialog(true);
-                              }
-                            };
-                        
-                        return (
-                          <SortableFieldButton
-                            key={field}
-                            field={field}
-                            hasValue={hasValue}
-                            onClick={handleFieldClick}
-                          />
-                        );
-                      })}
-                  </div>
-                </SortableContext>
-              </DndContext>
+            {/* 邮箱 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">邮箱</label>
+              <Input
+                placeholder="请输入邮箱"
+                value={extendedFields.find(f => f.categoryName === '邮箱')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '邮箱');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('邮箱'), categoryName: '邮箱', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
+            </div>
+            
+            {/* 快递地址 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">快递地址</label>
+              <Input
+                placeholder="请输入快递地址"
+                value={extendedFields.find(f => f.categoryName === '快递地址')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '快递地址');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('快递地址'), categoryName: '快递地址', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
+            </div>
+            
+            {/* 银行账号 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">银行账号</label>
+              <Input
+                placeholder="请输入银行账号"
+                value={extendedFields.find(f => f.categoryName === '银行账号')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '银行账号');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('银行账号'), categoryName: '银行账号', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
+            </div>
+            
+            {/* 公司名称 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">公司名称</label>
+              <Input
+                placeholder="请输入公司名称"
+                value={extendedFields.find(f => f.categoryName === '公司名称')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '公司名称');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('公司名称'), categoryName: '公司名称', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
+            </div>
+            
+            {/* 开票信息 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">开票信息</label>
+              <textarea
+                className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="请输入开票信息（公司名称、税号、地址等）"
+                value={extendedFields.find(f => f.categoryName === '开票信息')?.value || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setExtendedFields(prev => {
+                    const filtered = prev.filter(f => f.categoryName !== '开票信息');
+                    if (value) {
+                      return [...filtered, { categoryId: getCategoryId('开票信息'), categoryName: '开票信息', value }];
+                    }
+                    return filtered;
+                  });
+                }}
+              />
             </div>
           </CardContent>
         </Card>
