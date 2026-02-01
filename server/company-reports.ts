@@ -216,6 +216,9 @@ router.get('/api/company-reports/companies', async (req, res) => {
     }
     
     // 查询所有联系人的扩展信息，筛选出公司名称
+    // 支持两种存储方式：
+    // 1. 旧方式：通过categoryId关联contact_field_categories表
+    // 2. 新方式：直接使用categoryName字段
     const result = await db.execute(sql`
       SELECT 
         cfv.value AS companyName,
@@ -227,15 +230,18 @@ router.get('/api/company-reports/companies', async (req, res) => {
         (
           SELECT COUNT(*)
           FROM contact_field_values cfv2
-          INNER JOIN contact_field_categories cfc2 ON cfv2.categoryId = cfc2.id
-          WHERE cfc2.name = '公司名称' AND cfv2.value = cfv.value
+          WHERE (cfv2.categoryName = '公司名称' OR cfv2.categoryId IN (
+            SELECT id FROM contact_field_categories WHERE name = '公司名称'
+          )) AND cfv2.value = cfv.value
         ) AS duplicateCount
       FROM contact_field_values cfv
-      INNER JOIN contact_field_categories cfc ON cfv.categoryId = cfc.id
       INNER JOIN contacts c ON cfv.contactId = c.id
       INNER JOIN users u ON c.parentUserId = u.id
       LEFT JOIN company_reports cr ON cfv.value = cr.company_name
-      WHERE cfc.name = '公司名称' AND cfv.value IS NOT NULL AND cfv.value != ''
+      WHERE (
+        cfv.categoryName = '公司名称' 
+        OR cfv.categoryId IN (SELECT id FROM contact_field_categories WHERE name = '公司名称')
+      ) AND cfv.value IS NOT NULL AND cfv.value != ''
       ORDER BY cfv.value, c.name
     `);
     
