@@ -1267,6 +1267,21 @@ export async function getContactStats(parentUserId: number) {
   }
   
   console.log('[getContactStats] 统计结果:', { totalContacts, newThisWeek, newThisMonth, newThisYear });
+  // 获取用户参与的所有账本的账目总数
+  let totalLedgerEntries = 0;
+  try {
+    const ledgerEntriesResult = await db.execute(sql`
+      SELECT COUNT(DISTINCT e.id) as count
+      FROM entries e
+      INNER JOIN ledgers l ON e.ledger_id = l.id
+      INNER JOIN ledger_members lm ON l.id = lm.ledger_id
+      WHERE lm.user_id = ${parentUserId}
+    `);
+    totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
+  } catch (error) {
+    console.error('[获取账目总数失败]', error);
+  }
+
   return {
     totalContacts,
     newThisWeek,
@@ -1279,6 +1294,7 @@ export async function getContactStats(parentUserId: number) {
     todayActive,
     dormantCount,
     companyCount,
+    totalLedgerEntries,
     tagDistribution: tagDistResult
   };
 }

@@ -117,16 +117,16 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   );
 }
 
-// 功能5卡片 - 平均联络间隔
-function AverageIntervalCard({ days, dragListeners, isBreathing }: { days: number; dragListeners?: any; isBreathing?: boolean }) {
+// 功能5卡片 - 账目总数
+function TotalEntriesCard({ count, dragListeners, isBreathing }: { count: number; dragListeners?: any; isBreathing?: boolean }) {
   return (
     <Card className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800 flex flex-col justify-center ${
         isBreathing ? "animate-breathing-border-teal" : ""
       }`}>
       <CardContent {...dragListeners} className="flex flex-col items-center justify-center gap-1 py-2.5 px-2 md:cursor-grab md:active:cursor-grabbing">
-        <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">联络频率</p>
-        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
-          {days}<span className="text-xs sm:text-sm font-normal">天</span>
+        <p className="text-xs sm:text-sm text-teal-600 dark:text-teal-400">账目总数</p>
+        <p className="font-bold text-teal-700 dark:text-teal-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+          {count}<span className="text-xs sm:text-sm font-normal">条</span>
         </p>
       </CardContent>
     </Card>
@@ -538,7 +538,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
   if (feature.id === 5) {
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
-        <AverageIntervalCard days={stats?.averageInteractionInterval || 0} dragListeners={listeners} />
+        <TotalEntriesCard count={stats?.totalLedgerEntries || 0} dragListeners={listeners} />
       </div>
     );
   }
