@@ -236,6 +236,18 @@ export default function AddContact() {
   const [wechatList, setWechatList] = useState<string[]>([]);
   const [currentWechat, setCurrentWechat] = useState("");
   
+  // 联络对话框（综合管理手机、微信、邮箱）
+  const [showContactDialog, setShowContactDialog] = useState(false);
+  const [contactPhoneList, setContactPhoneList] = useState<string[]>([]);
+  const [contactWechatList, setContactWechatList] = useState<string[]>([]);
+  const [contactEmailList, setContactEmailList] = useState<string[]>([]);
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactWechat, setNewContactWechat] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [editingContactType, setEditingContactType] = useState<'phone' | 'wechat' | 'email' | null>(null);
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
+  const [showAddContactInput, setShowAddContactInput] = useState<'phone' | 'wechat' | 'email' | null>(null);
+  
   // 用于跟踪是否已初始化字段值
   const [isFieldsInitialized, setIsFieldsInitialized] = useState(false);
   
@@ -258,7 +270,7 @@ export default function AddContact() {
     '星座', '生日', '年龄', '属相', '民族', '身份',
     '饮食', '娱乐',
     '公司', '行业', '类型', '职业', '征信', '公户', '私户',
-    '电话', '微信', '邮箱', '地址'
+    '联络', '地址'
   ];
   
   // 从 localStorage加载或使用默认配置
@@ -913,6 +925,24 @@ export default function AddContact() {
                                 setCurrentWechat('');
                                 setDialogMessage(null);
                                 setShowWechatDialog(true);
+                              } else if (field === '联络') {
+                                // 联络字段使用综合对话框（管理手机、微信、邮箱）
+                                const phoneValue = extendedFields.find(f => f.categoryName === '电话');
+                                const wechatValue = extendedFields.find(f => f.categoryName === '微信');
+                                const emailValue = extendedFields.find(f => f.categoryName === '邮箱');
+                                
+                                setContactPhoneList(phoneValue ? phoneValue.value.split(',').map(p => p.trim()).filter(p => p) : []);
+                                setContactWechatList(wechatValue ? wechatValue.value.split(',').map(w => w.trim()).filter(w => w) : []);
+                                setContactEmailList(emailValue ? emailValue.value.split(',').map(e => e.trim()).filter(e => e) : []);
+                                
+                                setNewContactPhone('');
+                                setNewContactWechat('');
+                                setNewContactEmail('');
+                                setEditingContactType(null);
+                                setEditingContactIndex(null);
+                                setShowAddContactInput(null);
+                                setDialogMessage(null);
+                                setShowContactDialog(true);
                               }
                             };
                         
@@ -3024,6 +3054,438 @@ export default function AddContact() {
                 });
                 setShowWechatDialog(false);
               }}>确定</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 联络对话框（综合管理手机、微信、邮箱） */}
+      {showContactDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowContactDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">联络方式</h3>
+            
+            {/* 手机号部分 */}
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">手机号</p>
+              {contactPhoneList.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {contactPhoneList.map((phone, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                      {editingContactType === 'phone' && editingContactIndex === index ? (
+                        <Input 
+                          value={newContactPhone}
+                          onChange={(e) => setNewContactPhone(e.target.value)}
+                          className="flex-1 h-8"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="flex-1 text-sm">{phone}</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'phone' && editingContactIndex === index) {
+                            // 保存编辑
+                            if (newContactPhone.trim()) {
+                              setContactPhoneList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactPhone.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactPhone('');
+                          } else {
+                            // 添加新手机号
+                            setShowAddContactInput('phone');
+                          }
+                        }}
+                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        title="添加"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setContactPhoneList(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        title="删除"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'phone' && editingContactIndex === index) {
+                            // 保存编辑
+                            if (newContactPhone.trim()) {
+                              setContactPhoneList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactPhone.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactPhone('');
+                          } else {
+                            // 进入编辑模式
+                            setEditingContactType('phone');
+                            setEditingContactIndex(index);
+                            setNewContactPhone(phone);
+                          }
+                        }}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        title={editingContactType === 'phone' && editingContactIndex === index ? '保存' : '编辑'}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* 添加新手机号输入框 */}
+              {(contactPhoneList.length === 0 || showAddContactInput === 'phone') && (
+                <div className="flex gap-2">
+                  <Input 
+                    type="tel"
+                    value={newContactPhone}
+                    onChange={(e) => setNewContactPhone(e.target.value)}
+                    placeholder="请输入手机号"
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (newContactPhone.trim()) {
+                        setContactPhoneList(prev => [...prev, newContactPhone.trim()]);
+                        setNewContactPhone('');
+                        setShowAddContactInput(null);
+                      }
+                    }}
+                  >
+                    添加
+                  </Button>
+                  {showAddContactInput === 'phone' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setShowAddContactInput(null);
+                        setNewContactPhone('');
+                      }}
+                    >
+                      取消
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* 微信号部分 */}
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">微信号</p>
+              {contactWechatList.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {contactWechatList.map((wechat, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                      {editingContactType === 'wechat' && editingContactIndex === index ? (
+                        <Input 
+                          value={newContactWechat}
+                          onChange={(e) => setNewContactWechat(e.target.value)}
+                          className="flex-1 h-8"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="flex-1 text-sm">{wechat}</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'wechat' && editingContactIndex === index) {
+                            if (newContactWechat.trim()) {
+                              setContactWechatList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactWechat.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactWechat('');
+                          } else {
+                            setShowAddContactInput('wechat');
+                          }
+                        }}
+                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        title="添加"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setContactWechatList(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        title="删除"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'wechat' && editingContactIndex === index) {
+                            if (newContactWechat.trim()) {
+                              setContactWechatList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactWechat.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactWechat('');
+                          } else {
+                            setEditingContactType('wechat');
+                            setEditingContactIndex(index);
+                            setNewContactWechat(wechat);
+                          }
+                        }}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        title={editingContactType === 'wechat' && editingContactIndex === index ? '保存' : '编辑'}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(contactWechatList.length === 0 || showAddContactInput === 'wechat') && (
+                <div className="flex gap-2">
+                  <Input 
+                    value={newContactWechat}
+                    onChange={(e) => setNewContactWechat(e.target.value)}
+                    placeholder="请输入微信号"
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (newContactWechat.trim()) {
+                        setContactWechatList(prev => [...prev, newContactWechat.trim()]);
+                        setNewContactWechat('');
+                        setShowAddContactInput(null);
+                      }
+                    }}
+                  >
+                    添加
+                  </Button>
+                  {showAddContactInput === 'wechat' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setShowAddContactInput(null);
+                        setNewContactWechat('');
+                      }}
+                    >
+                      取消
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* 邮箱部分 */}
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">邮箱</p>
+              {contactEmailList.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {contactEmailList.map((email, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                      {editingContactType === 'email' && editingContactIndex === index ? (
+                        <Input 
+                          type="email"
+                          value={newContactEmail}
+                          onChange={(e) => setNewContactEmail(e.target.value)}
+                          className="flex-1 h-8"
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="flex-1 text-sm">{email}</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'email' && editingContactIndex === index) {
+                            if (newContactEmail.trim()) {
+                              setContactEmailList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactEmail.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactEmail('');
+                          } else {
+                            setShowAddContactInput('email');
+                          }
+                        }}
+                        className="text-green-500 hover:text-green-700 flex-shrink-0"
+                        title="添加"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setContactEmailList(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        title="删除"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (editingContactType === 'email' && editingContactIndex === index) {
+                            if (newContactEmail.trim()) {
+                              setContactEmailList(prev => {
+                                const newList = [...prev];
+                                newList[index] = newContactEmail.trim();
+                                return newList;
+                              });
+                            }
+                            setEditingContactType(null);
+                            setEditingContactIndex(null);
+                            setNewContactEmail('');
+                          } else {
+                            setEditingContactType('email');
+                            setEditingContactIndex(index);
+                            setNewContactEmail(email);
+                          }
+                        }}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        title={editingContactType === 'email' && editingContactIndex === index ? '保存' : '编辑'}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(contactEmailList.length === 0 || showAddContactInput === 'email') && (
+                <div className="flex gap-2">
+                  <Input 
+                    type="email"
+                    value={newContactEmail}
+                    onChange={(e) => setNewContactEmail(e.target.value)}
+                    placeholder="请输入邮箱"
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (newContactEmail.trim()) {
+                        // 简单的邮箱格式验证
+                        if (!newContactEmail.includes('@')) {
+                          setDialogMessage({type: 'error', text: '请输入有效的邮箱地址'});
+                          return;
+                        }
+                        setContactEmailList(prev => [...prev, newContactEmail.trim()]);
+                        setNewContactEmail('');
+                        setShowAddContactInput(null);
+                      }
+                    }}
+                  >
+                    添加
+                  </Button>
+                  {showAddContactInput === 'email' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setShowAddContactInput(null);
+                        setNewContactEmail('');
+                      }}
+                    >
+                      取消
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { 
+                setDialogMessage(null);
+                setShowContactDialog(false);
+              }}>取消</Button>
+              <Button className="flex-1" onClick={() => {
+                // 保存所有联络方式到extendedFields
+                setExtendedFields(prev => {
+                  let filtered = prev.filter(f => !['电话', '微信', '邮箱'].includes(f.categoryName));
+                  
+                  if (contactPhoneList.length > 0) {
+                    filtered = [...filtered, { 
+                      categoryId: getCategoryId('电话'),
+                      categoryName: '电话', 
+                      value: contactPhoneList.join(',') 
+                    }];
+                  }
+                  if (contactWechatList.length > 0) {
+                    filtered = [...filtered, { 
+                      categoryId: getCategoryId('微信'),
+                      categoryName: '微信', 
+                      value: contactWechatList.join(',') 
+                    }];
+                  }
+                  if (contactEmailList.length > 0) {
+                    filtered = [...filtered, { 
+                      categoryId: getCategoryId('邮箱'),
+                      categoryName: '邮箱', 
+                      value: contactEmailList.join(',') 
+                    }];
+                  }
+                  
+                  return filtered;
+                });
+                setDialogMessage({type: 'success', text: '联络方式已保存'});
+                setTimeout(() => {
+                  setDialogMessage(null);
+                  setShowContactDialog(false);
+                }, 500);
+              }}>保存</Button>
             </div>
           </div>
         </div>
