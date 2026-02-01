@@ -89,46 +89,6 @@ export default function DataComparison() {
             </button>
           </div>
         </div>
-
-        {/* 第二行标题：互动与关系健康度 + Tab切换 */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-white/20">
-          <div className="flex items-center">
-            <span className="font-medium">互动与关系健康度</span>
-          </div>
-          {/* 标签页切换 */}
-          <div className="flex bg-white/20 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setActiveTab("all")}
-              className="px-3 py-1 text-sm"
-              style={{ 
-                backgroundColor: activeTab === "all" ? "white" : "transparent",
-                color: activeTab === "all" ? themeColors.primary : "white"
-              }}
-            >
-              全部
-            </button>
-            <button
-              onClick={() => setActiveTab("my")}
-              className="px-3 py-1 text-sm"
-              style={{ 
-                backgroundColor: activeTab === "my" ? "white" : "transparent",
-                color: activeTab === "my" ? themeColors.primary : "white"
-              }}
-            >
-              我的
-            </button>
-            <button
-              onClick={() => setActiveTab("shared")}
-              className="px-3 py-1 text-sm"
-              style={{ 
-                backgroundColor: activeTab === "shared" ? "white" : "transparent",
-                color: activeTab === "shared" ? themeColors.primary : "white"
-              }}
-            >
-              共享
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* 内容区域 */}
