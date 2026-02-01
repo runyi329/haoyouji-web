@@ -209,23 +209,26 @@ export default function LedgerDetail() {
           
           {/* 功能按钮（靠右） */}
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center">
-              <Settings 
-                className="w-5 h-5 text-white cursor-pointer" 
-                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-              />
+            <div 
+              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
+              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
+              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+            >
+              <Settings className="w-5 h-5" style={{ color: themeColors.text }} />
             </div>
             <div 
-              className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer"
+              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
+              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
-              <Search className="w-5 h-5 text-white" />
+              <Search className="w-5 h-5" style={{ color: themeColors.text }} />
             </div>
             <div 
-              className="w-10 h-10 rounded-full border-2 border-white/50 flex items-center justify-center cursor-pointer"
+              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
+              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
               onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
             >
-              <BarChart3 className="w-5 h-5 text-white" />
+              <BarChart3 className="w-5 h-5" style={{ color: themeColors.text }} />
             </div>
           </div>
         </div>
