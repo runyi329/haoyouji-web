@@ -2,13 +2,14 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList
+  BarChart, Bar, LineChart, Line, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList
 } from 'recharts';
 import { trpc } from "@/lib/trpc";
 
 type TabType = "all" | "my" | "shared";
 type TimePeriodType = "day" | "week" | "month";
+type ChartType = "bar" | "line" | "area";
 
 export default function DataComparison() {
   const [, setLocation] = useLocation();
@@ -84,6 +85,7 @@ export default function DataComparison() {
 // 全部数据内容
 function AllDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [chartType, setChartType] = useState<ChartType>("bar");
 
   // 根据时间维度生成数据
   const chartData = useMemo(() => {
@@ -126,6 +128,116 @@ function AllDataContent() {
   const titleText = `最近12${periodText}新增人脉`;
   const avgText = `12${periodText}平均新增`;
 
+  // 渲染图表
+  const renderChart = () => {
+    const commonProps = {
+      data: chartData,
+      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+    };
+
+    const commonAxisProps = {
+      xAxis: {
+        dataKey: "name",
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        interval: 0
+      },
+      yAxis: {
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        width: 45,
+        tickFormatter: (value: number) => `${value}人`,
+        domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
+      },
+      tooltip: {
+        contentStyle: {
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          fontSize: '14px'
+        },
+        formatter: (value: any) => [`${value}人`, '新增人脉']
+      }
+    };
+
+    if (chartType === "bar") {
+      return (
+        <BarChart {...commonProps} barCategoryGap="20%">
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Bar 
+            dataKey="value" 
+            fill="#8b5cf6" 
+            radius={[4, 4, 0, 0]}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Bar>
+        </BarChart>
+      );
+    } else if (chartType === "line") {
+      return (
+        <LineChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Line 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            dot={{ fill: '#8b5cf6', r: 4 }}
+            activeDot={{ r: 6 }}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Line>
+        </LineChart>
+      );
+    } else {
+      return (
+        <AreaChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Area 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            fill="#8b5cf6"
+            fillOpacity={0.3}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Area>
+        </AreaChart>
+      );
+    }
+  };
+
   return (
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
@@ -138,55 +250,13 @@ function AllDataContent() {
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart 
-            data={chartData}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-            barCategoryGap="20%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              interval={0}
-            />
-            <YAxis 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              width={45}
-              tickFormatter={(value) => `${value}人`}
-              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-              formatter={(value: any) => [`${value}人`, '新增人脉']}
-            />
-            <Bar 
-              dataKey="value" 
-              fill="#8b5cf6" 
-              radius={[4, 4, 0, 0]}
-              animationBegin={0}
-              animationDuration={1500}
-              animationEasing="ease-out"
-            >
-              <LabelList 
-                dataKey="value" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-                formatter={(value: number) => value}
-              />
-            </Bar>
-          </BarChart>
+          {renderChart()}
         </ResponsiveContainer>
 
-        {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+        {/* 按钮区域：时间维度 + 图表类型 */}
+        <div className="mt-3 mb-3 flex items-center justify-between gap-3">
+          {/* 时间维度切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
@@ -218,6 +288,40 @@ function AllDataContent() {
               月
             </button>
           </div>
+
+          {/* 图表类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setChartType("bar")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "bar"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              柱状图
+            </button>
+            <button
+              onClick={() => setChartType("line")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "line" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              折线图
+            </button>
+            <button
+              onClick={() => setChartType("area")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "area" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              面积图
+            </button>
+          </div>
         </div>
 
         {/* 统计数据 */}
@@ -235,6 +339,7 @@ function AllDataContent() {
 // 我的数据内容
 function MyDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [chartType, setChartType] = useState<ChartType>("bar");
 
   // 根据时间维度生成数据
   const chartData = useMemo(() => {
@@ -277,6 +382,116 @@ function MyDataContent() {
   const titleText = `最近12${periodText}新增人脉（我的）`;
   const avgText = `12${periodText}平均新增`;
 
+  // 渲染图表
+  const renderChart = () => {
+    const commonProps = {
+      data: chartData,
+      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+    };
+
+    const commonAxisProps = {
+      xAxis: {
+        dataKey: "name",
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        interval: 0
+      },
+      yAxis: {
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        width: 45,
+        tickFormatter: (value: number) => `${value}人`,
+        domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
+      },
+      tooltip: {
+        contentStyle: {
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          fontSize: '14px'
+        },
+        formatter: (value: any) => [`${value}人`, '新增人脉']
+      }
+    };
+
+    if (chartType === "bar") {
+      return (
+        <BarChart {...commonProps} barCategoryGap="20%">
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Bar 
+            dataKey="value" 
+            fill="#8b5cf6" 
+            radius={[4, 4, 0, 0]}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Bar>
+        </BarChart>
+      );
+    } else if (chartType === "line") {
+      return (
+        <LineChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Line 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            dot={{ fill: '#8b5cf6', r: 4 }}
+            activeDot={{ r: 6 }}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Line>
+        </LineChart>
+      );
+    } else {
+      return (
+        <AreaChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Area 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            fill="#8b5cf6"
+            fillOpacity={0.3}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Area>
+        </AreaChart>
+      );
+    }
+  };
+
   return (
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
@@ -289,55 +504,13 @@ function MyDataContent() {
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart 
-            data={chartData}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-            barCategoryGap="20%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              interval={0}
-            />
-            <YAxis 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              width={45}
-              tickFormatter={(value) => `${value}人`}
-              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-              formatter={(value: any) => [`${value}人`, '新增人脉']}
-            />
-            <Bar 
-              dataKey="value" 
-              fill="#8b5cf6" 
-              radius={[4, 4, 0, 0]}
-              animationBegin={0}
-              animationDuration={1500}
-              animationEasing="ease-out"
-            >
-              <LabelList 
-                dataKey="value" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-                formatter={(value: number) => value}
-              />
-            </Bar>
-          </BarChart>
+          {renderChart()}
         </ResponsiveContainer>
 
-        {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+        {/* 按钮区域：时间维度 + 图表类型 */}
+        <div className="mt-3 mb-3 flex items-center justify-between gap-3">
+          {/* 时间维度切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
@@ -369,6 +542,40 @@ function MyDataContent() {
               月
             </button>
           </div>
+
+          {/* 图表类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setChartType("bar")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "bar"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              柱状图
+            </button>
+            <button
+              onClick={() => setChartType("line")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "line" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              折线图
+            </button>
+            <button
+              onClick={() => setChartType("area")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "area" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              面积图
+            </button>
+          </div>
         </div>
 
         {/* 统计数据 */}
@@ -386,6 +593,7 @@ function MyDataContent() {
 // 共享数据内容
 function SharedDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [chartType, setChartType] = useState<ChartType>("bar");
 
   // 根据时间维度生成数据
   const chartData = useMemo(() => {
@@ -428,6 +636,116 @@ function SharedDataContent() {
   const titleText = `最近12${periodText}新增人脉（共享）`;
   const avgText = `12${periodText}平均新增`;
 
+  // 渲染图表
+  const renderChart = () => {
+    const commonProps = {
+      data: chartData,
+      margin: { top: 5, right: 5, left: 5, bottom: 5 }
+    };
+
+    const commonAxisProps = {
+      xAxis: {
+        dataKey: "name",
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        interval: 0
+      },
+      yAxis: {
+        tick: { fontSize: 11, fill: '#6b7280' },
+        stroke: "#9ca3af",
+        width: 45,
+        tickFormatter: (value: number) => `${value}人`,
+        domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
+      },
+      tooltip: {
+        contentStyle: {
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          fontSize: '14px'
+        },
+        formatter: (value: any) => [`${value}人`, '新增人脉']
+      }
+    };
+
+    if (chartType === "bar") {
+      return (
+        <BarChart {...commonProps} barCategoryGap="20%">
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Bar 
+            dataKey="value" 
+            fill="#8b5cf6" 
+            radius={[4, 4, 0, 0]}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Bar>
+        </BarChart>
+      );
+    } else if (chartType === "line") {
+      return (
+        <LineChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Line 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            dot={{ fill: '#8b5cf6', r: 4 }}
+            activeDot={{ r: 6 }}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Line>
+        </LineChart>
+      );
+    } else {
+      return (
+        <AreaChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis {...commonAxisProps.xAxis} />
+          <YAxis {...commonAxisProps.yAxis} />
+          <Tooltip {...commonAxisProps.tooltip} />
+          <Area 
+            type="monotone"
+            dataKey="value" 
+            stroke="#8b5cf6" 
+            strokeWidth={2}
+            fill="#8b5cf6"
+            fillOpacity={0.3}
+            animationBegin={0}
+            animationDuration={1500}
+            animationEasing="ease-out"
+          >
+            <LabelList 
+              dataKey="value" 
+              position="top" 
+              style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+            />
+          </Area>
+        </AreaChart>
+      );
+    }
+  };
+
   return (
     <div className="p-2.5 space-y-4">
       {/* 每周新增人脉统计 */}
@@ -440,55 +758,13 @@ function SharedDataContent() {
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart 
-            data={chartData}
-            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
-            barCategoryGap="20%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              interval={0}
-            />
-            <YAxis 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              stroke="#9ca3af"
-              width={45}
-              tickFormatter={(value) => `${value}人`}
-              domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.15)]}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-              formatter={(value: any) => [`${value}人`, '新增人脉']}
-            />
-            <Bar 
-              dataKey="value" 
-              fill="#8b5cf6" 
-              radius={[4, 4, 0, 0]}
-              animationBegin={0}
-              animationDuration={1500}
-              animationEasing="ease-out"
-            >
-              <LabelList 
-                dataKey="value" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
-                formatter={(value: number) => value}
-              />
-            </Bar>
-          </BarChart>
+          {renderChart()}
         </ResponsiveContainer>
 
-        {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3">
-          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
+        {/* 按钮区域：时间维度 + 图表类型 */}
+        <div className="mt-3 mb-3 flex items-center justify-between gap-3">
+          {/* 时间维度切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
               className={`px-3 py-1 text-sm ${
@@ -518,6 +794,40 @@ function SharedDataContent() {
               }`}
             >
               月
+            </button>
+          </div>
+
+          {/* 图表类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setChartType("bar")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "bar"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              柱状图
+            </button>
+            <button
+              onClick={() => setChartType("line")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "line" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              折线图
+            </button>
+            <button
+              onClick={() => setChartType("area")}
+              className={`px-3 py-1 text-sm ${
+                chartType === "area" 
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
+              }`}
+            >
+              面积图
             </button>
           </div>
         </div>
