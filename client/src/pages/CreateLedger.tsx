@@ -58,8 +58,10 @@ export default function CreateLedger() {
   const [createdLedgerId, setCreatedLedgerId] = useState<number | null>(null);
 
   const createLedgerMutation = trpc.ledger.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setCreatedLedgerId(data.id);
+      // 等待一小段时间确保数据库写入完成
+      await new Promise(resolve => setTimeout(resolve, 500));
       setShowSuccessDialog(true);
     },
     onError: (error) => {
@@ -88,6 +90,7 @@ export default function CreateLedger() {
 
   const handleGoToSettings = () => {
     if (createdLedgerId) {
+      // 跳转到账本设置页面（包含邀请成员功能）
       setLocation(`/ledger/${createdLedgerId}/settings`);
     }
   };
