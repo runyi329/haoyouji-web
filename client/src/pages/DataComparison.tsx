@@ -93,9 +93,15 @@ function AllDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= 30; i++) {
+      // 生成过去30天的真实日期（不包括今天）
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i - 1);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
         data.push({
-          name: `${i}天`,
+          name: `${month}/${day}`,
           value: Math.floor(Math.random() * 10) + 1,
         });
       }
@@ -234,13 +240,13 @@ function AllDataContent() {
                   style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-xs font-bold ${
+                  <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {index + 1}
+                    {item.name}
                   </div>
-                  <div className={`text-[9px] ${
-                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  <div className={`text-sm font-bold ${
+                    hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
                     {item.value}
                   </div>
@@ -362,9 +368,15 @@ function MyDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= 30; i++) {
+      // 生成过去30天的真实日期（不包括今天）
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i - 1);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
         data.push({
-          name: `${i}天`,
+          name: `${month}/${day}`,
           value: Math.floor(Math.random() * 8) + 1,
         });
       }
@@ -503,13 +515,13 @@ function MyDataContent() {
                   style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-xs font-bold ${
+                  <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {index + 1}
+                    {item.name}
                   </div>
-                  <div className={`text-[9px] ${
-                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  <div className={`text-sm font-bold ${
+                    hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
                     {item.value}
                   </div>
@@ -631,9 +643,15 @@ function SharedDataContent() {
     const count = 12;
     
     if (timePeriod === "day") {
-      for (let i = 1; i <= 30; i++) {
+      // 生成过去30天的真实日期（不包括今天）
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i - 1);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
         data.push({
-          name: `${i}天`,
+          name: `${month}/${day}`,
           value: Math.floor(Math.random() * 5) + 1,
         });
       }
@@ -772,13 +790,13 @@ function SharedDataContent() {
                   style={{ aspectRatio: '1 / 0.8' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-xs font-bold ${
+                  <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {index + 1}
+                    {item.name}
                   </div>
-                  <div className={`text-[9px] ${
-                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  <div className={`text-sm font-bold ${
+                    hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
                     {item.value}
                   </div>
