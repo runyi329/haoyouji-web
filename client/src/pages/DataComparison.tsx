@@ -165,9 +165,9 @@ function AllDataContent({ themeColors }: DataContentProps) {
         interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
-        tick: { fontSize: 11, fill: '#6b7280' },
+        tick: { fontSize: 10, fill: '#6b7280' },
         stroke: "#9ca3af",
-        width: 45,
+        width: 50,
         tickFormatter: (value: number) => `${value}人`,
         domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
       },
@@ -500,9 +500,9 @@ function MyDataContent({ themeColors }: DataContentProps) {
         interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
-        tick: { fontSize: 11, fill: '#6b7280' },
+        tick: { fontSize: 10, fill: '#6b7280' },
         stroke: "#9ca3af",
-        width: 45,
+        width: 50,
         tickFormatter: (value: number) => `${value}人`,
         domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
       },
@@ -836,9 +836,9 @@ function SharedDataContent({ themeColors }: DataContentProps) {
         interval: timePeriod === "day" ? 1 : 0
       },
       yAxis: {
-        tick: { fontSize: 11, fill: '#6b7280' },
+        tick: { fontSize: 10, fill: '#6b7280' },
         stroke: "#9ca3af",
-        width: 45,
+        width: 50,
         tickFormatter: (value: number) => `${value}人`,
         domain: [0, (dataMax: number) => Math.ceil(dataMax * 1.15)]
       },
