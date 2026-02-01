@@ -15,6 +15,7 @@ import { ArrowLeft, Trash2, Plus, ChevronDown, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
+import { MultiItemFieldV2, MultiAddressFieldV2, MultiBankFieldV2, MultiInvoiceFieldV2 } from "@/components/MultiItemFieldV2";
 import {
   DndContext,
   closestCenter,
@@ -1427,8 +1428,8 @@ export default function AddContact() {
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 手机 - 支持多个 */}
-            <MultiItemField
+            {/* 手机 - 支持多个（每个单独存储） */}
+            <MultiItemFieldV2
               label="手机"
               placeholder="请输入手机号"
               categoryName="手机"
@@ -1437,8 +1438,8 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 邮箱 - 支持多个 */}
-            <MultiItemField
+            {/* 邮箱 - 支持多个（每个单独存储） */}
+            <MultiItemFieldV2
               label="邮箱"
               placeholder="请输入邮箱"
               categoryName="邮箱"
@@ -1447,8 +1448,8 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 快递地址 - 支持多个，每个包含收件人、电话、地址 */}
-            <MultiAddressField
+            {/* 快递地址 - 支持多个（每个单独存储） */}
+            <MultiAddressFieldV2
               label="快递地址"
               categoryName="快递地址"
               extendedFields={extendedFields}
@@ -1456,8 +1457,8 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 银行账号 - 支持多个，每个包含账户名、开户行、账号 */}
-            <MultiBankField
+            {/* 银行账号 - 支持多个（每个单独存储） */}
+            <MultiBankFieldV2
               label="银行账号"
               categoryName="银行账号"
               extendedFields={extendedFields}
@@ -1465,8 +1466,8 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 公司名称 - 支持多个 */}
-            <MultiItemField
+            {/* 公司名称 - 支持多个（每个单独存储） */}
+            <MultiItemFieldV2
               label="公司名称"
               placeholder="请输入公司名称"
               categoryName="公司名称"
@@ -1475,8 +1476,8 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 开票信息 - 支持多个，每个包含公司名称和税号 */}
-            <MultiInvoiceField
+            {/* 开票信息 - 支持多个（每个单独存储） */}
+            <MultiInvoiceFieldV2
               label="开票信息"
               categoryName="开票信息"
               extendedFields={extendedFields}

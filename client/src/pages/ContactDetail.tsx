@@ -135,6 +135,7 @@ function CopyableItem({
 }
 
 // 扩展信息显示组件 - 支持多条目和固定顺序
+// V2版本：支持每个条目单独存储的新格式
 function ExtendedInfoSection({
   fieldValues,
   showFullInfo,
@@ -153,31 +154,46 @@ function ExtendedInfoSection({
   // 固定显示顺序
   const fieldOrder = ['手机', '邮箱', '快递地址', '银行账号', '公司名称', '开票信息'];
   
-  // 解析JSON数组格式的值
-  const parseJsonArray = (value: string): any[] => {
+  // 解析字段值（支持新旧两种格式）
+  // 新格式：每个条目单独存储，值可能是JSON对象或简单字符串
+  // 旧格式：多个条目存储在一个JSON数组中
+  const parseFieldValue = (value: string): any => {
     try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      return JSON.parse(value);
     } catch {
-      // 兼容旧格式
-      return value ? [value] : [];
+      return value;
     }
   };
   
   // 按固定顺序组织数据，只显示指定的6个字段
+  // 支持新格式：同一categoryName可能有多条记录
   const organizedFields: {categoryName: string, items: any[]}[] = [];
   
   fieldOrder.forEach(categoryName => {
-    const field = fieldValues.find(f => f.categoryName === categoryName);
-    if (field) {
-      const items = parseJsonArray(field.value);
+    // 获取该类别的所有记录（新格式：多条记录）
+    const fieldsOfCategory = fieldValues.filter(f => f.categoryName === categoryName);
+    
+    if (fieldsOfCategory.length > 0) {
+      const items: any[] = [];
+      
+      fieldsOfCategory.forEach(field => {
+        const parsed = parseFieldValue(field.value);
+        // 如果是数组（旧格式），展开添加
+        if (Array.isArray(parsed)) {
+          items.push(...parsed);
+        } else {
+          // 新格式或简单字符串
+          items.push(parsed);
+        }
+      });
+      
       if (items.length > 0) {
         organizedFields.push({ categoryName, items });
       }
     }
   });
   
-  // 不再显示其他字段，只显示上述6个指定字段
+  // 只显示上述6个指定字段
   
   if (organizedFields.length === 0) return null;
   
