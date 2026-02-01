@@ -100,8 +100,10 @@ function AllDataContent() {
         date.setDate(today.getDate() - i - 1);
         const month = date.getMonth() + 1;
         const day = date.getDate();
+        const dayIndex = 29 - i + 1; // 1-30
         data.push({
           name: `${month}/${day}`,
+          displayName: `${dayIndex}`, // 图表X轴只显示数字
           value: Math.floor(Math.random() * 10) + 1,
         });
       }
@@ -143,7 +145,7 @@ function AllDataContent() {
 
     const commonAxisProps = {
       xAxis: {
-        dataKey: "name",
+        dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
         interval: 0
@@ -376,8 +378,10 @@ function MyDataContent() {
         date.setDate(today.getDate() - i - 1);
         const month = date.getMonth() + 1;
         const day = date.getDate();
+        const dayIndex = 29 - i + 1; // 1-30
         data.push({
           name: `${month}/${day}`,
+          displayName: `${dayIndex}`, // 图表X轴只显示数字
           value: Math.floor(Math.random() * 8) + 1,
         });
       }
@@ -419,7 +423,7 @@ function MyDataContent() {
 
     const commonAxisProps = {
       xAxis: {
-        dataKey: "name",
+        dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
         interval: 0
@@ -652,8 +656,10 @@ function SharedDataContent() {
         date.setDate(today.getDate() - i - 1);
         const month = date.getMonth() + 1;
         const day = date.getDate();
+        const dayIndex = 29 - i + 1; // 1-30
         data.push({
           name: `${month}/${day}`,
+          displayName: `${dayIndex}`, // 图表X轴只显示数字
           value: Math.floor(Math.random() * 5) + 1,
         });
       }
@@ -695,7 +701,7 @@ function SharedDataContent() {
 
     const commonAxisProps = {
       xAxis: {
-        dataKey: "name",
+        dataKey: timePeriod === "day" ? "displayName" : "name",
         tick: { fontSize: 11, fill: '#6b7280' },
         stroke: "#9ca3af",
         interval: 0
