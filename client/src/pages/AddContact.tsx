@@ -395,6 +395,102 @@ function MultiBankField({
   );
 }
 
+// 多开票信息字段组件（每个包含公司名称、税号）
+function MultiInvoiceField({
+  label,
+  categoryName,
+  extendedFields,
+  setExtendedFields,
+  getCategoryId
+}: {
+  label: string;
+  categoryName: string;
+  extendedFields: ExtendedFieldValue[];
+  setExtendedFields: React.Dispatch<React.SetStateAction<ExtendedFieldValue[]>>;
+  getCategoryId: (name: string) => number;
+}) {
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newTaxNumber, setNewTaxNumber] = useState('');
+  
+  // 获取当前类别的所有开票信息
+  const getItems = (): {companyName: string, taxNumber: string}[] => {
+    const field = extendedFields.find(f => f.categoryName === categoryName);
+    if (!field) return [];
+    try {
+      const parsed = JSON.parse(field.value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      // 兼容旧格式：如果是字符串，尝试解析为公司名称
+      return field.value ? [{ companyName: field.value, taxNumber: '' }] : [];
+    }
+  };
+  
+  const items = getItems();
+  
+  // 添加新开票信息
+  const handleAdd = () => {
+    if (!newCompanyName.trim() && !newTaxNumber.trim()) return;
+    const newItem = { companyName: newCompanyName.trim(), taxNumber: newTaxNumber.trim() };
+    const newItems = [...items, newItem];
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+    });
+    setNewCompanyName('');
+    setNewTaxNumber('');
+  };
+  
+  // 删除开票信息
+  const handleDelete = (index: number) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setExtendedFields(prev => {
+      const filtered = prev.filter(f => f.categoryName !== categoryName);
+      if (newItems.length > 0) {
+        return [...filtered, { categoryId: getCategoryId(categoryName), categoryName, value: JSON.stringify(newItems) }];
+      }
+      return filtered;
+    });
+  };
+  
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      {/* 已保存的开票信息列表 */}
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((item, index) => (
+            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1 text-sm flex-1">
+                  <div><span className="text-gray-500">公司名称：</span>{item.companyName}</div>
+                  <div><span className="text-gray-500">税号：</span>{item.taxNumber}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(index)}
+                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 添加新开票信息 */}
+      <div className="p-3 border rounded-md space-y-2 bg-white">
+        <Input className="w-full" placeholder="公司名称" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} />
+        <div className="flex gap-2">
+          <Input className="flex-1" placeholder="税号" value={newTaxNumber} onChange={(e) => setNewTaxNumber(e.target.value)} />
+          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AddContact() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -1017,15 +1113,13 @@ export default function AddContact() {
               getCategoryId={getCategoryId}
             />
             
-            {/* 开票信息 - 支持多个 */}
-            <MultiItemField
+            {/* 开票信息 - 支持多个，每个包含公司名称和税号 */}
+            <MultiInvoiceField
               label="开票信息"
-              placeholder="请输入开票信息（公司名称、税号、地址等）"
               categoryName="开票信息"
               extendedFields={extendedFields}
               setExtendedFields={setExtendedFields}
               getCategoryId={getCategoryId}
-              multiline={true}
             />
           </CardContent>
         </Card>

@@ -88,7 +88,8 @@ function CopyableItem({
     e.stopPropagation();
     let copyText = value;
     if (isComposite && compositeLines.length > 0) {
-      copyText = compositeLines.map(l => `${l.label}：${l.value}`).join('\n');
+      // 只复制内容，不复制标题
+      copyText = compositeLines.map(l => l.value).join('\n');
     }
     navigator.clipboard.writeText(copyText).then(() => {
       if (navigator.vibrate) {
@@ -163,7 +164,7 @@ function ExtendedInfoSection({
     }
   };
   
-  // 按固定顺序组织数据
+  // 按固定顺序组织数据，只显示指定的6个字段
   const organizedFields: {categoryName: string, items: any[]}[] = [];
   
   fieldOrder.forEach(categoryName => {
@@ -176,15 +177,7 @@ function ExtendedInfoSection({
     }
   });
   
-  // 添加不在固定顺序中的其他字段
-  fieldValues.forEach(field => {
-    if (!fieldOrder.includes(field.categoryName)) {
-      const items = parseJsonArray(field.value);
-      if (items.length > 0) {
-        organizedFields.push({ categoryName: field.categoryName, items });
-      }
-    }
-  });
+  // 不再显示其他字段，只显示上述6个指定字段
   
   if (organizedFields.length === 0) return null;
   
@@ -257,6 +250,27 @@ function ExtendedInfoSection({
                         { label: '账户名', value: bank.accountName || '' },
                         { label: '开户行', value: bank.bankName || '' },
                         { label: '账号', value: bank.accountNumber || '' }
+                      ].filter(l => l.value)}
+                    />
+                  );
+                }
+                
+                // 开票信息 - 复合字段
+                if (field.categoryName === '开票信息') {
+                  const invoice = typeof item === 'object' ? item : { companyName: item, taxNumber: '' };
+                  return (
+                    <CopyableItem
+                      key={itemIndex}
+                      label="开票信息"
+                      value=""
+                      showFullInfo={showFullInfo}
+                      setToastMessage={setToastMessage}
+                      setToastType={setToastType}
+                      setShowToast={setShowToast}
+                      isComposite={true}
+                      compositeLines={[
+                        { label: '公司名称', value: invoice.companyName || '' },
+                        { label: '税号', value: invoice.taxNumber || '' }
                       ].filter(l => l.value)}
                     />
                   );
