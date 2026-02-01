@@ -269,7 +269,7 @@ export default function AddContact() {
   const defaultFieldList = [
     '星座', '生日', '年龄', '属相', '民族', '身份',
     '饮食', '娱乐',
-    '公司', '行业', '类型', '职业', '征信', '公户', '私户',
+    '商业', '行业', '类型', '职业', '征信', '公户', '私户',
     '联络', '地址'
   ];
   
@@ -807,8 +807,8 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowEntertainmentDialog(true);
-                              } else if (field === '公司') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '公司');
+                              } else if (field === '商业') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '商业');
                                 if (existingValue) {
                                   setCompanyList(existingValue.value.split(','));
                                 } else {
@@ -2171,11 +2171,11 @@ export default function AddContact() {
         </div>
       )}
       
-      {/* 公司对话框 */}
+      {/* 商业对话框 */}
       {showCompanyDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCompanyDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">公司名称</h3>
+            <h3 className="text-lg font-semibold mb-4">商业信息</h3>
             
             {/* 历史记录列表 */}
             {companyList.length > 0 && (
@@ -2219,11 +2219,11 @@ export default function AddContact() {
             
             {/* 输入框 */}
             <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">{companyList.length > 0 ? '添加新公司：' : '公司名称：'}</p>
+              <p className="text-sm text-gray-600 mb-2">{companyList.length > 0 ? '添加新商业：' : '商业名称：'}</p>
               <Input 
                 value={selectedCompany} 
                 onChange={(e) => setSelectedCompany(e.target.value)} 
-                placeholder="请输入公司名称" 
+                placeholder="请输入商业名称" 
               />
             </div>
             
@@ -2242,7 +2242,7 @@ export default function AddContact() {
               <Button variant="outline" className="flex-1" onClick={() => { 
                 setDialogMessage(null);
                 setShowCompanyDialog(false);
-              }}>{extendedFields.some(f => f.categoryName === '公司') ? '返回' : '取消'}</Button>
+              }}>{extendedFields.some(f => f.categoryName === '商业') ? '返回' : '取消'}</Button>
               <Button className="flex-1" onClick={() => {
                 // 检查当前输入框是否有内容
                 const hasCurrentInput = selectedCompany.trim();
@@ -2251,26 +2251,26 @@ export default function AddContact() {
                   // 将当前输入框的内容添加到列表
                   const allCompanies = [...companyList, selectedCompany.trim()];
                   
-                  // 保存所有公司
+                  // 保存所有商业
                   const value = allCompanies.join('; ');
                   setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '公司');
-                    return [...filtered, { categoryId: getCategoryId('公司'),
-                        categoryName: '公司', value }];
+                    const filtered = prev.filter(f => f.categoryName !== '商业');
+                    return [...filtered, { categoryId: getCategoryId('商业'),
+                        categoryName: '商业', value }];
                   });
                   setShowCompanyDialog(false);
                 } else {
                   // 如果输入框没有内容，检查是否有历史记录
                   if (companyList.length === 0) {
-                    setDialogMessage({type: "error", text: "请至少添加一个公司"});
+                    setDialogMessage({type: "error", text: "请至少添加一个商业"});
                     return;
                   }
-                  // 保存已有的公司
+                  // 保存已有的商业
                   const value = companyList.join('; ');
                   setExtendedFields(prev => {
-                    const filtered = prev.filter(f => f.categoryName !== '公司');
-                    return [...filtered, { categoryId: getCategoryId('公司'),
-                        categoryName: '公司', value }];
+                    const filtered = prev.filter(f => f.categoryName !== '商业');
+                    return [...filtered, { categoryId: getCategoryId('商业'),
+                        categoryName: '商业', value }];
                   });
                   setShowCompanyDialog(false);
                 }
