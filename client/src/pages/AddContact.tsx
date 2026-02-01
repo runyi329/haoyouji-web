@@ -131,26 +131,47 @@ function MultiItemField({
   // 添加新条目或保存编辑
   const handleAdd = () => {
     if (!newValue.trim()) return;
-    let newItems: string[];
-    if (editingIndex !== null) {
-      // 编辑模式：更新指定索引的条目
-      newItems = [...items];
-      newItems[editingIndex] = newValue.trim();
-      setEditingIndex(null);
-    } else {
-      // 添加模式：添加新条目
-      newItems = [...items, newValue.trim()];
-    }
-    const currentField = getCurrentField();
+    const trimmedValue = newValue.trim();
+    
     setExtendedFields(prev => {
+      // 在回调中获取当前字段，确保获取最新的状态
+      const currentField = prev.find(f => f.categoryName === categoryName);
+      
+      // 获取当前类别的所有值
+      let currentItems: string[] = [];
+      if (currentField) {
+        try {
+          const parsed = JSON.parse(currentField.value);
+          currentItems = Array.isArray(parsed) ? parsed : [currentField.value];
+        } catch {
+          currentItems = currentField.value ? [currentField.value] : [];
+        }
+      }
+      
+      let newItems: string[];
+      if (editingIndex !== null) {
+        // 编辑模式：更新指定索引的条目
+        newItems = [...currentItems];
+        newItems[editingIndex] = trimmedValue;
+      } else {
+        // 添加模式：添加新条目
+        newItems = [...currentItems, trimmedValue];
+      }
+      
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { 
+      const newField = { 
         id: currentField?.id, 
-        categoryId: getCategoryId(categoryName), 
+        categoryId: currentField?.categoryId || getCategoryId(categoryName), 
         categoryName, 
         value: JSON.stringify(newItems) 
-      }];
+      };
+      console.log('[MultiItemField] handleAdd - currentField:', currentField, 'newField:', newField);
+      return [...filtered, newField];
     });
+    
+    if (editingIndex !== null) {
+      setEditingIndex(null);
+    }
     setNewValue('');
   };
   
@@ -295,26 +316,46 @@ function MultiAddressField({
   const handleAdd = () => {
     if (!newName.trim() && !newPhone.trim() && !newAddress.trim()) return;
     const newItem = { name: newName.trim(), phone: newPhone.trim(), address: newAddress.trim() };
-    let newItems: {name: string, phone: string, address: string}[];
-    if (editingIndex !== null) {
-      // 编辑模式：更新指定索引的条目
-      newItems = [...items];
-      newItems[editingIndex] = newItem;
-      setEditingIndex(null);
-    } else {
-      // 添加模式：添加新条目
-      newItems = [...items, newItem];
-    }
-    const currentField = getCurrentField();
+    
     setExtendedFields(prev => {
+      // 在回调中获取当前字段，确保获取最新的状态
+      const currentField = prev.find(f => f.categoryName === categoryName);
+      
+      // 获取当前类别的所有地址
+      let currentItems: {name: string, phone: string, address: string}[] = [];
+      if (currentField) {
+        try {
+          const parsed = JSON.parse(currentField.value);
+          currentItems = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          currentItems = [];
+        }
+      }
+      
+      let newItems: {name: string, phone: string, address: string}[];
+      if (editingIndex !== null) {
+        // 编辑模式：更新指定索引的条目
+        newItems = [...currentItems];
+        newItems[editingIndex] = newItem;
+      } else {
+        // 添加模式：添加新条目
+        newItems = [...currentItems, newItem];
+      }
+      
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { 
+      const newField = { 
         id: currentField?.id,
-        categoryId: getCategoryId(categoryName), 
+        categoryId: currentField?.categoryId || getCategoryId(categoryName), 
         categoryName, 
         value: JSON.stringify(newItems) 
-      }];
+      };
+      console.log('[MultiAddressField] handleAdd - currentField:', currentField, 'newField:', newField);
+      return [...filtered, newField];
     });
+    
+    if (editingIndex !== null) {
+      setEditingIndex(null);
+    }
     setNewName('');
     setNewPhone('');
     setNewAddress('');
@@ -464,26 +505,46 @@ function MultiBankField({
   const handleAdd = () => {
     if (!newAccountName.trim() && !newBankName.trim() && !newAccountNumber.trim()) return;
     const newItem = { accountName: newAccountName.trim(), bankName: newBankName.trim(), accountNumber: newAccountNumber.trim() };
-    let newItems: {accountName: string, bankName: string, accountNumber: string}[];
-    if (editingIndex !== null) {
-      // 编辑模式：更新指定索引的条目
-      newItems = [...items];
-      newItems[editingIndex] = newItem;
-      setEditingIndex(null);
-    } else {
-      // 添加模式：添加新条目
-      newItems = [...items, newItem];
-    }
-    const currentField = getCurrentField();
+    
     setExtendedFields(prev => {
+      // 在回调中获取当前字段，确保获取最新的状态
+      const currentField = prev.find(f => f.categoryName === categoryName);
+      
+      // 获取当前类别的所有银行账号
+      let currentItems: {accountName: string, bankName: string, accountNumber: string}[] = [];
+      if (currentField) {
+        try {
+          const parsed = JSON.parse(currentField.value);
+          currentItems = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          currentItems = [];
+        }
+      }
+      
+      let newItems: {accountName: string, bankName: string, accountNumber: string}[];
+      if (editingIndex !== null) {
+        // 编辑模式：更新指定索引的条目
+        newItems = [...currentItems];
+        newItems[editingIndex] = newItem;
+      } else {
+        // 添加模式：添加新条目
+        newItems = [...currentItems, newItem];
+      }
+      
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { 
+      const newField = { 
         id: currentField?.id,
-        categoryId: getCategoryId(categoryName), 
+        categoryId: currentField?.categoryId || getCategoryId(categoryName), 
         categoryName, 
         value: JSON.stringify(newItems) 
-      }];
+      };
+      console.log('[MultiBankField] handleAdd - currentField:', currentField, 'newField:', newField);
+      return [...filtered, newField];
     });
+    
+    if (editingIndex !== null) {
+      setEditingIndex(null);
+    }
     setNewAccountName('');
     setNewBankName('');
     setNewAccountNumber('');
@@ -633,26 +694,47 @@ function MultiInvoiceField({
   const handleAdd = () => {
     if (!newCompanyName.trim() && !newTaxNumber.trim()) return;
     const newItem = { companyName: newCompanyName.trim(), taxNumber: newTaxNumber.trim() };
-    let newItems: {companyName: string, taxNumber: string}[];
-    if (editingIndex !== null) {
-      // 编辑模式：更新指定索引的条目
-      newItems = [...items];
-      newItems[editingIndex] = newItem;
-      setEditingIndex(null);
-    } else {
-      // 添加模式：添加新条目
-      newItems = [...items, newItem];
-    }
-    const currentField = getCurrentField();
+    
     setExtendedFields(prev => {
+      // 在回调中获取当前字段，确保获取最新的状态
+      const currentField = prev.find(f => f.categoryName === categoryName);
+      
+      // 获取当前类别的所有开票信息
+      let currentItems: {companyName: string, taxNumber: string}[] = [];
+      if (currentField) {
+        try {
+          const parsed = JSON.parse(currentField.value);
+          currentItems = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          // 兼容旧格式
+          currentItems = currentField.value ? [{ companyName: currentField.value, taxNumber: '' }] : [];
+        }
+      }
+      
+      let newItems: {companyName: string, taxNumber: string}[];
+      if (editingIndex !== null) {
+        // 编辑模式：更新指定索引的条目
+        newItems = [...currentItems];
+        newItems[editingIndex] = newItem;
+      } else {
+        // 添加模式：添加新条目
+        newItems = [...currentItems, newItem];
+      }
+      
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      return [...filtered, { 
+      const newField = { 
         id: currentField?.id,
-        categoryId: getCategoryId(categoryName), 
+        categoryId: currentField?.categoryId || getCategoryId(categoryName), 
         categoryName, 
         value: JSON.stringify(newItems) 
-      }];
+      };
+      console.log('[MultiInvoiceField] handleAdd - currentField:', currentField, 'newField:', newField);
+      return [...filtered, newField];
     });
+    
+    if (editingIndex !== null) {
+      setEditingIndex(null);
+    }
     setNewCompanyName('');
     setNewTaxNumber('');
   };
