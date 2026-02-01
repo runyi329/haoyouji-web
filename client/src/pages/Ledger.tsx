@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,10 @@ const mockLedgers = [
 export default function Ledger() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
   
   // 添加滑动手势支持
   useSwipeGesture({
@@ -140,7 +145,7 @@ export default function Ledger() {
   };
 
   return (
-    <div className="min-h-screen bg-[#e0fcff] pb-20">
+    <div className="min-h-screen pb-20" style={{ backgroundColor: `${themeColors.primary}15` }}>
       {/* 顶部导航栏 */}
       <div className="bg-white shadow-sm">
         <div className="container py-3 px-4 flex items-center">
@@ -162,9 +167,10 @@ export default function Ledger() {
             onClick={() => setActiveTab("active")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               activeTab === "active"
-                ? "bg-[#ff7f50] text-white"
+                ? "text-white"
                 : "text-gray-600 hover:bg-gray-100"
             }`}
+            style={activeTab === "active" ? { backgroundColor: themeColors.primary } : {}}
           >
             使用中
           </button>
@@ -172,9 +178,10 @@ export default function Ledger() {
             onClick={() => setActiveTab("archived")}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               activeTab === "archived"
-                ? "bg-[#ff7f50] text-white"
+                ? "text-white"
                 : "text-gray-600 hover:bg-gray-100"
             }`}
+            style={activeTab === "archived" ? { backgroundColor: themeColors.primary } : {}}
           >
             已存档
           </button>
@@ -352,7 +359,11 @@ export default function Ledger() {
         <div className="container flex gap-3">
           <Button
             variant="outline"
-            className="flex-1 bg-[#bde4f4] hover:bg-[#e0fcff] text-[#404969] border-0 shadow-lg"
+            className="flex-1 border-0 shadow-lg"
+            style={{ 
+              backgroundColor: `${themeColors.primary}20`, 
+              color: themeColors.text 
+            }}
             onClick={() => {
               // TODO: 加入他人账本
             }}
@@ -360,7 +371,8 @@ export default function Ledger() {
             加入他人账本
           </Button>
           <Button
-            className="flex-1 bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] shadow-lg"
+            className="flex-1 text-white shadow-lg hover:opacity-90"
+            style={{ backgroundColor: themeColors.primary }}
             onClick={() => setShowCreateDialog(true)}
           >
             创建新的账本
@@ -474,7 +486,8 @@ export default function Ledger() {
                       size="sm"
                       onClick={() => handleInviteUser(user.username)}
                       disabled={inviteMutation.isPending}
-                      className="bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+                      className="text-white hover:opacity-90"
+                      style={{ backgroundColor: themeColors.primary }}
                     >
                       <UserPlus className="w-4 h-4 mr-1" />
                       添加
