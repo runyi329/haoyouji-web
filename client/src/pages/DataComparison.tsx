@@ -149,8 +149,9 @@ function AllDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+                position="inside" 
+                offset={10}
+                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
                 formatter={(value: number) => value}
               />
             </Bar>
@@ -238,8 +239,9 @@ function MyDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+                position="inside" 
+                offset={10}
+                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
                 formatter={(value: number) => value}
               />
             </Bar>
@@ -327,8 +329,9 @@ function SharedDataContent() {
             >
               <LabelList 
                 dataKey="count" 
-                position="top" 
-                style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
+                position="inside" 
+                offset={10}
+                style={{ fontSize: '12px', fill: 'white', fontWeight: 600 }}
                 formatter={(value: number) => value}
               />
             </Bar>
