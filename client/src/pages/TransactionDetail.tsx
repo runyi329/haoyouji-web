@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -19,6 +20,10 @@ export default function TransactionDetail() {
   const [, params] = useRoute("/ledger/:ledgerId/transaction/:transactionId");
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
 
   const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
   const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
@@ -132,7 +137,7 @@ export default function TransactionDetail() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航栏 */}
-      <div className="bg-[#bde4f4] text-[#404969]">
+      <div style={{ backgroundColor: `${themeColors.primary}30`, color: themeColors.text }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}`)}
@@ -302,7 +307,8 @@ export default function TransactionDetail() {
                 deleteMutation.mutate({ recordId: transactionId });
               }
             }}
-            className="w-full py-3 bg-[#ff7f50] hover:bg-[#bde4f4] text-white hover:text-[#404969] rounded-lg font-medium text-base"
+            className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
+            style={{ backgroundColor: themeColors.primary }}
           >
             删除账目
           </button>

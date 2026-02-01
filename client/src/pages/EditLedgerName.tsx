@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -10,6 +11,10 @@ export default function EditLedgerName() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
+
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
 
   // 获取账本详情
   const { data: ledgerData, isLoading } = trpc.ledger.getById.useQuery({
@@ -97,7 +102,8 @@ export default function EditLedgerName() {
           <Button
             onClick={handleSave}
             disabled={updateLedgerNameMutation.isPending || !newName.trim()}
-            className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+            className="w-full text-white hover:opacity-90"
+            style={{ backgroundColor: themeColors.primary }}
           >
             {updateLedgerNameMutation.isPending ? "保存中..." : "确定"}
           </Button>

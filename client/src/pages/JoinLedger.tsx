@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 
 export default function JoinLedger() {
   const { token } = useParams<{ token: string }>();
@@ -15,6 +16,10 @@ export default function JoinLedger() {
   const [joinStatus, setJoinStatus] = useState<"idle" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [ledgerInfo, setLedgerInfo] = useState<{ id: number; name: string } | null>(null);
+
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
 
   // 加入账本的mutation
   const joinMutation = trpc.ledger.joinByToken.useMutation({
@@ -53,16 +58,17 @@ export default function JoinLedger() {
   // 如果未登录，显示登录提示
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
         <Card className="p-8 bg-white max-w-md w-full text-center">
-          <AlertCircle className="w-16 h-16 text-[#ff7f50] mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-[#404969] mb-4">需要登录</h2>
+          <AlertCircle className="w-16 h-16 mx-auto mb-4" style={{ color: themeColors.primary }} />
+          <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>需要登录</h2>
           <p className="text-gray-600 mb-6">
             您需要先登录脉动账号才能加入账本
           </p>
           <Button
             onClick={() => window.location.href = getLoginUrl()}
-            className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+            className="w-full text-white hover:opacity-90"
+            style={{ backgroundColor: themeColors.primary }}
           >
             前往登录
           </Button>
@@ -74,14 +80,14 @@ export default function JoinLedger() {
   // 加入成功
   if (joinStatus === "success" && ledgerInfo) {
     return (
-      <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
         <Card className="p-8 bg-white max-w-md w-full text-center">
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-[#404969] mb-4">加入成功！</h2>
+          <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入成功！</h2>
           <p className="text-gray-600 mb-2">
             您已成功加入账本
           </p>
-          <p className="text-lg font-semibold text-[#404969] mb-6">
+          <p className="text-lg font-semibold mb-6" style={{ color: themeColors.text }}>
             {ledgerInfo.name}
           </p>
           <p className="text-sm text-gray-500">
@@ -95,10 +101,10 @@ export default function JoinLedger() {
   // 加入失败
   if (joinStatus === "error") {
     return (
-      <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
         <Card className="p-8 bg-white max-w-md w-full text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-[#404969] mb-4">加入失败</h2>
+          <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入失败</h2>
           <p className="text-gray-600 mb-6">
             {errorMessage}
           </p>
@@ -114,7 +120,8 @@ export default function JoinLedger() {
                 setJoinStatus("idle");
                 setErrorMessage("");
               }}
-              className="flex-1 bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+              className="flex-1 text-white hover:opacity-90"
+              style={{ backgroundColor: themeColors.primary }}
             >
               重试
             </Button>
@@ -126,19 +133,20 @@ export default function JoinLedger() {
 
   // 待加入状态
   return (
-    <div className="min-h-screen bg-[#e0fcff] flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
       <Card className="p-8 bg-white max-w-md w-full text-center">
-        <div className="w-16 h-16 rounded-full bg-[#bde4f4] flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${themeColors.primary}30` }}>
           <span className="text-3xl">📒</span>
         </div>
-        <h2 className="text-2xl font-bold text-[#404969] mb-4">加入账本</h2>
+        <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入账本</h2>
         <p className="text-gray-600 mb-6">
           您收到了一个账本邀请，点击下方按钮即可加入
         </p>
         <Button
           onClick={handleJoin}
           disabled={isJoining}
-          className="w-full bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+          className="w-full text-white hover:opacity-90"
+          style={{ backgroundColor: themeColors.primary }}
         >
           {isJoining ? (
             <>

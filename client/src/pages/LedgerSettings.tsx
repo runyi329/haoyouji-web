@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Switch } from "@/components/ui/switch";
 import { ChevronRight, ChevronLeft, X, Search, UserPlus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -23,6 +24,10 @@ export default function LedgerSettings() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
+
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const themeColors = customColors || currentTheme.colors;
 
   // 获取账本详情
   const { data: ledgerData, isLoading } = trpc.ledger.getById.useQuery({
@@ -147,7 +152,7 @@ export default function LedgerSettings() {
                   />
                 </div>
                 {member.role === 'owner' && (
-                  <div className="absolute -top-1 -left-1 bg-[#ff7f50] text-white text-xs px-1.5 py-0.5 rounded">
+                  <div className="absolute -top-1 -left-1 text-white text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: themeColors.primary }}>
                     创建人
                   </div>
                 )}
@@ -175,10 +180,10 @@ export default function LedgerSettings() {
             onClick={() => setShowInviteDialog(true)}
             className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
           >
-            <div className="w-16 h-16 rounded-lg border-2 border-dashed border-[#ff7f50] flex items-center justify-center">
-              <span className="text-3xl text-[#ff7f50]">+</span>
+            <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: themeColors.primary }}>
+              <span className="text-3xl" style={{ color: themeColors.primary }}>+</span>
             </div>
-            <div className="text-sm text-[#ff7f50] mt-1">邀请伙伴</div>
+            <div className="text-sm mt-1" style={{ color: themeColors.primary }}>邀请伙伴</div>
           </button>
         </div>
       </div>
@@ -353,8 +358,9 @@ export default function LedgerSettings() {
                             disabled={isMember || inviteMutation.isPending}
                             className={isMember 
                               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                              : "bg-[#ff7f50] hover:bg-[#ff6a3d] text-white"
+                              : "text-white hover:opacity-90"
                             }
+                            style={!isMember ? { backgroundColor: themeColors.primary } : {}}
                           >
                             <UserPlus className="w-4 h-4 mr-1" />
                             {isMember ? '已添加' : '添加'}
