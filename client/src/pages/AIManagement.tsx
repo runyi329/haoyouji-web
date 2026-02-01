@@ -49,19 +49,11 @@ export default function AIManagement() {
       if (result.success) {
         setConfig(result.data);
       } else {
-        toast({
-          title: '加载失败',
-          description: result.error || '无法加载 AI 配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法加载 AI 配置');
       }
     } catch (error) {
       console.error('加载 AI 配置错误:', error);
-      toast({
-        title: '加载失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsLoading(false);
     }
@@ -83,24 +75,13 @@ export default function AIManagement() {
       const result = await response.json();
 
       if (result.success) {
-        toast({
-          title: '保存成功',
-          description: 'AI 配置已更新',
-        });
+        toast.success('AI 配置已更新');
       } else {
-        toast({
-          title: '保存失败',
-          description: result.error || '无法保存 AI 配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法保存 AI 配置');
       }
     } catch (error) {
       console.error('保存 AI 配置错误:', error);
-      toast({
-        title: '保存失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsSaving(false);
     }
@@ -121,24 +102,13 @@ export default function AIManagement() {
 
       if (result.success) {
         setConfig(result.data);
-        toast({
-          title: '重置成功',
-          description: 'AI 配置已恢复为默认值',
-        });
+        toast.success('AI 配置已恢复为默认值');
       } else {
-        toast({
-          title: '重置失败',
-          description: result.error || '无法重置 AI 配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法重置 AI 配置');
       }
     } catch (error) {
       console.error('重置 AI 配置错误:', error);
-      toast({
-        title: '重置失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsLoading(false);
     }
@@ -154,19 +124,11 @@ export default function AIManagement() {
       if (result.success) {
         setAssistantConfig(result.data);
       } else {
-        toast({
-          title: '加载失败',
-          description: result.error || '无法加载 AI 助手配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法加载 AI 助手配置');
       }
     } catch (error) {
       console.error('加载 AI 助手配置错误:', error);
-      toast({
-        title: '加载失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsAssistantLoading(false);
     }
@@ -188,24 +150,13 @@ export default function AIManagement() {
       const result = await response.json();
 
       if (result.success) {
-        toast({
-          title: '保存成功',
-          description: 'AI 助手配置已更新',
-        });
+        toast.success('AI 助手配置已更新');
       } else {
-        toast({
-          title: '保存失败',
-          description: result.error || '无法保存 AI 助手配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法保存 AI 助手配置');
       }
     } catch (error) {
       console.error('保存 AI 助手配置错误:', error);
-      toast({
-        title: '保存失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsAssistantSaving(false);
     }
@@ -226,24 +177,13 @@ export default function AIManagement() {
 
       if (result.success) {
         setAssistantConfig(result.data);
-        toast({
-          title: '重置成功',
-          description: 'AI 助手配置已恢复为默认值',
-        });
+        toast.success('AI 助手配置已恢复为默认值');
       } else {
-        toast({
-          title: '重置失败',
-          description: result.error || '无法重置 AI 助手配置',
-          variant: 'destructive',
-        });
+        toast.error(result.error || '无法重置 AI 助手配置');
       }
     } catch (error) {
       console.error('重置 AI 助手配置错误:', error);
-      toast({
-        title: '重置失败',
-        description: '网络错误，请稍后重试',
-        variant: 'destructive',
-      });
+      toast.error('网络错误，请稍后重试');
     } finally {
       setIsAssistantLoading(false);
     }
