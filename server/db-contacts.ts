@@ -1271,9 +1271,9 @@ export async function getContactStats(parentUserId: number) {
   let totalLedgerEntries = 0;
   try {
     const ledgerEntriesResult = await db.execute(sql`
-      SELECT COUNT(DISTINCT e.id) as count
-      FROM entries e
-      INNER JOIN ledgers l ON e.ledger_id = l.id
+      SELECT COUNT(DISTINCT lr.id) as count
+      FROM ledger_records lr
+      INNER JOIN ledgers l ON lr.ledgerId = l.id
       INNER JOIN ledger_members lm ON l.id = lm.ledger_id
       WHERE lm.user_id = ${parentUserId}
     `);
