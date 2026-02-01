@@ -225,14 +225,14 @@ function AllDataContent() {
                   style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  {/* 周数 */}
+                  {/* 周数/月份 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {timePeriod === "week" ? `第${item.name}` : item.name}
+                    {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
-                  {/* 日期范围（只在周维度显示） */}
-                  {timePeriod === "week" && (item as any).dateRange && (
+                  {/* 日期范围（周和月维度显示） */}
+                  {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
                     <div className={`text-[8px] ${
                       hasData ? 'text-purple-600' : 'text-white'
                     }`}>
@@ -506,14 +506,14 @@ function MyDataContent() {
                   style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  {/* 周数 */}
+                  {/* 周数/月份 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {timePeriod === "week" ? `第${item.name}` : item.name}
+                    {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
-                  {/* 日期范围（只在周维度显示） */}
-                  {timePeriod === "week" && (item as any).dateRange && (
+                  {/* 日期范围（周和月维度显示） */}
+                  {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
                     <div className={`text-[8px] ${
                       hasData ? 'text-purple-600' : 'text-white'
                     }`}>
@@ -787,14 +787,14 @@ function SharedDataContent() {
                   style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  {/* 周数 */}
+                  {/* 周数/月份 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {timePeriod === "week" ? `第${item.name}` : item.name}
+                    {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
-                  {/* 日期范围（只在周维度显示） */}
-                  {timePeriod === "week" && (item as any).dateRange && (
+                  {/* 日期范围（周和月维度显示） */}
+                  {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
                     <div className={`text-[8px] ${
                       hasData ? 'text-purple-600' : 'text-white'
                     }`}>

@@ -238,6 +238,16 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
         const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
         
+        // 计算该月的最后一天
+        const lastDay = new Date(nextDate.getTime() - 1);
+        
+        // 格式化日期范围显示
+        const startMonth = date.getMonth() + 1;
+        const startDay = date.getDate();
+        const endMonth = lastDay.getMonth() + 1;
+        const endDay = lastDay.getDate();
+        const dateRange = `${startMonth}/${startDay}-${endMonth}/${endDay}`;
+        
         let count = 0;
         
         if (type === 'all' || type === 'my') {
@@ -249,6 +259,7 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         
         stats.push({
           name: `${12 - i}月`,
+          dateRange: dateRange,
           value: count,
         });
       }
