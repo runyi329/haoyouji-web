@@ -1659,7 +1659,6 @@ export async function addTransaction(data: {
     amount: data.amount.toString(),
     categoryId: data.categoryId,
     description: data.description || null,
-    imageUrl: data.imageUrl || null,
     recordDate: data.transactionDate,
     createdBy: data.userId,
   });
