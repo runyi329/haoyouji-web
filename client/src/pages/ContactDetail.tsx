@@ -142,7 +142,9 @@ function ExtendedInfoSection({
   setToastMessage,
   setToastType,
   setShowToast,
-  toggleVisibility
+  toggleVisibility,
+  companyReportExistsMap,
+  onCompanyReportClick
 }: {
   fieldValues: any[];
   showFullInfo: boolean;
@@ -150,6 +152,8 @@ function ExtendedInfoSection({
   setToastType: (type: 'success' | 'error') => void;
   setShowToast: (show: boolean) => void;
   toggleVisibility: () => void;
+  companyReportExistsMap: Record<string, boolean>;
+  onCompanyReportClick: (companyName: string) => void;
 }) {
   // 固定显示顺序
   const fieldOrder = ['手机', '邮箱', '快递地址', '银行账号', '公司名称', '开票信息'];
@@ -292,7 +296,43 @@ function ExtendedInfoSection({
                   );
                 }
                 
-                // 简单字段
+                // 公司名称 - 添加机器人图标
+                if (field.categoryName === '公司名称') {
+                  const companyName = typeof item === 'string' ? item : JSON.stringify(item);
+                  const hasReport = companyReportExistsMap[companyName] || false;
+                  return (
+                    <div key={itemIndex} className="py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className={`text-sm ${showFullInfo ? '' : 'blur-sm select-none'}`}>
+                          {companyName}
+                        </span>
+                        <CompanyReportIcon
+                          hasReport={hasReport}
+                          onClick={() => onCompanyReportClick(companyName)}
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(companyName).then(() => {
+                            setToastMessage('已复制');
+                            setToastType('success');
+                            setShowToast(true);
+                          }).catch(() => {
+                            setToastMessage('复制失败');
+                            setToastType('error');
+                            setShowToast(true);
+                          });
+                        }}
+                        className="p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0"
+                        title="复制"
+                      >
+                        <Copy className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  );
+                }
+                
+                // 其他简单字段
                 const displayValue = typeof item === 'string' ? item : JSON.stringify(item);
                 return (
                   <CopyableItem
@@ -1495,6 +1535,11 @@ export default function ContactDetail() {
                   setToastType={setToastType}
                   setShowToast={setShowToast}
                   toggleVisibility={toggleExtendedInfoVisibility}
+                  companyReportExistsMap={companyReportExistsMap}
+                  onCompanyReportClick={(companyName) => {
+                    setSelectedCompanyName(companyName);
+                    setShowCompanyReportDialog(true);
+                  }}
                 />
               )}
               
