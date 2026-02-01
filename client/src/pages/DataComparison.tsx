@@ -185,34 +185,34 @@ function AllDataContent() {
         </ResponsiveContainer>
 
         {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3 flex justify-center">
-          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+        <div className="mt-3 mb-3">
+          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "day"
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "week" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "month" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               月
@@ -336,34 +336,34 @@ function MyDataContent() {
         </ResponsiveContainer>
 
         {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3 flex justify-center">
-          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+        <div className="mt-3 mb-3">
+          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "day"
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "week" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "month" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               月
@@ -487,34 +487,34 @@ function SharedDataContent() {
         </ResponsiveContainer>
 
         {/* 时间维度切换按钮 */}
-        <div className="mt-3 mb-3 flex justify-center">
-          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+        <div className="mt-3 mb-3">
+          <div className="flex bg-white/20 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "day"
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "week" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-3 py-1 text-sm ${
                 timePeriod === "month" 
-                  ? "bg-purple-600 text-white shadow-sm" 
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white text-purple-600" 
+                  : "text-gray-600"
               }`}
             >
               月
