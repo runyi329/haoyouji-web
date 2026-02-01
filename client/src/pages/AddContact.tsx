@@ -1117,8 +1117,12 @@ export default function AddContact() {
   }, [existingContact, isEditMode, isFieldsInitialized]);
   
   // 初始化扩展信息字段值（编辑模式）
+  // 添加一个标志位防止重复初始化
+  const [isExtendedFieldsInitialized, setIsExtendedFieldsInitialized] = useState(false);
+  
   useEffect(() => {
-    if (isEditMode && existingFieldValues && existingFieldValues.length > 0) {
+    // 只在第一次加载时初始化，防止保存后的invalidate覆盖本地状态
+    if (isEditMode && existingFieldValues && existingFieldValues.length > 0 && !isExtendedFieldsInitialized) {
       const fields: ExtendedFieldValue[] = existingFieldValues.map((fv: any) => ({
         id: fv.id,
         categoryId: fv.categoryId,
@@ -1126,8 +1130,9 @@ export default function AddContact() {
         value: fv.value || "",
       }));
       setExtendedFields(fields);
+      setIsExtendedFieldsInitialized(true);
     }
-  }, [existingFieldValues, isEditMode]);
+  }, [existingFieldValues, isEditMode, isExtendedFieldsInitialized]);
   
   // 创建人脉API
   const createContactMutation = trpc.contacts.create.useMutation({
