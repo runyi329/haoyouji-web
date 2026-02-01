@@ -2167,7 +2167,7 @@ export default function ContactsList() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>记录联络</DialogTitle>
+            <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
               {contactToRecord?.hasTodayInteraction 
                 ? `今天已经记录过与 "${contactToRecord?.name}" 的联络，单日确认上限1次`

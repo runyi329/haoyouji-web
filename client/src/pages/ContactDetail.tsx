@@ -1944,7 +1944,7 @@ export default function ContactDetail() {
       <Dialog open={showInteractionDialog} onOpenChange={setShowInteractionDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>记录联络</DialogTitle>
+            <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
               记录与 {contact.name} 的联络情况
             </DialogDescription>
@@ -2124,7 +2124,7 @@ export default function ContactDetail() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>记录联络</DialogTitle>
+            <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
               {contact?.hasTodayInteraction 
                 ? `今天已经记录过与 "${contact?.name}" 的联络，单日确认上限1次`
