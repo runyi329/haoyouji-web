@@ -112,7 +112,6 @@ function AllDataContent() {
     return chartData.reduce((sum, item) => sum + item.value, 0);
   }, [chartData]);
   const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
-  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -269,7 +268,10 @@ function AllDataContent() {
             <div className="w-1 h-6 bg-purple-600 rounded"></div>
             <h2 className="text-lg font-medium">{titleText}</h2>
           </div>
-          <div className="text-xs text-gray-600">{statsText}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
+            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          </div>
         </div>
 
         {/* 图表 */}
@@ -393,7 +395,6 @@ function MyDataContent() {
     return chartData.reduce((sum, item) => sum + item.value, 0);
   }, [chartData]);
   const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
-  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -550,7 +551,10 @@ function MyDataContent() {
             <div className="w-1 h-6 bg-purple-600 rounded"></div>
             <h2 className="text-lg font-medium">{titleText}</h2>
           </div>
-          <div className="text-xs text-gray-600">{statsText}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
+            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          </div>
         </div>
 
         {/* 图表 */}
@@ -675,7 +679,6 @@ function SharedDataContent() {
     return chartData.reduce((sum, item) => sum + item.value, 0);
   }, [chartData]);
   const avgUnit = timePeriod === "day" ? "日均" : timePeriod === "week" ? "周均" : "月均";
-  const statsText = `${avgUnit}${avgValue}人，共计${totalCount}人`;
 
   // 渲染图表
   const renderChart = () => {
@@ -832,7 +835,10 @@ function SharedDataContent() {
             <div className="w-1 h-6 bg-purple-600 rounded"></div>
             <h2 className="text-lg font-medium">{titleText}</h2>
           </div>
-          <div className="text-xs text-gray-600">{statsText}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
+            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          </div>
         </div>
 
         {/* 图表 */}
