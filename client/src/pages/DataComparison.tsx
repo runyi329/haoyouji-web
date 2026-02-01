@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import {
@@ -6,19 +6,44 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList
 } from 'recharts';
 import { trpc } from "@/lib/trpc";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
 
 type TabType = "all" | "my" | "shared";
 type TimePeriodType = "day" | "week" | "month";
 type ChartType = "bar" | "line" | "calendar";
 
+// 获取当前主题色的hook
+function useThemeColors() {
+  const { currentTheme, customColors } = useColorTheme();
+  const colors = customColors || currentTheme.colors;
+  
+  // 计算一个较浅的主题色用于背景
+  const primaryLight = `${colors.primary}15`; // 15% opacity
+  const primaryMedium = `${colors.primary}50`; // 50% opacity
+  
+  return {
+    primary: colors.primary,
+    secondary: colors.secondary,
+    primaryLight,
+    primaryMedium,
+    text: colors.text,
+  };
+}
+
 export default function DataComparison() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>("all");
+  const themeColors = useThemeColors();
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* 顶部导航区 - 蓝色渐变背景 */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+      {/* 顶部导航区 - 使用主题色渐变背景 */}
+      <div 
+        className="text-white"
+        style={{ 
+          background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
+        }}
+      >
         {/* 顶部导航栏：返回 + 标题 + Tab切换 */}
         <div className="flex items-center justify-between px-4 py-3">
           <button 
@@ -34,31 +59,31 @@ export default function DataComparison() {
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
               onClick={() => setActiveTab("all")}
-              className={`px-3 py-1 text-sm ${ 
-                activeTab === "all"
-                  ? "bg-white text-blue-600" 
-                  : "text-white"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: activeTab === "all" ? "white" : "transparent",
+                color: activeTab === "all" ? themeColors.primary : "white"
+              }}
             >
               全部
             </button>
             <button
               onClick={() => setActiveTab("my")}
-              className={`px-3 py-1 text-sm ${
-                activeTab === "my" 
-                  ? "bg-white text-blue-600" 
-                  : "text-white"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: activeTab === "my" ? "white" : "transparent",
+                color: activeTab === "my" ? themeColors.primary : "white"
+              }}
             >
               我的
             </button>
             <button
               onClick={() => setActiveTab("shared")}
-              className={`px-3 py-1 text-sm ${
-                activeTab === "shared" 
-                  ? "bg-white text-blue-600" 
-                  : "text-white"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: activeTab === "shared" ? "white" : "transparent",
+                color: activeTab === "shared" ? themeColors.primary : "white"
+              }}
             >
               共享
             </button>
@@ -69,21 +94,33 @@ export default function DataComparison() {
       {/* 内容区域 */}
       <div className="flex-1 bg-gray-50 overflow-auto">
         {activeTab === "all" && (
-          <AllDataContent />
+          <AllDataContent themeColors={themeColors} />
         )}
         {activeTab === "my" && (
-          <MyDataContent />
+          <MyDataContent themeColors={themeColors} />
         )}
         {activeTab === "shared" && (
-          <SharedDataContent />
+          <SharedDataContent themeColors={themeColors} />
         )}
       </div>
     </div>
   );
 }
 
+interface ThemeColors {
+  primary: string;
+  secondary: string;
+  primaryLight: string;
+  primaryMedium: string;
+  text: string;
+}
+
+interface DataContentProps {
+  themeColors: ThemeColors;
+}
+
 // 全部数据内容
-function AllDataContent() {
+function AllDataContent({ themeColors }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -154,7 +191,7 @@ function AllDataContent() {
           <Tooltip {...commonAxisProps.tooltip} />
           <Bar 
             dataKey="value" 
-            fill="#8b5cf6" 
+            fill={themeColors.primary}
             radius={[4, 4, 0, 0]}
             animationBegin={0}
             animationDuration={1500}
@@ -178,9 +215,9 @@ function AllDataContent() {
           <Line 
             type="monotone"
             dataKey="value" 
-            stroke="#8b5cf6" 
+            stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: '#8b5cf6', r: 4 }}
+            dot={{ fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
@@ -206,7 +243,7 @@ function AllDataContent() {
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       
       return (
-        <div className="bg-purple-600 p-1.5 rounded-lg">
+        <div className="p-1.5 rounded-lg" style={{ backgroundColor: themeColors.primary }}>
           {/* 星期标题（只在日维度显示） */}
           {timePeriod === "day" && (
             <div className="grid grid-cols-7 gap-0.5 mb-1">
@@ -222,30 +259,34 @@ function AllDataContent() {
               return (
                 <div
                   key={index}
-                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
-                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
-                  }`}
-                  style={{ aspectRatio: '1 / 0.95' }}
+                  className="rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ 
+                    aspectRatio: '1 / 0.95',
+                    backgroundColor: hasData ? '#fffbeb' : themeColors.primaryMedium
+                  }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数/月份 */}
-                  <div className={`text-[8px] ${
-                    hasData ? 'text-purple-600' : 'text-white'
-                  }`}>
+                  <div 
+                    className="text-[8px]"
+                    style={{ color: hasData ? themeColors.primary : 'white' }}
+                  >
                     {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
                   {/* 日期范围（周和月维度显示） */}
                   {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
-                    <div className={`text-[8px] ${
-                      hasData ? 'text-purple-600' : 'text-white'
-                    }`}>
+                    <div 
+                      className="text-[8px]"
+                      style={{ color: hasData ? themeColors.primary : 'white' }}
+                    >
                       {(item as any).dateRange}
                     </div>
                   )}
                   {/* 数据 */}
-                  <div className={`flex items-baseline gap-0.5 ${
-                    hasData ? 'text-green-600' : 'text-white/70'
-                  }`}>
+                  <div 
+                    className="flex items-baseline gap-0.5"
+                    style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
+                  >
                     <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
@@ -265,12 +306,33 @@ function AllDataContent() {
         {/* 标题 + 统计信息 */}
         <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
           <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
-            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
             <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
-            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.secondary}20`,
+                color: themeColors.secondary
+              }}
+            >
+              {avgUnit}{avgValue}人
+            </span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.primary}15`,
+                color: themeColors.primary
+              }}
+            >
+              共计{totalCount}人
+            </span>
           </div>
         </div>
 
@@ -295,31 +357,31 @@ function AllDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "day"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "day" ? "white" : "transparent",
+                color: timePeriod === "day" ? themeColors.primary : "#4b5563"
+              }}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "week" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "week" ? "white" : "transparent",
+                color: timePeriod === "week" ? themeColors.primary : "#4b5563"
+              }}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "month" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "month" ? "white" : "transparent",
+                color: timePeriod === "month" ? themeColors.primary : "#4b5563"
+              }}
             >
               月
             </button>
@@ -329,31 +391,31 @@ function AllDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setChartType("bar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "bar"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "bar" ? "white" : "transparent",
+                color: chartType === "bar" ? themeColors.primary : "#4b5563"
+              }}
             >
               柱状图
             </button>
             <button
               onClick={() => setChartType("line")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "line" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "line" ? "white" : "transparent",
+                color: chartType === "line" ? themeColors.primary : "#4b5563"
+              }}
             >
               折线图
             </button>
             <button
               onClick={() => setChartType("calendar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "calendar"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "calendar" ? "white" : "transparent",
+                color: chartType === "calendar" ? themeColors.primary : "#4b5563"
+              }}
             >
               日历图
             </button>
@@ -366,7 +428,7 @@ function AllDataContent() {
 }
 
 // 我的数据内容
-function MyDataContent() {
+function MyDataContent({ themeColors }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -437,7 +499,7 @@ function MyDataContent() {
           <Tooltip {...commonAxisProps.tooltip} />
           <Bar 
             dataKey="value" 
-            fill="#8b5cf6" 
+            fill={themeColors.primary}
             radius={[4, 4, 0, 0]}
             animationBegin={0}
             animationDuration={1500}
@@ -461,9 +523,9 @@ function MyDataContent() {
           <Line 
             type="monotone"
             dataKey="value" 
-            stroke="#8b5cf6" 
+            stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: '#8b5cf6', r: 4 }}
+            dot={{ fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
@@ -489,7 +551,7 @@ function MyDataContent() {
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       
       return (
-        <div className="bg-purple-600 p-1.5 rounded-lg">
+        <div className="p-1.5 rounded-lg" style={{ backgroundColor: themeColors.primary }}>
           {/* 星期标题（只在日维度显示） */}
           {timePeriod === "day" && (
             <div className="grid grid-cols-7 gap-0.5 mb-1">
@@ -505,30 +567,34 @@ function MyDataContent() {
               return (
                 <div
                   key={index}
-                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
-                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
-                  }`}
-                  style={{ aspectRatio: '1 / 0.95' }}
+                  className="rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ 
+                    aspectRatio: '1 / 0.95',
+                    backgroundColor: hasData ? '#fffbeb' : themeColors.primaryMedium
+                  }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数/月份 */}
-                  <div className={`text-[8px] ${
-                    hasData ? 'text-purple-600' : 'text-white'
-                  }`}>
+                  <div 
+                    className="text-[8px]"
+                    style={{ color: hasData ? themeColors.primary : 'white' }}
+                  >
                     {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
                   {/* 日期范围（周和月维度显示） */}
                   {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
-                    <div className={`text-[8px] ${
-                      hasData ? 'text-purple-600' : 'text-white'
-                    }`}>
+                    <div 
+                      className="text-[8px]"
+                      style={{ color: hasData ? themeColors.primary : 'white' }}
+                    >
                       {(item as any).dateRange}
                     </div>
                   )}
                   {/* 数据 */}
-                  <div className={`flex items-baseline gap-0.5 ${
-                    hasData ? 'text-green-600' : 'text-white/70'
-                  }`}>
+                  <div 
+                    className="flex items-baseline gap-0.5"
+                    style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
+                  >
                     <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
@@ -548,12 +614,33 @@ function MyDataContent() {
         {/* 标题 + 统计信息 */}
         <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
           <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
-            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
             <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
-            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.secondary}20`,
+                color: themeColors.secondary
+              }}
+            >
+              {avgUnit}{avgValue}人
+            </span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.primary}15`,
+                color: themeColors.primary
+              }}
+            >
+              共计{totalCount}人
+            </span>
           </div>
         </div>
 
@@ -578,31 +665,31 @@ function MyDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "day"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "day" ? "white" : "transparent",
+                color: timePeriod === "day" ? themeColors.primary : "#4b5563"
+              }}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "week" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "week" ? "white" : "transparent",
+                color: timePeriod === "week" ? themeColors.primary : "#4b5563"
+              }}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "month" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "month" ? "white" : "transparent",
+                color: timePeriod === "month" ? themeColors.primary : "#4b5563"
+              }}
             >
               月
             </button>
@@ -612,31 +699,31 @@ function MyDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setChartType("bar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "bar"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "bar" ? "white" : "transparent",
+                color: chartType === "bar" ? themeColors.primary : "#4b5563"
+              }}
             >
               柱状图
             </button>
             <button
               onClick={() => setChartType("line")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "line" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "line" ? "white" : "transparent",
+                color: chartType === "line" ? themeColors.primary : "#4b5563"
+              }}
             >
               折线图
             </button>
             <button
               onClick={() => setChartType("calendar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "calendar" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "calendar" ? "white" : "transparent",
+                color: chartType === "calendar" ? themeColors.primary : "#4b5563"
+              }}
             >
               日历图
             </button>
@@ -650,7 +737,7 @@ function MyDataContent() {
 }
 
 // 共享数据内容
-function SharedDataContent() {
+function SharedDataContent({ themeColors }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -721,7 +808,7 @@ function SharedDataContent() {
           <Tooltip {...commonAxisProps.tooltip} />
           <Bar 
             dataKey="value" 
-            fill="#8b5cf6" 
+            fill={themeColors.primary}
             radius={[4, 4, 0, 0]}
             animationBegin={0}
             animationDuration={1500}
@@ -745,9 +832,9 @@ function SharedDataContent() {
           <Line 
             type="monotone"
             dataKey="value" 
-            stroke="#8b5cf6" 
+            stroke={themeColors.primary}
             strokeWidth={2}
-            dot={{ fill: '#8b5cf6', r: 4 }}
+            dot={{ fill: themeColors.primary, r: 4 }}
             activeDot={{ r: 6 }}
             animationBegin={0}
             animationDuration={1500}
@@ -773,7 +860,7 @@ function SharedDataContent() {
       const weekHeaders = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       
       return (
-        <div className="bg-purple-600 p-1.5 rounded-lg">
+        <div className="p-1.5 rounded-lg" style={{ backgroundColor: themeColors.primary }}>
           {/* 星期标题（只在日维度显示） */}
           {timePeriod === "day" && (
             <div className="grid grid-cols-7 gap-0.5 mb-1">
@@ -789,30 +876,34 @@ function SharedDataContent() {
               return (
                 <div
                   key={index}
-                  className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
-                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
-                  }`}
-                  style={{ aspectRatio: '1 / 0.95' }}
+                  className="rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ 
+                    aspectRatio: '1 / 0.95',
+                    backgroundColor: hasData ? '#fffbeb' : themeColors.primaryMedium
+                  }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数/月份 */}
-                  <div className={`text-[8px] ${
-                    hasData ? 'text-purple-600' : 'text-white'
-                  }`}>
+                  <div 
+                    className="text-[8px]"
+                    style={{ color: hasData ? themeColors.primary : 'white' }}
+                  >
                     {timePeriod === "week" ? `第${item.name}` : timePeriod === "month" ? `第${item.name}` : item.name}
                   </div>
                   {/* 日期范围（周和月维度显示） */}
                   {(timePeriod === "week" || timePeriod === "month") && (item as any).dateRange && (
-                    <div className={`text-[8px] ${
-                      hasData ? 'text-purple-600' : 'text-white'
-                    }`}>
+                    <div 
+                      className="text-[8px]"
+                      style={{ color: hasData ? themeColors.primary : 'white' }}
+                    >
                       {(item as any).dateRange}
                     </div>
                   )}
                   {/* 数据 */}
-                  <div className={`flex items-baseline gap-0.5 ${
-                    hasData ? 'text-green-600' : 'text-white/70'
-                  }`}>
+                  <div 
+                    className="flex items-baseline gap-0.5"
+                    style={{ color: hasData ? '#16a34a' : 'rgba(255,255,255,0.7)' }}
+                  >
                     <span className="text-xl font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
@@ -832,12 +923,33 @@ function SharedDataContent() {
         {/* 标题 + 统计信息 */}
         <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
           <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
-            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
             <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
-            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.secondary}20`,
+                color: themeColors.secondary
+              }}
+            >
+              {avgUnit}{avgValue}人
+            </span>
+            <span 
+              className="px-1.5 py-0.5 rounded whitespace-nowrap" 
+              style={{ 
+                fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)',
+                backgroundColor: `${themeColors.primary}15`,
+                color: themeColors.primary
+              }}
+            >
+              共计{totalCount}人
+            </span>
           </div>
         </div>
 
@@ -862,31 +974,31 @@ function SharedDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setTimePeriod("day")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "day"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "day" ? "white" : "transparent",
+                color: timePeriod === "day" ? themeColors.primary : "#4b5563"
+              }}
             >
               日
             </button>
             <button
               onClick={() => setTimePeriod("week")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "week" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "week" ? "white" : "transparent",
+                color: timePeriod === "week" ? themeColors.primary : "#4b5563"
+              }}
             >
               周
             </button>
             <button
               onClick={() => setTimePeriod("month")}
-              className={`px-3 py-1 text-sm ${
-                timePeriod === "month" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: timePeriod === "month" ? "white" : "transparent",
+                color: timePeriod === "month" ? themeColors.primary : "#4b5563"
+              }}
             >
               月
             </button>
@@ -896,31 +1008,31 @@ function SharedDataContent() {
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
             <button
               onClick={() => setChartType("bar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "bar"
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "bar" ? "white" : "transparent",
+                color: chartType === "bar" ? themeColors.primary : "#4b5563"
+              }}
             >
               柱状图
             </button>
             <button
               onClick={() => setChartType("line")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "line" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "line" ? "white" : "transparent",
+                color: chartType === "line" ? themeColors.primary : "#4b5563"
+              }}
             >
               折线图
             </button>
             <button
               onClick={() => setChartType("calendar")}
-              className={`px-3 py-1 text-sm ${
-                chartType === "calendar" 
-                  ? "bg-white text-purple-600" 
-                  : "text-gray-600"
-              }`}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: chartType === "calendar" ? "white" : "transparent",
+                color: chartType === "calendar" ? themeColors.primary : "#4b5563"
+              }}
             >
               日历图
             </button>

@@ -145,6 +145,9 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
       const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
       const nowDateStr = now.toISOString().slice(0, 19).replace('T', ' ');
       
+      // 创建日期映射
+      const dateMap = new Map();
+      
       // 查询自己的人脉
       if (type === 'all' || type === 'my') {
         const result = await db.execute(
@@ -157,35 +160,56 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
               ORDER BY date ASC`
         );
         
-        // 创建日期映射
-        const dateMap = new Map();
         const rows = (result as any)[0] || [];
-        console.log('[getContactGrowthStats] rows:', rows);
+        console.log('[getContactGrowthStats] my rows:', rows);
         for (const row of rows) {
           if (row && row.date) {
-            console.log('[getContactGrowthStats] 添加数据:', { date: row.date, count: row.count });
-            dateMap.set(row.date, Number(row.count));
+            dateMap.set(row.date, (dateMap.get(row.date) || 0) + Number(row.count));
           }
         }
-        console.log('[getContactGrowthStats] dateMap:', Array.from(dateMap.entries()));
+      }
+      
+      // 查询共享给我的人脉
+      if (type === 'all' || type === 'shared') {
+        const result = await db.execute(
+          sql`SELECT DATE(c.createdAt) as date, COUNT(*) as count 
+              FROM contacts c
+              INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+              WHERE csc.receiverId = ${userId} 
+              AND csc.status = 'active'
+              AND c.createdAt >= ${startDateStr} 
+              AND c.createdAt < ${nowDateStr}
+              GROUP BY DATE(c.createdAt)
+              ORDER BY date ASC`
+        );
         
-        // 生成完整的30天数据
-        for (let i = 29; i >= 0; i--) {
-          const date = new Date(now);
-          date.setDate(now.getDate() - i - 1);
-          date.setHours(0, 0, 0, 0);
-          
-          const dateKey = date.toISOString().slice(0, 10);
-          const month = date.getMonth() + 1;
-          const day = date.getDate();
-          const dayIndex = 29 - i + 1;
-          
-          stats.push({
-            name: `${month}/${day}`,
-            displayName: `${dayIndex}`,
-            value: dateMap.get(dateKey) || 0,
-          });
+        const rows = (result as any)[0] || [];
+        console.log('[getContactGrowthStats] shared rows:', rows);
+        for (const row of rows) {
+          if (row && row.date) {
+            dateMap.set(row.date, (dateMap.get(row.date) || 0) + Number(row.count));
+          }
         }
+      }
+      
+      console.log('[getContactGrowthStats] dateMap:', Array.from(dateMap.entries()));
+      
+      // 生成完整的30天数据
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i - 1);
+        date.setHours(0, 0, 0, 0);
+        
+        const dateKey = date.toISOString().slice(0, 10);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const dayIndex = 29 - i + 1;
+        
+        stats.push({
+          name: `${month}/${day}`,
+          displayName: `${dayIndex}`,
+          value: dateMap.get(dateKey) || 0,
+        });
       }
     } else if (period === 'week') {
       // 过去12周的数据（不包含本周，从上周开始）
@@ -220,17 +244,34 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         
         let count = 0;
         
+        // 查询自己的人脉
         if (type === 'all' || type === 'my') {
           const result = await db.execute(
             sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${startDateStr} AND createdAt <= ${endDateStr}`
           );
-          console.log(`[Week ${i + 1}] raw result:`, JSON.stringify(result));
-          // MySQL2 execute返回 [rows, fields]，rows是数组
           const rows = Array.isArray(result) ? result[0] : result;
           const firstRow = Array.isArray(rows) ? rows[0] : rows;
           const weekCount = Number(firstRow?.count || 0);
-          console.log(`[Week ${i + 1}] query result: ${weekCount}, firstRow:`, firstRow);
+          console.log(`[Week ${i + 1}] my count: ${weekCount}`);
           count += weekCount;
+        }
+        
+        // 查询共享给我的人脉
+        if (type === 'all' || type === 'shared') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count 
+                FROM contacts c
+                INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+                WHERE csc.receiverId = ${userId} 
+                AND csc.status = 'active'
+                AND c.createdAt >= ${startDateStr} 
+                AND c.createdAt <= ${endDateStr}`
+          );
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          const sharedCount = Number(firstRow?.count || 0);
+          console.log(`[Week ${i + 1}] shared count: ${sharedCount}`);
+          count += sharedCount;
         }
         
         stats.push({
@@ -260,11 +301,27 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         
         let count = 0;
         
+        // 查询自己的人脉
         if (type === 'all' || type === 'my') {
           const result = await db.execute(
             sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${dateStr} AND createdAt < ${nextDateStr}`
           );
-          // MySQL2 execute返回 [rows, fields]，rows是数组
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          count += Number(firstRow?.count || 0);
+        }
+        
+        // 查询共享给我的人脉
+        if (type === 'all' || type === 'shared') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count 
+                FROM contacts c
+                INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+                WHERE csc.receiverId = ${userId} 
+                AND csc.status = 'active'
+                AND c.createdAt >= ${dateStr} 
+                AND c.createdAt < ${nextDateStr}`
+          );
           const rows = Array.isArray(result) ? result[0] : result;
           const firstRow = Array.isArray(rows) ? rows[0] : rows;
           count += Number(firstRow?.count || 0);
