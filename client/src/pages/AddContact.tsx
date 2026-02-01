@@ -640,150 +640,7 @@ export default function AddContact() {
 
       {/* 表单内容 */}
       <div className="container py-6 space-y-6">
-        {/* 基本信息 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setIsBasicInfoCollapsed(!isBasicInfoCollapsed)}>
-            <div className="flex items-center gap-2">
-              <CardTitle>基本信息</CardTitle>
-              {isBasicInfoCollapsed && name && (
-                <span className="text-base font-normal text-gray-600">{name}</span>
-              )}
-            </div>
-            <div className="flex-shrink-0">
-              <ChevronDown className={`h-6 w-6 text-gray-700 z-50 transition-transform ${isBasicInfoCollapsed ? 'rotate-180' : ''}`} />
-            </div>
-          </CardHeader>
-          {!isBasicInfoCollapsed && (
-          <CardContent className="space-y-4">
-            {/* 第一行：姓名 + 昵称 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 relative">
-                <Label htmlFor="name">
-                  姓名 <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  onFocus={() => setShowSuggestions(searchQuery.length > 0)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  placeholder="请输入姓名"
-                />
-                
-                {/* 模糊查询下拉框 */}
-                {showSuggestions && suggestions && suggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
-                      找到 {suggestions.length} 个相似的人脉，点击查看详情
-                    </div>
-                    {suggestions.map((contact: any) => (
-                      <div
-                        key={contact.id}
-                        onClick={() => handleSuggestionClick(contact.id)}
-                        className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                      >
-                        <div className="font-medium text-sm">{contact.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
-                          {contact.title && <div>昵称：{contact.title}</div>}
-                          {contact.fieldValues && contact.fieldValues.length > 0 && (
-                            <div>
-                              {contact.fieldValues
-                                .slice(0, 3)
-                                .map((fv: any, idx: number) => (
-                                  <span key={idx}>
-                                    {fv.categoryName}：{fv.value}
-                                    {idx < Math.min(contact.fieldValues.length, 3) - 1 && ' · '}
-                                  </span>
-                                ))}
-                            </div>
-                          )}
-                          {contact.region && <div>所在地：{contact.region}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="title">昵称</Label>
-                <Input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="请输入昵称"
-                />
-              </div>
-            </div>
-
-            {/* 第二行：性别 + 地区 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="gender">性别</Label>
-                <Select value={gender} onValueChange={setGender}>
-                  <SelectTrigger id="gender" className="w-full">
-                    <SelectValue placeholder="请选择性别" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="男">男</SelectItem>
-                    <SelectItem value="女">女</SelectItem>
-                    <SelectItem value="未知">未知</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="region">地区</Label>
-                <Select value={region} onValueChange={setRegion}>
-                  <SelectTrigger id="region" className="w-full">
-                    <SelectValue placeholder="请选择地区" />
-                  </SelectTrigger>
-                  <SelectContent>
-                  <SelectItem value="北京">北京</SelectItem>
-                  <SelectItem value="天津">天津</SelectItem>
-                  <SelectItem value="河北">河北</SelectItem>
-                  <SelectItem value="山西">山西</SelectItem>
-                  <SelectItem value="内蒙古">内蒙古</SelectItem>
-                  <SelectItem value="辽宁">辽宁</SelectItem>
-                  <SelectItem value="吉林">吉林</SelectItem>
-                  <SelectItem value="黑龙江">黑龙江</SelectItem>
-                  <SelectItem value="上海">上海</SelectItem>
-                  <SelectItem value="江苏">江苏</SelectItem>
-                  <SelectItem value="浙江">浙江</SelectItem>
-                  <SelectItem value="安徽">安徽</SelectItem>
-                  <SelectItem value="福建">福建</SelectItem>
-                  <SelectItem value="江西">江西</SelectItem>
-                  <SelectItem value="山东">山东</SelectItem>
-                  <SelectItem value="河南">河南</SelectItem>
-                  <SelectItem value="湖北">湖北</SelectItem>
-                  <SelectItem value="湖南">湖南</SelectItem>
-                  <SelectItem value="广东">广东</SelectItem>
-                  <SelectItem value="广西">广西</SelectItem>
-                  <SelectItem value="海南">海南</SelectItem>
-                  <SelectItem value="重庆">重庆</SelectItem>
-                  <SelectItem value="四川">四川</SelectItem>
-                  <SelectItem value="贵州">贵州</SelectItem>
-                  <SelectItem value="云南">云南</SelectItem>
-                  <SelectItem value="西藏">西藏</SelectItem>
-                  <SelectItem value="陕西">陕西</SelectItem>
-                  <SelectItem value="甘肃">甘肃</SelectItem>
-                  <SelectItem value="青海">青海</SelectItem>
-                  <SelectItem value="宁夏">宁夏</SelectItem>
-                  <SelectItem value="新疆">新疆</SelectItem>
-                  <SelectItem value="香港">香港</SelectItem>
-                  <SelectItem value="澳门">澳门</SelectItem>
-                  <SelectItem value="台湾">台湾</SelectItem>
-                  <SelectItem value="海外">海外</SelectItem>
-                  <SelectItem value="其他">其他</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          </CardContent>
-          )}
-        </Card>
-
-        {/* 扩展信息 */}
+        {/* 扩展信息 - 放在上面 */}
         <Card>
           <CardHeader>
             <CardTitle>扩展信息</CardTitle>
@@ -935,14 +792,11 @@ export default function AddContact() {
                               } else if (field === '公司') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公司');
                                 if (existingValue) {
-                                  // 解析历史记录，格式：公司1; 公司2; 公司3
-                                  const companies = existingValue.value.split(';').map(c => c.trim()).filter(c => c);
-                                  setCompanyList(companies);
-                                  setSelectedCompany('');
+                                  setCompanyList(existingValue.value.split(','));
                                 } else {
                                   setCompanyList([]);
-                                  setSelectedCompany('');
                                 }
+                                setSelectedCompany('');
                                 setDialogMessage(null);
                                 setShowCompanyDialog(true);
                               } else if (field === '行业') {
@@ -959,13 +813,6 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowTypeDialog(true);
-                              } else if (field === '职业') {
-                                const existingValue = extendedFields.find(f => f.categoryName === '职业');
-                                if (existingValue) {
-                                  setSelectedOccupation(existingValue.value);
-                                }
-                                setDialogMessage(null);
-                                setShowOccupationDialog(true);
                               } else if (field === '征信') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '征信');
                                 if (existingValue) {
@@ -973,6 +820,13 @@ export default function AddContact() {
                                 }
                                 setDialogMessage(null);
                                 setShowCreditDialog(true);
+                              } else if (field === '职业') {
+                                const existingValue = extendedFields.find(f => f.categoryName === '职业');
+                                if (existingValue) {
+                                  setSelectedOccupation(existingValue.value);
+                                }
+                                setDialogMessage(null);
+                                setShowOccupationDialog(true);
                               } else if (field === '公户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '公户');
                                 if (existingValue) {
@@ -982,17 +836,13 @@ export default function AddContact() {
                                 setShowPublicAccountDialog(true);
                               } else if (field === '私户') {
                                 const existingValue = extendedFields.find(f => f.categoryName === '私户');
-                                if (existingValue?.value) {
-                                  // 解析格式：多个银行卡信息，以分号分隔，每个银行卡格式：银行|卡号|名字
-                                  const accounts = existingValue.value.split(';').map(account => {
-                                    const parts = account.split('|').map(p => p.trim());
-                                    return {
-                                      bank: parts[0] || '',
-                                      number: parts[1] || '',
-                                      name: parts[2] || ''
-                                    };
-                                  }).filter(acc => acc.bank || acc.number || acc.name);
-                                  setPrivateAccountList(accounts);
+                                if (existingValue) {
+                                  try {
+                                    const accounts = JSON.parse(existingValue.value);
+                                    setPrivateAccountList(accounts);
+                                  } catch {
+                                    setPrivateAccountList([]);
+                                  }
                                 } else {
                                   setPrivateAccountList([]);
                                 }
@@ -1001,12 +851,39 @@ export default function AddContact() {
                                 setPrivateAccountName('');
                                 setDialogMessage(null);
                                 setShowPrivateAccountDialog(true);
+                              } else if (field === '电话') {
+                                // 电话字段使用通用对话框
+                                const existingValue = extendedFields.find(f => f.categoryName === '电话');
+                                setGenericFieldName('电话');
+                                setGenericFieldValue(existingValue?.value || '');
+                                setDialogMessage(null);
+                                setShowGenericFieldDialog(true);
+                              } else if (field === '地址') {
+                                // 地址字段使用专用对话框
+                                const existingValue = extendedFields.find(f => f.categoryName === '地址');
+                                if (existingValue) {
+                                  try {
+                                    const addresses = JSON.parse(existingValue.value);
+                                    setAddressList(addresses);
+                                  } catch {
+                                    // 如果不是JSON格式，尝试作为单个地址处理
+                                    setAddressList([{type: '普通', address: existingValue.value}]);
+                                  }
+                                } else {
+                                  setAddressList([]);
+                                }
+                                setCurrentAddressType('');
+                                setCurrentAddress('');
+                                setCurrentAddressName('');
+                                setCurrentAddressPhone('');
+                                setShowAddressTypeSelection(true);
+                                setDialogMessage(null);
+                                setShowAddressDialog(true);
                               } else if (field === '邮箱') {
-                                // 邮箱字段使用历史记录模式
+                                // 邮箱字段使用专用对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === '邮箱');
-                                if (existingValue?.value) {
-                                  // 解析分号分隔的邮箱列表
-                                  setEmailList(existingValue.value.split(';').map(e => e.trim()).filter(e => e));
+                                if (existingValue) {
+                                  setEmailList(existingValue.value.split(','));
                                 } else {
                                   setEmailList([]);
                                 }
@@ -1014,56 +891,18 @@ export default function AddContact() {
                                 setDialogMessage(null);
                                 setShowEmailDialog(true);
                               } else if (field === '微信') {
-                                // 微信号使用多选对话框
+                                // 微信字段使用专用对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === '微信');
-                                if (existingValue?.value) {
-                                  setWechatList(existingValue.value.split(',').map(w => w.trim()));
+                                if (existingValue) {
+                                  setWechatList(existingValue.value.split(','));
                                 } else {
                                   setWechatList([]);
                                 }
                                 setCurrentWechat('');
                                 setDialogMessage(null);
                                 setShowWechatDialog(true);
-              } else if (field === '电话' || field === '地址') {
-                // 对于电话、地址，使用通用的文本输入对话框
-                const existingValue = extendedFields.find(f => f.categoryName === field);
-                setGenericFieldName(field);
-                if (field === '地址' && existingValue?.value) {
-                  // 解析地址格式：多个地址用 ; 分隔，每个地址格式为 地址|姓名|电话
-                  const addresses = existingValue.value.split(';').map(a => a.trim()).filter(a => a);
-                  setAddressList(addresses.map(addr => {
-                    const parts = addr.split('|').map(p => p.trim());
-                    return {
-                      type: '',
-                      address: parts[0] || '',
-                      name: parts[1] || '',
-                      phone: parts[2] || ''
-                    };
-                  }));
-                  // 清空当前输入框
-                  setGenericFieldValue('');
-                  setCurrentAddressName('');
-                  setCurrentAddressPhone('');
-                } else if (field === '地址') {
-                  // 新建地址，清空所有字段
-                  setAddressList([]);
-                  setGenericFieldValue('');
-                  setCurrentAddressName('');
-                  setCurrentAddressPhone('');
-                } else {
-                  setGenericFieldValue(existingValue?.value || '');
-                }
-                setDialogMessage(null);
-                setShowGenericFieldDialog(true);
-                              } else {
-                                // 其他字段使用通用对话框
-                                const existingValue = extendedFields.find(f => f.categoryName === field);
-                                setGenericFieldName(field);
-                                setGenericFieldValue(existingValue?.value || '');
-                                setDialogMessage(null);
-                                setShowGenericFieldDialog(true);
                               }
-                        };
+                            };
                         
                         return (
                           <SortableFieldButton
@@ -1072,13 +911,156 @@ export default function AddContact() {
                             hasValue={hasValue}
                             onClick={handleFieldClick}
                           />
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 </SortableContext>
               </DndContext>
             </div>
           </CardContent>
+        </Card>
+
+        {/* 基本信息 - 放在下面 */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setIsBasicInfoCollapsed(!isBasicInfoCollapsed)}>
+            <div className="flex items-center gap-2">
+              <CardTitle>基本信息</CardTitle>
+              {isBasicInfoCollapsed && name && (
+                <span className="text-base font-normal text-gray-600">{name}</span>
+              )}
+            </div>
+            <div className="flex-shrink-0">
+              <ChevronDown className={`h-6 w-6 text-gray-700 z-50 transition-transform ${isBasicInfoCollapsed ? 'rotate-180' : ''}`} />
+            </div>
+          </CardHeader>
+          {!isBasicInfoCollapsed && (
+          <CardContent className="space-y-4">
+            {/* 第一行：姓名 + 昵称 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2 relative">
+                <Label htmlFor="name">
+                  姓名 <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  onFocus={() => setShowSuggestions(searchQuery.length > 0)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="请输入姓名"
+                />
+                
+                {/* 模糊查询下拉框 */}
+                {showSuggestions && suggestions && suggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 text-xs text-gray-500 dark:text-gray-400 border-b">
+                      找到 {suggestions.length} 个相似的人脉，点击查看详情
+                    </div>
+                    {suggestions.map((contact: any) => (
+                      <div
+                        key={contact.id}
+                        onClick={() => handleSuggestionClick(contact.id)}
+                        className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      >
+                        <div className="font-medium text-sm">{contact.name}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-0.5">
+                          {contact.title && <div>昵称：{contact.title}</div>}
+                          {contact.fieldValues && contact.fieldValues.length > 0 && (
+                            <div>
+                              {contact.fieldValues
+                                .slice(0, 3)
+                                .map((fv: any, idx: number) => (
+                                  <span key={idx}>
+                                    {fv.categoryName}：{fv.value}
+                                    {idx < Math.min(contact.fieldValues.length, 3) - 1 && ' · '}
+                                  </span>
+                                ))}
+                            </div>
+                          )}
+                          {contact.region && <div>所在地：{contact.region}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="title">昵称</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="请输入昵称"
+                />
+              </div>
+            </div>
+
+            {/* 第二行：性别 + 地区 */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="gender">性别</Label>
+                <Select value={gender} onValueChange={setGender}>
+                  <SelectTrigger id="gender" className="w-full">
+                    <SelectValue placeholder="请选择性别" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="男">男</SelectItem>
+                    <SelectItem value="女">女</SelectItem>
+                    <SelectItem value="未知">未知</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="region">地区</Label>
+                <Select value={region} onValueChange={setRegion}>
+                  <SelectTrigger id="region" className="w-full">
+                    <SelectValue placeholder="请选择地区" />
+                  </SelectTrigger>
+                  <SelectContent>
+                  <SelectItem value="北京">北京</SelectItem>
+                  <SelectItem value="天津">天津</SelectItem>
+                  <SelectItem value="河北">河北</SelectItem>
+                  <SelectItem value="山西">山西</SelectItem>
+                  <SelectItem value="内蒙古">内蒙古</SelectItem>
+                  <SelectItem value="辽宁">辽宁</SelectItem>
+                  <SelectItem value="吉林">吉林</SelectItem>
+                  <SelectItem value="黑龙江">黑龙江</SelectItem>
+                  <SelectItem value="上海">上海</SelectItem>
+                  <SelectItem value="江苏">江苏</SelectItem>
+                  <SelectItem value="浙江">浙江</SelectItem>
+                  <SelectItem value="安徽">安徽</SelectItem>
+                  <SelectItem value="福建">福建</SelectItem>
+                  <SelectItem value="江西">江西</SelectItem>
+                  <SelectItem value="山东">山东</SelectItem>
+                  <SelectItem value="河南">河南</SelectItem>
+                  <SelectItem value="湖北">湖北</SelectItem>
+                  <SelectItem value="湖南">湖南</SelectItem>
+                  <SelectItem value="广东">广东</SelectItem>
+                  <SelectItem value="广西">广西</SelectItem>
+                  <SelectItem value="海南">海南</SelectItem>
+                  <SelectItem value="重庆">重庆</SelectItem>
+                  <SelectItem value="四川">四川</SelectItem>
+                  <SelectItem value="贵州">贵州</SelectItem>
+                  <SelectItem value="云南">云南</SelectItem>
+                  <SelectItem value="西藏">西藏</SelectItem>
+                  <SelectItem value="陕西">陕西</SelectItem>
+                  <SelectItem value="甘肃">甘肃</SelectItem>
+                  <SelectItem value="青海">青海</SelectItem>
+                  <SelectItem value="宁夏">宁夏</SelectItem>
+                  <SelectItem value="新疆">新疆</SelectItem>
+                  <SelectItem value="香港">香港</SelectItem>
+                  <SelectItem value="澳门">澳门</SelectItem>
+                  <SelectItem value="台湾">台湾</SelectItem>
+                  <SelectItem value="海外">海外</SelectItem>
+                  <SelectItem value="其他">其他</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          </CardContent>
+          )}
         </Card>
       </div>
 
