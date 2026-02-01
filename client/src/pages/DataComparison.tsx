@@ -8,6 +8,7 @@ import {
 import { trpc } from "@/lib/trpc";
 
 type TabType = "all" | "my" | "shared";
+type TimePeriodType = "day" | "week" | "month";
 
 export default function DataComparison() {
   const [, setLocation] = useLocation();
@@ -82,23 +83,48 @@ export default function DataComparison() {
 
 // 全部数据内容
 function AllDataContent() {
-  // 模拟每周新增人脉数据（后续从API获取）
-  const weeklyData = useMemo(() => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+
+  // 根据时间维度生成数据
+  const chartData = useMemo(() => {
     const data = [];
-    for (let i = 1; i <= 12; i++) {
-      data.push({
-        week: `${i}周`,
-        count: i === 6 ? 100 : Math.floor(Math.random() * 20) + 5, // 第6周测试100的数据
-      });
+    const count = 12;
+    
+    if (timePeriod === "day") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}天`,
+          value: Math.floor(Math.random() * 10) + 1,
+        });
+      }
+    } else if (timePeriod === "week") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}周`,
+          value: i === 6 ? 100 : Math.floor(Math.random() * 25) + 5,
+        });
+      }
+    } else {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}月`,
+          value: Math.floor(Math.random() * 50) + 20,
+        });
+      }
     }
     return data;
-  }, []);
+  }, [timePeriod]);
 
   // 计算平均值
-  const avgWeekly = useMemo(() => {
-    const total = weeklyData.reduce((sum, item) => sum + item.count, 0);
-    return (total / weeklyData.length).toFixed(1);
-  }, [weeklyData]);
+  const avgValue = useMemo(() => {
+    const total = chartData.reduce((sum, item) => sum + item.value, 0);
+    return (total / chartData.length).toFixed(1);
+  }, [chartData]);
+
+  // 获取标题文字
+  const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
+  const titleText = `最近12${periodText}新增人脉`;
+  const avgText = `12${periodText}平均新增`;
 
   return (
     <div className="p-2.5 space-y-4">
@@ -107,19 +133,19 @@ function AllDataContent() {
         {/* 标题 */}
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">最近12周新增人脉</h2>
+          <h2 className="text-lg font-medium">{titleText}</h2>
         </div>
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
           <BarChart 
-            data={weeklyData}
+            data={chartData}
             margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
             barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis 
-              dataKey="week" 
+              dataKey="name" 
               tick={{ fontSize: 11, fill: '#6b7280' }}
               stroke="#9ca3af"
               interval={0}
@@ -141,7 +167,7 @@ function AllDataContent() {
               formatter={(value: any) => [`${value}人`, '新增人脉']}
             />
             <Bar 
-              dataKey="count" 
+              dataKey="value" 
               fill="#8b5cf6" 
               radius={[4, 4, 0, 0]}
               animationBegin={0}
@@ -149,7 +175,7 @@ function AllDataContent() {
               animationEasing="ease-out"
             >
               <LabelList 
-                dataKey="count" 
+                dataKey="value" 
                 position="top" 
                 style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
@@ -158,11 +184,47 @@ function AllDataContent() {
           </BarChart>
         </ResponsiveContainer>
 
+        {/* 时间维度切换按钮 */}
+        <div className="mt-3 mb-3 flex justify-center">
+          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+            <button
+              onClick={() => setTimePeriod("day")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "day"
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              日
+            </button>
+            <button
+              onClick={() => setTimePeriod("week")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "week" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              周
+            </button>
+            <button
+              onClick={() => setTimePeriod("month")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "month" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              月
+            </button>
+          </div>
+        </div>
+
         {/* 统计数据 */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">12周平均新增</span>
-            <span className="text-lg font-medium text-purple-600">{avgWeekly}</span>
+            <span className="text-sm text-gray-600">{avgText}</span>
+            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
           </div>
         </div>
       </div>
@@ -172,23 +234,48 @@ function AllDataContent() {
 
 // 我的数据内容
 function MyDataContent() {
-  // 模拟每周新增人脉数据（后续从API获取，只统计自己的）
-  const weeklyData = useMemo(() => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+
+  // 根据时间维度生成数据
+  const chartData = useMemo(() => {
     const data = [];
-    for (let i = 1; i <= 12; i++) {
-      data.push({
-        week: `${i}周`,
-        count: Math.floor(Math.random() * 15) + 3, // 模拟数据，比全部少一些
-      });
+    const count = 12;
+    
+    if (timePeriod === "day") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}天`,
+          value: Math.floor(Math.random() * 8) + 1,
+        });
+      }
+    } else if (timePeriod === "week") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}周`,
+          value: Math.floor(Math.random() * 15) + 3,
+        });
+      }
+    } else {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}月`,
+          value: Math.floor(Math.random() * 40) + 15,
+        });
+      }
     }
     return data;
-  }, []);
+  }, [timePeriod]);
 
   // 计算平均值
-  const avgWeekly = useMemo(() => {
-    const total = weeklyData.reduce((sum, item) => sum + item.count, 0);
-    return (total / weeklyData.length).toFixed(1);
-  }, [weeklyData]);
+  const avgValue = useMemo(() => {
+    const total = chartData.reduce((sum, item) => sum + item.value, 0);
+    return (total / chartData.length).toFixed(1);
+  }, [chartData]);
+
+  // 获取标题文字
+  const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
+  const titleText = `最近12${periodText}新增人脉（我的）`;
+  const avgText = `12${periodText}平均新增`;
 
   return (
     <div className="p-2.5 space-y-4">
@@ -197,19 +284,19 @@ function MyDataContent() {
         {/* 标题 */}
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">最近12周新增人脉（我的）</h2>
+          <h2 className="text-lg font-medium">{titleText}</h2>
         </div>
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
           <BarChart 
-            data={weeklyData}
+            data={chartData}
             margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
             barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis 
-              dataKey="week" 
+              dataKey="name" 
               tick={{ fontSize: 11, fill: '#6b7280' }}
               stroke="#9ca3af"
               interval={0}
@@ -231,7 +318,7 @@ function MyDataContent() {
               formatter={(value: any) => [`${value}人`, '新增人脉']}
             />
             <Bar 
-              dataKey="count" 
+              dataKey="value" 
               fill="#8b5cf6" 
               radius={[4, 4, 0, 0]}
               animationBegin={0}
@@ -239,7 +326,7 @@ function MyDataContent() {
               animationEasing="ease-out"
             >
               <LabelList 
-                dataKey="count" 
+                dataKey="value" 
                 position="top" 
                 style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
@@ -248,11 +335,47 @@ function MyDataContent() {
           </BarChart>
         </ResponsiveContainer>
 
+        {/* 时间维度切换按钮 */}
+        <div className="mt-3 mb-3 flex justify-center">
+          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+            <button
+              onClick={() => setTimePeriod("day")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "day"
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              日
+            </button>
+            <button
+              onClick={() => setTimePeriod("week")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "week" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              周
+            </button>
+            <button
+              onClick={() => setTimePeriod("month")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "month" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              月
+            </button>
+          </div>
+        </div>
+
         {/* 统计数据 */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">12周平均新增</span>
-            <span className="text-lg font-medium text-purple-600">{avgWeekly}</span>
+            <span className="text-sm text-gray-600">{avgText}</span>
+            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
           </div>
         </div>
       </div>
@@ -262,23 +385,48 @@ function MyDataContent() {
 
 // 共享数据内容
 function SharedDataContent() {
-  // 模拟每周新增人脉数据（后续从API获取，只统计共享者的）
-  const weeklyData = useMemo(() => {
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+
+  // 根据时间维度生成数据
+  const chartData = useMemo(() => {
     const data = [];
-    for (let i = 1; i <= 12; i++) {
-      data.push({
-        week: `${i}周`,
-        count: Math.floor(Math.random() * 10) + 2, // 模拟数据，比我的更少一些
-      });
+    const count = 12;
+    
+    if (timePeriod === "day") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}天`,
+          value: Math.floor(Math.random() * 5) + 1,
+        });
+      }
+    } else if (timePeriod === "week") {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}周`,
+          value: Math.floor(Math.random() * 10) + 2,
+        });
+      }
+    } else {
+      for (let i = 1; i <= count; i++) {
+        data.push({
+          name: `${i}月`,
+          value: Math.floor(Math.random() * 30) + 10,
+        });
+      }
     }
     return data;
-  }, []);
+  }, [timePeriod]);
 
   // 计算平均值
-  const avgWeekly = useMemo(() => {
-    const total = weeklyData.reduce((sum, item) => sum + item.count, 0);
-    return (total / weeklyData.length).toFixed(1);
-  }, [weeklyData]);
+  const avgValue = useMemo(() => {
+    const total = chartData.reduce((sum, item) => sum + item.value, 0);
+    return (total / chartData.length).toFixed(1);
+  }, [chartData]);
+
+  // 获取标题文字
+  const periodText = timePeriod === "day" ? "天" : timePeriod === "week" ? "周" : "月";
+  const titleText = `最近12${periodText}新增人脉（共享）`;
+  const avgText = `12${periodText}平均新增`;
 
   return (
     <div className="p-2.5 space-y-4">
@@ -287,19 +435,19 @@ function SharedDataContent() {
         {/* 标题 */}
         <div className="flex items-center gap-2 mb-4">
           <div className="w-1 h-6 bg-purple-600 rounded"></div>
-          <h2 className="text-lg font-medium">最近12周新增人脉（共享）</h2>
+          <h2 className="text-lg font-medium">{titleText}</h2>
         </div>
 
         {/* 图表 */}
         <ResponsiveContainer width="100%" height={250}>
           <BarChart 
-            data={weeklyData}
+            data={chartData}
             margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
             barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis 
-              dataKey="week" 
+              dataKey="name" 
               tick={{ fontSize: 11, fill: '#6b7280' }}
               stroke="#9ca3af"
               interval={0}
@@ -321,7 +469,7 @@ function SharedDataContent() {
               formatter={(value: any) => [`${value}人`, '新增人脉']}
             />
             <Bar 
-              dataKey="count" 
+              dataKey="value" 
               fill="#8b5cf6" 
               radius={[4, 4, 0, 0]}
               animationBegin={0}
@@ -329,7 +477,7 @@ function SharedDataContent() {
               animationEasing="ease-out"
             >
               <LabelList 
-                dataKey="count" 
+                dataKey="value" 
                 position="top" 
                 style={{ fontSize: '12px', fill: '#6b7280', fontWeight: 500 }}
                 formatter={(value: number) => value}
@@ -338,11 +486,47 @@ function SharedDataContent() {
           </BarChart>
         </ResponsiveContainer>
 
+        {/* 时间维度切换按钮 */}
+        <div className="mt-3 mb-3 flex justify-center">
+          <div className="inline-flex bg-white border-2 border-purple-200 rounded-lg overflow-hidden p-1 shadow-sm">
+            <button
+              onClick={() => setTimePeriod("day")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "day"
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              日
+            </button>
+            <button
+              onClick={() => setTimePeriod("week")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "week" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              周
+            </button>
+            <button
+              onClick={() => setTimePeriod("month")}
+              className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                timePeriod === "month" 
+                  ? "bg-purple-600 text-white shadow-sm" 
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              月
+            </button>
+          </div>
+        </div>
+
         {/* 统计数据 */}
-        <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">12周平均新增</span>
-            <span className="text-lg font-medium text-purple-600">{avgWeekly}</span>
+            <span className="text-sm text-gray-600">{avgText}</span>
+            <span className="text-lg font-medium text-purple-600">{avgValue}</span>
           </div>
         </div>
       </div>
