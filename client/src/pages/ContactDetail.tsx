@@ -838,6 +838,7 @@ export default function ContactDetail() {
   const [showQuickContactDialog, setShowQuickContactDialog] = useState(false);
   const [quickContactNote, setQuickContactNote] = useState("");
   const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
+  const [importanceScore, setImportanceScore] = useState<number>(0); // 互动重要性评分：1-5分
   const [showDeleteInteractionDialog, setShowDeleteInteractionDialog] = useState(false);
   const [interactionToDelete, setInteractionToDelete] = useState<any>(null);
   const [showEditInteractionDialog, setShowEditInteractionDialog] = useState(false);
@@ -1179,17 +1180,22 @@ export default function ContactDetail() {
     },
   });
 
-  // 快速记录联络（支持可选备注和联络方式）
+  // 快速记录联络（支持可选备注、联络方式和重要性评分）
   const quickRecordInteraction = () => {
     let note = quickContactNote.trim() || "快捷联络";
     // 如果选择了联络方式，添加到备注中
     if (contactMethod) {
       note = `${contactMethod} - ${note}`;
     }
+    // 如果选择了重要性评分，添加到备注中
+    if (importanceScore > 0) {
+      note = `${note} [重要性:${importanceScore}分]`;
+    }
     createInteraction.mutate({ contactId, note });
     setShowQuickContactDialog(false);
     setQuickContactNote("");
     setContactMethod("");
+    setImportanceScore(0);
   };
 
   // 删除联络记录
@@ -2113,6 +2119,7 @@ export default function ContactDetail() {
         if (!open) {
           setQuickContactNote("");
           setContactMethod("");
+          setImportanceScore(0);
         }
       }}>
         <DialogContent>
@@ -2156,6 +2163,23 @@ export default function ContactDetail() {
                     >
                       微信
                     </Button>
+                  </div>
+                </div>
+                {/* 互动重要性评分（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <Button
+                        key={score}
+                        type="button"
+                        variant={importanceScore === score ? "default" : "outline"}
+                        onClick={() => setImportanceScore(importanceScore === score ? 0 : score)}
+                        className="flex-1"
+                      >
+                        {score}分
+                      </Button>
+                    ))}
                   </div>
                 </div>
                 {/* 备注输入 */}

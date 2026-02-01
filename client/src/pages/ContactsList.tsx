@@ -319,6 +319,7 @@ export default function ContactsList() {
   const [contactToRecord, setContactToRecord] = useState<any>(null);
   const [quickContactNote, setQuickContactNote] = useState("");
   const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
+  const [importanceScore, setImportanceScore] = useState<number>(0); // 互动重要性评分：1-5分
   
   // 互动记录对话框状态
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
@@ -695,6 +696,10 @@ export default function ContactsList() {
       if (contactMethod) {
         note = `${contactMethod} - ${note}`;
       }
+      // 如果选择了重要性评分，添加到备注中
+      if (importanceScore > 0) {
+        note = `${note} [重要性:${importanceScore}分]`;
+      }
       recordInteractionMutation.mutate({ 
         contactId: contactToRecord.id,
         note
@@ -706,6 +711,7 @@ export default function ContactsList() {
       });
       setQuickContactNote("");
       setContactMethod("");
+      setImportanceScore(0);
     }
   };
   
@@ -2156,6 +2162,7 @@ export default function ContactsList() {
           setContactToRecord(null);
           setQuickContactNote("");
           setContactMethod("");
+          setImportanceScore(0);
         }
       }}>
         <DialogContent>
@@ -2201,6 +2208,23 @@ export default function ContactsList() {
                     </Button>
                   </div>
                 </div>
+                {/* 互动重要性评分（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <Button
+                        key={score}
+                        type="button"
+                        variant={importanceScore === score ? "default" : "outline"}
+                        onClick={() => setImportanceScore(importanceScore === score ? 0 : score)}
+                        className="flex-1"
+                      >
+                        {score}分
+                      </Button>
+                    ))}
+                  </div>
+                </div>
                 {/* 备注输入 */}
                 <div className="w-full">
                   <Input
@@ -2225,6 +2249,7 @@ export default function ContactsList() {
                 setContactToRecord(null);
                 setQuickContactNote("");
                 setContactMethod("");
+                setImportanceScore(0);
               }}
               className="w-full"
             >
