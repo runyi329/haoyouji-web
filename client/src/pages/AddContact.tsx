@@ -206,7 +206,13 @@ export default function AddContact() {
   const [privateAccountNumber, setPrivateAccountNumber] = useState("");
   const [privateAccountName, setPrivateAccountName] = useState("");
   
-  // 通用字段对话框（用于电话）
+  // 电话对话框（支持多个电话号码）
+  const [showPhoneDialog, setShowPhoneDialog] = useState(false);
+  const [phoneList, setPhoneList] = useState<string[]>([]);
+  const [currentPhone, setCurrentPhone] = useState("");
+  const [editingPhoneIndex, setEditingPhoneIndex] = useState<number | null>(null);
+  
+  // 通用字段对话框（用于其他字段）
   const [showGenericFieldDialog, setShowGenericFieldDialog] = useState(false);
   const [genericFieldName, setGenericFieldName] = useState("");
   const [genericFieldValue, setGenericFieldValue] = useState("");
@@ -852,12 +858,18 @@ export default function AddContact() {
                                 setDialogMessage(null);
                                 setShowPrivateAccountDialog(true);
                               } else if (field === '电话') {
-                                // 电话字段使用通用对话框
+                                // 电话字段使用专用对话框（支持多个电话）
                                 const existingValue = extendedFields.find(f => f.categoryName === '电话');
-                                setGenericFieldName('电话');
-                                setGenericFieldValue(existingValue?.value || '');
+                                if (existingValue) {
+                                  // 解析已保存的电话列表，格式：电话1,电话2,电话3
+                                  setPhoneList(existingValue.value.split(',').map(p => p.trim()).filter(p => p));
+                                } else {
+                                  setPhoneList([]);
+                                }
+                                setCurrentPhone('');
+                                setEditingPhoneIndex(null);
                                 setDialogMessage(null);
-                                setShowGenericFieldDialog(true);
+                                setShowPhoneDialog(true);
                               } else if (field === '地址') {
                                 // 地址字段使用专用对话框
                                 const existingValue = extendedFields.find(f => f.categoryName === '地址');
@@ -2537,7 +2549,165 @@ export default function AddContact() {
           </div>
         </div>
       )}
-            {/* 通用字段对话框（用于电话、地址等） */}
+      
+      {/* 电话对话框（支持多个电话号码） */}
+      {showPhoneDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPhoneDialog(false)}>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">电话</h3>
+            
+            {/* 已保存的电话列表 */}
+            {phoneList.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">已保存的电话：</p>
+                <div className="space-y-2">
+                  {phoneList.map((phone, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-3 rounded-lg border">
+                      <span className="flex-1 text-sm">{phone}</span>
+                      <button
+                        onClick={() => {
+                          setCurrentPhone(phone);
+                          setEditingPhoneIndex(index);
+                          setDialogMessage({type: "success", text: '已加载到输入框，修改后点击保存'});
+                        }}
+                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        title="编辑"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPhoneList(prev => prev.filter((_, i) => i !== index));
+                          if (editingPhoneIndex === index) {
+                            setEditingPhoneIndex(null);
+                            setCurrentPhone('');
+                          }
+                          setDialogMessage({type: "success", text: '已删除'});
+                        }}
+                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        title="删除"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 输入电话 */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 mb-2 block">
+                {editingPhoneIndex !== null ? '编辑电话' : '添加新电话'}
+              </label>
+              <Input 
+                type="tel"
+                value={currentPhone} 
+                onChange={(e) => setCurrentPhone(e.target.value)} 
+                placeholder="请输入电话号码" 
+              />
+            </div>
+            
+            {/* 提示信息 */}
+            {dialogMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                dialogMessage.type === 'error' 
+                  ? 'bg-red-50 text-red-700 border border-red-200' 
+                  : 'bg-green-50 text-green-700 border border-green-200'
+              }`}>
+                {dialogMessage.text}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              {/* 添加/保存按钮 */}
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => {
+                  if (!currentPhone.trim()) {
+                    setDialogMessage({type: "error", text: '请输入电话号码'});
+                    return;
+                  }
+                  
+                  if (editingPhoneIndex !== null) {
+                    // 编辑模式：更新已有电话
+                    setPhoneList(prev => {
+                      const newList = [...prev];
+                      newList[editingPhoneIndex] = currentPhone.trim();
+                      return newList;
+                    });
+                    setEditingPhoneIndex(null);
+                    setCurrentPhone('');
+                    setDialogMessage({type: "success", text: '已更新'});
+                  } else {
+                    // 添加模式：添加新电话
+                    setPhoneList(prev => [...prev, currentPhone.trim()]);
+                    setCurrentPhone('');
+                    setDialogMessage({type: "success", text: '已添加'});
+                  }
+                }}
+              >
+                {editingPhoneIndex !== null ? '保存修改' : '添加'}
+              </Button>
+              
+              {/* 取消按钮 */}
+              <Button 
+                variant="outline" 
+                className="flex-1" 
+                onClick={() => {
+                  setDialogMessage(null);
+                  setShowPhoneDialog(false);
+                }}
+              >
+                取消
+              </Button>
+              
+              {/* 确定按钮 */}
+              <Button 
+                className="flex-1" 
+                onClick={() => {
+                  // 如果输入框有内容，先添加到列表
+                  let finalList = [...phoneList];
+                  if (currentPhone.trim()) {
+                    if (editingPhoneIndex !== null) {
+                      finalList[editingPhoneIndex] = currentPhone.trim();
+                    } else {
+                      finalList.push(currentPhone.trim());
+                    }
+                  }
+                  
+                  if (finalList.length === 0) {
+                    // 如果没有电话，删除该字段
+                    setExtendedFields(prev => prev.filter(f => f.categoryName !== '电话'));
+                    setDialogMessage({type: "success", text: '已清空电话'});
+                  } else {
+                    // 保存所有电话
+                    const value = finalList.join(',');
+                    setExtendedFields(prev => {
+                      const filtered = prev.filter(f => f.categoryName !== '电话');
+                      return [...filtered, { categoryId: getCategoryId('电话'), categoryName: '电话', value }];
+                    });
+                    setDialogMessage({type: "success", text: `已保存${finalList.length}个电话`});
+                  }
+                  
+                  setTimeout(() => {
+                    setDialogMessage(null);
+                    setShowPhoneDialog(false);
+                  }, 800);
+                }}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+            {/* 通用字段对话框（用于其他字段） */}
       {showGenericFieldDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGenericFieldDialog(false)}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
