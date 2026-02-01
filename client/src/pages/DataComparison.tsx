@@ -222,7 +222,7 @@ function AllDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 1.0' }}
+                  style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数 */}
@@ -243,7 +243,7 @@ function AllDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-base font-bold">{item.value}</span>
+                    <span className="text-lg font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -503,7 +503,7 @@ function MyDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 1.0' }}
+                  style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数 */}
@@ -524,7 +524,7 @@ function MyDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-base font-bold">{item.value}</span>
+                    <span className="text-lg font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -784,7 +784,7 @@ function SharedDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 1.0' }}
+                  style={{ aspectRatio: '1 / 0.95' }}
                   title={`${item.name}: ${item.value}人`}
                 >
                   {/* 周数 */}
@@ -805,7 +805,7 @@ function SharedDataContent() {
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-base font-bold">{item.value}</span>
+                    <span className="text-lg font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
