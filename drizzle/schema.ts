@@ -836,6 +836,8 @@ export const userPreferences = mysqlTable("user_preferences", {
 	userId: int().notNull(),
 	homeCardOrder: json(),
 	favoriteFeatures: json(),
+	colorThemeId: varchar({ length: 50 }),
+	customColors: json(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },

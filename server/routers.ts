@@ -4927,6 +4927,27 @@ export const appRouter = router({
         await db.saveHomeCardOrder(ctx.user.id, input.cardOrder);
         return { success: true };
       }),
+    
+    // 获取用户主题设置
+    getThemeSettings: protectedProcedure
+      .query(async ({ ctx }) => {
+        const preference = await db.getUserPreference(ctx.user.id);
+        return {
+          colorThemeId: preference?.colorThemeId || null,
+          customColors: preference?.customColors || null,
+        };
+      }),
+    
+    // 保存用户主题设置
+    saveThemeSettings: protectedProcedure
+      .input(z.object({
+        colorThemeId: z.string().nullable(),
+        customColors: z.any().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.saveThemeSettings(ctx.user.id, input.colorThemeId, input.customColors);
+        return { success: true };
+      }),
   }),
 
   // 积分系统

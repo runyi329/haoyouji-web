@@ -4456,3 +4456,31 @@ export async function saveHomeCardOrder(userId: number, cardOrder: string[]): Pr
     });
   }
 }
+
+/**
+ * 保存或更新用户主题设置
+ */
+export async function saveThemeSettings(userId: number, colorThemeId: string | null, customColors: any): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getUserPreference(userId);
+  
+  if (existing) {
+    // 更新现有记录
+    await db.update(userPreferences)
+      .set({ 
+        colorThemeId,
+        customColors,
+        updatedAt: new Date()
+      })
+      .where(eq(userPreferences.userId, userId));
+  } else {
+    // 创建新记录
+    await db.insert(userPreferences).values({
+      userId,
+      colorThemeId,
+      customColors,
+    });
+  }
+}

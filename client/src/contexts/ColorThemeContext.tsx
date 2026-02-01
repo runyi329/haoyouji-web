@@ -89,26 +89,66 @@ export const useColorTheme = () => {
 export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentTheme, setCurrentTheme] = useState<ThemeTemplate>(themeTemplates[0]);
   const [customColors, setCustomColors] = useState<ThemeColors | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // 从 localStorage 加载主题
+  // 从云端加载主题设置
   useEffect(() => {
-    const savedThemeId = localStorage.getItem('colorThemeId');
-    const savedCustomColors = localStorage.getItem('customColors');
+    const loadThemeFromServer = async () => {
+      try {
+        const response = await fetch('/api/trpc/userPreferences.getThemeSettings');
+        if (response.ok) {
+          const data = await response.json();
+          const result = data.result?.data;
+          
+          if (result?.customColors) {
+            setCustomColors(result.customColors);
+            applyTheme(result.customColors);
+          } else if (result?.colorThemeId) {
+            const theme = themeTemplates.find(t => t.id === result.colorThemeId);
+            if (theme) {
+              setCurrentTheme(theme);
+              applyTheme(theme.colors);
+            }
+          } else {
+            // 默认主题
+            applyTheme(currentTheme.colors);
+          }
+        } else {
+          // 未登录或请求失败，使用localStorage
+          const savedThemeId = localStorage.getItem('colorThemeId');
+          const savedCustomColors = localStorage.getItem('customColors');
 
-    if (savedCustomColors) {
-      const colors = JSON.parse(savedCustomColors);
-      setCustomColors(colors);
-      applyTheme(colors);
-    } else if (savedThemeId) {
-      const theme = themeTemplates.find(t => t.id === savedThemeId);
-      if (theme) {
-        setCurrentTheme(theme);
-        applyTheme(theme.colors);
+          if (savedCustomColors) {
+            const colors = JSON.parse(savedCustomColors);
+            setCustomColors(colors);
+            applyTheme(colors);
+          } else if (savedThemeId) {
+            const theme = themeTemplates.find(t => t.id === savedThemeId);
+            if (theme) {
+              setCurrentTheme(theme);
+              applyTheme(theme.colors);
+            }
+          } else {
+            applyTheme(currentTheme.colors);
+          }
+        }
+      } catch (error) {
+        console.error('加载主题设置失败:', error);
+        // 使用localStorage作为备用
+        const savedThemeId = localStorage.getItem('colorThemeId');
+        if (savedThemeId) {
+          const theme = themeTemplates.find(t => t.id === savedThemeId);
+          if (theme) {
+            setCurrentTheme(theme);
+            applyTheme(theme.colors);
+          }
+        }
+      } finally {
+        setIsLoaded(true);
       }
-    } else {
-      // 默认主题
-      applyTheme(currentTheme.colors);
-    }
+    };
+
+    loadThemeFromServer();
   }, []);
 
   // 应用主题到 CSS 变量
@@ -154,7 +194,7 @@ export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     root.style.setProperty('--ring', colors.primary);
   };
 
-  const setTheme = (themeId: string) => {
+  const setTheme = async (themeId: string) => {
     const theme = themeTemplates.find(t => t.id === themeId);
     if (theme) {
       setCurrentTheme(theme);
@@ -162,14 +202,42 @@ export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       localStorage.setItem('colorThemeId', themeId);
       localStorage.removeItem('customColors');
       applyTheme(theme.colors);
+      
+      // 同步到云端
+      try {
+        await fetch('/api/trpc/userPreferences.saveThemeSettings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            colorThemeId: themeId,
+            customColors: null,
+          }),
+        });
+      } catch (error) {
+        console.error('保存主题设置到云端失败:', error);
+      }
     }
   };
 
-  const handleSetCustomColors = (colors: ThemeColors) => {
+  const handleSetCustomColors = async (colors: ThemeColors) => {
     setCustomColors(colors);
     localStorage.setItem('customColors', JSON.stringify(colors));
     localStorage.removeItem('colorThemeId');
     applyTheme(colors);
+    
+    // 同步到云端
+    try {
+      await fetch('/api/trpc/userPreferences.saveThemeSettings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          colorThemeId: null,
+          customColors: colors,
+        }),
+      });
+    } catch (error) {
+      console.error('保存自定义主题到云端失败:', error);
+    }
   };
 
   return (
