@@ -451,14 +451,48 @@ function AllDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 绿色背景标题 */}
+      {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        className="text-white rounded-lg mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
       >
-        <h2 className="font-medium text-center">互动与关系健康度</h2>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
+            <span className="font-medium">互动与关系健康度</span>
+          </div>
+          {/* 标签页切换 */}
+          <div className="flex bg-white/20 rounded-lg overflow-hidden">
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "white",
+                color: themeColors.primary
+              }}
+            >
+              全部
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              我的
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              共享
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 占位内容 */}
@@ -804,14 +838,48 @@ function MyDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 绿色背景标题 */}
+      {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        className="text-white rounded-lg mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
       >
-        <h2 className="font-medium text-center">互动与关系健康度</h2>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
+            <span className="font-medium">互动与关系健康度</span>
+          </div>
+          {/* 标签页切换 */}
+          <div className="flex bg-white/20 rounded-lg overflow-hidden">
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "white",
+                color: themeColors.primary
+              }}
+            >
+              全部
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              我的
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              共享
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 占位内容 */}
@@ -1157,14 +1225,48 @@ function SharedDataContent({ themeColors }: DataContentProps) {
 
       </div>
 
-      {/* 互动与关系健康度 - 绿色背景标题 */}
+      {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white px-4 py-3 rounded-lg mb-2.5"
+        className="text-white rounded-lg mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
       >
-        <h2 className="font-medium text-center">互动与关系健康度</h2>
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
+            <span className="font-medium">互动与关系健康度</span>
+          </div>
+          {/* 标签页切换 */}
+          <div className="flex bg-white/20 rounded-lg overflow-hidden">
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "white",
+                color: themeColors.primary
+              }}
+            >
+              全部
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              我的
+            </button>
+            <button
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: "transparent",
+                color: "white"
+              }}
+            >
+              共享
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 占位内容 */}
