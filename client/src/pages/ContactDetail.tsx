@@ -300,11 +300,15 @@ function ExtendedInfoSection({
                 if (field.categoryName === '公司名称') {
                   const companyName = typeof item === 'string' ? item : JSON.stringify(item);
                   const hasReport = companyReportExistsMap[companyName] || false;
+                  // 公司名称脱敏：显示前2个字符，其余用星号
+                  const maskedCompanyName = showFullInfo ? companyName : (
+                    companyName.length <= 2 ? companyName : companyName.slice(0, 2) + '*'.repeat(Math.min(companyName.length - 2, 4))
+                  );
                   return (
                     <div key={itemIndex} className="py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className={`text-sm ${showFullInfo ? '' : 'blur-sm select-none'}`}>
-                          {companyName}
+                        <span className="text-sm">
+                          {maskedCompanyName}
                         </span>
                         <CompanyReportIcon
                           hasReport={hasReport}
