@@ -224,8 +224,12 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
           const result = await db.execute(
             sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${startDateStr} AND createdAt <= ${endDateStr}`
           );
-          const weekCount = Number(result?.[0]?.count || 0);
-          console.log(`[Week ${i + 1}] query result: ${weekCount}`);
+          console.log(`[Week ${i + 1}] raw result:`, JSON.stringify(result));
+          // MySQL2 execute返回 [rows, fields]，rows是数组
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          const weekCount = Number(firstRow?.count || 0);
+          console.log(`[Week ${i + 1}] query result: ${weekCount}, firstRow:`, firstRow);
           count += weekCount;
         }
         
@@ -260,7 +264,10 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
           const result = await db.execute(
             sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${dateStr} AND createdAt < ${nextDateStr}`
           );
-          count += Number(result?.[0]?.count || 0);
+          // MySQL2 execute返回 [rows, fields]，rows是数组
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          count += Number(firstRow?.count || 0);
         }
         
         stats.push({

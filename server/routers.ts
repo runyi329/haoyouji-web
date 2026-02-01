@@ -4719,7 +4719,10 @@ export const appRouter = router({
             return result;
           });
           
-          allSharedContacts.push(...contactsWithDetails);
+          // 使用concat或循环避免栈溢出（push(...array)在数组很大时会崩溃）
+          for (const contact of contactsWithDetails) {
+            allSharedContacts.push(contact);
+          }
         }
         
         return allSharedContacts;

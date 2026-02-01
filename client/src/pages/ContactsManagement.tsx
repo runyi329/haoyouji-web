@@ -483,7 +483,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <ContactsStatsCard 
-          totalContacts={stats.totalContacts} 
+          totalContacts={stats?.totalContacts || 0} 
           onClick={() => setLocation('/parent/contacts/list')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -497,7 +497,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <WeeklyNewCard 
-          count={stats.newThisWeek} 
+          count={stats?.newThisWeek || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisWeek')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -511,7 +511,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <MonthlyNewCard 
-          count={stats.newThisMonth} 
+          count={stats?.newThisMonth || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisMonth')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -525,7 +525,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <YearlyNewCard 
-          count={stats.newThisYear} 
+          count={stats?.newThisYear || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=thisYear')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -538,7 +538,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
   if (feature.id === 5) {
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
-        <AverageIntervalCard days={stats.averageInteractionInterval} dragListeners={listeners} />
+        <AverageIntervalCard days={stats?.averageInteractionInterval || 0} dragListeners={listeners} />
       </div>
     );
   }
@@ -548,7 +548,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <NeedsAttentionCard 
-          count={stats.needsAttentionCount} 
+          count={stats?.needsAttentionCount || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=needsAttention')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -562,7 +562,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <MonthlyActiveCard 
-          count={stats.monthlyActiveCount} 
+          count={stats?.monthlyActiveCount || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=monthlyActive')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -576,7 +576,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <WeeklyActiveCard 
-          count={stats.weeklyActive} 
+          count={stats?.weeklyActive || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=weeklyActive')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -590,7 +590,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <YearlyActiveCard 
-          count={stats.yearlyActive} 
+          count={stats?.yearlyActive || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=yearlyActive')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -604,7 +604,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <BlacklistCard 
-          count={stats.blacklistCount} 
+          count={stats?.blacklistCount || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=blacklist')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -618,7 +618,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <TodayRemindersCard 
-          count={stats.todayReminders} 
+          count={stats?.todayReminders || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=todayReminders')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -632,7 +632,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <WeekRemindersCard 
-          count={stats.weekReminders} 
+          count={stats?.weekReminders || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=weekReminders')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -646,7 +646,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <MonthRemindersCard 
-          count={stats.monthReminders} 
+          count={stats?.monthReminders || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=monthReminders')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -660,7 +660,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <TodayActiveCard 
-          count={stats.todayActive} 
+          count={stats?.todayActive || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=todayActive')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -674,7 +674,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <DormantCard 
-          count={stats.dormantCount} 
+          count={stats?.dormantCount || 0} 
           dragListeners={listeners}
           isBreathing={isBreathing}
         />
@@ -687,7 +687,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <CompanyCountCard 
-          count={stats.companyCount} 
+          count={stats?.companyCount || 0} 
           dragListeners={listeners}
           isBreathing={isBreathing}
           onClick={() => setLocation('/parent/contacts/list?view=company')}
@@ -701,7 +701,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <TotalInteractionCard 
-          count={stats.totalInteractionCount} 
+          count={stats?.totalInteractionCount || 0} 
           dragListeners={listeners}
           isBreathing={isBreathing}
         />
@@ -714,7 +714,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <TotalTagCard 
-          count={stats.totalTagCount} 
+          count={stats?.totalTagCount || 0} 
           dragListeners={listeners}
           isBreathing={isBreathing}
           onClick={() => setLocation('/parent/contacts/tag-analytics')}
@@ -728,7 +728,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <TotalUsageDaysCard 
-          days={stats.totalUsageDays} 
+          days={stats?.totalUsageDays || 0} 
           dragListeners={listeners}
           isBreathing={isBreathing}
         />
@@ -787,6 +787,12 @@ export default function ContactsManagement() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  
+  // 监控searchQuery变化，追踪是什么触发了查询
+  useEffect(() => {
+    console.log('[ContactsManagement] searchQuery变化:', searchQuery);
+    console.trace('[ContactsManagement] searchQuery变化堆栈:');
+  }, [searchQuery]);
   
   // 呼吸灯效果状态
   const [breathingCardId, setBreathingCardId] = useState<number | null>(null);
@@ -852,12 +858,20 @@ export default function ContactsManagement() {
   const hasSharingPermission = true;
   
   // 获取人脉列表（支持搜索）
-  const { data: contacts, isLoading } = trpc.contacts.list.useQuery({
-    searchQuery: searchQuery || undefined,
-  });
+  // 注意：只在有搜索关键词时才查询，避免加载大量数据导致崩溃
+  const { data: contacts, isLoading } = trpc.contacts.list.useQuery(
+    {
+      searchQuery: searchQuery || undefined,
+    },
+    {
+      enabled: !!searchQuery, // 只在有searchQuery时才执行查询
+    }
+  );
   
   // 获取共享给我的人脉列表
-  const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
+  // 注意：禁用自动加载，因为当共享联系人很多时会导致页面卡顿/崩溃
+  // 如果需要使用，应该在特定页面按需加载
+  // const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
   
   // stats.totalContacts 已经包含了自己的 + 共享的联系人总数，不需要再加
   const totalContactsWithShared = stats?.totalContacts || 0;
@@ -970,7 +984,8 @@ export default function ContactsManagement() {
       
       // 如果API返回的功能数量少于20，自动补充到20个
       if (apiFeatures.length < 20) {
-        const maxId = Math.max(...apiFeatures.map(f => f.id), 0);
+        // 使用reduce避免栈溢出（Math.max(...array)在数组很大时会崩溃）
+        const maxId = apiFeatures.reduce((max, f) => Math.max(max, f.id), 0);
         const additionalFeatures = Array.from(
           { length: 20 - apiFeatures.length },
           (_, i) => ({
@@ -1153,96 +1168,8 @@ export default function ContactsManagement() {
         
 
         
-        {/* 搜索框、标签管理和添加按钮 */}
+        {/* 标签管理和添加按钮 */}
         <div className="flex gap-2 sm:gap-4">
-          <div ref={searchRef} className="relative flex-1">
-            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground z-10" />
-            <Input
-              placeholder="搜索人脉..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={handleSearchFocus}
-              className="pl-7 sm:pl-10 h-8 sm:h-10 text-sm"
-            />
-            
-            {/* 搜索下拉列表 */}
-            {showDropdown && dropdownContacts.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
-                {dropdownContacts.map((contact: any) => {
-                  const company = getFieldValue(contact, "公司");
-                  const position = getFieldValue(contact, "职位");
-                  
-                  return (
-                    <div
-                      key={contact.id}
-                      onClick={() => handleContactClick(contact.id)}
-                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm sm:text-base truncate">{contact.name}</span>
-                            {contact.title && (
-                              <span className="text-xs sm:text-sm text-muted-foreground truncate">{contact.title}</span>
-                            )}
-                          </div>
-                          {(company || position) && (
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
-                              {company && <span>{company}</span>}
-                              {company && position && <span className="mx-1">·</span>}
-                              {position && <span>{position}</span>}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            {/* 搜索无结果提示 */}
-            {showDropdown && searchQuery && dropdownContacts.length === 0 && !isLoading && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 z-50">
-                <p className="text-sm text-muted-foreground text-center">未找到匹配的人脉</p>
-              </div>
-            )}
-            
-            {/* 搜索历史记录 */}
-            {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
-                  <button
-                    onClick={handleClearHistory}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    清空
-                  </button>
-                </div>
-                {searchHistory.map((query, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleHistoryClick(query)}
-                    className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Search className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-sm truncate">{query}</span>
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteHistory(query, e)}
-                      className="text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2"
-                    >
-                      <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
           <Button 
             onClick={() => setLocation('/parent/contacts/list')}
             size="sm" 

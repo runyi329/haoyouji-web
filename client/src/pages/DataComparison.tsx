@@ -263,14 +263,14 @@ function AllDataContent() {
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
         {/* 标题 + 统计信息 */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 bg-purple-600 rounded"></div>
-            <h2 className="text-lg font-medium">{titleText}</h2>
+        <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
-            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
+            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
           </div>
         </div>
 
@@ -546,14 +546,14 @@ function MyDataContent() {
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
         {/* 标题 + 统计信息 */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 bg-purple-600 rounded"></div>
-            <h2 className="text-lg font-medium">{titleText}</h2>
+        <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
-            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
+            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
           </div>
         </div>
 
@@ -830,14 +830,14 @@ function SharedDataContent() {
       {/* 每周新增人脉统计 */}
       <div className="bg-white rounded-lg p-2.5">
         {/* 标题 + 统计信息 */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 bg-purple-600 rounded"></div>
-            <h2 className="text-lg font-medium">{titleText}</h2>
+        <div className="flex items-center justify-between mb-4 flex-nowrap gap-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+            <div className="w-1 h-5 bg-purple-600 rounded flex-shrink-0"></div>
+            <h2 className="font-medium whitespace-nowrap" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>{titleText}</h2>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{avgUnit}{avgValue}人</span>
-            <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-600 rounded">共计{totalCount}人</span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>{avgUnit}{avgValue}人</span>
+            <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded whitespace-nowrap" style={{ fontSize: 'clamp(0.6rem, 2.8vw, 0.75rem)' }}>共计{totalCount}人</span>
           </div>
         </div>
 

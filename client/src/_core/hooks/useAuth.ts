@@ -42,10 +42,27 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    // 安全地存储用户信息到localStorage，只存储必要的字段
+    try {
+      if (meQuery.data) {
+        // 只存储必要的用户信息，避免存储大量数据导致localStorage超限
+        const minimalUserInfo = {
+          id: meQuery.data.id,
+          username: meQuery.data.username,
+          name: meQuery.data.name,
+          avatar: meQuery.data.avatar,
+        };
+        localStorage.setItem(
+          "manus-runtime-user-info",
+          JSON.stringify(minimalUserInfo)
+        );
+      } else {
+        localStorage.removeItem("manus-runtime-user-info");
+      }
+    } catch (e) {
+      // 忽略localStorage错误，不影响主流程
+      console.warn('[useAuth] localStorage操作失败:', e);
+    }
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
