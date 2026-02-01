@@ -188,18 +188,31 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         }
       }
     } else if (period === 'week') {
-      // 过去12周的数据
+      // 过去12周的数据（从周一开始）
       for (let i = 11; i >= 0; i--) {
+        // 计算该周的结束日期（周日）
         const endDate = new Date(now);
         endDate.setDate(now.getDate() - i * 7);
+        // 调整到周日
+        const dayOfWeek = endDate.getDay();
+        const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+        endDate.setDate(endDate.getDate() + daysToSunday);
         endDate.setHours(23, 59, 59, 999);
         
+        // 计算该周的开始日期（周一）
         const startDate = new Date(endDate);
         startDate.setDate(endDate.getDate() - 6);
         startDate.setHours(0, 0, 0, 0);
         
         const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
         const endDateStr = endDate.toISOString().slice(0, 19).replace('T', ' ');
+        
+        // 格式化日期范围显示
+        const startMonth = startDate.getMonth() + 1;
+        const startDay = startDate.getDate();
+        const endMonth = endDate.getMonth() + 1;
+        const endDay = endDate.getDate();
+        const dateRange = `${startMonth}/${startDay}-${endMonth}/${endDay}`;
         
         let count = 0;
         
@@ -212,6 +225,7 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         
         stats.push({
           name: `${12 - i}周`,
+          dateRange: dateRange,
           value: count,
         });
       }
@@ -240,7 +254,7 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
       }
     }
     
-    console.log('[getContactGrowthStats] 返回数据:', { count: stats.length, sample: stats.slice(0, 3) });
+    console.log('[getContactGrowthStats] 返回数据:', { count: stats.length, first: stats[0], sample: stats.slice(0, 3) });
     return stats;
   } catch (error) {
     console.error('[getContactGrowthStats] 错误:', error);

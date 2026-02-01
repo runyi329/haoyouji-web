@@ -222,18 +222,28 @@ function AllDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 0.8' }}
+                  style={{ aspectRatio: '1 / 1.0' }}
                   title={`${item.name}: ${item.value}人`}
                 >
+                  {/* 周数 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {item.name}
+                    {timePeriod === "week" ? `第${item.name}` : item.name}
                   </div>
+                  {/* 日期范围（只在周维度显示） */}
+                  {timePeriod === "week" && (item as any).dateRange && (
+                    <div className={`text-[8px] ${
+                      hasData ? 'text-purple-600' : 'text-white'
+                    }`}>
+                      {(item as any).dateRange}
+                    </div>
+                  )}
+                  {/* 数据 */}
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-base font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -493,18 +503,28 @@ function MyDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 0.8' }}
+                  style={{ aspectRatio: '1 / 1.0' }}
                   title={`${item.name}: ${item.value}人`}
                 >
+                  {/* 周数 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {item.name}
+                    {timePeriod === "week" ? `第${item.name}` : item.name}
                   </div>
+                  {/* 日期范围（只在周维度显示） */}
+                  {timePeriod === "week" && (item as any).dateRange && (
+                    <div className={`text-[8px] ${
+                      hasData ? 'text-purple-600' : 'text-white'
+                    }`}>
+                      {(item as any).dateRange}
+                    </div>
+                  )}
+                  {/* 数据 */}
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-base font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
@@ -764,18 +784,28 @@ function SharedDataContent() {
                   className={`rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
                     hasData ? 'bg-amber-50' : 'bg-purple-700/50'
                   }`}
-                  style={{ aspectRatio: '1 / 0.8' }}
+                  style={{ aspectRatio: '1 / 1.0' }}
                   title={`${item.name}: ${item.value}人`}
                 >
+                  {/* 周数 */}
                   <div className={`text-[8px] ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
-                    {item.name}
+                    {timePeriod === "week" ? `第${item.name}` : item.name}
                   </div>
+                  {/* 日期范围（只在周维度显示） */}
+                  {timePeriod === "week" && (item as any).dateRange && (
+                    <div className={`text-[8px] ${
+                      hasData ? 'text-purple-600' : 'text-white'
+                    }`}>
+                      {(item as any).dateRange}
+                    </div>
+                  )}
+                  {/* 数据 */}
                   <div className={`flex items-baseline gap-0.5 ${
                     hasData ? 'text-green-600' : 'text-white/70'
                   }`}>
-                    <span className="text-sm font-bold">{item.value}</span>
+                    <span className="text-base font-bold">{item.value}</span>
                     <span className="text-[8px]">人</span>
                   </div>
                 </div>
