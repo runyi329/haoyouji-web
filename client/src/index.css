@@ -628,115 +628,357 @@ input[type="range"].slider::-moz-range-thumb {
   animation: breathing-border-rose 5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
-/* 将所有蓝色类名重写为主题色 */
+/* ============================================
+   智能主题颜色映射系统
+   使用6个主题色智能分配到不同UI元素
+   - primary: 主色 - 按钮、链接、主要交互
+   - secondary: 辅色 - 次要按钮、深色变体
+   - background: 背景色 - 页面背景
+   - text: 文字色 - 主要文字
+   - accent1: 强调色1 - 卡片背景、白色元素
+   - accent2: 强调色2 - 边框、图标、装饰
+   ============================================ */
+
 @layer utilities {
-  /* 背景色 */
+  /* ========== 蓝色系列 → 主色系列 (primary) ========== */
+  
+  /* 背景色 - 浅色使用 accent1 混合 primary */
   .bg-blue-50 {
-    background-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
   }
   .bg-blue-100 {
-    background-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
   }
   .bg-blue-200 {
-    background-color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-accent1)) !important;
   }
   .bg-blue-300 {
-    background-color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-accent1)) !important;
   }
   .bg-blue-400 {
-    background-color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-accent1)) !important;
   }
   .bg-blue-500 {
     background-color: var(--color-primary) !important;
   }
+  /* 深色使用 secondary 或混合 text */
   .bg-blue-600 {
-    background-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+    background-color: var(--color-secondary) !important;
   }
   .bg-blue-700 {
-    background-color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+    background-color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
   }
   .bg-blue-800 {
-    background-color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+    background-color: color-mix(in srgb, var(--color-secondary) 60%, var(--color-text)) !important;
   }
   .bg-blue-900 {
-    background-color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+    background-color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-text)) !important;
   }
   
   /* 文字颜色 */
   .text-blue-50 {
-    color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+    color: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
   }
   .text-blue-100 {
-    color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+    color: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
   }
   .text-blue-200 {
-    color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+    color: color-mix(in srgb, var(--color-primary) 25%, var(--color-accent1)) !important;
   }
   .text-blue-300 {
-    color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+    color: color-mix(in srgb, var(--color-primary) 40%, var(--color-accent1)) !important;
   }
   .text-blue-400 {
-    color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+    color: color-mix(in srgb, var(--color-primary) 70%, var(--color-accent1)) !important;
   }
   .text-blue-500 {
     color: var(--color-primary) !important;
   }
   .text-blue-600 {
-    color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+    color: var(--color-secondary) !important;
   }
   .text-blue-700 {
-    color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+    color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
   }
   .text-blue-800 {
-    color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+    color: color-mix(in srgb, var(--color-secondary) 60%, var(--color-text)) !important;
   }
   .text-blue-900 {
-    color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+    color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-text)) !important;
   }
   
-  /* 边框颜色 */
+  /* 边框颜色 - 使用 accent2 增加层次 */
   .border-blue-50 {
-    border-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+    border-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
   }
   .border-blue-100 {
-    border-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+    border-color: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
   }
   .border-blue-200 {
-    border-color: color-mix(in srgb, var(--color-primary) 25%, white) !important;
+    border-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-accent1)) !important;
   }
   .border-blue-300 {
-    border-color: color-mix(in srgb, var(--color-primary) 40%, white) !important;
+    border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-accent1)) !important;
   }
   .border-blue-400 {
-    border-color: color-mix(in srgb, var(--color-primary) 60%, white) !important;
+    border-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-accent1)) !important;
   }
   .border-blue-500 {
     border-color: var(--color-primary) !important;
   }
   .border-blue-600 {
-    border-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+    border-color: var(--color-secondary) !important;
   }
   .border-blue-700 {
-    border-color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+    border-color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
   }
   .border-blue-800 {
-    border-color: color-mix(in srgb, var(--color-primary) 50%, black) !important;
+    border-color: color-mix(in srgb, var(--color-secondary) 60%, var(--color-text)) !important;
   }
   .border-blue-900 {
-    border-color: color-mix(in srgb, var(--color-primary) 30%, black) !important;
+    border-color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-text)) !important;
   }
   
-  /* Hover状态 */
+  /* ========== 紫色系列 → 辅色系列 (secondary/accent2) ========== */
+  
+  .bg-purple-50 {
+    background-color: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .bg-purple-100 {
+    background-color: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .bg-purple-200 {
+    background-color: color-mix(in srgb, var(--color-secondary) 25%, var(--color-accent1)) !important;
+  }
+  .bg-purple-300 {
+    background-color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-accent1)) !important;
+  }
+  .bg-purple-400 {
+    background-color: color-mix(in srgb, var(--color-secondary) 70%, var(--color-accent1)) !important;
+  }
+  .bg-purple-500 {
+    background-color: var(--color-secondary) !important;
+  }
+  .bg-purple-600 {
+    background-color: var(--color-accent2) !important;
+  }
+  .bg-purple-700 {
+    background-color: color-mix(in srgb, var(--color-accent2) 80%, var(--color-text)) !important;
+  }
+  .bg-purple-800 {
+    background-color: color-mix(in srgb, var(--color-accent2) 60%, var(--color-text)) !important;
+  }
+  .bg-purple-900 {
+    background-color: color-mix(in srgb, var(--color-accent2) 40%, var(--color-text)) !important;
+  }
+  
+  .text-purple-50 {
+    color: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .text-purple-100 {
+    color: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .text-purple-200 {
+    color: color-mix(in srgb, var(--color-secondary) 25%, var(--color-accent1)) !important;
+  }
+  .text-purple-300 {
+    color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-accent1)) !important;
+  }
+  .text-purple-400 {
+    color: color-mix(in srgb, var(--color-secondary) 70%, var(--color-accent1)) !important;
+  }
+  .text-purple-500 {
+    color: var(--color-secondary) !important;
+  }
+  .text-purple-600 {
+    color: var(--color-accent2) !important;
+  }
+  .text-purple-700 {
+    color: color-mix(in srgb, var(--color-accent2) 80%, var(--color-text)) !important;
+  }
+  .text-purple-800 {
+    color: color-mix(in srgb, var(--color-accent2) 60%, var(--color-text)) !important;
+  }
+  .text-purple-900 {
+    color: color-mix(in srgb, var(--color-accent2) 40%, var(--color-text)) !important;
+  }
+  
+  .border-purple-50 {
+    border-color: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .border-purple-100 {
+    border-color: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .border-purple-200 {
+    border-color: color-mix(in srgb, var(--color-secondary) 25%, var(--color-accent1)) !important;
+  }
+  .border-purple-300 {
+    border-color: color-mix(in srgb, var(--color-secondary) 40%, var(--color-accent1)) !important;
+  }
+  .border-purple-400 {
+    border-color: color-mix(in srgb, var(--color-secondary) 70%, var(--color-accent1)) !important;
+  }
+  .border-purple-500 {
+    border-color: var(--color-secondary) !important;
+  }
+  .border-purple-600 {
+    border-color: var(--color-accent2) !important;
+  }
+  .border-purple-700 {
+    border-color: color-mix(in srgb, var(--color-accent2) 80%, var(--color-text)) !important;
+  }
+  .border-purple-800 {
+    border-color: color-mix(in srgb, var(--color-accent2) 60%, var(--color-text)) !important;
+  }
+  .border-purple-900 {
+    border-color: color-mix(in srgb, var(--color-accent2) 40%, var(--color-text)) !important;
+  }
+  
+  /* ========== Hover 状态 ========== */
+  
   .hover\:bg-blue-50:hover {
-    background-color: color-mix(in srgb, var(--color-primary) 8%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
   }
   .hover\:bg-blue-100:hover {
-    background-color: color-mix(in srgb, var(--color-primary) 15%, white) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
+  }
+  .hover\:bg-blue-500:hover {
+    background-color: var(--color-primary) !important;
   }
   .hover\:bg-blue-600:hover {
-    background-color: color-mix(in srgb, var(--color-primary) 85%, black) !important;
+    background-color: var(--color-secondary) !important;
+  }
+  .hover\:bg-blue-700:hover {
+    background-color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
+  }
+  .hover\:text-blue-500:hover {
+    color: var(--color-primary) !important;
+  }
+  .hover\:text-blue-600:hover {
+    color: var(--color-secondary) !important;
   }
   .hover\:text-blue-700:hover {
-    color: color-mix(in srgb, var(--color-primary) 70%, black) !important;
+    color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
+  }
+  .hover\:border-blue-500:hover {
+    border-color: var(--color-primary) !important;
+  }
+  
+  .hover\:bg-purple-50:hover {
+    background-color: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .hover\:bg-purple-100:hover {
+    background-color: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .hover\:bg-purple-500:hover {
+    background-color: var(--color-secondary) !important;
+  }
+  .hover\:bg-purple-600:hover {
+    background-color: var(--color-accent2) !important;
+  }
+  .hover\:text-purple-500:hover {
+    color: var(--color-secondary) !important;
+  }
+  .hover\:text-purple-600:hover {
+    color: var(--color-accent2) !important;
+  }
+  .hover\:text-purple-700:hover {
+    color: color-mix(in srgb, var(--color-accent2) 80%, var(--color-text)) !important;
+  }
+  
+  /* ========== Active 状态 ========== */
+  
+  .active\:bg-blue-600:active {
+    background-color: var(--color-secondary) !important;
+  }
+  .active\:bg-blue-700:active {
+    background-color: color-mix(in srgb, var(--color-secondary) 80%, var(--color-text)) !important;
+  }
+  
+  /* ========== Focus 状态 ========== */
+  
+  .focus\:ring-blue-500:focus {
+    --tw-ring-color: var(--color-primary) !important;
+  }
+  .focus\:border-blue-500:focus {
+    border-color: var(--color-primary) !important;
+  }
+  
+  /* ========== 渐变色 ========== */
+  
+  .from-blue-50 {
+    --tw-gradient-from: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
+  }
+  .from-blue-100 {
+    --tw-gradient-from: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
+  }
+  .from-blue-500 {
+    --tw-gradient-from: var(--color-primary) !important;
+  }
+  .from-blue-600 {
+    --tw-gradient-from: var(--color-secondary) !important;
+  }
+  
+  .to-blue-50 {
+    --tw-gradient-to: color-mix(in srgb, var(--color-primary) 8%, var(--color-accent1)) !important;
+  }
+  .to-blue-100 {
+    --tw-gradient-to: color-mix(in srgb, var(--color-primary) 15%, var(--color-accent1)) !important;
+  }
+  .to-blue-500 {
+    --tw-gradient-to: var(--color-primary) !important;
+  }
+  .to-blue-600 {
+    --tw-gradient-to: var(--color-secondary) !important;
+  }
+  
+  .from-purple-50 {
+    --tw-gradient-from: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .from-purple-100 {
+    --tw-gradient-from: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .from-purple-500 {
+    --tw-gradient-from: var(--color-secondary) !important;
+  }
+  .from-purple-600 {
+    --tw-gradient-from: var(--color-accent2) !important;
+  }
+  
+  .to-purple-50 {
+    --tw-gradient-to: color-mix(in srgb, var(--color-secondary) 8%, var(--color-accent1)) !important;
+  }
+  .to-purple-100 {
+    --tw-gradient-to: color-mix(in srgb, var(--color-secondary) 15%, var(--color-accent1)) !important;
+  }
+  .to-purple-500 {
+    --tw-gradient-to: var(--color-secondary) !important;
+  }
+  .to-purple-600 {
+    --tw-gradient-to: var(--color-accent2) !important;
+  }
+  
+  /* ========== Ring 颜色 ========== */
+  
+  .ring-blue-500 {
+    --tw-ring-color: var(--color-primary) !important;
+  }
+  .ring-blue-600 {
+    --tw-ring-color: var(--color-secondary) !important;
+  }
+  .ring-purple-500 {
+    --tw-ring-color: var(--color-secondary) !important;
+  }
+  .ring-purple-600 {
+    --tw-ring-color: var(--color-accent2) !important;
+  }
+  
+  /* ========== 占位符颜色 ========== */
+  
+  .placeholder-blue-500::placeholder {
+    color: var(--color-primary) !important;
+  }
+  .placeholder-purple-500::placeholder {
+    color: var(--color-secondary) !important;
   }
 }
