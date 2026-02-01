@@ -230,8 +230,8 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         });
       }
     } else {
-      // 过去12个月的数据
-      for (let i = 11; i >= 0; i--) {
+      // 过去12个月的数据（不包含当月）
+      for (let i = 12; i >= 1; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
         
@@ -258,7 +258,7 @@ export async function getContactGrowthStats(userId: number, type: 'all' | 'my' |
         }
         
         stats.push({
-          name: `${12 - i}月`,
+          name: `${date.getMonth() + 1}月`,
           dateRange: dateRange,
           value: count,
         });
