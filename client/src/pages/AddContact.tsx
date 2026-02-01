@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, ChevronDown } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, ChevronDown, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -109,6 +109,7 @@ function MultiItemField({
   multiline?: boolean;
 }) {
   const [newValue, setNewValue] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   // 获取当前类别的所有值（JSON数组格式存储）
   const getItems = (): string[] => {
@@ -127,14 +128,22 @@ function MultiItemField({
   // 获取当前字段的完整信息（包括id）
   const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
   
-  // 添加新条目
+  // 添加新条目或保存编辑
   const handleAdd = () => {
     if (!newValue.trim()) return;
-    const newItems = [...items, newValue.trim()];
+    let newItems: string[];
+    if (editingIndex !== null) {
+      // 编辑模式：更新指定索引的条目
+      newItems = [...items];
+      newItems[editingIndex] = newValue.trim();
+      setEditingIndex(null);
+    } else {
+      // 添加模式：添加新条目
+      newItems = [...items, newValue.trim()];
+    }
     const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
-      // 保留原有字段的id，这样更新时可以正确识别
       return [...filtered, { 
         id: currentField?.id, 
         categoryId: getCategoryId(categoryName), 
@@ -145,6 +154,18 @@ function MultiItemField({
     setNewValue('');
   };
   
+  // 编辑条目
+  const handleEdit = (index: number) => {
+    setNewValue(items[index]);
+    setEditingIndex(index);
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setNewValue('');
+    setEditingIndex(null);
+  };
+  
   // 删除条目
   const handleDelete = (index: number) => {
     const newItems = items.filter((_, i) => i !== index);
@@ -152,7 +173,6 @@ function MultiItemField({
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
       if (newItems.length > 0) {
-        // 保留原有字段的id
         return [...filtered, { 
           id: currentField?.id, 
           categoryId: getCategoryId(categoryName), 
@@ -162,6 +182,11 @@ function MultiItemField({
       }
       return filtered;
     });
+    // 如果删除的是正在编辑的条目，取消编辑状态
+    if (editingIndex === index) {
+      setNewValue('');
+      setEditingIndex(null);
+    }
   };
   
   return (
@@ -171,12 +196,21 @@ function MultiItemField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+            <div key={index} className={`flex items-center gap-2 p-2 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <span className="flex-1 text-sm">{item}</span>
+              <button
+                type="button"
+                onClick={() => handleEdit(index)}
+                className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                title="编辑"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => handleDelete(index)}
                 className="p-1 text-red-500 hover:bg-red-50 rounded"
+                title="删除"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -184,27 +218,38 @@ function MultiItemField({
           ))}
         </div>
       )}
-      {/* 添加新条目 */}
+      {/* 添加/编辑输入区 */}
       <div className="flex gap-2">
         {multiline ? (
           <textarea
             className="flex-1 min-h-[60px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder={placeholder}
+            placeholder={editingIndex !== null ? '编辑中...' : placeholder}
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
           />
         ) : (
           <Input
             className="flex-1"
-            placeholder={placeholder}
+            placeholder={editingIndex !== null ? '编辑中...' : placeholder}
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAdd())}
           />
         )}
-        <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-          <Plus className="w-4 h-4" />
-        </Button>
+        {editingIndex !== null ? (
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              保存
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
+              取消
+            </Button>
+          </>
+        ) : (
+          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -227,6 +272,7 @@ function MultiAddressField({
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   // 获取当前类别的所有地址
   const getItems = (): {name: string, phone: string, address: string}[] => {
@@ -245,11 +291,20 @@ function MultiAddressField({
   // 获取当前字段的完整信息（包括id）
   const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
   
-  // 添加新地址
+  // 添加新地址或保存编辑
   const handleAdd = () => {
     if (!newName.trim() && !newPhone.trim() && !newAddress.trim()) return;
     const newItem = { name: newName.trim(), phone: newPhone.trim(), address: newAddress.trim() };
-    const newItems = [...items, newItem];
+    let newItems: {name: string, phone: string, address: string}[];
+    if (editingIndex !== null) {
+      // 编辑模式：更新指定索引的条目
+      newItems = [...items];
+      newItems[editingIndex] = newItem;
+      setEditingIndex(null);
+    } else {
+      // 添加模式：添加新条目
+      newItems = [...items, newItem];
+    }
     const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
@@ -263,6 +318,23 @@ function MultiAddressField({
     setNewName('');
     setNewPhone('');
     setNewAddress('');
+  };
+  
+  // 编辑地址
+  const handleEdit = (index: number) => {
+    const item = items[index];
+    setNewName(item.name);
+    setNewPhone(item.phone);
+    setNewAddress(item.address);
+    setEditingIndex(index);
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setNewName('');
+    setNewPhone('');
+    setNewAddress('');
+    setEditingIndex(null);
   };
   
   // 删除地址
@@ -281,6 +353,10 @@ function MultiAddressField({
       }
       return filtered;
     });
+    // 如果删除的是正在编辑的条目，取消编辑状态
+    if (editingIndex === index) {
+      handleCancelEdit();
+    }
   };
   
   return (
@@ -290,26 +366,37 @@ function MultiAddressField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">收件人：</span>{item.name}</div>
                   <div><span className="text-gray-500">电话：</span>{item.phone}</div>
                   <div><span className="text-gray-500">地址：</span>{item.address}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(index)}
-                  className="p-1 text-red-500 hover:bg-red-50 rounded"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(index)}
+                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    title="编辑"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(index)}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
-      {/* 添加新地址 */}
+      {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="收件人" value={newName} onChange={(e) => setNewName(e.target.value)} />
@@ -317,9 +404,20 @@ function MultiAddressField({
         </div>
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="详细地址" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
-          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-            <Plus className="w-4 h-4" />
-          </Button>
+          {editingIndex !== null ? (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+                保存
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
+                取消
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -343,6 +441,7 @@ function MultiBankField({
   const [newAccountName, setNewAccountName] = useState('');
   const [newBankName, setNewBankName] = useState('');
   const [newAccountNumber, setNewAccountNumber] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   // 获取当前类别的所有银行账号
   const getItems = (): {accountName: string, bankName: string, accountNumber: string}[] => {
@@ -361,11 +460,20 @@ function MultiBankField({
   // 获取当前字段的完整信息（包括id）
   const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
   
-  // 添加新银行账号
+  // 添加新银行账号或保存编辑
   const handleAdd = () => {
     if (!newAccountName.trim() && !newBankName.trim() && !newAccountNumber.trim()) return;
     const newItem = { accountName: newAccountName.trim(), bankName: newBankName.trim(), accountNumber: newAccountNumber.trim() };
-    const newItems = [...items, newItem];
+    let newItems: {accountName: string, bankName: string, accountNumber: string}[];
+    if (editingIndex !== null) {
+      // 编辑模式：更新指定索引的条目
+      newItems = [...items];
+      newItems[editingIndex] = newItem;
+      setEditingIndex(null);
+    } else {
+      // 添加模式：添加新条目
+      newItems = [...items, newItem];
+    }
     const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
@@ -379,6 +487,23 @@ function MultiBankField({
     setNewAccountName('');
     setNewBankName('');
     setNewAccountNumber('');
+  };
+  
+  // 编辑银行账号
+  const handleEdit = (index: number) => {
+    const item = items[index];
+    setNewAccountName(item.accountName);
+    setNewBankName(item.bankName);
+    setNewAccountNumber(item.accountNumber);
+    setEditingIndex(index);
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setNewAccountName('');
+    setNewBankName('');
+    setNewAccountNumber('');
+    setEditingIndex(null);
   };
   
   // 删除银行账号
@@ -397,6 +522,10 @@ function MultiBankField({
       }
       return filtered;
     });
+    // 如果删除的是正在编辑的条目，取消编辑状态
+    if (editingIndex === index) {
+      handleCancelEdit();
+    }
   };
   
   return (
@@ -406,26 +535,37 @@ function MultiBankField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">账户名：</span>{item.accountName}</div>
                   <div><span className="text-gray-500">开户行：</span>{item.bankName}</div>
                   <div><span className="text-gray-500">账号：</span>{item.accountNumber}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(index)}
-                  className="p-1 text-red-500 hover:bg-red-50 rounded"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(index)}
+                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    title="编辑"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(index)}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
-      {/* 添加新银行账号 */}
+      {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="账户名" value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} />
@@ -433,9 +573,20 @@ function MultiBankField({
         </div>
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="银行账号" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} />
-          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-            <Plus className="w-4 h-4" />
-          </Button>
+          {editingIndex !== null ? (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+                保存
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
+                取消
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -458,6 +609,7 @@ function MultiInvoiceField({
 }) {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newTaxNumber, setNewTaxNumber] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   // 获取当前类别的所有开票信息
   const getItems = (): {companyName: string, taxNumber: string}[] => {
@@ -477,11 +629,20 @@ function MultiInvoiceField({
   // 获取当前字段的完整信息（包括id）
   const getCurrentField = () => extendedFields.find(f => f.categoryName === categoryName);
   
-  // 添加新开票信息
+  // 添加新开票信息或保存编辑
   const handleAdd = () => {
     if (!newCompanyName.trim() && !newTaxNumber.trim()) return;
     const newItem = { companyName: newCompanyName.trim(), taxNumber: newTaxNumber.trim() };
-    const newItems = [...items, newItem];
+    let newItems: {companyName: string, taxNumber: string}[];
+    if (editingIndex !== null) {
+      // 编辑模式：更新指定索引的条目
+      newItems = [...items];
+      newItems[editingIndex] = newItem;
+      setEditingIndex(null);
+    } else {
+      // 添加模式：添加新条目
+      newItems = [...items, newItem];
+    }
     const currentField = getCurrentField();
     setExtendedFields(prev => {
       const filtered = prev.filter(f => f.categoryName !== categoryName);
@@ -494,6 +655,21 @@ function MultiInvoiceField({
     });
     setNewCompanyName('');
     setNewTaxNumber('');
+  };
+  
+  // 编辑开票信息
+  const handleEdit = (index: number) => {
+    const item = items[index];
+    setNewCompanyName(item.companyName);
+    setNewTaxNumber(item.taxNumber);
+    setEditingIndex(index);
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setNewCompanyName('');
+    setNewTaxNumber('');
+    setEditingIndex(null);
   };
   
   // 删除开票信息
@@ -512,6 +688,10 @@ function MultiInvoiceField({
       }
       return filtered;
     });
+    // 如果删除的是正在编辑的条目，取消编辑状态
+    if (editingIndex === index) {
+      handleCancelEdit();
+    }
   };
   
   return (
@@ -521,32 +701,54 @@ function MultiInvoiceField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className="p-3 bg-gray-50 rounded-md border">
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">公司名称：</span>{item.companyName}</div>
                   <div><span className="text-gray-500">税号：</span>{item.taxNumber}</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(index)}
-                  className="p-1 text-red-500 hover:bg-red-50 rounded"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(index)}
+                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    title="编辑"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(index)}
+                    className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
-      {/* 添加新开票信息 */}
+      {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <Input className="w-full" placeholder="公司名称" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} />
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="税号" value={newTaxNumber} onChange={(e) => setNewTaxNumber(e.target.value)} />
-          <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-            <Plus className="w-4 h-4" />
-          </Button>
+          {editingIndex !== null ? (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+                保存
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
+                取消
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
