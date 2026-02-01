@@ -64,7 +64,227 @@ function HighlightText({ text, keyword }: { text: string; keyword: string }) {
   );
 }
 
-// 字段项组件
+// 单个可复制条目组件
+function CopyableItem({
+  label,
+  value,
+  showFullInfo,
+  setToastMessage,
+  setToastType,
+  setShowToast,
+  isComposite = false,
+  compositeLines = []
+}: {
+  label: string;
+  value: string;
+  showFullInfo: boolean;
+  setToastMessage: (msg: string) => void;
+  setToastType: (type: 'success' | 'error') => void;
+  setShowToast: (show: boolean) => void;
+  isComposite?: boolean;
+  compositeLines?: {label: string, value: string}[];
+}) {
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let copyText = value;
+    if (isComposite && compositeLines.length > 0) {
+      copyText = compositeLines.map(l => `${l.label}：${l.value}`).join('\n');
+    }
+    navigator.clipboard.writeText(copyText).then(() => {
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+      setToastMessage(`已复制`);
+      setToastType('success');
+      setShowToast(true);
+    }).catch(() => {
+      setToastMessage('复制失败');
+      setToastType('error');
+      setShowToast(true);
+    });
+  };
+
+  return (
+    <div className="flex items-start gap-2 py-2 hover:bg-gray-50 transition-colors">
+      <div className="flex-1 min-w-0">
+        {isComposite ? (
+          <div className="space-y-0.5">
+            {compositeLines.map((line, idx) => (
+              <div key={idx} className="text-sm">
+                <span className="text-gray-500">{line.label}：</span>
+                <span>{showFullInfo ? line.value : maskSensitiveInfo(label, line.value)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm">
+            {showFullInfo ? value : maskSensitiveInfo(label, value)}
+          </span>
+        )}
+      </div>
+      <button
+        onClick={handleCopy}
+        className="p-1.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+        title="复制"
+      >
+        <Copy className="w-4 h-4 text-gray-500" />
+      </button>
+    </div>
+  );
+}
+
+// 扩展信息显示组件 - 支持多条目和固定顺序
+function ExtendedInfoSection({
+  fieldValues,
+  showFullInfo,
+  setToastMessage,
+  setToastType,
+  setShowToast,
+  toggleVisibility
+}: {
+  fieldValues: any[];
+  showFullInfo: boolean;
+  setToastMessage: (msg: string) => void;
+  setToastType: (type: 'success' | 'error') => void;
+  setShowToast: (show: boolean) => void;
+  toggleVisibility: () => void;
+}) {
+  // 固定显示顺序
+  const fieldOrder = ['手机', '邮箱', '快递地址', '银行账号', '公司名称', '开票信息'];
+  
+  // 解析JSON数组格式的值
+  const parseJsonArray = (value: string): any[] => {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      // 兼容旧格式
+      return value ? [value] : [];
+    }
+  };
+  
+  // 按固定顺序组织数据
+  const organizedFields: {categoryName: string, items: any[]}[] = [];
+  
+  fieldOrder.forEach(categoryName => {
+    const field = fieldValues.find(f => f.categoryName === categoryName);
+    if (field) {
+      const items = parseJsonArray(field.value);
+      if (items.length > 0) {
+        organizedFields.push({ categoryName, items });
+      }
+    }
+  });
+  
+  // 添加不在固定顺序中的其他字段
+  fieldValues.forEach(field => {
+    if (!fieldOrder.includes(field.categoryName)) {
+      const items = parseJsonArray(field.value);
+      if (items.length > 0) {
+        organizedFields.push({ categoryName: field.categoryName, items });
+      }
+    }
+  });
+  
+  if (organizedFields.length === 0) return null;
+  
+  return (
+    <div className="pt-2">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="text-xs font-medium text-muted-foreground">扩展信息</div>
+        <button
+          onClick={toggleVisibility}
+          className="p-1 hover:bg-accent rounded transition-colors"
+          title={showFullInfo ? "隐藏敏感信息" : "显示完整信息"}
+        >
+          {showFullInfo ? (
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <EyeOff className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+      <div className="border rounded-lg overflow-hidden">
+        {organizedFields.map((field, fieldIndex) => (
+          <div key={field.categoryName}>
+            {/* 字段类型分隔线 */}
+            {fieldIndex > 0 && <div className="border-t" />}
+            
+            {/* 字段标题 */}
+            <div className="px-3 py-1.5 bg-gray-50 border-b">
+              <span className="text-xs font-medium text-gray-600">{field.categoryName}</span>
+            </div>
+            
+            {/* 字段条目列表 */}
+            <div className="px-3 divide-y">
+              {field.items.map((item, itemIndex) => {
+                // 快递地址 - 复合字段
+                if (field.categoryName === '快递地址') {
+                  const addr = typeof item === 'object' ? item : { name: '', phone: '', address: item };
+                  return (
+                    <CopyableItem
+                      key={itemIndex}
+                      label="快递地址"
+                      value=""
+                      showFullInfo={showFullInfo}
+                      setToastMessage={setToastMessage}
+                      setToastType={setToastType}
+                      setShowToast={setShowToast}
+                      isComposite={true}
+                      compositeLines={[
+                        { label: '收件人', value: addr.name || '' },
+                        { label: '电话', value: addr.phone || '' },
+                        { label: '地址', value: addr.address || '' }
+                      ].filter(l => l.value)}
+                    />
+                  );
+                }
+                
+                // 银行账号 - 复合字段
+                if (field.categoryName === '银行账号') {
+                  const bank = typeof item === 'object' ? item : { accountName: '', bankName: '', accountNumber: item };
+                  return (
+                    <CopyableItem
+                      key={itemIndex}
+                      label="银行账号"
+                      value=""
+                      showFullInfo={showFullInfo}
+                      setToastMessage={setToastMessage}
+                      setToastType={setToastType}
+                      setShowToast={setShowToast}
+                      isComposite={true}
+                      compositeLines={[
+                        { label: '账户名', value: bank.accountName || '' },
+                        { label: '开户行', value: bank.bankName || '' },
+                        { label: '账号', value: bank.accountNumber || '' }
+                      ].filter(l => l.value)}
+                    />
+                  );
+                }
+                
+                // 简单字段
+                const displayValue = typeof item === 'string' ? item : JSON.stringify(item);
+                return (
+                  <CopyableItem
+                    key={itemIndex}
+                    label={field.categoryName}
+                    value={displayValue}
+                    showFullInfo={showFullInfo}
+                    setToastMessage={setToastMessage}
+                    setToastType={setToastType}
+                    setShowToast={setShowToast}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 字段项组件（保留用于兼容旧数据）
 function FieldItem({ 
   fv, 
   showFullInfo,
@@ -1236,36 +1456,16 @@ export default function ContactDetail() {
             
             <CardContent className="space-y-4">
               
-              {/* 显示扩展信息字段值 - 可拖拽排序 */}
-              {sortedFieldValues && sortedFieldValues.length > 0 && (
-                <div className="pt-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="text-xs font-medium text-muted-foreground">扩展信息（长按拖动排序）</div>
-                    <button
-                      onClick={toggleExtendedInfoVisibility}
-                      className="p-1 hover:bg-accent rounded transition-colors"
-                      title={showFullExtendedInfo ? "隐藏敏感信息" : "显示完整信息"}
-                    >
-                      {showFullExtendedInfo ? (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </div>
-                  <div className="border-t">
-                    {sortedFieldValues.map((fv: any) => (
-                      <FieldItem
-                        key={fv.id}
-                        fv={fv}
-                        showFullInfo={showFullExtendedInfo}
-                        setToastMessage={setToastMessage}
-                        setToastType={setToastType}
-                        setShowToast={setShowToast}
-                      />
-                    ))}
-                  </div>
-                </div>
+              {/* 显示扩展信息字段值 - 固定顺序显示 */}
+              {extendedFieldValues && extendedFieldValues.length > 0 && (
+                <ExtendedInfoSection
+                  fieldValues={extendedFieldValues}
+                  showFullInfo={showFullExtendedInfo}
+                  setToastMessage={setToastMessage}
+                  setToastType={setToastType}
+                  setShowToast={setShowToast}
+                  toggleVisibility={toggleExtendedInfoVisibility}
+                />
               )}
               
               {contact.phone && (
