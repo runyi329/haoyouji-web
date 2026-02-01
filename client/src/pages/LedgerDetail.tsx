@@ -210,25 +210,25 @@ export default function LedgerDetail() {
           {/* 功能按钮（靠右） */}
           <div className="flex items-center gap-2">
             <div 
-              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
-              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+              style={{ backgroundColor: themeColors.accent1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             >
-              <Settings className="w-5 h-5" style={{ color: themeColors.text }} />
+              <Settings className="w-5 h-5" style={{ color: themeColors.primary }} />
             </div>
             <div 
-              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
-              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+              style={{ backgroundColor: themeColors.accent1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
-              <Search className="w-5 h-5" style={{ color: themeColors.text }} />
+              <Search className="w-5 h-5" style={{ color: themeColors.primary }} />
             </div>
             <div 
-              className="w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer"
-              style={{ borderColor: themeColors.accent2, backgroundColor: `${themeColors.accent1}20` }}
+              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+              style={{ backgroundColor: themeColors.accent1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
             >
-              <BarChart3 className="w-5 h-5" style={{ color: themeColors.text }} />
+              <BarChart3 className="w-5 h-5" style={{ color: themeColors.primary }} />
             </div>
           </div>
         </div>
