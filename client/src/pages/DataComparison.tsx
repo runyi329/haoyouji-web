@@ -214,11 +214,11 @@ function AllDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       return (
-        <div className="bg-purple-600 p-2 rounded-lg">
+        <div className="bg-purple-600 p-1.5 rounded-lg">
           {/* 星期标题 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[10px] py-0.5">{day}</div>
+              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
             ))}
           </div>
           {/* 日历格子 */}
@@ -233,12 +233,12 @@ function AllDataContent() {
                   }`}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-sm font-bold ${
+                  <div className={`text-xs font-bold ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
                     {index + 1}
                   </div>
-                  <div className={`text-[10px] ${
+                  <div className={`text-[9px] ${
                     hasData ? 'text-green-600 font-medium' : 'text-white/70'
                   }`}>
                     {item.value}
@@ -482,11 +482,11 @@ function MyDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       return (
-        <div className="bg-purple-600 p-2 rounded-lg">
+        <div className="bg-purple-600 p-1.5 rounded-lg">
           {/* 星期标题 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[10px] py-0.5">{day}</div>
+              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
             ))}
           </div>
           {/* 日历格子 */}
@@ -501,12 +501,12 @@ function MyDataContent() {
                   }`}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-sm font-bold ${
+                  <div className={`text-xs font-bold ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
                     {index + 1}
                   </div>
-                  <div className={`text-[10px] ${
+                  <div className={`text-[9px] ${
                     hasData ? 'text-green-600 font-medium' : 'text-white/70'
                   }`}>
                     {item.value}
@@ -750,11 +750,11 @@ function SharedDataContent() {
       const maxValue = Math.max(...chartData.map(d => d.value));
       
       return (
-        <div className="bg-purple-600 p-2 rounded-lg">
+        <div className="bg-purple-600 p-1.5 rounded-lg">
           {/* 星期标题 */}
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-              <div key={i} className="text-center text-white text-[10px] py-0.5">{day}</div>
+              <div key={i} className="text-center text-white text-[9px] py-0">{day}</div>
             ))}
           </div>
           {/* 日历格子 */}
@@ -769,12 +769,12 @@ function SharedDataContent() {
                   }`}
                   title={`${item.name}: ${item.value}人`}
                 >
-                  <div className={`text-sm font-bold ${
+                  <div className={`text-xs font-bold ${
                     hasData ? 'text-purple-600' : 'text-white'
                   }`}>
                     {index + 1}
                   </div>
-                  <div className={`text-[10px] ${
+                  <div className={`text-[9px] ${
                     hasData ? 'text-green-600 font-medium' : 'text-white/70'
                   }`}>
                     {item.value}
