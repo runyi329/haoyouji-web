@@ -4879,6 +4879,16 @@ export const appRouter = router({
         const { getOverseasAndOtherTrend } = await import('./db-region-trend');
         return await getOverseasAndOtherTrend(ctx.user.id, input.months);
       }),
+    
+    // 获取人脉增长统计数据
+    contactGrowthStats: protectedProcedure
+      .input(z.object({
+        type: z.enum(['all', 'my', 'shared']),
+        period: z.enum(['day', 'week', 'month']),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbAnalytics.getContactGrowthStats(ctx.user.id, input.type, input.period);
+      }),
   }),
   
   // 用户偏好设置

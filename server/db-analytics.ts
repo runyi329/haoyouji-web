@@ -122,6 +122,165 @@ async function getGrowthTrend(userId: number) {
 }
 
 /**
+ * 获取人脉增长统计数据（支持日/周/月维度）
+ * @param userId 用户ID
+ * @param type 数据类型：'all'=全部, 'my'=我的, 'shared'=共享
+ * @param period 时间维度：'day'=日, 'week'=周, 'month'=月
+ */
+export async function getContactGrowthStats(userId: number, type: 'all' | 'my' | 'shared', period: 'day' | 'week' | 'month') {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const now = new Date();
+  const stats = [];
+  
+  if (period === 'day') {
+    // 过去30天的数据
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i - 1);
+      date.setHours(0, 0, 0, 0);
+      
+      const nextDate = new Date(date);
+      nextDate.setDate(date.getDate() + 1);
+      
+      const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
+      const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
+      
+      let count = 0;
+      
+      if (type === 'all' || type === 'my') {
+        // 获取自己的人脉
+        const result = await db.execute(
+          sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${userId} AND created_at >= ${dateStr} AND created_at < ${nextDateStr}`
+        );
+        count += Number(result?.[0]?.count || 0);
+      }
+      
+      if (type === 'all' || type === 'shared') {
+        // 获取共享给我的人脉（从共享连接中获取分享者的人脉）
+        const sharingConnections = await db
+          .select({ sharerId: contactSharingConnections.sharerId })
+          .from(contactSharingConnections)
+          .where(
+            and(
+              eq(contactSharingConnections.receiverId, userId),
+              eq(contactSharingConnections.status, 'active')
+            )
+          );
+        
+        for (const conn of sharingConnections) {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${conn.sharerId} AND created_at >= ${dateStr} AND created_at < ${nextDateStr}`
+          );
+          count += Number(result?.[0]?.count || 0);
+        }
+      }
+      
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      
+      stats.push({
+        name: `${month}/${day}`,
+        displayName: `${29 - i + 1}`,
+        value: count,
+      });
+    }
+  } else if (period === 'week') {
+    // 过去12周的数据
+    for (let i = 11; i >= 0; i--) {
+      const endDate = new Date(now);
+      endDate.setDate(now.getDate() - i * 7);
+      endDate.setHours(23, 59, 59, 999);
+      
+      const startDate = new Date(endDate);
+      startDate.setDate(endDate.getDate() - 6);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
+      const endDateStr = endDate.toISOString().slice(0, 19).replace('T', ' ');
+      
+      let count = 0;
+      
+      if (type === 'all' || type === 'my') {
+        const result = await db.execute(
+          sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${userId} AND created_at >= ${startDateStr} AND created_at <= ${endDateStr}`
+        );
+        count += Number(result?.[0]?.count || 0);
+      }
+      
+      if (type === 'all' || type === 'shared') {
+        const sharingConnections = await db
+          .select({ sharerId: contactSharingConnections.sharerId })
+          .from(contactSharingConnections)
+          .where(
+            and(
+              eq(contactSharingConnections.receiverId, userId),
+              eq(contactSharingConnections.status, 'active')
+            )
+          );
+        
+        for (const conn of sharingConnections) {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${conn.sharerId} AND created_at >= ${startDateStr} AND created_at <= ${endDateStr}`
+          );
+          count += Number(result?.[0]?.count || 0);
+        }
+      }
+      
+      stats.push({
+        name: `${12 - i}周`,
+        value: count,
+      });
+    }
+  } else {
+    // 过去12个月的数据
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      
+      const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
+      const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
+      
+      let count = 0;
+      
+      if (type === 'all' || type === 'my') {
+        const result = await db.execute(
+          sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${userId} AND created_at >= ${dateStr} AND created_at < ${nextDateStr}`
+        );
+        count += Number(result?.[0]?.count || 0);
+      }
+      
+      if (type === 'all' || type === 'shared') {
+        const sharingConnections = await db
+          .select({ sharerId: contactSharingConnections.sharerId })
+          .from(contactSharingConnections)
+          .where(
+            and(
+              eq(contactSharingConnections.receiverId, userId),
+              eq(contactSharingConnections.status, 'active')
+            )
+          );
+        
+        for (const conn of sharingConnections) {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count FROM contacts WHERE parent_user_id = ${conn.sharerId} AND created_at >= ${dateStr} AND created_at < ${nextDateStr}`
+          );
+          count += Number(result?.[0]?.count || 0);
+        }
+      }
+      
+      stats.push({
+        name: `${12 - i}月`,
+        value: count,
+      });
+    }
+  }
+  
+  return stats;
+}
+
+/**
  * 标签使用统计
  */
 async function getTagStats(userId: number) {

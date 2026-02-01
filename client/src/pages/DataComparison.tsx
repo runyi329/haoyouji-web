@@ -87,43 +87,17 @@ function AllDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
-  // 根据时间维度生成数据
+  // 使用API获取真实数据
+  const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
+    type: 'all',
+    period: timePeriod,
+  });
+
+  // 处理API数据
   const chartData = useMemo(() => {
-    const data = [];
-    const count = 12;
-    
-    if (timePeriod === "day") {
-      // 生成过去30天的真实日期（不包括今天）
-      const today = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i - 1);
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        const dayIndex = 29 - i + 1; // 1-30
-        data.push({
-          name: `${month}/${day}`,
-          displayName: `${dayIndex}`, // 图表X轴只显示数字
-          value: Math.floor(Math.random() * 10) + 1,
-        });
-      }
-    } else if (timePeriod === "week") {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}周`,
-          value: i === 6 ? 100 : Math.floor(Math.random() * 25) + 5,
-        });
-      }
-    } else {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}月`,
-          value: Math.floor(Math.random() * 50) + 20,
-        });
-      }
-    }
-    return data;
-  }, [timePeriod]);
+    if (!apiData) return [];
+    return apiData;
+  }, [apiData]);
 
   // 计算平均值
   const avgValue = useMemo(() => {
@@ -365,43 +339,17 @@ function MyDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
-  // 根据时间维度生成数据
+  // 使用API获取真实数据
+  const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
+    type: 'my',
+    period: timePeriod,
+  });
+
+  // 处理API数据
   const chartData = useMemo(() => {
-    const data = [];
-    const count = 12;
-    
-    if (timePeriod === "day") {
-      // 生成过去30天的真实日期（不包括今天）
-      const today = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i - 1);
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        const dayIndex = 29 - i + 1; // 1-30
-        data.push({
-          name: `${month}/${day}`,
-          displayName: `${dayIndex}`, // 图表X轴只显示数字
-          value: Math.floor(Math.random() * 8) + 1,
-        });
-      }
-    } else if (timePeriod === "week") {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}周`,
-          value: Math.floor(Math.random() * 15) + 3,
-        });
-      }
-    } else {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}月`,
-          value: Math.floor(Math.random() * 40) + 15,
-        });
-      }
-    }
-    return data;
-  }, [timePeriod]);
+    if (!apiData) return [];
+    return apiData;
+  }, [apiData]);
 
   // 计算平均值
   const avgValue = useMemo(() => {
@@ -643,43 +591,17 @@ function SharedDataContent() {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
-  // 根据时间维度生成数据
+  // 使用API获取真实数据
+  const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
+    type: 'shared',
+    period: timePeriod,
+  });
+
+  // 处理API数据
   const chartData = useMemo(() => {
-    const data = [];
-    const count = 12;
-    
-    if (timePeriod === "day") {
-      // 生成过去30天的真实日期（不包括今天）
-      const today = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i - 1);
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        const dayIndex = 29 - i + 1; // 1-30
-        data.push({
-          name: `${month}/${day}`,
-          displayName: `${dayIndex}`, // 图表X轴只显示数字
-          value: Math.floor(Math.random() * 5) + 1,
-        });
-      }
-    } else if (timePeriod === "week") {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}周`,
-          value: Math.floor(Math.random() * 10) + 2,
-        });
-      }
-    } else {
-      for (let i = 1; i <= count; i++) {
-        data.push({
-          name: `${i}月`,
-          value: Math.floor(Math.random() * 30) + 10,
-        });
-      }
-    }
-    return data;
-  }, [timePeriod]);
+    if (!apiData) return [];
+    return apiData;
+  }, [apiData]);
 
   // 计算平均值
   const avgValue = useMemo(() => {
