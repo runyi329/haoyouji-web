@@ -212,28 +212,41 @@ function AllDataContent() {
     } else {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
-      const getColor = (value: number) => {
-        const intensity = value / maxValue;
-        if (intensity > 0.75) return '#7c3aed'; // 深紫色
-        if (intensity > 0.5) return '#a78bfa'; // 中紫色
-        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
-        return '#e9d5ff'; // 极浅紫色
-      };
-
+      
       return (
-        <div className="grid grid-cols-7 gap-1.5 p-2">
-          {chartData.map((item, index) => (
-            <div key={index} className="flex flex-col items-center">
-              <div
-                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ backgroundColor: getColor(item.value) }}
-                title={`${item.name}: ${item.value}人`}
-              >
-                <span className="text-white">{item.value}</span>
-              </div>
-              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
-            </div>
-          ))}
+        <div className="bg-purple-600 p-3 rounded-lg">
+          {/* 星期标题 */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
+              <div key={i} className="text-center text-white text-xs py-1">{day}</div>
+            ))}
+          </div>
+          {/* 日历格子 */}
+          <div className="grid grid-cols-7 gap-1">
+            {chartData.map((item, index) => {
+              const hasData = item.value > 0;
+              return (
+                <div
+                  key={index}
+                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
+                  }`}
+                  title={`${item.name}: ${item.value}人`}
+                >
+                  <div className={`text-lg font-bold ${
+                    hasData ? 'text-purple-600' : 'text-white'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className={`text-xs ${
+                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  }`}>
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       );
     }
@@ -467,28 +480,41 @@ function MyDataContent() {
     } else {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
-      const getColor = (value: number) => {
-        const intensity = value / maxValue;
-        if (intensity > 0.75) return '#7c3aed'; // 深紫色
-        if (intensity > 0.5) return '#a78bfa'; // 中紫色
-        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
-        return '#e9d5ff'; // 极浅紫色
-      };
-
+      
       return (
-        <div className="grid grid-cols-7 gap-1.5 p-2">
-          {chartData.map((item, index) => (
-            <div key={index} className="flex flex-col items-center">
-              <div
-                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ backgroundColor: getColor(item.value) }}
-                title={`${item.name}: ${item.value}人`}
-              >
-                <span className="text-white">{item.value}</span>
-              </div>
-              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
-            </div>
-          ))}
+        <div className="bg-purple-600 p-3 rounded-lg">
+          {/* 星期标题 */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
+              <div key={i} className="text-center text-white text-xs py-1">{day}</div>
+            ))}
+          </div>
+          {/* 日历格子 */}
+          <div className="grid grid-cols-7 gap-1">
+            {chartData.map((item, index) => {
+              const hasData = item.value > 0;
+              return (
+                <div
+                  key={index}
+                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
+                  }`}
+                  title={`${item.name}: ${item.value}人`}
+                >
+                  <div className={`text-lg font-bold ${
+                    hasData ? 'text-purple-600' : 'text-white'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className={`text-xs ${
+                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  }`}>
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       );
     }
@@ -722,28 +748,41 @@ function SharedDataContent() {
     } else {
       // 日历热力图
       const maxValue = Math.max(...chartData.map(d => d.value));
-      const getColor = (value: number) => {
-        const intensity = value / maxValue;
-        if (intensity > 0.75) return '#7c3aed'; // 深紫色
-        if (intensity > 0.5) return '#a78bfa'; // 中紫色
-        if (intensity > 0.25) return '#c4b5fd'; // 浅紫色
-        return '#e9d5ff'; // 极浅紫色
-      };
-
+      
       return (
-        <div className="grid grid-cols-7 gap-1.5 p-2">
-          {chartData.map((item, index) => (
-            <div key={index} className="flex flex-col items-center">
-              <div
-                className="w-full aspect-square rounded flex items-center justify-center text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ backgroundColor: getColor(item.value) }}
-                title={`${item.name}: ${item.value}人`}
-              >
-                <span className="text-white">{item.value}</span>
-              </div>
-              <span className="text-xs text-gray-500 mt-1">{item.name}</span>
-            </div>
-          ))}
+        <div className="bg-purple-600 p-3 rounded-lg">
+          {/* 星期标题 */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
+              <div key={i} className="text-center text-white text-xs py-1">{day}</div>
+            ))}
+          </div>
+          {/* 日历格子 */}
+          <div className="grid grid-cols-7 gap-1">
+            {chartData.map((item, index) => {
+              const hasData = item.value > 0;
+              return (
+                <div
+                  key={index}
+                  className={`aspect-square rounded flex flex-col items-center justify-center cursor-pointer transition-opacity hover:opacity-80 ${
+                    hasData ? 'bg-amber-50' : 'bg-purple-700/50'
+                  }`}
+                  title={`${item.name}: ${item.value}人`}
+                >
+                  <div className={`text-lg font-bold ${
+                    hasData ? 'text-purple-600' : 'text-white'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className={`text-xs ${
+                    hasData ? 'text-green-600 font-medium' : 'text-white/70'
+                  }`}>
+                    {item.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       );
     }
