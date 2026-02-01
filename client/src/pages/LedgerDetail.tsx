@@ -164,7 +164,7 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: `${themeColors.primary}30`, color: themeColors.text }}>
+      <div className="pb-4" style={{ backgroundColor: themeColors.primary, color: themeColors.accent1 }}>
         {/* 标题栏 */}
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <button
