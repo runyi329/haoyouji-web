@@ -214,42 +214,24 @@ export const appRouter = router({
         imageData: z.string(), // base64 encoded image
       }))
       .mutation(async ({ ctx, input }) => {
+        // 简化方案：直接存储base64数据到数据库
+        // 注意：这只适合小图片，大图片应该使用云存储
         try {
-          // 使用Manus存储API上传图片
-          const base64Data = input.imageData.replace(/^data:image\/\w+;base64,/, '');
-          const buffer = Buffer.from(base64Data, 'base64');
+          const avatarData = input.imageData;
           
-          // 调用Manus存储API
-          const formData = new FormData();
-          const blob = new Blob([buffer], { type: 'image/jpeg' });
-          formData.append('file', blob, `avatar-${ctx.user.id}-${Date.now()}.jpg`);
-          
-          const uploadResponse = await fetch(process.env.BUILT_IN_FORGE_API_URL || 'https://api.manus.im/api/forge', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.BUILT_IN_FORGE_API_KEY || process.env.OPENAI_API_KEY}`,
-            },
-            body: formData,
-          });
-          
-          if (!uploadResponse.ok) {
-            throw new Error('上传到存储服务失败');
+          // 检查数据大小（限制为1MB）
+          const sizeInBytes = Math.ceil((avatarData.length * 3) / 4);
+          if (sizeInBytes > 1024 * 1024) {
+            throw new Error('图片太大，请选择小于1MB的图片');
           }
           
-          const uploadResult = await uploadResponse.json();
-          const avatarUrl = uploadResult.url || uploadResult.file_url;
-          
-          if (!avatarUrl) {
-            throw new Error('未获取到图片URL');
-          }
-          
-          // 更新数据库，存储URL而不是base64
+          // 更新数据库
           const db_instance = await getDb();
           if (db_instance) {
-            await db_instance.update(users).set({ avatar: avatarUrl }).where(eq(users.id, ctx.user.id));
+            await db_instance.update(users).set({ avatar: avatarData }).where(eq(users.id, ctx.user.id));
           }
           
-          return { success: true, avatarUrl: avatarUrl };
+          return { success: true, avatarUrl: avatarData };
         } catch (error) {
           console.error('[uploadAvatar] 错误:', error);
           throw new TRPCError({ 
