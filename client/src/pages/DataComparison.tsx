@@ -453,7 +453,7 @@ function AllDataContent({ themeColors }: DataContentProps) {
 
       {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white rounded-lg mb-2.5"
+        className="text-white -mx-2.5 mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
@@ -840,7 +840,7 @@ function MyDataContent({ themeColors }: DataContentProps) {
 
       {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white rounded-lg mb-2.5"
+        className="text-white -mx-2.5 mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
@@ -1227,7 +1227,7 @@ function SharedDataContent({ themeColors }: DataContentProps) {
 
       {/* 互动与关系健康度 - 完整标题栏 */}
       <div 
-        className="text-white rounded-lg mb-2.5"
+        className="text-white -mx-2.5 mb-2.5"
         style={{ 
           background: `linear-gradient(to right, ${themeColors.primary}, ${themeColors.secondary})` 
         }}
