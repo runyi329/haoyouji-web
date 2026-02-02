@@ -2729,3 +2729,109 @@ export async function getHealthStats(parentUserId: number, type: 'all' | 'my' | 
     },
   };
 }
+
+/**
+ * 获取家长的人脉列表（分页版本）
+ * @param parentUserId 用户ID
+ * @param searchQuery 搜索关键词
+ * @param page 页码（从1开始）
+ * @param pageSize 每页数量
+ * @returns { total: 总数, contacts: 人脉列表, hasMore: 是否还有更多 }
+ */
+export async function getContactsByParentPaginated(
+  parentUserId: number, 
+  searchQuery?: string,
+  page: number = 1,
+  pageSize: number = 50
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const offset = (page - 1) * pageSize;
+  
+  // 1. 先查询总数（不包含联络信息，只统计人脉数量）
+  let totalQuery;
+  if (!searchQuery) {
+    totalQuery = db.select({ count: sql<number>`COUNT(*)` })
+      .from(contacts)
+      .where(eq(contacts.parentUserId, parentUserId));
+  } else {
+    const searchPattern = `%${searchQuery}%`;
+    // 使用UNION去重统计
+    totalQuery = db.execute(sql`
+      SELECT COUNT(DISTINCT c.id) as count
+      FROM contacts c
+      LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
+      WHERE c.parentUserId = ${parentUserId}
+      AND (
+        c.name LIKE ${searchPattern}
+        OR c.title LIKE ${searchPattern}
+        OR c.occupation LIKE ${searchPattern}
+        OR c.phone LIKE ${searchPattern}
+        OR cfv.value LIKE ${searchPattern}
+      )
+    `);
+  }
+  
+  const totalResult = await totalQuery;
+  const total = Array.isArray(totalResult) ? Number(totalResult[0]?.count || 0) : Number(totalResult[0]?.count || 0);
+  
+  // 2. 查询分页数据
+  let baseContacts: any[];
+  
+  if (!searchQuery) {
+    baseContacts = await db.select().from(contacts)
+      .where(eq(contacts.parentUserId, parentUserId))
+      .orderBy(desc(contacts.updatedAt))
+      .limit(pageSize)
+      .offset(offset);
+  } else {
+    const searchPattern = `%${searchQuery}%`;
+    
+    // 使用子查询去重并分页
+    const result = await db.execute(sql`
+      SELECT DISTINCT c.*
+      FROM contacts c
+      LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
+      WHERE c.parentUserId = ${parentUserId}
+      AND (
+        c.name LIKE ${searchPattern}
+        OR c.title LIKE ${searchPattern}
+        OR c.occupation LIKE ${searchPattern}
+        OR c.phone LIKE ${searchPattern}
+        OR cfv.value LIKE ${searchPattern}
+      )
+      ORDER BY c.updatedAt DESC
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `);
+    
+    baseContacts = result as any[];
+  }
+  
+  // 3. 为每个人脉添加上次联络日期和距今天数（这部分保持不变）
+  const contactsWithInteractionInfo = await Promise.all(
+    baseContacts.map(async (contact) => {
+      const lastInteraction = await getLastInteractionDate(contact.id);
+      const daysSinceLastInteraction = lastInteraction 
+        ? calculateDaysDifference(lastInteraction, Date.now())
+        : null;
+      
+      return {
+        ...contact,
+        lastInteractionDate: lastInteraction,
+        daysSinceLastInteraction,
+      };
+    })
+  );
+  
+  const hasMore = offset + baseContacts.length < total;
+  
+  return {
+    total,
+    contacts: contactsWithInteractionInfo,
+    hasMore,
+    page,
+    pageSize,
+  };
+}

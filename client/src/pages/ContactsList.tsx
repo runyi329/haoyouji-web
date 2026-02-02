@@ -364,13 +364,43 @@ export default function ContactsList() {
     return saved ? JSON.parse(saved) : [];
   });
   
-  // 获取人脉列表（支持搜索）
-  const { data: allContacts, isLoading } = trpc.contacts.list.useQuery({
+  // 分页状态
+  const [page, setPage] = useState(1);
+  const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
+  const [totalContacts, setTotalContacts] = useState(0);
+  
+  // 获取人脉列表（支持分页）
+  const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
     sortBy: sortBy,
+    page: page,
+    pageSize: 50,
   }, {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
   });
+  
+  // 当数据加载完成时，累加到已加载列表
+  React.useEffect(() => {
+    if (contactsData) {
+      setTotalContacts(contactsData.total);
+      if (page === 1) {
+        // 第一页，直接设置
+        setAllLoadedContacts(contactsData.contacts);
+      } else {
+        // 后续页，追加
+        setAllLoadedContacts(prev => [...prev, ...contactsData.contacts]);
+      }
+    }
+  }, [contactsData, page]);
+  
+  // 当搜索条件或排序变化时，重置分页
+  React.useEffect(() => {
+    setPage(1);
+    setAllLoadedContacts([]);
+  }, [searchQuery, sortBy]);
+  
+  // 使用已加载的联系人列表
+  const allContacts = allLoadedContacts;
 
   // 获取公司列表（当 viewMode 为 company 时）
   const { data: companyList, isLoading: isLoadingCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
@@ -1003,7 +1033,7 @@ export default function ContactsList() {
             // 公司视图：统计去重后的公司家数
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : (
-            `共 ${filteredContacts?.length || 0} 位人脉`
+            `共 ${totalContacts || 0} 位人脉`
           )}
         </p>
         
@@ -2026,6 +2056,19 @@ export default function ContactsList() {
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             {searchQuery ? '没有找到匹配的人脉' : '还没有添加人脉，点击上方按钮开始添加'}
+          </div>
+        )}
+        
+        {/* 加载更多按钮 */}
+        {contactsData && contactsData.hasMore && (
+          <div className="text-center py-4">
+            <Button
+              variant="outline"
+              onClick={() => setPage(prev => prev + 1)}
+              disabled={isFetching}
+            >
+              {isFetching ? '加载中...' : '加载更多'}
+            </Button>
           </div>
         )}
       </div>

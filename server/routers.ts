@@ -3291,12 +3291,27 @@ export const appRouter = router({
     .input(z.object({
       searchQuery: z.string().optional(),
       sortBy: z.enum(['tagCount_desc', 'tagCount_asc', 'interactionCount_desc', 'interactionCount_asc']).optional(),
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(50),
     }))
     .query(async ({ ctx, input }) => {
-      const contacts = await dbContacts.getContactsByParent(ctx.user.id, input.searchQuery);
+      const paginatedResult = await dbContacts.getContactsByParentPaginated(
+        ctx.user.id, 
+        input.searchQuery,
+        input.page,
+        input.pageSize
+      );
+      
+      const contacts = paginatedResult.contacts;
       
       if (contacts.length === 0) {
-        return [];
+        return {
+          total: paginatedResult.total,
+          contacts: [],
+          hasMore: false,
+          page: paginatedResult.page,
+          pageSize: paginatedResult.pageSize,
+        };
       }
       
       // 获取所有联系人ID
@@ -3373,7 +3388,13 @@ export const appRouter = router({
         });
       }
       
-      return contactsWithDetails;
+      return {
+        total: paginatedResult.total,
+        contacts: contactsWithDetails,
+        hasMore: paginatedResult.hasMore,
+        page: paginatedResult.page,
+        pageSize: paginatedResult.pageSize,
+      };
     }),
 
   // 获取人脉详情
