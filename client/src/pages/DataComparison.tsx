@@ -517,7 +517,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
               style={{ backgroundColor: themeColors.primary }}
             ></div>
             <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
-              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "health" && "互动健康度总览表"}
               {tableType === "activity" && "人脉互动分层统计表"}
               {tableType === "importance" && "互动类型分布表"}
             </h2>
@@ -1119,7 +1119,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
               style={{ backgroundColor: themeColors.primary }}
             ></div>
             <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
-              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "health" && "互动健康度总览表"}
               {tableType === "activity" && "人脉互动分层统计表"}
               {tableType === "importance" && "互动类型分布表"}
             </h2>
@@ -1721,7 +1721,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
               style={{ backgroundColor: themeColors.primary }}
             ></div>
             <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
-              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "health" && "互动健康度总览表"}
               {tableType === "activity" && "人脉互动分层统计表"}
               {tableType === "importance" && "互动类型分布表"}
             </h2>
