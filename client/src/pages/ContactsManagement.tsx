@@ -856,18 +856,27 @@ export default function ContactsManagement() {
   
   // 刷新所有数据
   const handleRefresh = async () => {
+    if (isRefreshing) return; // 防止重复点击
+    
     setIsRefreshing(true);
-    await Promise.all([
-      refetchStats(),
-      refetchOverviewStats(),
-      refetchTodayReminders(),
-      refetchWeekReminders(),
-      refetchMonthReminders(),
-      refetchTotalInteractionCount(),
-      refetchTotalTagCount(),
-      refetchTotalUsageDays()
-    ]);
-    setIsRefreshing(false);
+    try {
+      // 强制重新获取数据，忽略缓存
+      await Promise.all([
+        refetchStats(),
+        refetchOverviewStats(),
+        refetchTodayReminders(),
+        refetchWeekReminders(),
+        refetchMonthReminders(),
+        refetchTotalInteractionCount(),
+        refetchTotalTagCount(),
+        refetchTotalUsageDays()
+      ]);
+      console.log('[handleRefresh] 数据刷新完成');
+    } catch (error) {
+      console.error('[handleRefresh] 刷新失败:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
   
   // 获取当前用户信息

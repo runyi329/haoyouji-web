@@ -13,8 +13,7 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 // Promise 缓存，避免并发请求重复查询
 const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
 const contactStatsPromiseCache = new Map<number, { promise: Promise<any>, timestamp: number }>();
-const CACHE_TTL = 60000; // 60秒
-const contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
+const CACHE_TTL = 5000; // 5秒onst contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
 
 /**
  * 轻量级获取联系人数量统计（全部、我的、共享）
