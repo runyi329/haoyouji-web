@@ -10,8 +10,8 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 
 // ==================== 工具函数 ====================
 
-// 简单的内存缓存，TTL 5秒
-const visibleContactIdsCache = new Map<number, { ids: number[], timestamp: number }>();
+// Promise 缓存，避免并发请求重复查询
+const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
 const CACHE_TTL = 5000; // 5秒
 
 /**
@@ -21,16 +21,19 @@ const CACHE_TTL = 5000; // 5秒
  */
 async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> {
   // 检查缓存
-  const cached = visibleContactIdsCache.get(parentUserId);
+  const cached = visibleContactIdsPromiseCache.get(parentUserId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[getAllVisibleContactIds] 使用缓存，用户ID:', parentUserId, '缓存数量:', cached.ids.length);
-    return cached.ids;
+    console.log('[getAllVisibleContactIds] 使用缓存，用户ID:', parentUserId);
+    return cached.promise;
   }
   
   console.log('[getAllVisibleContactIds] 开始获取可见联系人ID，用户ID:', parentUserId);
-  const db = await getDb();
- if (!db) throw new Error("Database not available");
-  if (!db) return [];
+  
+  // 创建查询 Promise 并立即缓存
+  const queryPromise = (async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    if (!db) return [];
   
   // 获取自己的人脉ID
   const ownContacts = await db
@@ -67,15 +70,18 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
     sharedContactIds.push(...sharerContactIds);
   }
   
-  // 合并并去重
-  console.log('[getAllVisibleContactIds] 共享联系人总数:', sharedContactIds.length);
-  const result = Array.from(new Set([...ownContactIds, ...sharedContactIds]));
-  console.log('[getAllVisibleContactIds] 最终可见联系人总数:', result.length);
+    // 合并并去重
+    console.log('[getAllVisibleContactIds] 共享联系人总数:', sharedContactIds.length);
+    const result = Array.from(new Set([...ownContactIds, ...sharedContactIds]));
+    console.log('[getAllVisibleContactIds] 最终可见联系人总数:', result.length);
+    
+    return result;
+  })();
   
-  // 保存到缓存
-  visibleContactIdsCache.set(parentUserId, { ids: result, timestamp: Date.now() });
+  // 立即保存 Promise 到缓存，并发请求会共享同一个 Promise
+  visibleContactIdsPromiseCache.set(parentUserId, { promise: queryPromise, timestamp: Date.now() });
   
-  return result;
+  return queryPromise;
 }
 
 /**
