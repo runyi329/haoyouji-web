@@ -84,10 +84,6 @@ export default function Ledger() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [invitingLedgerId, setInvitingLedgerId] = useState<number | null>(null);
   const [searchUsername, setSearchUsername] = useState("");
-  const [showExportDialog, setShowExportDialog] = useState(false);
-  const [exportingLedgerId, setExportingLedgerId] = useState<number | null>(null);
-  const [exportStartDate, setExportStartDate] = useState("");
-  const [exportEndDate, setExportEndDate] = useState("");
 
 
   // 从后端API获取账本列表
@@ -265,10 +261,36 @@ export default function Ledger() {
                       variant="outline"
                       size="sm"
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        setExportingLedgerId(ledger.id);
-                        setShowExportDialog(true);
+                        try {
+                          const result = await trpc.ledger.exportToExcel.query({
+                            ledgerId: ledger.id,
+                          });
+                          
+                          // 将base64转换为Blob并下载
+                          const byteCharacters = atob(result.data);
+                          const byteNumbers = new Array(byteCharacters.length);
+                          for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                          }
+                          const byteArray = new Uint8Array(byteNumbers);
+                          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                          
+                          // 创建下载链接
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = result.filename;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          window.URL.revokeObjectURL(url);
+                          
+                          toast.success("导出成功！");
+                        } catch (error: any) {
+                          toast.error(`导出失败: ${error.message}`);
+                        }
                       }}
                     >
                       导出
@@ -327,10 +349,36 @@ export default function Ledger() {
                       variant="outline"
                       size="sm"
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        setExportingLedgerId(ledger.id);
-                        setShowExportDialog(true);
+                        try {
+                          const result = await trpc.ledger.exportToExcel.query({
+                            ledgerId: ledger.id,
+                          });
+                          
+                          // 将base64转换为Blob并下载
+                          const byteCharacters = atob(result.data);
+                          const byteNumbers = new Array(byteCharacters.length);
+                          for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                          }
+                          const byteArray = new Uint8Array(byteNumbers);
+                          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                          
+                          // 创建下载链接
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = result.filename;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          window.URL.revokeObjectURL(url);
+                          
+                          toast.success("导出成功！");
+                        } catch (error: any) {
+                          toast.error(`导出失败: ${error.message}`);
+                        }
                       }}
                     >
                       导出
@@ -517,96 +565,7 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      {/* 导出对话框 */}
-      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
-        <DialogContent className="w-[85%] rounded-lg">
-          <DialogTitle>导出Excel</DialogTitle>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-gray-600 mb-2 block">开始日期</label>
-              <Input
-                type="date"
-                value={exportStartDate}
-                onChange={(e) => setExportStartDate(e.target.value)}
-                className="text-sm w-1/2"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-2 block">结束日期</label>
-              <Input
-                type="date"
-                value={exportEndDate}
-                onChange={(e) => setExportEndDate(e.target.value)}
-                className="text-sm w-1/2"
-              />
-            </div>
-            <div className="text-xs text-gray-500">
-              不选择日期将导出所有账目
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowExportDialog(false);
-                  setExportStartDate("");
-                  setExportEndDate("");
-                  setExportingLedgerId(null);
-                }}
-              >
-                取消
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={async () => {
-                  if (!exportingLedgerId) return;
-                  
-                  try {
-                    toast.success("正在生成Excel...");
-                    
-                    // 调用后端API
-                    const result = await trpc.ledger.exportToExcel.query({
-                      ledgerId: exportingLedgerId,
-                      startDate: exportStartDate || undefined,
-                      endDate: exportEndDate || undefined,
-                    });
-                    
-                    // 将base64转换为Blob并下载
-                    const byteCharacters = atob(result.data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                      byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                    
-                    // 创建下载链接
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = result.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    toast.success("导出成功！");
-                  } catch (error: any) {
-                    toast.error(`导出失败: ${error.message}`);
-                  }
-                  
-                  setShowExportDialog(false);
-                  setExportStartDate("");
-                  setExportEndDate("");
-                  setExportingLedgerId(null);
-                }}
-              >
-                下载
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
     </div>
   );
