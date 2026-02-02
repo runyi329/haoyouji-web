@@ -126,7 +126,7 @@ interface DataContentProps {
 function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
-  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -552,7 +552,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
             </button>
           </div>
         </div>
-        {tableType === "health" && (
+        {tableType === "activity" && (
 
           <>
 
@@ -615,9 +615,9 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 
         )}
 
-        {tableType === "activity" && (
+        {tableType === "health" && (
           <div className="text-center py-8 text-gray-400">
-            活跃度表格开发中...
+            健康度表格开发中...
           </div>
         )}
 
@@ -635,7 +635,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
-  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -1062,7 +1062,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
             </button>
           </div>
         </div>
-        {tableType === "health" && (
+        {tableType === "activity" && (
 
           <>
 
@@ -1125,9 +1125,9 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 
         )}
 
-        {tableType === "activity" && (
+        {tableType === "health" && (
           <div className="text-center py-8 text-gray-400">
-            活跃度表格开发中...
+            健康度表格开发中...
           </div>
         )}
 
@@ -1145,7 +1145,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
-  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -1572,7 +1572,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
             </button>
           </div>
         </div>
-        {tableType === "health" && (
+        {tableType === "activity" && (
 
           <>
 
@@ -1635,9 +1635,9 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
 
         )}
 
-        {tableType === "activity" && (
+        {tableType === "health" && (
           <div className="text-center py-8 text-gray-400">
-            活跃度表格开发中...
+            健康度表格开发中...
           </div>
         )}
 
