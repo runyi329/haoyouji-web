@@ -213,6 +213,15 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+// 批量获取用户信息（使用 IN 查询，支持几千个用户ID）
+export async function getUsersByIds(ids: number[]) {
+  if (ids.length === 0) return [];
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(users).where(inArray(users.id, ids));
+  return result;
+}
+
 export async function updateUserLastSignedIn(userId: number, lastSignedIn: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

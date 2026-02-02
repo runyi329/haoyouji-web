@@ -3649,6 +3649,12 @@ export const appRouter = router({
       return await dbContacts.getContactStats(ctx.user.id);
     }),
 
+  // 轻量级获取联系人数量（全部、我的、共享）
+  counts: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getContactCounts(ctx.user.id);
+    }),
+
   // 获取公司列表（所有有公司名称的联系人，标注重复）
   companyList: protectedProcedure
     .query(async ({ ctx }) => {
@@ -4651,6 +4657,29 @@ export const appRouter = router({
         }
         
         return await db.getSharingPermissionsByConnectionId(input.connectionId);
+      }),
+
+    // 轻量级获取共享人列表（只返回共享人名字和ID，使用单次SQL查询优化）
+    getSharerList: protectedProcedure
+      .query(async ({ ctx }) => {
+        // 获取所有共享给我的连接（只返回active状态）
+        const allConnections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
+        const connections = allConnections.filter((conn: any) => conn.status === 'active');
+        
+        if (connections.length === 0) {
+          return [];
+        }
+        
+        // 提取所有分享者ID
+        const sharerIds = connections.map((conn: any) => conn.sharerId);
+        
+        // 一次性查询所有分享者信息（使用 IN 查询，支持几千个分享者）
+        const sharers = await db.getUsersByIds(sharerIds);
+        
+        return sharers.map((sharer: any) => ({
+          id: sharer.id.toString(),
+          name: sharer.username || `用户${sharer.id}`
+        }));
       }),
 
     // 获取共享给我的人脉列表（数据聚合）

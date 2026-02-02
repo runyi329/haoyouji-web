@@ -371,8 +371,9 @@ export default function ContactsList() {
   // 分页状态
   const [page, setPage] = useState(1);
   const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
-  const [totalContacts, setTotalContacts] = useState(0);
-  const [totalSharedContacts, setTotalSharedContacts] = useState(0);
+  
+  // 轻量级获取联系人数量（全部、我的、共享）
+  const { data: contactCounts } = trpc.contacts.counts.useQuery();
   
   // 获取人脉列表（支持分页）
   const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
@@ -387,7 +388,6 @@ export default function ContactsList() {
   // 当数据加载完成时，累加到已加载列表
   React.useEffect(() => {
     if (contactsData) {
-      setTotalContacts(contactsData.total);
       if (page === 1) {
         // 第一页，直接设置
         setAllLoadedContacts(contactsData.contacts);
@@ -441,15 +441,13 @@ export default function ContactsList() {
   console.log('[ContactsList] companyList:', companyList);
   console.log('[ContactsList] isLoadingCompanyList:', isLoadingCompanyList);
   
-  // 获取共享给我的人脉列表
-  const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
+  // 轻量级获取共享人列表（用于下拉筛选）
+  const { data: sharerListData } = trpc.sharing.getSharerList.useQuery();
   
-  // 更新共享人脉总数
-  React.useEffect(() => {
-    if (sharedContacts) {
-      setTotalSharedContacts(sharedContacts.length);
-    }
-  }, [sharedContacts]);
+  // 只有当用户点击"共享"筛选时才加载共享联系人列表（懒加载优化）
+  const { data: sharedContacts, isLoading: isLoadingShared } = trpc.sharing.getSharedContacts.useQuery(undefined, {
+    enabled: shareFilter === 'shared', // 只有选中"共享"时才加载
+  });
   
   // 获取所有标签
   const { data: allTags, refetch: refetchTags } = trpc.contacts.tags.list.useQuery();
@@ -598,17 +596,8 @@ export default function ContactsList() {
     },
   });
   
-  // 提取共享人列表（去重）
-  const sharerList = React.useMemo(() => {
-    if (!sharedContacts || sharedContacts.length === 0) return [];
-    const sharers = new Map<string, string>();
-    sharedContacts.forEach((contact: any) => {
-      if (contact._sharedBy && contact._sharerUserId) {
-        sharers.set(contact._sharerUserId.toString(), contact._sharedBy);
-      }
-    });
-    return Array.from(sharers.entries()).map(([id, name]) => ({ id, name }));
-  }, [sharedContacts]);
+  // 共享人列表（使用轻量级 API）
+  const sharerList = sharerListData || [];
   
   // 根据筛选条件合并自己的人脉和共享的人脉
   const mergedContacts = React.useMemo(() => {
@@ -1120,14 +1109,14 @@ export default function ContactsList() {
         <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">
           {viewMode === 'company' && companyList ? (
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
-          ) : isLoading ? (
+          ) : !contactCounts ? (
             `加载中...`
           ) : shareFilter === 'mine' ? (
-            `共 ${contactsData?.total || 0} 位人脉`
+            `共 ${contactCounts.mine} 位人脉`
           ) : shareFilter === 'shared' ? (
-            `共 ${mergedContacts?.length || 0} 位人脉`
+            `共 ${contactCounts.shared} 位人脉`
           ) : (
-            `共 ${(contactsData?.total || 0) + (sharedContacts?.length || 0)} 位人脉`
+            `共 ${contactCounts.total} 位人脉`
           )}
         </p>
         

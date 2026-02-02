@@ -13,7 +13,64 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 // Promise 缓存，避免并发请求重复查询
 const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
 const contactStatsPromiseCache = new Map<number, { promise: Promise<any>, timestamp: number }>();
-const CACHE_TTL = 5000; // 5秒
+const CACHE_TTL = 60000; // 60秒
+const contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
+
+/**
+ * 轻量级获取联系人数量统计（全部、我的、共享）
+ * 不需要获取所有联系人 ID，只进行 COUNT 查询
+ */
+export async function getContactCounts(parentUserId: number): Promise<{ total: number, mine: number, shared: number }> {
+  // 检查缓存
+  const cached = contactCountsCache.get(parentUserId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[getContactCounts] 使用缓存，用户ID:', parentUserId);
+    return cached.data;
+  }
+  
+  console.log('[getContactCounts] 开始查询，用户ID:', parentUserId);
+  
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 1. 查询我的联系人数量
+  const mineResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, parentUserId));
+  const mine = mineResult[0]?.count || 0;
+  
+  // 2. 查询共享给我的联系人数量
+  const sharingConnections = await db
+    .select({ sharerId: contactSharingConnections.sharerId })
+    .from(contactSharingConnections)
+    .where(
+      and(
+        eq(contactSharingConnections.receiverId, parentUserId),
+        eq(contactSharingConnections.status, 'active')
+      )
+    );
+  
+  let shared = 0;
+  if (sharingConnections.length > 0) {
+    const sharerIds = sharingConnections.map(conn => conn.sharerId);
+    const sharedResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(contacts)
+      .where(inArray(contacts.parentUserId, sharerIds));
+    shared = sharedResult[0]?.count || 0;
+  }
+  
+  const total = mine + shared;
+  const result = { total, mine, shared };
+  
+  console.log('[getContactCounts] 查询结果:', result);
+  
+  // 保存到缓存
+  contactCountsCache.set(parentUserId, { data: result, timestamp: Date.now() });
+  
+  return result;
+}
 
 /**
  * 获取用户所有可见的人脉ID列表（包括自己的 + 共享给我的）
