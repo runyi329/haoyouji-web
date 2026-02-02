@@ -2519,3 +2519,186 @@ export async function createFieldCategory(name: string, icon: string = '', paren
     parentCategoryId,
   };
 }
+
+/**
+ * 获取健康度统计数据
+ */
+export async function getHealthStats(parentUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // 获取所有可见人脉ID（自己的 + 共享的）
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+
+  if (visibleContactIds.length === 0) {
+    return {
+      thirtyDayInteractionRate: { value: "0%", detail: "(0/0人)", trend: "0%", status: "待改善" },
+      averageInteractionFrequency: { value: "0天", trend: "0天", status: "待改善" },
+      dormantContactsCount: { value: "0人", percentage: "0%", trend: "0人", status: "良好" },
+      needsFollowUpCount: { value: "0项", trend: "0项", status: "良好" },
+      highValueInteractionRate: { value: "0%", trend: "0%", status: "待改善" },
+    };
+  }
+
+  // 获取所有可见人脉
+  const allContacts = await db.select().from(contacts)
+    .where(inArray(contacts.id, visibleContactIds));
+
+  const totalContacts = allContacts.length;
+
+  // 获取所有联络记录
+  const allInteractions = await db.select({
+    id: contactInteractions.id,
+    contactId: contactInteractions.contactId,
+    interactionDate: contactInteractions.interactionDate,
+    note: contactInteractions.note,
+  }).from(contactInteractions)
+    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
+    .where(inArray(contacts.id, visibleContactIds))
+    .orderBy(desc(contactInteractions.interactionDate));
+
+  // 1. 计算30天互动率
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const contactsWithRecentInteraction = new Set<number>();
+  for (const interaction of allInteractions) {
+    if (interaction.interactionDate >= thirtyDaysAgo) {
+      contactsWithRecentInteraction.add(interaction.contactId);
+    }
+  }
+  const thirtyDayCount = contactsWithRecentInteraction.size;
+  const thirtyDayRate = totalContacts > 0 ? Math.round((thirtyDayCount / totalContacts) * 100) : 0;
+
+  // 2. 计算平均互动频率（所有人脉的平均互动间隔天数）
+  let totalIntervalDays = 0;
+  let contactsWithInteractions = 0;
+
+  for (const contact of allContacts) {
+    const contactInteractionsList = allInteractions.filter(i => i.contactId === contact.id);
+    if (contactInteractionsList.length >= 2) {
+      let totalInterval = 0;
+      for (let i = 0; i < contactInteractionsList.length - 1; i++) {
+        const interval = contactInteractionsList[i].interactionDate - contactInteractionsList[i + 1].interactionDate;
+        totalInterval += interval;
+      }
+      const avgInterval = totalInterval / (contactInteractionsList.length - 1);
+      totalIntervalDays += avgInterval / (24 * 60 * 60 * 1000);
+      contactsWithInteractions++;
+    }
+  }
+
+  const averageInteractionInterval = contactsWithInteractions > 0
+    ? Math.round(totalIntervalDays / contactsWithInteractions)
+    : 0;
+
+  // 3. 失联人脉数（>180天未联络）
+  const oneEightyDaysAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
+  const contactLastInteractionMap = new Map<number, number>();
+  for (const interaction of allInteractions) {
+    if (!contactLastInteractionMap.has(interaction.contactId)) {
+      contactLastInteractionMap.set(interaction.contactId, interaction.interactionDate);
+    }
+  }
+
+  let dormantCount = 0;
+  for (const contact of allContacts) {
+    const lastInteractionDate = contactLastInteractionMap.get(contact.id);
+    if (!lastInteractionDate || lastInteractionDate < oneEightyDaysAgo) {
+      dormantCount++;
+    }
+  }
+  const dormantPercentage = totalContacts > 0 ? Math.round((dormantCount / totalContacts) * 100) : 0;
+
+  // 4. 待跟进承诺数（引用首页"需要关注"的数字）
+  // 获取所有可见人脉的标签关系
+  const contactTagsResult = await db
+    .select({
+      contactId: contactTagRelations.contactId,
+      tagName: contactTags.name,
+    })
+    .from(contactTagRelations)
+    .innerJoin(contactTags, eq(contactTagRelations.tagId, contactTags.id))
+    .innerJoin(contacts, eq(contactTagRelations.contactId, contacts.id))
+    .where(inArray(contacts.id, visibleContactIds));
+  
+  const contactTagsMap = new Map<number, string[]>();
+  for (const row of contactTagsResult) {
+    if (!contactTagsMap.has(row.contactId)) {
+      contactTagsMap.set(row.contactId, []);
+    }
+    contactTagsMap.get(row.contactId)!.push(row.tagName);
+  }
+  
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgoTimestamp = now - 30 * 24 * 60 * 60 * 1000;
+  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+  let needsFollowUpCount = 0;
+
+  for (const contact of allContacts) {
+    const lastInteractionDate = contactLastInteractionMap.get(contact.id);
+    const tags = contactTagsMap.get(contact.id) || [];
+    
+    let needsFollowUp = false;
+    if (tags.includes('周关注') && (!lastInteractionDate || lastInteractionDate < sevenDaysAgo)) {
+      needsFollowUp = true;
+    } else if (tags.includes('月关注') && (!lastInteractionDate || lastInteractionDate < thirtyDaysAgoTimestamp)) {
+      needsFollowUp = true;
+    } else if (tags.includes('季关注') && (!lastInteractionDate || lastInteractionDate < ninetyDaysAgo)) {
+      needsFollowUp = true;
+    }
+    
+    if (needsFollowUp) {
+      needsFollowUpCount++;
+    }
+  }
+
+  // 5. 高价值互动占比（评分≥4分的互动次数 / 总互动次数）
+  let highValueCount = 0;
+  const totalInteractionCount = allInteractions.length;
+
+  for (const interaction of allInteractions) {
+    const note = interaction.note || "";
+    // 匹配格式：[重要性:X分]
+    const match = note.match(/\[重要性:(\d+)分\]/);
+    if (match) {
+      const score = parseInt(match[1]);
+      if (score >= 4) {
+        highValueCount++;
+      }
+    }
+  }
+
+  const highValueRate = totalInteractionCount > 0 
+    ? Math.round((highValueCount / totalInteractionCount) * 100) 
+    : 0;
+
+  return {
+    thirtyDayInteractionRate: {
+      value: `${thirtyDayRate}%`,
+      detail: `(${thirtyDayCount}/${totalContacts}人)`,
+      trend: "↑ 5%", // TODO: 需要历史数据对比
+      status: thirtyDayRate >= 60 ? "良好" : thirtyDayRate >= 40 ? "注意" : "待改善",
+    },
+    averageInteractionFrequency: {
+      value: `每${averageInteractionInterval}天一次`,
+      trend: "↓ 3天", // TODO: 需要历史数据对比
+      status: averageInteractionInterval <= 45 ? "良好" : averageInteractionInterval <= 60 ? "注意" : "待改善",
+    },
+    dormantContactsCount: {
+      value: `${dormantCount}人`,
+      percentage: `(${dormantPercentage}%)`,
+      trend: "↓ 8人", // TODO: 需要历史数据对比
+      status: dormantPercentage <= 20 ? "良好" : dormantPercentage <= 30 ? "注意" : "待改善",
+    },
+    needsFollowUpCount: {
+      value: `${needsFollowUpCount}项`,
+      trend: "↑ 12项", // TODO: 需要历史数据对比
+      status: needsFollowUpCount <= 30 ? "良好" : needsFollowUpCount <= 50 ? "预警" : "严重",
+    },
+    highValueInteractionRate: {
+      value: `${highValueRate}%`,
+      trend: "↑ 8%", // TODO: 需要历史数据对比
+      status: highValueRate >= 30 ? "优秀" : highValueRate >= 20 ? "良好" : "待改善",
+    },
+  };
+}

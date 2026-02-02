@@ -139,6 +139,9 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
     type: tableTab,
   });
 
+  // 获取健康度统计数据
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
+
   // 处理API数据
   const chartData = useMemo(() => {
     if (!apiData) return [];
@@ -620,50 +623,73 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
         )}
 
         {tableType === "health" && (
-          <div className="overflow-x-auto -mx-2.5 px-2.5">
-            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
-              <thead>
-                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <>
+            {healthLoading ? (
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+            ) : healthData ? (
+              <div className="overflow-x-auto -mx-2.5 px-2.5">
+                <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+                  <thead>
+                    <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.thirtyDayInteractionRate.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.averageInteractionFrequency.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
+                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.dormantContactsCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.needsFollowUpCount.status === '良好' ? 'text-green-600' : 
+                        healthData.needsFollowUpCount.status === '预警' ? 'text-red-600' : 'text-red-700 font-bold'
+                      }`}>{healthData.needsFollowUpCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                      }`}>{healthData.highValueInteractionRate.status}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">暂无数据</div>
+            )}
+          </>
         )}
 
         {tableType === "importance" && (
@@ -739,6 +765,9 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
   const { data: layerData, isLoading: layerLoading } = trpc.analytics.contactLayerStats.useQuery({
     type: tableTab,
   });
+
+  // 获取健康度统计数据
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
 
   // 处理API数据
   const chartData = useMemo(() => {
@@ -1222,50 +1251,73 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
         )}
 
         {tableType === "health" && (
-          <div className="overflow-x-auto -mx-2.5 px-2.5">
-            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
-              <thead>
-                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <>
+            {healthLoading ? (
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+            ) : healthData ? (
+              <div className="overflow-x-auto -mx-2.5 px-2.5">
+                <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+                  <thead>
+                    <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.thirtyDayInteractionRate.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.averageInteractionFrequency.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
+                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.dormantContactsCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.needsFollowUpCount.status === '良好' ? 'text-green-600' : 
+                        healthData.needsFollowUpCount.status === '预警' ? 'text-red-600' : 'text-red-700 font-bold'
+                      }`}>{healthData.needsFollowUpCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                      }`}>{healthData.highValueInteractionRate.status}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">暂无数据</div>
+            )}
+          </>
         )}
 
         {tableType === "importance" && (
@@ -1341,6 +1393,9 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
   const { data: layerData, isLoading: layerLoading } = trpc.analytics.contactLayerStats.useQuery({
     type: tableTab,
   });
+
+  // 获取健康度统计数据
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
 
   // 处理API数据
   const chartData = useMemo(() => {
@@ -1824,50 +1879,73 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
         )}
 
         {tableType === "health" && (
-          <div className="overflow-x-auto -mx-2.5 px-2.5">
-            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
-              <thead>
-                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
-                </tr>
-                <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <>
+            {healthLoading ? (
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+            ) : healthData ? (
+              <div className="overflow-x-auto -mx-2.5 px-2.5">
+                <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+                  <thead>
+                    <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.thirtyDayInteractionRate.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.averageInteractionFrequency.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
+                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                      }`}>{healthData.dormantContactsCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.needsFollowUpCount.status === '良好' ? 'text-green-600' : 
+                        healthData.needsFollowUpCount.status === '预警' ? 'text-red-600' : 'text-red-700 font-bold'
+                      }`}>{healthData.needsFollowUpCount.status}</td>
+                    </tr>
+                    <tr className="border-b hover:bg-gray-50">
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                        healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                      }`}>{healthData.highValueInteractionRate.status}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">暂无数据</div>
+            )}
+          </>
         )}
 
         {tableType === "importance" && (

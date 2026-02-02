@@ -4916,6 +4916,12 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbAnalytics.getContactLayerStats(ctx.user.id, input.type);
       }),
+    
+    // 获取健康度统计数据
+    healthStats: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbContacts.getHealthStats(ctx.user.id);
+      }),
   }),
   
   // 用户偏好设置
