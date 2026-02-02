@@ -2764,10 +2764,9 @@ export async function getContactsByParentPaginated(
       SELECT COUNT(DISTINCT c.id) as count
       FROM contacts c
       LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
-      LEFT JOIN contact_tags ct ON c.id = ct.contactId
-      LEFT JOIN tags t ON ct.tagId = t.id
-      LEFT JOIN contact_personal_tags cpt ON c.id = cpt.contactId
-      LEFT JOIN personal_tags pt ON cpt.personalTagId = pt.id
+      LEFT JOIN contact_tag_relations ctr ON c.id = ctr.contactId
+      LEFT JOIN contact_tags ct ON ctr.tagId = ct.id
+      LEFT JOIN personal_contact_tags pct ON c.id = pct.contactId
       WHERE c.parentUserId = ${parentUserId}
       AND (
         c.name LIKE ${searchPattern}
@@ -2775,8 +2774,8 @@ export async function getContactsByParentPaginated(
         OR c.occupation LIKE ${searchPattern}
         OR c.phone LIKE ${searchPattern}
         OR cfv.value LIKE ${searchPattern}
-        OR t.name LIKE ${searchPattern}
-        OR pt.name LIKE ${searchPattern}
+        OR ct.name LIKE ${searchPattern}
+        OR pct.name LIKE ${searchPattern}
       )
     `);
   }
@@ -2813,10 +2812,9 @@ export async function getContactsByParentPaginated(
       SELECT DISTINCT c.*
       FROM contacts c
       LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
-      LEFT JOIN contact_tags ct ON c.id = ct.contactId
-      LEFT JOIN tags t ON ct.tagId = t.id
-      LEFT JOIN contact_personal_tags cpt ON c.id = cpt.contactId
-      LEFT JOIN personal_tags pt ON cpt.personalTagId = pt.id
+      LEFT JOIN contact_tag_relations ctr ON c.id = ctr.contactId
+      LEFT JOIN contact_tags ct ON ctr.tagId = ct.id
+      LEFT JOIN personal_contact_tags pct ON c.id = pct.contactId
       WHERE c.parentUserId = ${parentUserId}
       AND (
         c.name LIKE ${searchPattern}
@@ -2824,8 +2822,8 @@ export async function getContactsByParentPaginated(
         OR c.occupation LIKE ${searchPattern}
         OR c.phone LIKE ${searchPattern}
         OR cfv.value LIKE ${searchPattern}
-        OR t.name LIKE ${searchPattern}
-        OR pt.name LIKE ${searchPattern}
+        OR ct.name LIKE ${searchPattern}
+        OR pct.name LIKE ${searchPattern}
       )
       ORDER BY c.updatedAt DESC
       LIMIT ${pageSize}
