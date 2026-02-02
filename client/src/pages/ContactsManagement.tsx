@@ -853,7 +853,6 @@ export default function ContactsManagement() {
   
   // 刷新所有数据
   const handleRefresh = async () => {
-    toast.loading('正在刷新数据...');
     await Promise.all([
       refetchStats(),
       refetchOverviewStats(),
@@ -864,7 +863,6 @@ export default function ContactsManagement() {
       refetchTotalTagCount(),
       refetchTotalUsageDays()
     ]);
-    toast.success('数据刷新成功');
   };
   
   // 获取当前用户信息
