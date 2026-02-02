@@ -2164,11 +2164,11 @@ export default function ContactsList() {
               );
             })}
           </div>
-        ) : (
+        ) : !isLoading && !isLoadingCompanyList ? (
           <div className="text-center py-8 text-muted-foreground">
-            {searchQuery ? '没有找到匹配的人脉' : '还没有添加人脉，点击上方按钮开始添加'}
+            {searchQuery ? '没有找到匹配的人脉' : ''}
           </div>
-        )}
+        ) : null}
         
         {/* 无限滚动触发器 */}
         {contactsData && contactsData.hasMore && (
