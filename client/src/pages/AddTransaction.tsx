@@ -31,46 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-
-// 图片压缩函数
-const compressImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (e) => {
-      const img = new Image();
-      img.src = e.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        // 计算压缩后的尺寸
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('无法获取canvas context'));
-          return;
-        }
-        
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // 转换为base64，使用指定的质量
-        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-        resolve(compressedBase64);
-      };
-      img.onerror = () => reject(new Error('图片加载失败'));
-    };
-    reader.onerror = () => reject(new Error('文件读取失败'));
-  });
-};
+import { autoCompressImage } from "@/utils/imageUtils";
 
 type TransactionType = "expense" | "income";
 
@@ -662,9 +623,9 @@ const AddTransaction = () => {
               if (files) {
                 for (const file of Array.from(files)) {
                   try {
-                    // 压缩图片
-                    const compressedImage = await compressImage(file, 800, 0.7);
-                    setUploadedImages(prev => [...prev, compressedImage]);
+                    // 自动压缩图片
+                    const { base64 } = await autoCompressImage(file, 'normal');
+                    setUploadedImages(prev => [...prev, base64]);
                   } catch (error) {
                     console.error('图片压缩失败:', error);
                     // 如果压缩失败，使用原图

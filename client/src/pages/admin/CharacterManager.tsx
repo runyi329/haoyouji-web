@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Edit, Trash2, Upload, Search } from "lucide-react";
+import { autoCompressImage } from "@/utils/imageUtils";
 
 export default function CharacterManager() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -91,15 +92,22 @@ export default function CharacterManager() {
     setCommonWords("");
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        // 自动压缩图片（字符图片用缩略图模式）
+        const { base64 } = await autoCompressImage(file, 'thumbnail');
+        setImagePreview(base64);
+      } catch (error) {
+        // 压缩失败时使用原图
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 

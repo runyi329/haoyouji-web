@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Upload, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { autoCompressImage } from "@/utils/imageUtils";
 
 export default function BannerConfig() {
   const [, navigate] = useLocation();
@@ -50,24 +51,13 @@ export default function BannerConfig() {
     setUploading(true);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const buffer = e.target?.result as ArrayBuffer;
-        const uint8Array = new Uint8Array(buffer);
-
-        // 这里需要调用上传API
-        // 暂时使用base64
-        const base64 = btoa(
-          new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-        );
-        const dataUrl = `data:${file.type};base64,${base64}`;
-        setImageUrl(dataUrl);
-        toast.success("图片上传成功！");
-        setUploading(false);
-      };
-      reader.readAsArrayBuffer(file);
+      // 自动压缩图片（Banner 用高清模式）
+      const { base64 } = await autoCompressImage(file, 'hd');
+      setImageUrl(base64);
+      toast.success("图片上传成功！");
     } catch (error) {
       toast.error("图片上传失败");
+    } finally {
       setUploading(false);
     }
   };

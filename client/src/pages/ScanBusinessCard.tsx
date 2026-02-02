@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { autoCompressImage } from "@/utils/imageUtils";
 
 export default function ScanBusinessCard() {
   const [, setLocation] = useLocation();
@@ -16,7 +17,7 @@ export default function ScanBusinessCard() {
   const uploadImageMutation = trpc.contacts.uploadBusinessCardImage.useMutation();
   const recognizeMutation = trpc.contacts.recognizeBusinessCard.useMutation();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -32,12 +33,13 @@ export default function ScanBusinessCard() {
       return;
     }
 
-    // 读取图片并显示预览
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setSelectedImage(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // 自动压缩图片（名片用高清模式保证识别质量）
+      const { base64 } = await autoCompressImage(file, 'hd');
+      setSelectedImage(base64);
+    } catch (error) {
+      toast.error("图片处理失败");
+    }
   };
 
   const handleRecognize = async () => {

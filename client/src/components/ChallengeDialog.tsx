@@ -8,6 +8,7 @@ import { Upload, Trophy, Target, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { storagePut } from "@/lib/storage";
+import { compressFileImage } from "@/utils/imageUtils";
 
 interface ChallengeDialogProps {
   open: boolean;
@@ -82,7 +83,9 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
 
     setUploading(true);
     try {
-      const { url, fileKey } = await storagePut(file, `challenges/${kidId}`);
+      // 自动压缩图片
+      const compressedFile = await compressFileImage(file, 'thumbnail');
+      const { url, fileKey } = await storagePut(compressedFile, `challenges/${kidId}`);
       setRewardImageUrl(url);
       setRewardFileKey(fileKey);
       toast.success("图片上传成功");

@@ -95,6 +95,156 @@ export const validateFileSize = (file: File, maxSizeMB: number = 5): boolean => 
 };
 
 /**
+ * 图片压缩配置
+ */
+export const IMAGE_COMPRESS_CONFIG = {
+  // 头像：64x64，质量 60%，预计 2-5KB
+  avatar: { maxSize: 64, quality: 0.6 },
+  // 缩略图：200x200，质量 70%，预计 10-30KB
+  thumbnail: { maxSize: 200, quality: 0.7 },
+  // 普通图片：800x800，质量 80%，预计 50-150KB
+  normal: { maxSize: 800, quality: 0.8 },
+  // 高清图片：1200x1200，质量 85%，预计 100-300KB
+  hd: { maxSize: 1200, quality: 0.85 },
+  // 最大文件大小限制（字节）
+  maxFileSizeBytes: 500 * 1024, // 500KB
+};
+
+/**
+ * 通用图片压缩函数 - 自动压缩任何图片
+ * @param input File 或 Blob 对象
+ * @param type 压缩类型：'avatar' | 'thumbnail' | 'normal' | 'hd'
+ * @returns Promise<{ base64: string, blob: Blob, size: number }>
+ */
+export const autoCompressImage = async (
+  input: File | Blob,
+  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' = 'normal'
+): Promise<{ base64: string; blob: Blob; size: number }> => {
+  const config = IMAGE_COMPRESS_CONFIG[type];
+  const { maxSize, quality } = config;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(input);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      // 计算目标尺寸（保持比例）
+      let width = img.width;
+      let height = img.height;
+
+      if (type === 'avatar') {
+        // 头像：裁剪为正方形
+        width = maxSize;
+        height = maxSize;
+      } else {
+        // 其他类型：保持比例缩放
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('无法获取 canvas context'));
+        return;
+      }
+
+      if (type === 'avatar') {
+        // 头像：居中裁剪为正方形
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, width, height);
+      } else {
+        // 其他类型：直接缩放
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+
+      // 转换为 base64
+      const base64 = canvas.toDataURL('image/jpeg', quality);
+
+      // 转换为 Blob
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('转换 Blob 失败'));
+            return;
+          }
+
+          const originalSize = input instanceof File ? input.size : input.size;
+          console.log(
+            `[图片压缩] 类型: ${type}, 原始: ${(originalSize / 1024).toFixed(1)}KB, ` +
+            `压缩后: ${(blob.size / 1024).toFixed(1)}KB, ` +
+            `尺寸: ${img.width}x${img.height} → ${width}x${height}`
+          );
+
+          resolve({ base64, blob, size: blob.size });
+        },
+        'image/jpeg',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('图片加载失败'));
+    };
+
+    img.src = url;
+  });
+};
+
+/**
+ * 压缩 File 对象并返回新的 File
+ * @param file 原始文件
+ * @param type 压缩类型
+ * @returns Promise<File> 压缩后的文件
+ */
+export const compressFileImage = async (
+  file: File,
+  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' = 'normal'
+): Promise<File> => {
+  // 如果不是图片，直接返回
+  if (!file.type.startsWith('image/')) {
+    return file;
+  }
+
+  // 如果文件已经很小，不需要压缩
+  const config = IMAGE_COMPRESS_CONFIG[type];
+  if (file.size <= IMAGE_COMPRESS_CONFIG.maxFileSizeBytes) {
+    console.log(`[图片压缩] 文件已经很小 (${(file.size / 1024).toFixed(1)}KB)，跳过压缩`);
+    // 但如果是头像类型，仍然需要压缩到指定尺寸
+    if (type !== 'avatar') {
+      return file;
+    }
+  }
+
+  const { blob } = await autoCompressImage(file, type);
+  
+  // 创建新的 File 对象
+  const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
+
+  return compressedFile;
+};
+
+/**
  * 压缩头像图片为 64x64 像素
  * @param blob 原始图片 Blob
  * @param size 目标尺寸，默认 64
