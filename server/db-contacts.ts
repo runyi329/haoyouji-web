@@ -1324,12 +1324,14 @@ export async function getContactStats(parentUserId: number) {
   // 公司数量（去重后的公司数）- 从 contact_field_values 表中查询
   const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
   
-  // 查找“公司名称”字段的 categoryId
+  // 查找"公司名称"字段的 categoryId
   const companyCategory = await db
     .select({ id: contactFieldCategories.id })
     .from(contactFieldCategories)
     .where(eq(contactFieldCategories.name, '公司名称'))
     .limit(1);
+  
+  console.log('[getContactStats] 公司字段分类查询结果:', companyCategory);
   
   let companyCount = 0;
   if (companyCategory.length > 0) {
@@ -1354,6 +1356,14 @@ export async function getContactStats(parentUserId: number) {
     // 去重计算公司数量
     const uniqueCompanies = new Set(companyResult.map(r => r.companyName));
     companyCount = uniqueCompanies.size;
+    console.log('[getContactStats] 公司统计:', { 
+      companyCategoryId, 
+      totalCompanyRecords: companyResult.length, 
+      uniqueCompanyCount: companyCount,
+      sampleCompanies: Array.from(uniqueCompanies).slice(0, 5)
+    });
+  } else {
+    console.log('[getContactStats] 未找到"公司名称"字段分类');
   }
   
   console.log('[getContactStats] 统计结果:', { totalContacts, newThisWeek, newThisMonth, newThisYear });
