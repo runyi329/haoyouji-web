@@ -92,6 +92,10 @@ export default function Ledger() {
   const { data: ledgers, isLoading, refetch } = trpc.ledger.list.useQuery({
     isArchived: activeTab === "archived",
   });
+  
+  // 分别查询使用中和已存档的数量
+  const { data: activeLedgers } = trpc.ledger.list.useQuery({ isArchived: false });
+  const { data: archivedLedgers } = trpc.ledger.list.useQuery({ isArchived: true });
 
   const filteredLedgers = ledgers || [];
 
@@ -170,7 +174,7 @@ export default function Ledger() {
             }`}
             style={activeTab === "active" ? { backgroundColor: themeColors.primary } : {}}
           >
-            使用中
+            使用中 {activeLedgers && `(${activeLedgers.length})`}
           </button>
           <button
             onClick={() => setActiveTab("archived")}
@@ -181,7 +185,7 @@ export default function Ledger() {
             }`}
             style={activeTab === "archived" ? { backgroundColor: themeColors.primary } : {}}
           >
-            已存档
+            已存档 {archivedLedgers && `(${archivedLedgers.length})`}
           </button>
         </div>
       </div>
