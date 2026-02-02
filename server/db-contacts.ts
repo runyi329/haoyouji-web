@@ -2523,12 +2523,29 @@ export async function createFieldCategory(name: string, icon: string = '', paren
 /**
  * 获取健康度统计数据
  */
-export async function getHealthStats(parentUserId: number) {
+export async function getHealthStats(parentUserId: number, type: 'all' | 'my' | 'shared' = 'all') {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // 获取所有可见人脉ID（自己的 + 共享的）
-  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  // 根据type获取对应的人脉ID
+  let visibleContactIds: number[];
+  if (type === 'all') {
+    visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  } else if (type === 'my') {
+    // 只获取自己的人脉
+    const myContacts = await db.select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.parentUserId, parentUserId));
+    visibleContactIds = myContacts.map(c => c.id);
+  } else {
+    // 只获取共享的人脉
+    const allVisibleIds = await getAllVisibleContactIds(parentUserId);
+    const myContacts = await db.select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.parentUserId, parentUserId));
+    const myContactIds = new Set(myContacts.map(c => c.id));
+    visibleContactIds = allVisibleIds.filter(id => !myContactIds.has(id));
+  }
 
   if (visibleContactIds.length === 0) {
     return {

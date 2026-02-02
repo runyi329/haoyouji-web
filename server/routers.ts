@@ -4919,8 +4919,11 @@ export const appRouter = router({
     
     // 获取健康度统计数据
     healthStats: protectedProcedure
-      .query(async ({ ctx }) => {
-        return await dbContacts.getHealthStats(ctx.user.id);
+      .input(z.object({
+        type: z.enum(['all', 'my', 'shared']),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbContacts.getHealthStats(ctx.user.id, input.type);
       }),
   }),
   

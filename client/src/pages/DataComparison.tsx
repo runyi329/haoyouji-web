@@ -140,7 +140,9 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
   });
 
   // 获取健康度统计数据
-  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery({
+    type: tableTab,
+  });
 
   // 处理API数据
   const chartData = useMemo(() => {
@@ -767,7 +769,9 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
   });
 
   // 获取健康度统计数据
-  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery({
+    type: tableTab,
+  });
 
   // 处理API数据
   const chartData = useMemo(() => {
@@ -1395,7 +1399,9 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
   });
 
   // 获取健康度统计数据
-  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery();
+  const { data: healthData, isLoading: healthLoading } = trpc.analytics.healthStats.useQuery({
+    type: tableTab,
+  });
 
   // 处理API数据
   const chartData = useMemo(() => {
