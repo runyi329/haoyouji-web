@@ -2759,11 +2759,15 @@ export async function getContactsByParentPaginated(
       .where(eq(contacts.parentUserId, parentUserId));
   } else {
     const searchPattern = `%${searchQuery}%`;
-    // 使用UNION去重统计
+    // 使用UNION去重统计，包含标签搜索
     totalQuery = db.execute(sql`
       SELECT COUNT(DISTINCT c.id) as count
       FROM contacts c
       LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
+      LEFT JOIN contact_tags ct ON c.id = ct.contactId
+      LEFT JOIN tags t ON ct.tagId = t.id
+      LEFT JOIN contact_personal_tags cpt ON c.id = cpt.contactId
+      LEFT JOIN personal_tags pt ON cpt.personalTagId = pt.id
       WHERE c.parentUserId = ${parentUserId}
       AND (
         c.name LIKE ${searchPattern}
@@ -2771,6 +2775,8 @@ export async function getContactsByParentPaginated(
         OR c.occupation LIKE ${searchPattern}
         OR c.phone LIKE ${searchPattern}
         OR cfv.value LIKE ${searchPattern}
+        OR t.name LIKE ${searchPattern}
+        OR pt.name LIKE ${searchPattern}
       )
     `);
   }
@@ -2802,11 +2808,15 @@ export async function getContactsByParentPaginated(
   } else {
     const searchPattern = `%${searchQuery}%`;
     
-    // 使用子查询去重并分页
+    // 使用子查询去重并分页，包含标签搜索
     const result = await db.execute(sql`
       SELECT DISTINCT c.*
       FROM contacts c
       LEFT JOIN contact_field_values cfv ON c.id = cfv.contactId
+      LEFT JOIN contact_tags ct ON c.id = ct.contactId
+      LEFT JOIN tags t ON ct.tagId = t.id
+      LEFT JOIN contact_personal_tags cpt ON c.id = cpt.contactId
+      LEFT JOIN personal_tags pt ON cpt.personalTagId = pt.id
       WHERE c.parentUserId = ${parentUserId}
       AND (
         c.name LIKE ${searchPattern}
@@ -2814,6 +2824,8 @@ export async function getContactsByParentPaginated(
         OR c.occupation LIKE ${searchPattern}
         OR c.phone LIKE ${searchPattern}
         OR cfv.value LIKE ${searchPattern}
+        OR t.name LIKE ${searchPattern}
+        OR pt.name LIKE ${searchPattern}
       )
       ORDER BY c.updatedAt DESC
       LIMIT ${pageSize}

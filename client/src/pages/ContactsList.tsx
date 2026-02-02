@@ -625,6 +625,18 @@ export default function ContactsList() {
             if (fv.value && fv.value.toLowerCase().includes(query)) return true;
           }
         }
+        // 搜索全局标签
+        if (contact.tags) {
+          for (const tag of contact.tags) {
+            if (tag.name && tag.name.toLowerCase().includes(query)) return true;
+          }
+        }
+        // 搜索个人标签
+        if (contact.personalTags) {
+          for (const tag of contact.personalTags) {
+            if (tag.name && tag.name.toLowerCase().includes(query)) return true;
+          }
+        }
         return false;
       });
     }
