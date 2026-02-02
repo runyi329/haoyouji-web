@@ -516,7 +516,11 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
               className="w-1 h-5 rounded flex-shrink-0"
               style={{ backgroundColor: themeColors.primary }}
             ></div>
-            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
+              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "activity" && "人脉互动分层统计表"}
+              {tableType === "importance" && "互动类型分布表"}
+            </h2>
           </div>
           {/* 表格类型切换按钮 */}
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
@@ -1114,7 +1118,11 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
               className="w-1 h-5 rounded flex-shrink-0"
               style={{ backgroundColor: themeColors.primary }}
             ></div>
-            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
+              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "activity" && "人脉互动分层统计表"}
+              {tableType === "importance" && "互动类型分布表"}
+            </h2>
           </div>
           {/* 表格类型切换按钮 */}
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
@@ -1712,7 +1720,11 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
               className="w-1 h-5 rounded flex-shrink-0"
               style={{ backgroundColor: themeColors.primary }}
             ></div>
-            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>
+              {tableType === "health" && "整体互动健康度总览表"}
+              {tableType === "activity" && "人脉互动分层统计表"}
+              {tableType === "importance" && "互动类型分布表"}
+            </h2>
           </div>
           {/* 表格类型切换按钮 */}
           <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
