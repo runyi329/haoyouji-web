@@ -12,6 +12,7 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 
 // Promise 缓存，避免并发请求重复查询
 const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
+const contactStatsPromiseCache = new Map<number, { promise: Promise<any>, timestamp: number }>();
 const CACHE_TTL = 5000; // 5秒
 
 /**
@@ -1050,7 +1051,17 @@ export async function getTotalTagCount(parentUserId: number): Promise<number> {
  * 获取人脉统计数据
  */
 export async function getContactStats(parentUserId: number) {
+  // 检查缓存
+  const cached = contactStatsPromiseCache.get(parentUserId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[getContactStats] 使用缓存，用户ID:', parentUserId);
+    return cached.promise;
+  }
+  
   console.log('[getContactStats] 开始获取统计数据，用户ID:', parentUserId);
+  
+  // 创建查询 Promise 并立即缓存
+  const queryPromise = (async () => {
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return {
@@ -1318,6 +1329,15 @@ export async function getContactStats(parentUserId: number) {
     totalLedgerEntries,
     tagDistribution: tagDistResult
   };
+  })();
+  
+  // 存储到缓存
+  contactStatsPromiseCache.set(parentUserId, {
+    promise: queryPromise,
+    timestamp: Date.now()
+  });
+  
+  return queryPromise;
 }
 
 
