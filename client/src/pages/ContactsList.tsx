@@ -772,7 +772,7 @@ export default function ContactsList() {
   // 获取公司字段的categoryId
   const companyCategoryId = React.useMemo(() => {
     if (!fieldCategories) return null;
-    const category = fieldCategories.find(c => c.name === '公司');
+    const category = fieldCategories.find(c => c.name === '公司名称');
     return category?.id || null;
   }, [fieldCategories]);
   
