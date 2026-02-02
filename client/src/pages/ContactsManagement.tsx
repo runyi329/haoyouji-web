@@ -851,8 +851,12 @@ export default function ContactsManagement() {
   // 获取累计使用天数
   const { data: totalUsageDays, refetch: refetchTotalUsageDays } = trpc.contacts.getTotalUsageDays.useQuery();
   
+  // 刷新状态
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  
   // 刷新所有数据
   const handleRefresh = async () => {
+    setIsRefreshing(true);
     await Promise.all([
       refetchStats(),
       refetchOverviewStats(),
@@ -863,6 +867,7 @@ export default function ContactsManagement() {
       refetchTotalTagCount(),
       refetchTotalUsageDays()
     ]);
+    setIsRefreshing(false);
   };
   
   // 获取当前用户信息
@@ -1225,9 +1230,10 @@ export default function ContactsManagement() {
             onClick={handleRefresh}
             size="sm" 
             variant="outline"
-            className="h-8 sm:h-10 px-2 sm:px-4"
+            disabled={isRefreshing}
+            className={`h-8 sm:h-10 px-2 sm:px-4 transition-colors ${isRefreshing ? 'bg-gray-200 text-gray-400' : ''}`}
           >
-            <RefreshCcw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <RefreshCcw className={`h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">刷新</span>
           </Button>
           <Button onClick={handleAddContact} size="sm" className="h-8 sm:h-10 px-2 sm:px-4">
