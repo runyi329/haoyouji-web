@@ -2164,7 +2164,7 @@ export default function ContactsList() {
               );
             })}
           </div>
-        ) : !isLoading && !isLoadingCompanyList ? (
+        ) : !isLoading && !isLoadingCompanyList && filteredContacts && filteredContacts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             {searchQuery ? '没有找到匹配的人脉' : ''}
           </div>
