@@ -146,6 +146,26 @@ export default function Ledger() {
     }
   };
 
+  // 删除账本的mutation
+  const deleteMutation = trpc.ledger.delete.useMutation({
+    onSuccess: () => {
+      toast.success('账本已销毁');
+      refetch();
+      setShowDestroyDialog(false);
+      setDestroyingLedgerId(null);
+    },
+    onError: (error) => {
+      toast.error(`销毁失败: ${error.message}`);
+    },
+  });
+
+  // 处理销毁确认
+  const handleDestroyConfirm = () => {
+    if (destroyingLedgerId) {
+      deleteMutation.mutate({ ledgerId: destroyingLedgerId });
+    }
+  };
+
   return (
     <div className="min-h-screen pb-20" style={{ backgroundColor: `${themeColors.primary}15` }}>
       {/* 顶部导航栏 */}
@@ -571,22 +591,11 @@ export default function Ledger() {
             <p className="text-sm text-gray-500">销毁后无法恢复，请谨慎操作</p>
           </div>
           <button
-            onClick={async () => {
-              if (destroyingLedgerId) {
-                try {
-                  await trpc.ledger.delete.mutate({ ledgerId: destroyingLedgerId });
-                  toast.success('账本已销毁');
-                  refetch();
-                  setShowDestroyDialog(false);
-                  setDestroyingLedgerId(null);
-                } catch (error: any) {
-                  toast.error(`销毁失败: ${error.message}`);
-                }
-              }
-            }}
-            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors"
+            onClick={handleDestroyConfirm}
+            disabled={deleteMutation.isPending}
+            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            确认销毁
+            {deleteMutation.isPending ? '销毁中...' : '确认销毁'}
           </button>
           <button
             onClick={() => {
