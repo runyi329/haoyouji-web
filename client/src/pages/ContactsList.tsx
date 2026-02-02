@@ -574,13 +574,35 @@ export default function ContactsList() {
   const mergedContacts = React.useMemo(() => {
     if (!allContacts) return [];
     
-    // 为共享的人脉添加标记
-    const markedSharedContacts = sharedContacts?.map((contact: any) => ({
+    // 为共享的人脉添加标记，并根据搜索关键词过滤
+    let markedSharedContacts = sharedContacts?.map((contact: any) => ({
       ...contact,
       _isShared: true,
       // 确保共享人脉有唯一ID（避免与自己的人脉ID冲突）
       id: `shared_${contact.id}`,
     })) || [];
+    
+    // 如果有搜索关键词，对共享人脉也进行过滤
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      markedSharedContacts = markedSharedContacts.filter((contact: any) => {
+        // 搜索姓名
+        if (contact.name && contact.name.toLowerCase().includes(query)) return true;
+        // 搜索称谓
+        if (contact.title && contact.title.toLowerCase().includes(query)) return true;
+        // 搜索职业
+        if (contact.occupation && contact.occupation.toLowerCase().includes(query)) return true;
+        // 搜索电话
+        if (contact.phone && contact.phone.includes(query)) return true;
+        // 搜索自定义字段值（公司、职位等）
+        if (contact.fieldValues) {
+          for (const fv of contact.fieldValues) {
+            if (fv.value && fv.value.toLowerCase().includes(query)) return true;
+          }
+        }
+        return false;
+      });
+    }
     
     // 根据shareFilter返回对应的人脉列表
     if (shareFilter === 'mine') {
@@ -593,7 +615,7 @@ export default function ContactsList() {
       // 显示全部人脉（自己的 + 共享的）
       return [...allContacts, ...markedSharedContacts];
     }
-  }, [allContacts, sharedContacts, shareFilter]);
+  }, [allContacts, sharedContacts, shareFilter, searchQuery]);
   
   // 根据筛选条件过滤人脉
   const contacts = React.useMemo(() => {
