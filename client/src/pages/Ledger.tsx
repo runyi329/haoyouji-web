@@ -84,6 +84,8 @@ export default function Ledger() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [invitingLedgerId, setInvitingLedgerId] = useState<number | null>(null);
   const [searchUsername, setSearchUsername] = useState("");
+  const [showDestroyDialog, setShowDestroyDialog] = useState(false);
+  const [destroyingLedgerId, setDestroyingLedgerId] = useState<number | null>(null);
 
 
   // 从后端API获取账本列表
@@ -301,10 +303,12 @@ export default function Ledger() {
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: 查看明细
+                        setDestroyingLedgerId(ledger.id);
+                        setShowDestroyDialog(true);
                       }}
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1 text-red-500 hover:bg-red-50"
                     >
-                      明细
+                      销毁
                     </Button>
                     <Button
                       variant="outline"
@@ -389,10 +393,12 @@ export default function Ledger() {
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: 查看明细
+                        setDestroyingLedgerId(ledger.id);
+                        setShowDestroyDialog(true);
                       }}
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1 text-red-500 hover:bg-red-50"
                     >
-                      明细
+                      销毁
                     </Button>
                   </>
                 )}
@@ -565,7 +571,44 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-
+      {/* 销毁确认对话框 */}
+      <Dialog open={showDestroyDialog} onOpenChange={setShowDestroyDialog}>
+        <DialogContent className="w-[85%] rounded-lg p-0 gap-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">销毁账本</DialogTitle>
+          <div className="p-6 text-center">
+            <div className="text-2xl mb-4">⚠️</div>
+            <p className="text-gray-800 mb-2 font-medium">一旦销毁将永远消失</p>
+            <p className="text-sm text-gray-500">销毁后无法恢复，请谨慎操作</p>
+          </div>
+          <button
+            onClick={async () => {
+              if (destroyingLedgerId) {
+                try {
+                  await trpc.ledger.delete.mutate({ ledgerId: destroyingLedgerId });
+                  toast.success('账本已销毁');
+                  refetch();
+                  setShowDestroyDialog(false);
+                  setDestroyingLedgerId(null);
+                } catch (error: any) {
+                  toast.error(`销毁失败: ${error.message}`);
+                }
+              }
+            }}
+            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            确认销毁
+          </button>
+          <button
+            onClick={() => {
+              setShowDestroyDialog(false);
+              setDestroyingLedgerId(null);
+            }}
+            className="w-full text-center py-3.5 text-gray-600 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
