@@ -229,6 +229,7 @@ export default function ContactsList() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   
   // 标签管理相关状态
   const [showTagManagement, setShowTagManagement] = useState(false);
@@ -399,6 +400,30 @@ export default function ContactsList() {
     setPage(1);
     setAllLoadedContacts([]);
   }, [searchQuery, sortBy]);
+  
+  // 无限滚动：当滚动到底部时自动加载下一页
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && contactsData?.hasMore && !isFetching) {
+          setPage(prev => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+    
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [contactsData?.hasMore, isFetching]);
   
   // 使用已加载的联系人列表
   const allContacts = allLoadedContacts;
@@ -2095,16 +2120,13 @@ export default function ContactsList() {
           </div>
         )}
         
-        {/* 加载更多按钮 */}
+        {/* 无限滚动触发器 */}
         {contactsData && contactsData.hasMore && (
-          <div className="text-center py-4">
-            <Button
-              variant="outline"
-              onClick={() => setPage(prev => prev + 1)}
-              disabled={isFetching}
-            >
-              {isFetching ? '加载中...' : '加载更多'}
-            </Button>
+          <div 
+            ref={loadMoreRef}
+            className="text-center py-4 text-muted-foreground"
+          >
+            {isFetching ? '加载中...' : ''}
           </div>
         )}
       </div>
