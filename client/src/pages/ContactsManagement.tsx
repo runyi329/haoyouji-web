@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Tag, MapPin, Share2, BarChart3, LogIn, LogOut, User, UserCircle } from "lucide-react";
+import { Search, Plus, Tag, MapPin, Share2, BarChart3, LogIn, LogOut, User, UserCircle, RefreshCcw } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ReferrerPodium } from "@/components/ReferrerPodium";
 import BottomNav from "@/components/BottomNav";
@@ -827,7 +827,7 @@ export default function ContactsManagement() {
   });
   
   // 获取人脉统计数据
-  const { data: stats, error: statsError, isLoading: statsLoading } = trpc.contacts.stats.useQuery();
+  const { data: stats, error: statsError, isLoading: statsLoading, refetch: refetchStats } = trpc.contacts.stats.useQuery();
   
   // 调试日志
   console.log('[ContactsManagement] stats数据:', stats);
@@ -835,21 +835,37 @@ export default function ContactsManagement() {
   console.log('[ContactsManagement] stats加载中:', statsLoading);
   
   // 获取人脉健康度统计数据
-  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined);
+  const { data: overviewStats, refetch: refetchOverviewStats } = trpc.contacts.overviewStats.useQuery(undefined);
   
   // 获取提醒统计数据
-  const { data: todayReminders } = trpc.contacts.reminders.todayCount.useQuery();
-  const { data: weekReminders } = trpc.contacts.reminders.weekCount.useQuery();
-  const { data: monthReminders } = trpc.contacts.reminders.monthCount.useQuery();
+  const { data: todayReminders, refetch: refetchTodayReminders } = trpc.contacts.reminders.todayCount.useQuery();
+  const { data: weekReminders, refetch: refetchWeekReminders } = trpc.contacts.reminders.weekCount.useQuery();
+  const { data: monthReminders, refetch: refetchMonthReminders } = trpc.contacts.reminders.monthCount.useQuery();
   
   // 获取累计联络次数
-  const { data: totalInteractionCount } = trpc.contacts.totalInteractionCount.useQuery();
+  const { data: totalInteractionCount, refetch: refetchTotalInteractionCount } = trpc.contacts.totalInteractionCount.useQuery();
   
   // 获取累计标签数量
-  const { data: totalTagCount } = trpc.contacts.totalTagCount.useQuery();
+  const { data: totalTagCount, refetch: refetchTotalTagCount } = trpc.contacts.totalTagCount.useQuery();
   
   // 获取累计使用天数
-  const { data: totalUsageDays } = trpc.contacts.getTotalUsageDays.useQuery();
+  const { data: totalUsageDays, refetch: refetchTotalUsageDays } = trpc.contacts.getTotalUsageDays.useQuery();
+  
+  // 刷新所有数据
+  const handleRefresh = async () => {
+    toast.loading('正在刷新数据...');
+    await Promise.all([
+      refetchStats(),
+      refetchOverviewStats(),
+      refetchTodayReminders(),
+      refetchWeekReminders(),
+      refetchMonthReminders(),
+      refetchTotalInteractionCount(),
+      refetchTotalTagCount(),
+      refetchTotalUsageDays()
+    ]);
+    toast.success('数据刷新成功');
+  };
   
   // 获取当前用户信息
   const { user, isAuthenticated, logout } = useAuth();
@@ -1206,6 +1222,15 @@ export default function ContactsManagement() {
           >
             <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="hidden sm:inline">数据</span>
+          </Button>
+          <Button 
+            onClick={handleRefresh}
+            size="sm" 
+            variant="outline"
+            className="h-8 sm:h-10 px-2 sm:px-4"
+          >
+            <RefreshCcw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">刷新</span>
           </Button>
           <Button onClick={handleAddContact} size="sm" className="h-8 sm:h-10 px-2 sm:px-4">
             <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
