@@ -368,6 +368,7 @@ export default function ContactsList() {
   const [page, setPage] = useState(1);
   const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
   const [totalContacts, setTotalContacts] = useState(0);
+  const [totalSharedContacts, setTotalSharedContacts] = useState(0);
   
   // 获取人脉列表（支持分页）
   const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
@@ -414,6 +415,13 @@ export default function ContactsList() {
   
   // 获取共享给我的人脉列表
   const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
+  
+  // 更新共享人脉总数
+  React.useEffect(() => {
+    if (sharedContacts) {
+      setTotalSharedContacts(sharedContacts.length);
+    }
+  }, [sharedContacts]);
   
   // 获取所有标签
   const { data: allTags, refetch: refetchTags } = trpc.contacts.tags.list.useQuery();
@@ -1033,7 +1041,10 @@ export default function ContactsList() {
             // 公司视图：统计去重后的公司家数
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : (
-            `共 ${totalContacts || 0} 位人脉`
+            // 根据shareFilter显示对应的总数
+            shareFilter === 'mine' ? `共 ${totalContacts || 0} 位人脉` :
+            shareFilter === 'shared' ? `共 ${totalSharedContacts || 0} 位人脉` :
+            `共 ${(totalContacts || 0) + (totalSharedContacts || 0)} 位人脉`
           )}
         </p>
         
