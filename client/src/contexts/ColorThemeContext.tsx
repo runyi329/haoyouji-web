@@ -67,6 +67,30 @@ export const themeTemplates: ThemeTemplate[] = [
       accent2: '#52C41A',     // 支付宝绿
     },
   },
+  {
+    id: 'pinduoduo',
+    name: '拼多多风格',
+    colors: {
+      primary: '#E02E24',     // 拼多多红
+      secondary: '#FF6146',   // 浅拼多多红
+      background: '#FFFFFF',  // 白色背景
+      text: '#1A1A1A',        // 深灰文字
+      accent1: '#FFFFFF',     // 白色
+      accent2: '#FF9C00',     // 拼多多橙
+    },
+  },
+  {
+    id: 'taobao',
+    name: '淘宝风格',
+    colors: {
+      primary: '#FF6A00',     // 淘宝橙
+      secondary: '#FF8533',   // 浅淘宝橙
+      background: '#F5F5F5',  // 浅灰背景
+      text: '#333333',        // 深灰文字
+      accent1: '#FFFFFF',     // 白色
+      accent2: '#FF4400',     // 深淘宝橙
+    },
+  },
 ];
 
 interface ColorThemeContextType {
