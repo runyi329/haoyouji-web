@@ -2809,12 +2809,23 @@ export async function getContactsByParentPaginated(
       OFFSET ${offset}
     `);
     
-    baseContacts = result as any[];
+    // mysql2 的 execute 返回 [rows, fields]，需要取第一个元素
+    console.log('[getContactsByParentPaginated] 原始结果类型:', typeof result, Array.isArray(result));
+    console.log('[getContactsByParentPaginated] 原始结果长度:', Array.isArray(result) ? result.length : 'N/A');
+    if (Array.isArray(result) && result.length > 0) {
+      console.log('[getContactsByParentPaginated] result[0]类型:', typeof result[0], Array.isArray(result[0]));
+      if (Array.isArray(result[0]) && result[0].length > 0) {
+        console.log('[getContactsByParentPaginated] result[0][0]:', JSON.stringify(result[0][0]).substring(0, 200));
+      } else if (!Array.isArray(result[0])) {
+        console.log('[getContactsByParentPaginated] result[0]:', JSON.stringify(result[0]).substring(0, 200));
+      }
+    }
+    baseContacts = Array.isArray(result) && Array.isArray(result[0]) ? result[0] as any[] : result as any[];
   }
   
   console.log('[getContactsByParentPaginated] 查询到的联系人数量:', baseContacts.length);
   if (baseContacts.length > 0) {
-    console.log('[getContactsByParentPaginated] 第一个联系人:', baseContacts[0]?.name);
+    console.log('[getContactsByParentPaginated] 第一个联系人:', baseContacts[0]?.name, JSON.stringify(baseContacts[0]).substring(0, 200));
   }
   
   // 3. 为每个人脉添加上次联络日期和距今天数（这部分保持不变）
