@@ -1432,7 +1432,7 @@ export default function AddContact() {
       {/* 表单内容 */}
       <div className="container py-6 space-y-6 flex flex-col">
         {/* 扩展信息 */}
-        <Card style={{ order: fromExtended ? 1 : 2 }}>
+        <Card style={{ order: fromExtended ? 1 : 2, marginBottom: '1.5rem' }}>
           <CardHeader>
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
@@ -1497,7 +1497,7 @@ export default function AddContact() {
         </Card>
 
         {/* 基本信息 */}
-        <Card style={{ order: fromExtended ? 2 : 1 }}>
+        <Card style={{ order: fromExtended ? 2 : 1, marginBottom: '1.5rem' }}>
           <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setIsBasicInfoCollapsed(!isBasicInfoCollapsed)}>
             <div className="flex items-center gap-2">
               <CardTitle>基本信息</CardTitle>
