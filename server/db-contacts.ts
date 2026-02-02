@@ -2776,8 +2776,19 @@ export async function getContactsByParentPaginated(
   }
   
   const totalResult = await totalQuery;
-  const total = Array.isArray(totalResult) ? Number(totalResult[0]?.count || 0) : Number(totalResult[0]?.count || 0);
-  console.log('[getContactsByParentPaginated] 查询结果总数:', total);
+  // mysql2 的 execute 返回 [rows, fields]，需要正确解析
+  let total = 0;
+  if (Array.isArray(totalResult)) {
+    // 检查是否是 mysql2 的 [rows, fields] 格式
+    if (Array.isArray(totalResult[0])) {
+      // mysql2 execute 返回的格式: [[{count: n}], fields]
+      total = Number(totalResult[0][0]?.count || 0);
+    } else if (totalResult[0]?.count !== undefined) {
+      // drizzle select 返回的格式: [{count: n}]
+      total = Number(totalResult[0].count || 0);
+    }
+  }
+  console.log('[getContactsByParentPaginated] 查询结果总数:', total, 'totalResult结构:', JSON.stringify(totalResult).substring(0, 200));
   
   // 2. 查询分页数据
   let baseContacts: any[];
