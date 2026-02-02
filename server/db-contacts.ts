@@ -59,16 +59,17 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
   console.log('[getAllVisibleContactIds] 找到的共享连接数:', sharingConnections.length);
   console.log('[getAllVisibleContactIds] 共享连接详情:', sharingConnections);
   
-  // 获取所有分享者的人脉ID
-  const sharedContactIds: number[] = [];
-  for (const conn of sharingConnections) {
+  // 获取所有分享者的人脉ID（使用单次 IN 查询代替多次串行查询）
+  let sharedContactIds: number[] = [];
+  const sharerIds = sharingConnections.map(conn => conn.sharerId);
+  
+  if (sharerIds.length > 0) {
     const sharerContacts = await db
       .select({ id: contacts.id })
       .from(contacts)
-      .where(eq(contacts.parentUserId, conn.sharerId));
-    const sharerContactIds = sharerContacts.map(c => c.id);
-    console.log(`[getAllVisibleContactIds] 分享者 ${conn.sharerId} 的联系人数量:`, sharerContactIds.length);
-    sharedContactIds.push(...sharerContactIds);
+      .where(inArray(contacts.parentUserId, sharerIds));
+    sharedContactIds = sharerContacts.map(c => c.id);
+    console.log(`[getAllVisibleContactIds] 一次性查询 ${sharerIds.length} 个分享者的联系人，共 ${sharedContactIds.length} 个`);
   }
   
     // 合并并去重
