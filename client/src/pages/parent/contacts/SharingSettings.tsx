@@ -324,14 +324,6 @@ export default function SharingSettings() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => openPermissionDialog(conn)}
-                        className="h-8 px-2"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
                         onClick={() => handleDeleteConnection(conn.id)}
                         className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
                       >
