@@ -290,9 +290,6 @@ export default function LedgerSettings() {
 
       {/* 底部操作按钮 */}
       <div className="mt-6 px-4 space-y-3">
-        <button className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium">
-          邀请伙伴加入此账本
-        </button>
         <button className="w-full py-3 bg-red-500 text-white rounded-lg font-medium">
           退出账本
         </button>
