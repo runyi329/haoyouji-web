@@ -13,19 +13,14 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 // Promise 缓存，避免并发请求重复查询
 const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
 const contactStatsPromiseCache = new Map<number, { promise: Promise<any>, timestamp: number }>();
-const CACHE_TTL = 5000; // 5秒onst contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
+const CACHE_TTL = 0; // 禁用缓存onst contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
 
 /**
  * 轻量级获取联系人数量统计（全部、我的、共享）
  * 不需要获取所有联系人 ID，只进行 COUNT 查询
  */
 export async function getContactCounts(parentUserId: number): Promise<{ total: number, mine: number, shared: number }> {
-  // 检查缓存
-  const cached = contactCountsCache.get(parentUserId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[getContactCounts] 使用缓存，用户ID:', parentUserId);
-    return cached.data;
-  }
+  // 缓存已禁用
   
   console.log('[getContactCounts] 开始查询，用户ID:', parentUserId);
   
@@ -65,8 +60,7 @@ export async function getContactCounts(parentUserId: number): Promise<{ total: n
   
   console.log('[getContactCounts] 查询结果:', result);
   
-  // 保存到缓存
-  contactCountsCache.set(parentUserId, { data: result, timestamp: Date.now() });
+  // 缓存已禁用
   
   return result;
 }
@@ -77,12 +71,7 @@ export async function getContactCounts(parentUserId: number): Promise<{ total: n
  * @returns 人脉ID数组
  */
 async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> {
-  // 检查缓存
-  const cached = visibleContactIdsPromiseCache.get(parentUserId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[getAllVisibleContactIds] 使用缓存，用户ID:', parentUserId);
-    return cached.promise;
-  }
+  // 缓存已禁用
   
   console.log('[getAllVisibleContactIds] 开始获取可见联系人ID，用户ID:', parentUserId);
   
@@ -1108,12 +1097,7 @@ export async function getTotalTagCount(parentUserId: number): Promise<number> {
  * 获取人脉统计数据
  */
 export async function getContactStats(parentUserId: number) {
-  // 检查缓存
-  const cached = contactStatsPromiseCache.get(parentUserId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log('[getContactStats] 使用缓存，用户ID:', parentUserId);
-    return cached.promise;
-  }
+  // 缓存已禁用
   
   console.log('[getContactStats] 开始获取统计数据，用户ID:', parentUserId);
   
