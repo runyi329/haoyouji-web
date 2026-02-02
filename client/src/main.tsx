@@ -14,7 +14,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,
-      staleTime: 5 * 60 * 1000, // 5分钟内不重新获取
+      staleTime: 0, // 禁用缓存，立即刷新
     },
   },
 });
