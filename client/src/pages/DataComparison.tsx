@@ -616,14 +616,102 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
         )}
 
         {tableType === "health" && (
-          <div className="text-center py-8 text-gray-400">
-            健康度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
 
         {tableType === "importance" && (
-          <div className="text-center py-8 text-gray-400">
-            重要度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">高质量互动</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                </tr>
+                <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -1126,14 +1214,102 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
         )}
 
         {tableType === "health" && (
-          <div className="text-center py-8 text-gray-400">
-            健康度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
 
         {tableType === "importance" && (
-          <div className="text-center py-8 text-gray-400">
-            重要度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">高质量互动</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                </tr>
+                <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -1636,14 +1812,102 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
         )}
 
         {tableType === "health" && (
-          <div className="text-center py-8 text-gray-400">
-            健康度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">68% (340/500人)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 5%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">良好</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">每45天一次</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">↓ 3天</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">注意</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120人 (24%)</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↓ 8人</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">待改善</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">47项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">↑ 12项</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-red-600">预警</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">35%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">↑ 8%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">优秀</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
 
         {tableType === "importance" && (
-          <div className="text-center py-8 text-gray-400">
-            重要度表格开发中...
+          <div className="overflow-x-auto -mx-2.5 px-2.5">
+            <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+              <thead>
+                <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">高质量互动</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                </tr>
+                <tr className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                </tr>
+                <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
       </div>
