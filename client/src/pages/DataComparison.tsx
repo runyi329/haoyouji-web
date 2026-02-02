@@ -124,7 +124,7 @@ interface DataContentProps {
 
 // 全部数据内容
 function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
-  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("day");
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
@@ -753,7 +753,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 
 // 我的数据内容
 function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
-  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("day");
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
@@ -1383,7 +1383,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 
 // 共享数据内容
 function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
-  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
+  const [timePeriod, setTimePeriod] = useState<TimePeriodType>("day");
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [tableType, setTableType] = useState<"health" | "activity" | "importance">("activity");
 
