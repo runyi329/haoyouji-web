@@ -1090,8 +1090,13 @@ export default function ContactsList() {
           ) : isLoading ? (
             // 加载中显示加载状态
             `加载中...`
+          ) : searchQuery && searchQuery.trim() ? (
+            // 有搜索关键词时，显示过滤后的结果数量
+            shareFilter === 'mine' ? `共 ${contactsData?.total || 0} 位人脉` :
+            shareFilter === 'shared' ? `共 ${mergedContacts?.length || 0} 位人脉` :
+            `共 ${(contactsData?.total || 0) + (mergedContacts?.filter((c: any) => c._isShared)?.length || 0)} 位人脉`
           ) : (
-            // 根据shareFilter显示对应的总数，直接使用API返回的数据
+            // 无搜索关键词时，显示总数
             shareFilter === 'mine' ? `共 ${contactsData?.total || 0} 位人脉` :
             shareFilter === 'shared' ? `共 ${sharedContacts?.length || 0} 位人脉` :
             `共 ${(contactsData?.total || 0) + (sharedContacts?.length || 0)} 位人脉`
