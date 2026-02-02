@@ -10,12 +10,23 @@ import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearSt
 
 // ==================== 工具函数 ====================
 
+// 简单的内存缓存，TTL 5秒
+const visibleContactIdsCache = new Map<number, { ids: number[], timestamp: number }>();
+const CACHE_TTL = 5000; // 5秒
+
 /**
- * 获取用户所有可见人脉的ID列表（自己的 + 共享的）
+ * 获取用户所有可见的人脉ID列表（包括自己的 + 共享给我的）
  * @param parentUserId 用户ID
  * @returns 人脉ID数组
  */
 async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> {
+  // 检查缓存
+  const cached = visibleContactIdsCache.get(parentUserId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log('[getAllVisibleContactIds] 使用缓存，用户ID:', parentUserId, '缓存数量:', cached.ids.length);
+    return cached.ids;
+  }
+  
   console.log('[getAllVisibleContactIds] 开始获取可见联系人ID，用户ID:', parentUserId);
   const db = await getDb();
  if (!db) throw new Error("Database not available");
@@ -60,6 +71,10 @@ async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> 
   console.log('[getAllVisibleContactIds] 共享联系人总数:', sharedContactIds.length);
   const result = Array.from(new Set([...ownContactIds, ...sharedContactIds]));
   console.log('[getAllVisibleContactIds] 最终可见联系人总数:', result.length);
+  
+  // 保存到缓存
+  visibleContactIdsCache.set(parentUserId, { ids: result, timestamp: Date.now() });
+  
   return result;
 }
 
