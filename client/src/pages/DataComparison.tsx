@@ -126,6 +126,7 @@ interface DataContentProps {
 function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -508,17 +509,58 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 
       {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-1.5 mb-3">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+        {/* 标题和切换按钮 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+          </div>
+          {/* 表格类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setTableType("health")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "health" ? "white" : "transparent",
+                color: tableType === "health" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              健康度
+            </button>
+            <button
+              onClick={() => setTableType("activity")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "activity" ? "white" : "transparent",
+                color: tableType === "activity" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              活跃度
+            </button>
+            <button
+              onClick={() => setTableType("importance")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "importance" ? "white" : "transparent",
+                color: tableType === "importance" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              重要度
+            </button>
+          </div>
         </div>
-        {layerLoading ? (
-          <div className="text-center py-8 text-gray-400">加载中...</div>
-        ) : layerData ? (
+        {tableType === "health" && (
+
+          <>
+
+            {layerLoading ? (
+
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+
+            ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
@@ -564,7 +606,25 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
         </table>
         </div>
         ) : (
+
           <div className="text-center py-8 text-gray-400">暂无数据</div>
+
+        )}
+
+          </>
+
+        )}
+
+        {tableType === "activity" && (
+          <div className="text-center py-8 text-gray-400">
+            活跃度表格开发中...
+          </div>
+        )}
+
+        {tableType === "importance" && (
+          <div className="text-center py-8 text-gray-400">
+            重要度表格开发中...
+          </div>
         )}
       </div>
     </div>
@@ -575,6 +635,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -958,17 +1019,58 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 
       {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-1.5 mb-3">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+        {/* 标题和切换按钮 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+          </div>
+          {/* 表格类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setTableType("health")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "health" ? "white" : "transparent",
+                color: tableType === "health" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              健康度
+            </button>
+            <button
+              onClick={() => setTableType("activity")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "activity" ? "white" : "transparent",
+                color: tableType === "activity" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              活跃度
+            </button>
+            <button
+              onClick={() => setTableType("importance")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "importance" ? "white" : "transparent",
+                color: tableType === "importance" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              重要度
+            </button>
+          </div>
         </div>
-        {layerLoading ? (
-          <div className="text-center py-8 text-gray-400">加载中...</div>
-        ) : layerData ? (
+        {tableType === "health" && (
+
+          <>
+
+            {layerLoading ? (
+
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+
+            ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
@@ -1014,7 +1116,25 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
         </table>
         </div>
         ) : (
+
           <div className="text-center py-8 text-gray-400">暂无数据</div>
+
+        )}
+
+          </>
+
+        )}
+
+        {tableType === "activity" && (
+          <div className="text-center py-8 text-gray-400">
+            活跃度表格开发中...
+          </div>
+        )}
+
+        {tableType === "importance" && (
+          <div className="text-center py-8 text-gray-400">
+            重要度表格开发中...
+          </div>
         )}
       </div>
     </div>
@@ -1025,6 +1145,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
+  const [tableType, setTableType] = useState<"health" | "activity" | "importance">("health");
 
   // 使用API获取真实数据
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
@@ -1408,17 +1529,58 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
 
       {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        {/* 标题 */}
-        <div className="flex items-center gap-1.5 mb-3">
-          <div 
-            className="w-1 h-5 rounded flex-shrink-0"
-            style={{ backgroundColor: themeColors.primary }}
-          ></div>
-          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+        {/* 标题和切换按钮 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <div 
+              className="w-1 h-5 rounded flex-shrink-0"
+              style={{ backgroundColor: themeColors.primary }}
+            ></div>
+            <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
+          </div>
+          {/* 表格类型切换按钮 */}
+          <div className="flex bg-gray-100 rounded-lg overflow-hidden w-fit">
+            <button
+              onClick={() => setTableType("health")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "health" ? "white" : "transparent",
+                color: tableType === "health" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              健康度
+            </button>
+            <button
+              onClick={() => setTableType("activity")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "activity" ? "white" : "transparent",
+                color: tableType === "activity" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              活跃度
+            </button>
+            <button
+              onClick={() => setTableType("importance")}
+              className="px-3 py-1 text-sm"
+              style={{ 
+                backgroundColor: tableType === "importance" ? "white" : "transparent",
+                color: tableType === "importance" ? themeColors.primary : "#4b5563"
+              }}
+            >
+              重要度
+            </button>
+          </div>
         </div>
-        {layerLoading ? (
-          <div className="text-center py-8 text-gray-400">加载中...</div>
-        ) : layerData ? (
+        {tableType === "health" && (
+
+          <>
+
+            {layerLoading ? (
+
+              <div className="text-center py-8 text-gray-400">加载中...</div>
+
+            ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
@@ -1464,7 +1626,25 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
         </table>
         </div>
         ) : (
+
           <div className="text-center py-8 text-gray-400">暂无数据</div>
+
+        )}
+
+          </>
+
+        )}
+
+        {tableType === "activity" && (
+          <div className="text-center py-8 text-gray-400">
+            活跃度表格开发中...
+          </div>
+        )}
+
+        {tableType === "importance" && (
+          <div className="text-center py-8 text-gray-400">
+            重要度表格开发中...
+          </div>
         )}
       </div>
     </div>
