@@ -2539,12 +2539,22 @@ export async function getHealthStats(parentUserId: number, type: 'all' | 'my' | 
     visibleContactIds = myContacts.map(c => c.id);
   } else {
     // 只获取共享的人脉
-    const allVisibleIds = await getAllVisibleContactIds(parentUserId);
-    const myContacts = await db.select({ id: contacts.id })
-      .from(contacts)
-      .where(eq(contacts.parentUserId, parentUserId));
-    const myContactIds = new Set(myContacts.map(c => c.id));
-    visibleContactIds = allVisibleIds.filter(id => !myContactIds.has(id));
+    const sharingConnections = await db.select({ sharerId: contactSharingConnections.sharerId })
+      .from(contactSharingConnections)
+      .where(and(
+        eq(contactSharingConnections.receiverId, parentUserId),
+        eq(contactSharingConnections.status, 'active')
+      ));
+    const sharerIds = sharingConnections.map(c => c.sharerId);
+    
+    const sharedContactIds: number[] = [];
+    for (const sharerId of sharerIds) {
+      const sharerContacts = await db.select({ id: contacts.id })
+        .from(contacts)
+        .where(eq(contacts.parentUserId, sharerId));
+      sharedContactIds.push(...sharerContacts.map(c => c.id));
+    }
+    visibleContactIds = sharedContactIds;
   }
 
   if (visibleContactIds.length === 0) {
