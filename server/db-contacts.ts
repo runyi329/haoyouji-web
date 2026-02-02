@@ -1274,8 +1274,8 @@ export async function getContactStats(parentUserId: number) {
       SELECT COUNT(DISTINCT lr.id) as count
       FROM ledger_records lr
       INNER JOIN ledgers l ON lr.ledgerId = l.id
-      INNER JOIN ledger_members lm ON l.id = lm.ledger_id
-      WHERE lm.user_id = ${parentUserId}
+      INNER JOIN ledger_members lm ON l.id = lm.ledgerId
+      WHERE lm.userId = ${parentUserId}
     `);
     totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
   } catch (error) {
