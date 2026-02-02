@@ -4907,6 +4907,15 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbAnalytics.getContactGrowthStats(ctx.user.id, input.type, input.period);
       }),
+    
+    // 获取人脉互动分层统计数据
+    contactLayerStats: protectedProcedure
+      .input(z.object({
+        type: z.enum(['all', 'my', 'shared']),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbAnalytics.getContactLayerStats(ctx.user.id, input.type);
+      }),
   }),
   
   // 用户偏好设置

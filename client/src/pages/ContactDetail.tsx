@@ -1586,7 +1586,7 @@ export default function ContactDetail() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setLocation(`/parent/contacts/add?id=${contactId}&mode=edit`)}
+                  onClick={() => setLocation(`/parent/contacts/add?id=${contactId}&mode=edit&fromExtended=true`)}
                   className="flex-1"
                 >
                   <Pencil className="h-4 w-4 mr-2" />

@@ -1746,7 +1746,6 @@ export async function getTransactionsList(
       amount: ledgerRecords.amount,
       categoryId: ledgerRecords.categoryId,
       description: ledgerRecords.description,
-      imageUrl: ledgerRecords.imageUrl,
       date: ledgerRecords.recordDate,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
@@ -1827,7 +1826,6 @@ export async function getTransactionsList(
       category: category?.name || '未分类',
       categoryIcon: category?.icon,
       description: record.description,
-      imageUrl: record.imageUrl,
       createdAt: record.createdAt,
       member: creator ? {
         username: creator.username,

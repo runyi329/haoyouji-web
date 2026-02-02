@@ -844,11 +844,12 @@ export default function AddContact() {
   const utils = trpc.useUtils();
   
   // 使用useMemo缓存URL参数，避免每次渲染都重新创建
-  const { contactId, isEditMode } = useMemo(() => {
+  const { contactId, isEditMode, fromExtended } = useMemo(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get('id') ? parseInt(urlParams.get('id')!) : null;
     const mode = urlParams.get('mode') === 'edit' && id !== null;
-    return { contactId: id, isEditMode: mode };
+    const from = urlParams.get('fromExtended') === 'true';
+    return { contactId: id, isEditMode: mode, fromExtended: from };
   }, []);
   
   // 基本信息（4个基础字段：姓名、昵称、性别、地区）
@@ -1429,9 +1430,9 @@ export default function AddContact() {
       </div>
 
       {/* 表单内容 */}
-      <div className="container py-6 space-y-6">
-        {/* 扩展信息 - 放在上面 */}
-        <Card>
+      <div className="container py-6 space-y-6 flex flex-col">
+        {/* 扩展信息 */}
+        <Card style={{ order: fromExtended ? 1 : 2 }}>
           <CardHeader>
             <CardTitle>扩展信息</CardTitle>
           </CardHeader>
@@ -1495,8 +1496,8 @@ export default function AddContact() {
           </CardContent>
         </Card>
 
-        {/* 基本信息 - 放在下面 */}
-        <Card>
+        {/* 基本信息 */}
+        <Card style={{ order: fromExtended ? 2 : 1 }}>
           <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setIsBasicInfoCollapsed(!isBasicInfoCollapsed)}>
             <div className="flex items-center gap-2">
               <CardTitle>基本信息</CardTitle>

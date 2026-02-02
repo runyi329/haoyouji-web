@@ -70,7 +70,10 @@ export default function LedgerDetail() {
   });
 
   // 获取记账记录列表（应用筛选条件）
-  const { data: transactionsData } = trpc.ledger.getTransactions.useQuery(filters);
+  const { data: transactionsData, refetch: refetchTransactions } = trpc.ledger.getTransactions.useQuery(filters, {
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
 
   // 获取待审批记账数量
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({

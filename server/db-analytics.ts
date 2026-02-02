@@ -539,3 +539,111 @@ async function getQualityStats(userId: number) {
     },
   };
 }
+
+/**
+ * 人脉互动分层统计
+ * 根据最后互动时间将人脉分为：活跃层、常温层、低温层、失联层
+ */
+export async function getContactLayerStats(userId: number, type: 'all' | 'my' | 'shared') {
+  console.log('[getContactLayerStats] 调用参数:', { userId, type });
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    let sql = `
+      WITH contact_last_interaction AS (
+        SELECT 
+          c.id,
+          c.parentUserId,
+          MAX(ci.interactionDate) AS last_interaction
+        FROM contacts c
+        LEFT JOIN contact_interactions ci ON c.id = ci.contactId
+        WHERE c.isBlacklisted = 0
+    `;
+
+    // 根据类型添加条件
+    if (type === 'my') {
+      sql += ` AND c.parentUserId = ${userId}`;
+    } else if (type === 'shared') {
+      sql += ` AND c.parentUserId != ${userId}`;
+    }
+
+    sql += `
+        GROUP BY c.id, c.parentUserId
+      ),
+      layer_stats AS (
+        SELECT 
+          CASE 
+            WHEN DATEDIFF(CURDATE(), last_interaction) <= 7 THEN '活跃层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) BETWEEN 8 AND 30 THEN '常温层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) BETWEEN 31 AND 90 THEN '低温层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) > 180 OR last_interaction IS NULL THEN '失联层'
+            ELSE '其他'
+          END AS layer,
+          COUNT(*) AS count,
+          ROUND(AVG(DATEDIFF(CURDATE(), last_interaction)), 0) AS avg_days
+        FROM contact_last_interaction
+        GROUP BY layer
+      )
+      SELECT 
+        layer,
+        count,
+        ROUND(count * 100.0 / (SELECT SUM(count) FROM layer_stats), 0) AS percentage,
+        COALESCE(avg_days, 0) AS avg_days
+      FROM layer_stats
+      ORDER BY 
+        CASE layer
+          WHEN '活跃层' THEN 1
+          WHEN '常温层' THEN 2
+          WHEN '低温层' THEN 3
+          WHEN '失联层' THEN 4
+          ELSE 5
+        END;
+    `;
+
+    const [rows] = await db.execute(sql);
+    const results = rows as any[];
+
+    // 构建返回数据，确保所有层级都有数据
+    const layerMap = new Map<string, any>();
+    results.forEach(row => {
+      layerMap.set(row.layer, {
+        layer: row.layer,
+        count: row.count,
+        percentage: row.percentage,
+        avgDays: row.avg_days
+      });
+    });
+
+    // 确保所有层级都存在
+    const allLayers = ['活跃层', '常温层', '低温层', '失联层'];
+    const stats = allLayers.map(layer => {
+      if (layerMap.has(layer)) {
+        return layerMap.get(layer);
+      } else {
+        return {
+          layer,
+          count: 0,
+          percentage: 0,
+          avgDays: 0
+        };
+      }
+    });
+
+    // 计算总数和平均天数
+    const total = stats.reduce((sum, item) => sum + item.count, 0);
+    const totalAvgDays = total > 0 
+      ? Math.round(stats.reduce((sum, item) => sum + item.count * item.avgDays, 0) / total)
+      : 0;
+
+    console.log('[getContactLayerStats] 返回数据:', { total, stats });
+    return {
+      total,
+      totalAvgDays,
+      layers: stats
+    };
+  } catch (error) {
+    console.error('[getContactLayerStats] 错误:', error);
+    throw error;
+  }
+}

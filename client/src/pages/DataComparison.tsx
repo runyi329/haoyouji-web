@@ -33,6 +33,7 @@ function useThemeColors() {
 export default function DataComparison() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>("all");
+  const [tableTab, setTableTab] = useState<TabType>("all"); // 第二个独立的标签状态
   const themeColors = useThemeColors();
 
   return (
@@ -94,13 +95,13 @@ export default function DataComparison() {
       {/* 内容区域 */}
       <div className="flex-1 bg-gray-50 overflow-auto">
         {activeTab === "all" && (
-          <AllDataContent themeColors={themeColors} />
+          <AllDataContent themeColors={themeColors} tableTab={tableTab} setTableTab={setTableTab} />
         )}
         {activeTab === "my" && (
-          <MyDataContent themeColors={themeColors} />
+          <MyDataContent themeColors={themeColors} tableTab={tableTab} setTableTab={setTableTab} />
         )}
         {activeTab === "shared" && (
-          <SharedDataContent themeColors={themeColors} />
+          <SharedDataContent themeColors={themeColors} tableTab={tableTab} setTableTab={setTableTab} />
         )}
       </div>
     </div>
@@ -117,10 +118,12 @@ interface ThemeColors {
 
 interface DataContentProps {
   themeColors: ThemeColors;
+  tableTab: TabType;
+  setTableTab: (tab: TabType) => void;
 }
 
 // 全部数据内容
-function AllDataContent({ themeColors }: DataContentProps) {
+function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -128,6 +131,11 @@ function AllDataContent({ themeColors }: DataContentProps) {
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
     type: 'all',
     period: timePeriod,
+  });
+
+  // 获取人脉互动分层统计数据 - 使用tableTab状态
+  const { data: layerData, isLoading: layerLoading } = trpc.analytics.contactLayerStats.useQuery({
+    type: tableTab,
   });
 
   // 处理API数据
@@ -462,31 +470,34 @@ function AllDataContent({ themeColors }: DataContentProps) {
           <div className="flex items-center">
             <span className="font-medium">互动与关系健康度</span>
           </div>
-          {/* 标签页切换 */}
+                    {/* 标签页切换 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
+              onClick={() => setTableTab("all")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "white",
-                color: themeColors.primary
+                backgroundColor: tableTab === "all" ? "white" : "transparent",
+                color: tableTab === "all" ? themeColors.primary : "white"
               }}
             >
               全部
             </button>
             <button
+              onClick={() => setTableTab("my")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "my" ? "white" : "transparent",
+                color: tableTab === "my" ? themeColors.primary : "white"
               }}
             >
               我的
             </button>
             <button
+              onClick={() => setTableTab("shared")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "shared" ? "white" : "transparent",
+                color: tableTab === "shared" ? themeColors.primary : "white"
               }}
             >
               共享
@@ -495,18 +506,73 @@ function AllDataContent({ themeColors }: DataContentProps) {
         </div>
       </div>
 
-      {/* 占位内容 */}
+      {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        <div className="h-[200px] flex items-center justify-center text-gray-400">
-          数据开发中...
+        {/* 标题 */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <div 
+            className="w-1 h-5 rounded flex-shrink-0"
+            style={{ backgroundColor: themeColors.primary }}
+          ></div>
+          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
         </div>
+        {layerLoading ? (
+          <div className="text-center py-8 text-gray-400">加载中...</div>
+        ) : layerData ? (
+        <div className="overflow-x-auto -mx-2.5 px-2.5">
+          <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+          <thead>
+            <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+            </tr>
+          </thead>
+          <tbody>
+            {layerData.layers.map((layer: any, index: number) => {
+              const layerConfig: any = {
+                '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
+                '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
+              };
+              const config = layerConfig[layer.layer] || {};
+              
+              return (
+                <tr key={index} className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                    <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
+                    <div className="text-xs text-gray-500">{config.days}</div>
+                  </td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                </tr>
+              );
+            })}
+            <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">暂无数据</div>
+        )}
       </div>
     </div>
   );
 }
 
 // 我的数据内容
-function MyDataContent({ themeColors }: DataContentProps) {
+function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -514,6 +580,11 @@ function MyDataContent({ themeColors }: DataContentProps) {
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
     type: 'my',
     period: timePeriod,
+  });
+
+  // 获取人脉互动分层统计数据 - 使用tableTab状态
+  const { data: layerData, isLoading: layerLoading } = trpc.analytics.contactLayerStats.useQuery({
+    type: tableTab,
   });
 
   // 处理API数据
@@ -849,31 +920,34 @@ function MyDataContent({ themeColors }: DataContentProps) {
           <div className="flex items-center">
             <span className="font-medium">互动与关系健康度</span>
           </div>
-          {/* 标签页切换 */}
+                    {/* 标签页切换 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
+              onClick={() => setTableTab("all")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "white",
-                color: themeColors.primary
+                backgroundColor: tableTab === "all" ? "white" : "transparent",
+                color: tableTab === "all" ? themeColors.primary : "white"
               }}
             >
               全部
             </button>
             <button
+              onClick={() => setTableTab("my")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "my" ? "white" : "transparent",
+                color: tableTab === "my" ? themeColors.primary : "white"
               }}
             >
               我的
             </button>
             <button
+              onClick={() => setTableTab("shared")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "shared" ? "white" : "transparent",
+                color: tableTab === "shared" ? themeColors.primary : "white"
               }}
             >
               共享
@@ -882,18 +956,73 @@ function MyDataContent({ themeColors }: DataContentProps) {
         </div>
       </div>
 
-      {/* 占位内容 */}
+      {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        <div className="h-[200px] flex items-center justify-center text-gray-400">
-          数据开发中...
+        {/* 标题 */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <div 
+            className="w-1 h-5 rounded flex-shrink-0"
+            style={{ backgroundColor: themeColors.primary }}
+          ></div>
+          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
         </div>
+        {layerLoading ? (
+          <div className="text-center py-8 text-gray-400">加载中...</div>
+        ) : layerData ? (
+        <div className="overflow-x-auto -mx-2.5 px-2.5">
+          <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+          <thead>
+            <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+            </tr>
+          </thead>
+          <tbody>
+            {layerData.layers.map((layer: any, index: number) => {
+              const layerConfig: any = {
+                '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
+                '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
+              };
+              const config = layerConfig[layer.layer] || {};
+              
+              return (
+                <tr key={index} className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                    <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
+                    <div className="text-xs text-gray-500">{config.days}</div>
+                  </td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                </tr>
+              );
+            })}
+            <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">暂无数据</div>
+        )}
       </div>
     </div>
   );
 }
 
 // 共享数据内容
-function SharedDataContent({ themeColors }: DataContentProps) {
+function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentProps) {
   const [timePeriod, setTimePeriod] = useState<TimePeriodType>("week");
   const [chartType, setChartType] = useState<ChartType>("bar");
 
@@ -901,6 +1030,11 @@ function SharedDataContent({ themeColors }: DataContentProps) {
   const { data: apiData, isLoading } = trpc.analytics.contactGrowthStats.useQuery({
     type: 'shared',
     period: timePeriod,
+  });
+
+  // 获取人脉互动分层统计数据 - 使用tableTab状态
+  const { data: layerData, isLoading: layerLoading } = trpc.analytics.contactLayerStats.useQuery({
+    type: tableTab,
   });
 
   // 处理API数据
@@ -1236,31 +1370,34 @@ function SharedDataContent({ themeColors }: DataContentProps) {
           <div className="flex items-center">
             <span className="font-medium">互动与关系健康度</span>
           </div>
-          {/* 标签页切换 */}
+                    {/* 标签页切换 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
             <button
+              onClick={() => setTableTab("all")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "white",
-                color: themeColors.primary
+                backgroundColor: tableTab === "all" ? "white" : "transparent",
+                color: tableTab === "all" ? themeColors.primary : "white"
               }}
             >
               全部
             </button>
             <button
+              onClick={() => setTableTab("my")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "my" ? "white" : "transparent",
+                color: tableTab === "my" ? themeColors.primary : "white"
               }}
             >
               我的
             </button>
             <button
+              onClick={() => setTableTab("shared")}
               className="px-3 py-1 text-sm"
               style={{ 
-                backgroundColor: "transparent",
-                color: "white"
+                backgroundColor: tableTab === "shared" ? "white" : "transparent",
+                color: tableTab === "shared" ? themeColors.primary : "white"
               }}
             >
               共享
@@ -1269,11 +1406,66 @@ function SharedDataContent({ themeColors }: DataContentProps) {
         </div>
       </div>
 
-      {/* 占位内容 */}
+      {/* 人脉互动分层统计表 */}
       <div className="bg-white rounded-lg p-2.5">
-        <div className="h-[200px] flex items-center justify-center text-gray-400">
-          数据开发中...
+        {/* 标题 */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <div 
+            className="w-1 h-5 rounded flex-shrink-0"
+            style={{ backgroundColor: themeColors.primary }}
+          ></div>
+          <h2 className="font-medium" style={{ fontSize: 'clamp(0.8rem, 3.8vw, 1.125rem)' }}>人脉互动分层统计表</h2>
         </div>
+        {layerLoading ? (
+          <div className="text-center py-8 text-gray-400">加载中...</div>
+        ) : layerData ? (
+        <div className="overflow-x-auto -mx-2.5 px-2.5">
+          <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
+          <thead>
+            <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+            </tr>
+          </thead>
+          <tbody>
+            {layerData.layers.map((layer: any, index: number) => {
+              const layerConfig: any = {
+                '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
+                '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
+              };
+              const config = layerConfig[layer.layer] || {};
+              
+              return (
+                <tr key={index} className="border-b hover:bg-gray-50">
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                    <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
+                    <div className="text-xs text-gray-500">{config.days}</div>
+                  </td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                </tr>
+              );
+            })}
+            <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">暂无数据</div>
+        )}
       </div>
     </div>
   );
