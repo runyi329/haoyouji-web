@@ -381,13 +381,12 @@ export default function Ledger() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      className="text-sm leading-none px-2 py-1 h-8 flex-1 text-red-500 hover:bg-red-50"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDestroyingLedgerId(ledger.id);
                         setShowDestroyDialog(true);
                       }}
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1 text-red-500 hover:bg-red-50"
                     >
                       销毁
                     </Button>
