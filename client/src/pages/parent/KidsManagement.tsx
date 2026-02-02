@@ -8,6 +8,7 @@ import { ArrowLeft, Star, Camera, Edit, Check, X, Trash2, Plus } from "lucide-re
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
+import { compressAvatar } from "@/utils/imageUtils";
 
 export default function KidsManagement() {
   const [, navigate] = useLocation();
@@ -98,30 +99,34 @@ export default function KidsManagement() {
 
     setUploadingAvatar(currentKidId);
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const buffer = e.target?.result as ArrayBuffer;
-      const uint8Array = new Uint8Array(buffer);
-
-      try {
-        const uploadResult = await uploadAvatarMutation.mutateAsync({
-          id: currentKidId,
-          filename: "avatar.jpg",
-          contentType: "image/jpeg",
-          fileData: uint8Array,
-        });
-
-        if (uploadResult.url) {
-          refetchKids();
-          toast.success("头像上传成功！");
-        }
-      } catch (uploadError) {
-        toast.error("上传失败，请重试");
+    try {
+      // 压缩头像为 64x64 像素，质量 60%
+      const compressedBase64 = await compressAvatar(croppedBlob, 64, 0.6);
+      
+      // 将 base64 转换为 Uint8Array
+      const base64Data = compressedBase64.split(',')[1];
+      const binaryString = atob(base64Data);
+      const uint8Array = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        uint8Array[i] = binaryString.charCodeAt(i);
       }
-      setUploadingAvatar(null);
-      setCurrentKidId(null);
-    };
-    reader.readAsArrayBuffer(croppedBlob);
+
+      const uploadResult = await uploadAvatarMutation.mutateAsync({
+        id: currentKidId,
+        filename: "avatar.jpg",
+        contentType: "image/jpeg",
+        fileData: uint8Array,
+      });
+
+      if (uploadResult.url) {
+        refetchKids();
+        toast.success("头像上传成功！");
+      }
+    } catch (uploadError) {
+      toast.error("上传失败，请重试");
+    }
+    setUploadingAvatar(null);
+    setCurrentKidId(null);
   };
 
   return (

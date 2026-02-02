@@ -93,3 +93,57 @@ export const validateFileSize = (file: File, maxSizeMB: number = 5): boolean => 
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
   return file.size <= maxSizeBytes;
 };
+
+/**
+ * 压缩头像图片为 64x64 像素
+ * @param blob 原始图片 Blob
+ * @param size 目标尺寸，默认 64
+ * @param quality 压缩质量，默认 0.6
+ * @returns Promise<string> 返回 base64 格式的压缩后图片
+ */
+export const compressAvatar = (
+  blob: Blob,
+  size: number = 64,
+  quality: number = 0.6
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('无法获取 canvas context'));
+        return;
+      }
+      
+      // 计算裁剪区域（居中裁剪为正方形）
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+      
+      // 绘制压缩后的图片
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+      
+      // 转换为 base64，使用 JPEG 格式和指定质量
+      const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+      
+      console.log(`[头像压缩] 原始大小: ${blob.size} 字节, 压缩后: ${compressedBase64.length} 字符`);
+      
+      resolve(compressedBase64);
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('图片加载失败'));
+    };
+    
+    img.src = url;
+  });
+};
