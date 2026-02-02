@@ -272,6 +272,9 @@ export default function ContactsList() {
   // 共享人脉筛选状态：'all' = 全部、'mine' = 我的、'shared' = 共享
   const [shareFilter, setShareFilter] = useState<'all' | 'mine' | 'shared'>('all');
   
+  // 共享人筛选状态：按共享人名字筛选
+  const [sharerFilter, setSharerFilter] = useState<string>('all');
+  
   // 排序状态（从 localStorage 读取）
   const SORT_BY_KEY = 'contacts_list_sort_by';
   const [sortBy, setSortBy] = useState<'tagCount_desc' | 'tagCount_asc' | 'interactionCount_desc' | 'interactionCount_asc' | undefined>(() => {
@@ -595,6 +598,18 @@ export default function ContactsList() {
     },
   });
   
+  // 提取共享人列表（去重）
+  const sharerList = React.useMemo(() => {
+    if (!sharedContacts || sharedContacts.length === 0) return [];
+    const sharers = new Map<string, string>();
+    sharedContacts.forEach((contact: any) => {
+      if (contact._sharedBy && contact._sharerUserId) {
+        sharers.set(contact._sharerUserId.toString(), contact._sharedBy);
+      }
+    });
+    return Array.from(sharers.entries()).map(([id, name]) => ({ id, name }));
+  }, [sharedContacts]);
+  
   // 根据筛选条件合并自己的人脉和共享的人脉
   const mergedContacts = React.useMemo(() => {
     if (!allContacts) return [];
@@ -641,7 +656,14 @@ export default function ContactsList() {
       });
     }
     
-    // 根据shareFilter返回对应的人脉列表
+    // 如果选中了共享模式并且选择了特定共享人，进行过滤
+    if (shareFilter === 'shared' && sharerFilter !== 'all') {
+      markedSharedContacts = markedSharedContacts.filter((contact: any) => 
+        contact._sharerUserId?.toString() === sharerFilter
+      );
+    }
+    
+    // 根据 shareFilter 返回对应的人脉列表
     if (shareFilter === 'mine') {
       // 只显示自己的人脉
       return allContacts;
@@ -652,7 +674,7 @@ export default function ContactsList() {
       // 显示全部人脉（自己的 + 共享的）
       return [...allContacts, ...markedSharedContacts];
     }
-  }, [allContacts, sharedContacts, shareFilter, searchQuery]);
+  }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery]);
   
   // 根据筛选条件过滤人脉
   const contacts = React.useMemo(() => {
@@ -1102,17 +1124,12 @@ export default function ContactsList() {
           ) : isLoading ? (
             // 加载中显示加载状态
             `加载中...`
-          ) : searchQuery && searchQuery.trim() ? (
-            // 有搜索关键词时，显示过滤后的结果数量
+          ) : (
+            // 显示当前筛选后的人脉数量
             shareFilter === 'mine' ? `共 ${contactsData?.total || 0} 位人脉` :
             shareFilter === 'shared' ? `共 ${mergedContacts?.length || 0} 位人脉` :
-            `共 ${(contactsData?.total || 0) + (mergedContacts?.filter((c: any) => c._isShared)?.length || 0)} 位人脉`
-          ) : (
-            // 无搜索关键词时，显示总数
-            shareFilter === 'mine' ? `共 ${contactsData?.total || 0} 位人脉` :
-            shareFilter === 'shared' ? `共 ${sharedContacts?.length || 0} 位人脉` :
             `共 ${(contactsData?.total || 0) + (sharedContacts?.length || 0)} 位人脉`
-          )}
+          )
         </p>
         
         {/* 折叠标签按钮和排序按钮 */}
@@ -1161,6 +1178,34 @@ export default function ContactsList() {
                 <DropdownMenuItem onClick={() => setSortBy('interactionCount_asc')}>
                   <span className={sortBy === 'interactionCount_asc' ? 'font-bold' : ''}>联络次数：由低到高</span>
                 </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            {/* 共享人筛选下拉框 - 只在选中"共享"时可用 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={shareFilter !== 'shared'}
+                  className={`h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm ${
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <Handshake className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  {sharerFilter === 'all' ? '按共享人筛选' : 
+                    sharerList.find(s => s.id === sharerFilter)?.name || '按共享人筛选'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setSharerFilter('all')}>
+                  <span className={sharerFilter === 'all' ? 'font-bold' : ''}>全部共享人</span>
+                </DropdownMenuItem>
+                {sharerList.map((sharer) => (
+                  <DropdownMenuItem key={sharer.id} onClick={() => setSharerFilter(sharer.id)}>
+                    <span className={sharerFilter === sharer.id ? 'font-bold' : ''}>{sharer.name}</span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
