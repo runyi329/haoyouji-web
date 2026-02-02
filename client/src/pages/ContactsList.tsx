@@ -1040,11 +1040,14 @@ export default function ContactsList() {
           {viewMode === 'company' && companyList ? (
             // 公司视图：统计去重后的公司家数
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
+          ) : isLoading ? (
+            // 加载中显示加载状态
+            `加载中...`
           ) : (
-            // 根据shareFilter显示对应的总数
-            shareFilter === 'mine' ? `共 ${totalContacts || 0} 位人脉` :
-            shareFilter === 'shared' ? `共 ${totalSharedContacts || 0} 位人脉` :
-            `共 ${(totalContacts || 0) + (totalSharedContacts || 0)} 位人脉`
+            // 根据shareFilter显示对应的总数，直接使用API返回的数据
+            shareFilter === 'mine' ? `共 ${contactsData?.total || 0} 位人脉` :
+            shareFilter === 'shared' ? `共 ${sharedContacts?.length || 0} 位人脉` :
+            `共 ${(contactsData?.total || 0) + (sharedContacts?.length || 0)} 位人脉`
           )}
         </p>
         
