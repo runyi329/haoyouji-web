@@ -2744,6 +2744,8 @@ export async function getContactsByParentPaginated(
   page: number = 1,
   pageSize: number = 50
 ) {
+  console.log('[getContactsByParentPaginated] 开始查询:', { parentUserId, searchQuery, page, pageSize });
+  
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
@@ -2775,6 +2777,7 @@ export async function getContactsByParentPaginated(
   
   const totalResult = await totalQuery;
   const total = Array.isArray(totalResult) ? Number(totalResult[0]?.count || 0) : Number(totalResult[0]?.count || 0);
+  console.log('[getContactsByParentPaginated] 查询结果总数:', total);
   
   // 2. 查询分页数据
   let baseContacts: any[];
@@ -2807,6 +2810,11 @@ export async function getContactsByParentPaginated(
     `);
     
     baseContacts = result as any[];
+  }
+  
+  console.log('[getContactsByParentPaginated] 查询到的联系人数量:', baseContacts.length);
+  if (baseContacts.length > 0) {
+    console.log('[getContactsByParentPaginated] 第一个联系人:', baseContacts[0]?.name);
   }
   
   // 3. 为每个人脉添加上次联络日期和距今天数（这部分保持不变）
