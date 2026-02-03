@@ -625,8 +625,9 @@ export default function ContactsList() {
     let markedSharedContacts = sharedContacts?.map((contact: any) => ({
       ...contact,
       _isShared: true,
+      _originalId: contact.id, // 保存原始ID用于后端操作
       // 确保共享人脉有唯一ID（避免与自己的人脉ID冲突）
-      id: `shared_${contact.id}`,
+      id: `shared_${contact.id}_${contact._sharerUserId || 'unknown'}`,
     })) || [];
     
     // 如果有搜索关键词，对共享人脉也进行过滤
@@ -673,13 +674,15 @@ export default function ContactsList() {
     // 根据 shareFilter 返回对应的人脉列表
     if (shareFilter === 'mine') {
       // 只显示自己的人脉
-      return allContacts;
+      return allContacts || [];
     } else if (shareFilter === 'shared') {
       // 只显示共享的人脉
-      return markedSharedContacts;
+      return markedSharedContacts || [];
     } else {
       // 显示全部人脉（自己的 + 共享的）
-      return [...allContacts, ...markedSharedContacts];
+      const myContacts = allContacts || [];
+      const sharedList = markedSharedContacts || [];
+      return [...myContacts, ...sharedList];
     }
   }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery]);
   
@@ -1870,6 +1873,11 @@ export default function ContactsList() {
                   onClick={(e) => {
                     if (selectedContactIds.length > 0) {
                       // 如果已有选中的人脉，点击卡片切换选中状态
+                      // 共享人脉不可选中
+                      if (contact._isShared) {
+                        e.stopPropagation();
+                        return;
+                      }
                       if (isContactSelected) {
                         setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
                       } else {
@@ -1898,7 +1906,7 @@ export default function ContactsList() {
                   }}
                 >
                 {/* 批量选择checkbox */}
-                {selectedContactIds.length > 0 && (
+                {selectedContactIds.length > 0 && !contact._isShared && (
                   <div 
                     className="absolute top-2 right-2 z-10"
                     onClick={(e) => e.stopPropagation()}
