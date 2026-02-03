@@ -442,6 +442,8 @@ export default function ContactsList() {
   // 获取公司列表（当 viewMode 为 company 时）
   const { data: companyList, isLoading: isLoadingCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
     enabled: viewMode === 'company', // 只在公司视图时启用
+    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
+    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
   });
   
   // 调试日志
@@ -1338,7 +1340,7 @@ export default function ContactsList() {
             {showDropdown && dropdownContacts.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
                 {dropdownContacts.map((contact: any) => {
-                  const company = getFieldValue(contact, "公司");
+                  const company = getFieldValue(contact, "公司名称");
                   const position = getFieldValue(contact, "职位");
                   
                   return (
@@ -2035,7 +2037,7 @@ export default function ContactsList() {
                       )}
                       {/* 公司信息显示 - 当viewMode为company时突出显示 */}
                       {(() => {
-                        const company = getFieldValue(contact, "公司");
+                        const company = getFieldValue(contact, "公司名称");
                         const position = getFieldValue(contact, "职位");
                         if (!company && !position) return null;
                         return (
