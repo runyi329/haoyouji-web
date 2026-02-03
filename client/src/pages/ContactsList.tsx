@@ -1142,7 +1142,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('all')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                全部
+                全部{contactCounts ? ` (${contactCounts.total})` : ''}
               </Button>
               <Button
                 variant={shareFilter === 'mine' ? 'default' : 'outline'}
@@ -1150,7 +1150,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('mine')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                我的
+                我的{contactCounts ? ` (${contactCounts.mine})` : ''}
               </Button>
               <Button
                 variant={shareFilter === 'shared' ? 'default' : 'outline'}
@@ -1158,7 +1158,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('shared')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                共享
+                共享{contactCounts ? ` (${contactCounts.shared})` : ''}
               </Button>
             </div>
           </div>
@@ -1169,8 +1169,10 @@ export default function ContactsList() {
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : isLoading ? (
             `加载中...`
-          ) : filteredContacts ? (
-            `共 ${filteredContacts.length} 位人脉`
+          ) : contactCounts ? (
+            shareFilter === 'all' ? `共 ${contactCounts.total} 位人脉` :
+            shareFilter === 'mine' ? `共 ${contactCounts.mine} 位人脉` :
+            `共 ${contactCounts.shared} 位人脉`
           ) : (
             `共 0 位人脉`
           )}
