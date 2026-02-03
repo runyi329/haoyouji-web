@@ -140,11 +140,12 @@ function CopyableItem({
         )}
       </div>
       <button
+        type="button"
         onClick={handleCopy}
-        className="p-1.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+        className="p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0 cursor-pointer active:scale-95"
         title="复制"
       >
-        <Copy className="w-4 h-4 text-gray-500" />
+        <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
       </button>
     </div>
   );
@@ -332,6 +333,7 @@ function ExtendedInfoSection({
                         />
                       </div>
                       <button
+                        type="button"
                         onClick={async (e) => {
                           e.stopPropagation();
                           e.preventDefault();
@@ -362,10 +364,10 @@ function ExtendedInfoSection({
                             setTimeout(() => setShowToast(false), 3000);
                           }
                         }}
-                        className="p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0"
+                        className="p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0 cursor-pointer active:scale-95"
                         title="复制"
                       >
-                        <Copy className="h-4 w-4 text-muted-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                       </button>
                     </div>
                   );
