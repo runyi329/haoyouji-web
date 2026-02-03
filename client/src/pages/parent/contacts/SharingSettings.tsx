@@ -306,9 +306,12 @@ export default function SharingSettings() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm truncate">
-                          @{conn.receiverUsername}
+                          {conn.receiverName}
                         </p>
                       </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        @{conn.receiverUsername}
+                      </p>
                       {conn.note && (
                         <p className="text-xs text-muted-foreground mt-1 truncate">
                           备注: {conn.note}
@@ -355,7 +358,7 @@ export default function SharingSettings() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm truncate">
-                          @{conn.sharerUsername}
+                          {conn.sharerName}
                         </p>
                         <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
                           <Users className="h-3.5 w-3.5" />
@@ -363,6 +366,9 @@ export default function SharingSettings() {
                           <span className="font-medium">{conn.sharedContactCount || 0}</span>
                         </div>
                       </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        @{conn.sharerUsername}
+                      </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
