@@ -375,11 +375,20 @@ export default function ContactsList() {
   const [page, setPage] = useState(1);
   const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
   
-  // 组件挂载时重置状态，确保后退再进入时数据正常加载
+  // 组件挂载时重置状态,确保后退再进入时数据正常加载
   React.useEffect(() => {
     setPage(1);
     setAllLoadedContacts([]);
-  }, []); // 空依赖数组，只在组件挂载时执行一次
+  }, []); // 空依赖数组,只在组件挂载时执行一次
+  
+  // 当URL参数中有filter时,自动重置shareFilter为'all',确保显示所有符合条件的人脉
+  React.useEffect(() => {
+    if (filterType) {
+      console.log('[ContactsList] 检测到filter参数:', filterType, ',重置shareFilter为all');
+      setShareFilter('all');
+      setSearchQuery(''); // 同时清空搜索框
+    }
+  }, [filterType]);
   
   // 轻量级获取联系人数量（全部、我的、共享）
   const { data: contactCounts } = trpc.contacts.counts.useQuery();
