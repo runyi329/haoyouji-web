@@ -31,7 +31,7 @@ async function getAllVisibleContactIds(userId: number): Promise<number[]> {
   const sharedContactsResult = await db.execute(sql`
     SELECT DISTINCT c.id
     FROM contacts c
-    INNER JOIN sharing_connections sc ON c.parentUserId = sc.sharerId
+    INNER JOIN contact_sharing_connections sc ON c.parentUserId = sc.sharerId
     WHERE sc.receiverId = ${userId}
       AND sc.status = 'active'
   `);
@@ -111,17 +111,32 @@ export async function getYearlyActiveCount(userId: number): Promise<number> {
  * 一次性获取所有活跃统计数据
  */
 export async function getAllActiveStats(userId: number) {
-  const [todayActive, weeklyActive, monthlyActive, yearlyActive] = await Promise.all([
-    getTodayActiveCount(userId),
-    getWeeklyActiveCount(userId),
-    getMonthlyActiveCount(userId),
-    getYearlyActiveCount(userId),
-  ]);
-  
-  return {
-    todayActive,
-    weeklyActive,
-    monthlyActive,
-    yearlyActive,
-  };
+  try {
+    console.log('[getAllActiveStats] 开始查询用户ID:', userId);
+    
+    const [todayActive, weeklyActive, monthlyActive, yearlyActive] = await Promise.all([
+      getTodayActiveCount(userId),
+      getWeeklyActiveCount(userId),
+      getMonthlyActiveCount(userId),
+      getYearlyActiveCount(userId),
+    ]);
+    
+    console.log('[getAllActiveStats] 查询结果:', { todayActive, weeklyActive, monthlyActive, yearlyActive });
+    
+    return {
+      todayActive,
+      weeklyActive,
+      monthlyActive,
+      yearlyActive,
+    };
+  } catch (error) {
+    console.error('[getAllActiveStats] 查询失败:', error);
+    // 返回默认值而不是抛出异常
+    return {
+      todayActive: 0,
+      weeklyActive: 0,
+      monthlyActive: 0,
+      yearlyActive: 0,
+    };
+  }
 }
