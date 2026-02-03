@@ -8,9 +8,9 @@
  */
 
 import { getDb } from './db';
-import { contacts, contactInteractions } from '@shared/db-schema';
+import { contacts, contactInteractions } from '../drizzle/schema';
 import { eq, and, gte, lt, sql, inArray } from 'drizzle-orm';
-import { getBeijingTodayStart, getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart } from '@shared/timezone';
+import { getBeijingTodayStart, getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart } from '../shared/timezone';
 
 /**
  * 获取用户所有可见的联系人ID(我的+共享的)
