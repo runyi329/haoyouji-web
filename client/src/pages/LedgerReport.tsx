@@ -45,7 +45,7 @@ export default function LedgerReport() {
     return amount.toFixed(2);
   };
 
-  // 月份数据（1-12月）
+  // 月份数据（1-12月）- 用于列表视图
   const monthlyData = useMemo(() => {
     const data = [];
     for (let i = 1; i <= 12; i++) {
@@ -58,6 +58,11 @@ export default function LedgerReport() {
       });
     }
     return data;
+  }, [reportData]);
+
+  // 最近30天每日数据 - 用于图表视图的折线图
+  const dailyData = useMemo(() => {
+    return reportData?.dailyStats || [];
   }, [reportData]);
 
   return (
@@ -127,6 +132,7 @@ export default function LedgerReport() {
             reportData={reportData}
             selectedYear={selectedYear}
             monthlyData={monthlyData}
+            dailyData={dailyData}
             formatAmount={formatAmount}
             ledgerId={ledgerId}
           />
@@ -283,12 +289,14 @@ function ChartViewContent({
   reportData,
   selectedYear,
   monthlyData,
+  dailyData,
   formatAmount,
   ledgerId 
 }: { 
   reportData: any;
   selectedYear: number;
   monthlyData: any[];
+  dailyData: any[];
   formatAmount: (n: number) => string;
   ledgerId: number;
 }) {
@@ -616,36 +624,50 @@ function ChartViewContent({
           <h3 className="font-medium">收支曲线</h3>
         </div>
         
-        {/* 简单的折线图展示 */}
+        {/* 最近30天每日收支折线图 */}
         <div className="h-48 flex items-end justify-around border-b border-l border-gray-200 relative">
           {/* Y轴标签 */}
           <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
-            <span>{Math.max(...monthlyData.map(m => Math.max(m.income, m.expense))).toFixed(0)}</span>
+            <span>{Math.max(...dailyData.map((d: any) => Math.max(d.income, d.expense)), 0).toFixed(0)}</span>
             <span>0</span>
           </div>
           
-          {monthlyData.slice(0, 12).map((month, index) => {
+          {dailyData.map((day: any, index: number) => {
             const maxValue = Math.max(
-              ...monthlyData.map(m => Math.max(m.income, m.expense)),
+              ...dailyData.map((d: any) => Math.max(d.income, d.expense)),
               1
             );
-            const incomeHeight = (month.income / maxValue) * 100;
-            const expenseHeight = (month.expense / maxValue) * 100;
+            const incomeHeight = (day.income / maxValue) * 100;
+            const expenseHeight = (day.expense / maxValue) * 100;
+            
+            // 每5天显示一个日期标签
+            const showLabel = index % 5 === 0 || index === dailyData.length - 1;
+            const dateLabel = day.date ? new Date(day.date).getDate() : '';
             
             return (
-              <div key={index} className="flex flex-col items-center w-full">
-                <div className="flex items-end space-x-1 h-40">
+              <div key={index} className="flex flex-col items-center" style={{ width: '3%' }}>
+                <div className="flex items-end space-x-0.5 h-40 w-full justify-center">
                   <div 
-                    className="w-2 bg-orange-400 rounded-t"
-                    style={{ height: `${incomeHeight}%`, minHeight: month.income > 0 ? '4px' : '0' }}
+                    className="bg-orange-400 rounded-t"
+                    style={{ 
+                      width: '40%',
+                      height: `${incomeHeight}%`, 
+                      minHeight: day.income > 0 ? '2px' : '0' 
+                    }}
                   />
                   <div 
-                    className="w-2 bg-blue-500 rounded-t"
-                    style={{ height: `${expenseHeight}%`, minHeight: month.expense > 0 ? '4px' : '0' }}
+                    className="bg-blue-500 rounded-t"
+                    style={{ 
+                      width: '40%',
+                      height: `${expenseHeight}%`, 
+                      minHeight: day.expense > 0 ? '2px' : '0' 
+                    }}
                   />
                 </div>
-                {/* X轴标签 */}
-                <span className="text-xs text-gray-500 mt-1">{month.month}月</span>
+                {/* X轴标签 - 每5天显示一次 */}
+                <span className="text-[10px] text-gray-500 mt-1">
+                  {showLabel ? dateLabel : ''}
+                </span>
               </div>
             );
           })}

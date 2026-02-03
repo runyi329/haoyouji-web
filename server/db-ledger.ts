@@ -1424,6 +1424,39 @@ export async function getLedgerReport(
   const recentIncome = Number(recentStats[0]?.totalIncome || 0);
   const recentExpense = Number(recentStats[0]?.totalExpense || 0);
   
+  // 获取最近30天每日收支数据
+  const dailyStatsRaw = await db
+    .select({
+      date: ledgerRecords.recordDate,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+      )
+    )
+    .groupBy(ledgerRecords.recordDate)
+    .orderBy(asc(ledgerRecords.recordDate));
+  
+  // 生成完整的30天数据(包含没有记录的日期)
+  const dailyStats = [];
+  for (let i = 0; i < 30; i++) {
+    const currentDate = new Date(thirtyDaysAgo);
+    currentDate.setDate(thirtyDaysAgo.getDate() + i);
+    const dateStr = currentDate.toISOString().split('T')[0];
+    
+    const dayData = dailyStatsRaw.find((d: any) => d.date === dateStr);
+    dailyStats.push({
+      date: dateStr,
+      income: Number(dayData?.totalIncome || 0),
+      expense: Number(dayData?.totalExpense || 0),
+    });
+  }
+  
   return {
     yearlyStats: {
       income,
@@ -1434,6 +1467,7 @@ export async function getLedgerReport(
       expense: recentExpense,
       days: 30,
     },
+    dailyStats,
     memberStats,
     monthlyStats,
     categoryStats: {
