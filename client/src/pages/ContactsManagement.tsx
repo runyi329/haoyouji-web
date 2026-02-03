@@ -439,7 +439,7 @@ interface StatsData {
   newThisYear: number;
   averageInteractionInterval: number;
   needsAttentionCount: number;
-  monthlyActiveCount: number;
+  monthlyActive: number;
   weeklyActive: number;
   yearlyActive: number;
   blacklistCount: number;
@@ -562,7 +562,7 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
         <MonthlyActiveCard 
-          count={stats?.monthlyActiveCount || 0} 
+          count={stats?.monthlyActive || 0} 
           onClick={() => setLocation('/parent/contacts/list?filter=monthlyActive')}
           dragListeners={listeners}
           isBreathing={isBreathing}
@@ -1277,7 +1277,7 @@ export default function ContactsManagement() {
                   newThisYear: stats?.newThisYear || 0,
                   averageInteractionInterval: overviewStats?.averageInteractionInterval || 0,
                   needsAttentionCount: overviewStats?.needsAttentionCount || 0,
-                  monthlyActiveCount: overviewStats?.monthlyActiveCount || 0,
+                  monthlyActive: stats?.monthlyActive || 0,
                   weeklyActive: stats?.weeklyActive || 0,
                   yearlyActive: stats?.yearlyActive || 0,
                   blacklistCount: stats?.blacklistCount || 0,

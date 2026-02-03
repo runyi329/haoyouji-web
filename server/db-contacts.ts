@@ -1126,6 +1126,7 @@ export async function getContactStats(parentUserId: number) {
       newThisYear: 0,
       needsContact: 0,
       weeklyActive: 0,
+      monthlyActive: 0,
       yearlyActive: 0,
       blacklistCount: 0,
       todayActive: 0,
@@ -1236,6 +1237,19 @@ export async function getContactStats(parentUserId: number) {
       .map(interaction => interaction.contactId)
   );
   const weeklyActive = weeklyActiveContactIds.size;
+  
+  // 本月活跃（本月有联络记录）
+  const allMonthlyInteractions = await db
+    .select({ contactId: contactInteractions.contactId })
+    .from(contactInteractions)
+    .where(sql`${contactInteractions.interactionDate} >= ${thisMonthStart}`);
+  
+  const monthlyActiveContactIds = new Set(
+    allMonthlyInteractions
+      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
+      .map(interaction => interaction.contactId)
+  );
+  const monthlyActive = monthlyActiveContactIds.size;
   
   // 今年活跃（今年有联络记录）
   const allYearlyInteractions = await db
@@ -1391,6 +1405,7 @@ export async function getContactStats(parentUserId: number) {
     newThisYear,
     needsContact,
     weeklyActive,
+    monthlyActive,
     yearlyActive,
     blacklistCount,
     todayActive,
