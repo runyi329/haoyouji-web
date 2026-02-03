@@ -317,12 +317,8 @@ function ChartViewContent({
   const yearIncome = reportData?.yearlyStats?.income || 0;
   const yearExpense = reportData?.yearlyStats?.expense || 0;
   
-  // 计算天数和平均值
-  const currentDate = new Date();
-  const isCurrentYear = selectedYear === currentDate.getFullYear();
-  const daysPassed = isCurrentYear 
-    ? Math.floor((currentDate.getTime() - new Date(selectedYear, 0, 1).getTime()) / (1000 * 60 * 60 * 24)) + 1
-    : 365;
+  // 计算天数和平均值（固定为30天，包含当天）
+  const daysPassed = 30;
   
   const avgIncome = daysPassed > 0 ? yearIncome / daysPassed : 0;
   const avgExpense = daysPassed > 0 ? yearExpense / daysPassed : 0;
@@ -620,6 +616,12 @@ function ChartViewContent({
         
         {/* 简单的折线图展示 */}
         <div className="h-48 flex items-end justify-around border-b border-l border-gray-200 relative">
+          {/* Y轴标签 */}
+          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
+            <span>{Math.max(...monthlyData.map(m => Math.max(m.income, m.expense))).toFixed(0)}</span>
+            <span>0</span>
+          </div>
+          
           {monthlyData.slice(0, 12).map((month, index) => {
             const maxValue = Math.max(
               ...monthlyData.map(m => Math.max(m.income, m.expense)),
@@ -640,6 +642,8 @@ function ChartViewContent({
                     style={{ height: `${expenseHeight}%`, minHeight: month.expense > 0 ? '4px' : '0' }}
                   />
                 </div>
+                {/* X轴标签 */}
+                <span className="text-xs text-gray-500 mt-1">{month.month}月</span>
               </div>
             );
           })}
