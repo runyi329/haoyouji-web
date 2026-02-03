@@ -1307,21 +1307,23 @@ export async function getContactStats(parentUserId: number) {
   // 公司数量（去重后的公司数）- 从 contact_field_values 表中查询
   const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
   
-  // 查找"公司名称"字段的 categoryId
-  const companyCategory = await db
+  // 查找所有"公司名称"字段的 categoryId（可能有多个用户创建的）
+  const companyCategories = await db
     .select({ id: contactFieldCategories.id })
     .from(contactFieldCategories)
-    .where(eq(contactFieldCategories.name, '公司名称'))
-    .limit(1);
+    .where(eq(contactFieldCategories.name, '公司名称'));
   
-  console.log('[getContactStats] 公司字段分类查询结果:', companyCategory);
+  console.log('[getContactStats] 公司字段分类查询结果:', companyCategories);
+  
+  const companyCategoryIds = companyCategories.map(c => c.id);
+  console.log('[getContactStats] companyCategoryIds:', companyCategoryIds);
   
   let companyCount = 0;
-  if (companyCategory.length > 0) {
-    const companyCategoryId = companyCategory[0].id;
-    
-    // 查询所有可见联系人的公司名称
-    const companyResult = await db
+  const uniqueCompanies = new Set<string>();
+  
+  // 查询通过 categoryId 匹配的公司名称（旧数据）
+  if (companyCategoryIds.length > 0) {
+    const companyResultByCategoryId = await db
       .select({ 
         companyName: contactFieldValues.value
       })
@@ -1330,24 +1332,41 @@ export async function getContactStats(parentUserId: number) {
       .where(
         and(
           inArray(contacts.id, visibleContactIds),
-          eq(contactFieldValues.categoryId, companyCategoryId),
+          inArray(contactFieldValues.categoryId, companyCategoryIds),
           isNotNull(contactFieldValues.value),
           ne(contactFieldValues.value, '')
         )
       );
     
-    // 去重计算公司数量
-    const uniqueCompanies = new Set(companyResult.map(r => r.companyName));
-    companyCount = uniqueCompanies.size;
-    console.log('[getContactStats] 公司统计:', { 
-      companyCategoryId, 
-      totalCompanyRecords: companyResult.length, 
-      uniqueCompanyCount: companyCount,
-      sampleCompanies: Array.from(uniqueCompanies).slice(0, 5)
-    });
-  } else {
-    console.log('[getContactStats] 未找到"公司名称"字段分类');
+    companyResultByCategoryId.forEach(r => uniqueCompanies.add(r.companyName));
+    console.log('[getContactStats] 通过categoryId查询到公司数:', companyResultByCategoryId.length);
   }
+  
+  // 查询通过 categoryName = '公司名称' 匹配的公司名称（新数据，categoryId可能为0）
+  const companyResultByCategoryName = await db
+    .select({ 
+      companyName: contactFieldValues.value
+    })
+    .from(contactFieldValues)
+    .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
+    .where(
+      and(
+        inArray(contacts.id, visibleContactIds),
+        eq(contactFieldValues.categoryName, '公司名称'),
+        isNotNull(contactFieldValues.value),
+        ne(contactFieldValues.value, '')
+      )
+    );
+  
+  companyResultByCategoryName.forEach(r => uniqueCompanies.add(r.companyName));
+  console.log('[getContactStats] 通过categoryName查询到公司数:', companyResultByCategoryName.length);
+  
+  companyCount = uniqueCompanies.size;
+  console.log('[getContactStats] 公司统计:', { 
+    companyCategoryIds, 
+    uniqueCompanyCount: companyCount,
+    sampleCompanies: Array.from(uniqueCompanies).slice(0, 5)
+  });
   
   console.log('[getContactStats] 统计结果:', { totalContacts, newThisWeek, newThisMonth, newThisYear });
   // 获取用户参与的所有账本的账目总数
@@ -2493,23 +2512,49 @@ export async function getCompanyList(parentUserId: number) {
   // 查询公司字段的 categoryId
   const { contactFieldCategories, contactFieldValues } = await import('../drizzle/schema');
   
+  // 查询所有“公司名称”字段分类的ID（可能有多个用户创建的）
   const companyCategoryResult = await db
     .select({ id: contactFieldCategories.id })
     .from(contactFieldCategories)
-    .where(eq(contactFieldCategories.name, '公司名称'))
-    .limit(1);
+    .where(eq(contactFieldCategories.name, '公司名称'));
   
   console.log('[getCompanyList] companyCategoryResult:', companyCategoryResult);
-  if (companyCategoryResult.length === 0) {
-    console.log('[getCompanyList] 未找到“公司名称”字段分类');
-    return [];
-  }
   
-  const companyCategoryId = companyCategoryResult[0].id;
-  console.log('[getCompanyList] companyCategoryId:', companyCategoryId);
+  const companyCategoryIds = companyCategoryResult.map(r => r.id);
+  console.log('[getCompanyList] companyCategoryIds:', companyCategoryIds);
   
   // 查询所有有公司名称的联系人
-  const companyContacts = await db
+  // 支持两种情况：
+  // 1. 通过 categoryId 匹配（旧数据）
+  // 2. 通过 categoryName = '公司名称' 匹配（新数据，categoryId可能为0）
+  let companyContacts: any[] = [];
+  
+  // 查询通过 categoryId 匹配的记录
+  if (companyCategoryIds.length > 0) {
+    const contactsByCategoryId = await db
+      .select({
+        contactId: contactFieldValues.contactId,
+        contactName: contacts.name,
+        companyName: contactFieldValues.value,
+        createdAt: contactFieldValues.createdAt,
+      })
+      .from(contactFieldValues)
+      .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
+      .where(
+        and(
+          inArray(contacts.id, visibleContactIds),
+          inArray(contactFieldValues.categoryId, companyCategoryIds),
+          isNotNull(contactFieldValues.value),
+          ne(contactFieldValues.value, '')
+        )
+      )
+      .orderBy(desc(contactFieldValues.createdAt));
+    companyContacts = [...contactsByCategoryId];
+    console.log('[getCompanyList] 通过categoryId查询到:', contactsByCategoryId.length);
+  }
+  
+  // 查询通过 categoryName = '公司名称' 匹配的记录（categoryId可能为0）
+  const contactsByCategoryName = await db
     .select({
       contactId: contactFieldValues.contactId,
       contactName: contacts.name,
@@ -2521,12 +2566,22 @@ export async function getCompanyList(parentUserId: number) {
     .where(
       and(
         inArray(contacts.id, visibleContactIds),
-        eq(contactFieldValues.categoryId, companyCategoryId),
+        eq(contactFieldValues.categoryName, '公司名称'),
         isNotNull(contactFieldValues.value),
         ne(contactFieldValues.value, '')
       )
     )
     .orderBy(desc(contactFieldValues.createdAt));
+  console.log('[getCompanyList] 通过categoryName查询到:', contactsByCategoryName.length);
+  
+  // 合并结果，去重（同一个contactId只保留一条）
+  const seenContactIds = new Set(companyContacts.map(c => c.contactId));
+  for (const contact of contactsByCategoryName) {
+    if (!seenContactIds.has(contact.contactId)) {
+      companyContacts.push(contact);
+      seenContactIds.add(contact.contactId);
+    }
+  }
 
   console.log('[getCompanyList] companyContacts.length:', companyContacts.length);
   if (companyContacts.length > 0) {
