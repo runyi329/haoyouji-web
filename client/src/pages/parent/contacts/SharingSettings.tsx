@@ -222,7 +222,7 @@ export default function SharingSettings() {
             className="flex-1 h-10"
           >
             <Users className="h-4 w-4 mr-2" />
-            我的共享连接
+            我共享的人
           </Button>
           <Button 
             onClick={() => setActiveTab('shared')}
@@ -230,7 +230,7 @@ export default function SharingSettings() {
             className="flex-1 h-10"
           >
             <Share2 className="h-4 w-4 mr-2" />
-            共享给我的
+            共享给我的人
           </Button>
         </div>
 
@@ -308,11 +308,6 @@ export default function SharingSettings() {
                         <p className="font-medium text-sm truncate">
                           @{conn.receiverUsername}
                         </p>
-                        <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>×</span>
-                          <span className="font-medium">{conn.sharedContactCount || 0}</span>
-                        </div>
                       </div>
                       {conn.note && (
                         <p className="text-xs text-muted-foreground mt-1 truncate">
