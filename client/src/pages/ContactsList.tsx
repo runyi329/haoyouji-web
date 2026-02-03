@@ -372,6 +372,12 @@ export default function ContactsList() {
   const [page, setPage] = useState(1);
   const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
   
+  // 组件挂载时重置状态，确保后退再进入时数据正常加载
+  React.useEffect(() => {
+    setPage(1);
+    setAllLoadedContacts([]);
+  }, []); // 空依赖数组，只在组件挂载时执行一次
+  
   // 轻量级获取联系人数量（全部、我的、共享）
   const { data: contactCounts } = trpc.contacts.counts.useQuery();
   
@@ -383,6 +389,8 @@ export default function ContactsList() {
     pageSize: 50,
   }, {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
+    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
+    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
   });
   
   // 当数据加载完成时，累加到已加载列表
