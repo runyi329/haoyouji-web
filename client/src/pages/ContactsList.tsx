@@ -960,7 +960,13 @@ export default function ContactsList() {
     // 关闭下拉列表和历史记录
     setShowDropdown(false);
     setShowHistory(false);
-    setSearchQuery("");
+    
+    // 设置搜索查询为该人脉的名字,让它显示在列表中
+    if (contact && contact.name) {
+      setSearchQuery(contact.name);
+    } else {
+      setSearchQuery("");
+    }
     
     // 让搜索框失去焦点,防止下拉列表重新打开
     if (searchRef.current) {
@@ -970,31 +976,7 @@ export default function ContactsList() {
       }
     }
     
-    // 判断是否为共享人脉
-    if (contact && contact._isShared && contact._sharedBy) {
-      // 共享人脉，显示提示信息
-      if (event) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
-          duration: 1000,
-          position: "top",
-          style: {
-            position: 'fixed',
-            top: `${rect.top - 60}px`,
-            left: '50%',
-            transform: 'translateX(-50%)',
-          },
-        });
-      } else {
-        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
-          duration: 1000,
-          position: "top",
-        });
-      }
-    } else {
-      // 自己的人脉，正常跳转
-      setLocation(`/parent/contacts/${contactId}`);
-    }
+    // 不再直接显示toast或跳转,让用户在列表中点击名片时才触发
   };
   
   // 点击历史记录项
