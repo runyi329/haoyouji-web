@@ -384,9 +384,11 @@ export default function ContactsList() {
   // 当URL参数中有filter时,自动重置shareFilter为'all',确保显示所有符合条件的人脉
   React.useEffect(() => {
     if (filterType) {
-      console.log('[ContactsList] 检测到filter参数:', filterType, ',重置shareFilter为all');
+      console.log('[ContactsList] 检测到filter参数:', filterType, ',重置shareFilter为all,重置分页');
       setShareFilter('all');
       setSearchQuery(''); // 同时清空搜索框
+      setPage(1); // 重置到第一页
+      setAllLoadedContacts([]); // 清空已加载的数据
     }
   }, [filterType]);
   
