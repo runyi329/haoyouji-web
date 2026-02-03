@@ -415,6 +415,15 @@ export default function ContactsList() {
     setAllLoadedContacts([]);
   }, [searchQuery, sortBy]);
   
+  // 监听location变化，当返回列表页时强制刷新数据
+  React.useEffect(() => {
+    if (location === '/contacts') {
+      // 重置分页和数据，触发重新加载
+      setPage(1);
+      setAllLoadedContacts([]);
+    }
+  }, [location]);
+  
   // 无限滚动：当滚动到底部时自动加载下一页
   React.useEffect(() => {
     const observer = new IntersectionObserver(
