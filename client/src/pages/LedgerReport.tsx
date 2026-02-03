@@ -333,9 +333,9 @@ function ChartViewContent({
   const avgIncome = daysPassed > 0 ? recentIncome / daysPassed : 0;
   const avgExpense = daysPassed > 0 ? recentExpense / daysPassed : 0;
 
-  // 支出分类数据
-  const expenseCategories = reportData?.categoryStats?.expense || [];
-  const incomeCategories = reportData?.categoryStats?.income || [];
+  // 支出分类数据 - 使用最近30天的数据
+  const expenseCategories = reportData?.recentCategoryStats?.expense || [];
+  const incomeCategories = reportData?.recentCategoryStats?.income || [];
   
   // 成员显示文本
   const getMemberDisplayText = () => {
@@ -709,7 +709,7 @@ function ChartViewContent({
         <div className="flex justify-center mb-4">
           <PieChart 
             data={expenseCategories} 
-            total={yearExpense}
+            total={recentExpense}
             formatAmount={formatAmount}
           />
         </div>
@@ -726,8 +726,8 @@ function ChartViewContent({
           <tbody>
             {expenseCategories.length > 0 ? (
               expenseCategories.map((cat: any, index: number) => {
-                const percentage = yearExpense > 0 
-                  ? ((cat.amount / yearExpense) * 100).toFixed(0)
+                const percentage = recentExpense > 0 
+                  ? ((cat.amount / recentExpense) * 100).toFixed(0)
                   : 0;
                 return (
                   <tr key={index} className="border-t border-gray-100">
@@ -771,7 +771,7 @@ function ChartViewContent({
         <div className="flex justify-center mb-4">
           <PieChart 
             data={incomeCategories} 
-            total={yearIncome}
+            total={recentIncome}
             formatAmount={formatAmount}
             isIncome
           />
@@ -789,8 +789,8 @@ function ChartViewContent({
           <tbody>
             {incomeCategories.length > 0 ? (
               incomeCategories.map((cat: any, index: number) => {
-                const percentage = yearIncome > 0 
-                  ? ((cat.amount / yearIncome) * 100).toFixed(0)
+                const percentage = recentIncome > 0 
+                  ? ((cat.amount / recentIncome) * 100).toFixed(0)
                   : 0;
                 return (
                   <tr key={index} className="border-t border-gray-100">

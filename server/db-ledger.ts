@@ -1457,6 +1457,54 @@ export async function getLedgerReport(
     });
   }
   
+  // 获取最近30天的分类统计数据
+  const recentCategoryStatsRaw = await db
+    .select({
+      categoryId: ledgerRecords.categoryId,
+      type: ledgerRecords.type,
+      totalAmount: sql<number>`COALESCE(SUM(${ledgerRecords.amount}), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+      )
+    )
+    .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
+  
+  // 获取最近30天的分类名称
+  const recentCategoryIds = recentCategoryStatsRaw.map((c: any) => c.categoryId);
+  let recentCategories: any[] = [];
+  if (recentCategoryIds.length > 0) {
+    recentCategories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(recentCategoryIds, sql`, `)})`);
+  }
+  
+  const recentCategoryNameMap = new Map(recentCategories.map((c: any) => [c.id, c.name]));
+  
+  const recentExpenseCategories = recentCategoryStatsRaw
+    .filter((c: any) => c.type === 'expense')
+    .map((c: any) => ({
+      category: recentCategoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  const recentIncomeCategories = recentCategoryStatsRaw
+    .filter((c: any) => c.type === 'income')
+    .map((c: any) => ({
+      category: recentCategoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
   return {
     yearlyStats: {
       income,
@@ -1473,6 +1521,10 @@ export async function getLedgerReport(
     categoryStats: {
       expense: expenseCategories,
       income: incomeCategories,
+    },
+    recentCategoryStats: {
+      expense: recentExpenseCategories,
+      income: recentIncomeCategories,
     },
   };
 }
