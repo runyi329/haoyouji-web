@@ -976,9 +976,18 @@ export default function ContactsList() {
       saveSearchHistory(searchQuery.trim());
     }
     
+    // 关闭下拉列表和历史记录
     setShowDropdown(false);
     setShowHistory(false);
     setSearchQuery("");
+    
+    // 让搜索框失去焦点,防止下拉列表重新打开
+    if (searchRef.current) {
+      const input = searchRef.current.querySelector('input');
+      if (input) {
+        input.blur();
+      }
+    }
     
     // 判断是否为共享人脉
     if (contact && contact._isShared && contact._sharedBy) {
