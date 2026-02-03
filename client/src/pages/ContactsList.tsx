@@ -1137,14 +1137,12 @@ export default function ContactsList() {
         <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">
           {viewMode === 'company' && companyList ? (
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
-          ) : !contactCounts ? (
+          ) : isLoading ? (
             `加载中...`
-          ) : shareFilter === 'mine' ? (
-            `共 ${contactCounts.mine} 位人脉`
-          ) : shareFilter === 'shared' ? (
-            `共 ${contactCounts.shared} 位人脉`
+          ) : filteredContacts ? (
+            `共 ${filteredContacts.length} 位人脉`
           ) : (
-            `共 ${contactCounts.total} 位人脉`
+            `共 0 位人脉`
           )}
         </p>
         
