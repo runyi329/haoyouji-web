@@ -2067,16 +2067,32 @@ export default function ContactsList() {
                           {contact.title}
                         </span>
                       )}
-                      {/* 公司信息显示 - 始终显示公司和职位 */}
+                      {/* 公司列表显示 - 显示所有公司全称+报告图标 */}
                       {(() => {
-                        const company = getFieldValue(contact, "公司名称");
-                        const position = getFieldValue(contact, "职位");
-                        if (!company && !position) return null;
+                        if (!companyCategoryId) return null;
+                        const companies = contact.fieldValues?.filter((fv: any) => fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== '') || [];
+                        if (companies.length === 0) return null;
                         return (
-                          <div className="text-xs sm:text-sm mt-1 text-gray-600 dark:text-gray-400">
-                            {company && <span className="font-medium">{company}</span>}
-                            {company && position && <span className="mx-1">·</span>}
-                            {position && <span>{position}</span>}
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {companies.map((companyField: any, index: number) => (
+                              <div key={index} className="flex items-center gap-1">
+                                <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                                  {companyField.value}
+                                </span>
+                                <CompanyReportIcon 
+                                  hasReport={true} 
+                                  onClick={(e) => {
+                                    if (contact._isShared) {
+                                      e.stopPropagation();
+                                      return;
+                                    }
+                                    e.stopPropagation();
+                                    setSelectedCompanyForReport(companyField.value);
+                                    setShowCompanyReportDialog(true);
+                                  }}
+                                />
+                              </div>
+                            ))}
                           </div>
                         );
                       })()}
