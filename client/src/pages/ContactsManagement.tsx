@@ -827,7 +827,10 @@ export default function ContactsManagement() {
   });
   
   // 获取人脉统计数据
-  const { data: stats, error: statsError, isLoading: statsLoading, refetch: refetchStats } = trpc.contacts.stats.useQuery();
+  const { data: stats, error: statsError, isLoading: statsLoading, refetch: refetchStats } = trpc.contacts.stats.useQuery(undefined, {
+    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
+    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
+  });
   
   // 调试日志
   console.log('[ContactsManagement] stats数据:', stats);
