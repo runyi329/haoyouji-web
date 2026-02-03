@@ -295,6 +295,9 @@ export default function ContactsList() {
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [isBatchOperating, setIsBatchOperating] = useState(false);
   
+  // 公司报告存在映射表
+  const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
+  
   // 批量操作确认对话框状态
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -826,6 +829,37 @@ export default function ContactsList() {
       return contact.tags.some((tag: any) => tag.id === selectedTagIds[0]);
     });
   }, [contacts, selectedTagIds, viewMode, companyCategoryId]);
+  
+  // 检查所有公司的报告状态
+  useEffect(() => {
+    if (!filteredContacts || !companyCategoryId) return;
+    
+    // 收集所有公司名称
+    const allCompanyNames = new Set<string>();
+    filteredContacts.forEach(contact => {
+      const companies = contact.fieldValues?.filter((fv: any) => 
+        fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== ''
+      ) || [];
+      companies.forEach((company: any) => {
+        allCompanyNames.add(company.value);
+      });
+    });
+    
+    // 检查每个公司是否有报告
+    allCompanyNames.forEach(companyName => {
+      // 如果已经检查过，跳过
+      if (companyName in companyReportExistsMap) return;
+      
+      fetch(`/api/company-reports/${encodeURIComponent(companyName)}`)
+        .then(res => res.json())
+        .then(data => {
+          setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: !!data.data }));
+        })
+        .catch(() => {
+          setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: false }));
+        });
+    });
+  }, [filteredContacts, companyCategoryId]);
   
   // 获取人脉的全局字段值（公司、职位等）- 已移到上方
   
@@ -2080,7 +2114,7 @@ export default function ContactsList() {
                                   {companyField.value}
                                 </span>
                                 <CompanyReportIcon 
-                                  hasReport={true} 
+                                  hasReport={companyReportExistsMap[companyField.value] || false}
                                   onClick={(e) => {
                                     if (contact._isShared) {
                                       e.stopPropagation();
