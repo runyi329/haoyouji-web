@@ -5627,12 +5627,14 @@ export const appRouter = router({
         const ExcelJS = require('exceljs');
         
         // 获取账目数据
-        const transactions = await dbLedger.getTransactionsList({
-          ledgerId: input.ledgerId,
-          userId: ctx.user.id,
-          startDate: input.startDate,
-          endDate: input.endDate,
-        });
+        const transactions = await dbLedger.getTransactionsList(
+          input.ledgerId,
+          ctx.user.id,
+          {
+            startDate: input.startDate,
+            endDate: input.endDate,
+          }
+        );
 
         // 创建Excel工作簿
         const workbook = new ExcelJS.Workbook();
@@ -5648,15 +5650,17 @@ export const appRouter = router({
           { header: '创建人', key: 'creator', width: 15 },
         ];
 
-        // 添加数据
-        transactions.records.forEach((record: any) => {
-          worksheet.addRow({
-            date: new Date(record.recordDate).toLocaleDateString('zh-CN'),
-            type: record.type === 'income' ? '收入' : '支出',
-            category: record.categoryName || '未分类',
-            amount: record.amount,
-            description: record.description || '',
-            creator: record.creatorName || '',
+        // 添加数据 - transactions是按日期分组的数组
+        transactions.forEach((dayGroup: any) => {
+          dayGroup.records.forEach((record: any) => {
+            worksheet.addRow({
+              date: dayGroup.date,
+              type: record.type === 'income' ? '收入' : '支出',
+              category: record.category || '未分类',
+              amount: record.amount,
+              description: record.description || '',
+              creator: record.member?.username || '',
+            });
           });
         });
 
