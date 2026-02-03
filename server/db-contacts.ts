@@ -7,6 +7,7 @@ import {
 } from "../drizzle/schema";
 import { eq, and, like, or, desc, sql, gte, lt, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart, getBeijingTodayStart, getBeijingTodayEnd } from "../shared/timezone";
+import { getAllActiveStats } from "./db-contacts-active-stats";
 
 // ==================== 工具函数 ====================
 
@@ -1222,47 +1223,12 @@ export async function getContactStats(parentUserId: number) {
     )
     .groupBy(contactTags.id, contactTags.name);
   
-  // 创建 visibleContactIds 的 Set 用于快速查找
-  const visibleContactIdsSet = new Set(visibleContactIds);
+  // 使用新的活跃统计模块
+  console.log('[获取活跃统计] 开始查询...');
+  const activeStats = await getAllActiveStats(parentUserId);
+  console.log('[获取活跃统计] 结果:', activeStats);
   
-  // 本周活跃（本周有联络记录）
-  const allWeeklyInteractions = await db
-    .select({ contactId: contactInteractions.contactId })
-    .from(contactInteractions)
-    .where(sql`${contactInteractions.interactionDate} >= ${thisWeekStart}`);
-  
-  const weeklyActiveContactIds = new Set(
-    allWeeklyInteractions
-      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
-      .map(interaction => interaction.contactId)
-  );
-  const weeklyActive = weeklyActiveContactIds.size;
-  
-  // 本月活跃（本月有联络记录）
-  const allMonthlyInteractions = await db
-    .select({ contactId: contactInteractions.contactId })
-    .from(contactInteractions)
-    .where(sql`${contactInteractions.interactionDate} >= ${thisMonthStart}`);
-  
-  const monthlyActiveContactIds = new Set(
-    allMonthlyInteractions
-      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
-      .map(interaction => interaction.contactId)
-  );
-  const monthlyActive = monthlyActiveContactIds.size;
-  
-  // 今年活跃（今年有联络记录）
-  const allYearlyInteractions = await db
-    .select({ contactId: contactInteractions.contactId })
-    .from(contactInteractions)
-    .where(sql`${contactInteractions.interactionDate} >= ${thisYearStart}`);
-  
-  const yearlyActiveContactIds = new Set(
-    allYearlyInteractions
-      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
-      .map(interaction => interaction.contactId)
-  );
-  const yearlyActive = yearlyActiveContactIds.size;
+  const { todayActive, weeklyActive, monthlyActive, yearlyActive } = activeStats;
   
   // 拉黑名单（只统计个人的）
   const blacklistResult = await db
@@ -1275,33 +1241,6 @@ export async function getContactStats(parentUserId: number) {
       )
     );
   const blacklistCount = blacklistResult[0]?.count || 0;
-  
-  // 今日活跃（今天有联络记录）
-  const beijingOffset = 8 * 60 * 60 * 1000;
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const beijingTimestamp = Date.now() + beijingOffset;
-  const beijingStartOfDay = Math.floor(beijingTimestamp / oneDayMs) * oneDayMs;
-  const startOfTodayUTC = new Date(beijingStartOfDay - beijingOffset);
-  const endOfTodayUTC = new Date(startOfTodayUTC.getTime() + oneDayMs);
-  
-  // 查询今天所有的互动记录，然后在应用层过滤
-  const allTodayInteractions = await db
-    .select({ contactId: contactInteractions.contactId })
-    .from(contactInteractions)
-    .where(
-      and(
-        gte(contactInteractions.interactionDate, startOfTodayUTC),
-        lt(contactInteractions.interactionDate, endOfTodayUTC)
-      )
-    );
-  
-  // 过滤出属于 visibleContactIds 的记录，并去重
-  const todayActiveContactIds = new Set(
-    allTodayInteractions
-      .filter(interaction => visibleContactIdsSet.has(interaction.contactId))
-      .map(interaction => interaction.contactId)
-  );
-  const todayActive = todayActiveContactIds.size;
   
   // 休眠名单（180天未联络，只统计个人的）
   const oneEightyDaysAgo = Date.now() - (180 * 24 * 60 * 60 * 1000);
