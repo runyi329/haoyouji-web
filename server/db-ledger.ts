@@ -1399,10 +1399,40 @@ export async function getLedgerReport(
     }))
     .sort((a: any, b: any) => b.amount - a.amount);
   
+  // 获取最近30天的统计数据(包含当天)
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 29); // 包含当天共30天
+  
+  const recentStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+  const recentEndDate = today.toISOString().split('T')[0];
+  
+  const recentStats = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+      )
+    );
+  
+  const recentIncome = Number(recentStats[0]?.totalIncome || 0);
+  const recentExpense = Number(recentStats[0]?.totalExpense || 0);
+  
   return {
     yearlyStats: {
       income,
       expense,
+    },
+    recentStats: {
+      income: recentIncome,
+      expense: recentExpense,
+      days: 30,
     },
     memberStats,
     monthlyStats,

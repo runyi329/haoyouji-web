@@ -317,11 +317,13 @@ function ChartViewContent({
   const yearIncome = reportData?.yearlyStats?.income || 0;
   const yearExpense = reportData?.yearlyStats?.expense || 0;
   
-  // 计算天数和平均值（固定为30天，包含当天）
-  const daysPassed = 30;
+  // 使用最近30天的真实数据
+  const recentIncome = reportData?.recentStats?.income || 0;
+  const recentExpense = reportData?.recentStats?.expense || 0;
+  const daysPassed = reportData?.recentStats?.days || 30;
   
-  const avgIncome = daysPassed > 0 ? yearIncome / daysPassed : 0;
-  const avgExpense = daysPassed > 0 ? yearExpense / daysPassed : 0;
+  const avgIncome = daysPassed > 0 ? recentIncome / daysPassed : 0;
+  const avgExpense = daysPassed > 0 ? recentExpense / daysPassed : 0;
 
   // 支出分类数据
   const expenseCategories = reportData?.categoryStats?.expense || [];
