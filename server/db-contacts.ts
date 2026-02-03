@@ -1386,14 +1386,16 @@ export async function getContactStats(parentUserId: number) {
   // 获取用户参与的所有账本的账目总数
   let totalLedgerEntries = 0;
   try {
+    // 使用COUNT(*)而不是COUNT(DISTINCT),因为lr.id已经是唯一的
     const ledgerEntriesResult = await db.execute(sql`
-      SELECT COUNT(DISTINCT lr.id) as count
+      SELECT COUNT(*) as count
       FROM ledger_records lr
       INNER JOIN ledgers l ON lr.ledgerId = l.id
       INNER JOIN ledger_members lm ON l.id = lm.ledgerId
       WHERE lm.userId = ${parentUserId}
     `);
     totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
+    console.log('[getContactStats] 账目总数:', totalLedgerEntries, '用户ID:', parentUserId);
   } catch (error) {
     console.error('[获取账目总数失败]', error);
   }
