@@ -418,9 +418,10 @@ export default function ContactsList() {
   // 监听location变化，当返回列表页时强制刷新数据
   React.useEffect(() => {
     if (location === '/contacts') {
-      // 重置分页和数据，触发重新加载
+      // 重置分页、数据和搜索查询，触发重新加载
       setPage(1);
       setAllLoadedContacts([]);
+      setSearchQuery(""); // 清空搜索查询
     }
   }, [location]);
   
