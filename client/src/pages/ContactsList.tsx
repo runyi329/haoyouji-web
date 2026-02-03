@@ -1775,7 +1775,9 @@ export default function ContactsList() {
       <div>
         {(isLoading || isLoadingCompanyList) ? (
           <div className="text-center py-8 text-muted-foreground">加载中...</div>
-        ) : viewMode === 'company' && companyList && companyList.length > 0 ? (
+        ) : viewMode === 'company' ? (
+          // 公司视图
+          companyList && companyList.length > 0 ? (
           // 公司列表视图
           <div className="space-y-2">
             {companyList.map((company) => (
@@ -1831,6 +1833,12 @@ export default function ContactsList() {
               </Card>
             ))}
           </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>暂无公司信息</p>
+              <p className="text-sm mt-2">请为人脉添加"公司名称"字段</p>
+            </div>
+          )
         ) : filteredContacts && filteredContacts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredContacts.map((contact) => {
