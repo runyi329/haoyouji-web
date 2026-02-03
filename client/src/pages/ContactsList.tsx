@@ -741,39 +741,20 @@ export default function ContactsList() {
           return daysSinceInteraction > thresholdDays;
         }
         case 'monthlyActive': {
-          // 本月活跃：本月有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfMonth;
+          // 本月活跃：本月有联络记录（使用后端返回的标记字段）
+          return contact.hasInteractionThisMonth === true;
         }
         case 'weeklyActive': {
-          // 本周活跃：本周有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfWeek;
+          // 本周活跃：本周有联络记录（使用后端返回的标记字段）
+          return contact.hasInteractionThisWeek === true;
         }
         case 'todayActive': {
-          // 今日活跃：今天有联络记录
-          if (!contact.lastInteractionDate) return false;
-          
-          // 使用北京时间（UTC+8）来计算"今天"的范围
-          const beijingOffset = 8 * 60 * 60 * 1000;
-          const nowTimestamp = Date.now();
-          const oneDayMs = 24 * 60 * 60 * 1000;
-          
-          // 计算北京时间的今天开始时刻
-          const beijingTimestamp = nowTimestamp + beijingOffset;
-          const beijingStartOfDay = Math.floor(beijingTimestamp / oneDayMs) * oneDayMs;
-          const startOfTodayUTC = beijingStartOfDay - beijingOffset;
-          
-          // lastInteractionDate是时间戳（毫秒），直接比较
-          return contact.lastInteractionDate >= startOfTodayUTC;
+          // 今日活跃：今天有联络记录（使用后端返回的标记字段）
+          return contact.hasInteractionToday === true;
         }
         case 'yearlyActive': {
-          // 今年活跃：今年有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfYear;
+          // 今年活跃：今年有联络记录（使用后端返回的标记字段）
+          return contact.hasInteractionThisYear === true;
         }
         case 'blacklist': {
           // 拉黑名单

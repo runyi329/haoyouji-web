@@ -2270,19 +2270,32 @@ export async function getInteractionStatsForContacts(contactIds: number[]): Prom
 }
 
 /**
- * 批量获取多个联系人的最后联络时间和今日联络状态
+ * 批量获取多个联系人的最后联络时间和活跃时间段标记
  * @param contactIds 联系人ID数组
- * @returns Map<contactId, { lastInteraction, hasTodayInteraction }>
+ * @returns Map<contactId, { lastInteraction, hasTodayInteraction, hasInteractionThisWeek, hasInteractionThisMonth, hasInteractionThisYear }>
  */
-export async function getInteractionInfoForContacts(contactIds: number[]): Promise<Map<number, { lastInteraction: number | null, hasTodayInteraction: boolean }>> {
+export async function getInteractionInfoForContacts(contactIds: number[]): Promise<Map<number, { lastInteraction: number | null, hasTodayInteraction: boolean, hasInteractionToday: boolean, hasInteractionThisWeek: boolean, hasInteractionThisMonth: boolean, hasInteractionThisYear: boolean }>> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (!db || contactIds.length === 0) return new Map();
   
+  // 获取时间范围（基于北京时间）
+  const startOfTodayTimestamp = getBeijingTodayStart();
+  const startOfWeekTimestamp = getBeijingThisWeekStart();
+  const startOfMonthTimestamp = getBeijingThisMonthStart();
+  const startOfYearTimestamp = getBeijingThisYearStart();
+  
   // 初始化结果
-  const infoMap = new Map<number, { lastInteraction: number | null, hasTodayInteraction: boolean }>();
+  const infoMap = new Map<number, { lastInteraction: number | null, hasTodayInteraction: boolean, hasInteractionToday: boolean, hasInteractionThisWeek: boolean, hasInteractionThisMonth: boolean, hasInteractionThisYear: boolean }>();
   for (const contactId of contactIds) {
-    infoMap.set(contactId, { lastInteraction: null, hasTodayInteraction: false });
+    infoMap.set(contactId, { 
+      lastInteraction: null, 
+      hasTodayInteraction: false,
+      hasInteractionToday: false,
+      hasInteractionThisWeek: false,
+      hasInteractionThisMonth: false,
+      hasInteractionThisYear: false
+    });
   }
   
   // 对每个联系人单独检查
@@ -2293,9 +2306,45 @@ export async function getInteractionInfoForContacts(contactIds: number[]): Promi
     // 检查今天是否有联络
     const hasToday = await hasTodayInteraction(contactId);
     
+    // 检查各时间段是否有联络记录
+    let hasInteractionToday = false;
+    let hasInteractionThisWeek = false;
+    let hasInteractionThisMonth = false;
+    let hasInteractionThisYear = false;
+    
+    // 查询该人脉的所有联络记录
+    const interactions = await db
+      .select({ interactionDate: contactInteractions.interactionDate })
+      .from(contactInteractions)
+      .where(eq(contactInteractions.contactId, contactId));
+    
+    // 检查每个联络记录是否在各时间段内
+    for (const interaction of interactions) {
+      const interactionTimestamp = typeof interaction.interactionDate === 'number' 
+        ? interaction.interactionDate 
+        : new Date(interaction.interactionDate).getTime();
+      
+      if (interactionTimestamp >= startOfTodayTimestamp) {
+        hasInteractionToday = true;
+      }
+      if (interactionTimestamp >= startOfWeekTimestamp) {
+        hasInteractionThisWeek = true;
+      }
+      if (interactionTimestamp >= startOfMonthTimestamp) {
+        hasInteractionThisMonth = true;
+      }
+      if (interactionTimestamp >= startOfYearTimestamp) {
+        hasInteractionThisYear = true;
+      }
+    }
+    
     infoMap.set(contactId, {
       lastInteraction: lastInteraction || null,
-      hasTodayInteraction: hasToday
+      hasTodayInteraction: hasToday,
+      hasInteractionToday,
+      hasInteractionThisWeek,
+      hasInteractionThisMonth,
+      hasInteractionThisYear
     });
   }
   
@@ -2996,7 +3045,13 @@ export async function getContactsByParentPaginated(
     console.log('[getContactsByParentPaginated] 第一个联系人:', baseContacts[0]?.name, JSON.stringify(baseContacts[0]).substring(0, 200));
   }
   
-  // 3. 为每个人脉添加上次联络日期和距今天数（这部分保持不变）
+  // 3. 为每个人脉添加上次联络日期、距今天数和活跃时间段标记
+  // 获取时间范围（基于北京时间）
+  const startOfTodayTimestamp = getBeijingTodayStart();
+  const startOfWeekTimestamp = getBeijingThisWeekStart();
+  const startOfMonthTimestamp = getBeijingThisMonthStart();
+  const startOfYearTimestamp = getBeijingThisYearStart();
+  
   const contactsWithInteractionInfo = await Promise.all(
     baseContacts.map(async (contact) => {
       const lastInteraction = await getLastInteractionDate(contact.id);
@@ -3004,10 +3059,46 @@ export async function getContactsByParentPaginated(
         ? calculateDaysDifference(lastInteraction, Date.now())
         : null;
       
+      // 检查各时间段是否有联络记录
+      let hasInteractionToday = false;
+      let hasInteractionThisWeek = false;
+      let hasInteractionThisMonth = false;
+      let hasInteractionThisYear = false;
+      
+      // 查询该人脉的所有联络记录
+      const interactions = await db
+        .select({ interactionDate: contactInteractions.interactionDate })
+        .from(contactInteractions)
+        .where(eq(contactInteractions.contactId, contact.id));
+      
+      // 检查每个联络记录是否在各时间段内
+      for (const interaction of interactions) {
+        const interactionTimestamp = typeof interaction.interactionDate === 'number' 
+          ? interaction.interactionDate 
+          : new Date(interaction.interactionDate).getTime();
+        
+        if (interactionTimestamp >= startOfTodayTimestamp) {
+          hasInteractionToday = true;
+        }
+        if (interactionTimestamp >= startOfWeekTimestamp) {
+          hasInteractionThisWeek = true;
+        }
+        if (interactionTimestamp >= startOfMonthTimestamp) {
+          hasInteractionThisMonth = true;
+        }
+        if (interactionTimestamp >= startOfYearTimestamp) {
+          hasInteractionThisYear = true;
+        }
+      }
+      
       return {
         ...contact,
         lastInteractionDate: lastInteraction,
         daysSinceLastInteraction,
+        hasInteractionToday,
+        hasInteractionThisWeek,
+        hasInteractionThisMonth,
+        hasInteractionThisYear,
       };
     })
   );

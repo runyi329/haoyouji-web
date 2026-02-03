@@ -77,6 +77,7 @@ export async function getDb(forceGuest: boolean = false) {
           connectTimeout: 30000,
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
+          ssl: { rejectUnauthorized: true },
         });
         _guestDb = drizzle(connection);
         console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
@@ -104,6 +105,7 @@ export async function getDb(forceGuest: boolean = false) {
           connectTimeout: 30000,
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
+          ssl: { rejectUnauthorized: true },
         });
         _db = drizzle(connection);
         // 判断数据库类型

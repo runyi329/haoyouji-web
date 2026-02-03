@@ -4774,6 +4774,10 @@ export const appRouter = router({
               ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
               : null;
             result.hasTodayInteraction = interactionInfo.hasTodayInteraction;
+            result.hasInteractionToday = interactionInfo.hasInteractionToday || false;
+            result.hasInteractionThisWeek = interactionInfo.hasInteractionThisWeek || false;
+            result.hasInteractionThisMonth = interactionInfo.hasInteractionThisMonth || false;
+            result.hasInteractionThisYear = interactionInfo.hasInteractionThisYear || false;
             result.totalInteractions = interactionStats?.totalInteractions || 0;
             
             // 推荐人信息
