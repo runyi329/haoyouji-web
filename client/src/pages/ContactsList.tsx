@@ -2067,18 +2067,14 @@ export default function ContactsList() {
                           {contact.title}
                         </span>
                       )}
-                      {/* 公司信息显示 - 当viewMode为company时突出显示 */}
+                      {/* 公司信息显示 - 始终显示公司和职位 */}
                       {(() => {
                         const company = getFieldValue(contact, "公司名称");
                         const position = getFieldValue(contact, "职位");
                         if (!company && !position) return null;
                         return (
-                          <div className={`text-xs sm:text-sm mt-0.5 ${
-                            viewMode === 'company' 
-                              ? 'text-teal-600 dark:text-teal-400 font-medium' 
-                              : 'text-muted-foreground'
-                          }`}>
-                            {company && <span>{company}</span>}
+                          <div className="text-xs sm:text-sm mt-1 text-gray-600 dark:text-gray-400">
+                            {company && <span className="font-medium">{company}</span>}
                             {company && position && <span className="mx-1">·</span>}
                             {position && <span>{position}</span>}
                           </div>
