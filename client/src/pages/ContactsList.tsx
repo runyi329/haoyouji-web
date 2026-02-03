@@ -846,11 +846,21 @@ export default function ContactsList() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // 搜索框输入时不显示下拉列表，直接在主列表显示搜索结果
+  // 搜索框输入时显示模糊搜索下拉列表
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    setShowDropdown(false); // 不显示下拉框
-    setShowHistory(false);
+    const value = e.target.value;
+    setSearchQuery(value);
+    // 当有输入内容时显示下拉框，否则隐藏
+    if (value.trim()) {
+      setShowDropdown(true);
+      setShowHistory(false);
+    } else {
+      setShowDropdown(false);
+      // 当清空输入时，如果有历史记录则显示历史
+      if (searchHistory.length > 0) {
+        setShowHistory(true);
+      }
+    }
   };
   
   // 搜索框获得焦点时显示历史记录
