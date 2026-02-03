@@ -951,10 +951,25 @@ function CalendarViewContent({
 
   // 切换成员选中状态
   const toggleMember = (memberId: number) => {
+    // 如果memberId为0，表示选择“全部成员”
+    if (memberId === 0) {
+      setSelectedMemberIds([]);
+      return;
+    }
+    
     setSelectedMemberIds(prev => {
+      // 如果当前是“全部成员”状态（空数组），点击单个成员时只选中这个成员
+      if (prev.length === 0) {
+        return [memberId];
+      }
+      
+      // 如果已经选中，则取消选中
       if (prev.includes(memberId)) {
-        return prev.filter(id => id !== memberId);
+        const newIds = prev.filter(id => id !== memberId);
+        // 如果取消后为空，表示选择“全部成员”
+        return newIds;
       } else {
+        // 否则添加到选中列表
         return [...prev, memberId];
       }
     });
