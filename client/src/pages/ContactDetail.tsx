@@ -84,25 +84,41 @@ function CopyableItem({
   isComposite?: boolean;
   compositeLines?: {label: string, value: string}[];
 }) {
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
+    
     let copyText = value;
     if (isComposite && compositeLines.length > 0) {
       // 只复制内容，不复制标题
       copyText = compositeLines.map(l => l.value).join('\n');
     }
-    navigator.clipboard.writeText(copyText).then(() => {
+    
+    console.log('[CopyableItem] 复制内容:', copyText);
+    
+    try {
+      // 触感反馈
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
+      
+      await navigator.clipboard.writeText(copyText);
+      console.log('[CopyableItem] 复制成功');
       setToastMessage(`已复制`);
       setToastType('success');
       setShowToast(true);
-    }).catch(() => {
+      
+      // 3秒后自动关闭Toast
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('[CopyableItem] 复制失败:', error);
       setToastMessage('复制失败');
       setToastType('error');
       setShowToast(true);
-    });
+      
+      // 3秒后自动关闭Toast
+      setTimeout(() => setShowToast(false), 3000);
+    }
   };
 
   return (
@@ -316,16 +332,35 @@ function ExtendedInfoSection({
                         />
                       </div>
                       <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(companyName).then(() => {
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          
+                          console.log('[公司名称] 复制内容:', companyName);
+                          
+                          try {
+                            // 触感反馈
+                            if (navigator.vibrate) {
+                              navigator.vibrate(50);
+                            }
+                            
+                            await navigator.clipboard.writeText(companyName);
+                            console.log('[公司名称] 复制成功');
                             setToastMessage('已复制');
                             setToastType('success');
                             setShowToast(true);
-                          }).catch(() => {
+                            
+                            // 3秒后自动关闭Toast
+                            setTimeout(() => setShowToast(false), 3000);
+                          } catch (error) {
+                            console.error('[公司名称] 复制失败:', error);
                             setToastMessage('复制失败');
                             setToastType('error');
                             setShowToast(true);
-                          });
+                            
+                            // 3秒后自动关闭Toast
+                            setTimeout(() => setShowToast(false), 3000);
+                          }
                         }}
                         className="p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0"
                         title="复制"
@@ -2665,7 +2700,7 @@ export default function ContactDetail() {
       
       {/* Toast弹窗 */}
       {showToast && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]" onClick={(e) => {
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowToast(false);
           }
@@ -2673,6 +2708,9 @@ export default function ContactDetail() {
           <div className="bg-white rounded-2xl p-6 max-w-[85%] w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-center mb-6">
               <h3 className="text-lg font-semibold text-gray-900">{toastMessage}</h3>
+              {toastType === 'success' && (
+                <p className="text-sm text-gray-500 mt-2">内容已复制到剪贴板</p>
+              )}
             </div>
             
             <div className="flex gap-3">
