@@ -440,11 +440,19 @@ export default function ContactsList() {
   const allContacts = allLoadedContacts;
 
   // 获取公司列表（当 viewMode 为 company 时）
-  const { data: companyList, isLoading: isLoadingCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
+  const { data: companyList, isLoading: isLoadingCompanyList, refetch: refetchCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
     enabled: viewMode === 'company', // 只在公司视图时启用
     refetchOnMount: 'always', // 确保页面重新进入时刷新数据
     staleTime: 0, // 设置数据立即过期，确保每次都重新获取
   });
+  
+  // 当viewMode变化为company时，强制刷新公司列表
+  React.useEffect(() => {
+    if (viewMode === 'company') {
+      console.log('[ContactsList] viewMode changed to company, refetching companyList...');
+      refetchCompanyList();
+    }
+  }, [viewMode, refetchCompanyList]);
   
   // 调试日志
   console.log('[ContactsList] viewMode:', viewMode);
