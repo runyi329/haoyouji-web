@@ -1124,7 +1124,7 @@ export default function ContactsManagement() {
   };
 
   return (
-    <div className="container py-4 sm:py-8 px-2 sm:px-4 pb-24" style={{ touchAction: 'pan-y pinch-zoom' }}>
+    <div className="container py-4 sm:py-8 px-1 sm:px-4 pb-24 max-w-full overflow-x-hidden" style={{ touchAction: 'pan-y pinch-zoom' }}>
       {/* 页面标题 - 手机端更紧凑 */}
       <div className="mb-4 sm:mb-8">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
@@ -1263,8 +1263,8 @@ export default function ContactsManagement() {
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={features} strategy={rectSortingStrategy}>
-          {/* 手机端4列，平板3列，桌面4列 */}
-          <div className="grid grid-cols-4 sm:grid-cols-3 md:grid-cols-4 gap-1.5 sm:gap-3 md:gap-4 touch-none">
+          {/* 手机端4列,平板3列,桌面4列 - 使用min-w-0确保容器可以收缩 */}
+          <div className="grid grid-cols-4 sm:grid-cols-3 md:grid-cols-4 gap-1 sm:gap-3 md:gap-4 touch-none w-full">
             {features.map((feature) => (
               <SortableFeatureCard 
                 key={feature.id} 
