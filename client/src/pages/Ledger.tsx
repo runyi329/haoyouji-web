@@ -166,6 +166,38 @@ export default function Ledger() {
     }
   };
 
+  // 导出账本的处理函数
+  const handleExport = async (ledgerId: number) => {
+    try {
+      const result = await trpc.ledger.exportToExcel.query({
+        ledgerId: ledgerId,
+      });
+      
+      // 将base64转换为Blob并下载
+      const byteCharacters = atob(result.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("导出成功！");
+    } catch (error: any) {
+      toast.error(`导出失败: ${error.message}`);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-20" style={{ backgroundColor: `${themeColors.primary}15` }}>
       {/* 顶部导航栏 */}
@@ -287,36 +319,9 @@ export default function Ledger() {
                       variant="outline"
                       size="sm"
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
-                        try {
-                          const result = await trpc.ledger.exportToExcel.query({
-                            ledgerId: ledger.id,
-                          });
-                          
-                          // 将base64转换为Blob并下载
-                          const byteCharacters = atob(result.data);
-                          const byteNumbers = new Array(byteCharacters.length);
-                          for (let i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                          }
-                          const byteArray = new Uint8Array(byteNumbers);
-                          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                          
-                          // 创建下载链接
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = result.filename;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          window.URL.revokeObjectURL(url);
-                          
-                          toast.success("导出成功！");
-                        } catch (error: any) {
-                          toast.error(`导出失败: ${error.message}`);
-                        }
+                        handleExport(ledger.id);
                       }}
                     >
                       导出
@@ -364,36 +369,9 @@ export default function Ledger() {
                       variant="outline"
                       size="sm"
                       className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
-                        try {
-                          const result = await trpc.ledger.exportToExcel.query({
-                            ledgerId: ledger.id,
-                          });
-                          
-                          // 将base64转换为Blob并下载
-                          const byteCharacters = atob(result.data);
-                          const byteNumbers = new Array(byteCharacters.length);
-                          for (let i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                          }
-                          const byteArray = new Uint8Array(byteNumbers);
-                          const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                          
-                          // 创建下载链接
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = result.filename;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          window.URL.revokeObjectURL(url);
-                          
-                          toast.success("导出成功！");
-                        } catch (error: any) {
-                          toast.error(`导出失败: ${error.message}`);
-                        }
+                        handleExport(ledger.id);
                       }}
                     >
                       导出
