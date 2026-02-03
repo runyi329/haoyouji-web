@@ -72,12 +72,14 @@ export async function getDb(forceGuest: boolean = false) {
       const dbUrl = process.env.DATABASE_URL;
       if (dbUrl) {
       try {
+        // 判断是否是本地连接
+        const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
         const connection = await mysql.createConnection({
           uri: dbUrl,
           connectTimeout: 30000,
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
-          ssl: { rejectUnauthorized: true },
+          ssl: isLocalhost ? false : { rejectUnauthorized: false },
         });
         _guestDb = drizzle(connection);
         console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
@@ -100,18 +102,19 @@ export async function getDb(forceGuest: boolean = false) {
     
     if (dbUrl) {
       try {
+        // 判断数据库类型
+        const useDevDb = process.env.USE_DEV_DB === 'true';
+        const isTencentCloud = dbUrl.includes('124.223.54.69') || dbUrl.includes('tencentcloud');
+        const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+        
         const connection = await mysql.createConnection({
           uri: dbUrl,
           connectTimeout: 30000,
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
-          ssl: { rejectUnauthorized: true },
+          ssl: isLocalhost ? false : { rejectUnauthorized: false },
         });
         _db = drizzle(connection);
-        // 判断数据库类型
-        const useDevDb = process.env.USE_DEV_DB === 'true';
-        const isTencentCloud = dbUrl.includes('124.223.54.69') || dbUrl.includes('tencentcloud');
-        const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
         
         let dbType = "Manus数据库";
         if (isTencentCloud) dbType = "腾讯云数据库";
