@@ -452,6 +452,7 @@ interface StatsData {
   totalInteractionCount: number;
   totalTagCount: number;
   totalUsageDays: number;
+  totalLedgerEntries: number;
 }
 
 function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature; stats: StatsData; isBreathing: boolean }) {
@@ -854,6 +855,9 @@ export default function ContactsManagement() {
   // 获取累计使用天数
   const { data: totalUsageDays, refetch: refetchTotalUsageDays } = trpc.contacts.getTotalUsageDays.useQuery();
   
+  // 获取账目总数
+  const { data: totalLedgerEntries, refetch: refetchTotalLedgerEntries } = trpc.contacts.totalLedgerEntries.useQuery();
+  
   // 刷新状态
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   
@@ -872,7 +876,8 @@ export default function ContactsManagement() {
         refetchMonthReminders(),
         refetchTotalInteractionCount(),
         refetchTotalTagCount(),
-        refetchTotalUsageDays()
+        refetchTotalUsageDays(),
+        refetchTotalLedgerEntries()
       ]);
       console.log('[handleRefresh] 数据刷新完成');
     } catch (error) {
@@ -1290,6 +1295,7 @@ export default function ContactsManagement() {
                   totalInteractionCount: totalInteractionCount || 0,
                   totalTagCount: totalTagCount || 0,
                   totalUsageDays: totalUsageDays || 0,
+                  totalLedgerEntries: totalLedgerEntries || 0,
                 }} 
               />
             ))}

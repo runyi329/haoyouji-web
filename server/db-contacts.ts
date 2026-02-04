@@ -1095,6 +1095,42 @@ export async function getTotalTagCount(parentUserId: number): Promise<number> {
 }
 
 /**
+ * 获取账目总数（用户参与的所有账本的账目记录总数）
+ */
+export async function getTotalLedgerEntries(parentUserId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  try {
+    // 先获取用户参与的所有账本ID
+    const userLedgers = await db
+      .select({ ledgerId: ledgerMembers.ledgerId })
+      .from(ledgerMembers)
+      .where(eq(ledgerMembers.userId, parentUserId));
+    
+    const ledgerIds = userLedgers.map(l => l.ledgerId);
+    console.log('[getTotalLedgerEntries] 用户参与的账本IDs:', ledgerIds, '用户ID:', parentUserId);
+    
+    if (ledgerIds.length === 0) {
+      return 0;
+    }
+    
+    // 统计这些账本中的所有账目记录数
+    const ledgerEntriesResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ledgerRecords)
+      .where(inArray(ledgerRecords.ledgerId, ledgerIds));
+    
+    const total = Number(ledgerEntriesResult[0]?.count || 0);
+    console.log('[getTotalLedgerEntries] 账目总数:', total, '用户ID:', parentUserId);
+    return total;
+  } catch (error) {
+    console.error('[getTotalLedgerEntries] 获取账目总数失败:', error);
+    return 0;
+  }
+}
+
+/**
  * 获取人脉统计数据
  */
 export async function getContactStats(parentUserId: number) {

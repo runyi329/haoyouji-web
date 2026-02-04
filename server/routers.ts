@@ -3685,6 +3685,12 @@ export const appRouter = router({
       return await dbContacts.getTotalTagCount(ctx.user.id);
     }),
 
+  // 获取账目总数
+  totalLedgerEntries: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getTotalLedgerEntries(ctx.user.id);
+    }),
+
   // 标签管理
   tags: router({
     // 获取所有标签
