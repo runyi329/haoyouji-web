@@ -395,6 +395,9 @@ export default function ContactsList() {
   // 轻量级获取联系人数量（全部、我的、共享）
   const { data: contactCounts } = trpc.contacts.counts.useQuery();
   
+  // 获取统计数据（用于显示新增人数）
+  const { data: stats } = trpc.contacts.stats.useQuery();
+  
   // 获取人脉列表（支持分页）
   const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
@@ -1169,6 +1172,20 @@ export default function ContactsList() {
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : isLoading ? (
             `加载中...`
+          ) : filterType === 'thisWeek' && stats ? (
+            `共 ${stats.newThisWeek} 位人脉`
+          ) : filterType === 'thisMonth' && stats ? (
+            `共 ${stats.newThisMonth} 位人脉`
+          ) : filterType === 'thisYear' && stats ? (
+            `共 ${stats.newThisYear} 位人脉`
+          ) : filterType === 'weeklyActive' && stats ? (
+            `共 ${stats.weeklyActive} 位人脉`
+          ) : filterType === 'monthlyActive' && stats ? (
+            `共 ${stats.monthlyActive} 位人脉`
+          ) : filterType === 'yearlyActive' && stats ? (
+            `共 ${stats.yearlyActive} 位人脉`
+          ) : filterType === 'todayActive' && stats ? (
+            `共 ${stats.todayActive} 位人脉`
           ) : contactCounts ? (
             shareFilter === 'all' ? `共 ${contactCounts.total} 位人脉` :
             shareFilter === 'mine' ? `共 ${contactCounts.mine} 位人脉` :
