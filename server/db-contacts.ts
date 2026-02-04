@@ -3069,3 +3069,141 @@ export async function getContactsByParentPaginated(
     pageSize,
   };
 }
+
+
+/**
+ * 获取按筛选类型分类的统计数量（全部/我的/共享）
+ * 用于列表页显示"全部/我的/共享"按钮的数字
+ * @param parentUserId 用户ID
+ * @param filterType 筛选类型: thisWeek, thisMonth, thisYear, weeklyActive, monthlyActive, yearlyActive, todayActive
+ * @returns { total, mine, shared }
+ */
+export async function getFilteredCounts(
+  parentUserId: number, 
+  filterType: string
+): Promise<{ total: number, mine: number, shared: number }> {
+  console.log('[getFilteredCounts] 开始查询, 用户ID:', parentUserId, '筛选类型:', filterType);
+  
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 获取时间范围
+  const thisWeekStart = new Date(getBeijingThisWeekStart());
+  const thisMonthStart = new Date(getBeijingThisMonthStart());
+  const thisYearStart = new Date(getBeijingThisYearStart());
+  const todayStart = new Date(getBeijingTodayStart());
+  
+  // 获取共享给我的人脉的所有者ID列表
+  const sharingConnections = await db
+    .select({ sharerId: contactSharingConnections.sharerId })
+    .from(contactSharingConnections)
+    .where(
+      and(
+        eq(contactSharingConnections.receiverId, parentUserId),
+        eq(contactSharingConnections.status, 'active')
+      )
+    );
+  const sharerIds = sharingConnections.map(conn => conn.sharerId);
+  
+  let mine = 0;
+  let shared = 0;
+  
+  // 根据筛选类型计算
+  if (filterType === 'thisWeek' || filterType === 'thisMonth' || filterType === 'thisYear') {
+    // 新增类型：根据createdAt筛选
+    let startDate: Date;
+    if (filterType === 'thisWeek') {
+      startDate = thisWeekStart;
+    } else if (filterType === 'thisMonth') {
+      startDate = thisMonthStart;
+    } else {
+      startDate = thisYearStart;
+    }
+    
+    // 统计我的新增人脉
+    const mineResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.parentUserId, parentUserId),
+          sql`${contacts.createdAt} >= ${startDate}`
+        )
+      );
+    mine = mineResult[0]?.count || 0;
+    
+    // 统计共享的新增人脉
+    if (sharerIds.length > 0) {
+      const sharedResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(contacts)
+        .where(
+          and(
+            inArray(contacts.parentUserId, sharerIds),
+            sql`${contacts.createdAt} >= ${startDate}`
+          )
+        );
+      shared = sharedResult[0]?.count || 0;
+    }
+  } else if (filterType === 'todayActive' || filterType === 'weeklyActive' || filterType === 'monthlyActive' || filterType === 'yearlyActive') {
+    // 活跃类型：根据contact_interactions筛选
+    let startTimestamp: number;
+    if (filterType === 'todayActive') {
+      startTimestamp = getBeijingTodayStart();
+    } else if (filterType === 'weeklyActive') {
+      startTimestamp = getBeijingThisWeekStart();
+    } else if (filterType === 'monthlyActive') {
+      startTimestamp = getBeijingThisMonthStart();
+    } else {
+      startTimestamp = getBeijingThisYearStart();
+    }
+    
+    // 获取我的人脉ID
+    const myContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.parentUserId, parentUserId));
+    const myContactIds = myContacts.map(c => c.id);
+    
+    // 获取共享人脉ID
+    let sharedContactIds: number[] = [];
+    if (sharerIds.length > 0) {
+      const sharerContacts = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(inArray(contacts.parentUserId, sharerIds));
+      sharedContactIds = sharerContacts.map(c => c.id);
+    }
+    
+    // 查询有活跃记录的联系人
+    const activeInteractions = await db
+      .select({ contactId: contactInteractions.contactId })
+      .from(contactInteractions)
+      .where(sql`${contactInteractions.interactionDate} >= ${startTimestamp}`);
+    
+    // 统计我的活跃人脉
+    const myActiveSet = new Set<number>();
+    for (const interaction of activeInteractions) {
+      if (myContactIds.includes(interaction.contactId)) {
+        myActiveSet.add(interaction.contactId);
+      }
+    }
+    mine = myActiveSet.size;
+    
+    // 统计共享的活跃人脉
+    const sharedActiveSet = new Set<number>();
+    for (const interaction of activeInteractions) {
+      if (sharedContactIds.includes(interaction.contactId)) {
+        sharedActiveSet.add(interaction.contactId);
+      }
+    }
+    shared = sharedActiveSet.size;
+  }
+  
+  const total = mine + shared;
+  const result = { total, mine, shared };
+  
+  console.log('[getFilteredCounts] 查询结果:', result);
+  
+  return result;
+}

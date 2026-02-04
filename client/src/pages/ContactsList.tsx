@@ -398,6 +398,12 @@ export default function ContactsList() {
   // 获取统计数据（用于显示新增人数）
   const { data: stats } = trpc.contacts.stats.useQuery();
   
+  // 根据筛选类型获取分类统计数量（全部、我的、共享）
+  const { data: filteredCounts } = trpc.contacts.filteredCounts.useQuery(
+    { filterType: filterType || '' },
+    { enabled: !!filterType } // 只有有filterType时才查询
+  );
+  
   // 获取人脉列表（支持分页）
   const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
@@ -1145,7 +1151,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('all')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                全部{contactCounts ? ` (${contactCounts.total})` : ''}
+                全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
               </Button>
               <Button
                 variant={shareFilter === 'mine' ? 'default' : 'outline'}
@@ -1153,7 +1159,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('mine')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                我的{contactCounts ? ` (${contactCounts.mine})` : ''}
+                我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
               </Button>
               <Button
                 variant={shareFilter === 'shared' ? 'default' : 'outline'}
@@ -1161,7 +1167,7 @@ export default function ContactsList() {
                 onClick={() => setShareFilter('shared')}
                 className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
               >
-                共享{contactCounts ? ` (${contactCounts.shared})` : ''}
+                共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
               </Button>
             </div>
           </div>
@@ -1172,21 +1178,13 @@ export default function ContactsList() {
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : isLoading ? (
             `加载中...`
-          ) : filterType === 'thisWeek' && stats ? (
-            `共 ${stats.newThisWeek} 位人脉`
-          ) : filterType === 'thisMonth' && stats ? (
-            `共 ${stats.newThisMonth} 位人脉`
-          ) : filterType === 'thisYear' && stats ? (
-            `共 ${stats.newThisYear} 位人脉`
-          ) : filterType === 'weeklyActive' && stats ? (
-            `共 ${stats.weeklyActive} 位人脉`
-          ) : filterType === 'monthlyActive' && stats ? (
-            `共 ${stats.monthlyActive} 位人脉`
-          ) : filterType === 'yearlyActive' && stats ? (
-            `共 ${stats.yearlyActive} 位人脉`
-          ) : filterType === 'todayActive' && stats ? (
-            `共 ${stats.todayActive} 位人脉`
+          ) : (filterType && filteredCounts) ? (
+            // 有筛选类型时，根据 shareFilter 显示对应的分类数量
+            shareFilter === 'all' ? `共 ${filteredCounts.total} 位人脉` :
+            shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位人脉` :
+            `共 ${filteredCounts.shared} 位人脉`
           ) : contactCounts ? (
+            // 无筛选类型时，显示总人脉数量
             shareFilter === 'all' ? `共 ${contactCounts.total} 位人脉` :
             shareFilter === 'mine' ? `共 ${contactCounts.mine} 位人脉` :
             `共 ${contactCounts.shared} 位人脉`

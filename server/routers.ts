@@ -3655,6 +3655,15 @@ export const appRouter = router({
       return await dbContacts.getContactCounts(ctx.user.id);
     }),
 
+  // 根据筛选类型获取分类统计数量（全部、我的、共享）
+  filteredCounts: protectedProcedure
+    .input(z.object({
+      filterType: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      return await dbContacts.getFilteredCounts(ctx.user.id, input.filterType);
+    }),
+
   // 获取公司列表（所有有公司名称的联系人，标注重复）
   companyList: protectedProcedure
     .query(async ({ ctx }) => {
