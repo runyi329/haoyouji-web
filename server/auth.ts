@@ -155,10 +155,11 @@ export async function registerWithPassword(
     };
   }
 
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+  // 允许汉字、字母、数字和下划线
+  if (!/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(username)) {
     return {
       success: false,
-      error: "用户名只能包含字母、数字和下划线",
+      error: "用户名只能包含汉字、字母、数字和下划线",
     };
   }
 
