@@ -1,7 +1,7 @@
 import { getDb } from "./db";
 import {
   contacts, contactTags, contactTagRelations, contactInteractions, contactCustomFields, contactFieldValues, contactFieldCategories, reminders,
-  personalContactTags, contactSharingConnections,
+  personalContactTags, contactSharingConnections, ledgerRecords, ledgerMembers,
   InsertContact, InsertContactTag, InsertContactTagRelation, InsertContactInteraction, InsertContactCustomField,
   InsertPersonalContactTag,
 } from "../drizzle/schema";
@@ -1325,15 +1325,24 @@ export async function getContactStats(parentUserId: number) {
   // 获取用户参与的所有账本的账目总数
   let totalLedgerEntries = 0;
   try {
-    // 使用COUNT(*)而不是COUNT(DISTINCT),因为lr.id已经是唯一的
-    const ledgerEntriesResult = await db.execute(sql`
-      SELECT COUNT(*) as count
-      FROM ledger_records lr
-      INNER JOIN ledgers l ON lr.ledgerId = l.id
-      INNER JOIN ledger_members lm ON l.id = lm.ledgerId
-      WHERE lm.userId = ${parentUserId}
-    `);
-    totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
+    // 先获取用户参与的所有账本ID
+    const userLedgers = await db
+      .select({ ledgerId: ledgerMembers.ledgerId })
+      .from(ledgerMembers)
+      .where(eq(ledgerMembers.userId, parentUserId));
+    
+    const ledgerIds = userLedgers.map(l => l.ledgerId);
+    console.log('[getContactStats] 用户参与的账本IDs:', ledgerIds, '用户ID:', parentUserId);
+    
+    if (ledgerIds.length > 0) {
+      // 统计这些账本中的所有账目记录数
+      const ledgerEntriesResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(ledgerRecords)
+        .where(inArray(ledgerRecords.ledgerId, ledgerIds));
+      
+      totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
+    }
     console.log('[getContactStats] 账目总数:', totalLedgerEntries, '用户ID:', parentUserId);
   } catch (error) {
     console.error('[获取账目总数失败]', error);
