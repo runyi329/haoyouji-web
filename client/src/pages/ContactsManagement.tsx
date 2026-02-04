@@ -534,11 +534,11 @@ function SortableFeatureCard({ feature, stats, isBreathing }: { feature: Feature
     );
   }
 
-  // 功能5显示平均联络间隔
+  // 功能5显示账目总数
   if (feature.id === 5) {
     return (
       <div ref={setNodeRef} style={style} {...attributes} className="aspect-square touch-none">
-        <TotalEntriesCard count={stats?.totalLedgerEntries || 0} dragListeners={listeners} />
+        <TotalEntriesCard count={stats?.totalLedgerEntries || 0} dragListeners={listeners} isBreathing={isBreathing} />
       </div>
     );
   }
