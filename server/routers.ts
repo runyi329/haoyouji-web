@@ -3691,6 +3691,164 @@ export const appRouter = router({
       return await dbContacts.getTotalLedgerEntries(ctx.user.id);
     }),
 
+  // 自动生成模拟人脉功能（仅限特定用户）
+  autoGenerate: router({
+    // 检查当前用户是否有权限使用此功能
+    checkPermission: protectedProcedure
+      .query(async ({ ctx }) => {
+        // 目前仅允许用户名为"胡永煜"的用户使用
+        const allowedUsernames = ['胡永煜'];
+        return {
+          allowed: allowedUsernames.includes(ctx.user.username),
+          username: ctx.user.username
+        };
+      }),
+    
+    // 获取当前自动生成状态
+    status: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getAutoGenerateStatus } = await import('./mock-data-generator');
+        return getAutoGenerateStatus(ctx.user.id);
+      }),
+    
+    // 启动自动生成
+    start: protectedProcedure
+      .input(z.object({
+        dailyNewContacts: z.number().min(0).max(100).default(0),  // 每天生成新人脉数量
+        dailyRandomInteractions: z.number().min(0).max(100).default(0),  // 每天随机联络数量
+        dailyRandomTags: z.number().min(0).max(200).default(0),  // 每天随机打标签数量
+        options: z.object({
+          includePhone: z.boolean().default(true),
+          includeEmail: z.boolean().default(true),
+          includeAddress: z.boolean().default(true),
+          includeBankAccount: z.boolean().default(true),
+          includeCompany: z.boolean().default(true),
+          includeInvoiceInfo: z.boolean().default(true),
+        })
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // 权限检查
+        const allowedUsernames = ['胡永煤'];
+        if (!allowedUsernames.includes(ctx.user.username)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您没有权限使用此功能' });
+        }
+        
+        const { startAutoGenerate, generateMockContact } = await import('./mock-data-generator');
+        
+        const userId = ctx.user.id;
+        
+        // 创建联系人的回调
+        const createContactCallback = async (mockData: any): Promise<number> => {
+          const contactId = await dbContacts.createContact({
+            parentUserId: userId,
+            name: mockData.name,
+            title: mockData.title,
+            gender: mockData.gender,
+            region: mockData.region,
+          });
+          
+          // 添加扩展信息 - 使用 addFieldValue 函数
+          // 先获取字段类目信息
+          const categories = await dbContacts.getFieldCategories(userId);
+          const getCategoryId = (name: string) => {
+            for (const cat of categories) {
+              if (cat.name === name) return cat.id;
+              if (cat.children) {
+                const child = cat.children.find((c: any) => c.name === name);
+                if (child) return child.id;
+              }
+            }
+            return 0;
+          };
+          
+          if (mockData.phone) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('手机'), '手机', mockData.phone);
+          }
+          if (mockData.email) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('邮箱'), '邮箱', mockData.email);
+          }
+          if (mockData.address) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('快递地址'), '快递地址', JSON.stringify(mockData.address));
+          }
+          if (mockData.bankAccount) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('银行账号'), '银行账号', JSON.stringify(mockData.bankAccount));
+          }
+          if (mockData.company) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('公司名称'), '公司名称', mockData.company);
+          }
+          if (mockData.invoiceInfo) {
+            await dbContacts.addFieldValue(contactId, getCategoryId('开票信息'), '开票信息', JSON.stringify(mockData.invoiceInfo));
+          }
+          
+          return contactId;
+        };
+        
+        // 创建联络记录的回调
+        const createInteractionCallback = async (contactId: number, type: string, notes: string): Promise<void> => {
+          await dbContacts.createContactInteraction({
+            contactId,
+            interactionDate: new Date(),
+            note: `[自动生成] ${type}: ${notes}`,
+          });
+        };
+        
+        // 添加标签的回调
+        const addTagCallback = async (contactId: number, tagName: string): Promise<void> => {
+          // 先查找或创建标签
+          const existingTags = await dbContacts.getContactTags(userId);
+          let tagId = existingTags.find(t => t.name === tagName)?.id;
+          if (!tagId) {
+            // 创建新标签
+            const newTag = await dbContacts.createContactTag({
+              name: tagName,
+              parentUserId: userId,
+              color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'),
+            });
+            tagId = newTag?.id;
+          }
+          if (tagId) {
+            await dbContacts.addTagToContact(contactId, tagId);
+          }
+        };
+        
+        // 获取随机联系人ID的回调
+        const getRandomContactIds = async (): Promise<number[]> => {
+          const contacts = await dbContacts.getContactsByParent(userId);
+          return contacts.map(c => c.id);
+        };
+        
+        // 启动自动任务
+        startAutoGenerate(
+          userId,
+          {
+            dailyNewContacts: input.dailyNewContacts,
+            dailyRandomInteractions: input.dailyRandomInteractions,
+            dailyRandomTags: input.dailyRandomTags,
+            options: input.options,
+          },
+          createContactCallback,
+          createInteractionCallback,
+          addTagCallback,
+          getRandomContactIds
+        );
+        
+        const messages = [];
+        if (input.dailyNewContacts > 0) messages.push(`每天生成${input.dailyNewContacts}个新人脉`);
+        if (input.dailyRandomInteractions > 0) messages.push(`每天随机联络${input.dailyRandomInteractions}次`);
+        if (input.dailyRandomTags > 0) messages.push(`每天随机打${input.dailyRandomTags}个标签`);
+        
+        return { success: true, message: `已启动自动任务：${messages.join('，')}` };
+      }),
+    
+    // 停止自动生成
+    stop: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { stopAutoGenerate } = await import('./mock-data-generator');
+        const stopped = stopAutoGenerate(ctx.user.id);
+        return { success: stopped, message: stopped ? '已停止自动生成' : '没有正在运行的任务' };
+      }),
+  }),
+
   // 标签管理
   tags: router({
     // 获取所有标签
