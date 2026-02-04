@@ -2104,6 +2104,7 @@ export async function getTransactionDetail(
     updatedAt: transaction.updatedAt,
     member: memberWithAvatar,
     recordDate: transaction.date,
+    approvalStatus: 'not_required' as const, // 默认不需要审批
   };
 }
 
