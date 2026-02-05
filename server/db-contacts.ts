@@ -3192,16 +3192,20 @@ export async function getFilteredCounts(
     }
   } else if (filterType === 'todayActive' || filterType === 'weeklyActive' || filterType === 'monthlyActive' || filterType === 'yearlyActive') {
     // 活跃类型：根据contact_interactions筛选
-    let startTimestamp: number;
+    // 使用Date对象并转换为SQL格式字符串进行比较
+    let startDate: Date;
     if (filterType === 'todayActive') {
-      startTimestamp = getBeijingTodayStart();
+      startDate = new Date(getBeijingTodayStart());
     } else if (filterType === 'weeklyActive') {
-      startTimestamp = getBeijingThisWeekStart();
+      startDate = new Date(getBeijingThisWeekStart());
     } else if (filterType === 'monthlyActive') {
-      startTimestamp = getBeijingThisMonthStart();
+      startDate = new Date(getBeijingThisMonthStart());
     } else {
-      startTimestamp = getBeijingThisYearStart();
+      startDate = new Date(getBeijingThisYearStart());
     }
+    // 转换为SQL格式字符串 (YYYY-MM-DD HH:mm:ss)
+    const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
+    console.log('[getFilteredCounts] 活跃筛选 startDate:', startDate.toISOString(), 'startDateStr:', startDateStr);
     
     // 获取我的人脉ID
     const myContacts = await db
@@ -3220,11 +3224,11 @@ export async function getFilteredCounts(
       sharedContactIds = sharerContacts.map(c => c.id);
     }
     
-    // 查询有活跃记录的联系人
+    // 查询有活跃记录的联系人（使用SQL格式字符串进行比较）
     const activeInteractions = await db
       .select({ contactId: contactInteractions.contactId })
       .from(contactInteractions)
-      .where(sql`${contactInteractions.interactionDate} >= ${startTimestamp}`);
+      .where(sql`${contactInteractions.interactionDate} >= ${startDateStr}`);
     
     // 统计我的活跃人脉
     const myActiveSet = new Set<number>();
