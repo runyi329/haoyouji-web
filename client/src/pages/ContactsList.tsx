@@ -1887,8 +1887,13 @@ export default function ContactsList() {
             {companyList.map((company) => (
               <Card 
                 key={company.companyName}
-                className="hover:shadow-lg transition-all cursor-pointer"
+                className={`hover:shadow-lg transition-all ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                 onClick={() => {
+                  // 如果是共享的公司，弹出提示
+                  if (company.isShared) {
+                    alert('该公司为共享人脉，请联系共享人查看详情');
+                    return;
+                  }
                   // 如果只有一个联系人，直接跳转到该联系人详情
                   if (company.contactCount === 1) {
                     setLocation(`/parent/contacts/${company.contactIds[0]}`);
@@ -1919,9 +1924,13 @@ export default function ContactsList() {
                         {company.contactNames.map((name, index) => (
                           <span key={index}>
                             <span 
-                              className="text-sm text-muted-foreground hover:text-primary cursor-pointer"
+                              className={`text-sm text-muted-foreground ${company.isShared ? 'cursor-not-allowed' : 'hover:text-primary cursor-pointer'}`}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (company.isShared) {
+                                  alert('该公司为共享人脉，请联系共享人查看详情');
+                                  return;
+                                }
                                 setLocation(`/parent/contacts/${company.contactIds[index]}`);
                               }}
                             >

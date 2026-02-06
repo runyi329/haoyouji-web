@@ -2643,6 +2643,7 @@ export async function getCompanyList(parentUserId: number) {
         contactName: contacts.name,
         companyName: contactFieldValues.value,
         createdAt: contactFieldValues.createdAt,
+        parentUserId: contacts.parentUserId,
       })
       .from(contactFieldValues)
       .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
@@ -2666,6 +2667,7 @@ export async function getCompanyList(parentUserId: number) {
       contactName: contacts.name,
       companyName: contactFieldValues.value,
       createdAt: contactFieldValues.createdAt,
+      parentUserId: contacts.parentUserId,
     })
     .from(contactFieldValues)
     .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
@@ -2701,14 +2703,21 @@ export async function getCompanyList(parentUserId: number) {
     contactNames: string[];
     contactCount: number;
     createdAt: Date;
+    isShared: boolean;  // 是否是共享的公司
   }>();
 
   companyContacts.forEach(contact => {
     const existing = companyMap.get(contact.companyName);
+    const isContactShared = contact.parentUserId !== parentUserId;
+    
     if (existing) {
       existing.contactIds.push(contact.contactId);
       existing.contactNames.push(contact.contactName);
       existing.contactCount++;
+      // 如果有任何一个联系人是共享的，则整个公司标记为共享
+      if (isContactShared) {
+        existing.isShared = true;
+      }
       // 保留最早的创建时间
       if (new Date(contact.createdAt) < new Date(existing.createdAt)) {
         existing.createdAt = contact.createdAt;
@@ -2720,6 +2729,7 @@ export async function getCompanyList(parentUserId: number) {
         contactNames: [contact.contactName],
         contactCount: 1,
         createdAt: contact.createdAt,
+        isShared: isContactShared,
       });
     }
   });
