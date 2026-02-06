@@ -201,6 +201,7 @@ export async function getYearlyActiveCount(userId: number): Promise<number> {
 export async function getAllActiveStats(userId: number) {
   try {
     console.log('[getAllActiveStats] 开始查询用户ID:', userId);
+    console.log('[getAllActiveStats] 注意：统计的是全部人脉（我的+共享）');
     
     const [todayActive, weeklyActive, monthlyActive, yearlyActive] = await Promise.all([
       getTodayActiveCount(userId),
@@ -209,7 +210,7 @@ export async function getAllActiveStats(userId: number) {
       getYearlyActiveCount(userId),
     ]);
     
-    console.log('[getAllActiveStats] 查询结果:', { todayActive, weeklyActive, monthlyActive, yearlyActive });
+    console.log('[getAllActiveStats] 查询结果（全部人脉）:', { todayActive, weeklyActive, monthlyActive, yearlyActive });
     
     return {
       todayActive,

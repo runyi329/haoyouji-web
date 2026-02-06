@@ -1260,10 +1260,12 @@ export async function getContactStats(parentUserId: number) {
     )
     .groupBy(contactTags.id, contactTags.name);
   
-  // 使用新的活跃统计模块
+  // 使用新的活跃统计模块（统计全部人脉：我的+共享）
   console.log('[获取活跃统计] 开始查询...');
+  console.log('[获取活跃统计] 可见人脉总数:', visibleContactIds.length);
   const activeStats = await getAllActiveStats(parentUserId);
   console.log('[获取活跃统计] 结果:', activeStats);
+  console.log('[获取活跃统计] 今年活跃:', activeStats.yearlyActive, '人（全部人脉）');
   
   const { todayActive, weeklyActive, monthlyActive, yearlyActive } = activeStats;
   
