@@ -1973,6 +1973,8 @@ export async function getTransactionDetail(
   transactionId: number,
   userId: number
 ) {
+  console.log('[getTransactionDetail] 开始查询:', { ledgerId, transactionId, userId });
+  
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -2015,6 +2017,8 @@ export async function getTransactionDetail(
       )
     )
     .limit(1);
+  
+  console.log('[getTransactionDetail] 查询结果:', { recordLength: record.length, record: record[0] });
   
   if (record.length === 0) {
     throw new Error("记账不存在");
@@ -2087,7 +2091,7 @@ export async function getTransactionDetail(
     categoryPath.push(category[0].id);
   }
   
-  return {
+  const result = {
     id: transaction.id,
     ledgerId: transaction.ledgerId,
     amount: transaction.amount,
@@ -2106,6 +2110,9 @@ export async function getTransactionDetail(
     recordDate: transaction.date,
     approvalStatus: 'not_required' as const, // 默认不需要审批
   };
+  
+  console.log('[getTransactionDetail] 返回结果:', result);
+  return result;
 }
 
 /**

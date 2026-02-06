@@ -27,9 +27,11 @@ export default function TransactionDetail() {
 
   const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
   const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
+  
+  console.log('[TransactionDetail] params:', params, 'ledgerId:', ledgerId, 'transactionId:', transactionId);
 
   // 获取记账详情
-  const { data: transaction, isLoading, refetch } = trpc.ledger.getTransactionDetail.useQuery({
+  const { data: transaction, isLoading, refetch, error } = trpc.ledger.getTransactionDetail.useQuery({
     ledgerId,
     transactionId,
   });
@@ -103,6 +105,8 @@ export default function TransactionDetail() {
     return false;
   };
 
+  console.log('[TransactionDetail] isLoading:', isLoading, 'transaction:', transaction, 'error:', error);
+  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -114,7 +118,7 @@ export default function TransactionDetail() {
   if (!transaction) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">账目不存在</div>
+        <div className="text-gray-600">账目不存在 {error ? `(错误: ${error.message})` : ''}</div>
       </div>
     );
   }
