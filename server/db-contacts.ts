@@ -3160,6 +3160,15 @@ export async function getContactsByParentPaginated(
     })
   );
   
+  console.log('[getContactsByParentPaginated] 分页计算:', {
+    offset,
+    baseContactsLength: baseContacts.length,
+    contactsWithInteractionInfoLength: contactsWithInteractionInfo.length,
+    total,
+    calculation: `${offset} + ${baseContacts.length} < ${total}`,
+    hasMore: offset + baseContacts.length < total
+  });
+  
   const hasMore = offset + baseContacts.length < total;
   
   return {
