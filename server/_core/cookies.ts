@@ -42,7 +42,7 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "lax",
-    secure: isSecureRequest(req),
+    sameSite: "none",  // 修改为none以支持跨域请求
+    secure: true,  // sameSite=none必须配合secure=true使用
   };
 }
