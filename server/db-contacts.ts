@@ -1,7 +1,7 @@
 import { getDb } from "./db";
 import {
   contacts, contactTags, contactTagRelations, contactInteractions, contactCustomFields, contactFieldValues, contactFieldCategories, reminders,
-  personalContactTags, contactSharingConnections, ledgerRecords, ledgerMembers,
+  personalContactTags, contactSharingConnections, ledgerRecords, ledgerMembers, users,
   InsertContact, InsertContactTag, InsertContactTagRelation, InsertContactInteraction, InsertContactCustomField,
   InsertPersonalContactTag,
 } from "../drizzle/schema";
