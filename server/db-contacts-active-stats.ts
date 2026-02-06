@@ -25,6 +25,8 @@ async function getAllVisibleContactIds(userId: number): Promise<number[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  console.log(`[getAllVisibleContactIds] 开始查询用户 ${userId} 的可见人脉`);
+  
   // 1. 获取自己的联系人
   const myContacts = await db
     .select({ id: contacts.id })
@@ -32,6 +34,7 @@ async function getAllVisibleContactIds(userId: number): Promise<number[]> {
     .where(eq(contacts.parentUserId, userId));
   
   const myContactIds = myContacts.map(c => c.id);
+  console.log(`[getAllVisibleContactIds] 我的人脉数量: ${myContactIds.length}`);
   
   // 2. 获取共享给我的联系人
   const sharedContactsResult = await db.execute(sql`
@@ -43,9 +46,11 @@ async function getAllVisibleContactIds(userId: number): Promise<number[]> {
   `);
   
   const sharedContactIds = sharedContactsResult.map((row: any) => row.id);
+  console.log(`[getAllVisibleContactIds] 共享给我的人脉数量: ${sharedContactIds.length}`);
   
   // 3. 合并并去重
   const allIds = [...new Set([...myContactIds, ...sharedContactIds])];
+  console.log(`[getAllVisibleContactIds] 总计可见人脉: ${allIds.length}`);
   
   return allIds;
 }
@@ -71,11 +76,12 @@ async function getActiveCount(userId: number, startDate: Date): Promise<number> 
   const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
   
   console.log(`[getActiveCount] userId=${userId}, startDate=${startDate.toISOString()}, startDateStr=${startDateStr}`);
+  console.log(`[getActiveCount] 可见人脉数量: ${visibleContactIds.length}`);
   
   // 2. 查询指定时间范围内的所有联络记录
   // 使用原生 SQL 确保时间比较正确
   const interactions = await db
-    .select({ contactId: contactInteractions.contactId })
+    .select({ contactId: contactInteractions.contactId, interactionDate: contactInteractions.interactionDate })
     .from(contactInteractions)
     .where(
       and(
@@ -85,6 +91,9 @@ async function getActiveCount(userId: number, startDate: Date): Promise<number> 
     );
   
   console.log(`[getActiveCount] 查询到 ${interactions.length} 条联络记录`);
+  if (interactions.length > 0 && interactions.length <= 5) {
+    console.log(`[getActiveCount] 示例记录:`, interactions.map(i => ({ contactId: i.contactId, date: i.interactionDate })));
+  }
   
   // 3. 去重统计
   const activeContactIds = new Set(interactions.map(i => i.contactId));
