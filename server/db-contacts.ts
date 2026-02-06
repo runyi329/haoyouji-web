@@ -1967,8 +1967,31 @@ export async function getContactsByRegion(parentUserId: number, region: string) 
       .orderBy(desc(contacts.updatedAt));
   }
   
+  // 为自己的人脉添加标记
+  const ownContactsWithFlag = ownContacts.map(c => ({ ...c, isShared: false, sharerName: null, sharerUserId: null }));
+  
+  // 为共享的人脉添加标记和分享者信息
+  const sharedContactsWithFlag = await Promise.all(
+    sharedContacts.map(async (contact) => {
+      // 查找分享者信息
+      const sharer = await db.select({
+        username: users.username
+      })
+        .from(users)
+        .where(eq(users.id, contact.parentUserId))
+        .limit(1);
+      
+      return {
+        ...contact,
+        isShared: true,
+        sharerName: sharer[0]?.username || '未知',
+        sharerUserId: contact.parentUserId
+      };
+    })
+  );
+  
   // 合并结果
-  const allContacts = [...ownContacts, ...sharedContacts];
+  const allContacts = [...ownContactsWithFlag, ...sharedContactsWithFlag];
   
   // 为每个人脉获取标签
   const contactsWithDetails = await Promise.all(

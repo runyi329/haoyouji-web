@@ -73,7 +73,13 @@ export default function RegionMap() {
     setSelectedProvince(provinceName);
   };
 
-  const handleContactClick = (contactId: number) => {
+  const handleContactClick = (contactId: number, isShared?: boolean, sharerName?: string) => {
+    if (isShared) {
+      // 如果是共享人脉，提示用户找共享人
+      alert(`这是 ${sharerName || '其他用户'} 共享给您的人脉，请联系共享人查看详情`);
+      return;
+    }
+    // 如果是自己的人脉，正常跳转
     setLocation(`/parent/contacts/${contactId}`);
   };
 
@@ -175,15 +181,18 @@ export default function RegionMap() {
                   该地区暂无人脉
                 </p>
               ) : (
-                provinceContacts.map((contact) => (
+                provinceContacts.map((contact: any) => (
                   <button
                     key={contact.id}
-                    onClick={() => handleContactClick(contact.id)}
+                    onClick={() => handleContactClick(contact.id, contact.isShared, contact.sharerName)}
                     className="w-full p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
                   >
                     <div className="font-medium">{contact.name}</div>
                     {contact.title && (
                       <div className="text-sm text-muted-foreground">{contact.title}</div>
+                    )}
+                    {contact.isShared && (
+                      <div className="text-xs text-primary mt-1">共享自: {contact.sharerName}</div>
                     )}
                   </button>
                 ))
@@ -213,15 +222,18 @@ export default function RegionMap() {
                   该地区暂无人脉
                 </p>
               ) : (
-                provinceContacts.map((contact) => (
+                provinceContacts.map((contact: any) => (
                   <button
                     key={contact.id}
-                    onClick={() => handleContactClick(contact.id)}
+                    onClick={() => handleContactClick(contact.id, contact.isShared, contact.sharerName)}
                     className="w-full p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors text-left"
                   >
                     <div className="font-medium">{contact.name}</div>
                     {contact.title && (
                       <div className="text-sm text-muted-foreground">{contact.title}</div>
+                    )}
+                    {contact.isShared && (
+                      <div className="text-xs text-primary mt-1">共享自: {contact.sharerName}</div>
                     )}
                   </button>
                 ))
