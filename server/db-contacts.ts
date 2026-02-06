@@ -8,6 +8,7 @@ import {
 import { eq, and, like, or, desc, sql, gte, lt, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart, getBeijingTodayStart, getBeijingTodayEnd } from "../shared/timezone";
 import { getAllActiveStats } from "./db-contacts-active-stats";
+import { getReferrerStats } from "./db-referrer-stats";
 
 // ==================== 工具函数 ====================
 
@@ -1993,19 +1994,49 @@ export async function getContactsByRegion(parentUserId: number, region: string) 
   // 合并结果
   const allContacts = [...ownContactsWithFlag, ...sharedContactsWithFlag];
   
-  // 为每个人脉获取标签
-  const contactsWithDetails = await Promise.all(
-    allContacts.map(async (contact) => {
-      const tags = await getContactTagsByContactId(contact.id);
-      const lastInteraction = await getLastInteractionDate(contact.id);
-      
-      return {
-        ...contact,
-        tags: tags.map(t => t.name),
-        lastInteractionDate: lastInteraction,
-      };
-    })
+  // 获取所有联系人ID
+  const contactIds = allContacts.map(c => c.id);
+  
+  // 并行批量查询所有需要的数据（和contacts.list一样）
+  const [allReferrerStats, tagsMap, personalTagsMap, interactionStatsMap, interactionInfoMap, fieldValuesMap] = await Promise.all([
+    getReferrerStats(parentUserId).catch(() => []),
+    getTagsForContacts(contactIds),
+    getPersonalTagsForContacts(contactIds),
+    getInteractionStatsForContacts(contactIds),
+    getInteractionInfoForContacts(contactIds),
+    getFieldValuesForContacts(contactIds),
+  ]);
+  
+  // 创建推荐人统计的Map
+  const referrerStatsMap = new Map(
+    allReferrerStats.map((stat: any) => [stat.contactId, stat])
   );
+  
+  // 为每个人脉组装详情数据
+  const contactsWithDetails = allContacts.map((contact) => {
+    const tags = tagsMap.get(contact.id) || [];
+    const personalTags = personalTagsMap.get(contact.id) || [];
+    const interactionStats = interactionStatsMap.get(contact.id) || { totalInteractions: 0 };
+    const interactionInfo = interactionInfoMap.get(contact.id) || { lastInteraction: null, hasTodayInteraction: false };
+    const referrerStats = referrerStatsMap.get(contact.id) || null;
+    const fieldValues = fieldValuesMap.get(contact.id) || [];
+    
+    return {
+      ...contact,
+      tags,
+      personalTags,
+      fieldValues,
+      lastInteractionDate: interactionInfo.lastInteraction,
+      daysSinceLastInteraction: interactionInfo.lastInteraction 
+        ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
+        : null,
+      hasTodayInteraction: interactionInfo.hasTodayInteraction,
+      hasReferrer: contact.referrerId !== null && contact.referrerId !== undefined,
+      totalInteractions: interactionStats?.totalInteractions || 0,
+      directReferrals: referrerStats?.directReferrals || 0,
+      indirectReferrals: referrerStats?.indirectReferrals || 0,
+    };
+  });
   
   return contactsWithDetails;
 }
