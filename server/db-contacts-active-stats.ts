@@ -36,21 +36,38 @@ async function getAllVisibleContactIds(userId: number): Promise<number[]> {
   const myContactIds = myContacts.map(c => c.id);
   console.log(`[getAllVisibleContactIds] 我的人脉数量: ${myContactIds.length}`);
   
-  // 2. 获取共享给我的联系人
-  const sharedContactsResult = await db.execute(sql`
-    SELECT DISTINCT c.id
-    FROM contacts c
-    INNER JOIN contact_sharing_connections sc ON c.parentUserId = sc.sharerId
-    WHERE sc.receiverId = ${userId}
-      AND sc.status = 'active'
-  `);
+  // 2. 获取共享给我的联系人（使用正确的查询逻辑）
+  const { contactSharingConnections } = await import('../drizzle/schema');
+  const sharingConnections = await db
+    .select({ sharerId: contactSharingConnections.sharerId })
+    .from(contactSharingConnections)
+    .where(
+      and(
+        eq(contactSharingConnections.receiverId, userId),
+        eq(contactSharingConnections.status, 'active')
+      )
+    );
   
-  const sharedContactIds = sharedContactsResult.map((row: any) => row.id);
-  console.log(`[getAllVisibleContactIds] 共享给我的人脉数量: ${sharedContactIds.length}`);
+  console.log(`[getAllVisibleContactIds] 找到的共享连接数: ${sharingConnections.length}`);
+  
+  // 获取所有分享者的人脉ID（使用单次 IN 查询代替多次串行查询）
+  let sharedContactIds: number[] = [];
+  const sharerIds = sharingConnections.map(conn => conn.sharerId);
+  
+  if (sharerIds.length > 0) {
+    const sharerContacts = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(inArray(contacts.parentUserId, sharerIds));
+    sharedContactIds = sharerContacts.map(c => c.id);
+    console.log(`[getAllVisibleContactIds] 一次性查询 ${sharerIds.length} 个分享者的联系人，共 ${sharedContactIds.length} 个`);
+  }
+  
+  console.log(`[getAllVisibleContactIds] 共享联系人总数: ${sharedContactIds.length}`);
   
   // 3. 合并并去重
-  const allIds = [...new Set([...myContactIds, ...sharedContactIds])];
-  console.log(`[getAllVisibleContactIds] 总计可见人脉: ${allIds.length}`);
+  const allIds = Array.from(new Set([...myContactIds, ...sharedContactIds]));
+  console.log(`[getAllVisibleContactIds] 最终可见联系人总数: ${allIds.length}`);
   
   return allIds;
 }
