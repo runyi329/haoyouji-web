@@ -14,74 +14,9 @@
 import { getDb } from './db';
 import { contacts, contactInteractions } from '../drizzle/schema';
 import { eq, and, gte, sql, inArray } from 'drizzle-orm';
+import { getBeijingTodayStart, getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart } from '../shared/timezone';
 
-// 北京时区偏移量（毫秒）
-const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
-
-/**
- * 获取北京时间当前时刻
- */
-function getBeijingNow(): Date {
-  const now = new Date();
-  return new Date(now.getTime() + BEIJING_OFFSET_MS);
-}
-
-/**
- * 获取北京时间今天的开始时间（00:00:00）
- * @returns Date 对象（UTC时间，但代表北京时间的00:00）
- */
-function getBeijingTodayStartDate(): Date {
-  const beijingNow = getBeijingNow();
-  // 在北京时间下设置为当天00:00:00
-  const year = beijingNow.getUTCFullYear();
-  const month = beijingNow.getUTCMonth();
-  const day = beijingNow.getUTCDate();
-  // 创建北京时间的00:00:00，然后转回UTC
-  const beijingMidnight = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-  return new Date(beijingMidnight.getTime() - BEIJING_OFFSET_MS);
-}
-
-/**
- * 获取北京时间本周一的开始时间（00:00:00）
- * @returns Date 对象
- */
-function getBeijingThisWeekStartDate(): Date {
-  const beijingNow = getBeijingNow();
-  const dayOfWeek = beijingNow.getUTCDay(); // 0 = Sunday, 1 = Monday, ...
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  
-  const year = beijingNow.getUTCFullYear();
-  const month = beijingNow.getUTCMonth();
-  const day = beijingNow.getUTCDate() - daysToMonday;
-  
-  const beijingMondayMidnight = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-  return new Date(beijingMondayMidnight.getTime() - BEIJING_OFFSET_MS);
-}
-
-/**
- * 获取北京时间本月1号的开始时间（00:00:00）
- * @returns Date 对象
- */
-function getBeijingThisMonthStartDate(): Date {
-  const beijingNow = getBeijingNow();
-  const year = beijingNow.getUTCFullYear();
-  const month = beijingNow.getUTCMonth();
-  
-  const beijingMonthStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-  return new Date(beijingMonthStart.getTime() - BEIJING_OFFSET_MS);
-}
-
-/**
- * 获取北京时间本年1月1日的开始时间（00:00:00）
- * @returns Date 对象
- */
-function getBeijingThisYearStartDate(): Date {
-  const beijingNow = getBeijingNow();
-  const year = beijingNow.getUTCFullYear();
-  
-  const beijingYearStart = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
-  return new Date(beijingYearStart.getTime() - BEIJING_OFFSET_MS);
-}
+// 注意：现在使用 shared/timezone.ts 中的时间函数，保证与其他模块一致
 
 /**
  * 获取用户所有可见的联系人ID(我的+共享的)
@@ -163,7 +98,8 @@ async function getActiveCount(userId: number, startDate: Date): Promise<number> 
  * 获取今日活跃人脉数量
  */
 export async function getTodayActiveCount(userId: number): Promise<number> {
-  const startDate = getBeijingTodayStartDate();
+  const startTimestamp = getBeijingTodayStart();
+  const startDate = new Date(startTimestamp);
   console.log(`[getTodayActiveCount] 今日开始时间: ${startDate.toISOString()}`);
   return getActiveCount(userId, startDate);
 }
@@ -172,7 +108,8 @@ export async function getTodayActiveCount(userId: number): Promise<number> {
  * 获取本周活跃人脉数量
  */
 export async function getWeeklyActiveCount(userId: number): Promise<number> {
-  const startDate = getBeijingThisWeekStartDate();
+  const startTimestamp = getBeijingThisWeekStart();
+  const startDate = new Date(startTimestamp);
   console.log(`[getWeeklyActiveCount] 本周开始时间: ${startDate.toISOString()}`);
   return getActiveCount(userId, startDate);
 }
@@ -181,7 +118,8 @@ export async function getWeeklyActiveCount(userId: number): Promise<number> {
  * 获取本月活跃人脉数量
  */
 export async function getMonthlyActiveCount(userId: number): Promise<number> {
-  const startDate = getBeijingThisMonthStartDate();
+  const startTimestamp = getBeijingThisMonthStart();
+  const startDate = new Date(startTimestamp);
   console.log(`[getMonthlyActiveCount] 本月开始时间: ${startDate.toISOString()}`);
   return getActiveCount(userId, startDate);
 }
@@ -190,7 +128,8 @@ export async function getMonthlyActiveCount(userId: number): Promise<number> {
  * 获取今年活跃人脉数量
  */
 export async function getYearlyActiveCount(userId: number): Promise<number> {
-  const startDate = getBeijingThisYearStartDate();
+  const startTimestamp = getBeijingThisYearStart();
+  const startDate = new Date(startTimestamp);
   console.log(`[getYearlyActiveCount] 本年开始时间: ${startDate.toISOString()}`);
   return getActiveCount(userId, startDate);
 }
