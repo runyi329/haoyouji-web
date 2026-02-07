@@ -165,6 +165,25 @@ export default function InviteCode() {
       )}
 
       <div className="container max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* 邀请统计卡片 */}
+        <Card className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/30 border-rose-200 dark:border-rose-800">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900/50">
+                  <Users className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">已邀请好友</p>
+                  <p className="text-3xl font-bold text-rose-600 dark:text-rose-400">
+                    {inviteInfo?.inviteCount || 0}<span className="text-lg font-normal ml-1">人</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* 邀请码卡片 */}
         <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
           <CardContent className="p-6">
