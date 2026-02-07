@@ -22,7 +22,7 @@ export const invitePermissionRouter = router({
         });
       }
       
-      const db = getDb();
+      const db = await getDb();
       
       // 更新用户的邀请功能权限
       await db
@@ -53,7 +53,7 @@ export const invitePermissionRouter = router({
         });
       }
       
-      const db = getDb();
+      const db = await getDb();
       
       // 批量更新用户的邀请功能权限
       for (const userId of input.userIds) {
@@ -86,7 +86,7 @@ export const invitePermissionRouter = router({
         });
       }
       
-      const db = getDb();
+      const db = await getDb();
       
       const [user] = await db
         .select({
@@ -128,7 +128,7 @@ export const invitePermissionRouter = router({
         });
       }
       
-      const db = getDb();
+      const db = await getDb();
       
       const allUsers = await db
         .select({

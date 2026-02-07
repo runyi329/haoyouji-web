@@ -20,7 +20,7 @@ function generateInviteCode(): string {
 export const inviteRouter = router({
   // 获取当前用户的邀请信息
   getMyInviteInfo: protectedProcedure.query(async ({ ctx }) => {
-    const db = getDb();
+    const db = await getDb();
     const userId = ctx.user!.id;
     
     const [user] = await db
@@ -100,7 +100,7 @@ export const inviteRouter = router({
       inviteCode: z.string(),
     }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       
       const [inviter] = await db
         .select({
@@ -129,7 +129,7 @@ export const inviteRouter = router({
   
   // 获取我邀请的用户列表
   getMyInvitedUsers: protectedProcedure.query(async ({ ctx }) => {
-    const db = getDb();
+    const db = await getDb();
     const userId = ctx.user!.id;
     
     const invitedUsers = await db
@@ -154,7 +154,7 @@ export const inviteRouter = router({
       userId: z.number().optional(), // 如果不提供,则为当前用户
     }))
     .mutation(async ({ ctx, input }) => {
-      const db = getDb();
+      const db = await getDb();
       const targetUserId = input.userId || ctx.user!.id;
       
       // 如果是为其他用户生成,需要管理员权限
