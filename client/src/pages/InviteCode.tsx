@@ -281,22 +281,6 @@ export default function InviteCode() {
           </CardContent>
         </Card>
 
-        {/* 邀请统计 */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-lg">邀请统计</h3>
-              <div className="flex items-center gap-2 text-indigo-600">
-                <Users className="w-5 h-5" />
-                <span className="text-2xl font-bold">{inviteInfo?.inviteCount || 0}</span>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500">
-              您已成功邀请 {inviteInfo?.inviteCount || 0} 位用户
-            </p>
-          </CardContent>
-        </Card>
-
 
       </div>
     </div>
