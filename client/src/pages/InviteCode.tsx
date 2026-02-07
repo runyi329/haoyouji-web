@@ -18,34 +18,21 @@ import { trpc } from "@/lib/trpc";
 export default function InviteCode() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const [showQRCode, setShowQRCode] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   // 获取邀请信息
   const { data: inviteInfo, isLoading } = trpc.invite.getMyInviteInfo.useQuery();
 
-  // 生成二维码
-  const { refetch: generateQRCode } = trpc.invite.generateQRCode.useQuery(
+  // 自动生成二维码
+  const { data: qrCodeData } = trpc.invite.generateQRCode.useQuery(
     { inviteCode: inviteInfo?.inviteCode || "" },
     { 
-      enabled: false,
-      onSuccess: (data) => {
-        setQrCodeDataUrl(data.qrCodeDataUrl);
-        setShowQRCode(true);
-      }
+      enabled: !!inviteInfo?.inviteCode,
     }
   );
 
   // 获取邀请的用户列表
   const { data: invitedUsers } = trpc.invite.getMyInvitedUsers.useQuery();
-
-  // 自动生成二维码
-  useEffect(() => {
-    if (inviteInfo?.inviteCode && !qrCodeDataUrl) {
-      generateQRCode();
-    }
-  }, [inviteInfo?.inviteCode]);
 
   // 复制邀请码
   const copyInviteCode = () => {
@@ -108,19 +95,12 @@ export default function InviteCode() {
     );
   };
 
-  // 显示二维码
-  const handleShowQRCode = () => {
-    if (inviteInfo?.inviteCode) {
-      generateQRCode();
-    }
-  };
-
   // 下载二维码
   const downloadQRCode = () => {
-    if (!qrCodeDataUrl) return;
+    if (!qrCodeData?.qrCodeDataUrl) return;
 
     const link = document.createElement('a');
-    link.href = qrCodeDataUrl;
+    link.href = qrCodeData.qrCodeDataUrl;
     link.download = `invite-${inviteInfo?.inviteCode}.png`;
     document.body.appendChild(link);
     link.click();
@@ -214,14 +194,14 @@ export default function InviteCode() {
         </Card>
 
         {/* 二维码显示 */}
-        {qrCodeDataUrl && (
+        {qrCodeData?.qrCodeDataUrl && (
           <Card>
             <CardContent className="p-6">
               <div className="text-center space-y-4">
                 <h3 className="font-semibold text-lg">专属邀请二维码</h3>
                 <div className="flex justify-center">
                   <img 
-                    src={qrCodeDataUrl} 
+                    src={qrCodeData.qrCodeDataUrl} 
                     alt="邀请二维码" 
                     className="w-64 h-64 border-4 border-gray-200 rounded-lg"
                   />
