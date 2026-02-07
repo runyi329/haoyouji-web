@@ -227,12 +227,15 @@ export default function ProfileSettings() {
                     label="手续费等级"
                     value="VIP 1"
                   />
-                  <SettingItem
-                    icon={<Share2 className="w-5 h-5" />}
-                    label="邀请码"
-                    value="查看我的邀请"
-                    onClick={() => setLocation("/parent/profile/invite")}
-                  />
+                  {/* 邀请码 - 根据权限显示 */}
+                  {user?.inviteEnabled && (
+                    <SettingItem
+                      icon={<Share2 className="w-5 h-5" />}
+                      label="邀请码"
+                      value="查看我的邀请"
+                      onClick={() => setLocation("/parent/profile/invite")}
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>

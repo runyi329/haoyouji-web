@@ -868,6 +868,7 @@ export const users = mysqlTable("users", {
 	invitedByUserId: int(),
 	invitedAt: timestamp({ mode: 'string' }),
 	inviteCount: int().default(0).notNull(),
+	inviteEnabled: tinyint().default(0).notNull(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),

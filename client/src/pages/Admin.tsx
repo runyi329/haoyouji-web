@@ -151,6 +151,17 @@ export default function Admin() {
       toast.error(error.message);
     },
   });
+  
+  // 邀请功能权限控制
+  const toggleInvitePermissionMutation = trpc.invitePermission.setUserInvitePermission.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetchUsers();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   if (!user || user.role !== "super_admin") {
     return (
@@ -441,6 +452,26 @@ export default function Admin() {
                         ) : (
                           <ShieldCheck className="w-4 h-4" />
                         )}
+                      </Button>
+                      
+                      {/* 邀请功能开关 */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={`w-8 h-8 ${
+                          u.inviteEnabled 
+                            ? 'text-green-600 hover:text-green-700' 
+                            : 'text-gray-400 hover:text-gray-500'
+                        }`}
+                        onClick={() => {
+                          toggleInvitePermissionMutation.mutate({
+                            userId: u.id,
+                            enabled: !u.inviteEnabled,
+                          });
+                        }}
+                        title={u.inviteEnabled ? '关闭邀请功能' : '开启邀请功能'}
+                      >
+                        <Share2 className="w-4 h-4" />
                       </Button>
                       
                       {/* 编辑用户 */}

@@ -22,6 +22,7 @@ import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
+import { invitePermissionRouter } from "./invite-permission-api";
 
 export const appRouter = router({
   system: systemRouter,
@@ -5959,6 +5960,9 @@ export const appRouter = router({
   
   // 邀请系统
   invite: inviteRouter,
+  
+  // 邀请功能权限管理 (管理员)
+  invitePermission: invitePermissionRouter,
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
