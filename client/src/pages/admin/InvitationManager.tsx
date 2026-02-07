@@ -3,271 +3,333 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Copy, Link, Users, Clock, Ban, CheckCircle, XCircle } from "lucide-react";
+import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share2, RefreshCw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export function InvitationManager() {
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [familyName, setFamilyName] = useState("");
-  const [maxUses, setMaxUses] = useState(1);
-  const [expiresInDays, setExpiresInDays] = useState(7);
-  const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
-  const { data: invitations, refetch } = trpc.invitations.list.useQuery();
-  const createMutation = trpc.invitations.create.useMutation({
+  // 获取所有用户的邀请权限状态
+  const { data: allUsers, refetch, isLoading } = trpc.invitePermission.getAllUsersInvitePermission.useQuery();
+
+  // 切换邀请权限
+  const togglePermissionMutation = trpc.invitePermission.setUserInvitePermission.useMutation({
     onSuccess: (data) => {
-      setCreatedInviteCode(data.code);
+      toast.success(data.message);
       refetch();
-      toast.success("邀请码创建成功");
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-  const deactivateMutation = trpc.invitations.deactivate.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("邀请码已停用");
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
 
-  const handleCreate = () => {
-    createMutation.mutate({
-      familyName: familyName || undefined,
-      maxUses,
-      expiresInDays,
+  // 批量开启/关闭邀请权限
+  const batchToggleMutation = trpc.invitePermission.batchSetInvitePermission.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // 搜索过滤
+  const filteredUsers = allUsers?.filter(user => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      user.username.toLowerCase().includes(query) ||
+      user.name?.toLowerCase().includes(query) ||
+      user.inviteCode?.toLowerCase().includes(query)
+    );
+  });
+
+  // 复制邀请码
+  const handleCopyCode = (code: string | null) => {
+    if (!code) {
+      toast.error("该用户还没有邀请码");
+      return;
+    }
+    navigator.clipboard.writeText(code);
+    toast.success("邀请码已复制");
+  };
+
+  // 复制邀请链接
+  const handleCopyLink = (code: string | null) => {
+    if (!code) {
+      toast.error("该用户还没有邀请码");
+      return;
+    }
+    const link = `https://jiangyuchen.cn/register?invite=${code}`;
+    navigator.clipboard.writeText(link);
+    toast.success("邀请链接已复制");
+  };
+
+  // 切换权限
+  const handleTogglePermission = (userId: number, currentEnabled: boolean) => {
+    togglePermissionMutation.mutate({
+      userId,
+      enabled: !currentEnabled,
     });
   };
 
-  const handleCopyLink = (code: string) => {
-    const link = `${window.location.origin}/register?code=${code}`;
-    navigator.clipboard.writeText(link);
-    toast.success("邀请链接已复制到剪贴板");
-  };
-
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    toast.success("邀请码已复制到剪贴板");
-  };
-
-  const getStatusBadge = (invitation: {
-    isActive: boolean;
-    usedCount: number;
-    maxUses: number;
-    expiresAt: Date | null;
-  }) => {
-    if (!invitation.isActive) {
-      return <Badge variant="secondary" className="gap-1"><Ban className="w-3 h-3" /> 已停用</Badge>;
-    }
-    if (invitation.usedCount >= invitation.maxUses) {
-      return <Badge variant="secondary" className="gap-1"><CheckCircle className="w-3 h-3" /> 已用完</Badge>;
-    }
-    if (invitation.expiresAt && new Date(invitation.expiresAt) < new Date()) {
-      return <Badge variant="destructive" className="gap-1"><XCircle className="w-3 h-3" /> 已过期</Badge>;
-    }
-    return <Badge variant="default" className="gap-1 bg-green-500"><CheckCircle className="w-3 h-3" /> 有效</Badge>;
+  // 统计信息
+  const stats = {
+    total: allUsers?.length || 0,
+    enabled: allUsers?.filter(u => u.inviteEnabled).length || 0,
+    disabled: allUsers?.filter(u => !u.inviteEnabled).length || 0,
+    totalInvites: allUsers?.reduce((sum, u) => sum + u.inviteCount, 0) || 0,
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">邀请家长</h3>
-          <p className="text-sm text-muted-foreground">
-            创建邀请码，发送给家长注册账户
-          </p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              创建邀请码
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>创建邀请码</DialogTitle>
-              <DialogDescription>
-                创建一个邀请码，家长可以通过邀请链接注册账户
-              </DialogDescription>
-            </DialogHeader>
-            
-            {createdInviteCode ? (
-              <div className="space-y-4 py-4">
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-sm text-green-600 dark:text-green-400 mb-2">邀请码创建成功！</p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 p-2 bg-white dark:bg-gray-800 rounded font-mono text-lg">
-                      {createdInviteCode}
-                    </code>
-                    <Button variant="outline" size="sm" onClick={() => handleCopyCode(createdInviteCode)}>
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>邀请链接</Label>
-                  <div className="flex items-center gap-2">
-                    <Input 
-                      readOnly 
-                      value={`${window.location.origin}/register?code=${createdInviteCode}`}
-                      className="font-mono text-sm"
-                    />
-                    <Button variant="outline" size="sm" onClick={() => handleCopyLink(createdInviteCode)}>
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={() => {
-                    setCreatedInviteCode(null);
-                    setFamilyName("");
-                    setMaxUses(1);
-                    setExpiresInDays(7);
-                    setIsCreateDialogOpen(false);
-                  }}>
-                    完成
-                  </Button>
-                </DialogFooter>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="familyName">家庭名称（可选）</Label>
-                    <Input
-                      id="familyName"
-                      placeholder="如：张家、李家"
-                      value={familyName}
-                      onChange={(e) => setFamilyName(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      预设家庭名称，家长注册时会自动创建该名称的家庭
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="maxUses">可使用次数</Label>
-                      <Input
-                        id="maxUses"
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={maxUses}
-                        onChange={(e) => setMaxUses(parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="expiresInDays">有效天数</Label>
-                      <Input
-                        id="expiresInDays"
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={expiresInDays}
-                        onChange={(e) => setExpiresInDays(parseInt(e.target.value) || 7)}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    取消
-                  </Button>
-                  <Button onClick={handleCreate} disabled={createMutation.isPending}>
-                    {createMutation.isPending ? "创建中..." : "创建"}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
+      {/* 页面标题和说明 */}
+      <div>
+        <h3 className="text-lg font-semibold">用户邀请权限管理</h3>
+        <p className="text-sm text-muted-foreground">
+          管理用户的邀请功能权限,控制哪些用户可以邀请新用户注册
+        </p>
       </div>
 
-      {/* 邀请码列表 */}
-      <div className="space-y-4">
-        {invitations?.length === 0 && (
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">总用户数</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+              <Users className="w-8 h-8 text-muted-foreground" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">已开启</p>
+                <p className="text-2xl font-bold text-green-600">{stats.enabled}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">已关闭</p>
+                <p className="text-2xl font-bold text-gray-400">{stats.disabled}</p>
+              </div>
+              <XCircle className="w-8 h-8 text-gray-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">累计邀请</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.totalInvites}</p>
+              </div>
+              <Share2 className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 搜索和批量操作 */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索用户名、昵称或邀请码..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => refetch()}
+          disabled={isLoading}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          刷新
+        </Button>
+      </div>
+
+      {/* 用户列表 */}
+      <div className="space-y-2">
+        {isLoading && (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>还没有创建邀请码</p>
-              <p className="text-sm">点击上方按钮创建第一个邀请码</p>
+              <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin" />
+              <p>加载中...</p>
             </CardContent>
           </Card>
         )}
-        
-        {invitations?.map((invitation) => (
-          <Card key={invitation.id}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <code className="px-2 py-1 bg-muted rounded font-mono text-lg">
-                    {invitation.code}
-                  </code>
-                  {getStatusBadge(invitation)}
+
+        {!isLoading && filteredUsers?.length === 0 && (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>没有找到匹配的用户</p>
+              {searchQuery && (
+                <p className="text-sm">尝试修改搜索关键词</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoading && filteredUsers?.map((user) => (
+          <Card 
+            key={user.id}
+            className={`transition-all ${selectedUserId === user.id ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => setSelectedUserId(user.id)}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                {/* 用户信息 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium truncate">
+                      {user.name || user.username}
+                    </span>
+                    {user.role === 'super_admin' && (
+                      <Badge variant="secondary" className="text-xs">管理员</Badge>
+                    )}
+                    {user.inviteEnabled ? (
+                      <Badge variant="default" className="text-xs bg-green-500">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        已开启
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">
+                        <XCircle className="w-3 h-3 mr-1" />
+                        已关闭
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span>@{user.username}</span>
+                    {user.inviteCode && (
+                      <span className="font-mono">{user.inviteCode}</span>
+                    )}
+                    <span>已邀请: {user.inviteCount}人</span>
+                  </div>
                 </div>
+
+                {/* 操作按钮 */}
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
+                  {/* 复制邀请码 */}
+                  <Button
                     size="sm"
-                    onClick={() => handleCopyCode(invitation.code)}
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyCode(user.inviteCode);
+                    }}
+                    disabled={!user.inviteCode}
+                    title="复制邀请码"
                   >
                     <Copy className="w-4 h-4" />
                   </Button>
-                  <Button 
-                    variant="ghost" 
+
+                  {/* 复制邀请链接 */}
+                  <Button
                     size="sm"
-                    onClick={() => handleCopyLink(invitation.code)}
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyLink(user.inviteCode);
+                    }}
+                    disabled={!user.inviteCode}
+                    title="复制邀请链接"
                   >
-                    <Link className="w-4 h-4" />
+                    <Link2 className="w-4 h-4" />
                   </Button>
-                  {invitation.isActive && invitation.usedCount < invitation.maxUses && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => deactivateMutation.mutate({ id: invitation.id })}
-                    >
-                      <Ban className="w-4 h-4" />
-                    </Button>
-                  )}
+
+                  {/* 权限开关 */}
+                  <div className="flex items-center gap-2 pl-2 border-l">
+                    <Label htmlFor={`switch-${user.id}`} className="text-xs cursor-pointer">
+                      {user.inviteEnabled ? '开启' : '关闭'}
+                    </Label>
+                    <Switch
+                      id={`switch-${user.id}`}
+                      checked={user.inviteEnabled}
+                      onCheckedChange={() => handleTogglePermission(user.id, user.inviteEnabled)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                {invitation.familyName && (
-                  <span className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    {invitation.familyName}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  使用: {invitation.usedCount}/{invitation.maxUses}
-                </span>
-                {invitation.expiresAt && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {new Date(invitation.expiresAt) < new Date() 
-                      ? "已过期" 
-                      : `${Math.ceil((new Date(invitation.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}天后过期`
-                    }
-                  </span>
-                )}
-                <span className="text-xs">
-                  创建于 {new Date(invitation.createdAt).toLocaleDateString()}
-                </span>
-              </div>
+
+              {/* 展开详情 */}
+              {selectedUserId === user.id && user.inviteCode && (
+                <div className="mt-4 pt-4 border-t space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">邀请码</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={user.inviteCode}
+                        className="font-mono"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyCode(user.inviteCode)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">邀请链接</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={`https://jiangyuchen.cn/register?invite=${user.inviteCode}`}
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyLink(user.inviteCode)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">邀请统计</span>
+                    <span className="font-medium">已邀请 {user.inviteCount} 人</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* 显示结果数量 */}
+      {!isLoading && filteredUsers && filteredUsers.length > 0 && (
+        <p className="text-sm text-muted-foreground text-center">
+          显示 {filteredUsers.length} / {allUsers?.length} 个用户
+        </p>
+      )}
     </div>
   );
 }
