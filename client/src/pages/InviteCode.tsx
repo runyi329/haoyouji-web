@@ -31,8 +31,7 @@ export default function InviteCode() {
     }
   );
 
-  // 获取邀请的用户列表
-  const { data: invitedUsers } = trpc.invite.getMyInvitedUsers.useQuery();
+
 
   // 复制邀请码
   const copyInviteCode = () => {
@@ -164,19 +163,19 @@ export default function InviteCode() {
         </div>
       )}
 
-      <div className="container max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="container max-w-2xl mx-auto px-4 py-4 space-y-3">
         {/* 邀请统计卡片 */}
         <Card className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/30 border-rose-200 dark:border-rose-800">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900/50">
-                  <Users className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/50">
+                  <Users className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">已邀请好友</p>
-                  <p className="text-3xl font-bold text-rose-600 dark:text-rose-400">
-                    {inviteInfo?.inviteCount || 0}<span className="text-lg font-normal ml-1">人</span>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">已邀请好友</p>
+                  <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                    {inviteInfo?.inviteCount || 0}<span className="text-sm font-normal ml-1">人</span>
                   </p>
                 </div>
               </div>
@@ -186,18 +185,18 @@ export default function InviteCode() {
 
         {/* 邀请码卡片 */}
         <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
-          <CardContent className="p-6">
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-2">
-                <Share2 className="w-8 h-8" />
+          <CardContent className="p-4">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
+                <Share2 className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm opacity-90 mb-2">我的专属邀请码</p>
-                <div className="text-4xl font-bold tracking-wider font-mono">
+                <p className="text-xs opacity-90">我的专属邀请码</p>
+                <div className="text-3xl font-bold tracking-wider font-mono">
                   {inviteInfo?.inviteCode || "------"}
                 </div>
               </div>
-              <div className="flex gap-2 justify-center pt-2">
+              <div className="flex gap-2 justify-center pt-1">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -215,17 +214,17 @@ export default function InviteCode() {
         {/* 二维码显示 */}
         {qrCodeData?.qrCodeDataUrl && (
           <Card>
-            <CardContent className="p-6">
-              <div className="text-center space-y-4">
-                <h3 className="font-semibold text-lg">专属邀请二维码</h3>
+            <CardContent className="p-4">
+              <div className="text-center space-y-2">
+                <h3 className="font-semibold text-base">专属邀请二维码</h3>
                 <div className="flex justify-center">
                   <img 
                     src={qrCodeData.qrCodeDataUrl} 
                     alt="邀请二维码" 
-                    className="w-64 h-64 border-4 border-gray-200 rounded-lg"
+                    className="w-48 h-48 border-2 border-gray-200 rounded-lg"
                   />
                 </div>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs text-gray-500">
                   扫描二维码即可使用您的邀请码注册
                 </p>
                 <Button
@@ -298,88 +297,7 @@ export default function InviteCode() {
           </CardContent>
         </Card>
 
-        {/* 邀请的用户列表 */}
-        {invitedUsers && invitedUsers.length > 0 && (
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-lg mb-4">我邀请的用户</h3>
-              <div className="space-y-3">
-                {invitedUsers.map((invitedUser) => (
-                  <div 
-                    key={invitedUser.id}
-                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-                      {(invitedUser.name || invitedUser.username || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {invitedUser.name || invitedUser.username || "未命名"}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {invitedUser.invitedAt 
-                          ? new Date(invitedUser.invitedAt).toLocaleDateString('zh-CN')
-                          : new Date(invitedUser.createdAt).toLocaleDateString('zh-CN')
-                        }
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* 使用说明 */}
-        <Card>
-          <CardContent className="p-6">
-            <h3 className="font-semibold text-lg mb-4">如何分享</h3>
-            <div className="space-y-4">
-              {/* 微信分享步骤 */}
-              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Share2 className="w-5 h-5 text-green-600" />
-                  <h4 className="font-semibold text-green-700 dark:text-green-400">微信分享步骤</h4>
-                </div>
-                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="flex gap-2">
-                    <span className="text-green-600 font-semibold">①</span>
-                    <p>点击上方“<span className="font-semibold text-green-600">分享微信</span>”或“<span className="font-semibold text-indigo-600">复制完整邀请文案</span>”按钮</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-green-600 font-semibold">②</span>
-                    <p>打开微信,选择好友或群聊</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-green-600 font-semibold">③</span>
-                    <p>长按输入框,点击“粘贴”发送</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-green-600 font-semibold">④</span>
-                    <p>好友点击链接注册即可!</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 其他分享方式 */}
-              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <h4 className="font-semibold text-gray-700 dark:text-gray-300">其他分享方式</h4>
-                <div className="flex gap-2">
-                  <span className="text-indigo-600">•</span>
-                  <p><span className="font-semibold">二维码:</span> 生成并下载二维码,发送给好友扫码注册</p>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-indigo-600">•</span>
-                  <p><span className="font-semibold">邀请码:</span> 直接告诉好友您的6位邀请码</p>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-indigo-600">•</span>
-                  <p><span className="font-semibold">短信/邮件:</span> 复制完整文案发送</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
