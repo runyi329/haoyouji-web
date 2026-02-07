@@ -75,6 +75,30 @@ export default function InviteCode() {
     }
   };
 
+  // 分享到微信(复制链接并提示)
+  const shareToWechat = () => {
+    if (inviteInfo?.inviteLink) {
+      navigator.clipboard.writeText(inviteInfo.inviteLink);
+      toast.success(
+        "链接已复制!\n请打开微信粘贴分享给好友",
+        { duration: 4000 }
+      );
+    }
+  };
+
+  // 复制完整邀请文案
+  const copyFullInviteText = () => {
+    if (!inviteInfo) return;
+    
+    const inviteText = `🎉 邀请您加入好友记\n\n我的专属邀请码: ${inviteInfo.inviteCode}\n\n点击链接注册: ${inviteInfo.inviteLink}\n\n使用邀请码注册,一起管理人脉关系!`;
+    
+    navigator.clipboard.writeText(inviteText);
+    toast.success(
+      "邀请文案已复制!\n可直接粘贴到微信、短信等",
+      { duration: 4000 }
+    );
+  };
+
   // 显示二维码
   const handleShowQRCode = () => {
     if (inviteInfo?.inviteCode) {
@@ -195,24 +219,35 @@ export default function InviteCode() {
               <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg break-all text-sm font-mono">
                 {inviteInfo?.inviteLink || "https://jiangyuchen.cn/register?invite=------"}
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   onClick={copyInviteLink}
-                  className="flex-1"
+                  className="w-full"
                 >
                   <Copy className="w-4 h-4 mr-2" />
                   复制链接
                 </Button>
                 <Button
                   variant="default"
-                  onClick={shareInviteLink}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                  onClick={shareToWechat}
+                  className="w-full bg-green-600 hover:bg-green-700"
                 >
                   <Share2 className="w-4 h-4 mr-2" />
-                  分享链接
+                  分享微信
                 </Button>
               </div>
+              <Button
+                variant="outline"
+                onClick={copyFullInviteText}
+                className="w-full border-indigo-200 hover:bg-indigo-50"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                复制完整邀请文案
+              </Button>
+              <p className="text-xs text-gray-500 text-center pt-1">
+                💡 提示: 点击“分享微信”后,打开微信粘贴发送给好友
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -268,25 +303,49 @@ export default function InviteCode() {
         {/* 使用说明 */}
         <Card>
           <CardContent className="p-6">
-            <h3 className="font-semibold text-lg mb-4">如何使用</h3>
-            <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
-                  1
+            <h3 className="font-semibold text-lg mb-4">如何分享</h3>
+            <div className="space-y-4">
+              {/* 微信分享步骤 */}
+              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <Share2 className="w-5 h-5 text-green-600" />
+                  <h4 className="font-semibold text-green-700 dark:text-green-400">微信分享步骤</h4>
                 </div>
-                <p>分享您的专属邀请码、链接或二维码给好友</p>
+                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex gap-2">
+                    <span className="text-green-600 font-semibold">①</span>
+                    <p>点击上方“<span className="font-semibold text-green-600">分享微信</span>”或“<span className="font-semibold text-indigo-600">复制完整邀请文案</span>”按钮</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-green-600 font-semibold">②</span>
+                    <p>打开微信,选择好友或群聊</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-green-600 font-semibold">③</span>
+                    <p>长按输入框,点击“粘贴”发送</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-green-600 font-semibold">④</span>
+                    <p>好友点击链接注册即可!</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
-                  2
+
+              {/* 其他分享方式 */}
+              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">其他分享方式</h4>
+                <div className="flex gap-2">
+                  <span className="text-indigo-600">•</span>
+                  <p><span className="font-semibold">二维码:</span> 生成并下载二维码,发送给好友扫码注册</p>
                 </div>
-                <p>好友通过任意方式注册时使用您的邀请码</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
-                  3
+                <div className="flex gap-2">
+                  <span className="text-indigo-600">•</span>
+                  <p><span className="font-semibold">邀请码:</span> 直接告诉好友您的6位邀请码</p>
                 </div>
-                <p>注册成功后,系统会自动记录为您邀请的用户</p>
+                <div className="flex gap-2">
+                  <span className="text-indigo-600">•</span>
+                  <p><span className="font-semibold">短信/邮件:</span> 复制完整文案发送</p>
+                </div>
               </div>
             </div>
           </CardContent>
