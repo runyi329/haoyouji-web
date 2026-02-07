@@ -22,6 +22,16 @@ export default function Login() {
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [regName, setRegName] = useState("");
+  const [regInviteCode, setRegInviteCode] = useState("");
+  
+  // 从 URL 参数读取邀请码
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('invite');
+    if (inviteCode) {
+      setRegInviteCode(inviteCode);
+    }
+  }, []);
   
   // 长按计时器
   const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
@@ -128,6 +138,7 @@ export default function Login() {
       username: regUsername,
       password: regPassword,
       name: regName || undefined,
+      inviteCode: regInviteCode || undefined,
     });
   };
 
@@ -281,6 +292,20 @@ export default function Login() {
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
                       className="h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label htmlFor="reg-invite" className="text-base font-medium text-gray-700">
+                      邀请码（可选）
+                    </Label>
+                    <Input
+                      id="reg-invite"
+                      placeholder="6位邀请码"
+                      value={regInviteCode}
+                      onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                      maxLength={6}
+                      className="h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500 font-mono"
                     />
                   </div>
 

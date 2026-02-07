@@ -41,7 +41,7 @@ export const inviteRouter = router({
     // 如果用户还没有邀请码,生成一个
     if (!user.inviteCode) {
       const newCode = generateInviteCode();
-      const newLink = `https://jiangyuchen.cn/register?invite=${newCode}`;
+      const newLink = `https://jiangyuchen.cn/login?invite=${newCode}`;
       
       await db
         .update(users)
@@ -69,7 +69,7 @@ export const inviteRouter = router({
       inviteCode: z.string(),
     }))
     .query(async ({ input }) => {
-      const inviteLink = `https://jiangyuchen.cn/register?invite=${input.inviteCode}`;
+      const inviteLink = `https://jiangyuchen.cn/login?invite=${input.inviteCode}`;
       
       try {
         // 生成二维码 (返回Data URL)
@@ -170,7 +170,7 @@ export const inviteRouter = router({
       
       while (attempts < maxAttempts) {
         const newCode = generateInviteCode();
-        const newLink = `https://jiangyuchen.cn/register?invite=${newCode}`;
+        const newLink = `https://jiangyuchen.cn/login?invite=${newCode}`;
         
         try {
           await db
