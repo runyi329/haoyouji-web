@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function Login() {
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState("login");
   
   // 登录表单
   const [loginUsername, setLoginUsername] = useState("");
@@ -30,6 +31,8 @@ export default function Login() {
     const inviteCode = params.get('invite');
     if (inviteCode) {
       setRegInviteCode(inviteCode);
+      // 自动切换到注册标签页
+      setActiveTab("register");
     }
   }, []);
   
@@ -126,6 +129,10 @@ export default function Login() {
       toast.error("请填写用户名和密码");
       return;
     }
+    if (regUsername.length < 2 || regUsername.length > 20) {
+      toast.error("用户名长度必须在2-20个字符之间");
+      return;
+    }
     if (regPassword !== regConfirmPassword) {
       toast.error("两次输入的密码不一致");
       return;
@@ -182,7 +189,7 @@ export default function Login() {
 
           {/* 登录/注册卡片 */}
           <Card className="w-full p-8 shadow-xl border-2 border-gray-200 bg-white">
-            <Tabs defaultValue="login" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               {/* 登录表单 */}
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-6">

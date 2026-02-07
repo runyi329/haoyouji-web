@@ -133,7 +133,7 @@ export const appRouter = router({
     // 用户名密码注册
     registerWithPassword: publicProcedure
       .input(z.object({
-        username: z.string().min(1).max(20),
+        username: z.string().min(2).max(20),
         password: z.string().min(6),
         name: z.string().optional(),
         email: z.string().email().optional(),
