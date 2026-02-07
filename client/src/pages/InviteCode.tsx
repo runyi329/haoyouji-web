@@ -9,7 +9,7 @@ import {
   QrCode,
   Users,
   Download,
-  Camera
+  ScanLine
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -136,7 +136,7 @@ export default function InviteCode() {
             className="text-white hover:bg-white/20"
             onClick={() => setShowScanner(true)}
           >
-            <Camera className="w-5 h-5" />
+            <ScanLine className="w-5 h-5" />
           </Button>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default function InviteCode() {
               </Button>
             </div>
             <div className="text-center text-gray-500 py-8">
-              <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <ScanLine className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <p>扫一扫功能开发中...</p>
               <p className="text-sm mt-2">请使用微信扫一扫或相机扫码</p>
             </div>
