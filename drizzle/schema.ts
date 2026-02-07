@@ -863,6 +863,11 @@ export const users = mysqlTable("users", {
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	lastSignedIn: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	inviteCode: varchar({ length: 6 }),
+	inviteLink: varchar({ length: 255 }),
+	invitedByUserId: int(),
+	invitedAt: timestamp({ mode: 'string' }),
+	inviteCount: int().default(0).notNull(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),

@@ -1,0 +1,297 @@
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { 
+  ArrowLeft, 
+  Copy, 
+  Share2, 
+  QrCode,
+  Users,
+  Download
+} from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+
+export default function InviteCode() {
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+
+  // 获取邀请信息
+  const { data: inviteInfo, isLoading } = trpc.invite.getMyInviteInfo.useQuery();
+
+  // 生成二维码
+  const { refetch: generateQRCode } = trpc.invite.generateQRCode.useQuery(
+    { inviteCode: inviteInfo?.inviteCode || "" },
+    { 
+      enabled: false,
+      onSuccess: (data) => {
+        setQrCodeDataUrl(data.qrCodeDataUrl);
+        setShowQRCode(true);
+      }
+    }
+  );
+
+  // 获取邀请的用户列表
+  const { data: invitedUsers } = trpc.invite.getMyInvitedUsers.useQuery();
+
+  // 复制邀请码
+  const copyInviteCode = () => {
+    if (inviteInfo?.inviteCode) {
+      navigator.clipboard.writeText(inviteInfo.inviteCode);
+      toast.success("邀请码已复制");
+    }
+  };
+
+  // 复制邀请链接
+  const copyInviteLink = () => {
+    if (inviteInfo?.inviteLink) {
+      navigator.clipboard.writeText(inviteInfo.inviteLink);
+      toast.success("邀请链接已复制");
+    }
+  };
+
+  // 分享邀请链接
+  const shareInviteLink = async () => {
+    if (!inviteInfo?.inviteLink) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '邀请您加入',
+          text: `使用我的邀请码 ${inviteInfo.inviteCode} 注册`,
+          url: inviteInfo.inviteLink,
+        });
+        toast.success("分享成功");
+      } catch (error) {
+        // 用户取消分享
+      }
+    } else {
+      // 不支持分享API,复制链接
+      copyInviteLink();
+    }
+  };
+
+  // 显示二维码
+  const handleShowQRCode = () => {
+    if (inviteInfo?.inviteCode) {
+      generateQRCode();
+    }
+  };
+
+  // 下载二维码
+  const downloadQRCode = () => {
+    if (!qrCodeDataUrl) return;
+
+    const link = document.createElement('a');
+    link.href = qrCodeDataUrl;
+    link.download = `invite-${inviteInfo?.inviteCode}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("二维码已下载");
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20">
+      {/* 顶部导航 */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 sticky top-0 z-50 shadow-lg">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            onClick={() => setLocation("/parent/profile/settings")}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-xl font-semibold">我的邀请</h1>
+        </div>
+      </div>
+
+      <div className="container max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* 邀请码卡片 */}
+        <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
+          <CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-2">
+                <Share2 className="w-8 h-8" />
+              </div>
+              <div>
+                <p className="text-sm opacity-90 mb-2">我的专属邀请码</p>
+                <div className="text-4xl font-bold tracking-wider font-mono">
+                  {inviteInfo?.inviteCode || "------"}
+                </div>
+              </div>
+              <div className="flex gap-2 justify-center pt-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={copyInviteCode}
+                  className="bg-white/20 hover:bg-white/30 text-white border-0"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  复制邀请码
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleShowQRCode}
+                  className="bg-white/20 hover:bg-white/30 text-white border-0"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  生成二维码
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 二维码显示 */}
+        {showQRCode && qrCodeDataUrl && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <h3 className="font-semibold text-lg">专属邀请二维码</h3>
+                <div className="flex justify-center">
+                  <img 
+                    src={qrCodeDataUrl} 
+                    alt="邀请二维码" 
+                    className="w-64 h-64 border-4 border-gray-200 rounded-lg"
+                  />
+                </div>
+                <p className="text-sm text-gray-500">
+                  扫描二维码即可使用您的邀请码注册
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={downloadQRCode}
+                  className="w-full"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  下载二维码
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 邀请链接 */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="font-semibold text-lg mb-4">专属邀请链接</h3>
+            <div className="space-y-3">
+              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg break-all text-sm font-mono">
+                {inviteInfo?.inviteLink || "https://jiangyuchen.cn/register?invite=------"}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={copyInviteLink}
+                  className="flex-1"
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  复制链接
+                </Button>
+                <Button
+                  variant="default"
+                  onClick={shareInviteLink}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  分享链接
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 邀请统计 */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">邀请统计</h3>
+              <div className="flex items-center gap-2 text-indigo-600">
+                <Users className="w-5 h-5" />
+                <span className="text-2xl font-bold">{inviteInfo?.inviteCount || 0}</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              您已成功邀请 {inviteInfo?.inviteCount || 0} 位用户
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 邀请的用户列表 */}
+        {invitedUsers && invitedUsers.length > 0 && (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="font-semibold text-lg mb-4">我邀请的用户</h3>
+              <div className="space-y-3">
+                {invitedUsers.map((invitedUser) => (
+                  <div 
+                    key={invitedUser.id}
+                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+                      {(invitedUser.name || invitedUser.username || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {invitedUser.name || invitedUser.username || "未命名"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {invitedUser.invitedAt 
+                          ? new Date(invitedUser.invitedAt).toLocaleDateString('zh-CN')
+                          : new Date(invitedUser.createdAt).toLocaleDateString('zh-CN')
+                        }
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 使用说明 */}
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="font-semibold text-lg mb-4">如何使用</h3>
+            <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
+                  1
+                </div>
+                <p>分享您的专属邀请码、链接或二维码给好友</p>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
+                  2
+                </div>
+                <p>好友通过任意方式注册时使用您的邀请码</p>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-semibold">
+                  3
+                </div>
+                <p>注册成功后,系统会自动记录为您邀请的用户</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

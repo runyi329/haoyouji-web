@@ -18,7 +18,8 @@ import {
   MessageSquare,
   TrendingUp,
   Pencil,
-  Copy
+  Copy,
+  Share2
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -225,6 +226,12 @@ export default function ProfileSettings() {
                     icon={<DollarSign className="w-5 h-5" />}
                     label="手续费等级"
                     value="VIP 1"
+                  />
+                  <SettingItem
+                    icon={<Share2 className="w-5 h-5" />}
+                    label="邀请码"
+                    value="查看我的邀请"
+                    onClick={() => setLocation("/parent/profile/invite")}
                   />
                 </div>
               </CardContent>

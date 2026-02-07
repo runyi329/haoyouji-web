@@ -80,6 +80,7 @@ const ThemeSettings = lazy(() => import("./pages/parent/ThemeSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
 const ProfileSettings = lazy(() => import("./pages/ProfileSettings"));
+const InviteCode = lazy(() => import("./pages/InviteCode"));
 const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
 const Moments = lazy(() => import("./pages/Moments"));
@@ -155,6 +156,7 @@ function Router() {
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/profile/settings" component={ProfileSettings} />
+        <Route path="/parent/profile/invite" component={InviteCode} />
 
         <Route path="/parent/contacts/:id" component={ContactDetail} />
         <Route path="/parent/contacts/:contactId/referral-chain" component={ReferralChainVisualization} />

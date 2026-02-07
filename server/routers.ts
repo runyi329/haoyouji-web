@@ -21,6 +21,7 @@ import * as dbLedger from "./db-ledger";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { inviteRouter } from "./invite-api";
 
 export const appRouter = router({
   system: systemRouter,
@@ -135,6 +136,7 @@ export const appRouter = router({
         password: z.string().min(6),
         name: z.string().optional(),
         email: z.string().email().optional(),
+        inviteCode: z.string().optional(), // 邀请码
       }))
       .mutation(async ({ ctx, input }) => {
         const result = await registerWithPassword(
@@ -155,6 +157,35 @@ export const appRouter = router({
         const user = await db.getUserByUsername(input.username);
         if (!user) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "创建用户失败" });
+        }
+        
+        // 处理邀请码
+        if (input.inviteCode) {
+          const dbConn = getDb();
+          // 查找邀请者
+          const [inviter] = await dbConn
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.inviteCode, input.inviteCode));
+          
+          if (inviter) {
+            // 更新新用户的邀请信息
+            await dbConn
+              .update(users)
+              .set({
+                invitedByUserId: inviter.id,
+                invitedAt: new Date().toISOString(),
+              })
+              .where(eq(users.id, user.id));
+            
+            // 更新邀请者的邀请计数
+            await dbConn
+              .update(users)
+              .set({
+                inviteCount: sql`${users.inviteCount} + 1`,
+              })
+              .where(eq(users.id, inviter.id));
+          }
         }
         
         // 如果是家长，自动创建family
@@ -5925,6 +5956,9 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+  
+  // 邀请系统
+  invite: inviteRouter,
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
