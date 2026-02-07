@@ -93,16 +93,14 @@ async function backupDatabase(dbConfig) {
   // 确保备份目录存在
   await fs.mkdir(BACKUP_DIR, { recursive: true });
 
-  // 构建mysqldump命令
+  // 构建mysqldump命令 (TiDB兼容版本)
   const mysqldumpCmd = `mysqldump \
     --host=${dbConfig.host} \
     --port=${dbConfig.port} \
     --user=${dbConfig.username} \
     --password="${dbConfig.password}" \
-    --single-transaction \
-    --routines \
-    --triggers \
-    --events \
+    --skip-lock-tables \
+    --no-tablespaces \
     --add-drop-table \
     --databases ${dbConfig.database} \
     --result-file="${backupPath}"`;

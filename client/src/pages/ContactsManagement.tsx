@@ -1251,9 +1251,11 @@ export default function ContactsManagement() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
-                    onClick={() => {
-                      logout();
+                    onClick={async () => {
+                      await logout();
                       toast.success("已退出登录");
+                      // 退出后跳转到登录页面
+                      window.location.href = "/login";
                     }}
                     className="text-red-600"
                   >
