@@ -136,7 +136,7 @@ export default function InviteCode() {
             variant="ghost"
             size="icon"
             className="text-white hover:bg-white/20"
-            onClick={() => setLocation("/parent/profile/settings")}
+            onClick={() => setLocation("/parent/profile")}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
