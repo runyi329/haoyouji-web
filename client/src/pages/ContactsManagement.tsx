@@ -1130,12 +1130,12 @@ export default function ContactsManagement() {
       
       console.log('[ContactsManagement] 转换后的features:', apiFeatures);
       
-      // 如果API返回的功能数量少于21，自动补充到21个
-      if (apiFeatures.length < 21) {
+      // 如果API返回的功能数量少于24，自动补充到24个
+      if (apiFeatures.length < 24) {
         // 使用reduce避免栈溢出（Math.max(...array)在数组很大时会崩溃）
         const maxId = apiFeatures.reduce((max, f) => Math.max(max, f.id), 0);
         const additionalFeatures = Array.from(
-          { length: 21 - apiFeatures.length },
+          { length: 24 - apiFeatures.length },
           (_, i) => ({
             id: maxId + i + 1,
             title: `功能${maxId + i + 1}`,
@@ -1151,9 +1151,9 @@ export default function ContactsManagement() {
     }
   }, [featureOrderData]);
 
-  // 生成21个默认功能容器（fallback）
+  // 生成24个默认功能容器（fallback）
   function generateDefaultFeatures(): Feature[] {
-    return Array.from({ length: 21 }, (_, i) => ({
+    return Array.from({ length: 24 }, (_, i) => ({
       id: i + 1,
       title: `功能${i + 1}`,
     }));
