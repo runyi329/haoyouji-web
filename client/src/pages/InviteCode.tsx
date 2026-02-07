@@ -8,8 +8,7 @@ import {
   Share2, 
   QrCode,
   Users,
-  Download,
-  ScanLine
+  Download
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -18,7 +17,7 @@ import { trpc } from "@/lib/trpc";
 export default function InviteCode() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const [showScanner, setShowScanner] = useState(false);
+
 
   // 获取邀请信息
   const { data: inviteInfo, isLoading } = trpc.invite.getMyInviteInfo.useQuery();
@@ -129,39 +128,10 @@ export default function InviteCode() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-xl font-semibold flex-1">我的邀请</h1>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/20"
-            onClick={() => setShowScanner(true)}
-          >
-            <ScanLine className="w-5 h-5" />
-          </Button>
         </div>
       </div>
 
-      {/* 扫一扫对话框 */}
-      {showScanner && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">扫描邀请二维码</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowScanner(false)}
-              >
-                <span className="text-2xl">×</span>
-              </Button>
-            </div>
-            <div className="text-center text-gray-500 py-8">
-              <ScanLine className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>扫一扫功能开发中...</p>
-              <p className="text-sm mt-2">请使用微信扫一扫或相机扫码</p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       <div className="container max-w-2xl mx-auto px-4 py-4 space-y-3">
         {/* 邀请统计卡片 */}
