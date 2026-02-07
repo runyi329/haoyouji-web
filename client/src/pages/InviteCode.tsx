@@ -8,7 +8,8 @@ import {
   Share2, 
   QrCode,
   Users,
-  Download
+  Download,
+  Camera
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -17,7 +18,8 @@ import { trpc } from "@/lib/trpc";
 export default function InviteCode() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const [showQRCode, setShowQRCode] = useState(false);
+  const [showQRCode, setShowQRCode] = useState(true);
+  const [showScanner, setShowScanner] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   // 获取邀请信息
@@ -37,6 +39,13 @@ export default function InviteCode() {
 
   // 获取邀请的用户列表
   const { data: invitedUsers } = trpc.invite.getMyInvitedUsers.useQuery();
+
+  // 自动生成二维码
+  useEffect(() => {
+    if (inviteInfo?.inviteCode && !qrCodeDataUrl) {
+      generateQRCode();
+    }
+  }, [inviteInfo?.inviteCode]);
 
   // 复制邀请码
   const copyInviteCode = () => {
@@ -140,9 +149,40 @@ export default function InviteCode() {
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-xl font-semibold">我的邀请</h1>
+          <h1 className="text-xl font-semibold flex-1">我的邀请</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            onClick={() => setShowScanner(true)}
+          >
+            <Camera className="w-5 h-5" />
+          </Button>
         </div>
       </div>
+
+      {/* 扫一扫对话框 */}
+      {showScanner && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">扫描邀请二维码</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowScanner(false)}
+              >
+                <span className="text-2xl">×</span>
+              </Button>
+            </div>
+            <div className="text-center text-gray-500 py-8">
+              <Camera className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>扫一扫功能开发中...</p>
+              <p className="text-sm mt-2">请使用微信扫一扫或相机扫码</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="container max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* 邀请码卡片 */}
@@ -168,22 +208,13 @@ export default function InviteCode() {
                   <Copy className="w-4 h-4 mr-2" />
                   复制邀请码
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleShowQRCode}
-                  className="bg-white/20 hover:bg-white/30 text-white border-0"
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  生成二维码
-                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* 二维码显示 */}
-        {showQRCode && qrCodeDataUrl && (
+        {qrCodeDataUrl && (
           <Card>
             <CardContent className="p-6">
               <div className="text-center space-y-4">
