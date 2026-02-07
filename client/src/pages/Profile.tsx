@@ -39,6 +39,7 @@ import {
   ChevronDown,
   Palette,
   ArrowLeft,
+  UserPlus,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -369,28 +370,11 @@ export default function Profile() {
     // 编辑资料（所有用户都可用）
     { id: "edit-profile", icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
     { 
-      id: "install-app",
-      icon: Smartphone, 
-      label: isInstalled ? "已安装" : "安卓主屏", 
+      id: "invite-friends",
+      icon: UserPlus, 
+      label: "邀请好友", 
       badge: null, 
-      onClick: async () => {
-        if (isIOSSafari) {
-          navigate("/parent/academy#pwa");
-          return;
-        }
-        if (isInstalled) {
-          toast.success("应用已安装到桌面");
-          return;
-        }
-        if (isInstallable) {
-          const success = await promptInstall();
-          if (success) {
-            toast.success("安装成功！请查看桌面图标");
-          }
-        } else {
-          navigate("/parent/academy#pwa");
-        }
-      } 
+      onClick: () => navigate("/parent/profile/invite")
     },
     { id: "favorites", icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
     { id: "friends", icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
