@@ -672,30 +672,30 @@ export default function ContactsList() {
     if (searchQuery && searchQuery.trim()) {
       const query = searchQuery.trim();
       markedSharedContacts = markedSharedContacts.filter((contact: any) => {
-        // 搜索姓名 (不区分大小写)
-        if (contact.name && contact.name.toLowerCase().includes(query.toLowerCase())) return true;
-        // 搜索称谓 (不区分大小写)
-        if (contact.title && contact.title.toLowerCase().includes(query.toLowerCase())) return true;
-        // 搜索职业 (不区分大小写)
-        if (contact.occupation && contact.occupation.toLowerCase().includes(query.toLowerCase())) return true;
+        // 搜索姓名
+        if (contact.name && contact.name.includes(query)) return true;
+        // 搜索称谓
+        if (contact.title && contact.title.includes(query)) return true;
+        // 搜索职业
+        if (contact.occupation && contact.occupation.includes(query)) return true;
         // 搜索电话 (精确匹配,不转换大小写)
         if (contact.phone && contact.phone.includes(query)) return true;
-        // 搜索自定义字段值（公司、职位等,不区分大小写）
+        // 搜索自定义字段值（公司、职位等）
         if (contact.fieldValues) {
           for (const fv of contact.fieldValues) {
-            if (fv.value && fv.value.toLowerCase().includes(query.toLowerCase())) return true;
+            if (fv.value && fv.value.includes(query)) return true;
           }
         }
-        // 搜索全局标签 (不区分大小写)
+        // 搜索全局标签
         if (contact.tags) {
           for (const tag of contact.tags) {
-            if (tag.name && tag.name.toLowerCase().includes(query.toLowerCase())) return true;
+            if (tag.name && tag.name.includes(query)) return true;
           }
         }
-        // 搜索个人标签 (不区分大小写)
+        // 搜索个人标签
         if (contact.personalTags) {
           for (const tag of contact.personalTags) {
-            if (tag.name && tag.name.toLowerCase().includes(query.toLowerCase())) return true;
+            if (tag.name && tag.name.includes(query)) return true;
           }
         }
         return false;
