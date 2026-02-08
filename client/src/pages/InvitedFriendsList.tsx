@@ -215,18 +215,18 @@ export default function InvitedFriendsList() {
           <div className="space-y-2">
             {filteredAndSortedFriends.map((friend) => (
               <Card key={friend.id} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                <CardContent className="p-3">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    {/* 头像 - 缩小 */}
+                    {/* 头像 */}
                     <div className="flex-shrink-0">
                       {friend.avatar ? (
                         <img
                           src={friend.avatar}
                           alt={friend.name || friend.username || "用户"}
-                          className="w-10 h-10 rounded-full object-cover"
+                          className="w-12 h-12 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-base">
                           {(friend.name || friend.username || "?").charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -235,46 +235,49 @@ export default function InvitedFriendsList() {
                     {/* 用户信息和统计 - 紧凑布局 */}
                     <div className="flex-1 min-w-0">
                       {/* 用户名 */}
-                      <div className="flex items-center gap-1 mb-1">
-                        <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                      <div className="flex items-center gap-1 mb-2">
+                        <h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 truncate">
                           {friend.name || friend.username || "未命名用户"}
                         </h3>
                         {friend.username && friend.name && (
-                          <span className="text-xs text-gray-400 truncate">@{friend.username}</span>
+                          <span className="text-sm text-gray-400 truncate">@{friend.username}</span>
                         )}
                       </div>
 
-                      {/* 人脉统计 - 横向紧凑布局 */}
+                      {/* 人脉统计 - 横向布局，显示完整标签 */}
                       <div className="flex gap-2">
                         {/* 我的 */}
-                        <div className="flex items-center gap-1 px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/20">
-                          <Users className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/20">
+                          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">我的</span>
+                          <span className="text-sm text-blue-600 dark:text-blue-400 font-semibold">
                             {friend.ownContactsCount}
                           </span>
                         </div>
 
                         {/* 共享 */}
-                        <div className="flex items-center gap-1 px-2 py-1 rounded bg-green-50 dark:bg-green-900/20">
-                          <Share className="w-3 h-3 text-green-600 dark:text-green-400" />
-                          <span className="text-xs text-green-600 dark:text-green-400 font-semibold">
+                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-50 dark:bg-green-900/20">
+                          <Share className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">共享</span>
+                          <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
                             {friend.sharedContactsCount}
                           </span>
                         </div>
 
                         {/* 全部 */}
-                        <div className="flex items-center gap-1 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/20">
-                          <Users className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-                          <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold">
+                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
+                          <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          <span className="text-xs text-gray-600 dark:text-gray-400">全部</span>
+                          <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
                             {friend.totalContactsCount}
                           </span>
                         </div>
                       </div>
 
-                      {/* 注册时间 - 更小字号 */}
+                      {/* 注册时间 */}
                       {(friend.invitedAt || friend.createdAt) && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          {new Date(friend.invitedAt || friend.createdAt).toLocaleDateString('zh-CN', {
+                        <p className="text-xs text-gray-400 mt-2">
+                          注册于 {new Date(friend.invitedAt || friend.createdAt).toLocaleDateString('zh-CN', {
                             year: 'numeric',
                             month: 'numeric',
                             day: 'numeric'
