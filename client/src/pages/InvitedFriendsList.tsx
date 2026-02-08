@@ -7,7 +7,12 @@ export default function InvitedFriendsList() {
   const [, setLocation] = useLocation();
 
   // 获取邀请好友列表
-  const { data: friends, isLoading } = trpc.invite.getMyInvitedFriends.useQuery();
+  const { data: friends, isLoading, error } = trpc.invite.getMyInvitedFriends.useQuery();
+  
+  // 调试日志
+  console.log('[InvitedFriendsList] isLoading:', isLoading);
+  console.log('[InvitedFriendsList] friends:', friends);
+  console.log('[InvitedFriendsList] error:', error);
 
   if (isLoading) {
     return (
@@ -15,7 +20,7 @@ export default function InvitedFriendsList() {
         <div className="p-4">
           <div className="flex items-center gap-3 mb-4">
             <button
-              onClick={() => setLocation("/invite")}
+              onClick={() => setLocation("/parent/profile/invite")}
               className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -34,7 +39,7 @@ export default function InvitedFriendsList() {
         {/* 头部 */}
         <div className="flex items-center gap-3 mb-4">
           <button
-            onClick={() => setLocation("/invite")}
+            onClick={() => setLocation("/parent/profile/invite")}
             className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
