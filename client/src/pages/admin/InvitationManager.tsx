@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share2, RefreshCw, Edit, UserPlus, X } from "lucide-react";
+import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share, RefreshCw, Edit, UserPlus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -216,7 +216,7 @@ export function InvitationManager() {
                 <p className="text-sm text-muted-foreground">累计邀请</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.totalInvites}</p>
               </div>
-              <Share2 className="w-8 h-8 text-blue-600" />
+              <Share className="w-8 h-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
