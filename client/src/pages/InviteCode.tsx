@@ -8,7 +8,8 @@ import {
   Share2, 
   QrCode,
   Users,
-  Download
+  Download,
+  ChevronRight
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -149,6 +150,15 @@ export default function InviteCode() {
                   </p>
                 </div>
               </div>
+              {/* 箭头按钮 */}
+              {(inviteInfo?.inviteCount || 0) > 0 && (
+                <button
+                  onClick={() => setLocation("/invited-friends")}
+                  className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-full transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                </button>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -201,3 +201,59 @@ export const inviteRouter = router({
       });
     }),
 });
+
+  // 获取我邀请的好友列表及其人脉统计
+  getMyInvitedFriends: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    const userId = ctx.user!.id;
+    
+    // 查询被当前用户邀请的所有用户
+    const invitedUsers = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        invitedAt: users.invitedAt,
+      })
+      .from(users)
+      .where(eq(users.invitedByUserId, userId));
+    
+    // 为每个被邀请用户获取人脉统计
+    const friendsWithStats = await Promise.all(
+      invitedUsers.map(async (friend) => {
+        // 获取该用户自己的人脉数
+        const [ownContactsResult] = await db.execute(sql`
+          SELECT COUNT(*) as count 
+          FROM contacts 
+          WHERE parent_user_id = ${friend.id}
+        `);
+        const ownContactsCount = Number(ownContactsResult?.count || 0);
+        
+        // 获取该用户共享给他的人脉数
+        const [sharedContactsResult] = await db.execute(sql`
+          SELECT COUNT(DISTINCT c.id) as count
+          FROM contacts c
+          INNER JOIN contact_shares cs ON c.id = cs.contact_id
+          WHERE cs.shared_with_user_id = ${friend.id}
+        `);
+        const sharedContactsCount = Number(sharedContactsResult?.count || 0);
+        
+        // 全部人脉数 = 自己的 + 共享的
+        const totalContactsCount = ownContactsCount + sharedContactsCount;
+        
+        return {
+          id: friend.id,
+          username: friend.username,
+          name: friend.name,
+          avatarUrl: friend.avatarUrl,
+          invitedAt: friend.invitedAt,
+          ownContactsCount,
+          sharedContactsCount,
+          totalContactsCount,
+        };
+      })
+    );
+    
+    return friendsWithStats;
+  }),
