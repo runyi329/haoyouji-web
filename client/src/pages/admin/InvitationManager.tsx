@@ -76,7 +76,7 @@ export function InvitationManager() {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
-      user.username.toLowerCase().includes(query) ||
+      user.username?.toLowerCase().includes(query) ||
       user.name?.toLowerCase().includes(query) ||
       user.inviteCode?.toLowerCase().includes(query)
     );
@@ -88,7 +88,7 @@ export function InvitationManager() {
     if (!referrerSearchQuery) return true;
     const query = referrerSearchQuery.toLowerCase();
     return (
-      user.username.toLowerCase().includes(query) ||
+      user.username?.toLowerCase().includes(query) ||
       user.name?.toLowerCase().includes(query) ||
       user.inviteCode?.toLowerCase().includes(query)
     );
