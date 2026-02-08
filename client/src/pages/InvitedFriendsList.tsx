@@ -215,8 +215,9 @@ export default function InvitedFriendsList() {
           <div className="space-y-2">
             {filteredAndSortedFriends.map((friend) => (
               <Card key={friend.id} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
+                <CardContent className="p-4 space-y-3">
+                  {/* 第一排：头像 + 名字 + 注册时间 */}
+                  <div className="flex items-center gap-3">
                     {/* 头像 */}
                     <div className="flex-shrink-0">
                       {friend.avatar ? (
@@ -232,10 +233,9 @@ export default function InvitedFriendsList() {
                       )}
                     </div>
 
-                    {/* 用户信息和统计 - 紧凑布局 */}
+                    {/* 名字和注册时间 */}
                     <div className="flex-1 min-w-0">
-                      {/* 用户名 */}
-                      <div className="flex items-center gap-1 mb-2">
+                      <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 truncate">
                           {friend.name || friend.username || "未命名用户"}
                         </h3>
@@ -243,40 +243,8 @@ export default function InvitedFriendsList() {
                           <span className="text-sm text-gray-400 truncate">@{friend.username}</span>
                         )}
                       </div>
-
-                      {/* 人脉统计 - 横向布局，显示完整标签 */}
-                      <div className="flex gap-2">
-                        {/* 我的 */}
-                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/20">
-                          <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                          <span className="text-xs text-gray-600 dark:text-gray-400">我的</span>
-                          <span className="text-sm text-blue-600 dark:text-blue-400 font-semibold">
-                            {friend.ownContactsCount}
-                          </span>
-                        </div>
-
-                        {/* 共享 */}
-                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-50 dark:bg-green-900/20">
-                          <Share className="w-4 h-4 text-green-600 dark:text-green-400" />
-                          <span className="text-xs text-gray-600 dark:text-gray-400">共享</span>
-                          <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
-                            {friend.sharedContactsCount}
-                          </span>
-                        </div>
-
-                        {/* 全部 */}
-                        <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
-                          <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                          <span className="text-xs text-gray-600 dark:text-gray-400">全部</span>
-                          <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
-                            {friend.totalContactsCount}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 注册时间 */}
                       {(friend.invitedAt || friend.createdAt) && (
-                        <p className="text-xs text-gray-400 mt-2">
+                        <p className="text-xs text-gray-400 mt-0.5">
                           注册于 {new Date(friend.invitedAt || friend.createdAt).toLocaleDateString('zh-CN', {
                             year: 'numeric',
                             month: 'numeric',
@@ -284,6 +252,36 @@ export default function InvitedFriendsList() {
                           })}
                         </p>
                       )}
+                    </div>
+                  </div>
+
+                  {/* 第二排：人脉统计 */}
+                  <div className="flex gap-2">
+                    {/* 我的 */}
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/20">
+                      <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs text-gray-600 dark:text-gray-400">我的</span>
+                      <span className="text-sm text-blue-600 dark:text-blue-400 font-semibold">
+                        {friend.ownContactsCount}
+                      </span>
+                    </div>
+
+                    {/* 共享 */}
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-50 dark:bg-green-900/20">
+                      <Share className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      <span className="text-xs text-gray-600 dark:text-gray-400">共享</span>
+                      <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
+                        {friend.sharedContactsCount}
+                      </span>
+                    </div>
+
+                    {/* 全部 */}
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
+                      <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-xs text-gray-600 dark:text-gray-400">全部</span>
+                      <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
+                        {friend.totalContactsCount}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
