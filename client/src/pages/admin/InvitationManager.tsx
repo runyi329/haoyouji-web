@@ -6,12 +6,42 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share2, RefreshCw } from "lucide-react";
+import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share2, RefreshCw, Edit, UserPlus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function InvitationManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  
+  // 编辑推荐人对话框
+  const [editReferrerDialog, setEditReferrerDialog] = useState<{
+    open: boolean;
+    userId: number | null;
+    userName: string;
+    currentReferrerId: number | null;
+  }>({
+    open: false,
+    userId: null,
+    userName: "",
+    currentReferrerId: null,
+  });
+  
+  const [referrerSearchQuery, setReferrerSearchQuery] = useState("");
+  const [selectedReferrerId, setSelectedReferrerId] = useState<number | null>(null);
 
   // 获取所有用户的邀请权限状态
   const { data: allUsers, refetch, isLoading } = trpc.invitePermission.getAllUsersInvitePermission.useQuery();
@@ -27,10 +57,13 @@ export function InvitationManager() {
     },
   });
 
-  // 批量开启/关闭邀请权限
-  const batchToggleMutation = trpc.invitePermission.batchSetInvitePermission.useMutation({
+  // 更新推荐人
+  const updateReferrerMutation = trpc.invitePermission.updateUserReferrer.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
+      setEditReferrerDialog({ open: false, userId: null, userName: "", currentReferrerId: null });
+      setReferrerSearchQuery("");
+      setSelectedReferrerId(null);
       refetch();
     },
     onError: (error) => {
@@ -42,6 +75,18 @@ export function InvitationManager() {
   const filteredUsers = allUsers?.filter(user => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
+    return (
+      user.username.toLowerCase().includes(query) ||
+      user.name?.toLowerCase().includes(query) ||
+      user.inviteCode?.toLowerCase().includes(query)
+    );
+  });
+
+  // 推荐人候选列表(排除自己)
+  const referrerCandidates = allUsers?.filter(user => {
+    if (user.id === editReferrerDialog.userId) return false; // 不能选择自己
+    if (!referrerSearchQuery) return true;
+    const query = referrerSearchQuery.toLowerCase();
     return (
       user.username.toLowerCase().includes(query) ||
       user.name?.toLowerCase().includes(query) ||
@@ -78,6 +123,36 @@ export function InvitationManager() {
     });
   };
 
+  // 打开编辑推荐人对话框
+  const handleOpenEditReferrer = (user: any) => {
+    // 查找当前推荐人
+    const currentReferrer = allUsers?.find(u => u.id === user.invitedByUserId);
+    
+    setEditReferrerDialog({
+      open: true,
+      userId: user.id,
+      userName: user.name || user.username,
+      currentReferrerId: user.invitedByUserId || null,
+    });
+    setSelectedReferrerId(user.invitedByUserId || null);
+    setReferrerSearchQuery("");
+  };
+
+  // 保存推荐人
+  const handleSaveReferrer = () => {
+    if (!editReferrerDialog.userId) return;
+    
+    updateReferrerMutation.mutate({
+      userId: editReferrerDialog.userId,
+      referrerId: selectedReferrerId,
+    });
+  };
+
+  // 获取用户的推荐人信息
+  const getUserReferrer = (userId: number) => {
+    return allUsers?.find(u => u.id === userId);
+  };
+
   // 统计信息
   const stats = {
     total: allUsers?.length || 0,
@@ -92,7 +167,7 @@ export function InvitationManager() {
       <div>
         <h3 className="text-lg font-semibold">用户邀请权限管理</h3>
         <p className="text-sm text-muted-foreground">
-          管理用户的邀请功能权限,控制哪些用户可以邀请新用户注册
+          管理用户的邀请功能权限,控制哪些用户可以邀请新用户注册,并可手动修改推荐关系
         </p>
       </div>
 
@@ -191,137 +266,214 @@ export function InvitationManager() {
           </Card>
         )}
 
-        {!isLoading && filteredUsers?.map((user) => (
-          <Card 
-            key={user.id}
-            className={`transition-all ${selectedUserId === user.id ? 'ring-2 ring-primary' : ''}`}
-            onClick={() => setSelectedUserId(user.id)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                {/* 用户信息 */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium truncate">
-                      {user.name || user.username}
-                    </span>
-                    {user.role === 'super_admin' && (
-                      <Badge variant="secondary" className="text-xs">管理员</Badge>
-                    )}
-                    {user.inviteEnabled ? (
-                      <Badge variant="default" className="text-xs bg-green-500">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        已开启
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        已关闭
-                      </Badge>
-                    )}
+        {!isLoading && filteredUsers?.map((user) => {
+          const referrer = getUserReferrer(user.invitedByUserId || 0);
+          
+          return (
+            <Card 
+              key={user.id}
+              className={`transition-all ${selectedUserId === user.id ? 'ring-2 ring-primary' : ''}`}
+              onClick={() => setSelectedUserId(user.id)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  {/* 用户信息 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-medium truncate">
+                        {user.name || user.username}
+                      </span>
+                      {user.role === 'super_admin' && (
+                        <Badge variant="secondary" className="text-xs">管理员</Badge>
+                      )}
+                      {user.inviteEnabled ? (
+                        <Badge variant="default" className="text-xs bg-green-500">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          已开启
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          已关闭
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                      <span>@{user.username}</span>
+                      {user.inviteCode && (
+                        <span className="font-mono">{user.inviteCode}</span>
+                      )}
+                      <span>已邀请: {user.inviteCount}人</span>
+                      {referrer && (
+                        <span className="text-purple-600">
+                          推荐人: {referrer.name || referrer.username}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>@{user.username}</span>
+
+                  {/* 操作按钮 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* 编辑推荐人 */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditReferrer(user);
+                      }}
+                      title="编辑推荐人"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                    </Button>
+
+                    {/* 复制邀请码 */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyCode(user.inviteCode);
+                      }}
+                      disabled={!user.inviteCode}
+                      title="复制邀请码"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+
+                    {/* 复制邀请链接 */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyLink(user.inviteCode);
+                      }}
+                      disabled={!user.inviteCode}
+                      title="复制邀请链接"
+                    >
+                      <Link2 className="w-4 h-4" />
+                    </Button>
+
+                    {/* 权限开关 */}
+                    <div className="flex items-center gap-2 pl-2 border-l">
+                      <Label htmlFor={`switch-${user.id}`} className="text-xs cursor-pointer">
+                        {user.inviteEnabled ? '开启' : '关闭'}
+                      </Label>
+                      <Switch
+                        id={`switch-${user.id}`}
+                        checked={user.inviteEnabled}
+                        onCheckedChange={() => handleTogglePermission(user.id, user.inviteEnabled)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 展开详情 */}
+                {selectedUserId === user.id && (
+                  <div className="mt-4 pt-4 border-t space-y-3">
+                    {/* 推荐人信息 */}
+                    {referrer && (
+                      <div className="p-3 bg-purple-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">推荐人</p>
+                            <p className="font-medium">{referrer.name || referrer.username}</p>
+                            <p className="text-xs text-muted-foreground">@{referrer.username}</p>
+                            {referrer.inviteCode && (
+                              <p className="text-xs font-mono text-purple-600 mt-1">
+                                邀请码: {referrer.inviteCode}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditReferrer(user);
+                            }}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            修改
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!referrer && (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">暂无推荐人</p>
+                            <p className="text-xs text-muted-foreground">可以手动设置推荐关系</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditReferrer(user);
+                            }}
+                          >
+                            <UserPlus className="w-4 h-4 mr-1" />
+                            添加
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {user.inviteCode && (
-                      <span className="font-mono">{user.inviteCode}</span>
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">邀请码</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              readOnly
+                              value={user.inviteCode}
+                              className="font-mono"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCopyCode(user.inviteCode)}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">邀请链接</Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              readOnly
+                              value={`https://jiangyuchen.cn/register?invite=${user.inviteCode}`}
+                              className="font-mono text-xs"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCopyLink(user.inviteCode)}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
                     )}
-                    <span>已邀请: {user.inviteCount}人</span>
-                  </div>
-                </div>
 
-                {/* 操作按钮 */}
-                <div className="flex items-center gap-2">
-                  {/* 复制邀请码 */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyCode(user.inviteCode);
-                    }}
-                    disabled={!user.inviteCode}
-                    title="复制邀请码"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </Button>
-
-                  {/* 复制邀请链接 */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyLink(user.inviteCode);
-                    }}
-                    disabled={!user.inviteCode}
-                    title="复制邀请链接"
-                  >
-                    <Link2 className="w-4 h-4" />
-                  </Button>
-
-                  {/* 权限开关 */}
-                  <div className="flex items-center gap-2 pl-2 border-l">
-                    <Label htmlFor={`switch-${user.id}`} className="text-xs cursor-pointer">
-                      {user.inviteEnabled ? '开启' : '关闭'}
-                    </Label>
-                    <Switch
-                      id={`switch-${user.id}`}
-                      checked={user.inviteEnabled}
-                      onCheckedChange={() => handleTogglePermission(user.id, user.inviteEnabled)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 展开详情 */}
-              {selectedUserId === user.id && user.inviteCode && (
-                <div className="mt-4 pt-4 border-t space-y-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">邀请码</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        readOnly
-                        value={user.inviteCode}
-                        className="font-mono"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCopyCode(user.inviteCode)}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">邀请统计</span>
+                      <span className="font-medium">已邀请 {user.inviteCount} 人</span>
                     </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">邀请链接</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        readOnly
-                        value={`https://jiangyuchen.cn/register?invite=${user.inviteCode}`}
-                        className="font-mono text-xs"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCopyLink(user.inviteCode)}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">邀请统计</span>
-                    <span className="font-medium">已邀请 {user.inviteCount} 人</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* 显示结果数量 */}
@@ -330,6 +482,125 @@ export function InvitationManager() {
           显示 {filteredUsers.length} / {allUsers?.length} 个用户
         </p>
       )}
+
+      {/* 编辑推荐人对话框 */}
+      <Dialog open={editReferrerDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setEditReferrerDialog({ open: false, userId: null, userName: "", currentReferrerId: null });
+          setReferrerSearchQuery("");
+          setSelectedReferrerId(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>编辑推荐人 - {editReferrerDialog.userName}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* 当前推荐人 */}
+            {editReferrerDialog.currentReferrerId && (
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">当前推荐人</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {getUserReferrer(editReferrerDialog.currentReferrerId)?.name || 
+                       getUserReferrer(editReferrerDialog.currentReferrerId)?.username}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      @{getUserReferrer(editReferrerDialog.currentReferrerId)?.username}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedReferrerId(null)}
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    清除
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 搜索推荐人 */}
+            <div className="space-y-2">
+              <Label>选择新推荐人</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索用户名、昵称或邀请码..."
+                  value={referrerSearchQuery}
+                  onChange={(e) => setReferrerSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* 推荐人候选列表 */}
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {referrerCandidates?.map((candidate) => (
+                <Card
+                  key={candidate.id}
+                  className={`cursor-pointer transition-all ${
+                    selectedReferrerId === candidate.id ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSelectedReferrerId(candidate.id)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{candidate.name || candidate.username}</span>
+                          {candidate.role === 'super_admin' && (
+                            <Badge variant="secondary" className="text-xs">管理员</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                          <span>@{candidate.username}</span>
+                          {candidate.inviteCode && (
+                            <span className="font-mono">{candidate.inviteCode}</span>
+                          )}
+                          <span>已邀请: {candidate.inviteCount}人</span>
+                        </div>
+                      </div>
+                      {selectedReferrerId === candidate.id && (
+                        <CheckCircle className="w-5 h-5 text-primary" />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {referrerCandidates?.length === 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>没有找到匹配的用户</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditReferrerDialog({ open: false, userId: null, userName: "", currentReferrerId: null });
+                setReferrerSearchQuery("");
+                setSelectedReferrerId(null);
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleSaveReferrer}
+              disabled={updateReferrerMutation.isPending || selectedReferrerId === editReferrerDialog.currentReferrerId}
+            >
+              {updateReferrerMutation.isPending ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
