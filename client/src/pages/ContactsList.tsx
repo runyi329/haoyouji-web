@@ -668,34 +668,34 @@ export default function ContactsList() {
       id: `shared_${contact.id}_${contact._sharerUserId || 'unknown'}`,
     })) || [];
     
-    // 如果有搜索关键词，对共享人脉也进行过滤
+    // 如果有搜索关键词,对共享人脉也进行过滤
     if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.trim().toLowerCase();
+      const query = searchQuery.trim();
       markedSharedContacts = markedSharedContacts.filter((contact: any) => {
-        // 搜索姓名
-        if (contact.name && contact.name.toLowerCase().includes(query)) return true;
-        // 搜索称谓
-        if (contact.title && contact.title.toLowerCase().includes(query)) return true;
-        // 搜索职业
-        if (contact.occupation && contact.occupation.toLowerCase().includes(query)) return true;
-        // 搜索电话
+        // 搜索姓名 (不区分大小写)
+        if (contact.name && contact.name.toLowerCase().includes(query.toLowerCase())) return true;
+        // 搜索称谓 (不区分大小写)
+        if (contact.title && contact.title.toLowerCase().includes(query.toLowerCase())) return true;
+        // 搜索职业 (不区分大小写)
+        if (contact.occupation && contact.occupation.toLowerCase().includes(query.toLowerCase())) return true;
+        // 搜索电话 (精确匹配,不转换大小写)
         if (contact.phone && contact.phone.includes(query)) return true;
-        // 搜索自定义字段值（公司、职位等）
+        // 搜索自定义字段值（公司、职位等,不区分大小写）
         if (contact.fieldValues) {
           for (const fv of contact.fieldValues) {
-            if (fv.value && fv.value.toLowerCase().includes(query)) return true;
+            if (fv.value && fv.value.toLowerCase().includes(query.toLowerCase())) return true;
           }
         }
-        // 搜索全局标签
+        // 搜索全局标签 (不区分大小写)
         if (contact.tags) {
           for (const tag of contact.tags) {
-            if (tag.name && tag.name.toLowerCase().includes(query)) return true;
+            if (tag.name && tag.name.toLowerCase().includes(query.toLowerCase())) return true;
           }
         }
-        // 搜索个人标签
+        // 搜索个人标签 (不区分大小写)
         if (contact.personalTags) {
           for (const tag of contact.personalTags) {
-            if (tag.name && tag.name.toLowerCase().includes(query)) return true;
+            if (tag.name && tag.name.toLowerCase().includes(query.toLowerCase())) return true;
           }
         }
         return false;

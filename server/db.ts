@@ -80,6 +80,7 @@ export async function getDb(forceGuest: boolean = false) {
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
           ssl: isLocalhost ? false : { rejectUnauthorized: false },
+          charset: 'utf8mb4',
         });
         _guestDb = drizzle(connection);
         console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
@@ -113,6 +114,7 @@ export async function getDb(forceGuest: boolean = false) {
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
           ssl: isLocalhost ? false : { rejectUnauthorized: false },
+          charset: 'utf8mb4',
         });
         _db = drizzle(connection);
         
