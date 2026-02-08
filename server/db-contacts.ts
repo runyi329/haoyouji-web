@@ -3092,7 +3092,9 @@ export async function getContactsByParentPaginated(
         CASE 
           WHEN c.name COLLATE utf8mb4_unicode_ci LIKE ${searchQuery + '%'} THEN 1
           WHEN c.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern} THEN 2
-          ELSE 3
+          WHEN c.title COLLATE utf8mb4_unicode_ci LIKE ${searchQuery + '%'} THEN 3
+          WHEN c.title COLLATE utf8mb4_unicode_ci LIKE ${searchPattern} THEN 4
+          ELSE 5
         END,
         c.updatedAt DESC
       LIMIT ${pageSize}
