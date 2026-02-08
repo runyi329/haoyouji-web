@@ -4,7 +4,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const invitePermissionRouter = router({
   // 设置用户的邀请功能权限 (仅管理员)
@@ -159,7 +159,6 @@ export const invitePermissionRouter = router({
         createdAt: user.createdAt,
       }));
     }),
-});
 
   // 更新用户的推荐人 (仅管理员)
   updateUserReferrer: protectedProcedure
