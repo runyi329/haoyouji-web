@@ -3032,13 +3032,13 @@ export async function getContactsByParentPaginated(
       LEFT JOIN personal_contact_tags pct ON c.id = pct.contactId
       WHERE c.parentUserId = ${parentUserId}
       AND (
-        c.name LIKE ${searchPattern}
-        OR c.title LIKE ${searchPattern}
-        OR c.occupation LIKE ${searchPattern}
-        OR c.phone LIKE ${searchPattern}
-        OR cfv.value LIKE ${searchPattern}
-        OR ct.name LIKE ${searchPattern}
-        OR pct.name LIKE ${searchPattern}
+        c.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.title COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.occupation COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.phone COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR cfv.value COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR ct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR pct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
       )
     `);
   }
@@ -3080,13 +3080,13 @@ export async function getContactsByParentPaginated(
       LEFT JOIN personal_contact_tags pct ON c.id = pct.contactId
       WHERE c.parentUserId = ${parentUserId}
       AND (
-        c.name LIKE ${searchPattern}
-        OR c.title LIKE ${searchPattern}
-        OR c.occupation LIKE ${searchPattern}
-        OR c.phone LIKE ${searchPattern}
-        OR cfv.value LIKE ${searchPattern}
-        OR ct.name LIKE ${searchPattern}
-        OR pct.name LIKE ${searchPattern}
+        c.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.title COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.occupation COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR c.phone COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR cfv.value COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR ct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
+        OR pct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
       )
       ORDER BY c.updatedAt DESC
       LIMIT ${pageSize}
