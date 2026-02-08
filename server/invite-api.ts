@@ -3,8 +3,8 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./db";
-import { users } from "../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, contacts, contactSharingConnections } from "../drizzle/schema";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import QRCode from 'qrcode';
 
 // 生成6位随机邀请码
@@ -206,55 +206,78 @@ export const inviteRouter = router({
     const db = await getDb();
     const userId = ctx.user!.id;
     
-    // 查询被当前用户邀请的所有用户
+    console.log('[getMyInvitedFriends] 开始查询，当前用户ID:', userId);
+    
+    // 1. 查询被当前用户邀请的所有用户（使用正确的字段名）
     const invitedUsers = await db
       .select({
         id: users.id,
         username: users.username,
         name: users.name,
-        avatarUrl: users.avatarUrl,
+        avatar: users.avatar,
         invitedAt: users.invitedAt,
+        createdAt: users.createdAt,
       })
       .from(users)
-      .where(eq(users.invitedByUserId, userId));
+      .where(eq(users.invitedByUserId, userId))
+      .orderBy(sql`${users.invitedAt} DESC`);
     
-    // 为每个被邀请用户获取人脉统计
+    console.log('[getMyInvitedFriends] 查询到邀请用户数:', invitedUsers.length);
+    
+    if (invitedUsers.length === 0) {
+      return [];
+    }
+    
+    // 2. 为每个被邀请用户获取人脉统计
     const friendsWithStats = await Promise.all(
       invitedUsers.map(async (friend) => {
-        // 获取该用户自己的人脉数
-        const ownContactsResult: any = await db.execute(sql`
-          SELECT COUNT(*) as count 
-          FROM contacts 
-          WHERE parent_user_id = ${friend.id}
-        `);
-        // mysql2 execute 返回的格式: [[{count: n}], fields]
-        const ownContactsCount = Number(ownContactsResult[0]?.[0]?.count || 0);
+        // 2a. 获取该用户自己的人脉数（使用drizzle ORM查询，和getContactCounts一样的方式）
+        const mineResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, friend.id));
+        const ownCount = mineResult[0]?.count || 0;
         
-        // 获取该用户共享给他的人脉数
-        const sharedContactsResult: any = await db.execute(sql`
-          SELECT COUNT(DISTINCT c.id) as count
-          FROM contacts c
-          INNER JOIN contact_shares cs ON c.id = cs.contact_id
-          WHERE cs.shared_with_user_id = ${friend.id}
-        `);
-        // mysql2 execute 返回的格式: [[{count: n}], fields]
-        const sharedContactsCount = Number(sharedContactsResult[0]?.[0]?.count || 0);
+        // 2b. 获取共享给该用户的人脉数（通过contact_sharing_connections表）
+        const sharingConnections = await db
+          .select({ sharerId: contactSharingConnections.sharerId })
+          .from(contactSharingConnections)
+          .where(
+            and(
+              eq(contactSharingConnections.receiverId, friend.id),
+              eq(contactSharingConnections.status, 'active')
+            )
+          );
         
-        // 全部人脉数 = 自己的 + 共享的
-        const totalContactsCount = ownContactsCount + sharedContactsCount;
+        let sharedCount = 0;
+        if (sharingConnections.length > 0) {
+          const sharerIds = sharingConnections.map(conn => conn.sharerId);
+          const sharedResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(contacts)
+            .where(inArray(contacts.parentUserId, sharerIds));
+          sharedCount = sharedResult[0]?.count || 0;
+        }
+        
+        const totalCount = ownCount + sharedCount;
+        
+        console.log(`[getMyInvitedFriends] 用户 ${friend.username}(${friend.id}): 自己=${ownCount}, 共享=${sharedCount}, 全部=${totalCount}`);
         
         return {
           id: friend.id,
           username: friend.username,
           name: friend.name,
-          avatarUrl: friend.avatarUrl,
+          avatar: friend.avatar,
           invitedAt: friend.invitedAt,
-          ownContactsCount,
-          sharedContactsCount,
-          totalContactsCount,
+          createdAt: friend.createdAt,
+          ownContactsCount: ownCount,
+          sharedContactsCount: sharedCount,
+          totalContactsCount: totalCount,
         };
       })
     );
+    
+    console.log('[getMyInvitedFriends] 查询完成，返回数据:', friendsWithStats.length, '条');
     
     return friendsWithStats;
   }),

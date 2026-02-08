@@ -8,11 +8,6 @@ export default function InvitedFriendsList() {
 
   // 获取邀请好友列表
   const { data: friends, isLoading, error } = trpc.invite.getMyInvitedFriends.useQuery();
-  
-  // 调试日志
-  console.log('[InvitedFriendsList] isLoading:', isLoading);
-  console.log('[InvitedFriendsList] friends:', friends);
-  console.log('[InvitedFriendsList] error:', error);
 
   if (isLoading) {
     return (
@@ -28,6 +23,35 @@ export default function InvitedFriendsList() {
             <h1 className="text-xl font-bold">我邀请的好友</h1>
           </div>
           <div className="text-center py-8 text-gray-500">加载中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800">
+        <div className="p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => setLocation("/parent/profile/invite")}
+              className="p-2 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold">我邀请的好友</h1>
+          </div>
+          <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+            <CardContent className="p-8 text-center">
+              <p className="text-red-500">加载失败: {error.message}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-3 px-4 py-2 bg-purple-500 text-white rounded-lg text-sm"
+              >
+                重试
+              </button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -81,9 +105,9 @@ export default function InvitedFriendsList() {
                   <div className="flex items-start gap-3">
                     {/* 头像 */}
                     <div className="flex-shrink-0">
-                      {friend.avatarUrl ? (
+                      {friend.avatar ? (
                         <img
-                          src={friend.avatarUrl}
+                          src={friend.avatar}
                           alt={friend.name || friend.username || "用户"}
                           className="w-12 h-12 rounded-full object-cover"
                         />
@@ -142,9 +166,9 @@ export default function InvitedFriendsList() {
                       </div>
 
                       {/* 注册时间 */}
-                      {friend.invitedAt && (
+                      {(friend.invitedAt || friend.createdAt) && (
                         <p className="text-xs text-gray-500 mt-2">
-                          注册于 {new Date(friend.invitedAt).toLocaleDateString('zh-CN')}
+                          注册于 {new Date(friend.invitedAt || friend.createdAt).toLocaleDateString('zh-CN')}
                         </p>
                       )}
                     </div>
