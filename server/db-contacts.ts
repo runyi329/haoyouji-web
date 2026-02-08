@@ -3088,7 +3088,13 @@ export async function getContactsByParentPaginated(
         OR ct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
         OR pct.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern}
       )
-      ORDER BY c.updatedAt DESC
+      ORDER BY 
+        CASE 
+          WHEN c.name COLLATE utf8mb4_unicode_ci LIKE ${searchQuery + '%'} THEN 1
+          WHEN c.name COLLATE utf8mb4_unicode_ci LIKE ${searchPattern} THEN 2
+          ELSE 3
+        END,
+        c.updatedAt DESC
       LIMIT ${pageSize}
       OFFSET ${offset}
     `);
