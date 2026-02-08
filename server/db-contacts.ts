@@ -1929,6 +1929,175 @@ export async function getRegionStats(parentUserId: number) {
 }
 
 /**
+ * 按区域筛选人脉列表（分页版本）
+ */
+export async function getContactsByRegionPaginated(
+  parentUserId: number,
+  region: string,
+  page: number = 1,
+  pageSize: number = 50
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const offset = (page - 1) * pageSize;
+  
+  // 1. 查询总数
+  const totalOwnResult = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(contacts)
+    .where(and(
+      eq(contacts.parentUserId, parentUserId),
+      eq(contacts.region, region)
+    ));
+  
+  const totalOwnCount = totalOwnResult[0]?.count || 0;
+  
+  // 查询共享给我的该地区人脉总数
+  const sharingConnections = await db.select({
+    sharerId: contactSharingConnections.sharerId
+  })
+    .from(contactSharingConnections)
+    .where(and(
+      eq(contactSharingConnections.receiverId, parentUserId),
+      eq(contactSharingConnections.status, 'active')
+    ));
+  
+  const sharerIds = sharingConnections.map(c => c.sharerId);
+  let totalSharedCount = 0;
+  
+  if (sharerIds.length > 0) {
+    const totalSharedResult = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(contacts)
+      .where(and(
+        inArray(contacts.parentUserId, sharerIds),
+        eq(contacts.region, region)
+      ));
+    totalSharedCount = totalSharedResult[0]?.count || 0;
+  }
+  
+  const total = totalOwnCount + totalSharedCount;
+  
+  // 2. 查询分页数据
+  // 先查询自己的人脉
+  const ownContacts = await db.select()
+    .from(contacts)
+    .where(and(
+      eq(contacts.parentUserId, parentUserId),
+      eq(contacts.region, region)
+    ))
+    .orderBy(desc(contacts.updatedAt))
+    .limit(pageSize)
+    .offset(offset);
+  
+  // 如果自己的人脉不足 pageSize 条，再查询共享的人脉
+  let sharedContacts: any[] = [];
+  const remainingSize = pageSize - ownContacts.length;
+  
+  if (remainingSize > 0 && sharerIds.length > 0) {
+    // 计算共享人脉的 offset
+    const sharedOffset = Math.max(0, offset - totalOwnCount);
+    sharedContacts = await db.select()
+      .from(contacts)
+      .where(and(
+        inArray(contacts.parentUserId, sharerIds),
+        eq(contacts.region, region)
+      ))
+      .orderBy(desc(contacts.updatedAt))
+      .limit(remainingSize)
+      .offset(sharedOffset);
+  }
+  
+  // 合并结果
+  const allContacts = [...ownContacts, ...sharedContacts];
+  
+  // 3. 为共享的人脉添加标记和分享者信息
+  const contactsWithFlags = await Promise.all(
+    allContacts.map(async (contact) => {
+      const isShared = !ownContacts.find(c => c.id === contact.id);
+      
+      if (isShared) {
+        const sharer = await db.select({
+          username: users.username
+        })
+          .from(users)
+          .where(eq(users.id, contact.parentUserId))
+          .limit(1);
+        
+        return {
+          ...contact,
+          isShared: true,
+          sharerName: sharer[0]?.username || '未知',
+          sharerUserId: contact.parentUserId
+        };
+      } else {
+        return {
+          ...contact,
+          isShared: false,
+          sharerName: null,
+          sharerUserId: null
+        };
+      }
+    })
+  );
+  
+  // 4. 获取所有联系人ID
+  const contactIds = contactsWithFlags.map(c => c.id);
+  
+  // 5. 并行批量查询所有需要的数据
+  const [allReferrerStats, tagsMap, personalTagsMap, interactionStatsMap, interactionInfoMap, fieldValuesMap] = await Promise.all([
+    getReferrerStats(parentUserId).catch(() => []),
+    getTagsForContacts(contactIds),
+    getPersonalTagsForContacts(contactIds),
+    getInteractionStatsForContacts(contactIds),
+    getInteractionInfoForContacts(contactIds),
+    getFieldValuesForContacts(contactIds),
+  ]);
+  
+  // 创建推荐人统计的Map
+  const referrerStatsMap = new Map(
+    allReferrerStats.map((stat: any) => [stat.contactId, stat])
+  );
+  
+  // 6. 为每个人脉组装详情数据
+  const contactsWithDetails = contactsWithFlags.map((contact) => {
+    const tags = tagsMap.get(contact.id) || [];
+    const personalTags = personalTagsMap.get(contact.id) || [];
+    const interactionStats = interactionStatsMap.get(contact.id) || { totalInteractions: 0 };
+    const interactionInfo = interactionInfoMap.get(contact.id) || { lastInteraction: null, hasTodayInteraction: false };
+    const referrerStats = referrerStatsMap.get(contact.id) || null;
+    const fieldValues = fieldValuesMap.get(contact.id) || [];
+    
+    return {
+      ...contact,
+      tags,
+      personalTags,
+      fieldValues,
+      lastInteractionDate: interactionInfo.lastInteraction,
+      daysSinceLastInteraction: interactionInfo.lastInteraction 
+        ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
+        : null,
+      hasTodayInteraction: interactionInfo.hasTodayInteraction,
+      hasReferrer: contact.referrerId !== null && contact.referrerId !== undefined,
+      totalInteractions: interactionStats?.totalInteractions || 0,
+      directReferrals: referrerStats?.directReferrals || 0,
+      indirectReferrals: referrerStats?.indirectReferrals || 0,
+    };
+  });
+  
+  const hasMore = offset + contactsWithDetails.length < total;
+  
+  return {
+    total,
+    contacts: contactsWithDetails,
+    hasMore,
+    page,
+    pageSize,
+  };
+}
+
+/**
  * 按区域筛选人脉列表
  */
 export async function getContactsByRegion(parentUserId: number, region: string) {

@@ -4524,9 +4524,16 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({
         region: z.string(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(50),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbContacts.getContactsByRegion(ctx.user.id, input.region);
+        return await dbContacts.getContactsByRegionPaginated(
+          ctx.user.id,
+          input.region,
+          input.page,
+          input.pageSize
+        );
       }),
   }),
 

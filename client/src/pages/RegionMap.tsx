@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import ChinaMap from '@/components/ChinaMap';
 import { trpc } from '@/lib/trpc';
-import { ArrowLeft, MapPin, UserCheck, UserX, Smile, Layers2, Layers3, Handshake } from 'lucide-react';
+import { ArrowLeft, MapPin, UserCheck, UserX, Smile, Layers2, Layers3, Handshake, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -67,23 +67,60 @@ export default function RegionMap() {
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isMobile = !useMediaQuery("(min-width: 768px)");
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allContacts, setAllContacts] = useState<any[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalContacts, setTotalContacts] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // 获取区域统计数据
   const { data: regionStatsData = [] } = trpc.contacts.regions.stats.useQuery();
 
-  // 获取选中省份的人脉列表
-  const { data: provinceContacts = [] } = trpc.contacts.regions.list.useQuery(
-    { region: selectedProvince || '' },
+  // 获取选中省份的人脉列表（分页）
+  const { data: regionData, isLoading, isFetching } = trpc.contacts.regions.list.useQuery(
+    { 
+      region: selectedProvince || '',
+      page: currentPage,
+      pageSize: 50
+    },
     { enabled: !!selectedProvince }
   );
 
+  // 当选中省份变化时，重置分页
+  useEffect(() => {
+    if (selectedProvince) {
+      setCurrentPage(1);
+      setAllContacts([]);
+      setHasMore(true);
+      setTotalContacts(0);
+    }
+  }, [selectedProvince]);
+
+  // 当获取到新数据时，更新本地状态
+  useEffect(() => {
+    if (regionData) {
+      if (currentPage === 1) {
+        // 第一页，替换所有数据
+        setAllContacts(regionData.contacts || []);
+      } else {
+        // 后续页面，追加数据
+        setAllContacts(prev => [...prev, ...(regionData.contacts || [])]);
+      }
+      setHasMore(regionData.hasMore || false);
+      setTotalContacts(regionData.total || 0);
+      setIsLoadingMore(false);
+    }
+  }, [regionData, currentPage]);
+
   // 使用后端返回的动态排序结果（已按人脉数量降序，海外和其他在最后）
   const provinceStats = useMemo(() => {
-    // 直接使用后端返回的排序结果
     return regionStatsData;
   }, [regionStatsData]);
 
-  const totalContacts = regionStatsData.reduce((sum, s) => sum + s.value, 0);
+  const totalStats = regionStatsData.reduce((sum, s) => sum + s.value, 0);
   const activeProvinces = regionStatsData.filter(s => s.value > 0).length;
 
   // 当选择省份时，如果是移动端，打开抽屉
@@ -114,6 +151,155 @@ export default function RegionMap() {
     setLocation(`/parent/contacts/${contactId}`);
   };
 
+  // 处理无限滚动
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    
+    // 当滚动到底部时，加载更多
+    if (scrollHeight - scrollTop - clientHeight < 100 && hasMore && !isLoadingMore && !isFetching) {
+      setIsLoadingMore(true);
+      setCurrentPage(prev => prev + 1);
+    }
+  }, [hasMore, isLoadingMore, isFetching]);
+
+  // 监听滚动事件
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  // 渲染人脉列表
+  const renderContactsList = () => {
+    // 加载中状态
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">加载中...</p>
+        </div>
+      );
+    }
+
+    // 无人脉状态（只在确认获取到数据后显示）
+    if (!isLoading && allContacts.length === 0 && totalContacts === 0) {
+      return (
+        <p className="text-sm text-muted-foreground text-center py-8">
+          该地区暂无人脉
+        </p>
+      );
+    }
+
+    return (
+      <>
+        <div className="space-y-2">
+          {allContacts.map((contact: any) => (
+            <div
+              key={contact.id}
+              onClick={() => handleContactClick(contact.id, contact.isShared, contact.sharerName)}
+              className="w-full p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer"
+            >
+              {/* 头部：名字 + 状态图标 */}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="font-medium text-base">{contact.name}</div>
+                {/* 推荐人状态 */}
+                {contact.hasReferrer !== undefined && (
+                  contact.hasReferrer ? (
+                    <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }} />
+                  ) : (
+                    <UserX className="h-4 w-4 text-gray-400" />
+                  )
+                )}
+                {/* 累计沟通次数 */}
+                {contact.totalInteractions > 0 && (
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                    <Smile className="h-4 w-4" />
+                    <span className="text-xs font-medium">×{contact.totalInteractions}</span>
+                  </div>
+                )}
+                {/* 直接推荐数 */}
+                {contact.directReferrals > 0 && (
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                    <Layers2 className="h-4 w-4" />
+                    <span className="text-xs font-medium">×{contact.directReferrals}</span>
+                  </div>
+                )}
+                {/* 间接推荐数 */}
+                {contact.indirectReferrals > 0 && (
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                    <Layers3 className="h-4 w-4" />
+                    <span className="text-xs font-medium">×{contact.indirectReferrals}</span>
+                  </div>
+                )}
+                {/* 共享标识 */}
+                {contact.isShared && (
+                  <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
+                    <Handshake className="h-3 w-3" />
+                    <span>{contact.sharerName}</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* 称谂 */}
+              {contact.title && (
+                <div className="text-sm text-muted-foreground mb-2">{contact.title}</div>
+              )}
+              
+              {/* 联络状态 */}
+              <div 
+                className="text-xs pt-2 border-t border-gray-100 dark:border-gray-700 mb-2"
+                style={{ color: getInteractionStatusColor(contact.daysSinceLastInteraction) }}
+              >
+                {contact.daysSinceLastInteraction !== null ? (
+                  <div>距今 {contact.daysSinceLastInteraction} 天 · 距上次 {formatDate(contact.lastInteractionDate)}</div>
+                ) : (
+                  <div>从未联络</div>
+                )}
+              </div>
+              
+              {/* 标签显示 */}
+              {contact.tags && contact.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {contact.tags.map((tag: any) => (
+                    <Badge
+                      key={tag.id}
+                      variant="outline"
+                      className="text-xs"
+                      style={{
+                        borderColor: mapColorToTheme(tag.color || '#3b82f6'),
+                        color: mapColorToTheme(tag.color || '#3b82f6'),
+                      }}
+                    >
+                      {tag.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 加载更多指示器 */}
+        {isFetching && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+          </div>
+        )}
+
+        {/* 已加载完成提示 */}
+        {!hasMore && allContacts.length > 0 && (
+          <div className="text-center py-4">
+            <p className="text-xs text-muted-foreground">已加载全部 {totalContacts} 条人脉</p>
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
@@ -132,7 +318,7 @@ export default function RegionMap() {
         </div>
 
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>{totalContacts} 人脉</span>
+          <span>{totalStats} 人脉</span>
           <span>{activeProvinces} 省份</span>
         </div>
       </header>
@@ -195,222 +381,49 @@ export default function RegionMap() {
 
         {/* Desktop Sidebar */}
         {!isMobile && selectedProvince && (
-          <div className="w-80 bg-background border-l border-border overflow-y-auto">
-            <div className="p-4 border-b border-border">
+          <div className="w-80 bg-background border-l border-border overflow-y-auto flex flex-col">
+            <div className="p-4 border-b border-border shrink-0">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-primary" />
                 {selectedProvince}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                共 {provinceContacts.length} 位人脉
+                共 {totalContacts} 位人脉
               </p>
             </div>
 
-            <div className="p-4 space-y-2">
-              {provinceContacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  该地区暂无人脉
-                </p>
-              ) : (
-                provinceContacts.map((contact: any) => (
-                  <div
-                    key={contact.id}
-                    onClick={() => handleContactClick(contact.id, contact.isShared, contact.sharerName)}
-                    className="w-full p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer"
-                  >
-                    {/* 头部：名字 + 状态图标 */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="font-medium text-base">{contact.name}</div>
-                      {/* 推荐人状态 */}
-                      {contact.hasReferrer !== undefined && (
-                        contact.hasReferrer ? (
-                          <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }} />
-                        ) : (
-                          <UserX className="h-4 w-4 text-gray-400" />
-                        )
-                      )}
-                      {/* 累计沟通次数 */}
-                      {contact.totalInteractions > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Smile className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.totalInteractions}</span>
-                        </div>
-                      )}
-                      {/* 直接推荐数 */}
-                      {contact.directReferrals > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Layers2 className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.directReferrals}</span>
-                        </div>
-                      )}
-                      {/* 间接推荐数 */}
-                      {contact.indirectReferrals > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Layers3 className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.indirectReferrals}</span>
-                        </div>
-                      )}
-                      {/* 共享标识 */}
-                      {contact.isShared && (
-                        <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
-                          <Handshake className="h-3 w-3" />
-                          <span>{contact.sharerName}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* 称谂 */}
-                    {contact.title && (
-                      <div className="text-sm text-muted-foreground mb-2">{contact.title}</div>
-                    )}
-                    
-                    {/* 联络状态 */}
-                    <div 
-                      className="text-xs pt-2 border-t border-gray-100 dark:border-gray-700 mb-2"
-                      style={{ color: getInteractionStatusColor(contact.daysSinceLastInteraction) }}
-                    >
-                      {contact.daysSinceLastInteraction !== null ? (
-                        <div>距今 {contact.daysSinceLastInteraction} 天 · 距上次 {formatDate(contact.lastInteractionDate)}</div>
-                      ) : (
-                        <div>从未联络</div>
-                      )}
-                    </div>
-                    
-                    {/* 标签显示 */}
-                    {contact.tags && contact.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {contact.tags.map((tag: any) => (
-                          <Badge
-                            key={tag.id}
-                            variant="outline"
-                            className="text-xs"
-                            style={{
-                              borderColor: mapColorToTheme(tag.color || '#3b82f6'),
-                              color: mapColorToTheme(tag.color || '#3b82f6'),
-                            }}
-                          >
-                            {tag.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
+            <div 
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto p-4"
+            >
+              {renderContactsList()}
             </div>
           </div>
         )}
-      </main>
 
-      {/* Mobile Drawer */}
-      {isMobile && (
-        <Drawer open={isDrawerOpen} onOpenChange={handleDrawerOpenChange}>
-          <DrawerContent>
-            <DrawerHeader>
-              <DrawerTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-primary" />
-                {selectedProvince}
-              </DrawerTitle>
-              <p className="text-sm text-muted-foreground">
-                共 {provinceContacts.length} 位人脉
-              </p>
-            </DrawerHeader>
-
-            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
-              {provinceContacts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  该地区暂无人脉
+        {/* Mobile Drawer */}
+        {isMobile && selectedProvince && (
+          <Drawer open={isDrawerOpen} onOpenChange={handleDrawerOpenChange}>
+            <DrawerContent className="h-[60vh]">
+              <DrawerHeader>
+                <DrawerTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  {selectedProvince}
+                </DrawerTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  共 {totalContacts} 位人脉
                 </p>
-              ) : (
-                provinceContacts.map((contact: any) => (
-                  <div
-                    key={contact.id}
-                    onClick={() => handleContactClick(contact.id, contact.isShared, contact.sharerName)}
-                    className="w-full p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors cursor-pointer"
-                  >
-                    {/* 头部：名字 + 状态图标 */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="font-medium text-base">{contact.name}</div>
-                      {/* 推荐人状态 */}
-                      {contact.hasReferrer !== undefined && (
-                        contact.hasReferrer ? (
-                          <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }} />
-                        ) : (
-                          <UserX className="h-4 w-4 text-gray-400" />
-                        )
-                      )}
-                      {/* 累计沟通次数 */}
-                      {contact.totalInteractions > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Smile className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.totalInteractions}</span>
-                        </div>
-                      )}
-                      {/* 直接推荐数 */}
-                      {contact.directReferrals > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Layers2 className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.directReferrals}</span>
-                        </div>
-                      )}
-                      {/* 间接推荐数 */}
-                      {contact.indirectReferrals > 0 && (
-                        <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <Layers3 className="h-4 w-4" />
-                          <span className="text-xs font-medium">×{contact.indirectReferrals}</span>
-                        </div>
-                      )}
-                      {/* 共享标识 */}
-                      {contact.isShared && (
-                        <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
-                          <Handshake className="h-3 w-3" />
-                          <span>{contact.sharerName}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* 称谂 */}
-                    {contact.title && (
-                      <div className="text-sm text-muted-foreground mb-2">{contact.title}</div>
-                    )}
-                    
-                    {/* 联络状态 */}
-                    <div 
-                      className="text-xs pt-2 border-t border-gray-100 dark:border-gray-700 mb-2"
-                      style={{ color: getInteractionStatusColor(contact.daysSinceLastInteraction) }}
-                    >
-                      {contact.daysSinceLastInteraction !== null ? (
-                        <div>距今 {contact.daysSinceLastInteraction} 天 · 距上次 {formatDate(contact.lastInteractionDate)}</div>
-                      ) : (
-                        <div>从未联络</div>
-                      )}
-                    </div>
-                    
-                    {/* 标签显示 */}
-                    {contact.tags && contact.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {contact.tags.map((tag: any) => (
-                          <Badge
-                            key={tag.id}
-                            variant="outline"
-                            className="text-xs"
-                            style={{
-                              borderColor: mapColorToTheme(tag.color || '#3b82f6'),
-                              color: mapColorToTheme(tag.color || '#3b82f6'),
-                            }}
-                          >
-                            {tag.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </DrawerContent>
-        </Drawer>
-      )}
+              </DrawerHeader>
+              <div 
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto px-4 pb-4"
+              >
+                {renderContactsList()}
+              </div>
+            </DrawerContent>
+          </Drawer>
+        )}
+      </main>
     </div>
   );
 }
