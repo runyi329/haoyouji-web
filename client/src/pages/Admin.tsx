@@ -24,6 +24,7 @@ import {
   Star,
   Camera,
   Sparkles,
+  Share,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -471,7 +472,7 @@ export default function Admin() {
                         }}
                         title={u.inviteEnabled ? '关闭邀请功能' : '开启邀请功能'}
                       >
-                        <Share2 className="w-4 h-4" />
+                        <Share className="w-4 h-4" />
                       </Button>
                       
                       {/* 编辑用户 */}
