@@ -6,7 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
-import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
+
 
 // HMR 热更新提示音模块
 let hmrAudioContext: AudioContext | null = null;
@@ -222,7 +222,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <Router />
-            <PWAInstallPrompt />
+
           </TooltipProvider>
         </ColorThemeProvider>
       </ThemeProvider>
