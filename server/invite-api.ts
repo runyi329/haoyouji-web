@@ -200,7 +200,6 @@ export const inviteRouter = router({
         message: "生成邀请码失败,请重试",
       });
     }),
-});
 
   // 获取我邀请的好友列表及其人脉统计
   getMyInvitedFriends: protectedProcedure.query(async ({ ctx }) => {
@@ -257,3 +256,4 @@ export const inviteRouter = router({
     
     return friendsWithStats;
   }),
+});
