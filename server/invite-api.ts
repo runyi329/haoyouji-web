@@ -222,21 +222,21 @@ export const inviteRouter = router({
     const friendsWithStats = await Promise.all(
       invitedUsers.map(async (friend) => {
         // 获取该用户自己的人脉数
-        const [ownContactsResult] = await db.execute(sql`
+        const ownContactsResult = await db.execute(sql`
           SELECT COUNT(*) as count 
           FROM contacts 
           WHERE parent_user_id = ${friend.id}
         `);
-        const ownContactsCount = Number(ownContactsResult?.count || 0);
+        const ownContactsCount = Number((ownContactsResult[0] as any)?.[0]?.count || 0);
         
         // 获取该用户共享给他的人脉数
-        const [sharedContactsResult] = await db.execute(sql`
+        const sharedContactsResult = await db.execute(sql`
           SELECT COUNT(DISTINCT c.id) as count
           FROM contacts c
           INNER JOIN contact_shares cs ON c.id = cs.contact_id
           WHERE cs.shared_with_user_id = ${friend.id}
         `);
-        const sharedContactsCount = Number(sharedContactsResult?.count || 0);
+        const sharedContactsCount = Number((sharedContactsResult[0] as any)?.[0]?.count || 0);
         
         // 全部人脉数 = 自己的 + 共享的
         const totalContactsCount = ownContactsCount + sharedContactsCount;
