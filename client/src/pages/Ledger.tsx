@@ -259,45 +259,45 @@ export default function Ledger() {
               className="p-2 h-[120px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
-              {/* 账本名称和VIP标识 */}
-              <div className="flex items-center gap-2 -mb-3">
-                <Notebook className="w-4 h-4 text-blue-500 mt-0.5" strokeWidth={1.5} />
-                <div className="flex-1 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-base leading-none text-gray-800">{ledger.name}</h3>
-                    {ledger.isVip === true && (
-                      <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs">
-                        <Crown className="w-3 h-3 mr-1" />
-                        VIP
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 mt-3 mr-2">
-                    <div className="text-xs leading-none text-gray-400 whitespace-nowrap">
-                      开账日期 {new Date(ledger.createdAt).toLocaleDateString('zh-CN').replace(/\//g, '-')} · 至今 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
-                    </div>
-                    <div className="text-xs leading-none text-gray-400 whitespace-nowrap">
-                      账目总数 × {ledger.recordCount || 0}条
-                    </div>
-                  </div>
+              {/* 第一行：账本名称 + VIP标识 */}
+              <div className="flex items-center gap-2 mb-2">
+                <Notebook className="w-4 h-4 text-blue-500 flex-shrink-0" strokeWidth={1.5} />
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm leading-tight text-gray-800 truncate">{ledger.name}</h3>
+                  {ledger.isVip === true && (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs flex-shrink-0">
+                      <Crown className="w-3 h-3 mr-1" />
+                      VIP
+                    </Badge>
+                  )}
                 </div>
               </div>
 
-              {/* 成员头像 */}
-              <div className="flex items-center gap-2 -mb-3 -mt-2">
-                <div className="flex -space-x-2">
-                  {ledger.members.slice(0, 4).map((member, index) => (
-                    <UserAvatar
-                      key={member.userId}
-                      username={member.username}
-                      avatar={member.avatar}
-                      nickname={member.nickname}
-                      size="sm"
-                      style={{ zIndex: ledger.members.length - index }}
-                    />
-                  ))}
+              {/* 第二行：成员头像 + 统计信息 */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {ledger.members.slice(0, 4).map((member, index) => (
+                      <UserAvatar
+                        key={member.userId}
+                        username={member.username}
+                        avatar={member.avatar}
+                        nickname={member.nickname}
+                        size="sm"
+                        style={{ zIndex: ledger.members.length - index }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs leading-none text-gray-500">{ledger.memberCount}人共享+</span>
                 </div>
-                <span className="text-sm leading-none text-gray-500">{ledger.memberCount}人共享+</span>
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="text-[10px] leading-tight text-gray-400 whitespace-nowrap">
+                    开账日期 {new Date(ledger.createdAt).toLocaleDateString('zh-CN').replace(/\//g, '-')} · 至今 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
+                  </div>
+                  <div className="text-[10px] leading-tight text-gray-400 whitespace-nowrap">
+                    账目总数 × {ledger.recordCount || 0}条
+                  </div>
+                </div>
               </div>
 
               {/* 操作按钮 */}
