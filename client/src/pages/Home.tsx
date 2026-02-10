@@ -75,7 +75,7 @@ export default function Home() {
 
   const metricsRight = [
     { name: "本周新增", value: stats ? "+" + formatNumber(stats.weeklyNew) + "人" : "...", href: `${BASE_URL}/parent/contacts` },
-    { name: "账目总数", value: stats ? formatNumber(stats.totalAccounts) + "条" : "...", href: `${BASE_URL}/ledger` },
+    { name: "账目总数", value: stats ? formatNumber(stats.totalAccounts) + "条" : "...", href: `/ledger` },
     { name: "我的积分", value: stats ? formatNumber(stats.myPoints) + "分" : "...", href: `${BASE_URL}/parent/points` },
     { name: "邀请好友", value: stats ? formatNumber(stats.inviteCount) + "人" : "...", href: `${BASE_URL}/parent/profile/invite` },
   ];
