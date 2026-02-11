@@ -3825,7 +3825,8 @@ export async function getInteractionTimeSeries(
   const weekPatternData = await db
     .select({
       weekday: sql<number>`DAYOFWEEK(${contactInteractions.interactionDate})`,
-      count: sql<number>`COUNT(*)`
+      interactions: sql<number>`COUNT(*)`,
+      contacts: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})`
     })
     .from(contactInteractions)
     .where(
@@ -3836,11 +3837,11 @@ export async function getInteractionTimeSeries(
     )
     .groupBy(sql`DAYOFWEEK(${contactInteractions.interactionDate})`);
   
-  const weekPattern: any = {};
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  weekPatternData.forEach(d => {
-    weekPattern[dayNames[d.weekday - 1]] = d.count;
-  });
+  const weekPattern = weekPatternData.map(d => ({
+    weekday: d.weekday,
+    interactions: d.interactions,
+    contacts: d.contacts
+  }));
   
   return {
     series: seriesData,

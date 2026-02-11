@@ -283,16 +283,18 @@ export default function InteractionStats() {
       活跃人脉: s.contacts
     }));
 
-    // 准备周模式数据
-    const weekData = [
-      { day: '周一', value: timeSeries.weekPattern.monday || 0 },
-      { day: '周二', value: timeSeries.weekPattern.tuesday || 0 },
-      { day: '周三', value: timeSeries.weekPattern.wednesday || 0 },
-      { day: '周四', value: timeSeries.weekPattern.thursday || 0 },
-      { day: '周五', value: timeSeries.weekPattern.friday || 0 },
-      { day: '周六', value: timeSeries.weekPattern.saturday || 0 },
-      { day: '周日', value: timeSeries.weekPattern.sunday || 0 },
-    ];
+    // 准备周模式数据 - 双轴分组柱状图
+    const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    const weekData = Array.isArray(timeSeries.weekPattern) 
+      ? timeSeries.weekPattern.map(d => ({
+          day: dayNames[d.weekday - 2] || dayNames[d.weekday - 1] || '周日', // weekday: 1=周日, 2=周一
+          联络次数: d.interactions,
+          联络人数: d.contacts
+        })).sort((a, b) => {
+          const order = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+          return order.indexOf(a.day) - order.indexOf(b.day);
+        })
+      : dayNames.map(day => ({ day, 联络次数: 0, 联络人数: 0 }));
 
     return (
       <div className="space-y-4">
@@ -338,45 +340,83 @@ export default function InteractionStats() {
           </ResponsiveContainer>
         </Card>
 
-        {/* 周模式分析 */}
+        {/* 周模式分析 - 双轴分组柱状图 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">周模式分析</h3>
-          <ResponsiveContainer width="100%" height={180}>
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">周模式分析（双轴）</h3>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart data={weekData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 12 }} label={{ value: '次数', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} label={{ value: '人数', angle: 90, position: 'insideRight', style: { fontSize: 12 } }} />
               <Tooltip 
                 contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                formatter={(value: any) => [`${value}次`, '互动']}
+                formatter={(value: any, name: string) => [value, name]}
               />
-              <Bar dataKey="value" fill={colors.success} radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar yAxisId="left" dataKey="联络次数" fill={colors.info} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="联络人数" fill={colors.success} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            左轴：联络次数 | 右轴：联络人数
+          </p>
         </Card>
 
-        {/* 日历热力图简化版 */}
+        {/* 日历热力图 */}
         {timeSeries.heatmap.length > 0 && (
           <Card className="p-4 rounded-xl shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">每日互动强度</h3>
-            <div className="grid grid-cols-7 gap-1">
-              {timeSeries.heatmap.slice(-28).map((day, index) => {
-                const intensity = day.value;
-                const opacity = Math.min(intensity / 10, 1);
-                return (
-                  <div
-                    key={index}
-                    className="aspect-square rounded flex items-center justify-center text-xs"
-                    style={{
-                      backgroundColor: `rgba(59, 130, 246, ${opacity})`,
-                      color: opacity > 0.5 ? 'white' : '#666'
-                    }}
-                    title={`${day.date}: ${day.value}次`}
-                  >
-                    {intensity}
-                  </div>
-                );
-              })}
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">日历热力图（近四周）</h3>
+            <div className="space-y-2">
+              {/* 星期标签 */}
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
+                  <div key={i} className="text-xs text-gray-500 text-center font-medium">{day}</div>
+                ))}
+              </div>
+              {/* 热力图网格 */}
+              <div className="grid grid-cols-7 gap-1">
+                {(() => {
+                  // 填充到完整的四周 (28天)
+                  const last28Days = timeSeries.heatmap.slice(-28);
+                  const maxValue = Math.max(...last28Days.map(d => d.value), 1);
+                  
+                  return last28Days.map((day, index) => {
+                    const intensity = day.value;
+                    const opacity = Math.min(intensity / maxValue, 1);
+                    const bgColor = `rgba(59, 130, 246, ${0.1 + opacity * 0.9})`;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className="aspect-square rounded-lg flex items-center justify-center text-xs font-medium border border-gray-200 cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
+                        style={{
+                          backgroundColor: bgColor,
+                          color: opacity > 0.5 ? 'white' : '#374151'
+                        }}
+                        title={`${day.date}\n联络次数: ${day.value}次`}
+                      >
+                        {intensity > 0 ? intensity : ''}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+              {/* 图例 */}
+              <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-600">
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}></div>
+                  <span>低</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 0.6)' }}></div>
+                  <span>中</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 1)' }}></div>
+                  <span>高</span>
+                </div>
+              </div>
             </div>
           </Card>
         )}
