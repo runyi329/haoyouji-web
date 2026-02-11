@@ -96,7 +96,7 @@ export default function Home() {
   const metricsLeft = [
     { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", href: `${BASE_URL}/parent/contacts/interaction-stats` },
     { name: "累计使用", value: totalUsageDays ?? 0, unit: "天", href: `${BASE_URL}/parent/contacts` },
-    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", href: `${BASE_URL}/parent/contacts/list` },
+    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", href: `${BASE_URL}/parent/contacts/list?view=company` },
     { name: "今日活跃", value: stats?.todayActive ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
   ];
 
