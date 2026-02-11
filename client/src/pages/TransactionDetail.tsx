@@ -116,9 +116,19 @@ export default function TransactionDetail() {
   }
 
   if (!transaction) {
+    let errorMsg = '';
+    if (error) {
+      try {
+        errorMsg = typeof error === 'object' && error !== null && 'message' in error 
+          ? String((error as any).message) 
+          : JSON.stringify(error);
+      } catch (e) {
+        errorMsg = String(error);
+      }
+    }
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">账目不存在 {error ? `(错误: ${error.message})` : ''}</div>
+        <div className="text-gray-600">账目不存在 {errorMsg ? `(错误: ${errorMsg})` : ''}</div>
       </div>
     );
   }
