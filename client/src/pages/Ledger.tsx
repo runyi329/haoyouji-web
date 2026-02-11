@@ -279,143 +279,166 @@ export default function Ledger() {
           </Card>
         ) : (
           filteredLedgers.map((ledger) => (
-            <Card
+            <div
               key={ledger.id}
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+              className="relative cursor-pointer group"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
-              {/* 账本头部 */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Notebook className="w-5 h-5 text-blue-500 flex-shrink-0" strokeWidth={2} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-base text-gray-900 truncate">{ledger.name}</h3>
-                      {ledger.isVip === true && (
-                        <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0">
-                          <Crown className="w-3 h-3 mr-0.5" />
-                          VIP
-                        </Badge>
-                      )}
+              {/* 账本封面卡片 */}
+              <div className="relative bg-gradient-to-br from-white via-gray-50 to-gray-100 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-200">
+                {/* 左侧装订线效果 */}
+                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b" style={{ 
+                  backgroundImage: `linear-gradient(to bottom, ${themeColors.primary}, ${themeColors.primary}dd)` 
+                }}></div>
+                <div className="absolute left-2 top-0 bottom-0 w-px bg-gray-300 opacity-30"></div>
+                <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200 opacity-20"></div>
+                
+                {/* 封面内容 */}
+                <div className="pl-6 pr-4 py-5">
+                  {/* 账本标题区 */}
+                  <div className="mb-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Notebook className="w-6 h-6 flex-shrink-0" style={{ color: themeColors.primary }} strokeWidth={2.5} />
+                          <h3 className="font-bold text-xl text-gray-900 truncate" style={{ 
+                            textShadow: '0 1px 2px rgba(0,0,0,0.05)' 
+                          }}>{ledger.name}</h3>
+                          {ledger.isVip === true && (
+                            <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-2 py-0.5 flex-shrink-0 shadow-sm">
+                              <Crown className="w-3 h-3 mr-0.5" />
+                              VIP
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-gray-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                            开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
+                          </span>
+                          <span className="text-gray-300">|</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: themeColors.primary }}></span>
+                            {ledger.recordCount || 0}条账目
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
-                      <span>·</span>
-                      <span>{ledger.recordCount || 0}条账目</span>
+                  </div>
+
+                  {/* 成员信息区 */}
+                  <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-200">
+                    <div className="flex -space-x-3">
+                      {ledger.members.slice(0, 4).map((member, index) => (
+                        <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: ledger.members.length - index }}>
+                          <UserAvatar
+                            username={member.username}
+                            avatar={member.avatar}
+                            nickname={member.nickname}
+                            size="sm"
+                          />
+                        </div>
+                      ))}
                     </div>
+                    <span className="text-sm font-semibold" style={{ color: themeColors.primary }}>
+                      {ledger.memberCount}人共享
+                    </span>
+                  </div>
+
+                  {/* 操作按钮区 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {activeTab === "active" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLocation(`/ledger/${ledger.id}/settings`);
+                          }}
+                        >
+                          设置
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLocation(`/ledger/${ledger.id}/report`);
+                          }}
+                        >
+                          报表
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInvitingLedgerId(ledger.id);
+                            setShowInviteDialog(true);
+                          }}
+                        >
+                          邀请
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium col-span-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExport(ledger.id);
+                          }}
+                        >
+                          导出
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setArchivingLedgerId(ledger.id);
+                            setShowArchiveDialog(true);
+                          }}
+                        >
+                          存档
+                        </Button>
+                      </>
+                    )}
+                    {activeTab === "archived" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium col-span-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExport(ledger.id);
+                          }}
+                        >
+                          导出
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDestroyingLedgerId(ledger.id);
+                            setShowDestroyDialog(true);
+                          }}
+                        >
+                          销毁
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
-
-              {/* 成员信息 */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex -space-x-2">
-                  {ledger.members.slice(0, 4).map((member, index) => (
-                    <UserAvatar
-                      key={member.userId}
-                      username={member.username}
-                      avatar={member.avatar}
-                      nickname={member.nickname}
-                      size="sm"
-                      style={{ zIndex: ledger.members.length - index }}
-                    />
-                  ))}
-                </div>
-                <span className="text-sm text-gray-600 font-medium">{ledger.memberCount}人共享</span>
-              </div>
-
-              {/* 操作按钮 */}
-              <div className="grid grid-cols-3 gap-2">
-                {activeTab === "active" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/ledger/${ledger.id}/settings`);
-                      }}
-                    >
-                      设置
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/ledger/${ledger.id}/report`);
-                      }}
-                    >
-                      报表
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setInvitingLedgerId(ledger.id);
-                        setShowInviteDialog(true);
-                      }}
-                    >
-                      邀请
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all col-span-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExport(ledger.id);
-                      }}
-                    >
-                      导出
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-9 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setArchivingLedgerId(ledger.id);
-                        setShowArchiveDialog(true);
-                      }}
-                    >
-                      存档
-                    </Button>
-                  </>
-                )}
-                {activeTab === "archived" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExport(ledger.id);
-                      }}
-                    >
-                      导出
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1 text-red-500 hover:bg-red-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDestroyingLedgerId(ledger.id);
-                        setShowDestroyDialog(true);
-                      }}
-                    >
-                      销毁
-                    </Button>
-                  </>
-                )}
-              </div>
-            </Card>
+            </div>
           ))
         )}
       </div>
