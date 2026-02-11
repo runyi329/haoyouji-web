@@ -23,6 +23,7 @@ import { contacts, contactFieldCategories, contactFieldValues, contactTags, user
 import { eq } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { invitePermissionRouter } from "./invite-permission-api";
+import ExcelJS from "exceljs";
 
 export const appRouter = router({
   system: systemRouter,
@@ -5927,54 +5928,70 @@ export const appRouter = router({
         endDate: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        const ExcelJS = require('exceljs');
-        
-        // 获取账目数据
-        const transactions = await dbLedger.getTransactionsList(
-          input.ledgerId,
-          ctx.user.id,
-          {
-            startDate: input.startDate,
-            endDate: input.endDate,
-          }
-        );
+        try {
+          console.log('[exportToExcel] 开始导出:', { ledgerId: input.ledgerId, userId: ctx.user.id });
+          
+          // 获取账目数据
+          const transactions = await dbLedger.getTransactionsList(
+            input.ledgerId,
+            ctx.user.id,
+            {
+              startDate: input.startDate,
+              endDate: input.endDate,
+            }
+          );
+          
+          console.log('[exportToExcel] 获取到账目数据:', { count: transactions.length });
 
-        // 创建Excel工作簿
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('账目明细');
+          // 创建 Excel工作簿
+          const workbook = new ExcelJS.Workbook();
+          const worksheet = workbook.addWorksheet('账目明细');
 
-        // 设置列
-        worksheet.columns = [
-          { header: '日期', key: 'date', width: 15 },
-          { header: '类型', key: 'type', width: 10 },
-          { header: '分类', key: 'category', width: 15 },
-          { header: '金额', key: 'amount', width: 15 },
-          { header: '备注', key: 'description', width: 30 },
-          { header: '创建人', key: 'creator', width: 15 },
-        ];
+          // 设置列
+          worksheet.columns = [
+            { header: '日期', key: 'date', width: 15 },
+            { header: '类型', key: 'type', width: 10 },
+            { header: '分类', key: 'category', width: 15 },
+            { header: '金额', key: 'amount', width: 15 },
+            { header: '备注', key: 'description', width: 30 },
+            { header: '创建人', key: 'creator', width: 15 },
+          ];
 
-        // 添加数据 - transactions是按日期分组的数组
-        transactions.forEach((dayGroup: any) => {
-          dayGroup.records.forEach((record: any) => {
-            worksheet.addRow({
-              date: dayGroup.date,
-              type: record.type === 'income' ? '收入' : '支出',
-              category: record.category || '未分类',
-              amount: record.amount,
-              description: record.description || '',
-              creator: record.member?.username || '',
+          // 添加数据 - transactions是按日期分组的数组
+          let rowCount = 0;
+          transactions.forEach((dayGroup: any) => {
+            dayGroup.records.forEach((record: any) => {
+              worksheet.addRow({
+                date: dayGroup.date,
+                type: record.type === 'income' ? '收入' : '支出',
+                category: record.category || '未分类',
+                amount: record.amount,
+                description: record.description || '',
+                creator: record.member?.username || '',
+              });
+              rowCount++;
             });
           });
-        });
+          
+          console.log('[exportToExcel] 添加了', rowCount, '条记录');
 
-        // 生成buffer
-        const buffer = await workbook.xlsx.writeBuffer();
-        const base64 = buffer.toString('base64');
-        
-        return {
-          data: base64,
-          filename: `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`,
-        };
+          // 生成buffer
+          const buffer = await workbook.xlsx.writeBuffer();
+          const base64 = buffer.toString('base64');
+          
+          console.log('[exportToExcel] 生成成功, base64长度:', base64.length);
+          
+          return {
+            data: base64,
+            filename: `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`,
+          };
+        } catch (error: any) {
+          console.error('[exportToExcel] 错误:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `导出失败: ${error.message}`,
+          });
+        }
       }),
   }),
   

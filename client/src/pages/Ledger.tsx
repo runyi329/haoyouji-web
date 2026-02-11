@@ -168,10 +168,23 @@ export default function Ledger() {
 
   // 导出账本的处理函数
   const handleExport = async (ledgerId: number) => {
+    const loadingToast = toast.loading("正在导出...");
     try {
+      console.log('[handleExport] 开始导出:', ledgerId);
+      
       const result = await trpc.ledger.exportToExcel.query({
         ledgerId: ledgerId,
       });
+      
+      console.log('[handleExport] 获取到结果:', { 
+        hasData: !!result.data, 
+        dataLength: result.data?.length,
+        filename: result.filename 
+      });
+      
+      if (!result.data) {
+        throw new Error('未获取到导出数据');
+      }
       
       // 将base64转换为Blob并下载
       const byteCharacters = atob(result.data);
@@ -181,6 +194,8 @@ export default function Ledger() {
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      console.log('[handleExport] Blob创建成功:', { size: blob.size, type: blob.type });
       
       // 创建下载链接
       const url = window.URL.createObjectURL(blob);
@@ -192,9 +207,12 @@ export default function Ledger() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       
+      toast.dismiss(loadingToast);
       toast.success("导出成功！");
     } catch (error: any) {
-      toast.error(`导出失败: ${error.message}`);
+      console.error('[handleExport] 错误:', error);
+      toast.dismiss(loadingToast);
+      toast.error(`导出失败: ${error.message || '未知错误'}`);
     }
   };
 
