@@ -456,7 +456,7 @@ export default function Profile() {
               
               {/* 返回按钮 */}
               <button
-                onClick={() => navigate('/parent/contacts')}
+                onClick={() => navigate('/')}
                 className="flex items-center gap-2 text-sm transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
                 style={{ color: 'var(--color-primary)' }}
               >
