@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Users, 
   MapPin, 
@@ -45,10 +46,25 @@ function formatCurrency(num: number): string {
 }
 
 export default function Home() {
+  const { user } = useAuth();
+  
+  // 获取基础统计数据
   const { data: stats, isLoading, refetch, isFetching } = trpc.contacts.stats.useQuery(undefined, {
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  // 获取累计联络次数
+  const { data: totalInteractionCount } = trpc.contacts.totalInteractionCount.useQuery();
+  
+  // 获取累计标签数量
+  const { data: totalTagCount } = trpc.contacts.totalTagCount.useQuery();
+  
+  // 获取累计使用天数
+  const { data: totalUsageDays } = trpc.contacts.getTotalUsageDays.useQuery();
+  
+  // 获取邀请统计
+  const { data: inviteInfo } = trpc.invite.getMyInviteInfo.useQuery();
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
@@ -78,17 +94,17 @@ export default function Home() {
   ];
 
   const metricsLeft = [
-    { name: "累计联络", value: stats ? formatNumber(stats.totalInteractions) + "次" : "...", href: `${BASE_URL}/parent/contacts` },
-    { name: "累计使用", value: stats ? formatNumber(stats.totalUsage) + "天" : "...", href: `${BASE_URL}/parent/contacts/list` },
-    { name: "公司总数", value: stats ? formatNumber(stats.totalCompanies) + "家" : "...", href: `${BASE_URL}/parent/contacts/tag-analytics` },
-    { name: "今日活跃", value: stats ? formatNumber(stats.todayActive) + "人" : "...", href: `${BASE_URL}/parent/contacts` },
+    { name: "累计联络", value: totalInteractionCount ? formatNumber(totalInteractionCount) + "次" : "...", href: `${BASE_URL}/parent/contacts` },
+    { name: "累计使用", value: totalUsageDays ? formatNumber(totalUsageDays) + "天" : "...", href: `${BASE_URL}/parent/contacts` },
+    { name: "公司总数", value: stats ? formatNumber(stats.companyCount) + "家" : "...", href: `${BASE_URL}/parent/contacts/list` },
+    { name: "今日活跃", value: stats ? formatNumber(stats.todayActive) + "人" : "...", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
   ];
 
   const metricsRight = [
-    { name: "本周新增", value: stats ? "+" + formatNumber(stats.weeklyNew) + "人" : "...", href: `${BASE_URL}/parent/contacts` },
-    { name: "账目总数", value: stats ? formatNumber(stats.totalAccounts) + "条" : "...", href: `/ledger` },
-    { name: "我的积分", value: stats ? formatNumber(stats.myPoints) + "分" : "...", href: `${BASE_URL}/parent/points` },
-    { name: "邀请好友", value: stats ? formatNumber(stats.inviteCount) + "人" : "...", href: `${BASE_URL}/parent/profile/invite` },
+    { name: "本周新增", value: stats ? formatNumber(stats.newThisWeek) + "人" : "...", href: `${BASE_URL}/parent/contacts/list?filter=thisWeek` },
+    { name: "账目总数", value: stats ? formatNumber(stats.totalLedgerEntries) + "条" : "...", href: `/ledger` },
+    { name: "我的积分", value: user ? formatNumber(user.points) + "分" : "...", href: `${BASE_URL}/parent/points` },
+    { name: "邀请好友", value: inviteInfo ? formatNumber(inviteInfo.inviteCount) + "人" : "...", href: `${BASE_URL}/parent/profile/invite` },
   ];
 
   const handleLogout = () => {
@@ -96,6 +112,10 @@ export default function Home() {
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     // 跳转到登录页
     window.location.href = `${BASE_URL}/login`;
+  };
+
+  const handleRefresh = () => {
+    refetch();
   };
 
   return (
@@ -163,7 +183,7 @@ export default function Home() {
               <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
             ) : (
               <>
-                <span className="text-2xl font-bold text-[#A80000]">{stats ? formatNumber(stats.totalTags) : "—"}</span>
+                <span className="text-2xl font-bold text-[#A80000]">{totalTagCount ? formatNumber(totalTagCount) : "—"}</span>
                 <span className="text-sm text-gray-400">个</span>
               </>
             )}
@@ -199,31 +219,24 @@ export default function Home() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {features.map((feature, index) => (
-            feature.name === "刷新" ? (
-              <div
-                key={index}
-                className="flex flex-col items-center space-y-2 cursor-pointer"
-                onClick={() => refetch()}
-              >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
-                  <feature.icon className={`w-5 h-5 ${isFetching ? 'animate-spin' : ''}`} />
-                </div>
-                <span className="text-xs font-medium text-gray-600">{feature.name}</span>
-              </div>
-            ) : (
+          {features.map((feature) => {
+            const Icon = feature.icon;
+            const isRefresh = feature.name === "刷新";
+            
+            return (
               <a
-                key={index}
-                href={feature.href}
+                key={feature.name}
+                href={isRefresh ? undefined : feature.href}
+                onClick={isRefresh ? handleRefresh : undefined}
                 className="flex flex-col items-center space-y-2 cursor-pointer"
               >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
-                  <feature.icon className="w-5 h-5" />
+                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm ${isRefresh && isFetching ? 'animate-spin' : ''}`}>
+                  <Icon className="w-5 h-5" />
                 </div>
                 <span className="text-xs font-medium text-gray-600">{feature.name}</span>
               </a>
-            )
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -231,13 +244,16 @@ export default function Home() {
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
         {/* Left Column */}
         <div className="space-y-2">
-          {metricsLeft.map((metric, index) => (
-            <a key={index} href={metric.href} className="block">
-              <Card className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer">
+          {metricsLeft.map((metric) => (
+            <a key={metric.name} href={metric.href} className="block">
+              <Card className="bg-white p-3 rounded-xl shadow-sm border-none hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">{metric.name}</span>
-                  <span className="text-sm font-semibold text-gray-800">{metric.value}</span>
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
+                <div className="mt-1 text-base font-bold text-gray-800">{metric.value}</div>
               </Card>
             </a>
           ))}
@@ -245,17 +261,37 @@ export default function Home() {
 
         {/* Right Column */}
         <div className="space-y-2">
-          {metricsRight.map((metric, index) => (
-            <a key={index} href={metric.href} className="block">
-              <Card className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer">
+          {metricsRight.map((metric) => (
+            <a key={metric.name} href={metric.href} className="block">
+              <Card className="bg-white p-3 rounded-xl shadow-sm border-none hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">{metric.name}</span>
-                  <span className="text-sm font-semibold text-gray-800">{metric.value}</span>
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
+                <div className="mt-1 text-base font-bold text-gray-800">{metric.value}</div>
               </Card>
             </a>
           ))}
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="px-4 mt-2 grid grid-cols-2 gap-2">
+        <a href={`${BASE_URL}/parent/contacts`} className="block">
+          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-xl shadow-lg border-none flex items-center justify-center space-x-2 cursor-pointer hover:shadow-xl transition-shadow">
+            <Users className="w-5 h-5" />
+            <span className="font-medium">人脉</span>
+          </Card>
+        </a>
+        
+        <a href="/ledger" className="block">
+          <Card className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-4 rounded-xl shadow-lg border-none flex items-center justify-center space-x-2 cursor-pointer hover:shadow-xl transition-shadow">
+            <Wallet className="w-5 h-5" />
+            <span className="font-medium">钱脉</span>
+          </Card>
+        </a>
       </div>
     </div>
   );
