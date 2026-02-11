@@ -380,7 +380,7 @@ export default function SharingSettings() {
 
       {/* 添加连接对话框 */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md !top-[30%]">
           <DialogHeader>
             <DialogTitle>添加共享连接</DialogTitle>
             <DialogDescription>

@@ -541,7 +541,7 @@ export default function Ledger() {
 
       {/* 邀请成员对话框 */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-        <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
+        <DialogContent className="w-[90%] max-w-md rounded-lg !top-[30%]" showCloseButton={false}>
           <DialogTitle className="text-lg font-semibold mb-4">邀请成员</DialogTitle>
           <div className="space-y-4">
             {/* 搜索输入框 */}
