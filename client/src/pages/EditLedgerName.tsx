@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
@@ -22,13 +22,15 @@ export default function EditLedgerName() {
   });
 
   const [newName, setNewName] = useState("");
+  const isInitialized = useRef(false);
 
-  // 初始化名称
+  // 初始化名称（仅在首次加载时）
   useEffect(() => {
-    if (ledgerData?.name && !newName) {
+    if (ledgerData?.name && !isInitialized.current) {
       setNewName(ledgerData.name);
+      isInitialized.current = true;
     }
-  }, [ledgerData?.name, newName]);
+  }, [ledgerData?.name]);
 
   // 更新账本名称的mutation
   const utils = trpc.useUtils();
