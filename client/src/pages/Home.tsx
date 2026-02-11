@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
+import { Link } from "wouter";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -276,10 +277,12 @@ export default function Home() {
           </div>
         </a>
         
-        <a href="/ledger" className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#A80000] transition-colors">
-          <Wallet className="w-6 h-6" />
-          <span className="text-xs font-medium">钱脉</span>
-        </a>
+        <Link href="/ledger">
+          <a className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#A80000] transition-colors">
+            <Wallet className="w-6 h-6" />
+            <span className="text-xs font-medium">钱脉</span>
+          </a>
+        </Link>
       </div>
     </div>
   );
