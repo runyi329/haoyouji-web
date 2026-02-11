@@ -45,7 +45,7 @@ function formatCurrency(num: number): string {
 }
 
 export default function Home() {
-  const { data: stats, isLoading, refetch, isFetching } = trpc.dashboard.stats.useQuery(undefined, {
+  const { data: stats, isLoading, refetch, isFetching } = trpc.contacts.stats.useQuery(undefined, {
     refetchInterval: 60000,
     staleTime: 30000,
   });
