@@ -148,6 +148,7 @@ function Router() {
         <Route path="/parent/contacts/export" component={ExportContacts} />
         <Route path="/parent/contacts/tags" component={TagsManagement} />
         <Route path="/parent/contacts/tag-analytics" component={TagAnalytics} />
+        <Route path="/parent/contacts/interaction-stats" component={lazy(() => import("./pages/InteractionStats"))} />
         <Route path="/parent/contacts/sharing" component={SharingSettings} />
         <Route path="/parent/init-categories" component={lazy(() => import("./pages/InitCategories"))} />
         <Route path="/parent/profile" component={Profile} />

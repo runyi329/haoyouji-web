@@ -94,7 +94,7 @@ export default function Home() {
   ];
 
   const metricsLeft = [
-    { name: "累计联络", value: totalInteractionCount ? formatNumber(totalInteractionCount) + "次" : "...", href: `${BASE_URL}/parent/contacts` },
+    { name: "累计联络", value: totalInteractionCount ? formatNumber(totalInteractionCount) + "次" : "...", href: `${BASE_URL}/parent/contacts/interaction-stats` },
     { name: "累计使用", value: totalUsageDays ? formatNumber(totalUsageDays) + "天" : "...", href: `${BASE_URL}/parent/contacts` },
     { name: "公司总数", value: stats ? formatNumber(stats.companyCount) + "家" : "...", href: `${BASE_URL}/parent/contacts/list` },
     { name: "今日活跃", value: stats ? formatNumber(stats.todayActive) + "人" : "...", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
