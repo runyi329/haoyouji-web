@@ -241,11 +241,11 @@ export default function Home() {
       </div>
 
       {/* Business Metrics Grid */}
-      <div className="px-4 mt-2">
-        <div className="grid grid-cols-4 gap-2">
+      <div className="px-4 mt-3">
+        <div className="grid grid-cols-4 gap-3">
           {[...metricsLeft, ...metricsRight].map((stat, index) => (
             <a key={index} href={stat.href}>
-              <div className="bg-white p-2 rounded-xl shadow-sm flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:bg-gray-50 transition-colors h-full">
+              <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center space-y-1 cursor-pointer hover:bg-gray-50 transition-colors aspect-square">
                 <span className="text-xs text-gray-400">{stat.name}</span>
                 <span className={`text-sm font-bold ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'}`}>
                   {stat.value}
