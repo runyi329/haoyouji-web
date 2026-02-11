@@ -18,6 +18,12 @@ router.get('/api/ledger/:ledgerId/export', async (req: Request, res: Response) =
     const userId = parseInt(userIdHeader);    
     console.log('[exportLedger] 开始导出:', { ledgerId, userId });
     
+    // 获取账本信息
+    const ledger = await dbLedger.getLedgerById(ledgerId, userId);
+    if (!ledger) {
+      return res.status(404).json({ error: '账本不存在' });
+    }
+    
     // 获取账目数据
     const transactions = await dbLedger.getTransactionsList(
       ledgerId,
@@ -62,8 +68,9 @@ router.get('/api/ledger/:ledgerId/export', async (req: Request, res: Response) =
     // 生成buffer
     const buffer = await workbook.xlsx.writeBuffer();
     
-    // 设置响应头
-    const filename = `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+    // 设置响应头 - 使用账本名称
+    const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-');
+    const filename = `${ledger.name}_${dateStr}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
     res.setHeader('Content-Length', buffer.length);

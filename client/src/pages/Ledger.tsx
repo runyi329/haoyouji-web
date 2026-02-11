@@ -163,7 +163,12 @@ export default function Ledger() {
 
   // 导出账本的处理函数
   const handleExport = async (ledgerId: number) => {
-    const loadingToast = toast.loading("正在导出...");
+    const loadingToast = toast.loading(
+      <div className="flex items-center gap-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-500"></div>
+        <span>正在生成Excel文件...</span>
+      </div>
+    );
     try {
       console.log('[handleExport] 开始导出:', ledgerId);
       
@@ -207,7 +212,14 @@ export default function Ledger() {
       window.URL.revokeObjectURL(url);
       
       toast.dismiss(loadingToast);
-      toast.success("导出成功！");
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <div className="font-semibold">🎉 导出成功！</div>
+          <div className="text-xs text-gray-600">{filename}</div>
+          <div className="text-xs text-gray-500">文件已保存到下载文件夹</div>
+        </div>,
+        { duration: 4000 }
+      );
     } catch (error: any) {
       console.error('[handleExport] 错误:', error);
       toast.dismiss(loadingToast);
