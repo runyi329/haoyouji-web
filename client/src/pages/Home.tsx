@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { 
   Users, 
   MapPin, 
