@@ -48,7 +48,7 @@ export default function DataComparison() {
         {/* 顶部导航栏：返回 + 标题 + Tab切换 */}
         <div className="flex items-center justify-between px-4 py-3">
           <button 
-            onClick={() => setLocation('/parent/contacts')}
+            onClick={() => setLocation('/')}
             className="flex items-center"
           >
             <ChevronLeft className="w-6 h-6" />

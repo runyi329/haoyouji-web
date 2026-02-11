@@ -85,7 +85,7 @@ export default function TagAnalytics() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setLocation('/parent/contacts')}
+                onClick={() => setLocation('/')}
                 className="h-8 w-8 p-0 text-white hover:bg-white/20 flex-shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />

@@ -122,13 +122,13 @@ function DashboardLayoutContent({
 
   // 智能判断返回路径：子页面返回首页，首页不启用手势
   const getBackPath = () => {
-    if (location === '/parent/home') return null; // 首页不启用
-    return '/parent/home'; // 所有子页面返回首页
+    if (location === '/') return null; // 首页不启用
+    return '/'; // 所有子页面返回新首页
   };
 
   const backPath = getBackPath();
   const { swipeProgress } = useSwipeBack({
-    backPath: backPath || '/parent/home',
+    backPath: backPath || '/',
     enabled: isMobile && backPath !== null, // 只在移动端且非首页启用
     threshold: 80,
   });

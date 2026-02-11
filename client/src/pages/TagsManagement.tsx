@@ -243,7 +243,7 @@ export default function TagsManagement() {
       <div className="max-w-2xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={() => navigate("/parent/contacts/list")}>
+          <Button variant="ghost" onClick={() => navigate("/")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             返回
           </Button>

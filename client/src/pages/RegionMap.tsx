@@ -308,7 +308,7 @@ export default function RegionMap() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setLocation('/parent/contacts')}
+            onClick={() => setLocation('/')}
             className="gap-2"
           >
             <ArrowLeft className="w-4 h-4" />

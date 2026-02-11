@@ -1518,7 +1518,7 @@ export default function ContactDetail() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-muted-foreground mb-4">人脉不存在</p>
-            <Button onClick={() => setLocation("/parent/contacts")}>
+            <Button onClick={() => setLocation("/")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               返回好友记
             </Button>
@@ -1608,7 +1608,7 @@ export default function ContactDetail() {
                   <Button 
                     size="icon"
                     variant="ghost"
-                    onClick={() => setLocation("/parent/contacts")}
+                    onClick={() => setLocation("/")}
                     title="返回"
                   >
                     <ArrowLeft className="h-5 w-5" />

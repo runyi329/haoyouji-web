@@ -85,7 +85,7 @@ export default function ScanBusinessCard() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation("/parent/contacts")}
+            onClick={() => setLocation("/")}
             className="h-10 w-10"
           >
             <ArrowLeft className="h-5 w-5" />

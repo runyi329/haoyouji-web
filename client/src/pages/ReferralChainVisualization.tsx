@@ -117,7 +117,7 @@ export default function ReferralChainVisualization() {
   }, []);
 
   const handleBack = () => {
-    setLocation('/parent/contacts/list');
+    setLocation('/');
   };
 
   if (isLoading) {

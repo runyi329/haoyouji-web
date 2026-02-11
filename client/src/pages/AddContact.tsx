@@ -1396,7 +1396,7 @@ export default function AddContact() {
                 setLocation(`/parent/contacts/${targetId}`);
               } else {
                 // 如果没有ID（还未保存），返回列表页
-                setLocation('/parent/contacts');
+                setLocation('/');
               }
             }}
             className="gap-2"
