@@ -10,7 +10,9 @@ import {
   Wallet,
   Coins,
   Loader2,
-  User
+  User,
+  LogOut,
+  UserCircle
 } from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 import {
@@ -18,6 +20,13 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/carousel";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useState } from "react";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -40,6 +49,8 @@ export default function Home() {
     refetchInterval: 60000,
     staleTime: 30000,
   });
+
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const banners = [
     {
@@ -80,6 +91,13 @@ export default function Home() {
     { name: "邀请好友", value: stats ? formatNumber(stats.inviteCount) + "人" : "...", href: `${BASE_URL}/parent/profile/invite` },
   ];
 
+  const handleLogout = () => {
+    // 清除登录状态
+    document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    // 跳转到登录页
+    window.location.href = `${BASE_URL}/login`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
       {/* Header Banner Carousel */}
@@ -100,9 +118,9 @@ export default function Home() {
           <CarouselContent>
             {banners.map((banner) => (
               <CarouselItem key={banner.id}>
-                <div className="relative aspect-[16/11] w-full overflow-hidden">
-                  <img 
-                    src={banner.image} 
+                <div className="relative w-full aspect-[16/9] overflow-hidden">
+                  <img
+                    src={banner.image}
                     alt={banner.title}
                     className="w-full h-full object-cover"
                   />
@@ -113,10 +131,10 @@ export default function Home() {
         </Carousel>
       </div>
 
-      {/* Main Stats Cards */}
+      {/* Stats Cards */}
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        <a href="https://www.jiangyuchen.cn/parent/contacts/list" className="block">
-          <Card className="bg-[#A80000] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:opacity-90 transition-opacity">
+        <a href="https://www.jiangyuchen.cn/parent/contacts" className="block">
+        <Card className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 opacity-90">
             <Users className="w-5 h-5" />
             <span className="text-sm font-medium">人脉总数</span>
@@ -157,13 +175,30 @@ export default function Home() {
       {/* Feature Icons */}
       <div className="px-4 mt-2">
         <div className="bg-white rounded-2xl p-2 shadow-sm grid grid-cols-5 gap-1">
-          {/* Avatar Button → 原系统个人中心 */}
-          <a href={`${BASE_URL}/parent/profile`} className="flex flex-col items-center space-y-2 cursor-pointer">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
-              <User className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xs font-medium text-gray-600">我的</span>
-          </a>
+          {/* Avatar Button with Dropdown Menu */}
+          <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <div className="flex flex-col items-center space-y-2 cursor-pointer">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-gray-600">我的</span>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem asChild>
+                <a href={`${BASE_URL}/parent/profile`} className="flex items-center cursor-pointer">
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  <span>个人中心</span>
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-red-600">
+                <LogOut className="w-4 h-4 mr-2" />
+                <span>退出登录</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {features.map((feature, index) => (
             feature.name === "刷新" ? (
               <div
@@ -192,39 +227,35 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Business Metrics Grid */}
-      <div className="px-4 mt-2">
-        <div className="grid grid-cols-4 gap-2">
-          {[...metricsLeft, ...metricsRight].map((stat, index) => (
-            <a key={index} href={stat.href}>
-              <div className="bg-white p-2 rounded-xl shadow-sm flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:bg-gray-50 transition-colors h-full">
-                <span className="text-xs text-gray-400">{stat.name}</span>
-                <span className={`text-sm font-bold ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'}`}>
-                  {stat.value}
-                </span>
-              </div>
+      {/* Metrics Grid */}
+      <div className="px-4 mt-2 grid grid-cols-2 gap-2">
+        {/* Left Column */}
+        <div className="space-y-2">
+          {metricsLeft.map((metric, index) => (
+            <a key={index} href={metric.href} className="block">
+              <Card className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{metric.name}</span>
+                  <span className="text-sm font-semibold text-gray-800">{metric.value}</span>
+                </div>
+              </Card>
             </a>
           ))}
         </div>
-      </div>
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div className="flex flex-col items-center space-y-1 text-[#A80000]">
-          <Users className="w-6 h-6" />
-          <span className="text-xs font-bold">人脉</span>
+        {/* Right Column */}
+        <div className="space-y-2">
+          {metricsRight.map((metric, index) => (
+            <a key={index} href={metric.href} className="block">
+              <Card className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{metric.name}</span>
+                  <span className="text-sm font-semibold text-gray-800">{metric.value}</span>
+                </div>
+              </Card>
+            </a>
+          ))}
         </div>
-        
-        <a href={`${BASE_URL}/parent/contacts/add`}>
-          <div className="w-12 h-12 bg-[#A80000] rounded-full -mt-8 flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-[#8a0000] transition-colors">
-            <Plus className="w-6 h-6 text-white" />
-          </div>
-        </a>
-
-        <a href={`${BASE_URL}/ledger`} className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#A80000] transition-colors">
-          <Wallet className="w-6 h-6" />
-          <span className="text-xs font-medium">钱脉</span>
-        </a>
       </div>
     </div>
   );
