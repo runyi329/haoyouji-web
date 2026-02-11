@@ -1973,6 +1973,7 @@ export async function getTransactionDetail(
   transactionId: number,
   userId: number
 ) {
+  try {
   console.log('[getTransactionDetail] 开始查询:', { ledgerId, transactionId, userId });
   
   const db = await getLedgerDb();
@@ -2113,6 +2114,10 @@ export async function getTransactionDetail(
   
   console.log('[getTransactionDetail] 返回结果:', result);
   return result;
+  } catch (error) {
+    console.error('[getTransactionDetail] 错误:', error);
+    throw error;
+  }
 }
 
 /**
