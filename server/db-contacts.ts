@@ -3508,3 +3508,432 @@ export async function getFilteredCounts(
   
   return result;
 }
+
+// ==================== 互动统计分析函数 ====================
+
+/**
+ * 获取互动统计总览
+ */
+export async function getInteractionOverview(parentUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  if (visibleContactIds.length === 0) {
+    return {
+      totalInteractions: 0,
+      activeContacts: 0,
+      avgFrequency: 0,
+      coreCircle: 0,
+      trends: { thisMonth: { interactions: 0, contacts: 0 }, lastMonth: { interactions: 0, contacts: 0 } },
+      insights: []
+    };
+  }
+  
+  // 总互动次数
+  const totalResult = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(contactInteractions)
+    .where(inArray(contactInteractions.contactId, visibleContactIds));
+  const totalInteractions = totalResult[0]?.total || 0;
+  
+  // 有互动的联系人数
+  const activeResult = await db
+    .select({ count: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})` })
+    .from(contactInteractions)
+    .where(inArray(contactInteractions.contactId, visibleContactIds));
+  const activeContacts = activeResult[0]?.count || 0;
+  
+  // 平均频次
+  const avgFrequency = activeContacts > 0 ? +(totalInteractions / activeContacts).toFixed(2) : 0;
+  
+  // 核心圈层(≥8次互动)
+  const coreResult = await db
+    .select({ 
+      contactId: contactInteractions.contactId,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(contactInteractions)
+    .where(inArray(contactInteractions.contactId, visibleContactIds))
+    .groupBy(contactInteractions.contactId)
+    .having(sql`COUNT(*) >= 8`);
+  const coreCircle = coreResult.length;
+  
+  // 本月趋势
+  const thisMonthStart = new Date();
+  thisMonthStart.setDate(1);
+  thisMonthStart.setHours(0, 0, 0, 0);
+  
+  const thisMonthResult = await db
+    .select({ 
+      interactions: sql<number>`COUNT(*)`,
+      contacts: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})`
+    })
+    .from(contactInteractions)
+    .where(
+      and(
+        inArray(contactInteractions.contactId, visibleContactIds),
+        gte(contactInteractions.interactionDate, thisMonthStart)
+      )
+    );
+  
+  // 上月趋势
+  const lastMonthStart = new Date(thisMonthStart);
+  lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
+  const lastMonthEnd = new Date(thisMonthStart);
+  
+  const lastMonthResult = await db
+    .select({ 
+      interactions: sql<number>`COUNT(*)`,
+      contacts: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})`
+    })
+    .from(contactInteractions)
+    .where(
+      and(
+        inArray(contactInteractions.contactId, visibleContactIds),
+        gte(contactInteractions.interactionDate, lastMonthStart),
+        lt(contactInteractions.interactionDate, lastMonthEnd)
+      )
+    );
+  
+  // 生成洞察
+  const insights = [];
+  const onceOnlyCount = activeContacts > 0 ? 
+    (await db
+      .select({ contactId: contactInteractions.contactId })
+      .from(contactInteractions)
+      .where(inArray(contactInteractions.contactId, visibleContactIds))
+      .groupBy(contactInteractions.contactId)
+      .having(sql`COUNT(*) = 1`)
+    ).length : 0;
+  
+  if (onceOnlyCount > 0 && activeContacts > 0) {
+    const percentage = Math.round((onceOnlyCount / activeContacts) * 100);
+    insights.push({
+      type: 'longtail',
+      text: `${percentage}%的人脉仅有1次互动，建议激活`
+    });
+  }
+  
+  if (coreCircle > 0 && totalInteractions > 0) {
+    const coreInteractions = coreResult.reduce((sum, r) => sum + r.count, 0);
+    const percentage = Math.round((coreInteractions / totalInteractions) * 100);
+    insights.push({
+      type: 'pareto',
+      text: `${coreCircle}人核心圈贡献了${percentage}%的互动`
+    });
+  }
+  
+  return {
+    totalInteractions,
+    activeContacts,
+    avgFrequency,
+    coreCircle,
+    trends: {
+      thisMonth: {
+        interactions: thisMonthResult[0]?.interactions || 0,
+        contacts: thisMonthResult[0]?.contacts || 0
+      },
+      lastMonth: {
+        interactions: lastMonthResult[0]?.interactions || 0,
+        contacts: lastMonthResult[0]?.contacts || 0
+      }
+    },
+    insights
+  };
+}
+
+/**
+ * 获取互动频次分布
+ */
+export async function getInteractionDistribution(parentUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  if (visibleContactIds.length === 0) {
+    return { histogram: [], pareto: [], boxplot: null };
+  }
+  
+  // 获取每个联系人的互动次数
+  const distribution = await db
+    .select({ 
+      contactId: contactInteractions.contactId,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(contactInteractions)
+    .where(inArray(contactInteractions.contactId, visibleContactIds))
+    .groupBy(contactInteractions.contactId);
+  
+  // 构建直方图数据
+  const countMap = new Map<number, number>();
+  distribution.forEach(d => {
+    const count = d.count;
+    countMap.set(count, (countMap.get(count) || 0) + 1);
+  });
+  
+  const histogram = Array.from(countMap.entries())
+    .map(([count, contacts]) => ({ count, contacts }))
+    .sort((a, b) => a.count - b.count);
+  
+  // 构建帕累托数据
+  const sortedDistribution = [...distribution].sort((a, b) => b.count - a.count);
+  const totalInteractions = sortedDistribution.reduce((sum, d) => sum + d.count, 0);
+  const totalContacts = sortedDistribution.length;
+  
+  let cumulative = 0;
+  let cumulativeContacts = 0;
+  const pareto = [];
+  
+  // 核心圈 (≥8次)
+  const coreCircle = sortedDistribution.filter(d => d.count >= 8);
+  if (coreCircle.length > 0) {
+    cumulative += coreCircle.reduce((sum, d) => sum + d.count, 0);
+    cumulativeContacts += coreCircle.length;
+    pareto.push({
+      tier: '核心圈',
+      contacts: coreCircle.length,
+      cumulative: cumulativeContacts / totalContacts,
+      interactions: cumulative
+    });
+  }
+  
+  // 活跃圈 (4-7次)
+  const activeCircle = sortedDistribution.filter(d => d.count >= 4 && d.count < 8);
+  if (activeCircle.length > 0) {
+    cumulative += activeCircle.reduce((sum, d) => sum + d.count, 0);
+    cumulativeContacts += activeCircle.length;
+    pareto.push({
+      tier: '活跃圈',
+      contacts: activeCircle.length,
+      cumulative: cumulativeContacts / totalContacts,
+      interactions: cumulative
+    });
+  }
+  
+  // 普通圈 (2-3次)
+  const normalCircle = sortedDistribution.filter(d => d.count >= 2 && d.count < 4);
+  if (normalCircle.length > 0) {
+    cumulative += normalCircle.reduce((sum, d) => sum + d.count, 0);
+    cumulativeContacts += normalCircle.length;
+    pareto.push({
+      tier: '普通圈',
+      contacts: normalCircle.length,
+      cumulative: cumulativeContacts / totalContacts,
+      interactions: cumulative
+    });
+  }
+  
+  // 沉默圈 (1次)
+  const silentCircle = sortedDistribution.filter(d => d.count === 1);
+  if (silentCircle.length > 0) {
+    cumulative += silentCircle.reduce((sum, d) => sum + d.count, 0);
+    cumulativeContacts += silentCircle.length;
+    pareto.push({
+      tier: '沉默圈',
+      contacts: silentCircle.length,
+      cumulative: cumulativeContacts / totalContacts,
+      interactions: cumulative
+    });
+  }
+  
+  // 计算箱线图数据
+  const counts = sortedDistribution.map(d => d.count).sort((a, b) => a - b);
+  const min = counts[0] || 0;
+  const max = counts[counts.length - 1] || 0;
+  const median = counts[Math.floor(counts.length / 2)] || 0;
+  const q1 = counts[Math.floor(counts.length / 4)] || 0;
+  const q3 = counts[Math.floor(counts.length * 3 / 4)] || 0;
+  const iqr = q3 - q1;
+  const outliers = counts.filter(c => c > q3 + 1.5 * iqr || c < q1 - 1.5 * iqr);
+  
+  return {
+    histogram,
+    pareto,
+    boxplot: { min, q1, median, q3, max, outliers }
+  };
+}
+
+/**
+ * 获取互动时间序列
+ */
+export async function getInteractionTimeSeries(
+  parentUserId: number, 
+  granularity: 'day' | 'week' | 'month', 
+  range: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  if (visibleContactIds.length === 0) {
+    return { series: [], heatmap: [], weekPattern: {} };
+  }
+  
+  // 计算开始日期
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - range);
+  
+  // 获取时间序列数据
+  let dateFormat = '%Y-%m-%d';
+  if (granularity === 'week') dateFormat = '%Y-%u';
+  if (granularity === 'month') dateFormat = '%Y-%m';
+  
+  const seriesData = await db
+    .select({
+      date: sql<string>`DATE_FORMAT(${contactInteractions.interactionDate}, ${dateFormat})`,
+      interactions: sql<number>`COUNT(*)`,
+      contacts: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})`
+    })
+    .from(contactInteractions)
+    .where(
+      and(
+        inArray(contactInteractions.contactId, visibleContactIds),
+        gte(contactInteractions.interactionDate, startDate)
+      )
+    )
+    .groupBy(sql`DATE_FORMAT(${contactInteractions.interactionDate}, ${dateFormat})`)
+    .orderBy(sql`DATE_FORMAT(${contactInteractions.interactionDate}, ${dateFormat})`);
+  
+  // 获取日历热力图数据(仅day粒度)
+  let heatmap: any[] = [];
+  if (granularity === 'day') {
+    const heatmapData = await db
+      .select({
+        date: sql<string>`DATE(${contactInteractions.interactionDate})`,
+        value: sql<number>`COUNT(*)`,
+        weekday: sql<number>`DAYOFWEEK(${contactInteractions.interactionDate})`
+      })
+      .from(contactInteractions)
+      .where(
+        and(
+          inArray(contactInteractions.contactId, visibleContactIds),
+          gte(contactInteractions.interactionDate, startDate)
+        )
+      )
+      .groupBy(sql`DATE(${contactInteractions.interactionDate})`);
+    
+    heatmap = heatmapData.map(d => ({
+      date: d.date,
+      value: d.value,
+      weekday: d.weekday
+    }));
+  }
+  
+  // 获取周模式数据
+  const weekPatternData = await db
+    .select({
+      weekday: sql<number>`DAYOFWEEK(${contactInteractions.interactionDate})`,
+      count: sql<number>`COUNT(*)`
+    })
+    .from(contactInteractions)
+    .where(
+      and(
+        inArray(contactInteractions.contactId, visibleContactIds),
+        gte(contactInteractions.interactionDate, startDate)
+      )
+    )
+    .groupBy(sql`DAYOFWEEK(${contactInteractions.interactionDate})`);
+  
+  const weekPattern: any = {};
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  weekPatternData.forEach(d => {
+    weekPattern[dayNames[d.weekday - 1]] = d.count;
+  });
+  
+  return {
+    series: seriesData,
+    heatmap,
+    weekPattern
+  };
+}
+
+/**
+ * 获取标签互动统计
+ */
+export async function getTagInteractionStats(parentUserId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const visibleContactIds = await getAllVisibleContactIds(parentUserId);
+  if (visibleContactIds.length === 0) {
+    return { distribution: [], matrix: [] };
+  }
+  
+  // 获取标签分布
+  const tagDistribution = await db
+    .select({
+      tagId: contactTagRelations.tagId,
+      tagName: contactTags.name,
+      contacts: sql<number>`COUNT(DISTINCT ${contactTagRelations.contactId})`
+    })
+    .from(contactTagRelations)
+    .innerJoin(contactTags, eq(contactTagRelations.tagId, contactTags.id))
+    .where(
+      and(
+        inArray(contactTagRelations.contactId, visibleContactIds),
+        eq(contactTags.parentUserId, parentUserId)
+      )
+    )
+    .groupBy(contactTagRelations.tagId, contactTags.name)
+    .orderBy(desc(sql`COUNT(DISTINCT ${contactTagRelations.contactId})`))
+    .limit(15);
+  
+  const totalContacts = visibleContactIds.length;
+  const distribution = tagDistribution.map(t => ({
+    tag: t.tagName,
+    contacts: t.contacts,
+    percentage: +((t.contacts / totalContacts) * 100).toFixed(1)
+  }));
+  
+  // 获取标签互动矩阵
+  const matrix = await Promise.all(
+    tagDistribution.map(async (t) => {
+      // 获取该标签下的联系人
+      const tagContactIds = await db
+        .select({ contactId: contactTagRelations.contactId })
+        .from(contactTagRelations)
+        .where(
+          and(
+            eq(contactTagRelations.tagId, t.tagId),
+            inArray(contactTagRelations.contactId, visibleContactIds)
+          )
+        );
+      
+      const tagContactIdList = tagContactIds.map(c => c.contactId);
+      
+      if (tagContactIdList.length === 0) {
+        return {
+          tag: t.tagName,
+          contacts: t.contacts,
+          interactions: 0,
+          avgPerContact: 0,
+          activeRate: 0
+        };
+      }
+      
+      // 统计该标签下的互动
+      const interactionResult = await db
+        .select({ 
+          total: sql<number>`COUNT(*)`,
+          activeContacts: sql<number>`COUNT(DISTINCT ${contactInteractions.contactId})`
+        })
+        .from(contactInteractions)
+        .where(inArray(contactInteractions.contactId, tagContactIdList));
+      
+      const totalInteractions = interactionResult[0]?.total || 0;
+      const activeContacts = interactionResult[0]?.activeContacts || 0;
+      
+      return {
+        tag: t.tagName,
+        contacts: t.contacts,
+        interactions: totalInteractions,
+        avgPerContact: +(totalInteractions / t.contacts).toFixed(2),
+        activeRate: +((activeContacts / t.contacts) * 100).toFixed(1)
+      };
+    })
+  );
+  
+  return { distribution, matrix };
+}

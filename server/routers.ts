@@ -3711,6 +3711,34 @@ export const appRouter = router({
       return await dbContacts.getTotalInteractionCount(ctx.user.id);
     }),
 
+  // 获取互动统计总览
+  interactionOverview: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getInteractionOverview(ctx.user.id);
+    }),
+
+  // 获取互动频次分布
+  interactionDistribution: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getInteractionDistribution(ctx.user.id);
+    }),
+
+  // 获取互动时间序列
+  interactionTimeSeries: protectedProcedure
+    .input(z.object({
+      granularity: z.enum(['day', 'week', 'month']).default('day'),
+      range: z.number().default(30)
+    }))
+    .query(async ({ ctx, input }) => {
+      return await dbContacts.getInteractionTimeSeries(ctx.user.id, input.granularity, input.range);
+    }),
+
+  // 获取标签互动统计
+  tagInteractionStats: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbContacts.getTagInteractionStats(ctx.user.id);
+    }),
+
   // 获取累计标签数量
   totalTagCount: protectedProcedure
     .query(async ({ ctx }) => {
