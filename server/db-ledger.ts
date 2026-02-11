@@ -2066,8 +2066,8 @@ export async function getTransactionDetail(
       userId: ledgerMembers.userId,
       nickname: ledgerMembers.nickname,
       role: ledgerMembers.role,
-      username: users.username,
-      avatar: users.avatar,
+      username: sql<string | null>`${users.username}`.as('username'),
+      avatar: sql<string | null>`${users.avatar}`.as('avatar'),
     })
     .from(ledgerMembers)
     .leftJoin(users, eq(ledgerMembers.userId, users.id))
