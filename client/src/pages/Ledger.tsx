@@ -88,6 +88,9 @@ export default function Ledger() {
   const [destroyingLedgerId, setDestroyingLedgerId] = useState<number | null>(null);
 
 
+  // 获取当前用户信息
+  const { data: user } = trpc.auth.me.useQuery();
+  
   // 从后端API获取账本列表
   const { data: ledgers, isLoading, refetch } = trpc.ledger.list.useQuery({
     isArchived: activeTab === "archived",
@@ -172,36 +175,40 @@ export default function Ledger() {
     try {
       console.log('[handleExport] 开始导出:', ledgerId);
       
-      const result = await trpc.ledger.exportToExcel.query({
-        ledgerId: ledgerId,
-      });
-      
-      console.log('[handleExport] 获取到结果:', { 
-        hasData: !!result.data, 
-        dataLength: result.data?.length,
-        filename: result.filename 
-      });
-      
-      if (!result.data) {
-        throw new Error('未获取到导出数据');
+      // 检查用户是否登录
+      if (!user) {
+        throw new Error('未登录');
       }
       
-      // 将base64转换为Blob并下载
-      const byteCharacters = atob(result.data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      // 直接使用HTTP请求下载文件
+      const response = await fetch(`/api/ledger/${ledgerId}/export`, {
+        method: 'GET',
+        headers: {
+          'X-User-Id': user.id.toString(),
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '导出失败');
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
-      console.log('[handleExport] Blob创建成功:', { size: blob.size, type: blob.type });
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n]*?)\1/);
+        if (filenameMatch && filenameMatch[2]) {
+          filename = decodeURIComponent(filenameMatch[2]);
+        }
+      }
       
-      // 创建下载链接
+      // 下载文件
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = result.filename;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

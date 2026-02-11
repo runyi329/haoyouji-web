@@ -89,6 +89,9 @@ async function startServer() {
   // Company reports management router
   const companyReportsModule = await import('../company-reports.js');
   app.use(companyReportsModule.default);
+  // Ledger export router
+  const ledgerExportModule = await import('../ledger-export.js');
+  app.use(ledgerExportModule.default);
   // tRPC API
   app.use(
     "/api/trpc",
