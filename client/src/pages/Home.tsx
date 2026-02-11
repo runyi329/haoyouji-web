@@ -277,20 +277,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        <a href={`${BASE_URL}/parent/contacts`} className="block">
-          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-4 rounded-xl shadow-lg border-none flex items-center justify-center space-x-2 cursor-pointer hover:shadow-xl transition-shadow">
-            <Users className="w-5 h-5" />
-            <span className="font-medium">人脉</span>
-          </Card>
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="flex flex-col items-center space-y-1 text-[#A80000]">
+          <Users className="w-6 h-6" />
+          <span className="text-xs font-bold">人脉</span>
+        </div>
+        
+        <a href={`${BASE_URL}/parent/contacts/add`}>
+          <div className="w-12 h-12 bg-[#A80000] rounded-full -mt-8 flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-[#8a0000] transition-colors">
+            <Plus className="w-6 h-6 text-white" />
+          </div>
         </a>
         
-        <a href="/ledger" className="block">
-          <Card className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-4 rounded-xl shadow-lg border-none flex items-center justify-center space-x-2 cursor-pointer hover:shadow-xl transition-shadow">
-            <Wallet className="w-5 h-5" />
-            <span className="font-medium">钱脉</span>
-          </Card>
+        <a href="/ledger" className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#A80000] transition-colors">
+          <Wallet className="w-6 h-6" />
+          <span className="text-xs font-medium">钱脉</span>
         </a>
       </div>
     </div>
