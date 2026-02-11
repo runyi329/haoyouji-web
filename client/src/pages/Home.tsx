@@ -172,7 +172,7 @@ export default function Home() {
         </Card>
         </a>
         
-        <a href="https://www.jiangyuchen.cn/parent/contacts/tag-analytics" className="block">
+        <a href="https://www.jiangyuchen.cn/parent/contacts/tag-stats" className="block">
           <Card className="bg-white text-gray-800 p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 text-gray-500">
             <Coins className="w-5 h-5" />

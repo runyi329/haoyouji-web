@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, TrendingUp, Users, Target, Activity, Loader2, BarChart3, Clock, Tags } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Users, Target, Activity, Loader2, BarChart3, Clock } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart
@@ -11,7 +11,7 @@ import {
 
 export default function InteractionStats() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<'overview' | 'frequency' | 'time' | 'tags'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'frequency' | 'time'>('overview');
 
   // 获取数据
   const { data: overview, isLoading: isLoadingOverview } = trpc.contacts.interactionOverview.useQuery();
@@ -23,10 +23,6 @@ export default function InteractionStats() {
     { granularity: 'day', range: 30 },
     { enabled: activeTab === 'time' }
   );
-  const { data: tagStats, isLoading: isLoadingTags } = trpc.contacts.tagInteractionStats.useQuery(
-    undefined,
-    { enabled: activeTab === 'tags' }
-  );
 
   const isLoading = isLoadingOverview;
 
@@ -35,7 +31,6 @@ export default function InteractionStats() {
     { id: 'overview' as const, label: '总览', icon: BarChart3 },
     { id: 'frequency' as const, label: '频次', icon: Activity },
     { id: 'time' as const, label: '时间', icon: Clock },
-    { id: 'tags' as const, label: '标签', icon: Tags },
   ];
 
   // 颜色配置(适配主题)
@@ -389,115 +384,7 @@ export default function InteractionStats() {
     );
   };
 
-  // 渲染标签分析Tab
-  const renderTags = () => {
-    if (isLoadingTags) {
-      return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
-    }
-    if (!tagStats) return null;
 
-    // 准备饼图数据(TOP5 + 其他)
-    const top5 = tagStats.distribution.slice(0, 5);
-    const othersPercentage = tagStats.distribution.slice(5).reduce((sum, t) => sum + t.percentage, 0);
-    
-    const pieData = [
-      ...top5.map(t => ({ name: t.tag, value: t.percentage })),
-      ...(othersPercentage > 0 ? [{ name: '其他', value: othersPercentage }] : [])
-    ];
-
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280'];
-
-    return (
-      <div className="space-y-4">
-        {/* 标签分布饼图 */}
-        <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">标签分布(TOP5)</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
-                outerRadius={70}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: any) => `${value.toFixed(1)}%`} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* 标签互动矩阵 */}
-        <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">标签互动矩阵</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 font-semibold text-gray-700">标签</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">人数</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">互动</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">人均</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">活跃率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tagStats.matrix.slice(0, 10).map((m, index) => (
-                  <tr key={index} className="border-b border-gray-100">
-                    <td className="py-2 px-2 font-medium text-gray-800">{m.tag}</td>
-                    <td className="text-right py-2 px-2">{m.contacts}</td>
-                    <td className="text-right py-2 px-2">{m.interactions}</td>
-                    <td className="text-right py-2 px-2 text-blue-600 font-medium">{m.avgPerContact}</td>
-                    <td className="text-right py-2 px-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${
-                        m.activeRate >= 20 ? 'bg-green-100 text-green-700' :
-                        m.activeRate >= 10 ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {m.activeRate}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* 标签排行 */}
-        <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">标签人数排行</h3>
-          <div className="space-y-2">
-            {tagStats.distribution.slice(0, 8).map((t, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                  {index + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-800">{t.tag}</span>
-                    <span className="text-xs text-gray-600">{t.contacts}人</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div 
-                      className="bg-blue-500 h-1.5 rounded-full transition-all"
-                      style={{ width: `${t.percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
@@ -552,7 +439,6 @@ export default function InteractionStats() {
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'frequency' && renderFrequency()}
           {activeTab === 'time' && renderTime()}
-          {activeTab === 'tags' && renderTags()}
         </div>
       )}
     </div>
