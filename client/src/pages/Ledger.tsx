@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
-import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { toast } from "sonner";
 
 
@@ -70,14 +69,7 @@ export default function Ledger() {
   const { currentTheme, customColors } = useColorTheme();
   const themeColors = customColors || currentTheme.colors;
   
-  // 添加滑动手势支持
-  useSwipeGesture({
-    onSwipeRight: () => {
-      // 向右滑动,切换到人脉页面
-      setLocation('/contacts');
-      toast.success('切换到人脉', { duration: 1000 });
-    },
-  });
+  // 移除滑动手势，只保留左上角返回按钮
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [archivingLedgerId, setArchivingLedgerId] = useState<number | null>(null);
@@ -286,15 +278,8 @@ export default function Ledger() {
             >
               {/* 账本封面卡片 */}
               <div className="relative bg-gradient-to-br from-white via-gray-50 to-gray-100 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-200">
-                {/* 左侧装订线效果 */}
-                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b" style={{ 
-                  backgroundImage: `linear-gradient(to bottom, ${themeColors.primary}, ${themeColors.primary}dd)` 
-                }}></div>
-                <div className="absolute left-2 top-0 bottom-0 w-px bg-gray-300 opacity-30"></div>
-                <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200 opacity-20"></div>
-                
                 {/* 封面内容 */}
-                <div className="pl-6 pr-4 py-5">
+                <div className="px-4 py-5">
                   {/* 账本标题区 */}
                   <div className="mb-4">
                     <div className="flex items-start justify-between mb-2">
