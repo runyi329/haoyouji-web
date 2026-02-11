@@ -256,58 +256,57 @@ export default function Ledger() {
           filteredLedgers.map((ledger) => (
             <Card
               key={ledger.id}
-              className="p-2 h-[120px] cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
               onClick={() => setLocation(`/ledger/${ledger.id}`)}
             >
-              {/* 第一行：账本名称 + VIP标识 */}
-              <div className="flex items-center gap-2 mb-2">
-                <Notebook className="w-4 h-4 text-blue-500 flex-shrink-0" strokeWidth={1.5} />
-                <div className="flex items-center gap-2 flex-1 min-w-0 max-w-[70%]">
-                  <h3 className="font-semibold text-xs leading-tight text-gray-800 truncate">{ledger.name}</h3>
-                  {ledger.isVip === true && (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 text-xs flex-shrink-0">
-                      <Crown className="w-3 h-3 mr-1" />
-                      VIP
-                    </Badge>
-                  )}
+              {/* 账本头部 */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Notebook className="w-5 h-5 text-blue-500 flex-shrink-0" strokeWidth={2} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-base text-gray-900 truncate">{ledger.name}</h3>
+                      {ledger.isVip === true && (
+                        <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0">
+                          <Crown className="w-3 h-3 mr-0.5" />
+                          VIP
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
+                      <span>·</span>
+                      <span>{ledger.recordCount || 0}条账目</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* 第二行：成员头像 + 统计信息 */}
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex -space-x-2">
-                    {ledger.members.slice(0, 4).map((member, index) => (
-                      <UserAvatar
-                        key={member.userId}
-                        username={member.username}
-                        avatar={member.avatar}
-                        nickname={member.nickname}
-                        size="sm"
-                        style={{ zIndex: ledger.members.length - index }}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs leading-none text-gray-500">{ledger.memberCount}人共享+</span>
+              {/* 成员信息 */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex -space-x-2">
+                  {ledger.members.slice(0, 4).map((member, index) => (
+                    <UserAvatar
+                      key={member.userId}
+                      username={member.username}
+                      avatar={member.avatar}
+                      nickname={member.nickname}
+                      size="sm"
+                      style={{ zIndex: ledger.members.length - index }}
+                    />
+                  ))}
                 </div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <div className="text-[10px] leading-tight text-gray-400 whitespace-nowrap">
-                    开账日期 {new Date(ledger.createdAt).toLocaleDateString('zh-CN').replace(/\//g, '-')} · 至今 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
-                  </div>
-                  <div className="text-[10px] leading-tight text-gray-400 whitespace-nowrap">
-                    账目总数 × {ledger.recordCount || 0}条
-                  </div>
-                </div>
+                <span className="text-sm text-gray-600 font-medium">{ledger.memberCount}人共享</span>
               </div>
 
               {/* 操作按钮 */}
-              <div className="flex gap-1 -mt-2">
+              <div className="grid grid-cols-3 gap-2">
                 {activeTab === "active" && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
                         setLocation(`/ledger/${ledger.id}/settings`);
@@ -318,18 +317,7 @@ export default function Ledger() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExport(ledger.id);
-                      }}
-                    >
-                      导出
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
                         setLocation(`/ledger/${ledger.id}/report`);
@@ -340,7 +328,7 @@ export default function Ledger() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
                         setInvitingLedgerId(ledger.id);
@@ -352,7 +340,18 @@ export default function Ledger() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-sm leading-none px-2 py-1 h-8 flex-1"
+                      className="text-xs h-9 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all col-span-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExport(ledger.id);
+                      }}
+                    >
+                      导出
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-9 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
                         setArchivingLedgerId(ledger.id);
