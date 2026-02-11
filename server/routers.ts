@@ -246,24 +246,18 @@ export const appRouter = router({
         imageData: z.string(), // base64 encoded image
       }))
       .mutation(async ({ ctx, input }) => {
-        // 简化方案：直接存储base64数据到数据库
-        // 注意：这只适合小图片，大图片应该使用云存储
         try {
-          const avatarData = input.imageData;
+          // 使用腾讯COS存储头像
+          const { uploadImageToCOS } = await import('./cos-upload');
+          const avatarUrl = await uploadImageToCOS(input.imageData, 'avatars');
           
-          // 检查数据大小（限制为1MB）
-          const sizeInBytes = Math.ceil((avatarData.length * 3) / 4);
-          if (sizeInBytes > 1024 * 1024) {
-            throw new Error('图片太大，请选择小于1MB的图片');
-          }
-          
-          // 更新数据库
+          // 更新数据库为COS URL
           const db_instance = await getDb();
           if (db_instance) {
-            await db_instance.update(users).set({ avatar: avatarData }).where(eq(users.id, ctx.user.id));
+            await db_instance.update(users).set({ avatar: avatarUrl }).where(eq(users.id, ctx.user.id));
           }
           
-          return { success: true, avatarUrl: avatarData };
+          return { success: true, avatarUrl };
         } catch (error) {
           console.error('[uploadAvatar] 错误:', error);
           throw new TRPCError({ 

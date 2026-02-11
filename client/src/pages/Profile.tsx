@@ -273,8 +273,8 @@ export default function Profile() {
     setIsCropDialogOpen(false);
 
     try {
-      // 压缩头像为 64x64 像素，质量 60%
-      const compressedBase64 = await compressAvatar(croppedImageBlob, 64, 0.6);
+      // 压缩头像为 256x256 像素，质量 80%（推荐尺寸）
+      const compressedBase64 = await compressAvatar(croppedImageBlob, 256, 0.8);
       uploadAvatarMutation.mutate({ imageData: compressedBase64 });
     } catch (error) {
       toast.error(`图片处理失败: ${error instanceof Error ? error.message : '未知错误'}`);

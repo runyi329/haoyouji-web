@@ -200,7 +200,11 @@ export default function Home() {
             <DropdownMenuTrigger asChild>
               <div className="flex flex-col items-center space-y-2 cursor-pointer">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
-                  <User className="w-5 h-5 text-white" />
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-5 h-5 text-white" />
+                  )}
                 </div>
                 <span className="text-xs font-medium text-gray-600">我的</span>
               </div>
