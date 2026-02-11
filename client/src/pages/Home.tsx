@@ -44,17 +44,17 @@ export default function Home() {
   const banners = [
     {
       id: 1,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/share.png",
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/share.webp",
       title: "人脉共享"
     },
     {
       id: 2,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/decentral.png",
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/decentral.webp",
       title: "去中心化人脉管理"
     },
     {
       id: 3,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.png",
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.webp",
       title: "AI社交"
     }
   ];
