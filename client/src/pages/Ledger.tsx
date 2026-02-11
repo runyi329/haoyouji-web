@@ -102,20 +102,20 @@ export default function Ledger() {
 
   const filteredLedgers = ledgers || [];
 
-  // 存档账本的mutation
+  // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
     onSuccess: () => {
-      toast.success('账本已存档');
+      toast.success('账本已封存');
       refetch();
       setShowArchiveDialog(false);
       setArchivingLedgerId(null);
     },
     onError: (error) => {
-      toast.error(`存档失败: ${error.message}`);
+      toast.error(`封存失败: ${error.message}`);
     },
   });
 
-  // 处理存档确认
+  // 处理封存确认
   const handleArchiveConfirm = () => {
     if (archivingLedgerId) {
       archiveMutation.mutate({ ledgerId: archivingLedgerId, isArchived: true });
@@ -262,7 +262,7 @@ export default function Ledger() {
             }`}
             style={activeTab === "archived" ? { backgroundColor: themeColors.primary } : {}}
           >
-            已存档 {archivedLedgers && `(${archivedLedgers.length})`}
+            已封存 {archivedLedgers && `(${archivedLedgers.length})`}
           </button>
         </div>
       </div>
@@ -275,7 +275,7 @@ export default function Ledger() {
           </Card>
         ) : filteredLedgers.length === 0 ? (
           <Card className="p-8 text-center">
-            <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已存档"}的账本</p>
+            <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已封存"}的账本</p>
           </Card>
         ) : (
           filteredLedgers.map((ledger) => (
@@ -346,7 +346,7 @@ export default function Ledger() {
                   </div>
 
                   {/* 操作按钮区 */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     {activeTab === "active" && (
                       <>
                         <Button
@@ -355,10 +355,22 @@ export default function Ledger() {
                           className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setLocation(`/ledger/${ledger.id}/settings`);
+                            setLocation(`/ledger/${ledger.id}/filter`);
                           }}
                         >
-                          设置
+                          搜索
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInvitingLedgerId(ledger.id);
+                            setShowInviteDialog(true);
+                          }}
+                        >
+                          共享
                         </Button>
                         <Button
                           variant="outline"
@@ -377,18 +389,6 @@ export default function Ledger() {
                           className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setInvitingLedgerId(ledger.id);
-                            setShowInviteDialog(true);
-                          }}
-                        >
-                          邀请
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium col-span-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
                             handleExport(ledger.id);
                           }}
                         >
@@ -397,14 +397,25 @@ export default function Ledger() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium col-span-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLocation(`/ledger/${ledger.id}/settings`);
+                          }}
+                        >
+                          设置
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium col-span-2"
                           onClick={(e) => {
                             e.stopPropagation();
                             setArchivingLedgerId(ledger.id);
                             setShowArchiveDialog(true);
                           }}
                         >
-                          存档
+                          封存
                         </Button>
                       </>
                     )}
@@ -502,21 +513,21 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      {/* 存档确认对话框 */}
+      {/* 封存确认对话框 */}
       <Dialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>
         <DialogContent className="w-[85%] rounded-lg p-0 gap-0" showCloseButton={false}>
-          <DialogTitle className="sr-only">存档账本</DialogTitle>
+          <DialogTitle className="sr-only">封存账本</DialogTitle>
           <div className="p-6 text-center">
             <div className="text-2xl mb-4">⚠️</div>
-            <p className="text-gray-800 mb-2 font-medium">一旦存档将不可以再修改</p>
-            <p className="text-sm text-gray-500">存档后的账本只能查看和导出，无法继续编辑</p>
+            <p className="text-gray-800 mb-2 font-medium">一旦封存将不可以再修改</p>
+            <p className="text-sm text-gray-500">封存后的账本只能查看和导出，无法继续编辑</p>
           </div>
           <button
             onClick={handleArchiveConfirm}
             disabled={archiveMutation.isPending}
             className="w-full text-center py-3.5 text-red-500 font-medium border-t border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {archiveMutation.isPending ? '存档中...' : '确认存档'}
+            {archiveMutation.isPending ? '封存中...' : '确认封存'}
           </button>
           <button
             onClick={() => {
