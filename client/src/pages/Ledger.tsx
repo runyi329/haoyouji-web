@@ -345,8 +345,8 @@ export default function Ledger() {
                     </span>
                   </div>
 
-                  {/* 操作按钮区 */}
-                  <div className="grid grid-cols-4 gap-2">
+                  {/* 操作按钮区 - 3列2行 */}
+                  <div className="grid grid-cols-3 gap-2">
                     {activeTab === "active" && (
                       <>
                         <Button
@@ -397,7 +397,7 @@ export default function Ledger() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium col-span-2"
+                          className="text-xs h-9 bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-white hover:border-gray-400 transition-all shadow-sm font-medium"
                           onClick={(e) => {
                             e.stopPropagation();
                             setLocation(`/ledger/${ledger.id}/settings`);
@@ -408,7 +408,7 @@ export default function Ledger() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium col-span-2"
+                          className="text-xs h-9 bg-red-50/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-100 hover:border-red-400 transition-all shadow-sm font-medium"
                           onClick={(e) => {
                             e.stopPropagation();
                             setArchivingLedgerId(ledger.id);
