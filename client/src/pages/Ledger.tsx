@@ -440,7 +440,7 @@ export default function Ledger() {
       </div>
 
       {/* 底部按钮 */}
-      <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 bg-white pt-4">
+      <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 bg-white pt-4 z-50">
         <div className="container flex gap-3">
           <Button
             variant="outline"
