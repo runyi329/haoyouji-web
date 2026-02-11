@@ -94,17 +94,17 @@ export default function Home() {
   ];
 
   const metricsLeft = [
-    { name: "累计联络", value: totalInteractionCount ? formatNumber(totalInteractionCount) + "次" : "...", href: `${BASE_URL}/parent/contacts/interaction-stats` },
-    { name: "累计使用", value: totalUsageDays ? formatNumber(totalUsageDays) + "天" : "...", href: `${BASE_URL}/parent/contacts` },
-    { name: "公司总数", value: stats ? formatNumber(stats.companyCount) + "家" : "...", href: `${BASE_URL}/parent/contacts/list` },
-    { name: "今日活跃", value: stats ? formatNumber(stats.todayActive) + "人" : "...", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
+    { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", href: `${BASE_URL}/parent/contacts/interaction-stats` },
+    { name: "累计使用", value: totalUsageDays ?? 0, unit: "天", href: `${BASE_URL}/parent/contacts` },
+    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", href: `${BASE_URL}/parent/contacts/list` },
+    { name: "今日活跃", value: stats?.todayActive ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
   ];
 
   const metricsRight = [
-    { name: "本周新增", value: stats ? formatNumber(stats.newThisWeek) + "人" : "...", href: `${BASE_URL}/parent/contacts/list?filter=thisWeek` },
-    { name: "账目总数", value: stats ? formatNumber(stats.totalLedgerEntries) + "条" : "...", href: `/ledger` },
-    { name: "我的积分", value: user ? formatNumber(user.points) + "分" : "...", href: `${BASE_URL}/parent/points` },
-    { name: "邀请好友", value: inviteInfo ? formatNumber(inviteInfo.inviteCount) + "人" : "...", href: `${BASE_URL}/parent/profile/invite` },
+    { name: "本周新增", value: stats?.newThisWeek ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=thisWeek` },
+    { name: "账目总数", value: stats?.totalLedgerEntries ?? 0, unit: "条", href: `/ledger` },
+    { name: "我的积分", value: user?.points ?? 0, unit: "分", href: `${BASE_URL}/parent/points` },
+    { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", href: `${BASE_URL}/parent/profile/invite` },
   ];
 
   const handleLogout = () => {
@@ -245,11 +245,14 @@ export default function Home() {
         <div className="grid grid-cols-4 gap-3">
           {[...metricsLeft, ...metricsRight].map((stat, index) => (
             <a key={index} href={stat.href}>
-              <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center space-y-1 cursor-pointer hover:bg-gray-50 transition-colors aspect-square">
-                <span className="text-xs text-gray-400">{stat.name}</span>
-                <span className={`text-sm font-bold ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'}`}>
-                  {stat.value}
-                </span>
+              <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors aspect-square">
+                <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
+                <div className="flex items-baseline justify-center space-x-0.5">
+                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
+                    {formatNumber(stat.value)}
+                  </span>
+                  <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
+                </div>
               </div>
             </a>
           ))}
