@@ -203,7 +203,7 @@ export default function Ledger() {
       {/* 顶部导航栏 */}
       <div className="bg-white shadow-sm">
         <div className="container py-3 px-4 flex items-center">
-          <Link href="/contacts">
+          <Link href="/">
             <button
               className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
