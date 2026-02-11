@@ -3319,6 +3319,7 @@ export const appRouter = router({
       sortBy: z.enum(['tagCount_desc', 'tagCount_asc', 'interactionCount_desc', 'interactionCount_asc']).optional(),
       page: z.number().min(1).default(1),
       pageSize: z.number().min(1).max(100).default(50),
+      filterType: z.string().optional(), // 筛选类型: todayActive, weeklyActive, thisWeek等
     }))
     .query(async ({ ctx, input }) => {
       const paginatedResult = await dbContacts.getContactsByParentPaginated(
@@ -3394,20 +3395,84 @@ export const appRouter = router({
         };
       });
       
+      // 根据filterType过滤
+      let filteredContacts = contactsWithDetails;
+      if (input.filterType) {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        
+        filteredContacts = contactsWithDetails.filter(contact => {
+          const createdAt = new Date(contact.createdAt);
+          
+          switch (input.filterType) {
+            case 'thisWeek':
+              return createdAt >= startOfWeek;
+            case 'thisMonth':
+              return createdAt >= startOfMonth;
+            case 'thisYear':
+              return createdAt >= startOfYear;
+            case 'todayActive':
+              return contact.hasTodayInteraction === true;
+            case 'weeklyActive': {
+              // 本周活跃：需要查询本周有联络记录
+              // 这里简化处理，如果有lastInteractionDate且在本周内
+              if (!contact.lastInteractionDate) return false;
+              const lastInteraction = new Date(contact.lastInteractionDate);
+              return lastInteraction >= startOfWeek;
+            }
+            case 'monthlyActive': {
+              // 本月活跃
+              if (!contact.lastInteractionDate) return false;
+              const lastInteraction = new Date(contact.lastInteractionDate);
+              return lastInteraction >= startOfMonth;
+            }
+            case 'yearlyActive': {
+              // 今年活跃
+              if (!contact.lastInteractionDate) return false;
+              const lastInteraction = new Date(contact.lastInteractionDate);
+              return lastInteraction >= startOfYear;
+            }
+            case 'blacklist':
+              return contact.isBlacklisted === true;
+            case 'needsAttention': {
+              // 需要关注：基于标签的分级关注机制
+              const tagNames = contact.tags?.map((t: any) => t.name) || [];
+              let thresholdDays: number;
+              if (tagNames.includes('周关注')) {
+                thresholdDays = 7;
+              } else if (tagNames.includes('月关注')) {
+                thresholdDays = 30;
+              } else if (tagNames.includes('季关注')) {
+                thresholdDays = 90;
+              } else {
+                thresholdDays = 180;
+              }
+              
+              if (!contact.lastInteractionDate) return true;
+              const daysSince = Math.floor((now.getTime() - new Date(contact.lastInteractionDate).getTime()) / (1000 * 60 * 60 * 24));
+              return daysSince > thresholdDays;
+            }
+            default:
+              return true;
+          }
+        });
+      }
+      
       // 根据 sortBy 参数排序
       if (input.sortBy) {
-        contactsWithDetails.sort((a, b) => {
+        filteredContacts.sort((a, b) => {
           if (input.sortBy === 'tagCount_desc') {
-            // 标签数量：由高到低（标签数 + 个人标签数）
             return (b.tags.length + b.personalTags.length) - (a.tags.length + a.personalTags.length);
           } else if (input.sortBy === 'tagCount_asc') {
-            // 标签数量：由低到高
             return (a.tags.length + a.personalTags.length) - (b.tags.length + b.personalTags.length);
           } else if (input.sortBy === 'interactionCount_desc') {
-            // 联络次数：由高到低
             return (b.totalInteractions || 0) - (a.totalInteractions || 0);
           } else if (input.sortBy === 'interactionCount_asc') {
-            // 联络次数：由低到高
             return (a.totalInteractions || 0) - (b.totalInteractions || 0);
           }
           return 0;
@@ -3415,11 +3480,11 @@ export const appRouter = router({
       }
       
       return {
-        total: paginatedResult.total,
-        contacts: contactsWithDetails,
-        hasMore: paginatedResult.hasMore,
-        page: paginatedResult.page,
-        pageSize: paginatedResult.pageSize,
+        total: filteredContacts.length, // 返回过滤后的总数
+        contacts: filteredContacts,
+        hasMore: false, // 过滤后一次返回所有结果，无需分页
+        page: input.page,
+        pageSize: input.pageSize,
       };
     }),
 

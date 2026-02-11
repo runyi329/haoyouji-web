@@ -415,6 +415,7 @@ export default function ContactsList() {
     sortBy: sortBy,
     page: page,
     pageSize: 50,
+    filterType: filterType || undefined, // 传递筛选类型给后端
   }, {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
     refetchOnMount: 'always', // 确保页面重新进入时刷新数据
@@ -434,11 +435,11 @@ export default function ContactsList() {
     }
   }, [contactsData, page]);
   
-  // 当搜索条件或排序变化时，重置分页
+  // 当搜索条件、排序或筛选类型变化时，重置分页
   React.useEffect(() => {
     setPage(1);
     setAllLoadedContacts([]);
-  }, [searchQuery, sortBy]);
+  }, [searchQuery, sortBy, filterType]);
   
   // 监听location变化，当返回列表页时强制刷新数据
   React.useEffect(() => {
@@ -724,86 +725,8 @@ export default function ContactsList() {
     }
   }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery]);
   
-  // 根据筛选条件过滤人脉
-  const contacts = React.useMemo(() => {
-    if (!mergedContacts || !filterType) return mergedContacts;
-    
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    
-    return mergedContacts.filter(contact => {
-      const createdAt = new Date(contact.createdAt);
-      
-      switch (filterType) {
-        case 'thisWeek':
-          return createdAt >= startOfWeek;
-        case 'thisMonth':
-          return createdAt >= startOfMonth;
-        case 'thisYear':
-          return createdAt >= startOfYear;
-        case 'needsAttention': {
-          // 需要关注：基于标签的分级关注机制
-          // 周关注：7天，月关注：30天，季关注：90天，无标签：180天
-          const tagNames = contact.tags?.map((t: any) => t.name) || [];
-          let thresholdDays: number;
-          if (tagNames.includes('周关注')) {
-            thresholdDays = 7;
-          } else if (tagNames.includes('月关注')) {
-            thresholdDays = 30;
-          } else if (tagNames.includes('季关注')) {
-            thresholdDays = 90;
-          } else {
-            thresholdDays = 180;
-          }
-          
-          if (!contact.lastInteractionDate) return true; // 没有联络记录的也需要关注
-          const lastInteraction = new Date(contact.lastInteractionDate);
-          const daysSinceInteraction = Math.floor((now.getTime() - lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
-          return daysSinceInteraction > thresholdDays;
-        }
-        case 'monthlyActive': {
-          // 本月活跃：本月有联络记录（使用后端返回的标记字段）
-          return contact.hasInteractionThisMonth === true;
-        }
-        case 'weeklyActive': {
-          // 本周活跃：本周有联络记录（使用后端返回的标记字段）
-          return contact.hasInteractionThisWeek === true;
-        }
-        case 'todayActive': {
-          // 今日活跃：今天有联络记录（使用后端返回的标记字段）
-          return contact.hasInteractionToday === true;
-        }
-        case 'yearlyActive': {
-          // 今年活跃：今年有联络记录（使用后端返回的标记字段）
-          return contact.hasInteractionThisYear === true;
-        }
-        case 'blacklist': {
-          // 拉黑名单
-          return contact.isBlacklisted === true;
-        }
-        case 'todayReminders': {
-          // 今日提醒：有今天的提醒事项
-          // 这里需要后端返回提醒信息，暂时返回true显示所有
-          return true;
-        }
-        case 'weekReminders': {
-          // 本周提醒：有本周的提醒事项
-          return true;
-        }
-        case 'monthReminders': {
-          // 本月提醒：有本月的提醒事项
-          return true;
-        }
-        default:
-          return true;
-      }
-    });
-  }, [mergedContacts, filterType]);
+  // 根据筛选条件过滤人脉（后端已处理，这里直接使用mergedContacts）
+  const contacts = mergedContacts;
   
   // 获取人脉的全局字段分类（公司、职位等）- 移到这里以便在filteredContacts中使用
   const { data: fieldCategories } = trpc.contacts.fieldCategories.list.useQuery();
