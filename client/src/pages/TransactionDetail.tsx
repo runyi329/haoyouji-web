@@ -59,10 +59,16 @@ export default function TransactionDetail() {
     },
   });
 
+  // 获取tRPC utils用于缓存失效
+  const utils = trpc.useUtils();
+  
   // 删除mutation
   const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
     onSuccess: () => {
       toast.success("删除成功");
+      // 使缓存失效，刷新账目列表
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getById.invalidate({ ledgerId });
       setLocation(`/ledger/${ledgerId}`);
     },
     onError: (error) => {
