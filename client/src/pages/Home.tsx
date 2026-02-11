@@ -88,7 +88,7 @@ export default function Home() {
 
   const features = [
     { name: "地域", icon: MapPin, color: "bg-orange-50 text-orange-600", href: `${BASE_URL}/parent/contacts/map` },
-    { name: "分享", icon: Share2, color: "bg-green-50 text-green-600", href: `${BASE_URL}/parent/contacts/sharing` },
+    { name: "共享", icon: Share2, color: "bg-green-50 text-green-600", href: `${BASE_URL}/parent/contacts/sharing` },
     { name: "数据", icon: BarChart2, color: "bg-purple-50 text-purple-600", href: `${BASE_URL}/parent/contacts/data-comparison` },
     { name: "刷新", icon: RefreshCw, color: "bg-indigo-50 text-indigo-600", href: "" },
   ];

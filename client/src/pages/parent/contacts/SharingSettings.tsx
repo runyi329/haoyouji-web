@@ -191,7 +191,7 @@ export default function SharingSettings() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation("/parent/contacts")}
+            onClick={() => setLocation("/")}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
