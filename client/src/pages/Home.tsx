@@ -240,38 +240,17 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        {/* Left Column */}
-        <div className="space-y-2">
-          {metricsLeft.map((metric) => (
-            <a key={metric.name} href={metric.href} className="block">
-              <Card className="bg-white p-3 rounded-xl shadow-sm border-none hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">{metric.name}</span>
-                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-                <div className="mt-1 text-base font-bold text-gray-800">{metric.value}</div>
-              </Card>
-            </a>
-          ))}
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-2">
-          {metricsRight.map((metric) => (
-            <a key={metric.name} href={metric.href} className="block">
-              <Card className="bg-white p-3 rounded-xl shadow-sm border-none hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">{metric.name}</span>
-                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-                <div className="mt-1 text-base font-bold text-gray-800">{metric.value}</div>
-              </Card>
+      {/* Business Metrics Grid */}
+      <div className="px-4 mt-2">
+        <div className="grid grid-cols-4 gap-2">
+          {[...metricsLeft, ...metricsRight].map((stat, index) => (
+            <a key={index} href={stat.href}>
+              <div className="bg-white p-2 rounded-xl shadow-sm flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:bg-gray-50 transition-colors h-full">
+                <span className="text-xs text-gray-400">{stat.name}</span>
+                <span className={`text-sm font-bold ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'}`}>
+                  {stat.value}
+                </span>
+              </div>
             </a>
           ))}
         </div>
