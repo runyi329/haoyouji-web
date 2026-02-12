@@ -53,7 +53,7 @@ export default function TransactionDetail() {
   const [showReimbursementDialog, setShowReimbursementDialog] = useState(false);
   const [reimbursementNotes, setReimbursementNotes] = useState('');
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
-  const [selectedReimbursementStatus, setSelectedReimbursementStatus] = useState<'none' | 'pending' | 'completed'>('pending');
+
   const voucherInputRef = useRef<HTMLInputElement>(null);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
@@ -261,7 +261,6 @@ export default function TransactionDetail() {
               // 加载已有的报销信息
               setReimbursementNotes(transaction.reimbursementNotes || '');
               setVoucherImage(transaction.reimbursementVoucherUrl || null);
-              setSelectedReimbursementStatus(transaction.reimbursementStatus as 'none' | 'pending' | 'completed' || 'pending');
               setShowReimbursementDialog(true);
             }}
           >
@@ -449,46 +448,7 @@ export default function TransactionDetail() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* 当前状态 */}
-            <div>
-              <label className="text-sm text-gray-600 mb-2 block">报销状态</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedReimbursementStatus('pending')}
-                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                    selectedReimbursementStatus === 'pending'
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  💰待报销
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReimbursementStatus('completed')}
-                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                    selectedReimbursementStatus === 'completed'
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  ✅已报销
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReimbursementStatus('none')}
-                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
-                    selectedReimbursementStatus === 'none'
-                      ? 'bg-gray-400 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  无需报销
-                </button>
-              </div>
-            </div>
-            
+
             {/* 报销备注 */}
             <div>
               <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
@@ -616,7 +576,7 @@ export default function TransactionDetail() {
               onClick={() => {
                 manageReimbursementMutation.mutate({
                   recordId: transactionId,
-                  status: selectedReimbursementStatus,
+                  status: 'completed',
                   notes: reimbursementNotes || undefined,
                   voucherImage: voucherImage || undefined,
                 });
