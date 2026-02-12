@@ -504,51 +504,62 @@ export default function TransactionDetail() {
                   }
                 }}
               />
-              {voucherImage ? (
-                <div className="space-y-2">
-                  {/* 预览图 */}
-                  <div 
-                    className="relative w-full h-32 bg-white rounded-lg overflow-hidden cursor-pointer border-2 border-gray-200 hover:border-blue-400 transition-colors"
-                    onClick={() => {
-                      setPreviewImageUrl(voucherImage);
-                      setShowImagePreview(true);
-                    }}
-                  >
-                    <img 
-                      src={voucherImage} 
-                      alt="报销凭证" 
-                      className="w-full h-full object-contain"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all flex items-center justify-center">
-                      <span className="text-white opacity-0 hover:opacity-100 text-sm bg-black bg-opacity-50 px-3 py-1 rounded">
-                        点击放大
-                      </span>
+              <div className="flex items-start gap-3">
+                {voucherImage ? (
+                  <>
+                    {/* 小的正方形预览图 */}
+                    <div 
+                      className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
+                      onClick={() => {
+                        setPreviewImageUrl(voucherImage);
+                        setShowImagePreview(true);
+                      }}
+                    >
+                      <img 
+                        src={voucherImage} 
+                        alt="报销凭证" 
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                  </div>
-                  {/* 重新上传按钮 */}
+                    {/* 按钮组 */}
+                    <div className="flex-1 flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPreviewImageUrl(voucherImage);
+                          setShowImagePreview(true);
+                        }}
+                        className="w-full"
+                      >
+                        查看大图
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => voucherInputRef.current?.click()}
+                        className="w-full"
+                      >
+                        重新上传
+                      </Button>
+                    </div>
+                  </>
+                ) : (
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => voucherInputRef.current?.click()}
                     className="w-full"
                   >
-                    重新上传
+                    上传凭证
                   </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => voucherInputRef.current?.click()}
-                  className="w-full"
-                >
-                  上传凭证
-                </Button>
-              )}
+                )}
+              </div>
             </div>
             
-            {/* 历史记录链接 */}
-            {transaction?.reimbursementStatus === 'completed' && (
+            {/* 历史记录链接 */}            {transaction?.reimbursementStatus === 'completed' && (
               <div className="text-sm text-gray-500">
                 已有报销记录，修改将被记录在历史中
               </div>
