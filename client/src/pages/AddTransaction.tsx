@@ -85,6 +85,7 @@ const AddTransaction = () => {
   const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([2]);
   
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
+  const [reimbursementStatus, setReimbursementStatus] = useState<'none' | 'pending'>('none');
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -122,6 +123,11 @@ const AddTransaction = () => {
       // 加载图片
       if (editTransaction.images && editTransaction.images.length > 0) {
         setUploadedImages(editTransaction.images);
+      }
+      
+      // 加载报销状态
+      if (editTransaction.reimbursementStatus) {
+        setReimbursementStatus(editTransaction.reimbursementStatus as 'none' | 'pending');
       }
     }
   }, [isEditMode, editTransaction]);
@@ -458,6 +464,7 @@ const AddTransaction = () => {
       transactionDate: formattedDate,
       description: note || undefined,
       images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
+      reimbursementStatus, // 添加报销状态
     };
     
     // 只有当accountId是有效数字时才添加
@@ -614,6 +621,37 @@ const AddTransaction = () => {
               </button>
             ))}
           </div>
+          </div>
+        </div>
+
+        {/* 报销状态选择 */}
+        <div className="bg-white mt-1">
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            报销状态
+          </div>
+          <div className="p-3">
+            <div className="flex gap-1.5">
+              <button
+                className={`flex-1 px-3 py-1.5 rounded text-xs ${
+                  reimbursementStatus === 'none'
+                    ? "bg-gray-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setReimbursementStatus('none')}
+              >
+                无需报销
+              </button>
+              <button
+                className={`flex-1 px-3 py-1.5 rounded text-xs ${
+                  reimbursementStatus === 'pending'
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setReimbursementStatus('pending')}
+              >
+                💰 待报销
+              </button>
+            </div>
           </div>
         </div>
 

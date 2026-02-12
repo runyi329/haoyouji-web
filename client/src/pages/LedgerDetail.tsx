@@ -419,6 +419,22 @@ export default function LedgerDetail() {
                               </svg>
                             </span>
                           )}
+                          {/* 报销状态标签 */}
+                          {record.reimbursementStatus === 'pending' && (
+                            <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-xs rounded">
+                              💰待报销
+                            </span>
+                          )}
+                          {record.reimbursementStatus === 'completed' && (
+                            <span className="ml-1 px-1.5 py-0.5 bg-green-500 text-white text-xs rounded">
+                              ✅已报销
+                            </span>
+                          )}
+                          {record.reimbursementStatus === 'none' && (
+                            <span className="ml-1 px-1.5 py-0.5 bg-gray-400 text-white text-xs rounded">
+                              无需报销
+                            </span>
+                          )}
                         </div>
                         {record.description && (
                           <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
