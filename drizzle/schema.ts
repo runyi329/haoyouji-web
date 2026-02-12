@@ -509,6 +509,17 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
+export const ledgerRecordHistory = mysqlTable("ledger_record_history", {
+	id: int().autoincrement().notNull(),
+	recordId: int().notNull(),
+	ledgerId: int().notNull(),
+	userId: int().notNull(),
+	field: varchar({ length: 50 }).notNull(),
+	oldValue: text(),
+	newValue: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
 export const ledgers = mysqlTable("ledgers", {
 	id: int().autoincrement().notNull(),
 	name: varchar({ length: 100 }).notNull(),
