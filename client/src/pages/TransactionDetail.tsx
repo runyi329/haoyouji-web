@@ -53,6 +53,7 @@ export default function TransactionDetail() {
   const [showReimbursementDialog, setShowReimbursementDialog] = useState(false);
   const [reimbursementNotes, setReimbursementNotes] = useState('');
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
+  const [selectedReimbursementStatus, setSelectedReimbursementStatus] = useState<'none' | 'pending' | 'completed'>('pending');
   const voucherInputRef = useRef<HTMLInputElement>(null);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
@@ -60,7 +61,7 @@ export default function TransactionDetail() {
   // 报销管理mutation
   const manageReimbursementMutation = trpc.ledger.manageReimbursement.useMutation({
     onSuccess: () => {
-      toast.success("报销状态已更新");
+      toast.success("保存成功");
       setShowReimbursementDialog(false);
       setReimbursementNotes('');
       setVoucherImage(null);
@@ -260,6 +261,7 @@ export default function TransactionDetail() {
               // 加载已有的报销信息
               setReimbursementNotes(transaction.reimbursementNotes || '');
               setVoucherImage(transaction.reimbursementVoucherUrl || null);
+              setSelectedReimbursementStatus(transaction.reimbursementStatus as 'none' | 'pending' | 'completed' || 'pending');
               setShowReimbursementDialog(true);
             }}
           >
@@ -449,17 +451,41 @@ export default function TransactionDetail() {
           <div className="space-y-4 py-4">
             {/* 当前状态 */}
             <div>
-              <label className="text-sm text-gray-600 mb-2 block">当前状态</label>
+              <label className="text-sm text-gray-600 mb-2 block">报销状态</label>
               <div className="flex items-center gap-2">
-                {transaction?.reimbursementStatus === 'pending' && (
-                  <span className="px-3 py-1.5 bg-orange-500 text-white text-sm rounded">💰待报销</span>
-                )}
-                {transaction?.reimbursementStatus === 'completed' && (
-                  <span className="px-3 py-1.5 bg-green-500 text-white text-sm rounded">✅已报销</span>
-                )}
-                {transaction?.reimbursementStatus === 'none' && (
-                  <span className="px-3 py-1.5 bg-gray-400 text-white text-sm rounded">无需报销</span>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedReimbursementStatus('pending')}
+                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                    selectedReimbursementStatus === 'pending'
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  💰待报销
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReimbursementStatus('completed')}
+                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                    selectedReimbursementStatus === 'completed'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  ✅已报销
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReimbursementStatus('none')}
+                  className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                    selectedReimbursementStatus === 'none'
+                      ? 'bg-gray-400 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  无需报销
+                </button>
               </div>
             </div>
             
@@ -588,10 +614,9 @@ export default function TransactionDetail() {
             {/* 保存按钮 - 最右 */}
             <Button 
               onClick={() => {
-                const currentStatus = transaction?.reimbursementStatus || 'none';
                 manageReimbursementMutation.mutate({
                   recordId: transactionId,
-                  status: currentStatus as 'none' | 'pending' | 'completed',
+                  status: selectedReimbursementStatus,
                   notes: reimbursementNotes || undefined,
                   voucherImage: voucherImage || undefined,
                 });
