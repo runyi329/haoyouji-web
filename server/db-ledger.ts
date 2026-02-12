@@ -1775,6 +1775,7 @@ export async function addTransaction(data: {
     amount: data.amount.toString(),
     categoryId: data.categoryId,
     description: data.description || null,
+    imageUrl: data.images && data.images.length > 0 ? data.images[0] : null, // 只支持单张图片
     recordDate: data.transactionDate,
     createdBy: data.userId,
   });
@@ -2008,7 +2009,7 @@ export async function getTransactionDetail(
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
-      images: sql<string[] | null>`${ledgerRecords.images}`.as('images'),
+      imageUrl: ledgerRecords.imageUrl,
     })
     .from(ledgerRecords)
     .where(
@@ -2109,7 +2110,7 @@ export async function getTransactionDetail(
     member: memberWithAvatar,
     recordDate: transaction.date,
     approvalStatus: 'not_required' as const, // 默认不需要审批
-    images: transaction.images ? (typeof transaction.images === 'string' ? JSON.parse(transaction.images) : transaction.images) : [],
+    images: transaction.imageUrl ? [transaction.imageUrl] : [],
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);
@@ -2229,7 +2230,7 @@ export async function updateTransaction(
   if (data.subcategoryId !== undefined) updateData.subcategoryId = data.subcategoryId;
   if (data.description !== undefined) updateData.description = data.description;
   if (data.transactionDate) updateData.date = data.transactionDate;
-  if (data.images) updateData.images = JSON.stringify(data.images);
+  if (data.images && data.images.length > 0) updateData.imageUrl = data.images[0]; // 只支持单张图片
   if (data.memberId) updateData.memberId = data.memberId;
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
   

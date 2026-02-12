@@ -109,8 +109,8 @@ const AddTransaction = () => {
       }
       
       // 加载图片
-      if (editTransaction.imageUrl) {
-        setUploadedImages([editTransaction.imageUrl]);
+      if (editTransaction.images && editTransaction.images.length > 0) {
+        setUploadedImages(editTransaction.images);
       }
     }
   }, [isEditMode, editTransaction]);
@@ -418,6 +418,9 @@ const AddTransaction = () => {
       toast.error("修改失败：" + error.message);
     },
   });
+  
+  // 上传图片mutation
+  const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
 
   // 处理保存
   const handleSave = () => {
@@ -443,7 +446,7 @@ const AddTransaction = () => {
       categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
       transactionDate: formattedDate,
       description: note || undefined,
-      imageUrl: uploadedImages.length > 0 ? uploadedImages[0] : undefined,
+      images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
     };
     
     // 只有当accountId是有效数字时才添加
@@ -621,22 +624,29 @@ const AddTransaction = () => {
             onChange={async (e) => {
               const files = e.target.files;
               if (files) {
-                for (const file of Array.from(files)) {
-                  try {
-                    // 自动压缩图片
-                    const { base64 } = await autoCompressImage(file, 'normal');
-                    setUploadedImages(prev => [...prev, base64]);
-                  } catch (error) {
-                    console.error('图片压缩失败:', error);
-                    // 如果压缩失败，使用原图
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                      if (e.target?.result) {
-                        setUploadedImages(prev => [...prev, e.target!.result as string]);
-                      }
-                    };
-                    reader.readAsDataURL(file);
+                // 只支持上传1张图片
+                const file = files[0];
+                if (!file) return;
+                
+                try {
+                  // 显示加载提示
+                  toast.loading('正在上传图片...');
+                  
+                  // 自动压缩图片
+                  const { base64 } = await autoCompressImage(file, 'normal');
+                  
+                  // 上传到COS
+                  const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                  
+                  if (result.success && result.imageUrl) {
+                    setUploadedImages([result.imageUrl]); // 只保存一张
+                    toast.dismiss();
+                    toast.success('图片上传成功！');
                   }
+                } catch (error) {
+                  toast.dismiss();
+                  console.error('图片上传失败:', error);
+                  toast.error('图片上传失败，请重试');
                 }
               }
             }}
