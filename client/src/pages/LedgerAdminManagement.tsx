@@ -140,7 +140,7 @@ export default function LedgerAdminManagement() {
                   {member.nickname || member.username}
                 </div>
                 <div className="text-sm text-gray-500">
-                  加入时间：{new Date(member.joinedAt).toLocaleDateString()}
+                  加入时间：{new Date(member.createdAt).toLocaleDateString()}
                 </div>
               </div>
             </div>
@@ -153,7 +153,7 @@ export default function LedgerAdminManagement() {
               ) : (
                 <Select
                   value={member.role}
-                  onValueChange={(value) => handleRoleChange(member.id, value as 'admin' | 'member')}
+                  onValueChange={(value) => handleRoleChange(member.userId, value as 'admin' | 'member')}
                 >
                   <SelectTrigger className="w-[120px]">
                     <SelectValue />
