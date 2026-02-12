@@ -54,6 +54,8 @@ export default function TransactionDetail() {
   const [reimbursementNotes, setReimbursementNotes] = useState('');
   const [voucherImage, setVoucherImage] = useState<string | null>(null);
   const voucherInputRef = useRef<HTMLInputElement>(null);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
 
   // 报销管理mutation
   const manageReimbursementMutation = trpc.ledger.manageReimbursement.useMutation({
@@ -497,34 +499,47 @@ export default function TransactionDetail() {
                   }
                 }}
               />
-              <div className="flex gap-2">
+              {voucherImage ? (
+                <div className="space-y-2">
+                  {/* 预览图 */}
+                  <div 
+                    className="relative w-full h-32 bg-gray-100 rounded-lg overflow-hidden cursor-pointer border-2 border-gray-200 hover:border-blue-400 transition-colors"
+                    onClick={() => {
+                      setPreviewImageUrl(voucherImage);
+                      setShowImagePreview(true);
+                    }}
+                  >
+                    <img 
+                      src={voucherImage} 
+                      alt="报销凭证" 
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all flex items-center justify-center">
+                      <span className="text-white opacity-0 hover:opacity-100 text-sm bg-black bg-opacity-50 px-3 py-1 rounded">
+                        点击放大
+                      </span>
+                    </div>
+                  </div>
+                  {/* 重新上传按钮 */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => voucherInputRef.current?.click()}
+                    className="w-full"
+                  >
+                    重新上传
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => voucherInputRef.current?.click()}
-                  className="flex-1"
+                  className="w-full"
                 >
-                  {voucherImage ? '重新上传' : '上传凭证'}
+                  上传凭证
                 </Button>
-                {voucherImage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      const dialog = document.createElement('div');
-                      dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
-                      dialog.onclick = () => dialog.remove();
-                      const img = document.createElement('img');
-                      img.src = voucherImage;
-                      img.className = 'max-w-full max-h-full object-contain';
-                      dialog.appendChild(img);
-                      document.body.appendChild(dialog);
-                    }}
-                  >
-                    预览
-                  </Button>
-                )}
-              </div>
+              )}
             </div>
             
             {/* 历史记录链接 */}
@@ -574,11 +589,33 @@ export default function TransactionDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* 图片预览对话框 */}
+      <Dialog open={showImagePreview} onOpenChange={setShowImagePreview}>
+        <DialogContent className="max-w-4xl w-full p-0 bg-transparent border-none">
+          <div className="relative">
+            <img 
+              src={previewImageUrl} 
+              alt="预览" 
+              className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute top-4 right-4 bg-white hover:bg-gray-100"
+              onClick={() => setShowImagePreview(false)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 // 详细信息项组件
+
 interface DetailItemProps {
   label: string;
   value?: string;
