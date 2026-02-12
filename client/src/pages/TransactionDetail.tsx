@@ -263,16 +263,13 @@ export default function TransactionDetail() {
               setShowReimbursementDialog(true);
             }}
           >
-            <span className="text-xs text-gray-500">报销状态</span>
+            <span className="text-sm text-gray-600">报销状态</span>
             <div className="flex items-center gap-2">
-              {transaction.reimbursementStatus === 'pending' && (
-                <span className="px-2 py-1 bg-orange-500 text-white text-xs rounded">💰待报销</span>
+              {(transaction.reimbursementStatus === 'none' || transaction.reimbursementStatus === 'pending') && (
+                <span className="text-sm text-gray-900">待报销</span>
               )}
               {transaction.reimbursementStatus === 'completed' && (
-                <span className="px-2 py-1 bg-green-500 text-white text-xs rounded">✅已报销</span>
-              )}
-              {transaction.reimbursementStatus === 'none' && (
-                <span className="px-2 py-1 bg-gray-400 text-white text-xs rounded">无需报销</span>
+                <span className="text-sm text-gray-900">已报销</span>
               )}
               <ChevronRight className="w-4 h-4 text-gray-400" />
             </div>
@@ -566,12 +563,31 @@ export default function TransactionDetail() {
             )}
           </div>
           
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowReimbursementDialog(false)}>
+          <DialogFooter className="flex flex-row gap-2">
+            {/* 取消按钮 - 最左 */}
+            <Button 
+              variant="outline" 
+              onClick={() => setShowReimbursementDialog(false)}
+              className="flex-1"
+            >
               取消
             </Button>
             
-            {/* 保存按钮（始终显示） */}
+            {/* 删除按钮 - 中间 */}
+            <Button 
+              variant="destructive"
+              onClick={() => {
+                if (confirm('确定要删除这条账目吗？删除后无法恢复！')) {
+                  deleteTransactionMutation.mutate(transactionId);
+                }
+              }}
+              disabled={deleteTransactionMutation.isPending}
+              className="flex-1"
+            >
+              {deleteTransactionMutation.isPending ? '删除中...' : '删除'}
+            </Button>
+            
+            {/* 保存按钮 - 最右 */}
             <Button 
               onClick={() => {
                 const currentStatus = transaction?.reimbursementStatus || 'none';
@@ -583,44 +599,10 @@ export default function TransactionDetail() {
                 });
               }}
               disabled={manageReimbursementMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {manageReimbursementMutation.isPending ? '保存中...' : '保存'}
             </Button>
-            
-            {/* 改变状态按钮 */}
-            {transaction?.reimbursementStatus === 'pending' && (
-              <Button 
-                onClick={() => {
-                  manageReimbursementMutation.mutate({
-                    recordId: transactionId,
-                    status: 'completed',
-                    notes: reimbursementNotes || undefined,
-                    voucherImage: voucherImage || undefined,
-                  });
-                }}
-                disabled={manageReimbursementMutation.isPending}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {manageReimbursementMutation.isPending ? '处理中...' : '标记为已报销'}
-              </Button>
-            )}
-            {transaction?.reimbursementStatus === 'completed' && (
-              <Button 
-                onClick={() => {
-                  manageReimbursementMutation.mutate({
-                    recordId: transactionId,
-                    status: 'pending',
-                    notes: reimbursementNotes || undefined,
-                    voucherImage: voucherImage || undefined,
-                  });
-                }}
-                disabled={manageReimbursementMutation.isPending}
-                className="bg-orange-600 hover:bg-orange-700"
-              >
-                {manageReimbursementMutation.isPending ? '处理中...' : '改为待报销'}
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
