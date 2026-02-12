@@ -1866,6 +1866,7 @@ export async function getTransactionsList(
       date: ledgerRecords.recordDate,
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
+      imageUrl: ledgerRecords.imageUrl,
     })
     .from(ledgerRecords)
     .where(and(...conditions))
@@ -1944,6 +1945,7 @@ export async function getTransactionsList(
       categoryIcon: category?.icon,
       description: record.description,
       createdAt: record.createdAt,
+      imageUrl: record.imageUrl,
       member: creator ? {
         username: creator.username,
         avatar: creator.avatar,
