@@ -244,7 +244,7 @@ export default function LedgerDetail() {
                 <span>
                   {statsPeriod === 'day' && '今日'}
                   {statsPeriod === 'week' && '本周'}
-                  {statsPeriod === 'month' && '1月'}
+                  {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                   {statsPeriod === 'year' && '今年'}
                   总收入
                 </span>
@@ -305,7 +305,7 @@ export default function LedgerDetail() {
               <div className="text-xs opacity-90">
                 {statsPeriod === 'day' && '今日'}
                 {statsPeriod === 'week' && '本周'}
-                {statsPeriod === 'month' && '1月'}
+                {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                 {statsPeriod === 'year' && '今年'}
                 总结余
               </div>
@@ -315,7 +315,7 @@ export default function LedgerDetail() {
               <div className="text-xs opacity-90">
                 {statsPeriod === 'day' && '今日'}
                 {statsPeriod === 'week' && '本周'}
-                {statsPeriod === 'month' && '1月'}
+                {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                 {statsPeriod === 'year' && '今年'}
                 总支出
               </div>
