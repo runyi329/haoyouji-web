@@ -2590,6 +2590,7 @@ export async function manageReimbursement(
   notes?: string,
   voucherImage?: string
 ) {
+  console.log('[manageReimbursement] 开始执行', { recordId, userId, status, notes, hasVoucherImage: !!voucherImage });
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -2602,8 +2603,10 @@ export async function manageReimbursement(
     .then((rows: any[]) => rows[0]);
   
   if (!record) {
+    console.log('[manageReimbursement] 账目不存在', recordId);
     throw new Error('账目不存在');
   }
+  console.log('[manageReimbursement] 找到账目', { recordId, ledgerId: record.ledgerId, currentStatus: record.reimbursementStatus });
   
   // 验证权限（admin或owner）
   const member = await db
@@ -2619,8 +2622,10 @@ export async function manageReimbursement(
     .then((rows: any[]) => rows[0]);
   
   if (!member || (member.role !== 'admin' && member.role !== 'owner')) {
+    console.log('[manageReimbursement] 权限不足', { userId, memberRole: member?.role });
     throw new Error('只有管理员和所有者可以管理报销');
   }
+  console.log('[manageReimbursement] 权限验证通过', { userId, role: member.role });
   
   // 上传凭证图片（如果有）
   let voucherUrl = record.reimbursementVoucherUrl;
@@ -2647,10 +2652,12 @@ export async function manageReimbursement(
     updateData.reimbursedBy = userId;
   }
   
+  console.log('[manageReimbursement] 准备更新数据库', { recordId, updateData });
   await db
     .update(ledgerRecords)
     .set(updateData)
     .where(eq(ledgerRecords.id, recordId));
+  console.log('[manageReimbursement] 数据库更新成功');
   
   // 记录历史
   const { reimbursementHistory } = await import("../drizzle/schema.js");
@@ -2665,6 +2672,7 @@ export async function manageReimbursement(
     voucherUrl: voucherUrl || null,
   });
   
+  console.log('[manageReimbursement] 完成所有操作', { recordId, newStatus: status });
   return { 
     success: true, 
     voucherUrl: voucherUrl || undefined 
