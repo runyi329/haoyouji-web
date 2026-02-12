@@ -571,23 +571,22 @@ export default function TransactionDetail() {
               取消
             </Button>
             
-            {/* 保存修改按钮（不改变状态） */}
-            {(transaction?.reimbursementStatus === 'pending' || transaction?.reimbursementStatus === 'completed') && (
-              <Button 
-                onClick={() => {
-                  manageReimbursementMutation.mutate({
-                    recordId: transactionId,
-                    status: transaction.reimbursementStatus as 'pending' | 'completed',
-                    notes: reimbursementNotes || undefined,
-                    voucherImage: voucherImage || undefined,
-                  });
-                }}
-                disabled={manageReimbursementMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {manageReimbursementMutation.isPending ? '保存中...' : '保存修改'}
-              </Button>
-            )}
+            {/* 保存按钮（始终显示） */}
+            <Button 
+              onClick={() => {
+                const currentStatus = transaction?.reimbursementStatus || 'none';
+                manageReimbursementMutation.mutate({
+                  recordId: transactionId,
+                  status: currentStatus as 'none' | 'pending' | 'completed',
+                  notes: reimbursementNotes || undefined,
+                  voucherImage: voucherImage || undefined,
+                });
+              }}
+              disabled={manageReimbursementMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {manageReimbursementMutation.isPending ? '保存中...' : '保存'}
+            </Button>
             
             {/* 改变状态按钮 */}
             {transaction?.reimbursementStatus === 'pending' && (
