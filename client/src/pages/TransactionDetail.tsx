@@ -266,10 +266,10 @@ export default function TransactionDetail() {
             <span className="text-sm text-gray-600">报销状态</span>
             <div>
               {(transaction.reimbursementStatus === 'none' || transaction.reimbursementStatus === 'pending') && (
-                <span className="text-sm text-gray-900">待报销</span>
+                <span className="text-sm text-blue-600 font-medium">等待报销</span>
               )}
               {transaction.reimbursementStatus === 'completed' && (
-                <span className="text-sm text-gray-900">已报销</span>
+                <span className="text-sm text-green-600 font-medium">已经报销</span>
               )}
             </div>
           </div>
