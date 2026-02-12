@@ -256,7 +256,12 @@ export default function TransactionDetail() {
         {(ledgerData?.userRole === 'admin' || ledgerData?.userRole === 'owner') ? (
           <div 
             className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50"
-            onClick={() => setShowReimbursementDialog(true)}
+            onClick={() => {
+              // 加载已有的报销信息
+              setReimbursementNotes(transaction.reimbursementNotes || '');
+              setVoucherImage(transaction.reimbursementVoucherUrl || null);
+              setShowReimbursementDialog(true);
+            }}
           >
             <span className="text-xs text-gray-500">报销状态</span>
             <div className="flex items-center gap-2">
@@ -503,7 +508,7 @@ export default function TransactionDetail() {
                 <div className="space-y-2">
                   {/* 预览图 */}
                   <div 
-                    className="relative w-full h-32 bg-gray-100 rounded-lg overflow-hidden cursor-pointer border-2 border-gray-200 hover:border-blue-400 transition-colors"
+                    className="relative w-full h-32 bg-white rounded-lg overflow-hidden cursor-pointer border-2 border-gray-200 hover:border-blue-400 transition-colors"
                     onClick={() => {
                       setPreviewImageUrl(voucherImage);
                       setShowImagePreview(true);
@@ -554,6 +559,26 @@ export default function TransactionDetail() {
             <Button variant="outline" onClick={() => setShowReimbursementDialog(false)}>
               取消
             </Button>
+            
+            {/* 保存修改按钮（不改变状态） */}
+            {(transaction?.reimbursementStatus === 'pending' || transaction?.reimbursementStatus === 'completed') && (
+              <Button 
+                onClick={() => {
+                  manageReimbursementMutation.mutate({
+                    recordId: transactionId,
+                    status: transaction.reimbursementStatus as 'pending' | 'completed',
+                    notes: reimbursementNotes || undefined,
+                    voucherImage: voucherImage || undefined,
+                  });
+                }}
+                disabled={manageReimbursementMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {manageReimbursementMutation.isPending ? '保存中...' : '保存修改'}
+              </Button>
+            )}
+            
+            {/* 改变状态按钮 */}
             {transaction?.reimbursementStatus === 'pending' && (
               <Button 
                 onClick={() => {
