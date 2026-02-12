@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
