@@ -6028,7 +6028,7 @@ export const appRouter = router({
     manageReimbursement: protectedProcedure
       .input(z.object({
         recordId: z.number(),
-        status: z.enum(['pending', 'completed']),
+        status: z.enum(['none', 'pending', 'completed']),
         notes: z.string().optional(),
         voucherImage: z.string().optional(), // base64
       }))

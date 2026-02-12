@@ -2586,7 +2586,7 @@ export async function setMemberRole(
 export async function manageReimbursement(
   recordId: number,
   userId: number,
-  status: 'pending' | 'completed',
+  status: 'none' | 'pending' | 'completed',
   notes?: string,
   voucherImage?: string
 ) {
@@ -2658,7 +2658,7 @@ export async function manageReimbursement(
     recordId,
     ledgerId: record.ledgerId,
     operatedBy: userId,
-    action: status === 'completed' ? 'mark_completed' : 'mark_pending',
+    action: status === 'completed' ? 'mark_completed' : (status === 'pending' ? 'mark_pending' : 'update'),
     oldStatus,
     newStatus: status,
     notes: notes || null,
