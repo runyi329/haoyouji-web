@@ -443,7 +443,7 @@ export default function TransactionDetail() {
       
       {/* 报销管理对话框 */}
       <Dialog open={showReimbursementDialog} onOpenChange={setShowReimbursementDialog}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto top-[10%] translate-y-0">
+        <DialogContent className="max-w-md max-h-[70vh] overflow-y-auto top-[5%] translate-y-0">
           <DialogHeader>
             <DialogTitle>报销管理</DialogTitle>
             <DialogDescription>
