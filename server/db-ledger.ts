@@ -2231,7 +2231,7 @@ export async function updateTransaction(
   if (data.categoryId) updateData.categoryId = data.categoryId;
   if (data.subcategoryId !== undefined) updateData.subcategoryId = data.subcategoryId;
   if (data.description !== undefined) updateData.description = data.description;
-  if (data.transactionDate) updateData.date = data.transactionDate;
+  if (data.transactionDate) updateData.recordDate = data.transactionDate;
   if (data.images && data.images.length > 0) updateData.imageUrl = data.images[0]; // 只支持单张图片
   if (data.memberId) updateData.memberId = data.memberId;
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
