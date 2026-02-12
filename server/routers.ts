@@ -5497,6 +5497,25 @@ export const appRouter = router({
         return { min: 0, max: 0 };
       }),
 
+    // 上传账目图片到COS
+    uploadLedgerImage: protectedProcedure
+      .input(z.object({
+        imageData: z.string(), // base64 encoded image
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const { uploadImageToCOS } = await import('./cos-upload');
+          const imageUrl = await uploadImageToCOS(input.imageData, 'ledger-photos');
+          return { success: true, imageUrl };
+        } catch (error) {
+          console.error('[uploadLedgerImage] 错误:', error);
+          throw new TRPCError({ 
+            code: 'INTERNAL_SERVER_ERROR', 
+            message: `图片上传失败: ${error instanceof Error ? error.message : '未知错误'}` 
+          });
+        }
+      }),
+
     // 创建新账本
     create: protectedProcedure
       .input(z.object({

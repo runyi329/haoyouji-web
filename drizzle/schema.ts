@@ -502,6 +502,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	amount: decimal({ precision: 10, scale: 2 }).notNull(),
 	categoryId: int(),
 	description: text(),
+	imageUrl: text(),
 	recordDate: date({ mode: 'string' }).notNull(),
 	createdBy: int().notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
