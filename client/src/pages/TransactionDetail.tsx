@@ -264,14 +264,13 @@ export default function TransactionDetail() {
             }}
           >
             <span className="text-sm text-gray-600">报销状态</span>
-            <div className="flex items-center gap-2">
+            <div>
               {(transaction.reimbursementStatus === 'none' || transaction.reimbursementStatus === 'pending') && (
                 <span className="text-sm text-gray-900">待报销</span>
               )}
               {transaction.reimbursementStatus === 'completed' && (
                 <span className="text-sm text-gray-900">已报销</span>
               )}
-              <ChevronRight className="w-4 h-4 text-gray-400" />
             </div>
           </div>
         ) : (
