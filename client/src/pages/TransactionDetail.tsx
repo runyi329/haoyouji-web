@@ -174,7 +174,7 @@ export default function TransactionDetail() {
       <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-200">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>日志</span>
-          <span>成员 {transaction.member?.nickname || '未知'}</span>
+          <span>成员 {transaction.member?.nickname || transaction.member?.username || '未知'}</span>
           <span>添加</span>
           <span>账目</span>
         </div>
@@ -215,10 +215,10 @@ export default function TransactionDetail() {
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
-                  {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
+                  {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
                 </div>
               )}
-              <span className="text-gray-900">{transaction.member?.nickname || '未知'}</span>
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
             </div>
           }
         />
@@ -268,10 +268,10 @@ export default function TransactionDetail() {
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
-                  {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
+                  {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
                 </div>
               )}
-              <span className="text-gray-900">{transaction.member?.nickname || '未知'}</span>
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
             </div>
           }
         />
@@ -290,9 +290,9 @@ export default function TransactionDetail() {
           <div className="text-sm font-medium text-gray-900 mb-3">审批信息</div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white text-sm">
-              {transaction.member?.nickname ? transaction.member.nickname.charAt(0) : 'U'}
+              {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
             </div>
-            <span className="text-gray-900">{transaction.member?.nickname || '未知'}</span>
+            <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
           </div>
         </div>
       )}
