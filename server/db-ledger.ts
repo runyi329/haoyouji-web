@@ -2008,6 +2008,7 @@ export async function getTransactionDetail(
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
+      images: ledgerRecords.images,
     })
     .from(ledgerRecords)
     .where(
@@ -2108,6 +2109,7 @@ export async function getTransactionDetail(
     member: memberWithAvatar,
     recordDate: transaction.date,
     approvalStatus: 'not_required' as const, // 默认不需要审批
+    images: transaction.images || [],
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);

@@ -224,26 +224,29 @@ export default function TransactionDetail() {
         />
         <DetailItem label="日期" value={transaction.date} />
         <DetailItem label="备注" value={transaction.description || "未填写"} />
-        {transaction.imageUrl ? (
-          <div className="flex items-center justify-between py-3 px-4 border-b border-gray-100">
+        {transaction.images && transaction.images.length > 0 ? (
+          <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
             <span className="text-xs text-gray-500">凭证图片</span>
-            <div className="flex-1 flex justify-end">
-              <img
-                src={transaction.imageUrl}
-                alt="凭证图片"
-                className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => {
-                  // 点击放大图片
-                  const dialog = document.createElement('div');
-                  dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
-                  dialog.onclick = () => dialog.remove();
-                  const img = document.createElement('img');
-                  img.src = transaction.imageUrl;
-                  img.className = 'max-w-full max-h-full object-contain';
-                  dialog.appendChild(img);
-                  document.body.appendChild(dialog);
-                }}
-              />
+            <div className="flex-1 flex flex-wrap justify-end gap-2">
+              {transaction.images.map((imageUrl: string, index: number) => (
+                <img
+                  key={index}
+                  src={imageUrl}
+                  alt={`凭证图片${index + 1}`}
+                  className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => {
+                    // 点击放大图片
+                    const dialog = document.createElement('div');
+                    dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
+                    dialog.onclick = () => dialog.remove();
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.className = 'max-w-full max-h-full object-contain';
+                    dialog.appendChild(img);
+                    document.body.appendChild(dialog);
+                  }}
+                />
+              ))}
             </div>
           </div>
         ) : (
