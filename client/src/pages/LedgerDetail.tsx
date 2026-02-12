@@ -83,9 +83,17 @@ export default function LedgerDetail() {
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   
-  // 统计周期状态
-  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  // 统计周期状态（从 localStorage 读取上次的选择，默认为 'month'）
+  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>(() => {
+    const saved = localStorage.getItem('statsPeriod');
+    return (saved as 'day' | 'week' | 'month' | 'year') || 'month';
+  });
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  
+  // 保存统计周期选择到 localStorage
+  useEffect(() => {
+    localStorage.setItem('statsPeriod', statsPeriod);
+  }, [statsPeriod]);
 
   // 记录最后访问的账本ID到localStorage
   useEffect(() => {
