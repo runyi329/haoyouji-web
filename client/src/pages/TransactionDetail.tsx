@@ -578,13 +578,13 @@ export default function TransactionDetail() {
               variant="destructive"
               onClick={() => {
                 if (confirm('确定要删除这条账目吗？删除后无法恢复！')) {
-                  deleteTransactionMutation.mutate(transactionId);
+                  deleteMutation.mutate(transactionId);
                 }
               }}
-              disabled={deleteTransactionMutation.isPending}
+              disabled={deleteMutation.isPending}
               className="flex-1"
             >
-              {deleteTransactionMutation.isPending ? '删除中...' : '删除'}
+              {deleteMutation.isPending ? '删除中...' : '删除'}
             </Button>
             
             {/* 保存按钮 - 最右 */}
