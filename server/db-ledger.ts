@@ -2524,3 +2524,291 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
   
   return records;
 }
+
+/**
+ * 设置成员角色（仅owner可操作）
+ */
+export async function setMemberRole(
+  ledgerId: number,
+  userId: number,
+  memberId: number,
+  role: 'admin' | 'member'
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证操作者是owner
+  const operatorMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!operatorMember || operatorMember.role !== 'owner') {
+    throw new Error('只有账本所有者可以设置管理员');
+  }
+  
+  // 获取目标成员信息
+  const targetMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.id, memberId))
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!targetMember || targetMember.ledgerId !== ledgerId) {
+    throw new Error('成员不存在');
+  }
+  
+  // 不能修改owner的角色
+  if (targetMember.role === 'owner') {
+    throw new Error('不能修改所有者的角色');
+  }
+  
+  // 更新角色
+  await db
+    .update(ledgerMembers)
+    .set({ role })
+    .where(eq(ledgerMembers.id, memberId));
+  
+  return { success: true };
+}
+
+/**
+ * 管理报销（管理员/owner操作）
+ */
+export async function manageReimbursement(
+  recordId: number,
+  userId: number,
+  status: 'pending' | 'completed',
+  notes?: string,
+  voucherImage?: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取账目信息
+  const record = await db
+    .select()
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId))
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!record) {
+    throw new Error('账目不存在');
+  }
+  
+  // 验证权限（admin或owner）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member || (member.role !== 'admin' && member.role !== 'owner')) {
+    throw new Error('只有管理员和所有者可以管理报销');
+  }
+  
+  // 上传凭证图片（如果有）
+  let voucherUrl = record.reimbursementVoucherUrl;
+  if (voucherImage) {
+    const { uploadImageToCOS } = await import('./cos-upload');
+    voucherUrl = await uploadImageToCOS(voucherImage, 'reimbursement-vouchers');
+  }
+  
+  // 记录旧状态
+  const oldStatus = record.reimbursementStatus;
+  
+  // 更新报销状态
+  const updateData: any = {
+    reimbursementStatus: status,
+    reimbursementNotes: notes || record.reimbursementNotes,
+  };
+  
+  if (voucherUrl) {
+    updateData.reimbursementVoucherUrl = voucherUrl;
+  }
+  
+  if (status === 'completed') {
+    updateData.reimbursedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    updateData.reimbursedBy = userId;
+  }
+  
+  await db
+    .update(ledgerRecords)
+    .set(updateData)
+    .where(eq(ledgerRecords.id, recordId));
+  
+  // 记录历史
+  const { reimbursementHistory } = await import("../drizzle/schema.js");
+  await db.insert(reimbursementHistory).values({
+    recordId,
+    ledgerId: record.ledgerId,
+    operatedBy: userId,
+    action: status === 'completed' ? 'mark_completed' : 'mark_pending',
+    oldStatus,
+    newStatus: status,
+    notes: notes || null,
+    voucherUrl: voucherUrl || null,
+  });
+  
+  return { 
+    success: true, 
+    voucherUrl: voucherUrl || undefined 
+  };
+}
+
+/**
+ * 获取报销历史
+ */
+export async function getReimbursementHistory(recordId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取账目信息
+  const record = await db
+    .select()
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId))
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!record) {
+    throw new Error('账目不存在');
+  }
+  
+  // 验证权限（必须是账本成员）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member) {
+    throw new Error('无权查看此账目');
+  }
+  
+  // 获取历史记录
+  const { reimbursementHistory } = await import("../drizzle/schema.js");
+  const history = await db
+    .select({
+      id: reimbursementHistory.id,
+      operatedBy: reimbursementHistory.operatedBy,
+      action: reimbursementHistory.action,
+      oldStatus: reimbursementHistory.oldStatus,
+      newStatus: reimbursementHistory.newStatus,
+      notes: reimbursementHistory.notes,
+      voucherUrl: reimbursementHistory.voucherUrl,
+      createdAt: reimbursementHistory.createdAt,
+      operatorName: users.username,
+      operatorNickname: ledgerMembers.nickname,
+    })
+    .from(reimbursementHistory)
+    .leftJoin(users, eq(reimbursementHistory.operatedBy, users.id))
+    .leftJoin(
+      ledgerMembers,
+      and(
+        eq(ledgerMembers.userId, reimbursementHistory.operatedBy),
+        eq(ledgerMembers.ledgerId, record.ledgerId)
+      )
+    )
+    .where(eq(reimbursementHistory.recordId, recordId))
+    .orderBy(desc(reimbursementHistory.createdAt));
+  
+  // 格式化返回数据
+  return history.map((h: any) => ({
+    id: h.id,
+    operatedBy: h.operatorNickname || h.operatorName || '未知',
+    action: h.action,
+    oldStatus: h.oldStatus,
+    newStatus: h.newStatus,
+    notes: h.notes,
+    voucherUrl: h.voucherUrl,
+    createdAt: h.createdAt,
+  }));
+}
+
+/**
+ * 获取报销统计
+ */
+export async function getReimbursementStats(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证权限
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member) {
+    throw new Error('无权查看此账本');
+  }
+  
+  // 统计待报销
+  const pendingStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+      amount: sql<number>`sum(${ledgerRecords.amount})`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.reimbursementStatus, 'pending')
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+  
+  // 统计已报销
+  const completedStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+      amount: sql<number>`sum(${ledgerRecords.amount})`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.reimbursementStatus, 'completed')
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+  
+  return {
+    pending: {
+      count: pendingStats?.count || 0,
+      amount: Number(pendingStats?.amount || 0),
+    },
+    completed: {
+      count: completedStats?.count || 0,
+      amount: Number(completedStats?.amount || 0),
+    },
+  };
+}

@@ -6012,6 +6012,47 @@ export const appRouter = router({
           });
         }
       }),
+
+    // 设置成员角色（owner设置admin）
+    setMemberRole: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        memberId: z.number(),
+        role: z.enum(['admin', 'member']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.setMemberRole(input.ledgerId, ctx.user.id, input.memberId, input.role);
+      }),
+
+    // 管理报销（管理员操作）
+    manageReimbursement: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+        status: z.enum(['pending', 'completed']),
+        notes: z.string().optional(),
+        voucherImage: z.string().optional(), // base64
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.manageReimbursement(input.recordId, ctx.user.id, input.status, input.notes, input.voucherImage);
+      }),
+
+    // 获取报销历史
+    getReimbursementHistory: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getReimbursementHistory(input.recordId, ctx.user.id);
+      }),
+
+    // 获取报销统计
+    getReimbursementStats: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getReimbursementStats(input.ledgerId, ctx.user.id);
+      }),
   }),
   
   // 银行列表管理

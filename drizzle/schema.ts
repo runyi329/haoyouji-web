@@ -479,7 +479,7 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
 	userId: int().notNull(),
-	role: mysqlEnum(['owner','member']).default('member').notNull(),
+	role: mysqlEnum(['owner','admin','member']).default('member').notNull(),
 	nickname: varchar({ length: 50 }),
 	memberType: mysqlEnum("member_type", ['real','ai']).default('real').notNull(),
 	avatarType: varchar("avatar_type", { length: 50 }),
@@ -505,6 +505,12 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	imageUrl: text(),
 	recordDate: date({ mode: 'string' }).notNull(),
 	createdBy: int().notNull(),
+	reimbursementStatus: mysqlEnum('reimbursement_status', ['none','pending','completed']).default('none').notNull(),
+	reimbursementAmount: decimal('reimbursement_amount', { precision: 10, scale: 2 }),
+	reimbursedAt: timestamp('reimbursed_at', { mode: 'string' }),
+	reimbursedBy: int('reimbursed_by'),
+	reimbursementNotes: text('reimbursement_notes'),
+	reimbursementVoucherUrl: text('reimbursement_voucher_url'),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
@@ -957,3 +963,22 @@ export const ledgerApprovalRecords = mysqlTable("ledger_approval_records", {
 });
 
 // 修改 transactions 表，添加审批状态字段（注：这里只是记录，实际需要通过数据库迁移添加）
+
+// 报销修改历史表
+export const reimbursementHistory = mysqlTable("reimbursement_history", {
+	id: int().autoincrement().notNull(),
+	recordId: int('record_id').notNull(),
+	ledgerId: int('ledger_id').notNull(),
+	operatedBy: int('operated_by').notNull(),
+	action: varchar({ length: 50 }).notNull(),
+	oldStatus: mysqlEnum('old_status', ['none','pending','completed']),
+	newStatus: mysqlEnum('new_status', ['none','pending','completed']),
+	notes: text(),
+	voucherUrl: text('voucher_url'),
+	createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("idx_record_id").on(table.recordId),
+	index("idx_ledger_id").on(table.ledgerId),
+	index("idx_operated_by").on(table.operatedBy),
+]);

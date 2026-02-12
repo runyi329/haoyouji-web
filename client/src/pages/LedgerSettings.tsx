@@ -277,7 +277,7 @@ export default function LedgerSettings() {
         <SettingItem label="删除账单找回" showIcon />
         <SettingItem label="账本日志" showIcon />
         <SettingItem label="账本图片查看" showIcon />
-        <SettingItem label="账本管理员管理" showIcon />
+        <SettingItem label="账本管理员管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
         <SettingItem label="账本创建人转移" showIcon />
       </div>
 
