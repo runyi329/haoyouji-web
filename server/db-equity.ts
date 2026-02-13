@@ -82,13 +82,17 @@ export async function addInvestment(userId: number, amount: number, notes?: stri
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // MySQL timestamp 需要 'YYYY-MM-DD HH:mm:ss' 格式，不能用 ISO 8601
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  
   const [result] = await db
     .insert(equityInvestments)
     .values({
       userId,
-      investmentAmount: amount.toString(),
-      investmentDate: new Date().toISOString(),
-      notes,
+      investmentAmount: amount.toFixed(2),
+      investmentDate: dateStr,
+      notes: notes || null,
     });
   
   return { success: true, id: result.insertId };
