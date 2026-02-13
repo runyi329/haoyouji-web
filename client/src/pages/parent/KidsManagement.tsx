@@ -130,7 +130,7 @@ export default function KidsManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-red-50 to-rose-50 pb-20">
       {/* 顶部导航 */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -223,7 +223,7 @@ export default function KidsManagement() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white text-3xl font-bold">
+                          <div className="w-full h-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center text-white text-3xl font-bold">
                             {kid.name[0]}
                           </div>
                         )}

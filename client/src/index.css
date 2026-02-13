@@ -73,43 +73,43 @@
   --color-blue-800: color-mix(in srgb, var(--color-primary) 40%, #000000);
   --color-blue-900: color-mix(in srgb, var(--color-primary) 20%, #000000);
   
-  /* 优雅完美的紫色调主题 */
-  --primary: oklch(0.65 0.18 280);
-  --primary-foreground: oklch(0.98 0.01 280);
-  --sidebar-primary: oklch(0.6 0.16 280);
-  --sidebar-primary-foreground: oklch(0.98 0.01 280);
-  --chart-1: oklch(0.7 0.18 280);
+  /* 深红色主题 */
+  --primary: #A80000;
+  --primary-foreground: #ffffff;
+  --sidebar-primary: #A80000;
+  --sidebar-primary-foreground: #ffffff;
+  --chart-1: #A80000;
   --chart-2: oklch(0.75 0.15 180);
   --chart-3: oklch(0.7 0.15 330);
   --chart-4: oklch(0.75 0.15 60);
   --chart-5: oklch(0.7 0.15 140);
   --radius: 1rem;
-  --background: oklch(0.99 0.005 280);
-  --foreground: oklch(0.25 0.02 280);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.25 0.02 280);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.02 280);
-  --secondary: oklch(0.95 0.03 280);
-  --secondary-foreground: oklch(0.35 0.05 280);
-  --muted: oklch(0.96 0.02 280);
-  --muted-foreground: oklch(0.55 0.03 280);
-  --accent: oklch(0.85 0.15 180);
-  --accent-foreground: oklch(0.2 0.05 180);
+  --background: #F9FAFB;
+  --foreground: #1F2937;
+  --card: #ffffff;
+  --card-foreground: #1F2937;
+  --popover: #ffffff;
+  --popover-foreground: #1F2937;
+  --secondary: #fef2f2;
+  --secondary-foreground: #7f1d1d;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #fef2f2;
+  --accent-foreground: #7f1d1d;
   --destructive: oklch(0.65 0.2 25);
   --destructive-foreground: oklch(0.98 0.01 25);
-  --border: oklch(0.92 0.02 280);
-  --input: oklch(0.92 0.02 280);
-  --ring: oklch(0.65 0.18 280);
-  --sidebar: oklch(0.985 0.005 280);
-  --sidebar-foreground: oklch(0.25 0.02 280);
-  --sidebar-accent: oklch(0.95 0.03 280);
-  --sidebar-accent-foreground: oklch(0.25 0.02 280);
-  --sidebar-border: oklch(0.92 0.02 280);
-  --sidebar-ring: oklch(0.65 0.18 280);
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #A80000;
+  --sidebar: #F9FAFB;
+  --sidebar-foreground: #1F2937;
+  --sidebar-accent: #fef2f2;
+  --sidebar-accent-foreground: #1F2937;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #A80000;
   
   /* 儿童友好的渐变色 */
-  --gradient-purple: linear-gradient(135deg, oklch(0.75 0.15 280) 0%, oklch(0.65 0.18 300) 100%);
+  --gradient-purple: linear-gradient(135deg, #A80000 0%, #dd4444 100%);
   --gradient-pink: linear-gradient(135deg, oklch(0.8 0.12 350) 0%, oklch(0.7 0.15 330) 100%);
   --gradient-blue: linear-gradient(135deg, oklch(0.8 0.12 230) 0%, oklch(0.7 0.15 250) 100%);
   --gradient-green: linear-gradient(135deg, oklch(0.8 0.12 150) 0%, oklch(0.7 0.15 170) 100%);
@@ -176,15 +176,15 @@
     height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: oklch(0.96 0.02 280);
+    background: #f3f4f6;
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.8 0.08 280);
+    background: #d4a0a0;
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.7 0.1 280);
+    background: #A80000;
   }
 }
 
@@ -237,7 +237,7 @@
 }
 .card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px -12px oklch(0.65 0.18 280 / 0.15);
+  box-shadow: 0 20px 40px -12px rgba(168, 0, 0, 0.15);
 }
 
 /* 渐变按钮 */
@@ -247,7 +247,7 @@
 }
 .btn-gradient:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px -5px oklch(0.65 0.18 280 / 0.3);
+  box-shadow: 0 10px 20px -5px rgba(168, 0, 0, 0.3);
 }
 
 /* 玻璃态效果 */
@@ -299,21 +299,21 @@
 
 /* 柔和阴影 */
 .shadow-soft {
-  box-shadow: 0 4px 20px -2px oklch(0.65 0.18 280 / 0.1);
+  box-shadow: 0 4px 20px -2px rgba(168, 0, 0, 0.1);
 }
 
 .shadow-soft-lg {
-  box-shadow: 0 10px 40px -5px oklch(0.65 0.18 280 / 0.15);
+  box-shadow: 0 10px 40px -5px rgba(168, 0, 0, 0.15);
 }
 
 /* 游戏卡片样式 */
 .game-card {
   @apply relative overflow-hidden rounded-2xl p-6 transition-all duration-300;
-  background: linear-gradient(135deg, oklch(1 0 0) 0%, oklch(0.98 0.01 280) 100%);
-  border: 2px solid oklch(0.92 0.03 280);
+  background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+  border: 2px solid #e5e7eb;
 }
 .game-card:hover {
-  border-color: oklch(0.75 0.15 280);
+  border-color: #A80000;
   transform: scale(1.02);
 }
 
@@ -341,7 +341,7 @@
 /* 进度条样式 */
 .progress-bar {
   @apply h-3 rounded-full overflow-hidden;
-  background: oklch(0.95 0.02 280);
+  background: #f3f4f6;
 }
 .progress-bar-fill {
   @apply h-full rounded-full transition-all duration-500 ease-out;
@@ -353,7 +353,7 @@
   @apply flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200;
 }
 .nav-item:hover {
-  background: oklch(0.95 0.03 280);
+  background: #fef2f2;
 }
 .nav-item.active {
   background: var(--gradient-purple);
@@ -389,7 +389,7 @@
   content: '';
   @apply absolute -left-5 top-1 w-4 h-4 rounded-full border-4;
   background: white;
-  border-color: oklch(0.65 0.18 280);
+  border-color: #A80000;
 }
 
 /* 滑动条样式 */
@@ -398,7 +398,7 @@ input[type="range"].slider::-webkit-slider-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgb(168, 85, 247);
+  background: #A80000;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -407,7 +407,7 @@ input[type="range"].slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgb(168, 85, 247);
+  background: #A80000;
   cursor: pointer;
   border: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -504,15 +504,15 @@ input[type="range"].slider::-moz-range-thumb {
   }
 }
 
-/* 呼吸灯边框动画 - 紫色 */
+/* 呼吸灯边框动画 - 深红色 */
 @keyframes breathing-border-purple {
   0%, 100% {
-    border-color: rgb(233, 213, 255); /* purple-200 */
-    box-shadow: 0 0 0 rgba(168, 85, 247, 0), inset 0 0 0 rgba(168, 85, 247, 0);
+    border-color: rgb(254, 202, 202); /* red-200 */
+    box-shadow: 0 0 0 rgba(168, 0, 0, 0), inset 0 0 0 rgba(168, 0, 0, 0);
   }
   50% {
-    border-color: rgb(168, 85, 247); /* purple-500 */
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.6), inset 0 0 20px rgba(168, 85, 247, 0.6);
+    border-color: rgb(168, 0, 0); /* deep-red */
+    box-shadow: 0 0 20px rgba(168, 0, 0, 0.6), inset 0 0 20px rgba(168, 0, 0, 0.6);
   }
 }
 

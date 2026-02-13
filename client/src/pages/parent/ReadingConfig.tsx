@@ -102,8 +102,8 @@ export default function ReadingConfig() {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
-        <div className="text-2xl text-purple-600">加载中...</div>
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 flex items-center justify-center">
+        <div className="text-2xl text-[#A80000]">加载中...</div>
       </div>
     );
   }
@@ -113,11 +113,11 @@ export default function ReadingConfig() {
   const customStories = stories?.filter((s) => s.type !== "template") || [];
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-4">
       {/* 顶部导航 */}
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games/reading">
-          <Button variant="ghost" size="lg" className="text-purple-600">
+          <Button variant="ghost" size="lg" className="text-[#A80000]">
             <ArrowLeft className="w-6 h-6 mr-2" />
             返回
           </Button>
@@ -126,7 +126,7 @@ export default function ReadingConfig() {
       
       {/* 页面标题 */}
       <div className="max-w-6xl mx-auto mb-8 text-center">
-        <h1 className="text-5xl font-bold text-purple-600 mb-4">📚 阅读识字设置</h1>
+        <h1 className="text-5xl font-bold text-[#A80000] mb-4">📚 阅读识字设置</h1>
         <p className="text-xl text-gray-600">
           管理故事内容，为孩子创建个性化的阅读材料
         </p>
@@ -191,7 +191,7 @@ export default function ReadingConfig() {
         
         <Dialog>
           <DialogTrigger asChild>
-            <Button size="lg" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+            <Button size="lg" className="bg-gradient-to-r from-[#A80000] to-[#d44] hover:from-[#A80000] hover:to-pink-600">
               <Sparkles className="w-5 h-5 mr-2" />
               AI生成故事
             </Button>
@@ -228,7 +228,7 @@ export default function ReadingConfig() {
                     value={wordCount}
                     onChange={(e) => setWordCount(Number(e.target.value))}
                     disabled={isAIGenerating}
-                    className="flex-1 h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                    className="flex-1 h-2 bg-red-200 rounded-lg appearance-none cursor-pointer"
                   />
                 </div>
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -243,7 +243,7 @@ export default function ReadingConfig() {
               <Button
                 onClick={handleGenerateAI}
                 disabled={isAIGenerating}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500"
+                className="w-full bg-gradient-to-r from-[#A80000] to-[#d44]"
                 size="lg"
               >
                 {isAIGenerating ? (
@@ -297,12 +297,12 @@ export default function ReadingConfig() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {customStories.map((story) => (
-                <Card key={story.id} className="p-4 border-2 border-purple-200">
+                <Card key={story.id} className="p-4 border-2 border-red-200">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-lg font-bold text-gray-800 flex-1">
                       {story.title}
                       {story.type === "ai_generated" && (
-                        <span className="ml-2 text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded">
+                        <span className="ml-2 text-xs bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-2 py-1 rounded">
                           AI生成
                         </span>
                       )}

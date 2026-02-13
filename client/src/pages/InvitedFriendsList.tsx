@@ -59,7 +59,7 @@ export default function InvitedFriendsList() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 dark:from-gray-900 dark:to-gray-800">
         <div className="p-4">
           <div className="flex items-center gap-3 mb-4">
             <button
@@ -78,7 +78,7 @@ export default function InvitedFriendsList() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 dark:from-gray-900 dark:to-gray-800">
         <div className="p-4">
           <div className="flex items-center gap-3 mb-4">
             <button
@@ -94,7 +94,7 @@ export default function InvitedFriendsList() {
               <p className="text-red-500">加载失败: {error.message}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-3 px-4 py-2 bg-purple-500 text-white rounded-lg text-sm"
+                className="mt-3 px-4 py-2 bg-[#A80000] text-white rounded-lg text-sm"
               >
                 重试
               </button>
@@ -108,7 +108,7 @@ export default function InvitedFriendsList() {
   const currentSortLabel = sortOptions.find(opt => opt.value === sortType)?.label || "排序";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 dark:from-gray-900 dark:to-gray-800">
       <div className="p-3 space-y-3">
         {/* 头部 */}
         <div className="flex items-center gap-3">
@@ -125,12 +125,12 @@ export default function InvitedFriendsList() {
         <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
-              <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50">
-                <UserPlus className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50">
+                <UserPlus className="w-4 h-4 text-[#A80000] dark:text-red-400" />
               </div>
               <div>
                 <p className="text-xs text-gray-600 dark:text-gray-400">已邀请好友</p>
-                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                <p className="text-xl font-bold text-[#A80000] dark:text-red-400">
                   {friends?.length || 0}<span className="text-xs font-normal ml-1">人</span>
                 </p>
               </div>
@@ -148,7 +148,7 @@ export default function InvitedFriendsList() {
               placeholder="搜索用户名或昵称..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full pl-9 pr-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000]"
             />
           </div>
 
@@ -181,7 +181,7 @@ export default function InvitedFriendsList() {
                       }}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
                         sortType === option.value
-                          ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 font-medium"
+                          ? "bg-red-50 dark:bg-red-900/20 text-[#A80000] dark:text-red-400 font-medium"
                           : ""
                       }`}
                     >
@@ -227,7 +227,7 @@ export default function InvitedFriendsList() {
                           className="w-12 h-12 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-base">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center text-white font-bold text-base">
                           {(friend.name || friend.username || "?").charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -276,10 +276,10 @@ export default function InvitedFriendsList() {
                     </div>
 
                     {/* 全部 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
-                      <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-red-50 dark:bg-red-900/20">
+                      <Users className="w-4 h-4 text-[#A80000] dark:text-red-400" />
                       <span className="text-xs text-gray-600 dark:text-gray-400">全部</span>
-                      <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
+                      <span className="text-sm text-[#A80000] dark:text-red-400 font-semibold">
                         {friend.totalContactsCount}
                       </span>
                     </div>

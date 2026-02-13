@@ -75,7 +75,7 @@ export function PWAInstallPrompt() {
 
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5">
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg shadow-lg p-4">
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white rounded-lg shadow-lg p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -97,7 +97,7 @@ export function PWAInstallPrompt() {
         <div className="mt-3 flex gap-2">
           <Button
             onClick={handleInstallClick}
-            className="flex-1 bg-white text-purple-600 hover:bg-white/90"
+            className="flex-1 bg-white text-[#A80000] hover:bg-white/90"
           >
             立即安装
           </Button>

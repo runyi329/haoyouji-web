@@ -134,63 +134,14 @@ function SortableTagItem({
   );
 }
 
-// 将任意颜色映射到最接近的主题色
+// 直接返回用户选择的原始颜色，不做主题映射
 function mapColorToTheme(color: string): string {
-  const root = document.documentElement;
-  const primary = getComputedStyle(root).getPropertyValue('--color-primary').trim() || '#9333EA';
-  const secondary = getComputedStyle(root).getPropertyValue('--color-secondary').trim() || '#A78BFA';
-  const text = getComputedStyle(root).getPropertyValue('--color-text').trim() || '#3F3852';
-  const accent2 = getComputedStyle(root).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
-  
-  // 如果颜色已经是主题色，直接返回
-  if ([primary, secondary, text, accent2].includes(color)) {
-    return color;
-  }
-  
-  // 生成主题色变化
-  const themeColors = [
-    primary,
-    `color-mix(in srgb, ${primary} 50%, white)`,
-    `color-mix(in srgb, ${primary} 80%, black)`,
-    secondary,
-    `color-mix(in srgb, ${secondary} 50%, white)`,
-    `color-mix(in srgb, ${secondary} 80%, black)`,
-    text,
-    `color-mix(in srgb, ${text} 50%, white)`,
-    `color-mix(in srgb, ${text} 80%, black)`,
-    accent2,
-    `color-mix(in srgb, ${accent2} 50%, white)`,
-    `color-mix(in srgb, ${accent2} 80%, black)`,
-  ];
-  
-  // 根据颜色的哈希值选择一个主题色（保持一致性）
-  const hash = color.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return themeColors[hash % themeColors.length];
+  return color;
 }
 
-// 基于主题色生成标签颜色选项
+// 直接返回预定义的颜色选项
 function getThemeBasedColorOptions(): string[] {
-  const root = document.documentElement;
-  const primary = getComputedStyle(root).getPropertyValue('--color-primary').trim() || '#9333EA';
-  const secondary = getComputedStyle(root).getPropertyValue('--color-secondary').trim() || '#A78BFA';
-  const text = getComputedStyle(root).getPropertyValue('--color-text').trim() || '#3F3852';
-  const accent1 = getComputedStyle(root).getPropertyValue('--color-accent1').trim() || '#FFFFFF';
-  const accent2 = getComputedStyle(root).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
-  
-  // 为每种主题色生成深浅变化
-  const colors = [primary, secondary, text, accent2];
-  const variations: string[] = [];
-  
-  colors.forEach(color => {
-    // 添加原色
-    variations.push(color);
-    // 添加浅色版本（混合50%白色）
-    variations.push(`color-mix(in srgb, ${color} 50%, white)`);
-    // 添加深色版本（混合20%黑色）
-    variations.push(`color-mix(in srgb, ${color} 80%, black)`);
-  });
-  
-  return variations;
+  return COLOR_OPTIONS;
 }
 
 // 预定义的颜色选项（作为默认值）
@@ -204,16 +155,12 @@ const COLOR_OPTIONS = [
 const SEARCH_HISTORY_KEY = "contactsSearchHistory";
 const MAX_HISTORY_ITEMS = 5;
 
-// 根据距离上次联络的天数返回颜色（使用主题色）
+// 根据距离上次联络的天数返回颜色（统一深红色系）
 function getInteractionStatusColor(days: number | null): string {
-  const primary = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#9333EA';
-  const secondary = getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim() || '#A78BFA';
-  const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
-  
-  if (days === null) return accent2; // 从未联络：使用强调色2
-  if (days <= 30) return primary; // 0-30天：使用主色
-  if (days <= 90) return secondary; // 31-90天：使用辅色
-  return accent2; // 91天以上：使用强调色2
+  if (days === null) return '#d4a0a0'; // 从未联络：浅红灰
+  if (days <= 30) return '#A80000'; // 0-30天：深红色
+  if (days <= 90) return '#d44'; // 31-90天：中红色
+  return '#d4a0a0'; // 91天以上：浅红灰
 }
 
 // 格式化日期为"2025年1月10日"

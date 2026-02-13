@@ -1080,7 +1080,7 @@ export default function ContactDetail() {
       id: "monthlyInteractions",
       title: "本月联络",
       value: "",
-      color: "text-purple-600",
+      color: "text-[#A80000]",
       getValue: (stats) => `${stats.monthlyInteractions}次`,
     },
   ];
@@ -1556,7 +1556,7 @@ export default function ContactDetail() {
                     <div className="flex items-center gap-3 text-sm mt-2">
                       {contact.title && (
                         <div className="flex items-center max-w-[200px]">
-                          <User className="h-4 w-4 mr-1.5 text-purple-600 flex-shrink-0" />
+                          <User className="h-4 w-4 mr-1.5 text-[#A80000] flex-shrink-0" />
                           <span className="truncate" title={contact.title}>{contact.title}</span>
                         </div>
                       )}
@@ -1971,9 +1971,9 @@ export default function ContactDetail() {
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
+                  <div className="text-center p-4 bg-red-50 dark:bg-red-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">间接推荐</div>
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    <div className="text-2xl font-bold text-[#A80000] dark:text-red-400">
                       {contact.referrerContribution.indirectReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>

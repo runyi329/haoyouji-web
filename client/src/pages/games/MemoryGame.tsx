@@ -218,7 +218,7 @@ export default function MemoryGame() {
         {!gameStarted ? (
           /* 开始界面 */
           <div className="text-center py-12">
-            <div className="w-24 h-24 mx-auto mb-3 rounded-3xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center animate-float">
+            <div className="w-24 h-24 mx-auto mb-3 rounded-3xl bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center animate-float">
               <span className="text-5xl">🧠</span>
             </div>
             <h2 className="text-2xl font-bold mb-2">记忆翻牌</h2>
@@ -233,7 +233,7 @@ export default function MemoryGame() {
                     key={l}
                     variant={level === l ? "default" : "outline"}
                     onClick={() => setLevel(l)}
-                    className={level === l ? "bg-gradient-to-r from-purple-500 to-pink-500 border-0" : ""}
+                    className={level === l ? "bg-gradient-to-r from-red-500 to-pink-500 border-0" : ""}
                   >
                     {l === 1 ? "简单" : l === 2 ? "中等" : "困难"}
                   </Button>
@@ -258,10 +258,10 @@ export default function MemoryGame() {
             <h2 className="text-2xl font-bold mb-2">太棒了！</h2>
             <p className="text-muted-foreground mb-3">你完成了游戏！</p>
             
-            <Card className="p-6 mb-4 bg-gradient-to-br from-purple-50 to-pink-50 border-0 max-w-sm mx-auto">
+            <Card className="p-6 mb-4 bg-gradient-to-br from-red-50 to-pink-50 border-0 max-w-sm mx-auto">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-purple-600">{score}</div>
+                  <div className="text-2xl font-bold text-[#A80000]">{score}</div>
                   <div className="text-xs text-muted-foreground">得分</div>
                 </div>
                 <div>
@@ -290,9 +290,9 @@ export default function MemoryGame() {
             {/* 状态栏 */}
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-100">
-                  <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span className="text-sm font-medium text-purple-600">{score}</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100">
+                  <Sparkles className="w-4 h-4 text-[#A80000]" />
+                  <span className="text-sm font-medium text-[#A80000]">{score}</span>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100">
                   <Clock className="w-4 h-4 text-blue-600" />
@@ -314,7 +314,7 @@ export default function MemoryGame() {
                   className={`aspect-square rounded-2xl text-3xl sm:text-4xl transition-all duration-300 transform ${
                     card.isFlipped || card.isMatched
                       ? "bg-white shadow-lg scale-100 rotate-0"
-                      : "bg-gradient-to-br from-purple-400 to-purple-600 shadow-md hover:scale-105"
+                      : "bg-gradient-to-br from-[#A80000] to-[#d44] shadow-md hover:scale-105"
                   } ${card.isMatched ? "opacity-50" : ""}`}
                 >
                   {card.isFlipped || card.isMatched ? card.emoji : "?"}

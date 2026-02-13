@@ -184,7 +184,7 @@ export default function SharingSettings() {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-b from-red-50 to-white dark:from-gray-900 dark:to-gray-800">
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b">
         <div className="container mx-auto px-4 py-3 flex items-center gap-4">
@@ -201,7 +201,7 @@ export default function SharingSettings() {
 
       <div className="container mx-auto px-4 py-4 space-y-3">
         {/* 标语卡片 */}
-        <Card className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30 border-purple-200 dark:border-purple-800">
+        <Card className="bg-gradient-to-r from-red-100 to-rose-100 dark:from-red-900/30 dark:to-rose-900/30 border-red-200 dark:border-red-800">
           <CardContent className="py-2">
             <div className="text-center">
               <p className="text-lg font-medium text-gray-900 dark:text-gray-100" style={{ fontFamily: '"Smiley Sans", sans-serif' }}>

@@ -38,7 +38,7 @@ export default function TagAnalytics() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 p-3">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-3">
         <div className="container max-w-2xl mx-auto space-y-3">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="p-4 animate-pulse">
@@ -52,7 +52,7 @@ export default function TagAnalytics() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 flex items-center justify-center p-4">
         <Card className="p-6 text-center">
           <p className="text-gray-500">暂无数据</p>
         </Card>
@@ -76,9 +76,9 @@ export default function TagAnalytics() {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 pb-20">
       {/* 头部 */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 sticky top-0 z-10 shadow-lg">
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-4 sticky top-0 z-10 shadow-lg">
         <div className="container max-w-2xl mx-auto">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
@@ -92,7 +92,7 @@ export default function TagAnalytics() {
               </Button>
               <div>
                 <h1 className="text-lg font-bold">标签数据透视</h1>
-                <p className="text-xs text-purple-100 mt-0.5">全面分析标签使用情况</p>
+                <p className="text-xs text-red-100 mt-0.5">全面分析标签使用情况</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -128,7 +128,7 @@ export default function TagAnalytics() {
       <div className="container max-w-2xl mx-auto p-3 space-y-3">
         {/* 关键指标 - 2x2 网格 */}
         <div className="grid grid-cols-2 gap-2">
-          <Card className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0 shadow-md">
+          <Card className="p-3 bg-gradient-to-br from-[#A80000] to-[#d44] text-white border-0 shadow-md">
             <div className="flex items-center gap-2 mb-1">
               <Tag className="w-3.5 h-3.5" />
               <span className="text-xs opacity-90">全部标签</span>

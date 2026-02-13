@@ -305,7 +305,7 @@ export function InvitationManager() {
                       )}
                       <span>已邀请: {user.inviteCount}人</span>
                       {referrer && (
-                        <span className="text-purple-600">
+                        <span className="text-[#A80000]">
                           推荐人: {referrer.name || referrer.username}
                         </span>
                       )}
@@ -375,14 +375,14 @@ export function InvitationManager() {
                   <div className="mt-4 pt-4 border-t space-y-3">
                     {/* 推荐人信息 */}
                     {referrer && (
-                      <div className="p-3 bg-purple-50 rounded-lg">
+                      <div className="p-3 bg-red-50 rounded-lg">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">推荐人</p>
                             <p className="font-medium">{referrer.name || referrer.username}</p>
                             <p className="text-xs text-muted-foreground">@{referrer.username}</p>
                             {referrer.inviteCode && (
-                              <p className="text-xs font-mono text-purple-600 mt-1">
+                              <p className="text-xs font-mono text-[#A80000] mt-1">
                                 邀请码: {referrer.inviteCode}
                               </p>
                             )}
@@ -499,7 +499,7 @@ export function InvitationManager() {
           <div className="space-y-4">
             {/* 当前推荐人 */}
             {editReferrerDialog.currentReferrerId && (
-              <div className="p-3 bg-purple-50 rounded-lg">
+              <div className="p-3 bg-red-50 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-2">当前推荐人</p>
                 <div className="flex items-center justify-between">
                   <div>
