@@ -243,7 +243,8 @@ export default function Profile() {
   // 退出登录mutation
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
-      window.location.href = "/";
+      document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      window.location.href = "https://www.jiangyuchen.cn/login";
     },
   });
 
