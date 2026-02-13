@@ -5,6 +5,9 @@ import { Link } from "wouter";
 import { useState, useEffect, createElement } from "react";
 import { toast } from "sonner";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
+import MultiDimensionSimulator, { SimulationResult } from "@/components/MultiDimensionSimulator";
+import HighValueActions from "@/components/HighValueActions";
+import PUScoreboard from "@/components/PUScoreboard";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -293,6 +296,7 @@ export default function MyEquity() {
   
   const [simulateInvites, setSimulateInvites] = useState(0);
   const [simulateInvestment, setSimulateInvestment] = useState(0);
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isEquityExpanded, setIsEquityExpanded] = useState(false);
   const [showLeverageAnimation, setShowLeverageAnimation] = useState(false);
   
@@ -659,110 +663,40 @@ export default function MyEquity() {
         </div>
         {/* 第一层结束 */}
 
-        {/* 第二层：我的增值攻略 */}
+        {/* 第二层：动态增值实验室 */}
         <div className="mt-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">我的增值攻略</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">动态增值实验室</h2>
           
-          {/* 整合后的白色卡片：模拟器 + 明细 */}
-          <Card className="p-5 rounded-2xl shadow-sm bg-white">
-            {/* 顶部：增值模拟器（滑块） */}
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">增值模拟器</h3>
-          
-          <div className="space-y-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-700">如果我再邀请</label>
-                <span className="text-sm font-bold text-blue-600">{simulateInvites} 人</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={simulateInvites}
-                onChange={(e) => setSimulateInvites(Number(e.target.value))}
-                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
-
-            <div className="bg-white rounded-xl p-3 border border-blue-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">股份将增加到</span>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-blue-600">{simulatedTotalEquity.toFixed(4)}%</div>
-                  <div className="text-xs text-green-600">+{simulatedInviteEquity.toFixed(4)}%</div>
-                </div>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                估值约 ¥{((simulatedTotalEquity / 100) * equity.companyValuation / 10000).toFixed(2)}万
-              </div>
-            </div>
-          </div>
-
-          
-          {/* 中间：一条极淡的虚线（作为逻辑区分） */}
-          <div className="my-5 border-t border-dashed border-gray-200"></div>
-          
-          {/* 底部：预测后的明细（图1的内容） */}
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">预测变动后的明细</h3>
-          
-          <div className="space-y-2">
-            <div className="flex items-center p-3 bg-red-50 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-[#A80000] flex items-center justify-center flex-shrink-0 mr-3">
-                <DollarSign className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">投资股份</span>
-                  <span className="text-base font-bold text-[#A80000]">{equity.investmentEquity.toFixed(4)}%</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  投资股份池中占比
-                  {equity.details.userInvestment > 0 && (
-                    <span className="ml-1">· 金额占比 {((equity.details.userInvestment / equity.details.totalInvestment) * 100).toFixed(2)}%</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center p-3 bg-red-50/60 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-[#FF6B6B] flex items-center justify-center flex-shrink-0 mr-3">
-                <Users className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">邀请贡献</span>
-                  <div className="text-right">
-                    <span className="text-base font-bold text-[#FF6B6B]">
-                      {(equity.inviteEquity + simulatedInviteEquity).toFixed(4)}%
-                    </span>
-                    {simulateInvites > 0 && (
-                      <div className="text-xs text-green-600">+{simulatedInviteEquity.toFixed(4)}%</div>
-                    )}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  已邀请 {equity.details.inviteCount} 人 + 模拟 {simulateInvites} 人 × 0.05%/人
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center p-3 bg-amber-50 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0 mr-3">
-                <Network className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">人脉贡献</span>
-                  <span className="text-base font-bold text-amber-600">{equity.referralNetworkEquity.toFixed(4)}%</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  被邀请人带来 {equity.details.referralNetworkCount} 个人脉 · 每100人脉 = 0.02%
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
+          {/* 纯白色大容器：三大模块 */}
+          <Card className="p-5 rounded-2xl shadow-sm bg-white space-y-6">
+            {/* A. 顶部：多维实时模拟器 */}
+            <MultiDimensionSimulator
+              currentInvites={equity.details?.inviteCount || 0}
+              currentNetworkSize={equity.details?.referralNetworkCount || 0}
+              currentActiveDays={7}
+              leverageMultiplier={equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1.00}
+              onSimulationChange={(result) => setSimulationResult(result)}
+            />
+            
+            {/* 逻辑分割线 */}
+            <div className="border-t border-dashed border-gray-200"></div>
+            
+            {/* B. 中部：高价值增值动作推荐 */}
+            <HighValueActions />
+            
+            {/* 逻辑分割线 */}
+            <div className="border-t border-dashed border-gray-200"></div>
+            
+            {/* C. 底部：PU积分实时看板 */}
+            <PUScoreboard
+              currentPU={1250}
+              currentRank={equity.ranking?.rank || 1}
+              totalShareholders={equity.ranking?.total || 660}
+              nextLevelPU={2000}
+              nextLevelName="黄金合伙人"
+            />
+          </Card>
+        </div>
 
         {/* 第三层：背书与信任 */}
         <div className="mt-6 pt-6 pb-4 px-4 bg-gray-50">
