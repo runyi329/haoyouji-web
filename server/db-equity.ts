@@ -78,9 +78,18 @@ export async function getUserInvestments(userId: number) {
 /**
  * 添加投资记录
  */
-export async function addInvestment(userId: number, amount: number, investmentDate?: string, notes?: string) {
+export async function addInvestment(
+  userId: number,
+  investorName?: string,
+  investorIdCard?: string,
+  amount?: number,
+  investmentDate?: string,
+  notes?: string
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  
+  if (!amount) throw new Error("Investment amount is required");
   
   // 如果传入了投资日期，使用传入的日期；否则用当前时间
   let dateStr: string;
@@ -96,6 +105,8 @@ export async function addInvestment(userId: number, amount: number, investmentDa
     .insert(equityInvestments)
     .values({
       userId,
+      investorName: investorName || null,
+      investorIdCard: investorIdCard || null,
       investmentAmount: amount.toFixed(2),
       investmentDate: dateStr,
       notes: notes || null,

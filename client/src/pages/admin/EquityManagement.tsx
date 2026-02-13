@@ -138,6 +138,8 @@ export default function EquityManagement() {
   
   const [formData, setFormData] = useState({
     userId: "",
+    investorName: "",
+    investorIdCard: "",
     amount: "",
     investmentDate: new Date().toISOString().split('T')[0],
     notes: "",
@@ -151,7 +153,7 @@ export default function EquityManagement() {
     onSuccess: () => {
       toast.success("添加成功");
       setIsAddDialogOpen(false);
-      setFormData({ userId: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
+      setFormData({ userId: "", investorName: "", investorIdCard: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
       setSelectedUserName("");
       refetch();
     },
@@ -189,6 +191,8 @@ export default function EquityManagement() {
     }
     addInvestmentMutation.mutate({
       userId: parseInt(formData.userId),
+      investorName: formData.investorName || undefined,
+      investorIdCard: formData.investorIdCard || undefined,
       amount: parseFloat(formData.amount),
       investmentDate: formData.investmentDate,
       notes: formData.notes,
@@ -333,7 +337,7 @@ export default function EquityManagement() {
             <h2 className="text-lg font-bold text-gray-900">投资记录管理</h2>
             <Button
               onClick={() => {
-                setFormData({ userId: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
+                setFormData({ userId: "", investorName: "", investorIdCard: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
                 setSelectedUserName("");
                 setIsAddDialogOpen(true);
               }}
@@ -416,6 +420,27 @@ export default function EquityManagement() {
                   }}
                 />
               </div>
+            </div>
+            <div>
+              <Label htmlFor="investorName">投资人姓名</Label>
+              <Input
+                id="investorName"
+                type="text"
+                value={formData.investorName}
+                onChange={(e) => setFormData({ ...formData, investorName: e.target.value })}
+                placeholder="可选，不同于用户名"
+              />
+            </div>
+            <div>
+              <Label htmlFor="investorIdCard">投资人身份证</Label>
+              <Input
+                id="investorIdCard"
+                type="text"
+                maxLength={18}
+                value={formData.investorIdCard}
+                onChange={(e) => setFormData({ ...formData, investorIdCard: e.target.value })}
+                placeholder="可选，18位身份证号"
+              />
             </div>
             <div>
               <Label htmlFor="amount">投资金额（元）*</Label>
