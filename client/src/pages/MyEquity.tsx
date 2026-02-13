@@ -167,7 +167,7 @@ export default function MyEquity() {
 
   // 公司股权架构数据
   const companyPools: { label: string; value: number; color: string }[] = [];
-  if (poolConfig) {
+  if (poolConfig && Array.isArray(poolConfig)) {
     const poolRules = poolConfig.filter(
       (r: any) => r.ruleKey.includes('pool') && r.ruleKey.endsWith('_percentage')
     );
@@ -502,7 +502,7 @@ export default function MyEquity() {
             </div>
 
             <div className="space-y-2">
-              {equity.poolStatus.map((pool: any, idx: number) => (
+              {(equity.poolStatus || []).map((pool: any, idx: number) => (
                 <div key={idx} className="bg-white rounded-xl p-3 border border-green-200">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-semibold text-gray-700">{pool.poolName}</span>
@@ -535,7 +535,7 @@ export default function MyEquity() {
             </div>
 
             <div className="space-y-2">
-              {recentActivities.slice(0, 5).map((activity: any, idx: number) => (
+              {(recentActivities || []).slice(0, 5).map((activity: any, idx: number) => (
                 <div key={idx} className="flex items-center space-x-3 text-sm">
                   <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
                   <div className="flex-1 text-gray-700">
