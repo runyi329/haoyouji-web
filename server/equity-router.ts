@@ -109,8 +109,21 @@ export const equityRouter = router({
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
       }
+      console.log(`[updateRules] Received ${input.rules.length} rules to update`);
+      const results = [];
       for (const rule of input.rules) {
-        await dbEquity.upsertEquityRule(rule.ruleKey, rule.ruleValue, rule.ruleDescription);
+        console.log(`[updateRules] Processing: key=${rule.ruleKey}, value=${rule.ruleValue}, desc=${rule.ruleDescription}`);
+        try {
+          await dbEquity.upsertEquityRule(rule.ruleKey, rule.ruleValue, rule.ruleDescription);
+          results.push({ key: rule.ruleKey, status: 'ok' });
+        } catch (err: any) {
+          console.error(`[updateRules] Failed for ${rule.ruleKey}:`, err.message);
+          results.push({ key: rule.ruleKey, status: 'error', message: err.message });
+        }
+      }
+      const failed = results.filter(r => r.status === 'error');
+      if (failed.length > 0) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `部分规则保存失败: ${failed.map(f => f.key).join(', ')}` });
       }
       return { success: true };
     }),
