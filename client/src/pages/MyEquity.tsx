@@ -184,6 +184,8 @@ export default function MyEquity() {
     const poolRules = poolConfig.filter(
       (r: any) => r.ruleKey.includes('pool') && r.ruleKey.endsWith('_percentage')
     );
+    // 按比例从小到大排序
+    poolRules.sort((a: any, b: any) => a.ruleValue - b.ruleValue);
     poolRules.forEach((rule: any, index: number) => {
       companyPools.push({
         label: rule.ruleDescription || rule.ruleKey,
