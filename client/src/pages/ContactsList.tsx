@@ -89,7 +89,7 @@ function SortableTagItem({
   };
 
   return (
-    <Card ref={setNodeRef} style={style} className="p-3">
+    <Card ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm border-0 p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1">
           <div
@@ -1810,7 +1810,7 @@ export default function ContactsList() {
             {companyList.map((company) => (
               <Card 
                 key={company.companyName}
-                className={`hover:shadow-lg transition-all ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                className={`bg-white rounded-2xl shadow-sm hover:shadow-md transition-all border-0 ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                 onClick={() => {
                   // 如果是共享的公司，弹出提示
                   if (company.isShared) {
@@ -1882,7 +1882,7 @@ export default function ContactsList() {
               return (
                 <Card 
                   key={contact.id}
-                  className="hover:shadow-lg transition-all cursor-pointer relative"
+                  className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative border-0"
                   style={isContactSelected ? {
                     boxShadow: `0 0 0 2px var(--color-primary)`,
                     backgroundColor: 'color-mix(in srgb, var(--color-primary) 5%, white)'
