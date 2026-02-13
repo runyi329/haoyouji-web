@@ -998,3 +998,46 @@ export const encryptionConfig = mysqlTable("encryption_config", {
 (table) => [
 	index("idx_table_field").on(table.tableName, table.fieldName),
 ]);
+
+// ==================== 股权激励系统表 ====================
+
+export const equityInvestments = mysqlTable("equity_investments", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	investmentAmount: decimal("investment_amount", { precision: 15, scale: 2 }).default('0.00').notNull(),
+	investmentDate: timestamp("investment_date", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_user_id").on(table.userId),
+	index("idx_investment_date").on(table.investmentDate),
+]);
+
+export const equityRules = mysqlTable("equity_rules", {
+	id: int().autoincrement().notNull().primaryKey(),
+	ruleKey: varchar("rule_key", { length: 100 }).notNull().unique(),
+	ruleValue: decimal("rule_value", { precision: 10, scale: 4 }).notNull(),
+	ruleDescription: text("rule_description"),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_rule_key").on(table.ruleKey),
+]);
+
+export const equityContributions = mysqlTable("equity_contributions", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	contributionType: varchar("contribution_type", { length: 50 }).notNull(),
+	contributionValue: decimal("contribution_value", { precision: 10, scale: 4 }).notNull(),
+	relatedUserId: int("related_user_id"),
+	description: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("idx_user_id").on(table.userId),
+	index("idx_contribution_type").on(table.contributionType),
+	index("idx_created_at").on(table.createdAt),
+]);
