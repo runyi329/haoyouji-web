@@ -33,7 +33,7 @@ export default function ReadingStoryList() {
           </Button>
         </Link>
         <Link href="/parent/reading-config">
-          <Button variant="default" size="lg" className="bg-purple-500 hover:bg-purple-600">
+          <Button variant="default" size="lg" className="bg-[#A80000] hover:bg-[#8a0000]">
             <Settings className="w-5 h-5 mr-2" />
             家长设置
           </Button>
@@ -60,7 +60,7 @@ export default function ReadingStoryList() {
               <Link key={story.id} href={`/games/reading/${story.id}`}>
                 <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 border-blue-200 hover:border-blue-400">
                   {story.coverImageUrl && (
-                    <div className="w-full h-48 overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50">
+                    <div className="w-full h-48 overflow-hidden bg-gradient-to-br from-red-50 to-rose-50">
                       <img
                         src={story.coverImageUrl}
                         alt={story.title}
@@ -99,15 +99,15 @@ export default function ReadingStoryList() {
       {customStories.length > 0 && (
         <div className="max-w-6xl mx-auto mb-12">
           <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-            <Sparkles className="w-8 h-8 text-purple-600" />
+            <Sparkles className="w-8 h-8 text-[#A80000]" />
             我的故事
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {customStories.map((story) => (
               <Link key={story.id} href={`/games/reading/${story.id}`}>
-                <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 border-purple-200 hover:border-purple-400">
+                <Card className="overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 border-red-200 hover:border-red-400">
                   {story.coverImageUrl && (
-                    <div className="w-full h-48 overflow-hidden bg-gradient-to-br from-purple-50 to-pink-50">
+                    <div className="w-full h-48 overflow-hidden bg-gradient-to-br from-red-50 to-rose-50">
                       <img
                         src={story.coverImageUrl}
                         alt={story.title}
@@ -118,11 +118,11 @@ export default function ReadingStoryList() {
                   <div className="p-6">
                     <div className="flex items-start gap-4">
                       {!story.coverImageUrl && (
-                        <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                           {story.type === "ai_generated" ? (
-                            <Sparkles className="w-6 h-6 text-purple-600" />
+                            <Sparkles className="w-6 h-6 text-[#A80000]" />
                           ) : (
-                            <BookOpen className="w-6 h-6 text-purple-600" />
+                            <BookOpen className="w-6 h-6 text-[#A80000]" />
                           )}
                         </div>
                       )}
@@ -136,7 +136,7 @@ export default function ReadingStoryList() {
                         <div className="flex items-center gap-4 text-sm text-gray-500">
                           <span>{story.wordCount} 字</span>
                           {story.type === "ai_generated" && (
-                            <span className="text-purple-600 font-semibold">AI生成</span>
+                            <span className="text-[#A80000] font-semibold">AI生成</span>
                           )}
                         </div>
                       </div>
@@ -158,7 +158,7 @@ export default function ReadingStoryList() {
             请家长在设置页面添加自定义故事或使用AI生成故事
           </p>
           <Link href="/parent/reading-config">
-            <Button size="lg" className="bg-purple-500 hover:bg-purple-600">
+            <Button size="lg" className="bg-[#A80000] hover:bg-[#8a0000]">
               <Settings className="w-5 h-5 mr-2" />
               前往设置
             </Button>

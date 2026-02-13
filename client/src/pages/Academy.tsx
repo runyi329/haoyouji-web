@@ -134,7 +134,7 @@ const featureSections: FeatureSection[] = [
     id: "tags",
     icon: Tags,
     title: "标签系统",
-    color: "text-purple-600",
+    color: "text-[#A80000]",
     content: [
       {
         subtitle: "标签分类",
@@ -308,12 +308,12 @@ export default function Academy() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="container max-w-4xl py-8 px-4">
         <div className="mb-8 text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <GraduationCap className="h-12 w-12 text-indigo-600" />
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold text-[#A80000]">
               脉动学院
             </h1>
           </div>
@@ -401,7 +401,7 @@ export default function Academy() {
           </Card>
         )}
 
-        <Card className="mt-6 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-indigo-200 dark:border-indigo-800">
+        <Card className="mt-6 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
           <CardContent className="pt-6">
             <p className="text-sm text-center text-muted-foreground">
               💡 <strong>小贴士：</strong>如果您在使用过程中遇到问题，可以随时返回脉动学院查看相关功能说明。

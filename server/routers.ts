@@ -4182,7 +4182,7 @@ export const appRouter = router({
       .input(z.object({
         contactId: z.number(),
         name: z.string().min(1, "标签名称不能为空"),
-        color: z.string().default("#8b5cf6"),
+        color: z.string().default("#A80000"),
       }))
       .mutation(async ({ ctx, input }) => {
         const tagId = await dbContacts.createPersonalTag({
@@ -4890,6 +4890,7 @@ export const appRouter = router({
               ...conn,
               receiverName: receiver?.name || receiver?.username || '未知用户',
               receiverUsername: receiver?.username || '',
+              receiverAvatar: receiver?.avatar || null,
               permissions,
               sharedContactCount, // 共享给对方的人数
             };
@@ -4915,6 +4916,7 @@ export const appRouter = router({
               ...conn,
               sharerName: sharer?.name || sharer?.username || '未知用户',
               sharerUsername: sharer?.username || '',
+              sharerAvatar: sharer?.avatar || null,
               sharedContactCount, // 对方共享给我的人数
             };
           })

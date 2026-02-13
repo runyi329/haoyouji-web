@@ -460,7 +460,7 @@ export default function ChessGame() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 to-blue-50 pb-20">
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-16">
@@ -482,7 +482,7 @@ export default function ChessGame() {
             <div className="flex items-center justify-between mb-2">
               <div className="text-center flex-1">
                 <div className="text-xs text-muted-foreground">当前轮次</div>
-                <div className="text-lg font-bold text-purple-600">
+                <div className="text-lg font-bold text-[#A80000]">
                   {currentTurn === "white" ? "你的回合" : "电脑思考中..."}
                 </div>
               </div>

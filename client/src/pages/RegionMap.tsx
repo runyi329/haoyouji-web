@@ -36,7 +36,7 @@ const allProvinces = [
 function mapColorToTheme(color: string): string {
   const colorMap: Record<string, string> = {
     '#3b82f6': 'var(--color-primary)',
-    '#8b5cf6': 'var(--color-secondary)',
+    '#A80000': 'var(--color-secondary)',
     '#ec4899': 'var(--color-accent)',
     '#f59e0b': 'var(--color-accent2)',
   };

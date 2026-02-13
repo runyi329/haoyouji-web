@@ -31,7 +31,7 @@ const ledgerTypes = [
     name: "生意账本",
     description: "收益情况，合伙人随时查看",
     icon: Briefcase,
-    color: "bg-purple-100 text-purple-600",
+    color: "bg-red-100 text-[#A80000]",
   },
   {
     id: "class",

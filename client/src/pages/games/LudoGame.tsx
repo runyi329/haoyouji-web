@@ -418,7 +418,7 @@ export default function LudoGame() {
     
     // 中心终点区域
     if (row >= 4 && row <= 6 && col >= 4 && col <= 6) {
-      if (row === 5 && col === 5) return { bg: "bg-purple-300", type: "center" };
+      if (row === 5 && col === 5) return { bg: "bg-[#d44]", type: "center" };
       if (row === 5 && col < 5) return { bg: "bg-red-100", type: "home-red" };
       if (col === 5 && row < 5) return { bg: "bg-blue-100", type: "home-blue" };
       if (row === 5 && col > 5) return { bg: "bg-green-100", type: "home-green" };
