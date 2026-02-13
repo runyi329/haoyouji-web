@@ -625,28 +625,16 @@ const AddTransaction = () => {
             报销状态
           </div>
           <div className="p-3">
-            <div className="flex gap-1.5">
-              <button
-                className={`flex-1 px-3 py-1.5 rounded text-xs ${
-                  reimbursementStatus === 'none'
-                    ? "bg-gray-600 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setReimbursementStatus('none')}
-              >
-                无需报销
-              </button>
-              <button
-                className={`flex-1 px-3 py-1.5 rounded text-xs ${
-                  reimbursementStatus === 'pending'
-                    ? "bg-orange-500 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setReimbursementStatus('pending')}
-              >
-                💰 待报销
-              </button>
-            </div>
+            <button
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                reimbursementStatus === 'pending'
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-200 text-gray-600"
+              }`}
+              onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
+            >
+              申请报销
+            </button>
           </div>
         </div>
 
