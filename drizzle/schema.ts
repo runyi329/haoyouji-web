@@ -982,3 +982,19 @@ export const reimbursementHistory = mysqlTable("reimbursement_history", {
 	index("idx_ledger_id").on(table.ledgerId),
 	index("idx_operated_by").on(table.operatedBy),
 ]);
+
+// 数据加密配置表
+export const encryptionConfig = mysqlTable("encryption_config", {
+	id: int().autoincrement().notNull(),
+	tableName: varchar('table_name', { length: 100 }).notNull(),
+	fieldName: varchar('field_name', { length: 100 }).notNull(),
+	fieldLabel: varchar('field_label', { length: 100 }).notNull(),
+	fieldGroup: varchar('field_group', { length: 50 }).notNull(),
+	isEnabled: tinyint('is_enabled').default(0).notNull(),
+	encryptedAt: timestamp('encrypted_at', { mode: 'string' }),
+	createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_table_field").on(table.tableName, table.fieldName),
+]);

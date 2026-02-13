@@ -1,6 +1,12 @@
 import { getLedgerDb } from "./db";
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
+import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
+
+// 账目记录需要加密的字段
+const LEDGER_RECORD_ENCRYPT_FIELDS = ['description'];
+// 报销历史需要加密的字段
+const REIMBURSEMENT_ENCRYPT_FIELDS = ['notes'];
 
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
@@ -1784,18 +1790,20 @@ export async function addTransaction(data: {
     }
   }
   
-  // 插入记账记录
-  const result = await db.insert(ledgerRecords).values({
+  // 插入记账记录（加密敏感字段）
+  const recordData = {
     ledgerId: data.ledgerId,
     type: data.type,
     amount: data.amount.toString(),
     categoryId: data.categoryId,
     description: data.description || null,
-    imageUrl: data.images && data.images.length > 0 ? data.images[0] : null, // 只支持单张图片
+    imageUrl: data.images && data.images.length > 0 ? data.images[0] : null,
     recordDate: data.transactionDate,
     createdBy: data.userId,
     reimbursementStatus: data.reimbursementStatus || 'none',
-  });
+  };
+  const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
+  const result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
   
   // 如果需要审批，创建审批记录
   if (approvalStatus === 'pending' && approverIds.length > 0) {
@@ -1935,10 +1943,13 @@ export async function getTransactionsList(
   
   const creatorMap = new Map(creators.map((c: any) => [c.id, c]));
   
+  // 解密敏感字段
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
   // 按日期分组
   const groupedRecords: Record<string, any> = {};
   
-  records.forEach((record: any) => {
+  decryptedRecords.forEach((record: any) => {
     const date = record.date;
     
     if (!groupedRecords[date]) {
@@ -2119,13 +2130,16 @@ export async function getTransactionDetail(
     categoryPath.push(category[0].id);
   }
   
+  // 解密敏感字段
+  const decryptedTransaction = await decryptFields(db, 'ledger_records', transaction, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
   const result = {
-    id: transaction.id,
-    ledgerId: transaction.ledgerId,
-    amount: transaction.amount,
-    type: transaction.type,
-    date: transaction.date,
-    description: transaction.description,
+    id: decryptedTransaction.id,
+    ledgerId: decryptedTransaction.ledgerId,
+    amount: decryptedTransaction.amount,
+    type: decryptedTransaction.type,
+    date: decryptedTransaction.date,
+    description: decryptedTransaction.description,
     categoryId: transaction.categoryId,
     categoryPath,
     category: categoryName,
@@ -2267,10 +2281,13 @@ export async function updateTransaction(
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
   if (data.reimbursementStatus !== undefined) updateData.reimbursementStatus = data.reimbursementStatus;
   
+  // 加密敏感字段
+  const encryptedUpdateData = await encryptFields(db, 'ledger_records', updateData, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
   // 更新记录
   await db
     .update(ledgerRecords)
-    .set(updateData)
+    .set(encryptedUpdateData)
     .where(eq(ledgerRecords.id, recordId));
   
   return { success: true };
@@ -2691,8 +2708,8 @@ export async function manageReimbursement(
   console.log('[manageReimbursement] 数据库更新成功');
   
   // 记录历史
-  const { reimbursementHistory } = await import("../drizzle/schema.js");
-  await db.insert(reimbursementHistory).values({
+  // 加密报销备注
+  const historyData = {
     recordId,
     ledgerId: record.ledgerId,
     operatedBy: userId,
@@ -2701,7 +2718,11 @@ export async function manageReimbursement(
     newStatus: status,
     notes: notes || null,
     voucherUrl: voucherUrl || null,
-  });
+  };
+  const encryptedHistoryData = await encryptFields(db, 'reimbursement_history', historyData, REIMBURSEMENT_ENCRYPT_FIELDS);
+  
+  const { reimbursementHistory } = await import("../drizzle/schema.js");
+  await db.insert(reimbursementHistory).values(encryptedHistoryData as any);
   
   console.log('[manageReimbursement] 完成所有操作', { recordId, newStatus: status });
   return { 
@@ -2773,8 +2794,11 @@ export async function getReimbursementHistory(recordId: number, userId: number) 
     .where(eq(reimbursementHistory.recordId, recordId))
     .orderBy(desc(reimbursementHistory.createdAt));
   
+  // 解密敏感字段
+  const decryptedHistory = await decryptFieldsArray(db, 'reimbursement_history', history, REIMBURSEMENT_ENCRYPT_FIELDS);
+  
   // 格式化返回数据
-  return history.map((h: any) => ({
+  return decryptedHistory.map((h: any) => ({
     id: h.id,
     operatedBy: h.operatorNickname || h.operatorName || '未知',
     action: h.action,

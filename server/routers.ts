@@ -6136,6 +6136,45 @@ export const appRouter = router({
   
   // 邀请功能权限管理 (管理员)
   invitePermission: invitePermissionRouter,
+
+  // ==================== 数据安全（加密管理） ====================
+  encryption: router({
+    // 获取加密配置列表
+    getConfig: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      const dbEncryption = await import('./db-encryption');
+      const configs = await dbEncryption.getEncryptionConfigList();
+      const stats = await dbEncryption.getEncryptionStats();
+      const keyConfigured = dbEncryption.isEncryptionKeyConfigured();
+      return { configs, stats, keyConfigured };
+    }),
+
+    // 切换字段加密开关
+    toggleField: protectedProcedure
+      .input(z.object({
+        configId: z.number(),
+        enable: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const dbEncryption = await import('./db-encryption');
+        return await dbEncryption.toggleFieldEncryption(input.configId, input.enable);
+      }),
+
+    // 初始化加密配置表
+    init: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      const dbEncryption = await import('./db-encryption');
+      await dbEncryption.initEncryptionConfig();
+      return { success: true };
+    }),
+  }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

@@ -9,6 +9,14 @@ import { eq, and, like, or, desc, sql, gte, lt, isNotNull, isNull, ne, inArray }
 import { getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart, getBeijingTodayStart, getBeijingTodayEnd } from "../shared/timezone";
 import { getAllActiveStats } from "./db-contacts-active-stats";
 import { getReferrerStats } from "./db-referrer-stats";
+import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
+
+// 联系人表需要加密的字段
+const CONTACT_ENCRYPT_FIELDS = ['name', 'phone', 'wechat', 'address', 'occupation', 'title'];
+// 联络记录需要加密的字段
+const INTERACTION_ENCRYPT_FIELDS = ['note'];
+// 字段值需要加密的字段
+const FIELD_VALUE_ENCRYPT_FIELDS = ['value'];
 
 // ==================== 工具函数 ====================
 
@@ -196,7 +204,9 @@ export async function createContact(data: InsertContact) {
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return null;
-  const result = await db.insert(contacts).values(data);
+  // 加密敏感字段
+  const encryptedData = await encryptFields(db, 'contacts', data as any, CONTACT_ENCRYPT_FIELDS);
+  const result = await db.insert(contacts).values(encryptedData as any);
   return result[0].insertId;
 }
 
@@ -287,7 +297,9 @@ export async function getContactsByParent(parentUserId: number, searchQuery?: st
     })
   );
   
-  return contactsWithInteractionInfo;
+  // 解密敏感字段
+  const decryptedContacts = await decryptFieldsArray(db, 'contacts', contactsWithInteractionInfo, CONTACT_ENCRYPT_FIELDS);
+  return decryptedContacts;
 }
 
 /**
@@ -320,9 +332,13 @@ export async function getContactById(id: number) {
     }
   }
   
+  // 解密敏感字段
+  const decryptedContact = await decryptFields(db, 'contacts', contact, CONTACT_ENCRYPT_FIELDS);
+  const decryptedFieldValues = await decryptFieldsArray(db, 'contact_field_values', fieldValues, FIELD_VALUE_ENCRYPT_FIELDS);
+  
   return {
-    ...contact,
-    fieldValues,
+    ...decryptedContact,
+    fieldValues: decryptedFieldValues,
     referrer,
   };
 }
@@ -334,7 +350,9 @@ export async function updateContact(id: number, data: Partial<InsertContact>) {
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return;
-  await db.update(contacts).set(data).where(eq(contacts.id, id));
+  // 加密敏感字段
+  const encryptedData = await encryptFields(db, 'contacts', data as any, CONTACT_ENCRYPT_FIELDS);
+  await db.update(contacts).set(encryptedData as any).where(eq(contacts.id, id));
 }
 
 /**
@@ -731,7 +749,9 @@ export async function createContactInteraction(data: InsertContactInteraction) {
   const db = await getDb();
  if (!db) throw new Error("Database not available");
   if (!db) return null;
-  const result = await db.insert(contactInteractions).values(data);
+  // 加密敏感字段
+  const encryptedData = await encryptFields(db, 'contact_interactions', data as any, INTERACTION_ENCRYPT_FIELDS);
+  const result = await db.insert(contactInteractions).values(encryptedData as any);
   return result[0].insertId;
 }
 
@@ -2663,13 +2683,16 @@ export async function addFieldValue(contactId: number, categoryId: number, categ
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // 加密敏感字段
+  const encryptedData = await encryptFields(db, 'contact_field_values', { value }, FIELD_VALUE_ENCRYPT_FIELDS);
+  
   const result = await db
     .insert(contactFieldValues)
     .values({
       contactId,
       categoryId,
       categoryName,
-      value,
+      value: encryptedData.value,
     });
   
   const insertId = result[0].insertId;
