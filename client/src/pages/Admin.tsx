@@ -25,6 +25,7 @@ import {
   Camera,
   Sparkles,
   Share,
+  Coins,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -298,6 +299,10 @@ export default function Admin() {
             <TabsTrigger value="dataSecurity" className="text-xs sm:text-sm">
               <Lock className="w-4 h-4 mr-1 hidden sm:inline" />
               数据安全
+            </TabsTrigger>
+            <TabsTrigger value="equity" className="text-xs sm:text-sm">
+              <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
+              股权管理
             </TabsTrigger>
           </TabsList>
 
@@ -701,6 +706,22 @@ export default function Admin() {
 
           <TabsContent value="dataSecurity">
             <DataSecurityPanel />
+          </TabsContent>
+          <TabsContent value="equity">
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold">股权激励管理</h2>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                管理投资股东的资金记录、查看股东股权总览、配置股份池规则。
+              </p>
+              <Link href="/admin/equity">
+                <Button className="bg-[#A80000] hover:bg-[#8a0000]">
+                  <Coins className="w-4 h-4 mr-2" />
+                  前往股权管理
+                </Button>
+              </Link>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
