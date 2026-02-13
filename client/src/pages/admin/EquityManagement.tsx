@@ -297,8 +297,8 @@ export default function EquityManagement() {
       toast.error("请填写池名称和比例");
       return;
     }
-    // 生成key
-    const key = newPoolKey || `${newPoolName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pool_percentage`;
+    // 生成key（支持中文名称，用时间戳保证唯一性）
+    const key = newPoolKey || `custom_pool_${Date.now()}_percentage`;
     const newPool = {
       key,
       label: newPoolName,
@@ -315,8 +315,8 @@ export default function EquityManagement() {
   // 删除池
   const handleRemovePool = (index: number) => {
     const pool = editPoolData[index];
-    if (pool.key === 'investment_pool_percentage' || pool.key === 'contribution_pool_percentage') {
-      toast.error("投资股份池和贡献股份池不能删除");
+    if (editPoolData.length <= 1) {
+      toast.error("至少需要保留一个股份池");
       return;
     }
     const newData = editPoolData.filter((_, i) => i !== index);
@@ -484,16 +484,27 @@ export default function EquityManagement() {
                 return (
                   <div key={pool.key} className={`p-4 ${color.bg} rounded-xl`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">{pool.label}</span>
-                      {pool.key !== 'investment_pool_percentage' && pool.key !== 'contribution_pool_percentage' && (
-                        <button
-                          onClick={() => handleRemovePool(index)}
-                          className="text-red-400 hover:text-red-600 transition-colors"
-                          title="删除此池"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                      <div className="flex-1 mr-2">
+                        <Input
+                          type="text"
+                          value={pool.label}
+                          onChange={(e) => {
+                            const newData = [...editPoolData];
+                            newData[index].label = e.target.value;
+                            newData[index].description = e.target.value;
+                            setEditPoolData(newData);
+                          }}
+                          className="bg-white text-sm font-medium h-8"
+                          placeholder="池名称"
+                        />
+                      </div>
+                      <button
+                        onClick={() => handleRemovePool(index)}
+                        className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                        title="删除此池"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Input
