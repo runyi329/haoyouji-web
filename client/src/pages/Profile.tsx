@@ -66,11 +66,12 @@ type FeatureItem = {
   id: string;
   icon: any;
   label: string;
+  color: string;
   badge?: number | null;
   onClick: () => void;
 };
 
-// 可拖拽的功能项组件
+// 可拖拽的功能项组件 - 首页风格（圆形彩色背景图标）
 function SortableFeatureItem({ item }: { item: FeatureItem }) {
   const {
     attributes,
@@ -89,9 +90,7 @@ function SortableFeatureItem({ item }: { item: FeatureItem }) {
 
   const Icon = item.icon;
 
-  // 处理点击事件，确保短按时触发点击，长按时不触发
   const handleClick = (e: React.MouseEvent) => {
-    // 如果正在拖拽，不触发点击
     if (isDragging) {
       e.preventDefault();
       e.stopPropagation();
@@ -106,14 +105,16 @@ function SortableFeatureItem({ item }: { item: FeatureItem }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="relative group select-none"
+      className="relative select-none"
     >
       <button
         onClick={handleClick}
-        className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70 w-full"
+        className="flex flex-col items-center space-y-2 w-full cursor-pointer"
       >
-        <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-        <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
+        <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center shadow-sm`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <span className="text-xs font-medium text-gray-600 text-center">
           {item.label}
         </span>
         {item.badge !== null && item.badge !== undefined && (
@@ -123,6 +124,24 @@ function SortableFeatureItem({ item }: { item: FeatureItem }) {
         )}
       </button>
     </div>
+  );
+}
+
+// 静态功能项组件（不可拖拽）
+function StaticFeatureItem({ item }: { item: FeatureItem }) {
+  const Icon = item.icon;
+  return (
+    <button
+      onClick={item.onClick}
+      className="flex flex-col items-center space-y-2 cursor-pointer"
+    >
+      <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center shadow-sm`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <span className="text-xs font-medium text-gray-600 text-center">
+        {item.label}
+      </span>
+    </button>
   );
 }
 
@@ -245,19 +264,16 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 检查文件大小（限制为 5MB）
     if (file.size > 5 * 1024 * 1024) {
       toast.error("图片大小不能超过 5MB");
       return;
     }
 
-    // 检查文件类型
     if (!file.type.startsWith("image/")) {
       toast.error("请选择图片文件");
       return;
     }
 
-    // 读取文件并显示预览
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
@@ -273,7 +289,6 @@ export default function Profile() {
     setIsCropDialogOpen(false);
 
     try {
-      // 压缩头像为 256x256 像素，质量 80%（推荐尺寸）
       const compressedBase64 = await compressAvatar(croppedImageBlob, 256, 0.8);
       uploadAvatarMutation.mutate({ imageData: compressedBase64 });
     } catch (error) {
@@ -319,12 +334,12 @@ export default function Profile() {
     });
   };
 
-  // 配置拖拽传感器（与脉动首页相同的配置）
+  // 配置拖拽传感器
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        delay: 250,  // 长按250ms后才激活拖拽
-        tolerance: 8,  // 允许8px的移动误差
+        delay: 250,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -344,7 +359,6 @@ export default function Profile() {
       setFeatureOrder(newOrder);
       saveFavoritesMutation.mutate({ featureIds: newOrder });
 
-      // 震动反馈
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
@@ -361,153 +375,122 @@ export default function Profile() {
 
   const displayAvatar = avatarPreview || user.avatar || "/default-avatar.png";
 
-  // 定义所有可用的功能项
+  // 定义所有可用的功能项（带颜色）
   const allFeatures: FeatureItem[] = [
-    // 超级管理员专属功能
     ...(user.role === "super_admin" ? [
-      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", badge: null, onClick: () => navigate("/admin") },
+      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-red-50 text-red-600", badge: null, onClick: () => navigate("/admin") },
     ] : []),
-    // 编辑资料（所有用户都可用）
-    { id: "edit-profile", icon: User, label: "编辑资料", badge: null, onClick: handleEditProfile },
+    { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-blue-50 text-blue-600", badge: null, onClick: handleEditProfile },
     { 
       id: "invite-friends",
       icon: UserPlus, 
       label: "邀请好友", 
+      color: "bg-orange-50 text-orange-600",
       badge: null, 
       onClick: () => navigate("/parent/profile/invite")
     },
-    { id: "favorites", icon: Heart, label: "我的收藏", badge: null, onClick: () => toast("功能开发中") },
-    { id: "friends", icon: Users, label: "我的好友", badge: null, onClick: () => toast("功能开发中") },
-    { id: "calendar", icon: Calendar, label: "活动记录", badge: null, onClick: () => toast("功能开发中") },
-    { id: "points", icon: Award, label: "我的积分", badge: null, onClick: () => navigate("/parent/points") },
+    { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-pink-50 text-pink-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-green-50 text-green-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "points", icon: Award, label: "我的积分", color: "bg-yellow-50 text-yellow-600", badge: null, onClick: () => navigate("/parent/points") },
   ];
 
-  // 账户管理功能（不包括编辑资料，已移至常用功能）
+  // 账户管理功能
   const accountFeatures: FeatureItem[] = [
-    { id: "change-password", icon: Shield, label: "修改密码", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
-    { id: "notifications", icon: Bell, label: "消息通知", badge: null, onClick: () => toast("功能开发中") },
-    { id: "privacy", icon: Settings, label: "隐私设置", badge: null, onClick: () => toast("功能开发中") },
+    { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
+    { id: "notifications", icon: Bell, label: "消息通知", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
   ];
 
   // 帮助与支持功能
   const helpFeatures: FeatureItem[] = [
-    { id: "theme-settings", icon: Palette, label: "高级皮肤", badge: null, onClick: () => navigate("/parent/theme-settings") },
-    { id: "academy", icon: GraduationCap, label: "脉动学院", badge: null, onClick: () => navigate("/parent/academy") },
-    { id: "help", icon: HelpCircle, label: "帮助中心", badge: null, onClick: () => toast("功能开发中") },
-    { id: "about", icon: BookOpen, label: "关于我们", badge: null, onClick: () => toast("功能开发中") },
+    { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/parent/theme-settings") },
+    { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-cyan-50 text-cyan-600", badge: null, onClick: () => navigate("/parent/academy") },
+    { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-teal-50 text-teal-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => toast("功能开发中") },
   ];
 
   // 根据顺序排序所有功能
   const sortedFeatures = [...allFeatures].sort((a, b) => {
     const indexA = featureOrder.indexOf(a.id);
     const indexB = featureOrder.indexOf(b.id);
-    
-    // 如果都在顺序列表中，按顺序排
-    if (indexA !== -1 && indexB !== -1) {
-      return indexA - indexB;
-    }
-    // 如果只有A在列表中，A排前面
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
     if (indexA !== -1) return -1;
-    // 如果只有B在列表中，B排前面
     if (indexB !== -1) return 1;
-    // 都不在列表中，保持原顺序
     return 0;
   });
 
-
-
   return (
-    <div className="min-h-screen pb-20"
-      style={{
-        background: 'linear-gradient(to bottom right, color-mix(in srgb, var(--color-background) 100%, white), color-mix(in srgb, var(--color-primary) 5%, var(--color-background)), color-mix(in srgb, var(--color-secondary) 5%, var(--color-background)))'
-      }}>
-      <div className="container max-w-4xl py-8 px-4 relative">
-        {/* 顶部用户信息卡片 */}
-        <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between">
-              {/* 头像 */}
-              <div className="relative group w-20">
-              <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-blue-100 dark:ring-blue-900">
-                <img
-                  src={displayAvatar}
-                  alt="用户头像"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <button
-                onClick={handleAvatarClick}
-                disabled={isUploading}
-                className="absolute bottom-0 right-0 text-white rounded-full p-1.5 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
-                style={{
-                  backgroundColor: 'var(--color-primary)'
-                }}
-              >
-                <Camera className="w-3 h-3" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              </div>
-              
-              {/* 返回按钮 */}
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 text-sm transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                <ArrowLeft className="w-4 h-4" />
-                返回
-              </button>
-            </div>
+    <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+      {/* 顶部用户信息卡片 */}
+      <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6">
+        {/* 返回按钮 */}
+        <button
+          onClick={() => navigate('/')}
+          className="absolute top-3 left-3 flex items-center gap-1 text-white/80 text-sm px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          返回
+        </button>
 
-            {/* 用户信息 */}
-            <div>
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                  {user.name || user.username}
-                </h2>
-                {/* 退出登录按钮 */}
-                <button
-                  onClick={() => setIsLogoutDialogOpen(true)}
-                  className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                  title="退出登录"
-                >
-                  <LogOut className="w-6 h-6 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400" />
-                </button>
-              </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                个人资料和设置
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
-                  style={{
-                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 15%, white)',
-                    color: 'var(--color-primary)'
-                  }}>
-                  {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
-                </span>
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium"
-                  style={{
-                    backgroundColor: 'color-mix(in srgb, var(--color-secondary) 15%, white)',
-                    color: 'var(--color-secondary)'
-                  }}>
-                  <UsdtIcon size={16} /> {pointsData?.points || 0} 积分
-                </span>
-              </div>
+        <div className="flex items-center gap-4">
+          {/* 头像 */}
+          <div className="relative group flex-shrink-0">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/30 shadow-lg">
+              <img
+                src={displayAvatar}
+                alt="用户头像"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <button
+              onClick={handleAvatarClick}
+              disabled={isUploading}
+              className="absolute bottom-0 right-0 bg-white text-[#A80000] rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+            >
+              <Camera className="w-3 h-3" />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </div>
+          
+          {/* 用户信息 */}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold text-white truncate">
+              {user.name || user.username}
+            </h2>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+                {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+                <UsdtIcon size={14} /> {pointsData?.points || 0} 积分
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* 功能列表 */}
-        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-            功能
-          </h3>
+          {/* 退出登录 */}
+          <button
+            onClick={() => setIsLogoutDialogOpen(true)}
+            className="flex-shrink-0 p-2 rounded-full hover:bg-white/10 transition-colors"
+            title="退出登录"
+          >
+            <LogOut className="w-5 h-5 text-white/70" />
+          </button>
+        </div>
+      </div>
+
+      {/* 常用功能 */}
+      <div className="px-4 mt-3">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700">常用功能</h3>
+            <span className="text-xs text-gray-400">长按拖拽排序</span>
+          </div>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -517,7 +500,7 @@ export default function Profile() {
               items={sortedFeatures.map(f => f.id)}
               strategy={rectSortingStrategy}
             >
-              <div className="grid grid-cols-4 gap-6">
+              <div className="grid grid-cols-4 gap-4">
                 {sortedFeatures.map((item) => (
                   <SortableFeatureItem key={item.id} item={item} />
                 ))}
@@ -525,55 +508,30 @@ export default function Profile() {
             </SortableContext>
           </DndContext>
         </div>
+      </div>
 
-        {/* 账户管理 - 固定分区 */}
-        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-            账户管理
-          </h3>
-          <div className="grid grid-cols-4 gap-6">
-            {accountFeatures.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={item.onClick}
-                  className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
-                >
-                  <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                  <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+      {/* 账户管理 */}
+      <div className="px-4 mt-3">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">账户管理</h3>
+          <div className="grid grid-cols-4 gap-4">
+            {accountFeatures.map((item) => (
+              <StaticFeatureItem key={item.id} item={item} />
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* 帮助与支持 - 固定分区 */}
-        <div className="mb-8 pb-8 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-4">
-            帮助与支持
-          </h3>
-          <div className="grid grid-cols-4 gap-6">
-            {helpFeatures.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={item.onClick}
-                  className="flex flex-col items-center gap-2 transition-opacity hover:opacity-70"
-                >
-                  <Icon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
-                  <span className="text-xs text-slate-700 dark:text-slate-300 text-center">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+      {/* 帮助与支持 */}
+      <div className="px-4 mt-3">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">帮助与支持</h3>
+          <div className="grid grid-cols-4 gap-4">
+            {helpFeatures.map((item) => (
+              <StaticFeatureItem key={item.id} item={item} />
+            ))}
           </div>
         </div>
-
       </div>
 
       {/* 图片裁剪对话框 */}
