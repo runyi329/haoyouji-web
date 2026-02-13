@@ -40,15 +40,17 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
   // 过滤用户列表
   const filteredUsers = users?.filter((u) => {
     const keyword = searchText.toLowerCase();
+    const name = u.name ?? "";
+    const username = u.username ?? "";
     return (
-      (u.name || "").toLowerCase().includes(keyword) ||
-      u.username.toLowerCase().includes(keyword) ||
+      name.toLowerCase().includes(keyword) ||
+      username.toLowerCase().includes(keyword) ||
       u.id.toString().includes(keyword)
     );
   }) || [];
 
   const handleSelect = (user: { id: number; name: string | null; username: string }) => {
-    const displayName = user.name || user.username;
+    const displayName = user.name || user.username || `用户${user.id}`;
     onChange(user.id.toString(), displayName);
     setSelectedUserName(displayName);
     setSearchText("");
@@ -104,11 +106,11 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
                   {/* 首字母头像 */}
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A80000] to-[#c44] flex items-center justify-center flex-shrink-0 mr-3">
                     <span className="text-white text-xs font-bold">
-                      {(u.name || u.username).charAt(0).toUpperCase()}
+                      {(u.name || u.username || "?").charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{u.name || u.username}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{u.name || u.username || `用户${u.id}`}</p>
                     <p className="text-xs text-gray-500">@{u.username} · ID: {u.id}</p>
                   </div>
                   {value === u.id.toString() && (
