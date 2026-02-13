@@ -1949,6 +1949,7 @@ export async function getTransactionsList(
       description: record.description,
       createdAt: record.createdAt,
       imageUrl: record.imageUrl,
+      reimbursementStatus: record.reimbursementStatus,
       member: creator ? {
         username: creator.username,
         avatar: creator.avatar,
