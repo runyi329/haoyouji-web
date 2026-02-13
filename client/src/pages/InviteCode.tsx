@@ -116,9 +116,9 @@ export default function InviteCode() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20">
+    <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen">
       {/* 顶部导航 */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 sticky top-0 z-50 shadow-lg">
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-4 sticky top-0 z-50 shadow-lg rounded-t-2xl">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -134,18 +134,18 @@ export default function InviteCode() {
 
 
 
-      <div className="container max-w-2xl mx-auto px-4 py-4 space-y-3">
+      <div className="px-4 py-4 space-y-3">
         {/* 邀请统计卡片 */}
-        <Card className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/30 border-rose-200 dark:border-rose-800">
+        <Card className="bg-white rounded-2xl shadow-sm border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/50">
-                  <Users className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50">
+                  <Users className="w-5 h-5 text-[#A80000]" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-600 dark:text-gray-400">已邀请好友</p>
-                  <p className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                  <p className="text-2xl font-bold text-[#A80000]">
                     {inviteInfo?.inviteCount || 0}<span className="text-sm font-normal ml-1">人</span>
                   </p>
                 </div>
@@ -154,9 +154,9 @@ export default function InviteCode() {
               {(inviteInfo?.inviteCount || 0) > 0 && (
                 <button
                   onClick={() => setLocation("/invited-friends")}
-                  className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-full transition-colors"
+                  className="p-2 hover:bg-red-50 rounded-full transition-colors"
                 >
-                  <ChevronRight className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                  <ChevronRight className="w-5 h-5 text-[#A80000]" />
                 </button>
               )}
             </div>
@@ -164,7 +164,7 @@ export default function InviteCode() {
         </Card>
 
         {/* 邀请码卡片 */}
-        <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
+        <Card className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white border-0 rounded-2xl shadow-sm">
           <CardContent className="p-4">
             <div className="text-center space-y-2">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
@@ -193,7 +193,7 @@ export default function InviteCode() {
 
         {/* 二维码显示 */}
         {qrCodeData?.qrCodeDataUrl && (
-          <Card>
+          <Card className="bg-white rounded-2xl shadow-sm border-0">
             <CardContent className="p-4">
               <div className="text-center space-y-2">
                 <h3 className="font-semibold text-base">专属邀请二维码</h3>
@@ -221,7 +221,7 @@ export default function InviteCode() {
         )}
 
         {/* 邀请链接 */}
-        <Card>
+        <Card className="bg-white rounded-2xl shadow-sm border-0">
           <CardContent className="p-6">
             <h3 className="font-semibold text-lg mb-4">专属邀请链接</h3>
             <div className="space-y-3">
