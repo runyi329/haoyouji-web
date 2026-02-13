@@ -391,14 +391,14 @@ export default function TagsManagement() {
                     <div className="flex items-center gap-3">
                       <span
                         className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-white text-sm font-medium"
-                        style={{ backgroundColor: stat.color || "#8b5cf6" }}
+                        style={{ backgroundColor: stat.color || "#A80000" }}
                       >
                         <User className="w-3 h-3" />
                         {stat.name}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-purple-600">
+                      <span className="text-sm font-medium text-[#A80000]">
                         × {stat.count}
                       </span>
                       <span className="text-sm text-muted-foreground">

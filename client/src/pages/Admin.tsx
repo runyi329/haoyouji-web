@@ -167,7 +167,7 @@ export default function Admin() {
 
   if (!user || user.role !== "super_admin") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <Card className="p-8 text-center max-w-md">
           <Shield className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
           <h1 className="text-xl font-bold mb-2">访问受限</h1>
@@ -230,7 +230,7 @@ export default function Admin() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">
@@ -243,7 +243,7 @@ export default function Admin() {
             <h1 className="font-bold text-lg">后台管理</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-purple-500" />
+            <ShieldCheck className="w-5 h-5 text-[#A80000]" />
             <span className="text-sm font-medium">{user.name || user.username}</span>
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function Admin() {
                 <h2 className="font-bold">用户管理</h2>
                 <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                    <Button size="sm" className="bg-[#A80000] hover:bg-[#8a0000] text-white border-0">
                       <Plus className="w-4 h-4 mr-1" />
                       创建用户
                     </Button>
@@ -370,7 +370,7 @@ export default function Admin() {
                       </div>
                       <Button
                         type="submit"
-                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0"
+                        className="w-full bg-[#A80000] hover:bg-[#8a0000] text-white border-0"
                         disabled={createUserMutation.isPending}
                       >
                         {createUserMutation.isPending ? "创建中..." : "创建用户"}
@@ -407,7 +407,7 @@ export default function Admin() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium truncate">{u.name || u.username}</span>
                         {u.role === "super_admin" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-600">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-[#A80000]">
                             超级管理员
                           </span>
                         )}
@@ -691,7 +691,7 @@ export default function Admin() {
                 在这里管理 AI 提示词、企业报告等 AI 功能。
               </p>
               <Link href="/parent/ai-management">
-                <Button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                <Button className="bg-[#A80000] hover:bg-[#8a0000] text-white border-0">
                   <Sparkles className="w-4 h-4 mr-2" />
                   前往 AI 管理
                 </Button>

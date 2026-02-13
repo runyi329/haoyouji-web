@@ -483,7 +483,7 @@ const AddTransaction = () => {
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   // 主题颜色数组
-  const themeColors = ["bg-blue-500", "bg-orange-500", "bg-green-500", "bg-purple-500"];
+  const themeColors = ["bg-blue-500", "bg-orange-500", "bg-green-500", "bg-[#A80000]"];
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">

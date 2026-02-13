@@ -79,7 +79,7 @@ export default function InteractionStats() {
         value: overview.avgFrequency,
         unit: '次/人',
         icon: Target,
-        color: 'from-purple-500 to-purple-600',
+        color: 'from-[#A80000] to-[#d44]',
         trend: 'neutral' as const,
         trendValue: 0
       },
@@ -126,7 +126,7 @@ export default function InteractionStats() {
 
         {/* 洞察卡片 */}
         {overview.insights.length > 0 && (
-          <Card className="p-4 rounded-xl shadow-sm bg-gradient-to-br from-blue-50 to-purple-50">
+          <Card className="p-4 rounded-xl shadow-sm bg-gradient-to-br from-red-50 to-rose-50">
             <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
               <span className="text-lg">💡</span> 数据洞察
             </h3>

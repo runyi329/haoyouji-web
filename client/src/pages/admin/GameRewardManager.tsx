@@ -25,7 +25,7 @@ const GAMES: GameConfig[] = [
   // 棋类游戏
   { id: "chess", name: "国际象棋", icon: "♟️", color: "bg-gray-100", activityPrefix: ["chess_"] },
   { id: "go", name: "围棋", icon: "⚫", color: "bg-gray-100", activityPrefix: ["go_"] },
-  { id: "gomoku", name: "五子棋", icon: "⭕", color: "bg-purple-100", activityPrefix: ["gomoku_"], hasDan: true },
+  { id: "gomoku", name: "五子棋", icon: "⭕", color: "bg-red-100", activityPrefix: ["gomoku_"], hasDan: true },
   { id: "ludo", name: "飞行棋", icon: "🎲", color: "bg-blue-100", activityPrefix: ["ludo_"] },
   
   // 识字游戏 - 4个独立入口
@@ -65,8 +65,8 @@ const DAN_CONFIG: Record<number, { name: string; color: string }> = {
   2: { name: "2段·初学", color: "bg-green-100 text-green-600 border-green-300" },
   3: { name: "3段·业余", color: "bg-blue-100 text-blue-700 border-blue-300" },
   4: { name: "4段·进阶", color: "bg-blue-100 text-blue-600 border-blue-300" },
-  5: { name: "5段·熟练", color: "bg-purple-100 text-purple-700 border-purple-300" },
-  6: { name: "6段·高手", color: "bg-purple-100 text-purple-600 border-purple-300" },
+  5: { name: "5段·熟练", color: "bg-red-100 text-[#8a0000] border-red-300" },
+  6: { name: "6段·高手", color: "bg-red-100 text-[#A80000] border-red-300" },
   7: { name: "7段·专家", color: "bg-orange-100 text-orange-700 border-orange-300" },
   8: { name: "8段·大师", color: "bg-red-100 text-red-600 border-red-300" },
   9: { name: "9段·棋圣", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
@@ -178,7 +178,7 @@ export default function GameRewardManager() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
       </div>
     );
   }
@@ -283,7 +283,7 @@ export default function GameRewardManager() {
                 variant="outline"
                 onClick={() => handleEdit(rule)}
                 disabled={!rule.isActive}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                className="text-[#A80000] border-red-200 hover:bg-red-50"
               >
                 编辑
               </Button>
@@ -315,7 +315,7 @@ export default function GameRewardManager() {
           const starsDisplay = minStars === maxStars ? `${minStars}` : `${minStars}-${maxStars}`;
           
           return (
-            <Card key={game.id} className={`overflow-hidden ${isExpanded ? "ring-2 ring-purple-300" : ""}`}>
+            <Card key={game.id} className={`overflow-hidden ${isExpanded ? "ring-2 ring-red-300" : ""}`}>
               {/* 游戏标题行 - 点击展开/收起 */}
               <div
                 className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors ${game.color}`}
@@ -345,7 +345,7 @@ export default function GameRewardManager() {
                   <Button
                     size="sm"
                     variant={isExpanded ? "default" : "outline"}
-                    className={isExpanded ? "bg-purple-600 hover:bg-purple-700" : ""}
+                    className={isExpanded ? "bg-[#A80000] hover:bg-[#8a0000]" : ""}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleExpand(game.id);

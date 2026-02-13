@@ -23,12 +23,12 @@ export const themeTemplates: ThemeTemplate[] = [
     id: 'basic',
     name: '基础配色',
     colors: {
-      primary: '#9333EA',     // 紫色
-      secondary: '#A78BFA',   // 浅紫色
-      background: '#FDFCFE',  // 浅紫背景
-      text: '#3F3852',        // 深紫文字
+      primary: '#A80000',     // 深红色
+      secondary: '#dd4444',   // 中红色
+      background: '#F9FAFB',  // 浅灰背景
+      text: '#1F2937',        // 深灰文字
       accent1: '#FFFFFF',     // 白色
-      accent2: '#8B7FA0',     // 灰紫色
+      accent2: '#d4a0a0',     // 浅红灰
     },
   },
   {

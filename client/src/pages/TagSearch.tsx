@@ -14,7 +14,7 @@ export default function TagSearch() {
   const { data: tags = [], isLoading } = trpc.tags.search.useQuery({ keyword });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50">
       {/* 头部 */}
       <div className="bg-white/80 backdrop-blur-sm border-b sticky top-0 z-10">
         <div className="container py-4">
@@ -26,7 +26,7 @@ export default function TagSearch() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-[#A80000] to-[#d44] bg-clip-text text-transparent">
               标签搜索
             </h1>
           </div>
@@ -72,7 +72,7 @@ export default function TagSearch() {
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: tag.color }}
                     />
-                    <h3 className="font-semibold text-lg group-hover:text-purple-600 transition-colors">
+                    <h3 className="font-semibold text-lg group-hover:text-[#A80000] transition-colors">
                       {tag.name}
                     </h3>
                   </div>

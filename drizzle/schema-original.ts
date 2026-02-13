@@ -548,7 +548,7 @@ export const personalContactTags = mysqlTable("personal_contact_tags", {
   contactId: int("contact_id").notNull(), // 关联的人脉ID
   parentUserId: int("parent_user_id").notNull(), // 所属家长ID
   name: varchar("name", { length: 50 }).notNull(), // 标签名称
-  color: varchar("color", { length: 20 }).default("#8b5cf6").notNull(), // 标签颜色（默认紫色，与全局标签区分）
+  color: varchar("color", { length: 20 }).default("#A80000").notNull(), // 标签颜色（默认紫色，与全局标签区分）
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

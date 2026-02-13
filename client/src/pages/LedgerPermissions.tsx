@@ -145,7 +145,7 @@ const LedgerPermissions = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-3 flex items-center">
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-3 flex items-center">
         <button onClick={() => setLocation(`/ledger/${id}/settings`)}>
           <ArrowLeft className="w-5 h-5" />
         </button>
