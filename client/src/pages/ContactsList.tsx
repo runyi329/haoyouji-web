@@ -1048,11 +1048,11 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen py-4 px-4">
-      {/* 标题和返回按钮 */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center justify-between mb-1 sm:mb-2">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
+      <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen">
+      {/* 顶部深红色头部 */}
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-5 rounded-b-3xl mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-lg sm:text-xl font-bold text-white">
           {filterType === 'thisWeek' && '本周新增人脉'}
           {filterType === 'thisMonth' && '本月新增人脉'}
           {filterType === 'thisYear' && '本年新增人脉'}
@@ -1070,38 +1070,30 @@ export default function ContactsList() {
           {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {/* 共享人脉筛选按钮 */}
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Button
-                variant={shareFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
+              <button
                 onClick={() => setShareFilter('all')}
-                className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
-              </Button>
-              <Button
-                variant={shareFilter === 'mine' ? 'default' : 'outline'}
-                size="sm"
+              </button>
+              <button
                 onClick={() => setShareFilter('mine')}
-                className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
-              </Button>
-              <Button
-                variant={shareFilter === 'shared' ? 'default' : 'outline'}
-                size="sm"
+              </button>
+              <button
                 onClick={() => setShareFilter('shared')}
-                className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
-              </Button>
-            </div>
+              </button>
           </div>
         </div>
         
-        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">
+        <p className="text-xs sm:text-sm text-white/70 mb-3">
           {viewMode === 'company' && companyList ? (
             `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
           ) : isLoading ? (
@@ -1121,35 +1113,34 @@ export default function ContactsList() {
           )}
         </p>
         
+      </div>
+      {/* 工具栏区域 */}
+      <div className="px-4">
         {/* 折叠标签按钮和排序按钮 */}
-        <div className="mb-4">
+        <div className="mb-3">
           <div className="flex items-center gap-2">
             {allTags && allTags.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
-                className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#A80000] font-medium hover:bg-red-50 transition-all"
               >
-                <Tag className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <Tag className="h-3.5 w-3.5 mr-1.5" />
                 {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
-              </Button>
+              </button>
             )}
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm"
+                <button
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#A80000] font-medium hover:bg-red-50 transition-all"
                 >
-                  <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                   {!sortBy && '按排序筛选'}
                   {sortBy === 'tagCount_desc' && '排序：标签数↓'}
                   {sortBy === 'tagCount_asc' && '排序：标签数↑'}
                   {sortBy === 'interactionCount_desc' && '排序：联络次数↓'}
                   {sortBy === 'interactionCount_asc' && '排序：联络次数↑'}
-                </Button>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuItem onClick={() => setSortBy(undefined)}>
@@ -1173,23 +1164,21 @@ export default function ContactsList() {
             {/* 共享人筛选 - 带搜索功能的Combobox，只在选中“共享”时可用 */}
             <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   role="combobox"
                   aria-expanded={sharerPopoverOpen}
                   disabled={shareFilter !== 'shared'}
-                  className={`h-7 px-2 text-xs sm:h-8 sm:px-3 sm:text-sm justify-between ${
-                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed' : ''
+                  className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm font-medium transition-all ${
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#A80000] hover:bg-red-50'
                   }`}
                 >
-                  <Handshake className="h-3 w-3 sm:h-4 sm:w-4 mr-1 shrink-0" />
-                  <span className="truncate max-w-[100px]">
+                  <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                  <span className="truncate max-w-[80px]">
                     {sharerFilter === 'all' ? '按共享人筛选' : 
                       sharerList.find(s => s.id === sharerFilter)?.name || '按共享人筛选'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                </Button>
+                </button>
               </PopoverTrigger>
               <PopoverContent className="w-[200px] p-0" align="start">
                 <Command>
@@ -1261,15 +1250,13 @@ export default function ContactsList() {
               </label>
 
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={() => setShowTagManagement(true)}
-              className="h-6 px-2 text-xs sm:h-7 sm:px-3 sm:text-xs mb-2"
+              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#A80000] hover:bg-red-50 transition-all mb-2"
             >
               <Settings className="h-3 w-3 mr-1" />
               标签管理
-            </Button>
+            </button>
               <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => {
                 const isSelected = selectedTagIds.includes(tag.id);
@@ -1350,7 +1337,7 @@ export default function ContactsList() {
                   console.log('搜索:', searchQuery);
                 }
               }}
-              className="pr-8 h-8 sm:h-10 text-sm"
+              className="pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-[#A80000] focus:ring-[#A80000]"
             />
             {searchQuery && (
               <X
@@ -1406,8 +1393,7 @@ export default function ContactsList() {
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs hover:underline"
-                    style={{ color: 'var(--color-primary)' }}
+                    className="text-xs text-[#A80000] hover:underline"
                   >
                     清空
                   </button>
@@ -1431,26 +1417,20 @@ export default function ContactsList() {
             )}
           </div>
           
-          <Button 
+          <button 
             onClick={handleAddContact}
-            size="sm"
-            className="h-8 sm:h-10 text-xs sm:text-sm whitespace-nowrap"
+            className="flex items-center justify-center h-9 w-9 rounded-xl bg-[#A80000] text-white hover:bg-[#8a0000] transition-all shadow-sm"
           >
-            <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="hidden sm:inline">添加人脉</span>
-          </Button>
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="border rounded-lg p-3 mb-4 flex flex-wrap items-center justify-between gap-2"
-             style={{ 
-               backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, white)',
-               borderColor: 'var(--color-primary)'
-             }}>
+        <div className="border border-[#A80000]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-red-50">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+            <span className="text-sm font-medium text-[#A80000]">
               已选择 {selectedContactIds.length} 人
             </span>
             <Button
@@ -1504,7 +1484,7 @@ export default function ContactsList() {
                     setIsBatchOperating(false);
                   }
                 }}
-                className="text-xs h-7 px-2 text-orange-600 hover:text-orange-700"
+                className="text-xs h-7 px-2 text-[#A80000] hover:text-[#8a0000]"
                 disabled={isBatchOperating}
               >
                 <Undo className="h-3 w-3 mr-1" />
@@ -1556,7 +1536,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     周关注
                   </Button>
@@ -1596,12 +1576,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2"
-                    style={{
-                      backgroundColor: 'color-mix(in srgb, var(--color-primary) 10%, white)',
-                      borderColor: 'var(--color-primary)',
-                      color: 'var(--color-primary)'
-                    }}
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     月关注
                   </Button>
@@ -1641,12 +1616,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2"
-                    style={{
-                      backgroundColor: `color-mix(in srgb, var(--color-secondary) 10%, white)`,
-                      borderColor: `var(--color-secondary)`,
-                      color: `var(--color-text)`
-                    }}
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     季关注
                   </Button>
@@ -1664,12 +1634,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2"
-                  style={{
-                    backgroundColor: `color-mix(in srgb, var(--color-secondary) 10%, white)`,
-                    borderColor: `var(--color-secondary)`,
-                    color: `var(--color-text)`
-                  }}
+                  className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
@@ -1737,7 +1702,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-red-50 border-red-300 text-red-700 hover:bg-red-100"
+                  className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                 >
                   <X className="h-3 w-3 mr-1" />
                   选择标签
@@ -1828,7 +1793,7 @@ export default function ContactsList() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg text-teal-600 dark:text-teal-400">{company.companyName}</CardTitle>
+                        <CardTitle className="text-lg text-[#A80000]">{company.companyName}</CardTitle>
                         {company.contactCount > 1 && (
                           <Badge variant="secondary" className="text-xs">
                             {company.contactCount} 人
@@ -1884,8 +1849,8 @@ export default function ContactsList() {
                   key={contact.id}
                   className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative border-0"
                   style={isContactSelected ? {
-                    boxShadow: `0 0 0 2px var(--color-primary)`,
-                    backgroundColor: 'color-mix(in srgb, var(--color-primary) 5%, white)'
+                    boxShadow: `0 0 0 2px #A80000`,
+                    backgroundColor: '#A800000d'
                   } : {}}
                   onClick={(e) => {
                     if (selectedContactIds.length > 0) {
@@ -1940,7 +1905,7 @@ export default function ContactsList() {
                       }}
                       className="w-5 h-5 rounded border-gray-300"
                       style={{ 
-                        accentColor: 'var(--color-primary)'
+                        accentColor: '#A80000'
                       }}
                     />
                   </div>
@@ -1963,7 +1928,7 @@ export default function ContactsList() {
                             <UserCheck className={`h-4 w-4 ${
                               contact._isShared ? 'text-gray-400' : ''
                             }`}
-                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}} />
+                            style={!contact._isShared ? { color: '#A80000' } : {}} />
                           ) : (
                             <UserX className="h-4 w-4 text-gray-400" />
                           )
@@ -1985,7 +1950,7 @@ export default function ContactsList() {
                                 ? 'text-gray-400 cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
-                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
                             title={contact._isShared ? '' : '点击查看互动记录'}
                             disabled={contact._isShared}
                           >
@@ -2009,7 +1974,7 @@ export default function ContactsList() {
                                 ? 'text-gray-400 cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
-                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
                             title={contact._isShared ? '' : '点击查看直接推荐'}
                             disabled={contact._isShared}
                           >
@@ -2033,7 +1998,7 @@ export default function ContactsList() {
                                 ? 'text-gray-400 cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
-                            style={!contact._isShared ? { color: 'var(--color-primary)' } : {}}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
                             title={contact._isShared ? '' : '点击查看间接推荐'}
                             disabled={contact._isShared}
                           >
@@ -2061,7 +2026,7 @@ export default function ContactsList() {
                               className={`flex items-center gap-0.5 transition-opacity ${
                                 contact._isShared 
                                   ? 'text-gray-400 cursor-default' 
-                                  : 'text-blue-500 hover:opacity-70 cursor-pointer'
+                                  : 'text-[#A80000] hover:opacity-70 cursor-pointer'
                               }`}
                               title={contact._isShared ? '' : '点击查看公司列表'}
                               disabled={contact._isShared}
@@ -2074,7 +2039,7 @@ export default function ContactsList() {
                         {/* 共享者标识 - 显示这个人脉是谁共享给我的，放在最后 */}
                         {contact._isShared && contact._sharedBy && (
                           <span className="flex items-center gap-0.5">
-                            <Handshake className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
+                            <Handshake className="h-4 w-4" style={{ color: '#A80000' }} />
                             <span className="text-xs text-muted-foreground">{contact._sharedBy}</span>
                           </span>
                         )}
@@ -2135,7 +2100,7 @@ export default function ContactsList() {
                           className={`h-4 w-4 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
                               ? 'text-gray-400 opacity-50'
-                              : 'text-blue-500 hover:text-blue-600'
+                              : 'text-[#A80000] hover:text-[#8a0000]'
                           }`}
                         />
                       </Button>
@@ -2573,22 +2538,22 @@ export default function ContactsList() {
             <AlertDialogDescription>
               {confirmDialog.type === 'add' && (
                 <span>
-                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉批量添加「
-                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉批量添加「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'remove' && (
                 <span>
-                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉批量移除「
-                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉批量移除「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'cycle' && (
                 <span>
-                  将为 <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{selectedContactIds.length}</span> 位人脉设置「
-                  <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉设置「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」关注周期，是否继续？
                 </span>
               )}
@@ -2597,6 +2562,7 @@ export default function ContactsList() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-[#A80000] hover:bg-[#8a0000] text-white"
               onClick={async () => {
                 if (confirmDialog.onConfirm) {
                   await confirmDialog.onConfirm();
