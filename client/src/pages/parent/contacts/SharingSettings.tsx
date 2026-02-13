@@ -383,10 +383,22 @@ export default function SharingSettings() {
                   >
                     {/* 头像 */}
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
                       style={{ backgroundColor: getAvatarColor(conn.receiverName || conn.receiverUsername) }}
                     >
-                      {getInitial(conn.receiverName || conn.receiverUsername)}
+                      {conn.receiverAvatar ? (
+                        <img
+                          src={conn.receiverAvatar}
+                          alt={conn.receiverName}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.receiverName || conn.receiverUsername);
+                          }}
+                        />
+                      ) : (
+                        getInitial(conn.receiverName || conn.receiverUsername)
+                      )}
                     </div>
                     
                     {/* 信息 */}
@@ -471,10 +483,22 @@ export default function SharingSettings() {
                   >
                     {/* 头像 */}
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
                       style={{ backgroundColor: getAvatarColor(conn.sharerName || conn.sharerUsername) }}
                     >
-                      {getInitial(conn.sharerName || conn.sharerUsername)}
+                      {conn.sharerAvatar ? (
+                        <img
+                          src={conn.sharerAvatar}
+                          alt={conn.sharerName}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.sharerName || conn.sharerUsername);
+                          }}
+                        />
+                      ) : (
+                        getInitial(conn.sharerName || conn.sharerUsername)
+                      )}
                     </div>
                     
                     {/* 信息 */}
