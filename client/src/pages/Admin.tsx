@@ -53,6 +53,7 @@ import AccountRelationshipManager from "./admin/AccountRelationshipManager";
 import MasterLibraryManager from "./admin/MasterLibraryManager";
 import UserPermissionsManager from "./admin/UserPermissionsManager";
 import PointsManagement from "./admin/PointsManagement";
+import DataSecurityPanel from "./admin/DataSecurityPanel";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -293,6 +294,10 @@ export default function Admin() {
             <TabsTrigger value="aiManagement" className="text-xs sm:text-sm">
               <Sparkles className="w-4 h-4 mr-1 hidden sm:inline" />
               AI管理
+            </TabsTrigger>
+            <TabsTrigger value="dataSecurity" className="text-xs sm:text-sm">
+              <Lock className="w-4 h-4 mr-1 hidden sm:inline" />
+              数据安全
             </TabsTrigger>
           </TabsList>
 
@@ -692,6 +697,10 @@ export default function Admin() {
                 </Button>
               </Link>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="dataSecurity">
+            <DataSecurityPanel />
           </TabsContent>
         </Tabs>
       </main>
