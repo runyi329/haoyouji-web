@@ -648,18 +648,13 @@ export default function MyEquity() {
         </Card>
 
         {/* 第二层：我的增值攻略 */}
-        <div className="mt-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 shadow-md">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-            <Target className="w-7 h-7 text-blue-600" />
-            <span>我的增值攻略</span>
-          </h2>
+        <div className="mt-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">我的增值攻略</h2>
           
-          {/* 模拟器卡片 */}
-          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 mb-3">
-            <div className="flex items-center space-x-2 mb-3">
-              <Target className="w-5 h-5 text-blue-600" />
-              <h3 className="text-base font-bold text-gray-900">股份增长模拟器</h3>
-            </div>
+          {/* 整合后的白色卡片：模拟器 + 明细 */}
+          <Card className="p-5 rounded-2xl shadow-sm bg-white">
+            {/* 顶部：增值模拟器（滑块） */}
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">增值模拟器</h3>
           
           <div className="space-y-3">
             <div>
@@ -691,17 +686,12 @@ export default function MyEquity() {
             </div>
           </div>
 
-          <Link href="/parent/profile/invite">
-            <button className="w-full mt-3 bg-blue-600 text-white py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-sm flex items-center justify-center space-x-1">
-              <span>立即邀请好友</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </Link>
-        </Card>
-        
-        {/* 实时明细预测 */}
-        <Card className="p-4 rounded-2xl shadow-sm">
-          <h3 className="text-base font-bold text-gray-900 mb-3">股份明细（预测变动后）</h3>
+          
+          {/* 中间：一条极淡的虚线（作为逻辑区分） */}
+          <div className="my-5 border-t border-dashed border-gray-200"></div>
+          
+          {/* 底部：预测后的明细（图1的内容） */}
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">预测变动后的明细</h3>
           
           <div className="space-y-2">
             <div className="flex items-center p-3 bg-red-50 rounded-xl">
@@ -763,18 +753,12 @@ export default function MyEquity() {
       </div>
 
         {/* 第三层：背书与信任 */}
-        <div className="mt-6 p-5 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl border-2 border-amber-200 shadow-md">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
-            <Award className="w-7 h-7 text-amber-600" />
-            <span>背书与信任</span>
-          </h2>
+        <div className="mt-6 pt-6 pb-4 px-4 bg-gray-50">
+          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">背书与信任</h2>
 
         {/* 6. 里程碑成就 */}
-        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-amber-50 to-yellow-50">
-          <div className="flex items-center space-x-2 mb-3">
-            <Award className="w-5 h-5 text-amber-600" />
-            <h2 className="text-base font-bold text-gray-900">成就勋章</h2>
-          </div>
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">成就勋章</h3>
 
           <div className="space-y-3">
             {milestones.map((milestone, idx) => {
@@ -842,20 +826,18 @@ export default function MyEquity() {
               );
             })}
           </div>
-        </Card>
-
-
+        </div>
 
         {/* 7. 公司股权架构饼图 */}
         {companyPools.length > 0 && (
-          <Card className="p-4 rounded-2xl shadow-sm">
-            <h2 className="text-base font-bold text-gray-900 mb-2">公司股权架构</h2>
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">公司股权架构</h3>
             <EquityPieChart
               parts={companyPools}
               centerLabel="总股本"
               centerValue="100%"
             />
-          </Card>
+          </div>
         )}
       </div>
 
