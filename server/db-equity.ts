@@ -283,36 +283,43 @@ export async function calculateUserEquity(userId: number) {
     investmentEquity = (userInvestment / totalInvestment) * investmentPoolPercentage;
   }
   
-  // 3. 计算邀请贡献
-  const [user] = await db
-    .select({ inviteCount: users.inviteCount })
-    .from(users)
-    .where(eq(users.id, userId));
-  
-  const inviteCount = user?.inviteCount || 0;
-  const inviteEquity = inviteCount * invitePerUserPercentage;
-  
-  // 4. 计算人脉贡献（被邀请人的人脉总数）
-  // 获取所有被该用户邀请的用户ID
-  const invitedUsers = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.invitedByUserId, userId));
-  
-  const invitedUserIds = invitedUsers.map(u => u.id);
-  
+  // 3. 计算邀请贡献和人脉贡献
+  // 核心逻辑：只有有投资记录的用户（股东）才计算市场贡献股份
+  let inviteCount = 0;
+  let inviteEquity = 0;
   let referralNetworkCount = 0;
-  if (invitedUserIds.length > 0) {
-    // 统计这些用户的人脉总数
-    const [networkResult] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(contacts)
-      .where(inArray(contacts.parentUserId, invitedUserIds));
-    
-    referralNetworkCount = Number(networkResult?.count || 0);
-  }
+  let referralNetworkEquity = 0;
   
-  const referralNetworkEquity = Math.floor(referralNetworkCount / 100) * referralNetworkPer100Percentage;
+  if (userInvestment > 0) {
+    // 用户有投资记录，才计算贡献股份
+    const [user] = await db
+      .select({ inviteCount: users.inviteCount })
+      .from(users)
+      .where(eq(users.id, userId));
+    
+    inviteCount = user?.inviteCount || 0;
+    inviteEquity = inviteCount * invitePerUserPercentage;
+    
+    // 4. 计算人脉贡献（被邀请人的人脉总数）
+    const invitedUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.invitedByUserId, userId));
+    
+    const invitedUserIds = invitedUsers.map(u => u.id);
+    
+    if (invitedUserIds.length > 0) {
+      const [networkResult] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(contacts)
+        .where(inArray(contacts.parentUserId, invitedUserIds));
+      
+      referralNetworkCount = Number(networkResult?.count || 0);
+    }
+    
+    referralNetworkEquity = Math.floor(referralNetworkCount / 100) * referralNetworkPer100Percentage;
+  }
+  // 如果用户没有投资记录，inviteEquity 和 referralNetworkEquity 保持为 0
   
   // 5. 计算总股份
   const totalEquity = investmentEquity + inviteEquity + referralNetworkEquity;
