@@ -167,9 +167,6 @@ export default function MyEquity() {
   if (!equity.ranking) {
     equity.ranking = null;
   }
-  if (!equity.poolStatus) {
-    equity.poolStatus = [];
-  }
   
   const now = new Date();
   const timestampStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -510,38 +507,6 @@ export default function MyEquity() {
           </Card>
         )}
 
-        {/* 9. 股份池剩余额度 */}
-        {equity.poolStatus && equity.poolStatus.length > 0 && (
-          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200">
-            <div className="flex items-center space-x-2 mb-3">
-              <Activity className="w-5 h-5 text-green-600" />
-              <h2 className="text-base font-bold text-gray-900">股份池剩余额度</h2>
-            </div>
-
-            <div className="space-y-2">
-              {(equity.poolStatus || []).map((pool: any, idx: number) => (
-                <div key={idx} className="bg-white rounded-xl p-3 border border-green-200">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-semibold text-gray-700">{pool.poolName}</span>
-                    <span className="text-xs text-gray-600">
-                      剩余 {pool.remaining.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full bg-green-500 transition-all"
-                      style={{ width: `${pool.allocationRate}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
-                    <span>已分配 {pool.allocated.toFixed(2)}%</span>
-                    <span>总额 {pool.total.toFixed(2)}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
 
         {/* 10. 最近动态 */}
         {recentActivities && recentActivities.length > 0 && (
