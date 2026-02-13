@@ -78,13 +78,19 @@ export async function getUserInvestments(userId: number) {
 /**
  * 添加投资记录
  */
-export async function addInvestment(userId: number, amount: number, notes?: string) {
+export async function addInvestment(userId: number, amount: number, investmentDate?: string, notes?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // MySQL timestamp 需要 'YYYY-MM-DD HH:mm:ss' 格式，不能用 ISO 8601
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  // 如果传入了投资日期，使用传入的日期；否则用当前时间
+  let dateStr: string;
+  if (investmentDate) {
+    // 前端传入的是 YYYY-MM-DD 格式，补上时间部分
+    dateStr = `${investmentDate} 00:00:00`;
+  } else {
+    const now = new Date();
+    dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  }
   
   const [result] = await db
     .insert(equityInvestments)

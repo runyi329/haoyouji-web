@@ -33,13 +33,14 @@ export const equityRouter = router({
     .input(z.object({
       userId: z.number(),
       amount: z.number().positive(),
+      investmentDate: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
       }
-      return await dbEquity.addInvestment(input.userId, input.amount, input.notes);
+      return await dbEquity.addInvestment(input.userId, input.amount, input.investmentDate, input.notes);
     }),
   
   // 更新投资记录（管理员）
