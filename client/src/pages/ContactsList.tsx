@@ -1048,7 +1048,7 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div className="container py-4 sm:py-8 px-2 sm:px-4">
+      <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen py-4 px-4">
       {/* 标题和返回按钮 */}
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center justify-between mb-1 sm:mb-2">
