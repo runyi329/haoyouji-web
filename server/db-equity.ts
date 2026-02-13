@@ -37,35 +37,22 @@ export async function updateEquityRule(ruleKey: string, ruleValue: number) {
 
 /**
  * 插入或更新股权规则（upsert）
+ * 使用原生SQL的INSERT ON DUPLICATE KEY UPDATE确保可靠性
  */
 export async function upsertEquityRule(ruleKey: string, ruleValue: number, ruleDescription?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 先检查是否存在
-  const existing = await db
-    .select()
-    .from(equityRules)
-    .where(eq(equityRules.ruleKey, ruleKey));
+  const desc = ruleDescription || null;
   
-  if (existing.length > 0) {
-    const updateData: any = { ruleValue: ruleValue.toString() };
-    if (ruleDescription !== undefined) {
-      updateData.ruleDescription = ruleDescription;
-    }
-    await db
-      .update(equityRules)
-      .set(updateData)
-      .where(eq(equityRules.ruleKey, ruleKey));
-  } else {
-    await db
-      .insert(equityRules)
-      .values({
-        ruleKey,
-        ruleValue: ruleValue.toString(),
-        ruleDescription: ruleDescription || null,
-      });
-  }
+  // 使用原生SQL执行upsert，避免先查后插的并发问题
+  await db.execute(
+    sql`INSERT INTO equity_rules (rule_key, rule_value, rule_description)
+        VALUES (${ruleKey}, ${ruleValue.toFixed(4)}, ${desc})
+        ON DUPLICATE KEY UPDATE
+          rule_value = VALUES(rule_value),
+          rule_description = VALUES(rule_description)`
+  );
   
   return { success: true };
 }
