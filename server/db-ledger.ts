@@ -2016,6 +2016,11 @@ export async function getTransactionDetail(
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
       imageUrl: ledgerRecords.imageUrl,
+      reimbursementStatus: ledgerRecords.reimbursementStatus,
+      reimbursementNotes: ledgerRecords.reimbursementNotes,
+      reimbursementVoucherUrl: ledgerRecords.reimbursementVoucherUrl,
+      reimbursedAt: ledgerRecords.reimbursedAt,
+      reimbursedBy: ledgerRecords.reimbursedBy,
     })
     .from(ledgerRecords)
     .where(
@@ -2117,6 +2122,11 @@ export async function getTransactionDetail(
     recordDate: transaction.date,
     approvalStatus: 'not_required' as const, // 默认不需要审批
     images: transaction.imageUrl ? [transaction.imageUrl] : [],
+    reimbursementStatus: transaction.reimbursementStatus || 'none',
+    reimbursementNotes: transaction.reimbursementNotes || null,
+    reimbursementVoucherUrl: transaction.reimbursementVoucherUrl || null,
+    reimbursedAt: transaction.reimbursedAt || null,
+    reimbursedBy: transaction.reimbursedBy || null,
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);
