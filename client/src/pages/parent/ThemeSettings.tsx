@@ -1,22 +1,15 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check } from "lucide-react";
-import { useColorTheme, themeTemplates } from "@/contexts/ColorThemeContext";
+import { ArrowLeft } from "lucide-react";
+import { themeTemplates } from "@/contexts/ColorThemeContext";
 import { toast } from "sonner";
 
 export default function ThemeSettings() {
   const [, setLocation] = useLocation();
-  const { currentTheme, setTheme, customColors } = useColorTheme();
-
   const handleApplyTheme = (themeId: string) => {
-    setTheme(themeId);
-    toast.success("皮肤已应用！");
-  };
-
-  const isThemeApplied = (themeId: string) => {
-    return currentTheme.id === themeId && !customColors;
+    toast("需要更高权限", {
+      description: "该功能暂未开放，敬请期待",
+    });
   };
 
   const handleCopyColor = (color: string) => {
@@ -50,15 +43,9 @@ export default function ThemeSettings() {
             <div className="flex gap-1 items-center justify-center">
               {/* 配色名称按钮 */}
               <div
-                className={`w-16 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center ${
-                  isThemeApplied(template.id)
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-300 bg-white'
-                }`}
+                className="w-16 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center border-gray-300 bg-white"
               >
-                <span className={`text-[9px] font-bold leading-tight text-center whitespace-pre-line ${
-                  isThemeApplied(template.id) ? 'text-green-600' : 'text-gray-700'
-                }`}>
+                <span className="text-[9px] font-bold leading-tight text-center whitespace-pre-line text-gray-700">
                   {template.name.replace(/(.{2})/, '$1\n')}
                 </span>
               </div>
@@ -148,17 +135,12 @@ export default function ThemeSettings() {
                     e.stopPropagation();
                     handleApplyTheme(template.id);
                   }}
-                  disabled={isThemeApplied(template.id)}
                 >
                   <div
-                    className={`w-10 h-10 rounded-lg border-2 shadow-sm transition-all cursor-pointer flex items-center justify-center ${
-                      isThemeApplied(template.id)
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 hover:scale-110 bg-gray-400'
-                    }`}
+                    className="w-10 h-10 rounded-lg border-2 shadow-sm transition-all cursor-pointer flex items-center justify-center border-gray-300 hover:scale-110 bg-gray-400"
                   >
-                    <span className={`text-[8px] font-bold leading-[10px] text-center whitespace-pre-line text-white`}>
-                      {isThemeApplied(template.id) ? '已经\n应用' : '点击\n应用'}
+                    <span className="text-[8px] font-bold leading-[10px] text-center whitespace-pre-line text-white">
+                      {'点击\n应用'}
                     </span>
                   </div>
                 </button>
