@@ -139,6 +139,7 @@ export default function EquityManagement() {
   const [formData, setFormData] = useState({
     userId: "",
     amount: "",
+    investmentDate: new Date().toISOString().split('T')[0],
     notes: "",
   });
 
@@ -150,7 +151,7 @@ export default function EquityManagement() {
     onSuccess: () => {
       toast.success("添加成功");
       setIsAddDialogOpen(false);
-      setFormData({ userId: "", amount: "", notes: "" });
+      setFormData({ userId: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
       setSelectedUserName("");
       refetch();
     },
@@ -189,6 +190,7 @@ export default function EquityManagement() {
     addInvestmentMutation.mutate({
       userId: parseInt(formData.userId),
       amount: parseFloat(formData.amount),
+      investmentDate: formData.investmentDate,
       notes: formData.notes,
     });
   };
@@ -216,6 +218,7 @@ export default function EquityManagement() {
     setFormData({
       userId: investment.userId.toString(),
       amount: investment.investmentAmount,
+      investmentDate: investment.investmentDate ? new Date(investment.investmentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       notes: investment.notes || "",
     });
     setIsEditDialogOpen(true);
@@ -330,7 +333,7 @@ export default function EquityManagement() {
             <h2 className="text-lg font-bold text-gray-900">投资记录管理</h2>
             <Button
               onClick={() => {
-                setFormData({ userId: "", amount: "", notes: "" });
+                setFormData({ userId: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
                 setSelectedUserName("");
                 setIsAddDialogOpen(true);
               }}
@@ -423,6 +426,15 @@ export default function EquityManagement() {
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                 placeholder="请输入投资金额"
+              />
+            </div>
+            <div>
+              <Label htmlFor="investmentDate">投资日期 *</Label>
+              <Input
+                id="investmentDate"
+                type="date"
+                value={formData.investmentDate}
+                onChange={(e) => setFormData({ ...formData, investmentDate: e.target.value })}
               />
             </div>
             <div>
