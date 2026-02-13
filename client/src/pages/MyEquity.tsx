@@ -4,6 +4,7 @@ import { Loader2, TrendingUp, Trophy, Target, Activity, DollarSign, Users, Netwo
 import { Link } from "wouter";
 import { useState, useEffect, createElement } from "react";
 import { toast } from "sonner";
+import EquityEnergyRing from "@/components/EquityEnergyRing";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -344,11 +345,29 @@ export default function MyEquity() {
   const now = new Date();
   const timestampStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // 个人股份构成数据
+  // 个人股份构成数据（升级话术）
   const equityParts = [
-    { label: '投资股份', value: equity.investmentEquity || 0, color: '#A80000' },
-    { label: '邀请贡献', value: equity.inviteEquity || 0, color: '#FF6B6B' },
-    { label: '人脉贡献', value: equity.referralNetworkEquity || 0, color: '#F59E0B' },
+    { 
+      label: '投资股份', 
+      value: equity.investmentEquity || 0, 
+      color: '#A80000',
+      upgradeLabel: '原始核心权证',
+      description: '稳健底仓，由投资转化'
+    },
+    { 
+      label: '邀请贡献', 
+      value: equity.inviteEquity || 0, 
+      color: '#FF6B6B',
+      upgradeLabel: '渠道裂变加权',
+      description: `已邀请 ${equity.details?.inviteCount || 0} 人`
+    },
+    { 
+      label: '人脉贡献', 
+      value: equity.referralNetworkEquity || 0, 
+      color: '#F59E0B',
+      upgradeLabel: '社会化杠杆溢价',
+      description: `人脉网络 ${equity.details?.referralNetworkCount || 0} 人`
+    },
   ];
   const othersValue = Math.max(0, 100 - (equity.totalEquity || 0));
 
@@ -628,17 +647,13 @@ export default function MyEquity() {
           {/* 虚线分割 */}
           <div className="border-t border-dashed border-gray-300 my-4"></div>
           
-          {/* 饼图区域（轻量化） */}
+          {/* 3D能量环区域 */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">持股构成明细</h3>
-            <div className="scale-90 origin-top">
-              <EquityPieChart
-                parts={equityParts}
-                othersValue={othersValue}
-                centerLabel="我的股份"
-                centerValue={equity.totalEquity.toFixed(2) + '%'}
-              />
-            </div>
+            <EquityEnergyRing
+              parts={equityParts}
+              othersValue={othersValue}
+              totalEquity={equity.totalEquity}
+            />
           </div>
         </Card>
         </div>
