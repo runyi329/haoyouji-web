@@ -207,6 +207,9 @@ export default function EquityManagement() {
     updateInvestmentMutation.mutate({
       id: editingInvestment.id,
       amount: parseFloat(formData.amount),
+      investorName: formData.investorName || undefined,
+      investorIdCard: formData.investorIdCard || undefined,
+      investmentDate: formData.investmentDate,
       notes: formData.notes,
     });
   };
@@ -221,6 +224,8 @@ export default function EquityManagement() {
     setEditingInvestment(investment);
     setFormData({
       userId: investment.userId.toString(),
+      investorName: investment.investorName || "",
+      investorIdCard: investment.investorIdCard || "",
       amount: investment.investmentAmount,
       investmentDate: investment.investmentDate ? new Date(investment.investmentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       notes: investment.notes || "",
@@ -499,6 +504,27 @@ export default function EquityManagement() {
               <Input value={editingInvestment?.userName || editingInvestment?.username || ""} disabled />
             </div>
             <div>
+              <Label htmlFor="edit-investorName">投资人姓名</Label>
+              <Input
+                id="edit-investorName"
+                type="text"
+                value={formData.investorName}
+                onChange={(e) => setFormData({ ...formData, investorName: e.target.value })}
+                placeholder="可选，不同于用户名"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-investorIdCard">投资人身份证</Label>
+              <Input
+                id="edit-investorIdCard"
+                type="text"
+                maxLength={18}
+                value={formData.investorIdCard}
+                onChange={(e) => setFormData({ ...formData, investorIdCard: e.target.value })}
+                placeholder="可选，18位身份证号"
+              />
+            </div>
+            <div>
               <Label htmlFor="edit-amount">投资金额（元）*</Label>
               <Input
                 id="edit-amount"
@@ -506,6 +532,15 @@ export default function EquityManagement() {
                 step="0.01"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-investmentDate">投资日期 *</Label>
+              <Input
+                id="edit-investmentDate"
+                type="date"
+                value={formData.investmentDate}
+                onChange={(e) => setFormData({ ...formData, investmentDate: e.target.value })}
               />
             </div>
             <div>
