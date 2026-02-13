@@ -256,8 +256,11 @@ export default function EquityManagement() {
   });
 
   // 识别池类型和贡献规则
-  const poolKeys = rulesDetail?.filter(r => r.ruleKey.endsWith('_pool_percentage')) || [];
-  const contributionRuleKeys = rulesDetail?.filter(r => !r.ruleKey.endsWith('_pool_percentage')) || [];
+  // 池的key特征：包含 'pool' 且以 '_percentage' 结尾
+  // 贡献规则的key特征：不包含 'pool'（如 invite_per_user_percentage, referral_network_per_100_percentage）
+  const isPoolKey = (key: string) => key.includes('pool') && key.endsWith('_percentage');
+  const poolKeys = rulesDetail?.filter(r => isPoolKey(r.ruleKey)) || [];
+  const contributionRuleKeys = rulesDetail?.filter(r => !isPoolKey(r.ruleKey)) || [];
 
   // 计算池总和
   const poolTotal = editPoolData.reduce((sum, p) => sum + (parseFloat(p.value) || 0), 0);
