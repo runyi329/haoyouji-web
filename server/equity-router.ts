@@ -154,4 +154,35 @@ export const equityRouter = router({
     .query(async () => {
       return await dbEquity.getEquityRulesDetail();
     }),
+
+  // 获取增强的股权信息（包含估值、排名等）
+  getMyEquityEnhanced: protectedProcedure
+    .query(async ({ ctx }) => {
+      const equity = await dbEquity.calculateUserEquity(ctx.user.id);
+      const rules = await dbEquity.getEquityRules();
+      const companyValuation = rules['company_valuation'] || 5000000;
+      const estimatedValue = (equity.totalEquity / 100) * companyValuation;
+      const ranking = await dbEquity.getShareholderRanking(ctx.user.id);
+      const poolStatus = await dbEquity.getPoolStatus();
+      
+      return {
+        ...equity,
+        estimatedValue,
+        companyValuation,
+        ranking,
+        poolStatus,
+      };
+    }),
+
+  // 获取估值历史
+  getValuationHistory: protectedProcedure
+    .query(async () => {
+      return await dbEquity.getValuationHistory();
+    }),
+
+  // 获取最近动态
+  getRecentActivities: protectedProcedure
+    .query(async () => {
+      return await dbEquity.getRecentActivities(10);
+    }),
 });

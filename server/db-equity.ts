@@ -374,3 +374,136 @@ export async function getAllShareholdersEquity() {
   
   return shareholdersEquity;
 }
+
+/**
+ * 获取估值历史
+ */
+export async function getValuationHistory() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const history = await db.execute(sql`
+    SELECT valuation, record_date as recordDate
+    FROM equity_valuation_history
+    ORDER BY record_date ASC
+  `);
+  
+  return history.rows as { valuation: string; recordDate: string }[];
+}
+
+/**
+ * 获取股东排名信息
+ */
+export async function getShareholderRanking(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 获取所有股东的股份，按降序排列
+  const allShareholders = await getAllShareholdersEquity();
+  const sorted = allShareholders
+    .filter(s => s.totalEquity > 0)
+    .sort((a, b) => b.totalEquity - a.totalEquity);
+  
+  const userIndex = sorted.findIndex(s => s.userId === userId);
+  if (userIndex === -1) {
+    return {
+      rank: sorted.length + 1,
+      total: sorted.length,
+      gapToNext: 0,
+    };
+  }
+  
+  const gapToNext = userIndex > 0 ? sorted[userIndex - 1].totalEquity - sorted[userIndex].totalEquity : 0;
+  
+  return {
+    rank: userIndex + 1,
+    total: sorted.length,
+    gapToNext,
+  };
+}
+
+/**
+ * 获取股份池状态（总额、已分配、剩余）
+ */
+export async function getPoolStatus() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const rules = await db.select().from(equityRules);
+  const poolRules = rules.filter(r => r.ruleKey.includes('pool') && r.ruleKey.endsWith('_percentage'));
+  
+  const allShareholders = await getAllShareholdersEquity();
+  
+  const poolStatus = poolRules.map(rule => {
+    const poolKey = rule.ruleKey.replace('_percentage', '');
+    let allocated = 0;
+    
+    if (poolKey === 'investment_pool') {
+      allocated = allShareholders.reduce((sum, s) => sum + s.investmentEquity, 0);
+    } else if (poolKey === 'contribution_pool') {
+      allocated = allShareholders.reduce((sum, s) => sum + s.inviteEquity + s.referralNetworkEquity, 0);
+    }
+    
+    const total = Number(rule.ruleValue);
+    const remaining = Math.max(0, total - allocated);
+    
+    return {
+      poolName: rule.ruleDescription || rule.ruleKey,
+      poolKey: rule.ruleKey,
+      total,
+      allocated,
+      remaining,
+      allocationRate: total > 0 ? (allocated / total) * 100 : 0,
+    };
+  });
+  
+  return poolStatus;
+}
+
+/**
+ * 获取最近动态（脱敏处理）
+ */
+export async function getRecentActivities(limit: number = 10) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const activities = await db.execute(sql`
+    SELECT 
+      ea.activity_type as activityType,
+      ea.value,
+      ea.created_at as createdAt,
+      u.username
+    FROM equity_activities ea
+    LEFT JOIN users u ON ea.user_id = u.id
+    ORDER BY ea.created_at DESC
+    LIMIT ${limit}
+  `);
+  
+  // 脱敏处理：隐藏用户名中间字符
+  return (activities.rows as any[]).map(a => {
+    const username = a.username || '匿名用户';
+    const maskedName = username.length > 2 
+      ? username[0] + 'X'.repeat(username.length - 2) + username[username.length - 1]
+      : username[0] + 'X';
+    
+    return {
+      activityType: a.activityType,
+      value: Number(a.value),
+      createdAt: a.createdAt,
+      username: maskedName,
+    };
+  });
+}
+
+/**
+ * 记录股权动态
+ */
+export async function recordActivity(userId: number, activityType: 'investment' | 'invite', value: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.execute(sql`
+    INSERT INTO equity_activities (user_id, activity_type, value)
+    VALUES (${userId}, ${activityType}, ${value})
+  `);
+}
