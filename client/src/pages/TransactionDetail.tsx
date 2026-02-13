@@ -67,6 +67,12 @@ export default function TransactionDetail() {
   // 当前显示的报销状态（优先使用本地状态）
   const displayStatus = rbLocalStatus || transaction?.reimbursementStatus || 'none';
 
+  // 获取报销历史记录
+  const { data: rbHistory, refetch: refetchRbHistory } = trpc.ledger.getReimbursementHistory.useQuery(
+    { recordId: transactionId },
+    { enabled: rbDialogOpen } // 只在对话框打开时查询
+  );
+
   // tRPC mutation
   const rbMutation = trpc.ledger.manageReimbursement.useMutation({
     onSuccess: (data) => {
@@ -74,7 +80,11 @@ export default function TransactionDetail() {
       setRbLocalStatus('completed');
       toast.success('报销处理成功');
       setRbDialogOpen(false);
+      // 清空输入
+      setRbNote('');
+      setRbVoucher(null);
       refetch();
+      refetchRbHistory();
     },
     onError: (err) => {
       console.error('[rbMutation] onError:', err);
@@ -84,13 +94,18 @@ export default function TransactionDetail() {
 
   // 打开报销对话框
   const openRbDialog = () => {
-    setRbNote(transaction?.reimbursementNotes || '');
-    setRbVoucher(transaction?.reimbursementVoucherUrl || null);
+    // 新增记录时清空输入框（不加载旧数据）
+    setRbNote('');
+    setRbVoucher(null);
     setRbDialogOpen(true);
   };
 
-  // 保存报销
+  // 保存报销（新增一条处理记录）
   const handleRbSave = () => {
+    if (!rbNote && !rbVoucher) {
+      toast.error('请填写备注或上传凭证');
+      return;
+    }
     console.log('[handleRbSave] 调用mutation', {
       recordId: transactionId,
       status: 'completed',
@@ -119,6 +134,17 @@ export default function TransactionDetail() {
     } catch (error) {
       toast.dismiss();
       toast.error('图片上传失败');
+    }
+  };
+
+  // 格式化时间
+  const formatTime = (timeStr: string | null) => {
+    if (!timeStr) return '未知时间';
+    try {
+      const d = new Date(timeStr);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    } catch {
+      return timeStr;
     }
   };
   // ========== 报销功能状态结束 ==========
@@ -449,31 +475,70 @@ export default function TransactionDetail() {
       
       {/* ========== 报销管理对话框（全新实现）========== */}
       <Dialog open={rbDialogOpen} onOpenChange={setRbDialogOpen}>
-        <DialogContent className="max-w-md max-h-[70vh] overflow-y-auto top-[5%] translate-y-0">
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto top-[5%] translate-y-0">
           <DialogHeader>
             <DialogTitle>报销管理</DialogTitle>
             <DialogDescription>
               {displayStatus === 'completed' 
-                ? '查看和编辑报销处理记录' 
-                : '处理该账目的报销申请，点击保存即标记为已处理'}
+                ? '查看处理记录，可新增处理记录' 
+                : '处理该账目的报销申请'}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            {/* 报销备注 */}
+          <div className="space-y-4 py-2">
+            {/* ===== 历史处理记录 ===== */}
+            {rbHistory && rbHistory.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">处理记录</label>
+                <div className="space-y-3">
+                  {rbHistory.map((record: any, idx: number) => (
+                    <div key={record.id || idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-800">{record.operatedBy}</span>
+                        <span className="text-xs text-gray-400">{formatTime(record.createdAt)}</span>
+                      </div>
+                      {record.notes && (
+                        <p className="text-sm text-gray-600 mt-1">{record.notes}</p>
+                      )}
+                      {record.voucherUrl && (
+                        <img 
+                          src={record.voucherUrl} 
+                          alt="凭证" 
+                          className="mt-2 w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
+                          onClick={() => { setRbPreviewUrl(record.voucherUrl); setRbPreviewOpen(true); }}
+                        />
+                      )}
+                      {!record.notes && !record.voucherUrl && (
+                        <p className="text-xs text-gray-400 mt-1">标记为已处理（无备注）</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ===== 分割线 ===== */}
+            {rbHistory && rbHistory.length > 0 && (
+              <div className="border-t border-gray-200 pt-3">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">新增处理记录</label>
+              </div>
+            )}
+
+            {/* ===== 新增处理记录输入区 ===== */}
             <div>
-              <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
+              {!(rbHistory && rbHistory.length > 0) && (
+                <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
+              )}
               <Textarea
                 value={rbNote}
                 onChange={(e) => setRbNote(e.target.value)}
-                placeholder="输入报销备注（可选）..."
-                className="min-h-[80px]"
+                placeholder="输入报销备注..."
+                className="min-h-[70px]"
               />
             </div>
             
             {/* 上传凭证 */}
             <div>
-              <label className="text-sm text-gray-600 mb-2 block">报销凭证</label>
               <input
                 ref={rbFileRef}
                 type="file"
@@ -485,22 +550,19 @@ export default function TransactionDetail() {
                 {rbVoucher ? (
                   <>
                     <div 
-                      className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
+                      className="relative w-16 h-16 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
                       onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }}
                     >
                       <img src={rbVoucher} alt="报销凭证" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 flex flex-col gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }} className="w-full">
-                        查看大图
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full">
-                        重新上传
+                      <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full text-xs">
+                        重新上传凭证
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <Button type="button" variant="outline" onClick={() => rbFileRef.current?.click()} className="w-full">
+                  <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full text-xs">
                     上传凭证（可选）
                   </Button>
                 )}
