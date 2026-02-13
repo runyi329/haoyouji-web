@@ -148,4 +148,10 @@ export const equityRouter = router({
       }
       return await dbEquity.getEquityRulesDetail();
     }),
+
+  // 获取股份池配置（所有登录用户可访问，用于前端展示公司股权架构饼图）
+  getPoolConfig: protectedProcedure
+    .query(async () => {
+      return await dbEquity.getEquityRulesDetail();
+    }),
 });
