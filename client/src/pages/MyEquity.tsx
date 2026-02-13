@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, Users, Handshake, FileSignature, ChevronDown, ChevronUp, Building2, GitBranch, DollarSign, Network } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { Link } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -91,30 +92,29 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 股份构成 — 横向条形图 + 列表 */}
+        {/* 股份构成 — 饼图 */}
         <Card className="p-4 rounded-2xl shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-3">股份构成</h2>
           
-          {/* 横向堆叠条 */}
-          <div className="w-full h-6 rounded-full overflow-hidden bg-gray-200 flex mb-3">
-            {equityParts.map((part, i) => (
-              part.value > 0 && (
-                <div
-                  key={i}
-                  className="h-full transition-all"
-                  style={{
-                    width: `${Math.max(part.value, 0.5)}%`,
-                    backgroundColor: part.color,
-                  }}
-                />
-              )
-            ))}
-            {othersValue > 0 && (
-              <div
-                className="h-full bg-gray-300"
-                style={{ width: `${othersValue}%` }}
-              />
-            )}
+          {/* 饼图 */}
+          <div className="w-full h-48 mb-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={equityParts}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={0}
+                  outerRadius={70}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {equityParts.map((part, index) => (
+                    <Cell key={`cell-${index}`} fill={part.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
 
           {/* 图例列表 */}
@@ -128,13 +128,6 @@ export default function MyEquity() {
                 <span className="text-sm font-bold" style={{ color: part.color }}>{part.value.toFixed(4)}%</span>
               </div>
             ))}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-sm bg-gray-300 flex-shrink-0" />
-                <span className="text-sm text-gray-500">其他股东</span>
-              </div>
-              <span className="text-sm font-bold text-gray-500">{othersValue.toFixed(4)}%</span>
-            </div>
           </div>
         </Card>
 
