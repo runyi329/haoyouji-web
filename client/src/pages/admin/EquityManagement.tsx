@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Edit, Trash2, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Plus, Edit, Trash2, TrendingUp, Search, Check, ChevronDown } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,10 +16,123 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
+// 用户搜索选择器组件
+function UserSelector({ value, onChange }: { value: string; onChange: (userId: string, userName: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [selectedUserName, setSelectedUserName] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: users } = trpc.admin.getUsers.useQuery();
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // 过滤用户列表
+  const filteredUsers = users?.filter((u) => {
+    const keyword = searchText.toLowerCase();
+    return (
+      (u.name || "").toLowerCase().includes(keyword) ||
+      u.username.toLowerCase().includes(keyword) ||
+      u.id.toString().includes(keyword)
+    );
+  }) || [];
+
+  const handleSelect = (user: { id: number; name: string | null; username: string }) => {
+    const displayName = user.name || user.username;
+    onChange(user.id.toString(), displayName);
+    setSelectedUserName(displayName);
+    setSearchText("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div
+        className="flex items-center border rounded-md px-3 py-2 cursor-pointer hover:border-gray-400 transition-colors"
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
+      >
+        {value ? (
+          <span className="flex-1 text-sm">{selectedUserName} (ID: {value})</span>
+        ) : (
+          <span className="flex-1 text-sm text-gray-400">点击选择用户...</span>
+        )}
+        <ChevronDown className="w-4 h-4 text-gray-400 ml-2" />
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-hidden">
+          {/* 搜索框 */}
+          <div className="p-2 border-b sticky top-0 bg-white">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                className="w-full pl-8 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A80000]/20 focus:border-[#A80000]"
+                placeholder="搜索用户名或昵称..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+
+          {/* 用户列表 */}
+          <div className="overflow-y-auto max-h-48">
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((u) => (
+                <div
+                  key={u.id}
+                  className={`flex items-center px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    value === u.id.toString() ? "bg-red-50" : ""
+                  }`}
+                  onClick={() => handleSelect(u)}
+                >
+                  {/* 首字母头像 */}
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A80000] to-[#c44] flex items-center justify-center flex-shrink-0 mr-3">
+                    <span className="text-white text-xs font-bold">
+                      {(u.name || u.username).charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{u.name || u.username}</p>
+                    <p className="text-xs text-gray-500">@{u.username} · ID: {u.id}</p>
+                  </div>
+                  {value === u.id.toString() && (
+                    <Check className="w-4 h-4 text-[#A80000] flex-shrink-0 ml-2" />
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-6 text-center text-sm text-gray-500">
+                {users ? "未找到匹配的用户" : "加载中..."}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EquityManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
+  const [selectedUserName, setSelectedUserName] = useState("");
   
   const [formData, setFormData] = useState({
     userId: "",
@@ -36,6 +149,7 @@ export default function EquityManagement() {
       toast.success("添加成功");
       setIsAddDialogOpen(false);
       setFormData({ userId: "", amount: "", notes: "" });
+      setSelectedUserName("");
       refetch();
     },
     onError: (error) => {
@@ -213,7 +327,11 @@ export default function EquityManagement() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-gray-900">投资记录管理</h2>
             <Button
-              onClick={() => setIsAddDialogOpen(true)}
+              onClick={() => {
+                setFormData({ userId: "", amount: "", notes: "" });
+                setSelectedUserName("");
+                setIsAddDialogOpen(true);
+              }}
               className="bg-[#A80000] hover:bg-[#8a0000]"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -283,14 +401,16 @@ export default function EquityManagement() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="userId">用户ID *</Label>
-              <Input
-                id="userId"
-                type="number"
-                value={formData.userId}
-                onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-                placeholder="请输入用户ID"
-              />
+              <Label>选择用户 *</Label>
+              <div className="mt-1.5">
+                <UserSelector
+                  value={formData.userId}
+                  onChange={(userId, userName) => {
+                    setFormData({ ...formData, userId });
+                    setSelectedUserName(userName);
+                  }}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="amount">投资金额（元）*</Label>
@@ -367,7 +487,7 @@ export default function EquityManagement() {
               className="bg-[#A80000] hover:bg-[#8a0000]"
               disabled={updateInvestmentMutation.isPending}
             >
-              {updateInvestmentMutation.isPending ? "保存中..." : "保存"}
+              {updateInvestmentMutation.isPending ? "更新中..." : "确定"}
             </Button>
           </DialogFooter>
         </DialogContent>
