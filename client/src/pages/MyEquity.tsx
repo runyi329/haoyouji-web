@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, Trophy, Target, Activity, DollarSign, Users, Network, ChevronRight, Sparkles, Award, Crown, Gem, Medal } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useState, createElement } from "react";
 import { toast } from "sonner";
 
 // 饼图配色方案
@@ -154,16 +154,33 @@ export default function MyEquity() {
   }
 
   const equity = enhanced;
+  
+  // 确保所有必需字段都有默认值
+  if (!equity.details) {
+    equity.details = {
+      inviteCount: 0,
+      userInvestment: 0,
+      totalInvestment: 1,
+      referralNetworkCount: 0,
+    };
+  }
+  if (!equity.ranking) {
+    equity.ranking = null;
+  }
+  if (!equity.poolStatus) {
+    equity.poolStatus = [];
+  }
+  
   const now = new Date();
   const timestampStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   // 个人股份构成数据
   const equityParts = [
-    { label: '投资股份', value: equity.investmentEquity, color: '#A80000' },
-    { label: '邀请贡献', value: equity.inviteEquity, color: '#FF6B6B' },
-    { label: '人脉贡献', value: equity.referralNetworkEquity, color: '#F59E0B' },
+    { label: '投资股份', value: equity.investmentEquity || 0, color: '#A80000' },
+    { label: '邀请贡献', value: equity.inviteEquity || 0, color: '#FF6B6B' },
+    { label: '人脉贡献', value: equity.referralNetworkEquity || 0, color: '#F59E0B' },
   ];
-  const othersValue = Math.max(0, 100 - equity.totalEquity);
+  const othersValue = Math.max(0, 100 - (equity.totalEquity || 0));
 
   // 公司股权架构数据
   const companyPools: { label: string; value: number; color: string }[] = [];
@@ -198,7 +215,7 @@ export default function MyEquity() {
         { name: '金牌股东', threshold: 50, icon: Trophy, color: '#FFD700' },
         { name: '钻石股东', threshold: 100, icon: Gem, color: '#B9F2FF' },
       ],
-      current: equity.details.inviteCount,
+      current: equity.details?.inviteCount || 0,
     },
     {
       category: '投资成就',
@@ -209,7 +226,7 @@ export default function MyEquity() {
         { name: '金牌投资人', threshold: 100000, icon: Trophy, color: '#FFD700' },
         { name: '钻石投资人', threshold: 500000, icon: Crown, color: '#B9F2FF' },
       ],
-      current: equity.details.userInvestment,
+      current: equity.details?.userInvestment || 0,
     },
     {
       category: '持股成就',
@@ -220,7 +237,7 @@ export default function MyEquity() {
         { name: '金牌持股人', threshold: 5, icon: Trophy, color: '#FFD700' },
         { name: '钻石持股人', threshold: 10, icon: Crown, color: '#B9F2FF' },
       ],
-      current: equity.totalEquity,
+      current: equity.totalEquity || 0,
     },
   ];
 
@@ -392,7 +409,7 @@ export default function MyEquity() {
                     </div>
                     {currentLevel && (
                       <div className="flex items-center space-x-1">
-                        {React.createElement(currentLevel.icon, {
+                        {createElement(currentLevel.icon, {
                           className: "w-4 h-4",
                           style: { color: currentLevel.color },
                         })}
