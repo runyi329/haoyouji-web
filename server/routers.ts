@@ -4887,6 +4887,7 @@ export const appRouter = router({
               ...conn,
               receiverName: receiver?.name || receiver?.username || '未知用户',
               receiverUsername: receiver?.username || '',
+              receiverAvatar: receiver?.avatar || null,
               permissions,
               sharedContactCount, // 共享给对方的人数
             };
@@ -4912,6 +4913,7 @@ export const appRouter = router({
               ...conn,
               sharerName: sharer?.name || sharer?.username || '未知用户',
               sharerUsername: sharer?.username || '',
+              sharerAvatar: sharer?.avatar || null,
               sharedContactCount, // 对方共享给我的人数
             };
           })
