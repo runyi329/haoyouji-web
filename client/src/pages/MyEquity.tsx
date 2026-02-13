@@ -1,10 +1,126 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, Users, Handshake, FileSignature, ChevronDown, ChevronUp, Building2, GitBranch, DollarSign, Network } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { Link } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
+
+// 自绘SVG饼图组件：饼在左侧，引线引到右侧统一排列
+function EquityPieChart({ parts, othersValue }: { parts: { label: string; value: number; color: string }[]; othersValue: number }) {
+  const cx = 90; // 饼图中心X
+  const cy = 100; // 饼图中心Y
+  const r = 72; // 饼图半径
+  const svgW = 360;
+  const svgH = 200;
+
+  // 构建所有扇区数据（包含其他股东）
+  const allParts = [
+    ...parts.filter(p => p.value > 0),
+    ...(othersValue > 0 ? [{ label: '其他股东', value: othersValue, color: '#D1D5DB' }] : []),
+  ];
+  const total = allParts.reduce((s, p) => s + p.value, 0);
+  if (total === 0) return null;
+
+  // 计算每个扇区的角度
+  let cumAngle = -90; // 从顶部开始
+  const sectors = allParts.map((part) => {
+    const angle = (part.value / total) * 360;
+    const startAngle = cumAngle;
+    const endAngle = cumAngle + angle;
+    const midAngle = cumAngle + angle / 2;
+    cumAngle = endAngle;
+    return { ...part, startAngle, endAngle, midAngle, angleDeg: angle };
+  });
+
+  // 角度转弧度
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  // 生成扇区路径
+  const sectorPath = (startAngle: number, endAngle: number) => {
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    const x1 = cx + r * Math.cos(toRad(startAngle));
+    const y1 = cy + r * Math.sin(toRad(startAngle));
+    const x2 = cx + r * Math.cos(toRad(endAngle));
+    const y2 = cy + r * Math.sin(toRad(endAngle));
+    return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  };
+
+  // 右侧标签区域：统一排列在右侧
+  const labelX = 210; // 标签起始X
+  const labelStartY = 30; // 第一个标签Y
+  const labelGap = 42; // 标签间距
+
+  return (
+    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '220px' }}>
+      {/* 饼图阴影 */}
+      <defs>
+        <filter id="pieShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.08" />
+        </filter>
+      </defs>
+
+      {/* 饼图扇区 */}
+      <g filter="url(#pieShadow)">
+        {sectors.map((s, i) => (
+          <path
+            key={i}
+            d={sectorPath(s.startAngle, s.endAngle)}
+            fill={s.color}
+            stroke="white"
+            strokeWidth="2"
+          />
+        ))}
+        {/* 中心白色圆形（环形图效果） */}
+        <circle cx={cx} cy={cy} r={r * 0.45} fill="white" />
+        {/* 中心文字 */}
+        <text x={cx} y={cy - 6} textAnchor="middle" className="text-[11px]" fill="#666" fontWeight="400">总股份</text>
+        <text x={cx} y={cy + 14} textAnchor="middle" className="text-[16px]" fill="#A80000" fontWeight="700">
+          {allParts.filter(p => p.label !== '其他股东').reduce((s, p) => s + p.value, 0).toFixed(2)}%
+        </text>
+      </g>
+
+      {/* 引线和标签 */}
+      {sectors.map((s, i) => {
+        const midRad = toRad(s.midAngle);
+        // 引线起点：饼图边缘
+        const edgeX = cx + (r + 4) * Math.cos(midRad);
+        const edgeY = cy + (r + 4) * Math.sin(midRad);
+        // 引线拐点
+        const elbowX = cx + (r + 20) * Math.cos(midRad);
+        const elbowY = cy + (r + 20) * Math.sin(midRad);
+        // 标签Y位置（统一右侧排列）
+        const targetY = labelStartY + i * labelGap;
+        const targetX = labelX - 8;
+
+        return (
+          <g key={`label-${i}`}>
+            {/* 引线 */}
+            <polyline
+              points={`${edgeX},${edgeY} ${elbowX},${elbowY} ${targetX},${targetY + 8}`}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="1.2"
+              strokeDasharray={s.label === '其他股东' ? '3,2' : 'none'}
+              opacity="0.6"
+            />
+            {/* 引线末端圆点 */}
+            <circle cx={targetX} cy={targetY + 8} r="3" fill={s.color} />
+
+            {/* 标签文字 */}
+            <g>
+              {/* 颜色标记条 */}
+              <rect x={labelX} y={targetY} width="3" height={32} rx="1.5" fill={s.color} />
+              {/* 标签名 */}
+              <text x={labelX + 10} y={targetY + 12} fill="#374151" fontSize="12" fontWeight="600">{s.label}</text>
+              {/* 百分比 */}
+              <text x={labelX + 10} y={targetY + 28} fill={s.color} fontSize="14" fontWeight="700">{s.value.toFixed(4)}%</text>
+            </g>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 export default function MyEquity() {
   const { data: equity, isLoading } = trpc.equity.getMyEquity.useQuery();
@@ -38,19 +154,16 @@ export default function MyEquity() {
       label: '投资股份',
       value: equity.investmentEquity,
       color: '#A80000',
-      bgColor: 'bg-[#A80000]',
     },
     {
       label: '邀请贡献',
       value: equity.inviteEquity,
       color: '#FF6B6B',
-      bgColor: 'bg-[#FF6B6B]',
     },
     {
       label: '人脉贡献',
       value: equity.referralNetworkEquity,
       color: '#F59E0B',
-      bgColor: 'bg-amber-500',
     },
   ];
 
@@ -92,43 +205,10 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 股份构成 — 饼图 */}
+        {/* 股份构成 — 高级饼图 */}
         <Card className="p-4 rounded-2xl shadow-sm">
-          <h2 className="text-base font-bold text-gray-900 mb-3">股份构成</h2>
-          
-          {/* 饼图 */}
-          <div className="w-full h-48 mb-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={equityParts}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={0}
-                  outerRadius={70}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {equityParts.map((part, index) => (
-                    <Cell key={`cell-${index}`} fill={part.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* 图例列表 */}
-          <div className="space-y-2">
-            {equityParts.map((part, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: part.color }} />
-                  <span className="text-sm text-gray-700">{part.label}</span>
-                </div>
-                <span className="text-sm font-bold" style={{ color: part.color }}>{part.value.toFixed(4)}%</span>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-base font-bold text-gray-900 mb-2">股份构成</h2>
+          <EquityPieChart parts={equityParts} othersValue={othersValue} />
         </Card>
 
         {/* 股份明细 — 紧凑卡片 */}
@@ -226,7 +306,7 @@ export default function MyEquity() {
           </Link>
         </Card>
 
-        {/* 在线签署协议入口 — 移到底部 */}
+        {/* 在线签署协议入口 */}
         <Card
           className="p-4 rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 cursor-pointer hover:shadow-md transition-shadow"
           onClick={() => toast.info("在线签署功能即将上线，敬请期待")}
@@ -245,7 +325,7 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 股权架构说明 — 可折叠，移到最底部 */}
+        {/* 股权架构说明 — 可折叠 */}
         <Card className="rounded-2xl shadow-sm overflow-hidden">
           <button
             className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
