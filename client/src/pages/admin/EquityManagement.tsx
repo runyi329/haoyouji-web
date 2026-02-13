@@ -14,10 +14,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function EquityManagement() {
-  const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
@@ -34,41 +33,41 @@ export default function EquityManagement() {
 
   const addInvestmentMutation = trpc.equity.addInvestment.useMutation({
     onSuccess: () => {
-      toast({ title: "添加成功" });
+      toast.success("添加成功");
       setIsAddDialogOpen(false);
       setFormData({ userId: "", amount: "", notes: "" });
       refetch();
     },
     onError: (error) => {
-      toast({ title: "添加失败", description: error.message, variant: "destructive" });
+      toast.error("添加失败", { description: error.message });
     },
   });
 
   const updateInvestmentMutation = trpc.equity.updateInvestment.useMutation({
     onSuccess: () => {
-      toast({ title: "更新成功" });
+      toast.success("更新成功");
       setIsEditDialogOpen(false);
       setEditingInvestment(null);
       refetch();
     },
     onError: (error) => {
-      toast({ title: "更新失败", description: error.message, variant: "destructive" });
+      toast.error("更新失败", { description: error.message });
     },
   });
 
   const deleteInvestmentMutation = trpc.equity.deleteInvestment.useMutation({
     onSuccess: () => {
-      toast({ title: "删除成功" });
+      toast.success("删除成功");
       refetch();
     },
     onError: (error) => {
-      toast({ title: "删除失败", description: error.message, variant: "destructive" });
+      toast.error("删除失败", { description: error.message });
     },
   });
 
   const handleAdd = () => {
     if (!formData.userId || !formData.amount) {
-      toast({ title: "请填写必填项", variant: "destructive" });
+      toast.error("请填写必填项");
       return;
     }
     addInvestmentMutation.mutate({
@@ -80,7 +79,7 @@ export default function EquityManagement() {
 
   const handleEdit = () => {
     if (!editingInvestment || !formData.amount) {
-      toast({ title: "请填写必填项", variant: "destructive" });
+      toast.error("请填写必填项");
       return;
     }
     updateInvestmentMutation.mutate({
