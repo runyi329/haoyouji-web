@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -27,8 +27,6 @@ export default function TransactionDetail() {
 
   const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
   const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
-  
-  console.log('[TransactionDetail] params:', params, 'ledgerId:', ledgerId, 'transactionId:', transactionId);
 
   // 获取记账详情
   const { data: transaction, isLoading, refetch, error } = trpc.ledger.getTransactionDetail.useQuery({
@@ -49,29 +47,82 @@ export default function TransactionDetail() {
   const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   
-  // 报销管理对话框状态
-  const [showReimbursementDialog, setShowReimbursementDialog] = useState(false);
-  const [reimbursementNotes, setReimbursementNotes] = useState('');
-  const [voucherImage, setVoucherImage] = useState<string | null>(null);
+  // ========== 报销功能状态（全新实现）==========
+  const [rbDialogOpen, setRbDialogOpen] = useState(false);
+  const [rbNote, setRbNote] = useState('');
+  const [rbVoucher, setRbVoucher] = useState<string | null>(null);
+  // 本地状态：用于在保存成功后立即更新UI
+  const [rbLocalStatus, setRbLocalStatus] = useState<string | null>(null);
+  const rbFileRef = useRef<HTMLInputElement>(null);
+  const [rbPreviewOpen, setRbPreviewOpen] = useState(false);
+  const [rbPreviewUrl, setRbPreviewUrl] = useState('');
 
-  const voucherInputRef = useRef<HTMLInputElement>(null);
-  const [showImagePreview, setShowImagePreview] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+  // 当transaction数据加载/更新后，同步本地状态
+  useEffect(() => {
+    if (transaction) {
+      setRbLocalStatus(transaction.reimbursementStatus || 'none');
+    }
+  }, [transaction]);
 
-  // 报销管理mutation
-  const manageReimbursementMutation = trpc.ledger.manageReimbursement.useMutation({
-    onSuccess: () => {
-      toast.success("保存成功");
-      setShowReimbursementDialog(false);
-      setReimbursementNotes('');
-      setVoucherImage(null);
+  // 当前显示的报销状态（优先使用本地状态）
+  const displayStatus = rbLocalStatus || transaction?.reimbursementStatus || 'none';
+
+  // tRPC mutation
+  const rbMutation = trpc.ledger.manageReimbursement.useMutation({
+    onSuccess: (data) => {
+      console.log('[rbMutation] onSuccess:', data);
+      setRbLocalStatus('completed');
+      toast.success('报销处理成功');
+      setRbDialogOpen(false);
       refetch();
     },
-    onError: (error) => {
-      toast.error(error.message || "操作失败");
+    onError: (err) => {
+      console.error('[rbMutation] onError:', err);
+      toast.error(err.message || '操作失败');
     },
   });
-  
+
+  // 打开报销对话框
+  const openRbDialog = () => {
+    setRbNote(transaction?.reimbursementNotes || '');
+    setRbVoucher(transaction?.reimbursementVoucherUrl || null);
+    setRbDialogOpen(true);
+  };
+
+  // 保存报销
+  const handleRbSave = () => {
+    console.log('[handleRbSave] 调用mutation', {
+      recordId: transactionId,
+      status: 'completed',
+      notes: rbNote,
+      hasVoucher: !!rbVoucher,
+    });
+    rbMutation.mutate({
+      recordId: transactionId,
+      status: 'completed' as const,
+      notes: rbNote || undefined,
+      voucherImage: rbVoucher || undefined,
+    });
+  };
+
+  // 处理凭证图片上传
+  const handleRbVoucherUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      toast.loading('正在上传图片...');
+      const { autoCompressImage } = await import('@/utils/imageUtils');
+      const { base64 } = await autoCompressImage(file, 'normal');
+      setRbVoucher(base64);
+      toast.dismiss();
+      toast.success('图片上传成功');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('图片上传失败');
+    }
+  };
+  // ========== 报销功能状态结束 ==========
+
   // 上传图片mutation
   const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
   
@@ -95,7 +146,6 @@ export default function TransactionDetail() {
   const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
     onSuccess: () => {
       toast.success("删除成功");
-      // 使缓存失效，刷新账目列表
       utils.ledger.getTransactions.invalidate({ ledgerId });
       utils.ledger.getById.invalidate({ ledgerId });
       setLocation(`/ledger/${ledgerId}`);
@@ -123,25 +173,17 @@ export default function TransactionDetail() {
   // 判断当前用户是否是审批人
   const isApprover = () => {
     if (!user || !transaction || !approvalRules) return false;
-    
-    // 查找记账人的审批规则
     const rule = approvalRules.find(r => r.recorderId === transaction.createdBy);
     if (rule) {
-      // 检查当前用户是否在审批人列表中
       return rule.approverIds.includes(user.id);
     }
-    
-    // 如果没有特殊规则，检查全体成员规则
     const defaultRule = approvalRules.find(r => r.recorderId === null);
     if (defaultRule) {
       return defaultRule.approverIds.includes(user.id);
     }
-    
     return false;
   };
 
-  console.log('[TransactionDetail] isLoading:', isLoading, 'transaction:', transaction, 'error:', error);
-  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -183,15 +225,15 @@ export default function TransactionDetail() {
     }
   };
 
+  // 是否是管理员/所有者
+  const isAdminOrOwner = ledgerData?.userRole === 'admin' || ledgerData?.userRole === 'owner';
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航栏 */}
       <div style={{ backgroundColor: `${themeColors.primary}30`, color: themeColors.text }}>
         <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}`)}
-            className="p-1"
-          >
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-medium">账目详细</h1>
@@ -237,11 +279,7 @@ export default function TransactionDetail() {
           rightContent={
             <div className="flex items-center gap-2">
               {transaction.member?.avatar ? (
-                <img
-                  src={transaction.member.avatar}
-                  alt={transaction.member.nickname || '未知'}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
+                <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
                   {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
@@ -253,36 +291,30 @@ export default function TransactionDetail() {
         />
         <DetailItem label="日期" value={transaction.date} />
         <DetailItem label="备注" value={transaction.description || "未填写"} />
-        {/* 报销状态 */}
-        {(ledgerData?.userRole === 'admin' || ledgerData?.userRole === 'owner') ? (
-          <div 
-            className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50"
-            onClick={() => {
-              // 加载已有的报销信息
-              setReimbursementNotes(transaction.reimbursementNotes || '');
-              setVoucherImage(transaction.reimbursementVoucherUrl || null);
-              setShowReimbursementDialog(true);
-            }}
-          >
-            <span className="text-sm text-gray-600">报销状态</span>
-            <span className={`text-sm font-medium ${
-              transaction.reimbursementStatus === 'completed' 
-                ? 'text-green-600' 
-                : 'text-blue-600'
-            }`}>
-              {transaction.reimbursementStatus === 'completed' ? '已经报销' : '等待报销'}
-            </span>
-          </div>
-        ) : (
-          <DetailItem 
-            label="报销状态" 
-            value={
-              transaction.reimbursementStatus === 'pending' ? '💰待报销' :
-              transaction.reimbursementStatus === 'completed' ? '✅已报销' :
-              '无需报销'
-            }
-          />
+
+        {/* ========== 报销状态显示（全新实现）========== */}
+        {displayStatus !== 'none' && (
+          isAdminOrOwner ? (
+            <div 
+              className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+              onClick={openRbDialog}
+            >
+              <span className="text-sm text-gray-600">报销状态</span>
+              {displayStatus === 'completed' ? (
+                <span className="text-sm font-medium text-green-600">已经处理</span>
+              ) : (
+                <span className="text-sm font-medium text-blue-600">等待报销</span>
+              )}
+            </div>
+          ) : (
+            <DetailItem 
+              label="报销状态" 
+              value={displayStatus === 'pending' ? '待报销' : displayStatus === 'completed' ? '已报销' : ''}
+            />
+          )
         )}
+        {/* ========== 报销状态显示结束 ========== */}
+
         {transaction.images && transaction.images.length > 0 ? (
           <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
             <span className="text-xs text-gray-500">凭证图片</span>
@@ -292,9 +324,8 @@ export default function TransactionDetail() {
                   key={index}
                   src={imageUrl}
                   alt={`凭证图片${index + 1}`}
-                  className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                  className="w-16 h-16 object-cover rounded cursor-pointer border border-gray-200"
                   onClick={() => {
-                    // 点击放大图片
                     const dialog = document.createElement('div');
                     dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
                     dialog.onclick = () => dialog.remove();
@@ -320,11 +351,7 @@ export default function TransactionDetail() {
           rightContent={
             <div className="flex items-center gap-2">
               {transaction.member?.avatar ? (
-                <img
-                  src={transaction.member.avatar}
-                  alt={transaction.member.nickname || '未知'}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
+                <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
                   {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
@@ -359,7 +386,6 @@ export default function TransactionDetail() {
       {/* 底部按钮区域 */}
       <div className="flex-1"></div>
       
-      {/* 审批按钮（待审批状态且当前用户是审批人时显示） */}
       {transaction.approvalStatus === 'pending' && isApprover() && (
         <div className="bg-white px-4 py-3">
           <button 
@@ -371,14 +397,10 @@ export default function TransactionDetail() {
         </div>
       )}
 
-      {/* 修改/删除按钮（非待审批状态或不是审批人时显示） */}
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
           <button 
-            onClick={() => {
-              // 跳转到添加账目页面，传递编辑参数
-              setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`);
-            }}
+            onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
             className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
           >
             修改账目
@@ -397,35 +419,23 @@ export default function TransactionDetail() {
         </div>
       )}
 
-
-
       {/* 审批对话框 */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {approvalAction === 'approved' ? '通过审批' : '拒绝审批'}
-            </DialogTitle>
+            <DialogTitle>{approvalAction === 'approved' ? '通过审批' : '拒绝审批'}</DialogTitle>
             <DialogDescription>
               {approvalAction === 'approved' 
                 ? '确认通过这笔记账吗？通过后将计入收支统计。'
-                : '确认拒绝这笔记账吗？拒绝后将不计入收支统计。'
-              }
+                : '确认拒绝这笔记账吗？拒绝后将不计入收支统计。'}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <label className="text-sm text-gray-600 mb-2 block">审批意见（可选）</label>
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="输入审批意见..."
-              className="min-h-[100px]"
-            />
+            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="输入审批意见..." className="min-h-[100px]" />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowApprovalDialog(false)}>
-              取消
-            </Button>
+            <Button variant="outline" onClick={() => setShowApprovalDialog(false)}>取消</Button>
             <Button 
               onClick={confirmApproval}
               disabled={approveMutation.isPending}
@@ -437,25 +447,26 @@ export default function TransactionDetail() {
         </DialogContent>
       </Dialog>
       
-      {/* 报销管理对话框 */}
-      <Dialog open={showReimbursementDialog} onOpenChange={setShowReimbursementDialog}>
+      {/* ========== 报销管理对话框（全新实现）========== */}
+      <Dialog open={rbDialogOpen} onOpenChange={setRbDialogOpen}>
         <DialogContent className="max-w-md max-h-[70vh] overflow-y-auto top-[5%] translate-y-0">
           <DialogHeader>
             <DialogTitle>报销管理</DialogTitle>
             <DialogDescription>
-              管理该账目的报销状态和凭证
+              {displayStatus === 'completed' 
+                ? '查看和编辑报销处理记录' 
+                : '处理该账目的报销申请，点击保存即标记为已处理'}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-
             {/* 报销备注 */}
             <div>
               <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
               <Textarea
-                value={reimbursementNotes}
-                onChange={(e) => setReimbursementNotes(e.target.value)}
-                placeholder="输入报销备注..."
+                value={rbNote}
+                onChange={(e) => setRbNote(e.target.value)}
+                placeholder="输入报销备注（可选）..."
                 className="min-h-[80px]"
               />
             </div>
@@ -464,147 +475,60 @@ export default function TransactionDetail() {
             <div>
               <label className="text-sm text-gray-600 mb-2 block">报销凭证</label>
               <input
-                ref={voucherInputRef}
+                ref={rbFileRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    try {
-                      toast.loading('正在上传图片...');
-                      const { autoCompressImage } = await import('@/utils/imageUtils');
-                      const { base64 } = await autoCompressImage(file, 'normal');
-                      setVoucherImage(base64);
-                      toast.dismiss();
-                      toast.success('图片上传成功');
-                    } catch (error) {
-                      toast.dismiss();
-                      toast.error('图片上传失败');
-                    }
-                  }
-                }}
+                onChange={handleRbVoucherUpload}
               />
               <div className="flex items-start gap-3">
-                {voucherImage ? (
+                {rbVoucher ? (
                   <>
-                    {/* 小的正方形预览图 */}
                     <div 
                       className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
-                      onClick={() => {
-                        setPreviewImageUrl(voucherImage);
-                        setShowImagePreview(true);
-                      }}
+                      onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }}
                     >
-                      <img 
-                        src={voucherImage} 
-                        alt="报销凭证" 
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={rbVoucher} alt="报销凭证" className="w-full h-full object-cover" />
                     </div>
-                    {/* 按钮组 */}
                     <div className="flex-1 flex flex-col gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPreviewImageUrl(voucherImage);
-                          setShowImagePreview(true);
-                        }}
-                        className="w-full"
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }} className="w-full">
                         查看大图
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => voucherInputRef.current?.click()}
-                        className="w-full"
-                      >
+                      <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full">
                         重新上传
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => voucherInputRef.current?.click()}
-                    className="w-full"
-                  >
-                    上传凭证
+                  <Button type="button" variant="outline" onClick={() => rbFileRef.current?.click()} className="w-full">
+                    上传凭证（可选）
                   </Button>
                 )}
               </div>
             </div>
-            
-            {/* 历史记录链接 */}            {transaction?.reimbursementStatus === 'completed' && (
-              <div className="text-sm text-gray-500">
-                已有报销记录，修改将被记录在历史中
-              </div>
-            )}
           </div>
           
           <DialogFooter className="flex flex-row gap-2">
-            {/* 取消按钮 - 最左 */}
-            <Button 
-              variant="outline" 
-              onClick={() => setShowReimbursementDialog(false)}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => setRbDialogOpen(false)} className="flex-1">
               取消
             </Button>
-            
-            {/* 删除按钮 - 中间 */}
             <Button 
-              variant="destructive"
-              onClick={() => {
-                if (confirm('确定要删除这条账目吗？删除后无法恢复！')) {
-                  deleteMutation.mutate(transactionId);
-                }
-              }}
-              disabled={deleteMutation.isPending}
-              className="flex-1"
-            >
-              {deleteMutation.isPending ? '删除中...' : '删除'}
-            </Button>
-            
-            {/* 保存按钮 - 最右 */}
-            <Button 
-              onClick={() => {
-                manageReimbursementMutation.mutate({
-                  recordId: transactionId,
-                  status: 'completed',
-                  notes: reimbursementNotes || undefined,
-                  voucherImage: voucherImage || undefined,
-                });
-              }}
-              disabled={manageReimbursementMutation.isPending}
+              onClick={handleRbSave}
+              disabled={rbMutation.isPending}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
-              {manageReimbursementMutation.isPending ? '保存中...' : '保存'}
+              {rbMutation.isPending ? '保存中...' : '保存'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
       {/* 图片预览对话框 */}
-      <Dialog open={showImagePreview} onOpenChange={setShowImagePreview}>
+      <Dialog open={rbPreviewOpen} onOpenChange={setRbPreviewOpen}>
         <DialogContent className="max-w-4xl w-full p-0 bg-transparent border-none">
           <div className="relative">
-            <img 
-              src={previewImageUrl} 
-              alt="预览" 
-              className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="absolute top-4 right-4 bg-white hover:bg-gray-100"
-              onClick={() => setShowImagePreview(false)}
-            >
+            <img src={rbPreviewUrl} alt="预览" className="w-full h-auto max-h-[90vh] object-contain rounded-lg" />
+            <Button variant="outline" size="icon" className="absolute top-4 right-4 bg-white hover:bg-gray-100" onClick={() => setRbPreviewOpen(false)}>
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -615,7 +539,6 @@ export default function TransactionDetail() {
 }
 
 // 详细信息项组件
-
 interface DetailItemProps {
   label: string;
   value?: string;
