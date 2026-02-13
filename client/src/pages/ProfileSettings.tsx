@@ -69,7 +69,7 @@ export default function ProfileSettings() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20">
       {/* 用户信息卡片 - 动态布局 */}
       <div 
-        className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white relative overflow-hidden transition-all duration-300"
+        className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white relative overflow-hidden transition-all duration-300"
         style={{ height: `${containerHeight}px` }}
       >
         {/* 返回按钮 */}

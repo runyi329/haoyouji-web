@@ -63,7 +63,7 @@ export default function UserPermissionsManager() {
   return (
     <Card className="p-6">
       <div className="flex items-center gap-2 mb-6">
-        <Shield className="w-5 h-5 text-purple-500" />
+        <Shield className="w-5 h-5 text-[#A80000]" />
         <h2 className="text-xl font-bold">用户功能权限管理</h2>
       </div>
       

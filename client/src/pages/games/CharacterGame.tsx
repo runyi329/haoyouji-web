@@ -372,10 +372,10 @@ export default function CharacterGame() {
   // 游戏模式选择页面
   if (gameMode === 'select') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
         <div className="max-w-2xl mx-auto pt-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-purple-600 mb-2">📚 识字游戏</h1>
+            <h1 className="text-4xl font-bold text-[#A80000] mb-2">📚 识字游戏</h1>
             <p className="text-gray-600">选择你喜欢的学习方式！</p>
           </div>
           
@@ -387,9 +387,9 @@ export default function CharacterGame() {
             >
               <div className="text-center">
                 <div className="text-6xl mb-4">🖼️</div>
-                <h2 className="text-2xl font-bold text-purple-600 mb-3">看图识字</h2>
+                <h2 className="text-2xl font-bold text-[#A80000] mb-3">看图识字</h2>
                 <p className="text-gray-600 mb-4">看图片选汉字，语音播报，快乐学习！</p>
-                <Button className="w-full bg-gradient-to-r from-purple-400 to-purple-600 text-white">
+                <Button className="w-full bg-gradient-to-r from-[#A80000] to-[#d44] text-white">
                   开始游戏
                 </Button>
               </div>
@@ -433,10 +433,10 @@ export default function CharacterGame() {
   // 看图识字游戏设置页面
   if (gameMode === 'picture' && !gameStarted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 p-4">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
         <div className="max-w-2xl mx-auto pt-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-purple-600 mb-2">📚 看图识字</h1>
+            <h1 className="text-4xl font-bold text-[#A80000] mb-2">📚 看图识字</h1>
             <p className="text-gray-600">看图片，选汉字，快乐学习！</p>
           </div>
           
@@ -456,7 +456,7 @@ export default function CharacterGame() {
                   <Button
                     key={option.value}
                     variant={voiceSettings === option.value ? "default" : "outline"}
-                    className={voiceSettings === option.value ? "bg-purple-500" : ""}
+                    className={voiceSettings === option.value ? "bg-red-500" : ""}
                     onClick={() => setVoiceSettings(option.value)}
                   >
                     {option.label}
@@ -471,7 +471,7 @@ export default function CharacterGame() {
             {/* 题目数量 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                选择题目数量：<span className="text-purple-600 font-bold">{questionCount}题</span>
+                选择题目数量：<span className="text-[#A80000] font-bold">{questionCount}题</span>
               </label>
               <div className="px-2">
                 <input
@@ -484,7 +484,7 @@ export default function CharacterGame() {
                     const counts = [10, 20, 30, 40, 50];
                     setQuestionCount(counts[parseInt(e.target.value)]);
                   }}
-                  className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
+                  className="w-full h-2 bg-red-200 rounded-lg appearance-none cursor-pointer slider"
                   style={{
                     background: `linear-gradient(to right, rgb(168, 85, 247) 0%, rgb(168, 85, 247) ${([10, 20, 30, 40, 50].indexOf(questionCount) / 4) * 100}%, rgb(233, 213, 255) ${([10, 20, 30, 40, 50].indexOf(questionCount) / 4) * 100}%, rgb(233, 213, 255) 100%)`
                   }}
@@ -547,7 +547,7 @@ export default function CharacterGame() {
                   <Button
                     key={option.label}
                     variant={category === option.value ? "default" : "outline"}
-                    className={category === option.value ? "bg-purple-500" : ""}
+                    className={category === option.value ? "bg-red-500" : ""}
                     onClick={() => setCategory(option.value)}
                   >
                     {option.label}
@@ -559,7 +559,7 @@ export default function CharacterGame() {
             
             <Button
               onClick={startGame}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-6 text-lg"
+              className="w-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-[#A80000] hover:to-pink-600 text-white font-bold py-6 text-lg"
             >
               开始游戏 🚀
             </Button>
@@ -831,12 +831,12 @@ export default function CharacterGame() {
   const currentQuestion = questions[currentIndex];
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
       <div className="max-w-4xl mx-auto pt-8">
         {/* 顶部信息栏 */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-4">
-            <div className="text-lg font-semibold text-purple-600">
+            <div className="text-lg font-semibold text-[#A80000]">
               第 {currentIndex + 1} / {questions.length} 题
             </div>
             <div className="text-lg font-semibold text-gray-600">
@@ -876,7 +876,7 @@ export default function CharacterGame() {
               <Button
                 onClick={handleManualPlay}
                 disabled={isPlaying}
-                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-purple-500 hover:bg-purple-600"
+                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-red-500 hover:bg-[#A80000]"
                 size="icon"
               >
                 <Volume2 className="w-6 h-6" />

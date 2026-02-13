@@ -123,7 +123,7 @@ export default function LedgerFilter() {
     { value: "wechat", label: "微信", color: "bg-green-500" },
     { value: "alipay", label: "支付宝", color: "bg-blue-400" },
     { value: "bank", label: "银行卡", color: "bg-orange-500" },
-    { value: "digital", label: "数字钱包", color: "bg-purple-500" },
+    { value: "digital", label: "数字钱包", color: "bg-[#A80000]" },
     { value: "cash", label: "现金", color: "bg-gray-500" },
   ];
 
@@ -231,9 +231,9 @@ export default function LedgerFilter() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-rose-50 flex flex-col">
       {/* 顶部标题栏 */}
-      <div className="bg-gradient-to-r from-blue-500 to-purple-500 px-3 py-2.5 flex items-center shadow-md">
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] px-3 py-2.5 flex items-center shadow-md">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
@@ -570,7 +570,7 @@ export default function LedgerFilter() {
           重置条件
         </Button>
         <Button
-          className="flex-1 h-10 text-sm bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+          className="flex-1 h-10 text-sm bg-gradient-to-r from-[#A80000] to-[#d44] hover:from-[#8a0000] hover:to-[#A80000] text-white"
           onClick={handleSearch}
         >
           确定搜索

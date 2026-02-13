@@ -76,7 +76,7 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2 mb-2">
@@ -222,7 +222,7 @@ export default function Register() {
           
           {/* 注册按钮 */}
           <Button 
-            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            className="w-full bg-gradient-to-r from-indigo-600 to-[#d44] hover:from-indigo-700 hover:to-[#8a0000]"
             onClick={handleRegister}
             disabled={registerMutation.isPending}
           >

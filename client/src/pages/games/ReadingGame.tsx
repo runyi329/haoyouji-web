@@ -297,7 +297,7 @@ export default function ReadingGame() {
             onClick={() => setShowPinyin(!showPinyin)}
             variant={showPinyin ? "default" : "outline"}
             size="lg"
-            className={showPinyin ? "bg-purple-500 hover:bg-purple-600" : ""}
+            className={showPinyin ? "bg-red-500 hover:bg-[#A80000]" : ""}
           >
             <Languages className="w-5 h-5 mr-2" />
             {showPinyin ? "隐藏拼音" : "显示拼音"}
@@ -384,14 +384,14 @@ export default function ReadingGame() {
         
         {/* 点击的文字显示 */}
         {clickedChar && (
-          <div className="mt-8 p-6 bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg border-2 border-purple-300">
+          <div className="mt-8 p-6 bg-gradient-to-r from-red-100 to-pink-100 rounded-lg border-2 border-red-300">
             <div className="flex items-center gap-3 mb-2">
-              <Volume2 className={`w-8 h-8 text-purple-600 ${isPlaying ? "animate-pulse" : ""}`} />
-              <span className="text-xl text-purple-800 font-semibold">
+              <Volume2 className={`w-8 h-8 text-[#A80000] ${isPlaying ? "animate-pulse" : ""}`} />
+              <span className="text-xl text-[#8a0000] font-semibold">
                 {isPlaying ? "正在播放..." : "点击了"}
               </span>
             </div>
-            <p className="text-6xl font-bold text-purple-900 text-center">
+            <p className="text-6xl font-bold text-[#6a0000] text-center">
               {clickedChar}
             </p>
           </div>

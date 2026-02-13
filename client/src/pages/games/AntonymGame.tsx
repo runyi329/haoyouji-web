@@ -439,7 +439,7 @@ export default function AntonymGame() {
           </Link>
 
           <div className="space-y-6">
-            <h1 className="text-5xl font-black text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent drop-shadow-sm">
+            <h1 className="text-5xl font-black text-center bg-gradient-to-r from-[#A80000] to-pink-600 bg-clip-text text-transparent drop-shadow-sm">
               反义词游戏
             </h1>
             
@@ -504,7 +504,7 @@ export default function AntonymGame() {
                   }}
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.gameMode === 'voice'
-                      ? 'bg-purple-500 text-white shadow-lg scale-105'
+                      ? 'bg-red-500 text-white shadow-lg scale-105'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
@@ -568,7 +568,7 @@ export default function AntonymGame() {
     const currentPair = gameState.pairs[gameState.currentQuestion];
     if (!currentPair) {
       return (
-        <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4 flex items-center justify-center">
+        <div className="min-h-screen bg-gradient-to-b from-blue-100 to-rose-100 p-4 flex items-center justify-center">
           <div className="text-center">
             <p className="text-lg text-gray-600">加载中...</p>
           </div>
@@ -579,7 +579,7 @@ export default function AntonymGame() {
     const isCorrect = isAnswered && gameState.selectedAnswer === currentPair.antonym;
 
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 p-4">
+      <div className="min-h-screen bg-gradient-to-b from-blue-100 to-rose-100 p-4">
         <div className="max-w-md mx-auto">
           <Link href="/games" className="flex items-center gap-2 text-blue-600 mb-4">
             <ChevronLeft size={20} />
@@ -588,7 +588,7 @@ export default function AntonymGame() {
 
           <div className="bg-white rounded-lg shadow-lg p-6 space-y-4">
             <div className="flex justify-between items-center">
-              <h1 className="text-xl font-bold text-purple-600">反义词游戏</h1>
+              <h1 className="text-xl font-bold text-[#A80000]">反义词游戏</h1>
               <span className="text-blue-600 font-bold">{formatTime(elapsedTime)}</span>
             </div>
 
@@ -661,8 +661,8 @@ export default function AntonymGame() {
                     {/* 录音中的波纹动画 */}
                     {isListening && (
                       <>
-                        <div className="absolute inset-0 rounded-full bg-purple-400 opacity-75 animate-ping" />
-                        <div className="absolute inset-0 rounded-full bg-purple-300 opacity-50 animate-pulse" style={{ animationDelay: '0.15s' }} />
+                        <div className="absolute inset-0 rounded-full bg-[#A80000] opacity-75 animate-ping" />
+                        <div className="absolute inset-0 rounded-full bg-[#d44] opacity-50 animate-pulse" style={{ animationDelay: '0.15s' }} />
                       </>
                     )}
                     
@@ -670,7 +670,7 @@ export default function AntonymGame() {
                       className={`relative w-32 h-32 rounded-full flex items-center justify-center text-white font-bold text-lg transition-all ${
                         isListening
                           ? "bg-gradient-to-br from-red-500 to-pink-500 shadow-lg shadow-red-300"
-                          : "bg-gradient-to-br from-purple-500 to-indigo-500 shadow-lg"
+                          : "bg-gradient-to-br from-red-500 to-indigo-500 shadow-lg"
                       }`}
                     >
                       {isListening ? (
@@ -689,7 +689,7 @@ export default function AntonymGame() {
                   
                   {isListening && (
                     <div className="text-center animate-pulse">
-                      <p className="text-purple-600 font-bold text-lg">🎤 请说出反义词...</p>
+                      <p className="text-[#A80000] font-bold text-lg">🎤 请说出反义词...</p>
                       <p className="text-gray-500 text-sm mt-1">系统正在认真听哦！</p>
                     </div>
                   )}
@@ -699,7 +699,7 @@ export default function AntonymGame() {
                   )}
                   
                   {voiceAnswer && (
-                    <div className="bg-gradient-to-r from-blue-100 to-purple-100 px-6 py-3 rounded-lg shadow-md">
+                    <div className="bg-gradient-to-r from-blue-100 to-rose-100 px-6 py-3 rounded-lg shadow-md">
                       <p className="text-gray-600 text-sm">你说的是：</p>
                       <p className="text-blue-600 font-bold text-2xl">{voiceAnswer}</p>
                     </div>

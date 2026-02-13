@@ -56,7 +56,7 @@ export default function ReferrerLeaderboard() {
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-4">
       <div className="max-w-4xl mx-auto">
         {/* 顶部导航 */}
         <div className="mb-6 flex items-center gap-4">
@@ -144,7 +144,7 @@ export default function ReferrerLeaderboard() {
                         <td className="py-4 px-4 text-center text-blue-600 font-semibold">
                           {stat.directCount}人
                         </td>
-                        <td className="py-4 px-4 text-center text-purple-600 font-semibold">
+                        <td className="py-4 px-4 text-center text-[#A80000] font-semibold">
                           {stat.indirectCount}人
                         </td>
                         <td className="py-4 px-4 text-center text-indigo-700 font-bold">

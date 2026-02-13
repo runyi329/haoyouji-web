@@ -71,7 +71,7 @@ export default function BannerConfig() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-blue-50 pb-20">
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">
@@ -179,7 +179,7 @@ export default function BannerConfig() {
               {(title || description || imageUrl) && (
                 <div className="space-y-2">
                   <Label>预览效果</Label>
-                  <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50">
+                  <Card className="p-6 bg-gradient-to-br from-blue-50 to-rose-50">
                     {imageUrl && (
                       <div className="mb-4 rounded-lg overflow-hidden">
                         <img

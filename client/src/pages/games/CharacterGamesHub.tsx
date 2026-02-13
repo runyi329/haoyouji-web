@@ -47,8 +47,8 @@ const literacyGames: LiteracyGame[] = [
     title: "翻牌记字",
     description: "翻牌配对记汉字，训练记忆！",
     icon: Layers,
-    gradient: "from-purple-400 to-pink-600",
-    bgColor: "bg-purple-50",
+    gradient: "from-[#A80000] to-[#d44]",
+    bgColor: "bg-red-50",
     path: "/games/character-memory",
   },
 ];

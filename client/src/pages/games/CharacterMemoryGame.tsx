@@ -83,7 +83,7 @@ function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenP
   ];
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-blue-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 space-y-6 shadow-xl">
         {/* 标题 */}
         <div className="text-center space-y-2">
@@ -106,7 +106,7 @@ function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenP
                   w-full p-4 rounded-lg text-white font-medium
                   transition-all duration-200
                   ${btn.color}
-                  ${level === btn.id ? 'ring-4 ring-offset-2 ring-purple-400 scale-105' : ''}
+                  ${level === btn.id ? 'ring-4 ring-offset-2 ring-[#A80000] scale-105' : ''}
                   active:scale-95
                 `}
               >
@@ -132,7 +132,7 @@ function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenP
             playStartSound();
             onStartGame();
           }}
-          className="w-full h-14 text-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+          className="w-full h-14 text-lg font-bold bg-gradient-to-r from-red-500 to-pink-500 hover:from-[#A80000] hover:to-pink-600"
           disabled={!level}
         >
           开始游戏
@@ -379,7 +379,7 @@ export default function CharacterMemoryGame() {
                   className={`aspect-square rounded-xl transition-all duration-300 transform ${
                     card.isFlipped || card.isMatched
                       ? 'bg-white shadow-lg'
-                      : 'bg-gradient-to-br from-purple-400 to-pink-400 hover:scale-105 hover:shadow-xl'
+                      : 'bg-gradient-to-br from-[#A80000] to-[#d44] hover:scale-105 hover:shadow-xl'
                   } ${
                     card.isMatched ? 'opacity-50 scale-95' : ''
                   }`}
@@ -427,9 +427,9 @@ export default function CharacterMemoryGame() {
                 <div className="text-sm text-gray-600">用时</div>
                 <div className="text-2xl font-bold text-blue-600">{formatTime(elapsedTime)}</div>
               </div>
-              <div className="p-4 bg-purple-50 rounded-lg">
+              <div className="p-4 bg-red-50 rounded-lg">
                 <div className="text-sm text-gray-600">步数</div>
-                <div className="text-2xl font-bold text-purple-600">{moves}</div>
+                <div className="text-2xl font-bold text-[#A80000]">{moves}</div>
               </div>
             </div>
 
@@ -447,7 +447,7 @@ export default function CharacterMemoryGame() {
                 再玩一次
               </Button>
               <Link href="/games/character-hub">
-                <Button className="gap-2 bg-gradient-to-r from-purple-500 to-pink-500">
+                <Button className="gap-2 bg-gradient-to-r from-red-500 to-pink-500">
                   返回识字游戏
                 </Button>
               </Link>

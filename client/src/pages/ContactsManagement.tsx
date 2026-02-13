@@ -106,14 +106,14 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-purple-200 dark:border-purple-800 flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border-purple" : ""
       }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-purple-600 dark:text-purple-400">今年新增</p>
-        <p className="font-bold text-purple-700 dark:text-purple-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-[#A80000] dark:text-red-400">今年新增</p>
+        <p className="font-bold text-[#A80000] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -202,14 +202,14 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
   return (
     <Card 
       {...dragListeners}
-      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800 flex flex-col justify-center cursor-pointer select-none ${
+      className={`hover:shadow-lg transition-shadow relative h-full bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-800 flex flex-col justify-center cursor-pointer select-none ${
         isBreathing ? "animate-breathing-border" : ""
       }`}
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400">今年活跃</p>
-        <p className="font-bold text-violet-700 dark:text-violet-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-[#A80000] dark:text-red-400">今年活跃</p>
+        <p className="font-bold text-[#A80000] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -1269,7 +1269,7 @@ export default function ContactsManagement() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="rounded-full w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white overflow-hidden p-0"
+                    className="rounded-full w-9 h-9 bg-gradient-to-br from-[#A80000] to-[#d44] hover:from-[#8a0000] hover:to-[#A80000] text-white overflow-hidden p-0"
                   >
                     {user?.avatar ? (
                       <img 
