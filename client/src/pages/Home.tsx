@@ -88,10 +88,10 @@ export default function Home() {
   ];
 
   const features = [
-    { name: "地域", icon: MapPin, color: "bg-orange-50 text-orange-600", href: `${BASE_URL}/parent/contacts/map` },
-    { name: "共享", icon: Handshake, color: "bg-green-50 text-green-600", href: `${BASE_URL}/parent/contacts/sharing` },
-    { name: "数据", icon: BarChart2, color: "bg-purple-50 text-purple-600", href: `${BASE_URL}/parent/contacts/data-comparison` },
-    { name: "刷新", icon: RefreshCw, color: "bg-indigo-50 text-indigo-600", href: "" },
+    { name: "地域", icon: MapPin, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
+    { name: "共享", icon: Handshake, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/sharing` },
+    { name: "数据", icon: BarChart2, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/data-comparison` },
+    { name: "刷新", icon: RefreshCw, color: "bg-red-50 text-[#A80000]", href: "" },
   ];
 
   const metricsLeft = [
