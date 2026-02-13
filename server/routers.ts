@@ -18,15 +18,18 @@ import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
+import * as dbEquity from "./db-equity";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
+import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
 import ExcelJS from "exceljs";
 
 export const appRouter = router({
   system: systemRouter,
+  equity: equityRouter,
   
   auth: router({
     me: publicProcedure.query(opts => {

@@ -109,6 +109,8 @@ const LedgerCalendar = lazy(() => import("./pages/LedgerCalendar"));
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
 const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
+const MyEquity = lazy(() => import("./pages/MyEquity"));
+const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // 加载中组件
@@ -138,6 +140,7 @@ function Router() {
         <Route path="/admin/banner" component={BannerConfig} />
         <Route path="/admin/points" component={PointsManagement} />
         <Route path="/admin/point-rules" component={PointRulesManagement} />
+        <Route path="/admin/equity" component={EquityManagement} />
 
         {/* 好友记相关页面 */}
         <Route path="/parent/contacts" component={ContactsManagement} />
@@ -158,6 +161,7 @@ function Router() {
         <Route path="/parent/academy" component={Academy} />
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
+        <Route path="/parent/my-equity" component={MyEquity} />
         <Route path="/parent/profile/invite" component={InviteCode} />
         <Route path="/invited-friends" component={InvitedFriendsList} />
 
