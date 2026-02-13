@@ -626,10 +626,10 @@ const AddTransaction = () => {
           </div>
           <div className="p-3">
             <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded text-xs ${
                 reimbursementStatus === 'pending'
-                  ? "bg-purple-600 text-white"
-                  : "bg-gray-200 text-gray-600"
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
             >
