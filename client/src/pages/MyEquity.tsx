@@ -5,6 +5,70 @@ import { Link } from "wouter";
 import { useState, createElement } from "react";
 import { toast } from "sonner";
 
+// FAQ手风琴组件
+function FAQAccordion() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const faqs = [
+    {
+      question: '我投这点钱到底占多少股？',
+      answer: [
+        '我们不按传统的"拍脑袋估值"来谈。我们要的是**"同舟共济"**。',
+        '',
+        '1. **它是动态的增长票**：我们现在是初创期，我们不想随便定一个虚高的估值把您套住，也不想低估公司的潜力。这30%是专门给首批天使投资人的"原始红利池"。',
+        '',
+        '2. **您的份额由您的胆识决定**：如果本轮我们只需要300万就能跑通市场，那您这50万就占了整个天使池的1/6，折合总股本5%。',
+        '',
+        '3. **您有"二次增持"的机会**：除了这笔钱，如果您能利用资源帮我们拓展市场（利用那15%的贡献池），您的资金权重会被双倍放大。这意味着，您不仅是出钱的股东，您还是能通过贡献"赚"回更多股权的合伙人。',
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {faqs.map((faq, index) => (
+        <div key={index} className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+          <button
+            onClick={() => setOpenIndex(openIndex === index ? null : index)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+          >
+            <span className="text-sm font-semibold text-gray-900 pr-4">{faq.question}</span>
+            <svg
+              className={`w-5 h-5 text-gray-500 flex-shrink-0 transition-transform ${
+                openIndex === index ? 'rotate-180' : ''
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {openIndex === index && (
+            <div className="px-4 pb-4 pt-2 text-sm text-gray-700 leading-relaxed border-t border-gray-100">
+              {faq.answer.map((line, i) => {
+                if (line === '') return <div key={i} className="h-2" />;
+                if (line.includes('**')) {
+                  const parts = line.split('**');
+                  return (
+                    <p key={i} className="mb-2">
+                      {parts.map((part, j) => 
+                        j % 2 === 1 ? <strong key={j} className="font-bold text-gray-900">{part}</strong> : part
+                      )}
+                    </p>
+                  );
+                }
+                return <p key={i} className="mb-2">{line}</p>;
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // 饼图配色方案
 const POOL_COLORS = [
   '#A80000', '#FF6B6B', '#F59E0B', '#10B981', '#3B82F6',
@@ -592,6 +656,18 @@ export default function MyEquity() {
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
           </div>
+        </Card>
+
+        {/* 13. 常见问题 FAQ */}
+        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200">
+          <div className="flex items-center space-x-2 mb-3">
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h2 className="text-base font-bold text-gray-900">常见问题</h2>
+          </div>
+
+          <FAQAccordion />
         </Card>
       </div>
     </div>
