@@ -50,13 +50,16 @@ export const equityRouter = router({
     .input(z.object({
       id: z.number(),
       amount: z.number().positive(),
+      investorName: z.string().optional(),
+      investorIdCard: z.string().optional(),
+      investmentDate: z.string().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
       }
-      return await dbEquity.updateInvestment(input.id, input.amount, input.notes);
+      return await dbEquity.updateInvestment(input.id, input.amount, input.investorName, input.investorIdCard, input.investmentDate, input.notes);
     }),
   
   // 删除投资记录（管理员）

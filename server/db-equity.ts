@@ -48,6 +48,8 @@ export async function getAllInvestments() {
       userId: equityInvestments.userId,
       userName: users.name,
       username: users.username,
+      investorName: equityInvestments.investorName,
+      investorIdCard: equityInvestments.investorIdCard,
       investmentAmount: equityInvestments.investmentAmount,
       investmentDate: equityInvestments.investmentDate,
       notes: equityInvestments.notes,
@@ -118,16 +120,31 @@ export async function addInvestment(
 /**
  * 更新投资记录
  */
-export async function updateInvestment(id: number, amount: number, notes?: string) {
+export async function updateInvestment(
+  id: number,
+  amount: number,
+  investorName?: string,
+  investorIdCard?: string,
+  investmentDate?: string,
+  notes?: string
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  const updateData: any = {
+    investmentAmount: amount.toString(),
+    notes: notes || null,
+    investorName: investorName || null,
+    investorIdCard: investorIdCard || null,
+  };
+  
+  if (investmentDate) {
+    updateData.investmentDate = `${investmentDate} 00:00:00`;
+  }
+  
   await db
     .update(equityInvestments)
-    .set({
-      investmentAmount: amount.toString(),
-      notes,
-    })
+    .set(updateData)
     .where(eq(equityInvestments.id, id));
   
   return { success: true };
