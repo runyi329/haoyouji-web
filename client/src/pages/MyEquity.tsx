@@ -647,12 +647,19 @@ export default function MyEquity() {
           />
         </Card>
 
-        {/* 5. 股份增长模拟器 */}
-        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
-          <div className="flex items-center space-x-2 mb-3">
-            <Target className="w-5 h-5 text-blue-600" />
-            <h2 className="text-base font-bold text-gray-900">股份增长模拟器</h2>
-          </div>
+        {/* 第二层：我的增值攻略 */}
+        <div className="mt-4 pt-4 border-t-4 border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center space-x-2">
+            <Target className="w-6 h-6 text-blue-600" />
+            <span>我的增值攻略</span>
+          </h2>
+          
+          {/* 模拟器卡片 */}
+          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 mb-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <Target className="w-5 h-5 text-blue-600" />
+              <h3 className="text-base font-bold text-gray-900">股份增长模拟器</h3>
+            </div>
           
           <div className="space-y-3">
             <div>
@@ -691,12 +698,82 @@ export default function MyEquity() {
             </button>
           </Link>
         </Card>
+        
+        {/* 实时明细预测 */}
+        <Card className="p-4 rounded-2xl shadow-sm">
+          <h3 className="text-base font-bold text-gray-900 mb-3">股份明细（预测变动后）</h3>
+          
+          <div className="space-y-2">
+            <div className="flex items-center p-3 bg-red-50 rounded-xl">
+              <div className="w-9 h-9 rounded-lg bg-[#A80000] flex items-center justify-center flex-shrink-0 mr-3">
+                <DollarSign className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">投资股份</span>
+                  <span className="text-base font-bold text-[#A80000]">{equity.investmentEquity.toFixed(4)}%</span>
+                </div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  投资股份池中占比
+                  {equity.details.userInvestment > 0 && (
+                    <span className="ml-1">· 金额占比 {((equity.details.userInvestment / equity.details.totalInvestment) * 100).toFixed(2)}%</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center p-3 bg-red-50/60 rounded-xl">
+              <div className="w-9 h-9 rounded-lg bg-[#FF6B6B] flex items-center justify-center flex-shrink-0 mr-3">
+                <Users className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">邀请贡献</span>
+                  <div className="text-right">
+                    <span className="text-base font-bold text-[#FF6B6B]">
+                      {(equity.inviteEquity + simulatedInviteEquity).toFixed(4)}%
+                    </span>
+                    {simulateInvites > 0 && (
+                      <div className="text-xs text-green-600">+{simulatedInviteEquity.toFixed(4)}%</div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  已邀请 {equity.details.inviteCount} 人 + 模拟 {simulateInvites} 人 × 0.05%/人
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center p-3 bg-amber-50 rounded-xl">
+              <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0 mr-3">
+                <Network className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">人脉贡献</span>
+                  <span className="text-base font-bold text-amber-600">{equity.referralNetworkEquity.toFixed(4)}%</span>
+                </div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  被邀请人带来 {equity.details.referralNetworkCount} 个人脉 · 每100人脉 = 0.02%
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+        {/* 第三层：背书与信任 */}
+        <div className="mt-4 pt-4 border-t-4 border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center space-x-2">
+            <Award className="w-6 h-6 text-amber-600" />
+            <span>背书与信任</span>
+          </h2>
 
         {/* 6. 里程碑成就 */}
-        <Card className="p-4 rounded-2xl shadow-sm">
+        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-amber-50 to-yellow-50">
           <div className="flex items-center space-x-2 mb-3">
             <Award className="w-5 h-5 text-amber-600" />
-            <h2 className="text-base font-bold text-gray-900">里程碑成就</h2>
+            <h2 className="text-base font-bold text-gray-900">成就勋章</h2>
           </div>
 
           <div className="space-y-3">
@@ -704,21 +781,40 @@ export default function MyEquity() {
               const currentLevel = milestone.levels.filter(l => milestone.current >= l.threshold).pop();
               const nextLevel = milestone.levels.find(l => milestone.current < l.threshold);
               const Icon = milestone.icon;
+              
+              // 判断是否是高等级勋章（金牌、钻石）
+              const isHighLevel = currentLevel && (currentLevel.name.includes('金牌') || currentLevel.name.includes('钻石'));
 
               return (
-                <div key={idx} className="bg-gray-50 rounded-xl p-3">
+                <div 
+                  key={idx} 
+                  className={`rounded-xl p-3 transition-all ${
+                    isHighLevel 
+                      ? 'bg-gradient-to-br from-yellow-100 to-amber-100 border-2 border-yellow-400 shadow-lg' 
+                      : 'bg-white border border-gray-200'
+                  }`}
+                >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
                       <Icon className="w-4 h-4 text-gray-600" />
                       <span className="text-sm font-semibold text-gray-700">{milestone.category}</span>
                     </div>
                     {currentLevel && (
-                      <div className="flex items-center space-x-1">
+                      <div className={`flex items-center space-x-1 ${
+                        isHighLevel ? 'animate-pulse' : ''
+                      }`}>
                         {createElement(currentLevel.icon, {
-                          className: "w-4 h-4",
+                          className: `w-5 h-5 ${
+                            isHighLevel ? 'drop-shadow-lg' : ''
+                          }`,
                           style: { color: currentLevel.color },
                         })}
-                        <span className="text-xs font-bold" style={{ color: currentLevel.color }}>
+                        <span 
+                          className={`text-sm font-bold ${
+                            isHighLevel ? 'drop-shadow-sm' : ''
+                          }`} 
+                          style={{ color: currentLevel.color }}
+                        >
                           {currentLevel.name}
                         </span>
                       </div>
@@ -748,62 +844,9 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 7. 股份明细 */}
-        <Card className="p-4 rounded-2xl shadow-sm">
-          <h2 className="text-base font-bold text-gray-900 mb-3">股份明细</h2>
-          
-          <div className="space-y-2">
-            <div className="flex items-center p-3 bg-red-50 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-[#A80000] flex items-center justify-center flex-shrink-0 mr-3">
-                <DollarSign className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">投资股份</span>
-                  <span className="text-base font-bold text-[#A80000]">{equity.investmentEquity.toFixed(4)}%</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  投资股份池中占比
-                  {equity.details.userInvestment > 0 && (
-                    <span className="ml-1">· 金额占比 {((equity.details.userInvestment / equity.details.totalInvestment) * 100).toFixed(2)}%</span>
-                  )}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center p-3 bg-red-50/60 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-[#FF6B6B] flex items-center justify-center flex-shrink-0 mr-3">
-                <Users className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">邀请贡献</span>
-                  <span className="text-base font-bold text-[#FF6B6B]">{equity.inviteEquity.toFixed(4)}%</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  已邀请 {equity.details.inviteCount} 人 × 0.05%/人
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center p-3 bg-amber-50 rounded-xl">
-              <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0 mr-3">
-                <Network className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">人脉贡献</span>
-                  <span className="text-base font-bold text-amber-600">{equity.referralNetworkEquity.toFixed(4)}%</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  被邀请人带来 {equity.details.referralNetworkCount} 个人脉 · 每100人脉 = 0.02%
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* 8. 公司股权架构饼图 */}
+        {/* 7. 公司股权架构饼图 */}
         {companyPools.length > 0 && (
           <Card className="p-4 rounded-2xl shadow-sm">
             <h2 className="text-base font-bold text-gray-900 mb-2">公司股权架构</h2>
@@ -814,9 +857,9 @@ export default function MyEquity() {
             />
           </Card>
         )}
+      </div>
 
-
-        {/* 10. 最近动态 */}
+        {/* 8. 最近动态 */}
         {recentActivities && recentActivities.length > 0 && (
           <Card className="p-4 rounded-2xl shadow-sm">
             <div className="flex items-center space-x-2 mb-3">
