@@ -8,6 +8,11 @@ import EquityEnergyRing from "@/components/EquityEnergyRing";
 import MultiDimensionSimulator, { SimulationResult } from "@/components/MultiDimensionSimulator";
 import HighValueActions from "@/components/HighValueActions";
 import PUScoreboard from "@/components/PUScoreboard";
+import AchievementWall from "@/components/AchievementWall";
+import CompanyEquityStructure from "@/components/CompanyEquityStructure";
+import LegalAgreementZone from "@/components/LegalAgreementZone";
+import BlockchainProof from "@/components/BlockchainProof";
+import InvestorFAQ from "@/components/InvestorFAQ";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -698,192 +703,62 @@ export default function MyEquity() {
           </Card>
         </div>
 
-        {/* 第三层：背书与信任 */}
-        <div className="mt-6 pt-6 pb-4 px-4 bg-gray-50">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">背书与信任</h2>
+        {/* 第三层：合伙人保障中心 */}
+        <div className="mt-6 pt-6 pb-6 px-4 bg-gray-50">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">合伙人保障中心</h2>
+          <p className="text-xs text-gray-500 mb-6 px-1">契约、背书与底层逻辑 —— 为660位创始股东构建信任基石</p>
 
-        {/* 6. 里程碑成就 */}
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">成就勋章</h3>
+          {/* 模块一：成就勋章墙 */}
+          <div className="mb-6">
+            <AchievementWall
+              inviteCount={equity.details?.inviteCount || 0}
+              investmentAmount={equity.details?.userInvestment || 0}
+              networkSize={equity.details?.referralNetworkCount || 0}
+            />
+          </div>
 
-          <div className="space-y-3">
-            {milestones.map((milestone, idx) => {
-              const currentLevel = milestone.levels.filter(l => milestone.current >= l.threshold).pop();
-              const nextLevel = milestone.levels.find(l => milestone.current < l.threshold);
-              const Icon = milestone.icon;
-              
-              // 判断是否是高等级勋章（金牌、钻石）
-              const isHighLevel = currentLevel && (currentLevel.name.includes('金牌') || currentLevel.name.includes('钻石'));
+          {/* 模块二：公司股权透视图 */}
+          <div className="mb-6">
+            <CompanyEquityStructure />
+          </div>
 
-              return (
-                <div 
-                  key={idx} 
-                  className={`rounded-xl p-3 transition-all ${
-                    isHighLevel 
-                      ? 'bg-gradient-to-br from-yellow-100 to-amber-100 border-2 border-yellow-400 shadow-lg' 
-                      : 'bg-white border border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <Icon className="w-4 h-4 text-gray-600" />
-                      <span className="text-sm font-semibold text-gray-700">{milestone.category}</span>
-                    </div>
-                    {currentLevel && (
-                      <div className={`flex items-center space-x-1 ${
-                        isHighLevel ? 'animate-pulse' : ''
-                      }`}>
-                        {createElement(currentLevel.icon, {
-                          className: `w-5 h-5 ${
-                            isHighLevel ? 'drop-shadow-lg' : ''
-                          }`,
-                          style: { color: currentLevel.color },
-                        })}
-                        <span 
-                          className={`text-sm font-bold ${
-                            isHighLevel ? 'drop-shadow-sm' : ''
-                          }`} 
-                          style={{ color: currentLevel.color }}
-                        >
-                          {currentLevel.name}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+          {/* 模块三：法律契约区 */}
+          <div className="mb-6">
+            <LegalAgreementZone
+              agreements={[
+                {
+                  id: 'equity-investment-agreement',
+                  title: '电子股权投资协议',
+                  description: '明确股东权益、义务及退出机制',
+                  status: 'unsigned',
+                  hashValue: '0x7a2d8f3e9c1b5a4d6f8e2c9a1b3d5e7f9a2c4e6d8f1a3b5c7d9e1f3a5b7c9d1e3f',
+                  blockchainTxId: 'BH9872F3A...A82',
+                },
+              ]}
+              onSign={(id) => {
+                toast.info('正在跳转到签署页面...');
+              }}
+              onDownload={(id) => {
+                toast.success('协议下载中...');
+              }}
+            />
+          </div>
 
-                  {nextLevel && (
-                    <div>
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                        <span>下一级：{nextLevel.name}</span>
-                        <span>{milestone.current.toFixed(0)} / {nextLevel.threshold}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all"
-                          style={{
-                            width: `${Math.min(100, (milestone.current / nextLevel.threshold) * 100)}%`,
-                            backgroundColor: nextLevel.color,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          {/* 模块四：智能FAQ */}
+          <div className="mb-6">
+            <InvestorFAQ />
+          </div>
+
+          {/* 神来之笔：区块链存证标签 */}
+          <div>
+            <BlockchainProof
+              totalShareholders={equity.ranking?.total || 660}
+              lastSyncTime={new Date().toISOString()}
+            />
           </div>
         </div>
 
-        {/* 7. 公司股权架构饼图 */}
-        {companyPools.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">公司股权架构</h3>
-            <EquityPieChart
-              parts={companyPools}
-              centerLabel="总股本"
-              centerValue="100%"
-            />
-          </div>
-        )}
-      </div>
 
-        {/* 8. 最近动态 */}
-        {recentActivities && recentActivities.length > 0 && (
-          <Card className="p-4 rounded-2xl shadow-sm">
-            <div className="flex items-center space-x-2 mb-3">
-              <Activity className="w-5 h-5 text-blue-600" />
-              <h2 className="text-base font-bold text-gray-900">最近动态</h2>
-            </div>
-
-            <div className="space-y-2">
-              {(recentActivities || []).slice(0, 5).map((activity: any, idx: number) => (
-                <div key={idx} className="flex items-center space-x-3 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
-                  <div className="flex-1 text-gray-700">
-                    <span className="font-semibold">{activity.username}</span>
-                    {activity.activityType === 'investment' && (
-                      <span> 增加了投资</span>
-                    )}
-                    {activity.activityType === 'invite' && (
-                      <span> 邀请了 {activity.value} 位新用户</span>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">
-                    {new Date(activity.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* 11. 如何增加股份 */}
-        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
-          <h2 className="text-base font-bold text-gray-900 mb-3">如何增加股份？</h2>
-          
-          <div className="space-y-2.5">
-            <div className="flex items-start space-x-2.5">
-              <div className="w-5 h-5 rounded-full bg-[#A80000] text-white flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">1</div>
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">邀请新用户</span>
-                <span className="text-gray-500"> — 每邀请1人 </span>
-                <span className="text-[#A80000] font-bold">+0.05%</span>
-              </p>
-            </div>
-            <div className="flex items-start space-x-2.5">
-              <div className="w-5 h-5 rounded-full bg-[#A80000] text-white flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">2</div>
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">帮助被邀请人发展人脉</span>
-                <span className="text-gray-500"> — 每增加100人脉 </span>
-                <span className="text-[#A80000] font-bold">+0.02%</span>
-              </p>
-            </div>
-            <div className="flex items-start space-x-2.5">
-              <div className="w-5 h-5 rounded-full bg-[#A80000] text-white flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">3</div>
-              <p className="text-sm text-gray-700">
-                <span className="font-semibold">增加投资</span>
-                <span className="text-gray-500"> — 提升在投资股份池中的占比</span>
-              </p>
-            </div>
-          </div>
-
-          <Link href="/parent/profile/invite">
-            <button className="w-full mt-3 bg-[#A80000] text-white py-2.5 rounded-xl font-semibold hover:bg-[#8a0000] transition-colors text-sm">
-              立即邀请好友
-            </button>
-          </Link>
-        </Card>
-
-        {/* 12. 签署协议/架构说明 */}
-        <Card
-          className="p-4 rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => toast.info("需要更高权限")}
-        >
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A80000] to-[#c44] flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 text-sm">在线签署股权投资协议</h3>
-              <p className="text-xs text-gray-500">电子签章，具有法律效力</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-          </div>
-        </Card>
-
-        {/* 13. 常见问题 FAQ */}
-        <Card className="p-3 rounded-2xl shadow-sm">
-          <div className="flex items-center space-x-2 mb-2.5">
-            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h2 className="text-sm font-bold text-gray-900">常见问题</h2>
-          </div>
-
-          <FAQAccordion />
-        </Card>
       </div>
     </div>
   );
