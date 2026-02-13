@@ -14,6 +14,7 @@ import {
   BarChart3,
   Plus,
   Search,
+  Receipt,
 } from "lucide-react";
 
 export default function LedgerDetail() {
@@ -419,21 +420,9 @@ export default function LedgerDetail() {
                               </svg>
                             </span>
                           )}
-                          {/* 报销状态标签 */}
+                          {/* 报销状态图标 */}
                           {record.reimbursementStatus === 'pending' && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-xs rounded">
-                              💰待报销
-                            </span>
-                          )}
-                          {record.reimbursementStatus === 'completed' && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-green-500 text-white text-xs rounded">
-                              ✅已报销
-                            </span>
-                          )}
-                          {record.reimbursementStatus === 'none' && (
-                            <span className="ml-1 px-1.5 py-0.5 bg-gray-400 text-white text-xs rounded">
-                              无需报销
-                            </span>
+                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-blue-500 flex-shrink-0" />
                           )}
                         </div>
                         {record.description && (
