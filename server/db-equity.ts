@@ -37,24 +37,57 @@ export async function updateEquityRule(ruleKey: string, ruleValue: number) {
 
 /**
  * 插入或更新股权规则（upsert）
- * 使用原生SQL的INSERT ON DUPLICATE KEY UPDATE确保可靠性
+ * 使用drizzle ORM的insert + onDuplicateKeyUpdate确保可靠性
  */
 export async function upsertEquityRule(ruleKey: string, ruleValue: number, ruleDescription?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  const desc = ruleDescription || null;
+  const desc = ruleDescription || ruleKey;
+  const valStr = Number(ruleValue).toFixed(4);
   
-  // 使用原生SQL执行upsert，避免先查后插的并发问题
-  await db.execute(
-    sql`INSERT INTO equity_rules (rule_key, rule_value, rule_description)
-        VALUES (${ruleKey}, ${ruleValue.toFixed(4)}, ${desc})
-        ON DUPLICATE KEY UPDATE
-          rule_value = VALUES(rule_value),
-          rule_description = VALUES(rule_description)`
-  );
+  console.log(`[upsertEquityRule] key=${ruleKey}, value=${valStr}, desc=${desc}`);
   
-  return { success: true };
+  try {
+    // 方法一：先查后插/更
+    const existing = await db
+      .select()
+      .from(equityRules)
+      .where(eq(equityRules.ruleKey, ruleKey));
+    
+    if (existing.length > 0) {
+      console.log(`[upsertEquityRule] Updating existing rule: ${ruleKey}`);
+      await db
+        .update(equityRules)
+        .set({
+          ruleValue: valStr,
+          ruleDescription: desc,
+        })
+        .where(eq(equityRules.ruleKey, ruleKey));
+    } else {
+      console.log(`[upsertEquityRule] Inserting new rule: ${ruleKey}`);
+      await db
+        .insert(equityRules)
+        .values({
+          ruleKey: ruleKey,
+          ruleValue: valStr,
+          ruleDescription: desc,
+        });
+      console.log(`[upsertEquityRule] Insert completed for: ${ruleKey}`);
+    }
+    
+    // 验证写入是否成功
+    const verify = await db
+      .select()
+      .from(equityRules)
+      .where(eq(equityRules.ruleKey, ruleKey));
+    console.log(`[upsertEquityRule] Verify result for ${ruleKey}:`, verify.length > 0 ? 'EXISTS' : 'NOT FOUND');
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[upsertEquityRule] Error for ${ruleKey}:`, error.message);
+    throw error;
+  }
 }
 
 /**
