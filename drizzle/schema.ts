@@ -1004,6 +1004,8 @@ export const encryptionConfig = mysqlTable("encryption_config", {
 export const equityInvestments = mysqlTable("equity_investments", {
 	id: int().autoincrement().notNull().primaryKey(),
 	userId: int("user_id").notNull(),
+	investorName: varchar("investor_name", { length: 100 }),
+	investorIdCard: varchar("investor_id_card", { length: 18 }),
 	investmentAmount: decimal("investment_amount", { precision: 15, scale: 2 }).default('0.00').notNull(),
 	investmentDate: timestamp("investment_date", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	notes: text(),
