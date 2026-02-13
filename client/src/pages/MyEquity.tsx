@@ -648,9 +648,9 @@ export default function MyEquity() {
         </Card>
 
         {/* 第二层：我的增值攻略 */}
-        <div className="mt-4 pt-4 border-t-4 border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center space-x-2">
-            <Target className="w-6 h-6 text-blue-600" />
+        <div className="mt-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 shadow-md">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
+            <Target className="w-7 h-7 text-blue-600" />
             <span>我的增值攻略</span>
           </h2>
           
@@ -763,9 +763,9 @@ export default function MyEquity() {
       </div>
 
         {/* 第三层：背书与信任 */}
-        <div className="mt-4 pt-4 border-t-4 border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center space-x-2">
-            <Award className="w-6 h-6 text-amber-600" />
+        <div className="mt-6 p-5 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl border-2 border-amber-200 shadow-md">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center space-x-2">
+            <Award className="w-7 h-7 text-amber-600" />
             <span>背书与信任</span>
           </h2>
 
