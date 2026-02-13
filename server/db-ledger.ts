@@ -2202,6 +2202,7 @@ export async function updateTransaction(
     images?: string[];
     memberId?: number;
     accountId?: number;
+    reimbursementStatus?: 'none' | 'pending' | 'completed';
   }
 ) {
   const db = await getLedgerDb();
@@ -2249,6 +2250,7 @@ export async function updateTransaction(
   if (data.images && data.images.length > 0) updateData.imageUrl = data.images[0]; // 只支持单张图片
   if (data.memberId) updateData.memberId = data.memberId;
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
+  if (data.reimbursementStatus !== undefined) updateData.reimbursementStatus = data.reimbursementStatus;
   
   // 更新记录
   await db
