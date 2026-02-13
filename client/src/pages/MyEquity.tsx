@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, Users, Handshake, FileSignature, ChevronDown, ChevronUp, Building2, GitBranch, DollarSign, Network } from "lucide-react";
+import { Loader2, TrendingUp, Trophy, Target, Activity, DollarSign, Users, Network, ChevronRight, Sparkles, Award, Crown, Gem, Medal } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ const POOL_COLORS = [
   '#84CC16', '#06B6D4',
 ];
 
-// 自绘SVG饼图组件：饼在左侧，引线引到右侧统一排列
+// 自绘SVG饼图组件
 function EquityPieChart({
   parts,
   othersValue,
@@ -36,7 +36,6 @@ function EquityPieChart({
   const total = allParts.reduce((s, p) => s + p.value, 0);
   if (total === 0) return null;
 
-  // 动态计算SVG高度
   const labelGap = 42;
   const labelStartY = 30;
   const svgH = Math.max(200, labelStartY + allParts.length * labelGap + 10);
@@ -55,7 +54,6 @@ function EquityPieChart({
 
   const sectorPath = (startAngle: number, endAngle: number) => {
     if (endAngle - startAngle >= 359.99) {
-      // 完整圆
       return `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`;
     }
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
@@ -67,8 +65,6 @@ function EquityPieChart({
   };
 
   const labelX = 210;
-
-  // 中心显示内容
   const cLabel = centerLabel || '总股份';
   const cValue = centerValue || allParts.filter(p => p.label !== '其他股东').reduce((s, p) => s + p.value, 0).toFixed(2) + '%';
 
@@ -131,9 +127,13 @@ function EquityPieChart({
 }
 
 export default function MyEquity() {
-  const { data: equity, isLoading } = trpc.equity.getMyEquity.useQuery();
+  const { data: enhanced, isLoading } = trpc.equity.getMyEquityEnhanced.useQuery();
   const { data: poolConfig } = trpc.equity.getPoolConfig.useQuery();
-  const [showStructure, setShowStructure] = useState(false);
+  const { data: valuationHistory } = trpc.equity.getValuationHistory.useQuery();
+  const { data: recentActivities } = trpc.equity.getRecentActivities.useQuery();
+  
+  const [simulateInvites, setSimulateInvites] = useState(0);
+  const [simulateInvestment, setSimulateInvestment] = useState(0);
 
   if (isLoading) {
     return (
@@ -143,7 +143,7 @@ export default function MyEquity() {
     );
   }
 
-  if (!equity) {
+  if (!enhanced) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -153,38 +153,24 @@ export default function MyEquity() {
     );
   }
 
-  // 当前时间戳
+  const equity = enhanced;
   const now = new Date();
   const timestampStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   // 个人股份构成数据
   const equityParts = [
-    {
-      label: '投资股份',
-      value: equity.investmentEquity,
-      color: '#A80000',
-    },
-    {
-      label: '邀请贡献',
-      value: equity.inviteEquity,
-      color: '#FF6B6B',
-    },
-    {
-      label: '人脉贡献',
-      value: equity.referralNetworkEquity,
-      color: '#F59E0B',
-    },
+    { label: '投资股份', value: equity.investmentEquity, color: '#A80000' },
+    { label: '邀请贡献', value: equity.inviteEquity, color: '#FF6B6B' },
+    { label: '人脉贡献', value: equity.referralNetworkEquity, color: '#F59E0B' },
   ];
-
   const othersValue = Math.max(0, 100 - equity.totalEquity);
 
-  // 公司股权架构数据（从后台股份池配置获取）
+  // 公司股权架构数据
   const companyPools: { label: string; value: number; color: string }[] = [];
   if (poolConfig) {
     const poolRules = poolConfig.filter(
       (r: any) => r.ruleKey.includes('pool') && r.ruleKey.endsWith('_percentage')
     );
-    // 按比例从小到大排序
     poolRules.sort((a: any, b: any) => a.ruleValue - b.ruleValue);
     poolRules.forEach((rule: any, index: number) => {
       companyPools.push({
@@ -194,6 +180,49 @@ export default function MyEquity() {
       });
     });
   }
+
+  // 股份增长模拟
+  const inviteRule = 0.05;
+  const networkRule = 0.02;
+  const simulatedInviteEquity = simulateInvites * inviteRule;
+  const simulatedTotalEquity = equity.totalEquity + simulatedInviteEquity;
+
+  // 里程碑定义
+  const milestones = [
+    {
+      category: '邀请成就',
+      icon: Users,
+      levels: [
+        { name: '铜牌股东', threshold: 5, icon: Medal, color: '#CD7F32' },
+        { name: '银牌股东', threshold: 20, icon: Award, color: '#C0C0C0' },
+        { name: '金牌股东', threshold: 50, icon: Trophy, color: '#FFD700' },
+        { name: '钻石股东', threshold: 100, icon: Gem, color: '#B9F2FF' },
+      ],
+      current: equity.details.inviteCount,
+    },
+    {
+      category: '投资成就',
+      icon: DollarSign,
+      levels: [
+        { name: '铜牌投资人', threshold: 10000, icon: Medal, color: '#CD7F32' },
+        { name: '银牌投资人', threshold: 50000, icon: Award, color: '#C0C0C0' },
+        { name: '金牌投资人', threshold: 100000, icon: Trophy, color: '#FFD700' },
+        { name: '钻石投资人', threshold: 500000, icon: Crown, color: '#B9F2FF' },
+      ],
+      current: equity.details.userInvestment,
+    },
+    {
+      category: '持股成就',
+      icon: TrendingUp,
+      levels: [
+        { name: '铜牌持股人', threshold: 1, icon: Medal, color: '#CD7F32' },
+        { name: '银牌持股人', threshold: 3, icon: Award, color: '#C0C0C0' },
+        { name: '金牌持股人', threshold: 5, icon: Trophy, color: '#FFD700' },
+        { name: '钻石持股人', threshold: 10, icon: Crown, color: '#B9F2FF' },
+      ],
+      current: equity.totalEquity,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -213,7 +242,7 @@ export default function MyEquity() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-        {/* 总股份卡片 */}
+        {/* 1. 总股份卡片 */}
         <Card className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-2xl shadow-lg border-none">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm opacity-90">我的总股份</span>
@@ -231,7 +260,61 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 个人股份构成饼图 */}
+        {/* 2. 股权估值卡片 */}
+        <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-5 rounded-2xl shadow-lg border-none">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm opacity-90 flex items-center">
+              <Sparkles className="w-4 h-4 mr-1" />
+              我的股权估值
+            </span>
+            <DollarSign className="w-5 h-5 opacity-90" />
+          </div>
+          <div className="flex items-baseline space-x-1">
+            <span className="text-xs opacity-80">≈</span>
+            <span className="text-4xl font-bold">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
+            <span className="text-lg opacity-90">万</span>
+          </div>
+          <div className="mt-2 text-xs opacity-70">
+            基于公司最新一轮估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
+          </div>
+          {valuationHistory && valuationHistory.length > 1 && (
+            <div className="mt-3 pt-3 border-t border-white/20">
+              <div className="flex items-center justify-between text-xs">
+                <span className="opacity-70">估值增长</span>
+                <span className="font-semibold">
+                  {((Number(valuationHistory[valuationHistory.length - 1].valuation) / Number(valuationHistory[0].valuation) - 1) * 100).toFixed(1)}% ↑
+                </span>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* 3. 股东排行榜 */}
+        {equity.ranking && (
+          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                  <Trophy className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">股东持股排名</h3>
+                  <p className="text-xs text-gray-600">共{equity.ranking.total}位股东</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold text-purple-600">#{equity.ranking.rank}</div>
+                {equity.ranking.gapToNext > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    距上一名 {equity.ranking.gapToNext.toFixed(2)}%
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* 4. 个人股份构成饼图 */}
         <Card className="p-4 rounded-2xl shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2">我的股份构成</h2>
           <EquityPieChart
@@ -242,24 +325,112 @@ export default function MyEquity() {
           />
         </Card>
 
-        {/* 公司股权架构饼图 */}
-        {companyPools.length > 0 && (
-          <Card className="p-4 rounded-2xl shadow-sm">
-            <h2 className="text-base font-bold text-gray-900 mb-2">公司股权架构</h2>
-            <EquityPieChart
-              parts={companyPools}
-              centerLabel="总股本"
-              centerValue="100%"
-            />
-          </Card>
-        )}
+        {/* 5. 股份增长模拟器 */}
+        <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
+          <div className="flex items-center space-x-2 mb-3">
+            <Target className="w-5 h-5 text-blue-600" />
+            <h2 className="text-base font-bold text-gray-900">股份增长模拟器</h2>
+          </div>
+          
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-gray-700">如果我再邀请</label>
+                <span className="text-sm font-bold text-blue-600">{simulateInvites} 人</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={simulateInvites}
+                onChange={(e) => setSimulateInvites(Number(e.target.value))}
+                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
 
-        {/* 股份明细 */}
+            <div className="bg-white rounded-xl p-3 border border-blue-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">股份将增加到</span>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-600">{simulatedTotalEquity.toFixed(4)}%</div>
+                  <div className="text-xs text-green-600">+{simulatedInviteEquity.toFixed(4)}%</div>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                估值约 ¥{((simulatedTotalEquity / 100) * equity.companyValuation / 10000).toFixed(2)}万
+              </div>
+            </div>
+          </div>
+
+          <Link href="/parent/profile/invite">
+            <button className="w-full mt-3 bg-blue-600 text-white py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-sm flex items-center justify-center space-x-1">
+              <span>立即邀请好友</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </Link>
+        </Card>
+
+        {/* 6. 里程碑成就 */}
+        <Card className="p-4 rounded-2xl shadow-sm">
+          <div className="flex items-center space-x-2 mb-3">
+            <Award className="w-5 h-5 text-amber-600" />
+            <h2 className="text-base font-bold text-gray-900">里程碑成就</h2>
+          </div>
+
+          <div className="space-y-3">
+            {milestones.map((milestone, idx) => {
+              const currentLevel = milestone.levels.filter(l => milestone.current >= l.threshold).pop();
+              const nextLevel = milestone.levels.find(l => milestone.current < l.threshold);
+              const Icon = milestone.icon;
+
+              return (
+                <div key={idx} className="bg-gray-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <Icon className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm font-semibold text-gray-700">{milestone.category}</span>
+                    </div>
+                    {currentLevel && (
+                      <div className="flex items-center space-x-1">
+                        {React.createElement(currentLevel.icon, {
+                          className: "w-4 h-4",
+                          style: { color: currentLevel.color },
+                        })}
+                        <span className="text-xs font-bold" style={{ color: currentLevel.color }}>
+                          {currentLevel.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {nextLevel && (
+                    <div>
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span>下一级：{nextLevel.name}</span>
+                        <span>{milestone.current.toFixed(0)} / {nextLevel.threshold}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, (milestone.current / nextLevel.threshold) * 100)}%`,
+                            backgroundColor: nextLevel.color,
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* 7. 股份明细 */}
         <Card className="p-4 rounded-2xl shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-3">股份明细</h2>
           
           <div className="space-y-2">
-            {/* 投资股份 */}
             <div className="flex items-center p-3 bg-red-50 rounded-xl">
               <div className="w-9 h-9 rounded-lg bg-[#A80000] flex items-center justify-center flex-shrink-0 mr-3">
                 <DollarSign className="w-4.5 h-4.5 text-white" />
@@ -278,7 +449,6 @@ export default function MyEquity() {
               </div>
             </div>
 
-            {/* 邀请贡献 */}
             <div className="flex items-center p-3 bg-red-50/60 rounded-xl">
               <div className="w-9 h-9 rounded-lg bg-[#FF6B6B] flex items-center justify-center flex-shrink-0 mr-3">
                 <Users className="w-4.5 h-4.5 text-white" />
@@ -294,7 +464,6 @@ export default function MyEquity() {
               </div>
             </div>
 
-            {/* 人脉贡献 */}
             <div className="flex items-center p-3 bg-amber-50 rounded-xl">
               <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0 mr-3">
                 <Network className="w-4.5 h-4.5 text-white" />
@@ -312,7 +481,82 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 如何增加股份 */}
+        {/* 8. 公司股权架构饼图 */}
+        {companyPools.length > 0 && (
+          <Card className="p-4 rounded-2xl shadow-sm">
+            <h2 className="text-base font-bold text-gray-900 mb-2">公司股权架构</h2>
+            <EquityPieChart
+              parts={companyPools}
+              centerLabel="总股本"
+              centerValue="100%"
+            />
+          </Card>
+        )}
+
+        {/* 9. 股份池剩余额度 */}
+        {equity.poolStatus && equity.poolStatus.length > 0 && (
+          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200">
+            <div className="flex items-center space-x-2 mb-3">
+              <Activity className="w-5 h-5 text-green-600" />
+              <h2 className="text-base font-bold text-gray-900">股份池剩余额度</h2>
+            </div>
+
+            <div className="space-y-2">
+              {equity.poolStatus.map((pool: any, idx: number) => (
+                <div key={idx} className="bg-white rounded-xl p-3 border border-green-200">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-gray-700">{pool.poolName}</span>
+                    <span className="text-xs text-gray-600">
+                      剩余 {pool.remaining.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-green-500 transition-all"
+                      style={{ width: `${pool.allocationRate}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                    <span>已分配 {pool.allocated.toFixed(2)}%</span>
+                    <span>总额 {pool.total.toFixed(2)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* 10. 最近动态 */}
+        {recentActivities && recentActivities.length > 0 && (
+          <Card className="p-4 rounded-2xl shadow-sm">
+            <div className="flex items-center space-x-2 mb-3">
+              <Activity className="w-5 h-5 text-blue-600" />
+              <h2 className="text-base font-bold text-gray-900">最近动态</h2>
+            </div>
+
+            <div className="space-y-2">
+              {recentActivities.slice(0, 5).map((activity: any, idx: number) => (
+                <div key={idx} className="flex items-center space-x-3 text-sm">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                  <div className="flex-1 text-gray-700">
+                    <span className="font-semibold">{activity.username}</span>
+                    {activity.activityType === 'investment' && (
+                      <span> 增加了投资</span>
+                    )}
+                    {activity.activityType === 'invite' && (
+                      <span> 邀请了 {activity.value} 位新用户</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0">
+                    {new Date(activity.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* 11. 如何增加股份 */}
         <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
           <h2 className="text-base font-bold text-gray-900 mb-3">如何增加股份？</h2>
           
@@ -349,99 +593,23 @@ export default function MyEquity() {
           </Link>
         </Card>
 
-        {/* 在线签署协议入口 */}
+        {/* 12. 签署协议/架构说明 */}
         <Card
           className="p-4 rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 cursor-pointer hover:shadow-md transition-shadow"
           onClick={() => toast.info("需要更高权限")}
         >
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A80000] to-[#c44] flex items-center justify-center flex-shrink-0">
-              <FileSignature className="w-5 h-5 text-white" />
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900 text-sm">在线签署股权投资协议</h3>
               <p className="text-xs text-gray-500">电子签章，具有法律效力</p>
             </div>
-            <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
           </div>
-        </Card>
-
-        {/* 股权架构说明 */}
-        <Card className="rounded-2xl shadow-sm overflow-hidden">
-          <button
-            className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
-            onClick={() => toast.info("需要更高权限")}
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 text-sm">股权架构说明</h3>
-                <p className="text-xs text-gray-500">了解公司股权结构</p>
-              </div>
-            </div>
-            {showStructure ? (
-              <ChevronUp className="w-5 h-5 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
-            )}
-          </button>
-
-          {showStructure && (
-            <div className="px-4 pb-4 border-t border-gray-100">
-              <div className="mt-3 space-y-2">
-                <div className="bg-gradient-to-r from-[#A80000] to-[#c44] text-white rounded-xl p-3 text-center">
-                  <p className="text-xs opacity-80">经营主体</p>
-                  <p className="font-bold text-sm">上海蓄水池企业管理有限公司</p>
-                </div>
-
-                <div className="flex justify-center">
-                  <div className="flex flex-col items-center">
-                    <div className="w-0.5 h-3 bg-gray-300"></div>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">持股</span>
-                    <div className="w-0.5 h-3 bg-gray-300"></div>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-                  <p className="text-xs text-blue-600">投资主体（有限合伙企业）</p>
-                  <p className="font-bold text-gray-900 text-sm">全体投资股东</p>
-                  <p className="text-xs text-gray-500 mt-0.5">以有限合伙形式持有经营主体股权</p>
-                </div>
-
-                <div className="flex justify-center">
-                  <div className="flex flex-col items-center">
-                    <div className="w-0.5 h-3 bg-gray-300"></div>
-                    <div className="flex items-center space-x-1">
-                      <GitBranch className="w-3 h-3 text-gray-400" />
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">合伙人</span>
-                    </div>
-                    <div className="w-0.5 h-3 bg-gray-300"></div>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-                  <p className="text-xs text-amber-600">有限合伙人（LP）</p>
-                  <p className="font-bold text-gray-900 text-sm">各位投资股东</p>
-                  <p className="text-xs text-gray-500 mt-0.5">按投资额和贡献值分配合伙份额</p>
-                </div>
-              </div>
-
-              <div className="mt-3 bg-gray-50 rounded-lg p-3 space-y-1.5">
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  <span className="font-semibold text-gray-800">架构说明：</span>
-                  所有投资股东以有限合伙人（LP）身份加入有限合伙企业，再由该有限合伙企业持有
-                  <span className="font-semibold">上海蓄水池企业管理有限公司</span>的股权。
-                </p>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  股份由多个股份池构成，各池比例由管理员在后台配置。
-                </p>
-              </div>
-            </div>
-          )}
         </Card>
       </div>
     </div>
