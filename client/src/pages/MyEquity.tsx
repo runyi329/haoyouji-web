@@ -429,9 +429,11 @@ export default function MyEquity() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4 space-y-3">
+        {/* 第一层：现状层（红色 + 灰色仪表盘融合） */}
+        <div className="space-y-0">
         {/* 1. 股权透视卡片（可点击展开） */}
         <Card 
-          className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-2xl shadow-lg border-none cursor-pointer transition-all"
+          className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
           onClick={() => setIsEquityExpanded(!isEquityExpanded)}
         >
           <div className="flex items-center justify-between mb-3">
@@ -582,70 +584,65 @@ export default function MyEquity() {
           )}
         </Card>
 
-        {/* 2. 股权估值卡片 */}
-        <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-5 rounded-2xl shadow-lg border-none">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm opacity-90 flex items-center">
-              <Sparkles className="w-4 h-4 mr-1" />
-              我的股权估值
-            </span>
-            <DollarSign className="w-5 h-5 opacity-90" />
-          </div>
-          <div className="flex items-baseline space-x-1">
-            <span className="text-xs opacity-80">≈</span>
-            <span className="text-4xl font-bold">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
-            <span className="text-lg opacity-90">万</span>
-          </div>
-          <div className="mt-2 text-xs opacity-70">
-            基于公司最新一轮估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
-          </div>
-          {valuationHistory && valuationHistory.length > 1 && (
-            <div className="mt-3 pt-3 border-t border-white/20">
-              <div className="flex items-center justify-between text-xs">
-                <span className="opacity-70">估值增长</span>
-                <span className="font-semibold">
-                  {((Number(valuationHistory[valuationHistory.length - 1].valuation) / Number(valuationHistory[0].valuation) - 1) * 100).toFixed(1)}% ↑
-                </span>
+        {/* 2. 资产仪表盘：估值 + 排名（左右布局） + 饼图 */}
+        <Card className="bg-gray-50 rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
+          {/* 左右双列：估值 vs 排名 */}
+          <div className="grid grid-cols-2 gap-6 mb-5 relative">
+            {/* 左侧：我的股权估值 */}
+            <div>
+              <div className="text-xs text-gray-500 mb-1 flex items-center">
+                <Sparkles className="w-3 h-3 mr-1" />
+                我的股权估值
+              </div>
+              <div className="flex items-baseline space-x-1">
+                <span className="text-2xl font-bold text-orange-600">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
+                <span className="text-sm text-gray-600">万</span>
+              </div>
+              <div className="mt-1 text-xs text-gray-400">
+                基于估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
               </div>
             </div>
-          )}
-        </Card>
-
-        {/* 3. 股东排行榜 */}
-        {equity.ranking && (
-          <Card className="p-4 rounded-2xl shadow-sm bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                  <Trophy className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">股东持股排名</h3>
-                  <p className="text-xs text-gray-600">共{equity.ranking.total}位股东</p>
-                </div>
+            
+            {/* 中间分割线 */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300" style={{transform: 'translateX(-50%)'}}></div>
+            
+            {/* 右侧：当前持股排名 */}
+            <div className="text-right">
+              <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
+                <Trophy className="w-3 h-3 mr-1" />
+                当前持股排名
               </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-purple-600">#{equity.ranking.rank}</div>
-                {equity.ranking.gapToNext > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    距上一名 {equity.ranking.gapToNext.toFixed(2)}%
-                  </p>
-                )}
-              </div>
+              {equity.ranking ? (
+                <>
+                  <div className="text-2xl font-bold text-gray-900">No.{equity.ranking.rank}</div>
+                  <div className="mt-1 text-xs text-gray-400">
+                    共{equity.ranking.total}位股东
+                  </div>
+                </>
+              ) : (
+                <div className="text-2xl font-bold text-gray-400">--</div>
+              )}
             </div>
-          </Card>
-        )}
-
-        {/* 4. 个人股份构成饼图 */}
-        <Card className="p-4 rounded-2xl shadow-sm">
-          <h2 className="text-base font-bold text-gray-900 mb-2">我的股份构成</h2>
-          <EquityPieChart
-            parts={equityParts}
-            othersValue={othersValue}
-            centerLabel="我的股份"
-            centerValue={equity.totalEquity.toFixed(2) + '%'}
-          />
+          </div>
+          
+          {/* 虚线分割 */}
+          <div className="border-t border-dashed border-gray-300 my-4"></div>
+          
+          {/* 饼图区域（轻量化） */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">持股构成明细</h3>
+            <div className="scale-90 origin-top">
+              <EquityPieChart
+                parts={equityParts}
+                othersValue={othersValue}
+                centerLabel="我的股份"
+                centerValue={equity.totalEquity.toFixed(2) + '%'}
+              />
+            </div>
+          </div>
         </Card>
+        </div>
+        {/* 第一层结束 */}
 
         {/* 第二层：我的增值攻略 */}
         <div className="mt-6">
