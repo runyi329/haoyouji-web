@@ -569,7 +569,7 @@ export const personalContactTags = mysqlTable("personal_contact_tags", {
 	contactId: int().notNull(),
 	parentUserId: int().notNull(),
 	name: varchar({ length: 50 }).notNull(),
-	color: varchar({ length: 20 }).default('#8b5cf6').notNull(),
+	color: varchar({ length: 20 }).default('#A80000').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 
