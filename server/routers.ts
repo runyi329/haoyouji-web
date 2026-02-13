@@ -4179,7 +4179,7 @@ export const appRouter = router({
       .input(z.object({
         contactId: z.number(),
         name: z.string().min(1, "标签名称不能为空"),
-        color: z.string().default("#8b5cf6"),
+        color: z.string().default("#A80000"),
       }))
       .mutation(async ({ ctx, input }) => {
         const tagId = await dbContacts.createPersonalTag({

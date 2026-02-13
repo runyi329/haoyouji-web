@@ -20,14 +20,14 @@ import { useLocation } from "wouter";
 type DataScope = "all" | "mine" | "shared";
 
 const COLORS = [
-  "#8b5cf6", // 紫色
+  "#A80000", // 深红
   "#3b82f6", // 蓝色
   "#10b981", // 绿色
   "#f59e0b", // 橙色
   "#ef4444", // 红色
   "#ec4899", // 粉色
   "#06b6d4", // 青色
-  "#8b5cf6", // 紫色
+  "#A80000", // 深红
 ];
 
 export default function TagAnalytics() {
@@ -197,7 +197,7 @@ export default function TagAnalytics() {
                       contentStyle={{ fontSize: 12 }}
                       formatter={(value: number) => [`${value} 次`, "使用次数"]}
                     />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="count" fill="#A80000" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (

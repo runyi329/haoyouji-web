@@ -893,7 +893,7 @@ export default function ContactDetail() {
   // 个人标签相关state
   const [showCreatePersonalTagDialog, setShowCreatePersonalTagDialog] = useState(false);
   const [newPersonalTagName, setNewPersonalTagName] = useState("");
-  const [newPersonalTagColor, setNewPersonalTagColor] = useState("#8b5cf6");
+  const [newPersonalTagColor, setNewPersonalTagColor] = useState("#A80000");
   const [isPersonalTagEditMode, setIsPersonalTagEditMode] = useState(false); // 编辑模式
   const [editingPersonalTag, setEditingPersonalTag] = useState<{ id: number; name: string; color: string } | null>(null);
   // AI 背调状态
@@ -1428,7 +1428,7 @@ export default function ContactDetail() {
       toast.success("个人标签创建成功");
       setShowCreatePersonalTagDialog(false);
       setNewPersonalTagName("");
-      setNewPersonalTagColor("#8b5cf6");
+      setNewPersonalTagColor("#A80000");
       utils.contacts.personalTags.list.invalidate({ contactId });
     },
     onError: (error) => {
@@ -1837,7 +1837,7 @@ export default function ContactDetail() {
                       <span
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-white cursor-pointer transition-all hover:scale-105"
                         style={{
-                          backgroundColor: tag.color || '#8b5cf6',
+                          backgroundColor: tag.color || '#A80000',
                         }}
                         onClick={() => setEditingPersonalTag({ id: tag.id, name: tag.name, color: tag.color })}
                       >
@@ -2500,7 +2500,7 @@ export default function ContactDetail() {
         setShowCreatePersonalTagDialog(open);
         if (!open) {
           setNewPersonalTagName("");
-          setNewPersonalTagColor("#8b5cf6");
+          setNewPersonalTagColor("#A80000");
         }
       }}>
         <DialogContent className="sm:max-w-md">
@@ -2572,7 +2572,7 @@ export default function ContactDetail() {
               onClick={() => {
                 setShowCreatePersonalTagDialog(false);
                 setNewPersonalTagName("");
-                setNewPersonalTagColor("#8b5cf6");
+                setNewPersonalTagColor("#A80000");
               }}
             >
               取消

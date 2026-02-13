@@ -2131,7 +2131,7 @@ export default function ContactsList() {
                           key={`personal-${tag.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-white"
                           style={{
-                            backgroundColor: mapColorToTheme(tag.color || '#8b5cf6'),
+                            backgroundColor: mapColorToTheme(tag.color || '#A80000'),
                           }}
                         >
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">

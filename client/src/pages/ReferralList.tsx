@@ -41,7 +41,7 @@ export default function ReferralList() {
 
   const title = type === "direct" ? "直接推荐的人脉" : "间接推荐的人脉";
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1'];
+  const COLORS = ['#3b82f6', '#A80000', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#6366f1'];
 
   return (
     <div className="min-h-screen bg-background">

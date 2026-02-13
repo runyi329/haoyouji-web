@@ -188,7 +188,7 @@ export async function getPersonalTagRanking(
 
   return result.map(row => ({
     tagName: row.tagName,
-    tagColor: row.tagColor || '#8b5cf6',
+    tagColor: row.tagColor || '#A80000',
     usageCount: Number(row.usageCount),
   }));
 }

@@ -14,7 +14,7 @@ export default function TagStats() {
   const { data: tagStats, isLoading } = trpc.contacts.tagInteractionStats.useQuery();
 
   // 颜色配置
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6b7280'];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#A80000', '#6b7280'];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
