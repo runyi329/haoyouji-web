@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, Trophy, Target, Activity, DollarSign, Users, Network, ChevronRight, Sparkles, Award, Crown, Gem, Medal } from "lucide-react";
 import { Link } from "wouter";
-import { useState, createElement } from "react";
+import { useState, useEffect, createElement } from "react";
 import { toast } from "sonner";
 
 // FAQ手风琴组件
@@ -293,6 +293,20 @@ export default function MyEquity() {
   const [simulateInvites, setSimulateInvites] = useState(0);
   const [simulateInvestment, setSimulateInvestment] = useState(0);
   const [isEquityExpanded, setIsEquityExpanded] = useState(false);
+  const [showLeverageAnimation, setShowLeverageAnimation] = useState(false);
+  
+  // 当展开时触发杭杆放大动画
+  useEffect(() => {
+    if (isEquityExpanded) {
+      // 延迟500ms后显示杭杆放大效果
+      const timer = setTimeout(() => {
+        setShowLeverageAnimation(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setShowLeverageAnimation(false);
+    }
+  }, [isEquityExpanded]);
 
   if (isLoading) {
     return (
@@ -459,9 +473,9 @@ export default function MyEquity() {
                   <div className="text-xs opacity-60 mt-1">底仓，由投资转化</div>
                 </div>
                 
-                {/* 右侧：贡献股权 */}
+                {/* 右侧：贡献股权（显示基础值） */}
                 <div className="bg-white/10 rounded-xl p-3">
-                  <div className="text-xs opacity-70 mb-1">贡献股权</div>
+                  <div className="text-xs opacity-70 mb-1">贡献股权（基础）</div>
                   <div className="text-2xl font-bold">
                     {((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)).toFixed(3)}%
                   </div>
@@ -469,9 +483,9 @@ export default function MyEquity() {
                 </div>
               </div>
               
-              {/* 下方：杭杆系数 */}
+              {/* 下方：杭杆系数和放大后的值 */}
               <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-3 border border-yellow-400/30">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <div className="text-xs opacity-70 mb-1">身份杭杆系数 (L)</div>
                     <div className="text-3xl font-bold text-yellow-300">
@@ -485,6 +499,20 @@ export default function MyEquity() {
                     </div>
                   </div>
                 </div>
+                {/* 杭杆放大后的贡献股权 */}
+                {showLeverageAnimation && (
+                  <div className="pt-2 border-t border-yellow-400/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs opacity-70">杭杆放大后：</div>
+                      <div className="text-2xl font-bold text-yellow-300 animate-pulse">
+                        {(((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)) * (equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1)).toFixed(3)}%
+                      </div>
+                    </div>
+                    <div className="text-xs opacity-60 mt-1 text-right">
+                      ✨ 您的努力被公司制度放大了！
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* 三张卡片堆叠 */}
