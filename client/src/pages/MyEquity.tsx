@@ -5,24 +5,43 @@ import { Link } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
 
-// 自绘SVG饼图组件：饼在左侧，引线引到右侧统一排列
-function EquityPieChart({ parts, othersValue }: { parts: { label: string; value: number; color: string }[]; othersValue: number }) {
-  const cx = 90; // 饼图中心X
-  const cy = 100; // 饼图中心Y
-  const r = 72; // 饼图半径
-  const svgW = 360;
-  const svgH = 200;
+// 饼图配色方案
+const POOL_COLORS = [
+  '#A80000', '#FF6B6B', '#F59E0B', '#10B981', '#3B82F6',
+  '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1',
+  '#84CC16', '#06B6D4',
+];
 
-  // 构建所有扇区数据（包含其他股东）
+// 自绘SVG饼图组件：饼在左侧，引线引到右侧统一排列
+function EquityPieChart({
+  parts,
+  othersValue,
+  centerLabel,
+  centerValue,
+}: {
+  parts: { label: string; value: number; color: string }[];
+  othersValue?: number;
+  centerLabel?: string;
+  centerValue?: string;
+}) {
+  const cx = 90;
+  const cy = 100;
+  const r = 72;
+  const svgW = 360;
+
   const allParts = [
     ...parts.filter(p => p.value > 0),
-    ...(othersValue > 0 ? [{ label: '其他股东', value: othersValue, color: '#D1D5DB' }] : []),
+    ...(othersValue && othersValue > 0 ? [{ label: '其他股东', value: othersValue, color: '#D1D5DB' }] : []),
   ];
   const total = allParts.reduce((s, p) => s + p.value, 0);
   if (total === 0) return null;
 
-  // 计算每个扇区的角度
-  let cumAngle = -90; // 从顶部开始
+  // 动态计算SVG高度
+  const labelGap = 42;
+  const labelStartY = 30;
+  const svgH = Math.max(200, labelStartY + allParts.length * labelGap + 10);
+
+  let cumAngle = -90;
   const sectors = allParts.map((part) => {
     const angle = (part.value / total) * 360;
     const startAngle = cumAngle;
@@ -32,11 +51,13 @@ function EquityPieChart({ parts, othersValue }: { parts: { label: string; value:
     return { ...part, startAngle, endAngle, midAngle, angleDeg: angle };
   });
 
-  // 角度转弧度
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
-  // 生成扇区路径
   const sectorPath = (startAngle: number, endAngle: number) => {
+    if (endAngle - startAngle >= 359.99) {
+      // 完整圆
+      return `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`;
+    }
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
     const x1 = cx + r * Math.cos(toRad(startAngle));
     const y1 = cy + r * Math.sin(toRad(startAngle));
@@ -45,21 +66,20 @@ function EquityPieChart({ parts, othersValue }: { parts: { label: string; value:
     return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
   };
 
-  // 右侧标签区域：统一排列在右侧
-  const labelX = 210; // 标签起始X
-  const labelStartY = 30; // 第一个标签Y
-  const labelGap = 42; // 标签间距
+  const labelX = 210;
+
+  // 中心显示内容
+  const cLabel = centerLabel || '总股份';
+  const cValue = centerValue || allParts.filter(p => p.label !== '其他股东').reduce((s, p) => s + p.value, 0).toFixed(2) + '%';
 
   return (
-    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '220px' }}>
-      {/* 饼图阴影 */}
+    <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: `${svgH}px` }}>
       <defs>
         <filter id="pieShadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.08" />
         </filter>
       </defs>
 
-      {/* 饼图扇区 */}
       <g filter="url(#pieShadow)">
         {sectors.map((s, i) => (
           <path
@@ -70,31 +90,24 @@ function EquityPieChart({ parts, othersValue }: { parts: { label: string; value:
             strokeWidth="2"
           />
         ))}
-        {/* 中心白色圆形（环形图效果） */}
         <circle cx={cx} cy={cy} r={r * 0.45} fill="white" />
-        {/* 中心文字 */}
-        <text x={cx} y={cy - 6} textAnchor="middle" className="text-[11px]" fill="#666" fontWeight="400">总股份</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" className="text-[11px]" fill="#666" fontWeight="400">{cLabel}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" className="text-[16px]" fill="#A80000" fontWeight="700">
-          {allParts.filter(p => p.label !== '其他股东').reduce((s, p) => s + p.value, 0).toFixed(2)}%
+          {cValue}
         </text>
       </g>
 
-      {/* 引线和标签 */}
       {sectors.map((s, i) => {
         const midRad = toRad(s.midAngle);
-        // 引线起点：饼图边缘
         const edgeX = cx + (r + 4) * Math.cos(midRad);
         const edgeY = cy + (r + 4) * Math.sin(midRad);
-        // 引线拐点
         const elbowX = cx + (r + 20) * Math.cos(midRad);
         const elbowY = cy + (r + 20) * Math.sin(midRad);
-        // 标签Y位置（统一右侧排列）
         const targetY = labelStartY + i * labelGap;
         const targetX = labelX - 8;
 
         return (
           <g key={`label-${i}`}>
-            {/* 引线 */}
             <polyline
               points={`${edgeX},${edgeY} ${elbowX},${elbowY} ${targetX},${targetY + 8}`}
               fill="none"
@@ -103,17 +116,12 @@ function EquityPieChart({ parts, othersValue }: { parts: { label: string; value:
               strokeDasharray={s.label === '其他股东' ? '3,2' : 'none'}
               opacity="0.6"
             />
-            {/* 引线末端圆点 */}
             <circle cx={targetX} cy={targetY + 8} r="3" fill={s.color} />
 
-            {/* 标签文字 */}
             <g>
-              {/* 颜色标记条 */}
               <rect x={labelX} y={targetY} width="3" height={32} rx="1.5" fill={s.color} />
-              {/* 标签名 */}
               <text x={labelX + 10} y={targetY + 12} fill="#374151" fontSize="12" fontWeight="600">{s.label}</text>
-              {/* 百分比 */}
-              <text x={labelX + 10} y={targetY + 28} fill={s.color} fontSize="14" fontWeight="700">{s.value.toFixed(4)}%</text>
+              <text x={labelX + 10} y={targetY + 28} fill={s.color} fontSize="14" fontWeight="700">{s.value.toFixed(2)}%</text>
             </g>
           </g>
         );
@@ -124,6 +132,7 @@ function EquityPieChart({ parts, othersValue }: { parts: { label: string; value:
 
 export default function MyEquity() {
   const { data: equity, isLoading } = trpc.equity.getMyEquity.useQuery();
+  const { data: poolConfig } = trpc.equity.getPoolConfig.useQuery();
   const [showStructure, setShowStructure] = useState(false);
 
   if (isLoading) {
@@ -148,7 +157,7 @@ export default function MyEquity() {
   const now = new Date();
   const timestampStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // 股份构成数据
+  // 个人股份构成数据
   const equityParts = [
     {
       label: '投资股份',
@@ -168,6 +177,21 @@ export default function MyEquity() {
   ];
 
   const othersValue = Math.max(0, 100 - equity.totalEquity);
+
+  // 公司股权架构数据（从后台股份池配置获取）
+  const companyPools: { label: string; value: number; color: string }[] = [];
+  if (poolConfig) {
+    const poolRules = poolConfig.filter(
+      (r: any) => r.ruleKey.includes('pool') && r.ruleKey.endsWith('_percentage')
+    );
+    poolRules.forEach((rule: any, index: number) => {
+      companyPools.push({
+        label: rule.ruleDescription || rule.ruleKey,
+        value: rule.ruleValue,
+        color: POOL_COLORS[index % POOL_COLORS.length],
+      });
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -205,13 +229,30 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 股份构成 — 高级饼图 */}
+        {/* 个人股份构成饼图 */}
         <Card className="p-4 rounded-2xl shadow-sm">
-          <h2 className="text-base font-bold text-gray-900 mb-2">股份构成</h2>
-          <EquityPieChart parts={equityParts} othersValue={othersValue} />
+          <h2 className="text-base font-bold text-gray-900 mb-2">我的股份构成</h2>
+          <EquityPieChart
+            parts={equityParts}
+            othersValue={othersValue}
+            centerLabel="我的股份"
+            centerValue={equity.totalEquity.toFixed(2) + '%'}
+          />
         </Card>
 
-        {/* 股份明细 — 紧凑卡片 */}
+        {/* 公司股权架构饼图 */}
+        {companyPools.length > 0 && (
+          <Card className="p-4 rounded-2xl shadow-sm">
+            <h2 className="text-base font-bold text-gray-900 mb-2">公司股权架构</h2>
+            <EquityPieChart
+              parts={companyPools}
+              centerLabel="总股本"
+              centerValue="100%"
+            />
+          </Card>
+        )}
+
+        {/* 股份明细 */}
         <Card className="p-4 rounded-2xl shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-3">股份明细</h2>
           
@@ -227,7 +268,7 @@ export default function MyEquity() {
                   <span className="text-base font-bold text-[#A80000]">{equity.investmentEquity.toFixed(4)}%</span>
                 </div>
                 <p className="text-xs text-gray-600 mt-0.5">
-                  投资股份池(33.33%)中占比
+                  投资股份池中占比
                   {equity.details.userInvestment > 0 && (
                     <span className="ml-1">· 金额占比 {((equity.details.userInvestment / equity.details.totalInvestment) * 100).toFixed(2)}%</span>
                   )}
@@ -325,7 +366,7 @@ export default function MyEquity() {
           </div>
         </Card>
 
-        {/* 股权架构说明 — 可折叠 */}
+        {/* 股权架构说明 */}
         <Card className="rounded-2xl shadow-sm overflow-hidden">
           <button
             className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
@@ -349,15 +390,12 @@ export default function MyEquity() {
 
           {showStructure && (
             <div className="px-4 pb-4 border-t border-gray-100">
-              {/* 架构图 */}
               <div className="mt-3 space-y-2">
-                {/* 经营主体 */}
                 <div className="bg-gradient-to-r from-[#A80000] to-[#c44] text-white rounded-xl p-3 text-center">
                   <p className="text-xs opacity-80">经营主体</p>
                   <p className="font-bold text-sm">上海蓄水池企业管理有限公司</p>
                 </div>
 
-                {/* 连接线 */}
                 <div className="flex justify-center">
                   <div className="flex flex-col items-center">
                     <div className="w-0.5 h-3 bg-gray-300"></div>
@@ -366,14 +404,12 @@ export default function MyEquity() {
                   </div>
                 </div>
 
-                {/* 有限合伙 */}
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
                   <p className="text-xs text-blue-600">投资主体（有限合伙企业）</p>
                   <p className="font-bold text-gray-900 text-sm">全体投资股东</p>
                   <p className="text-xs text-gray-500 mt-0.5">以有限合伙形式持有经营主体股权</p>
                 </div>
 
-                {/* 连接线 */}
                 <div className="flex justify-center">
                   <div className="flex flex-col items-center">
                     <div className="w-0.5 h-3 bg-gray-300"></div>
@@ -385,7 +421,6 @@ export default function MyEquity() {
                   </div>
                 </div>
 
-                {/* 投资人 */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
                   <p className="text-xs text-amber-600">有限合伙人（LP）</p>
                   <p className="font-bold text-gray-900 text-sm">各位投资股东</p>
@@ -393,7 +428,6 @@ export default function MyEquity() {
                 </div>
               </div>
 
-              {/* 说明文字 */}
               <div className="mt-3 bg-gray-50 rounded-lg p-3 space-y-1.5">
                 <p className="text-xs text-gray-600 leading-relaxed">
                   <span className="font-semibold text-gray-800">架构说明：</span>
@@ -401,8 +435,7 @@ export default function MyEquity() {
                   <span className="font-semibold">上海蓄水池企业管理有限公司</span>的股权。
                 </p>
                 <p className="text-xs text-gray-600 leading-relaxed">
-                  股份由两部分构成：<span className="text-[#A80000] font-semibold">投资股份池（33.33%）</span>按投资金额比例分配；
-                  <span className="text-[#A80000] font-semibold">贡献股份池（66.67%）</span>按邀请用户数和被邀请人的人脉增长分配。
+                  股份由多个股份池构成，各池比例由管理员在后台配置。
                 </p>
               </div>
             </div>
