@@ -36,6 +36,70 @@ export async function updateEquityRule(ruleKey: string, ruleValue: number) {
 }
 
 /**
+ * 插入或更新股权规则（upsert）
+ */
+export async function upsertEquityRule(ruleKey: string, ruleValue: number, ruleDescription?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 先检查是否存在
+  const existing = await db
+    .select()
+    .from(equityRules)
+    .where(eq(equityRules.ruleKey, ruleKey));
+  
+  if (existing.length > 0) {
+    const updateData: any = { ruleValue: ruleValue.toString() };
+    if (ruleDescription !== undefined) {
+      updateData.ruleDescription = ruleDescription;
+    }
+    await db
+      .update(equityRules)
+      .set(updateData)
+      .where(eq(equityRules.ruleKey, ruleKey));
+  } else {
+    await db
+      .insert(equityRules)
+      .values({
+        ruleKey,
+        ruleValue: ruleValue.toString(),
+        ruleDescription: ruleDescription || null,
+      });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 删除股权规则
+ */
+export async function deleteEquityRule(ruleKey: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db
+    .delete(equityRules)
+    .where(eq(equityRules.ruleKey, ruleKey));
+  
+  return { success: true };
+}
+
+/**
+ * 获取所有规则详情（包含描述）
+ */
+export async function getEquityRulesDetail() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const rules = await db.select().from(equityRules);
+  return rules.map(r => ({
+    ruleKey: r.ruleKey,
+    ruleValue: Number(r.ruleValue),
+    ruleDescription: r.ruleDescription,
+  }));
+}
+
+/**
  * 获取所有投资记录
  */
 export async function getAllInvestments() {

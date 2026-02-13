@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Plus, Edit, Trash2, TrendingUp, Search, Check, ChevronDown } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, TrendingUp, Search, Check, ChevronDown, Save, X, Settings } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -130,11 +130,53 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
   );
 }
 
+// 预定义的池类型颜色
+const POOL_COLORS: Record<string, { bg: string; text: string }> = {
+  investment_pool_percentage: { bg: "bg-red-50", text: "text-[#A80000]" },
+  contribution_pool_percentage: { bg: "bg-blue-50", text: "text-blue-600" },
+  option_pool_percentage: { bg: "bg-purple-50", text: "text-purple-600" },
+  reserve_pool_percentage: { bg: "bg-green-50", text: "text-green-600" },
+  founder_pool_percentage: { bg: "bg-amber-50", text: "text-amber-600" },
+};
+
+const POOL_LABELS: Record<string, string> = {
+  investment_pool_percentage: "投资股份池",
+  contribution_pool_percentage: "贡献股份池",
+  option_pool_percentage: "期权池",
+  reserve_pool_percentage: "预留池",
+  founder_pool_percentage: "创始人池",
+};
+
+// 获取池的颜色（支持自定义池）
+function getPoolColor(key: string, index: number) {
+  if (POOL_COLORS[key]) return POOL_COLORS[key];
+  const colors = [
+    { bg: "bg-teal-50", text: "text-teal-600" },
+    { bg: "bg-orange-50", text: "text-orange-600" },
+    { bg: "bg-pink-50", text: "text-pink-600" },
+    { bg: "bg-cyan-50", text: "text-cyan-600" },
+    { bg: "bg-indigo-50", text: "text-indigo-600" },
+  ];
+  return colors[index % colors.length];
+}
+
 export default function EquityManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<any>(null);
   const [selectedUserName, setSelectedUserName] = useState("");
+  
+  // 编辑模式状态
+  const [isEditingPools, setIsEditingPools] = useState(false);
+  const [isEditingRules, setIsEditingRules] = useState(false);
+  const [editPoolData, setEditPoolData] = useState<{ key: string; label: string; value: string; description: string }[]>([]);
+  const [editRuleData, setEditRuleData] = useState<{ key: string; value: string }[]>([]);
+  
+  // 新增池弹窗
+  const [isAddPoolDialogOpen, setIsAddPoolDialogOpen] = useState(false);
+  const [newPoolName, setNewPoolName] = useState("");
+  const [newPoolValue, setNewPoolValue] = useState("");
+  const [newPoolKey, setNewPoolKey] = useState("");
   
   const [formData, setFormData] = useState({
     userId: "",
@@ -146,8 +188,9 @@ export default function EquityManagement() {
   });
 
   const { data: investments, isLoading, refetch } = trpc.equity.getAllInvestments.useQuery();
-  const { data: shareholders } = trpc.equity.getAllShareholders.useQuery();
-  const { data: rules } = trpc.equity.getRules.useQuery();
+  const { data: shareholders, refetch: refetchShareholders } = trpc.equity.getAllShareholders.useQuery();
+  const { data: rules, refetch: refetchRules } = trpc.equity.getRules.useQuery();
+  const { data: rulesDetail, refetch: refetchRulesDetail } = trpc.equity.getRulesDetail.useQuery();
 
   const addInvestmentMutation = trpc.equity.addInvestment.useMutation({
     onSuccess: () => {
@@ -156,6 +199,7 @@ export default function EquityManagement() {
       setFormData({ userId: "", investorName: "", investorIdCard: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
       setSelectedUserName("");
       refetch();
+      refetchShareholders();
     },
     onError: (error) => {
       toast.error("添加失败", { description: error.message });
@@ -168,6 +212,7 @@ export default function EquityManagement() {
       setIsEditDialogOpen(false);
       setEditingInvestment(null);
       refetch();
+      refetchShareholders();
     },
     onError: (error) => {
       toast.error("更新失败", { description: error.message });
@@ -178,11 +223,130 @@ export default function EquityManagement() {
     onSuccess: () => {
       toast.success("删除成功");
       refetch();
+      refetchShareholders();
     },
     onError: (error) => {
       toast.error("删除失败", { description: error.message });
     },
   });
+
+  const updateRulesMutation = trpc.equity.updateRules.useMutation({
+    onSuccess: () => {
+      toast.success("规则更新成功");
+      refetchRules();
+      refetchRulesDetail();
+      refetchShareholders();
+      setIsEditingPools(false);
+      setIsEditingRules(false);
+    },
+    onError: (error) => {
+      toast.error("更新失败", { description: error.message });
+    },
+  });
+
+  const deleteRuleMutation = trpc.equity.deleteRule.useMutation({
+    onSuccess: () => {
+      toast.success("已删除");
+      refetchRules();
+      refetchRulesDetail();
+    },
+    onError: (error) => {
+      toast.error("删除失败", { description: error.message });
+    },
+  });
+
+  // 识别池类型和贡献规则
+  const poolKeys = rulesDetail?.filter(r => r.ruleKey.endsWith('_pool_percentage')) || [];
+  const contributionRuleKeys = rulesDetail?.filter(r => !r.ruleKey.endsWith('_pool_percentage')) || [];
+
+  // 计算池总和
+  const poolTotal = editPoolData.reduce((sum, p) => sum + (parseFloat(p.value) || 0), 0);
+
+  // 开始编辑股份池
+  const startEditPools = () => {
+    setEditPoolData(
+      poolKeys.map(r => ({
+        key: r.ruleKey,
+        label: POOL_LABELS[r.ruleKey] || r.ruleDescription || r.ruleKey,
+        value: r.ruleValue.toString(),
+        description: r.ruleDescription || "",
+      }))
+    );
+    setIsEditingPools(true);
+  };
+
+  // 保存股份池
+  const savePoolConfig = () => {
+    const total = editPoolData.reduce((sum, p) => sum + (parseFloat(p.value) || 0), 0);
+    if (Math.abs(total - 100) > 0.01) {
+      toast.error(`所有股份池总和必须等于100%，当前为 ${total.toFixed(2)}%`);
+      return;
+    }
+    updateRulesMutation.mutate({
+      rules: editPoolData.map(p => ({
+        ruleKey: p.key,
+        ruleValue: parseFloat(p.value) || 0,
+        ruleDescription: p.description || undefined,
+      })),
+    });
+  };
+
+  // 添加新池
+  const handleAddPool = () => {
+    if (!newPoolName || !newPoolValue) {
+      toast.error("请填写池名称和比例");
+      return;
+    }
+    // 生成key
+    const key = newPoolKey || `${newPoolName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pool_percentage`;
+    const newPool = {
+      key,
+      label: newPoolName,
+      value: newPoolValue,
+      description: newPoolName,
+    };
+    setEditPoolData([...editPoolData, newPool]);
+    setIsAddPoolDialogOpen(false);
+    setNewPoolName("");
+    setNewPoolValue("");
+    setNewPoolKey("");
+  };
+
+  // 删除池
+  const handleRemovePool = (index: number) => {
+    const pool = editPoolData[index];
+    if (pool.key === 'investment_pool_percentage' || pool.key === 'contribution_pool_percentage') {
+      toast.error("投资股份池和贡献股份池不能删除");
+      return;
+    }
+    const newData = editPoolData.filter((_, i) => i !== index);
+    setEditPoolData(newData);
+    // 如果这个key已经在数据库中，需要删除
+    if (poolKeys.find(r => r.ruleKey === pool.key)) {
+      deleteRuleMutation.mutate({ ruleKey: pool.key });
+    }
+  };
+
+  // 开始编辑贡献规则
+  const startEditRules = () => {
+    setEditRuleData(
+      contributionRuleKeys.map(r => ({
+        key: r.ruleKey,
+        value: r.ruleValue.toString(),
+      }))
+    );
+    setIsEditingRules(true);
+  };
+
+  // 保存贡献规则
+  const saveRulesConfig = () => {
+    updateRulesMutation.mutate({
+      rules: editRuleData.map(r => ({
+        ruleKey: r.key,
+        ruleValue: parseFloat(r.value) || 0,
+      })),
+    });
+  };
 
   const handleAdd = () => {
     if (!formData.userId || !formData.amount) {
@@ -261,40 +425,207 @@ export default function EquityManagement() {
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* 股份池配置 */}
         <Card className="p-6 rounded-2xl shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">股份池配置</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-red-50 rounded-xl">
-              <p className="text-sm text-gray-600 mb-1">投资股份池</p>
-              <p className="text-2xl font-bold text-[#A80000]">
-                {rules?.investment_pool_percentage?.toFixed(2) || "33.33"}%
-              </p>
-            </div>
-            <div className="p-4 bg-blue-50 rounded-xl">
-              <p className="text-sm text-gray-600 mb-1">贡献股份池</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {rules?.contribution_pool_percentage?.toFixed(2) || "66.67"}%
-              </p>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">股份池配置</h2>
+            {!isEditingPools ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startEditPools}
+                className="text-gray-600 hover:text-[#A80000] hover:border-[#A80000]"
+              >
+                <Settings className="w-4 h-4 mr-1" />
+                编辑配置
+              </Button>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditingPools(false)}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  取消
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={savePoolConfig}
+                  className="bg-[#A80000] hover:bg-[#8a0000]"
+                  disabled={updateRulesMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-1" />
+                  {updateRulesMutation.isPending ? "保存中..." : "保存"}
+                </Button>
+              </div>
+            )}
           </div>
+
+          {!isEditingPools ? (
+            /* 展示模式 */
+            <div className="grid grid-cols-2 gap-4">
+              {poolKeys.map((pool, index) => {
+                const color = getPoolColor(pool.ruleKey, index);
+                const label = POOL_LABELS[pool.ruleKey] || pool.ruleDescription || pool.ruleKey;
+                return (
+                  <div key={pool.ruleKey} className={`p-4 ${color.bg} rounded-xl`}>
+                    <p className="text-sm text-gray-600 mb-1">{label}</p>
+                    <p className={`text-2xl font-bold ${color.text}`}>
+                      {pool.ruleValue.toFixed(2)}%
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* 编辑模式 */
+            <div className="space-y-4">
+              {editPoolData.map((pool, index) => {
+                const color = getPoolColor(pool.key, index);
+                return (
+                  <div key={pool.key} className={`p-4 ${color.bg} rounded-xl`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">{pool.label}</span>
+                      {pool.key !== 'investment_pool_percentage' && pool.key !== 'contribution_pool_percentage' && (
+                        <button
+                          onClick={() => handleRemovePool(index)}
+                          className="text-red-400 hover:text-red-600 transition-colors"
+                          title="删除此池"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={pool.value}
+                        onChange={(e) => {
+                          const newData = [...editPoolData];
+                          newData[index].value = e.target.value;
+                          setEditPoolData(newData);
+                        }}
+                        className="bg-white"
+                      />
+                      <span className={`text-lg font-bold ${color.text}`}>%</span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* 添加新池按钮 */}
+              <button
+                onClick={() => setIsAddPoolDialogOpen(true)}
+                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#A80000] hover:text-[#A80000] transition-colors flex items-center justify-center space-x-2"
+              >
+                <Plus className="w-5 h-5" />
+                <span>添加新的股份池</span>
+              </button>
+
+              {/* 总和提示 */}
+              <div className={`p-3 rounded-lg flex items-center justify-between ${
+                Math.abs(poolTotal - 100) < 0.01 ? "bg-green-50" : "bg-red-50"
+              }`}>
+                <span className="text-sm font-medium text-gray-700">所有池总和</span>
+                <span className={`text-lg font-bold ${
+                  Math.abs(poolTotal - 100) < 0.01 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {poolTotal.toFixed(2)}% / 100%
+                  {Math.abs(poolTotal - 100) < 0.01 ? " ✓" : " (需等于100%)"}
+                </span>
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* 贡献规则 */}
         <Card className="p-6 rounded-2xl shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">贡献股份规则</h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-gray-700">邀请新用户</span>
-              <span className="font-bold text-[#A80000]">
-                {rules?.invite_per_user_percentage?.toFixed(2) || "0.05"}% / 人
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-gray-700">被邀请人每100人脉</span>
-              <span className="font-bold text-[#A80000]">
-                {rules?.referral_network_per_100_percentage?.toFixed(2) || "0.02"}%
-              </span>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">贡献股份规则</h2>
+            {!isEditingRules ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startEditRules}
+                className="text-gray-600 hover:text-[#A80000] hover:border-[#A80000]"
+              >
+                <Settings className="w-4 h-4 mr-1" />
+                编辑规则
+              </Button>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditingRules(false)}
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  取消
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={saveRulesConfig}
+                  className="bg-[#A80000] hover:bg-[#8a0000]"
+                  disabled={updateRulesMutation.isPending}
+                >
+                  <Save className="w-4 h-4 mr-1" />
+                  {updateRulesMutation.isPending ? "保存中..." : "保存"}
+                </Button>
+              </div>
+            )}
           </div>
+
+          {!isEditingRules ? (
+            /* 展示模式 */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700">邀请新用户</span>
+                <span className="font-bold text-[#A80000]">
+                  {rules?.invite_per_user_percentage?.toFixed(2) || "0.05"}% / 人
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700">被邀请人每100人脉</span>
+                <span className="font-bold text-[#A80000]">
+                  {rules?.referral_network_per_100_percentage?.toFixed(2) || "0.02"}%
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* 编辑模式 */
+            <div className="space-y-3">
+              {editRuleData.map((rule, index) => {
+                const labels: Record<string, string> = {
+                  invite_per_user_percentage: "邀请新用户（% / 人）",
+                  referral_network_per_100_percentage: "被邀请人每100人脉（%）",
+                };
+                return (
+                  <div key={rule.key} className="p-3 bg-gray-50 rounded-lg">
+                    <Label className="text-sm text-gray-700 mb-2 block">
+                      {labels[rule.key] || rule.key}
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={rule.value}
+                        onChange={(e) => {
+                          const newData = [...editRuleData];
+                          newData[index].value = e.target.value;
+                          setEditRuleData(newData);
+                        }}
+                        className="bg-white"
+                      />
+                      <span className="text-sm font-bold text-[#A80000]">%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
 
         {/* 股东股权总览 */}
@@ -562,6 +893,64 @@ export default function EquityManagement() {
               disabled={updateInvestmentMutation.isPending}
             >
               {updateInvestmentMutation.isPending ? "更新中..." : "确定"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 添加新池对话框 */}
+      <Dialog open={isAddPoolDialogOpen} onOpenChange={setIsAddPoolDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加新的股份池</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="poolName">池名称 *</Label>
+              <Input
+                id="poolName"
+                type="text"
+                value={newPoolName}
+                onChange={(e) => setNewPoolName(e.target.value)}
+                placeholder="例如：期权池、预留池"
+              />
+            </div>
+            <div>
+              <Label htmlFor="poolKey">池标识（英文，可选）</Label>
+              <Input
+                id="poolKey"
+                type="text"
+                value={newPoolKey}
+                onChange={(e) => setNewPoolKey(e.target.value)}
+                placeholder="例如：option_pool_percentage（留空自动生成）"
+              />
+            </div>
+            <div>
+              <Label htmlFor="poolValue">比例（%）*</Label>
+              <Input
+                id="poolValue"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={newPoolValue}
+                onChange={(e) => setNewPoolValue(e.target.value)}
+                placeholder="例如：10"
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              提示：添加后请确保所有池的总和等于100%，可以调整其他池的比例来平衡。
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddPoolDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleAddPool}
+              className="bg-[#A80000] hover:bg-[#8a0000]"
+            >
+              添加
             </Button>
           </DialogFooter>
         </DialogContent>

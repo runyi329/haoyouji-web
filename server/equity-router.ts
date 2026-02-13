@@ -95,4 +95,44 @@ export const equityRouter = router({
       }
       return await dbEquity.updateEquityRule(input.ruleKey, input.ruleValue);
     }),
+
+  // 批量更新股权规则（管理员）
+  updateRules: protectedProcedure
+    .input(z.object({
+      rules: z.array(z.object({
+        ruleKey: z.string(),
+        ruleValue: z.number(),
+        ruleDescription: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      for (const rule of input.rules) {
+        await dbEquity.upsertEquityRule(rule.ruleKey, rule.ruleValue, rule.ruleDescription);
+      }
+      return { success: true };
+    }),
+
+  // 删除股权规则（管理员）
+  deleteRule: protectedProcedure
+    .input(z.object({
+      ruleKey: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      return await dbEquity.deleteEquityRule(input.ruleKey);
+    }),
+
+  // 获取所有规则详情（包含描述）
+  getRulesDetail: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      return await dbEquity.getEquityRulesDetail();
+    }),
 });
