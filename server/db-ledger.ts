@@ -21,7 +21,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
     return [];
   }
 
-  // 获取账本详情
+  // 获取账本详情（先不排序，后续按最近活动时间排序）
   const ledgerList = await db
     .select()
     .from(ledgers)
@@ -30,10 +30,9 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         sql`${ledgers.id} IN (${sql.join(ledgerIds, sql`, `)})`,
         eq(ledgers.isArchived, isArchived)
       )
-    )
-    .orderBy(desc(ledgers.updatedAt));
+    );
 
-  // 为每个账本获取成员信息
+  // 为每个账本获取成员信息和最近活动时间
   const result = await Promise.all(
     ledgerList.map(async (ledger: any) => {
       // 使用账本数据库连接,关联users表获取头像
@@ -62,8 +61,20 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         .where(eq(ledgerRecords.ledgerId, ledger.id))
         .then((rows: any[]) => rows[0]?.count || 0);
 
+      // 获取该账本最近一条账目的创建时间（作为最近活动时间）
+      const latestRecord = await db
+        .select({ latestAt: sql<string>`MAX(${ledgerRecords.createdAt})` })
+        .from(ledgerRecords)
+        .where(eq(ledgerRecords.ledgerId, ledger.id))
+        .then((rows: any[]) => rows[0]?.latestAt || null);
+
       // 获取当前用户在这个账本中的角色
       const userRole = memberRecords.find((m: any) => m.ledgerId === ledger.id)?.role || "member";
+
+      // 最近活动时间：取账目最新时间和账本updatedAt中的较新值
+      const lastActivityAt = latestRecord 
+        ? new Date(Math.max(new Date(latestRecord).getTime(), new Date(ledger.updatedAt).getTime()))
+        : new Date(ledger.updatedAt);
 
       return {
         ...ledger,
@@ -71,9 +82,13 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         memberCount,
         recordCount,
         userRole,
+        lastActivityAt: lastActivityAt.toISOString(),
       };
     })
   );
+
+  // 按最近活动时间降序排列（最近使用的排最前）
+  result.sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
 
   return result;
 }
