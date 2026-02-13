@@ -309,7 +309,7 @@ export default function MyEquity() {
         {/* 在线签署协议入口 */}
         <Card
           className="p-4 rounded-2xl shadow-sm border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => toast.info("在线签署功能即将上线，敬请期待")}
+          onClick={() => toast.info("需要更高权限")}
         >
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A80000] to-[#c44] flex items-center justify-center flex-shrink-0">
@@ -329,7 +329,7 @@ export default function MyEquity() {
         <Card className="rounded-2xl shadow-sm overflow-hidden">
           <button
             className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
-            onClick={() => setShowStructure(!showStructure)}
+            onClick={() => toast.info("需要更高权限")}
           >
             <div className="flex items-center space-x-3">
               <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
