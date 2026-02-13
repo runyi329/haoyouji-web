@@ -1869,6 +1869,7 @@ export async function getTransactionsList(
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
       imageUrl: ledgerRecords.imageUrl,
+      reimbursementStatus: ledgerRecords.reimbursementStatus,
     })
     .from(ledgerRecords)
     .where(and(...conditions))
