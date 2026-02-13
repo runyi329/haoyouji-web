@@ -53,15 +53,10 @@ const AddTransaction = () => {
   const ledgerId = parseInt(id || "0");
   const utils = trpc.useUtils();
   
-  // 监听页面获得焦点，刷新分类数据
+  // 监听页面进入，刷新分类数据
   useEffect(() => {
-    const handleFocus = () => {
-      // 使分类缓存失效，重新获取
-      utils.ledger.getCategories.invalidate({ ledgerId });
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    // 每次组件挂载或ledgerId变化时，使分类缓存失效
+    utils.ledger.getCategories.invalidate({ ledgerId });
   }, [ledgerId, utils]);
   
   // 编辑模式：从 URL 参数获取要编辑的账目 ID
