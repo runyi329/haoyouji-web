@@ -270,7 +270,7 @@ export default function EquityManagement() {
     setEditPoolData(
       poolKeys.map(r => ({
         key: r.ruleKey,
-        label: POOL_LABELS[r.ruleKey] || r.ruleDescription || r.ruleKey,
+        label: r.ruleDescription || POOL_LABELS[r.ruleKey] || r.ruleKey,
         value: r.ruleValue.toString(),
         description: r.ruleDescription || "",
       }))
@@ -468,7 +468,7 @@ export default function EquityManagement() {
             <div className="grid grid-cols-2 gap-4">
               {poolKeys.map((pool, index) => {
                 const color = getPoolColor(pool.ruleKey, index);
-                const label = POOL_LABELS[pool.ruleKey] || pool.ruleDescription || pool.ruleKey;
+                const label = pool.ruleDescription || POOL_LABELS[pool.ruleKey] || pool.ruleKey;
                 return (
                   <div key={pool.ruleKey} className={`p-4 ${color.bg} rounded-xl`}>
                     <p className="text-sm text-gray-600 mb-1">{label}</p>
