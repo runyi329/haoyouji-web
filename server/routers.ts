@@ -5811,6 +5811,7 @@ export const appRouter = router({
         images: z.array(z.string()).optional(),
         memberId: z.number().optional(),
         accountId: z.number().optional(),
+        reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.addTransaction({

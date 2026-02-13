@@ -1718,6 +1718,7 @@ export async function addTransaction(data: {
   images?: string[];
   memberId?: number; // 为谁记账（默认为自己）
   accountId?: number; // 付款/收款方式
+  reimbursementStatus?: 'none' | 'pending' | 'completed'; // 报销状态
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -1778,6 +1779,7 @@ export async function addTransaction(data: {
     imageUrl: data.images && data.images.length > 0 ? data.images[0] : null, // 只支持单张图片
     recordDate: data.transactionDate,
     createdBy: data.userId,
+    reimbursementStatus: data.reimbursementStatus || 'none',
   });
   
   // 如果需要审批，创建审批记录
