@@ -8,6 +8,7 @@ import { toast } from "sonner";
 // FAQ手风琴组件
 function FAQAccordion() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const faqs = [
     {
@@ -31,11 +32,13 @@ function FAQAccordion() {
     },
   ];
 
-  const handleCopy = (text: string) => {
+  const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      toast.success('已复制到剪贴板');
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
     }).catch(() => {
-      toast.error('复制失败，请重试');
+      setCopiedId(`error-${id}`);
+      setTimeout(() => setCopiedId(null), 2000);
     });
   };
 
@@ -63,24 +66,62 @@ function FAQAccordion() {
           {openIndex === index && (
             <div className="px-3 pb-3 pt-2 border-t border-gray-100">
               <div className="space-y-2.5">
-                {faq.answerBlocks.map((block, i) => (
-                  <div key={i} className="text-sm">
-                    {block.title && (
-                      <div className="font-bold text-gray-900 mb-1">{block.title}</div>
-                    )}
-                    <div className="text-gray-700 leading-relaxed">{block.text}</div>
-                  </div>
-                ))}
+                {faq.answerBlocks.map((block, i) => {
+                  const blockId = `${index}-${i}`;
+                  const blockText = block.title ? `${block.title}\n${block.text}` : block.text;
+                  const isCopied = copiedId === blockId;
+                  const isError = copiedId === `error-${blockId}`;
+                  
+                  return (
+                    <div key={i} className="text-sm relative group">
+                      {block.title && (
+                        <div className="font-bold text-gray-900 mb-1">{block.title}</div>
+                      )}
+                      <div className="text-gray-700 leading-relaxed flex items-start justify-between">
+                        <span className="flex-1 pr-2">{block.text}</span>
+                        <button
+                          onClick={() => handleCopy(blockText, blockId)}
+                          className="flex-shrink-0 ml-1 mt-0.5 p-1 hover:bg-gray-100 rounded transition-colors relative"
+                          title="复制这段"
+                        >
+                          <svg className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          {isCopied && (
+                            <span className="absolute -top-6 right-0 bg-green-500 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
+                              已复制
+                            </span>
+                          )}
+                          {isError && (
+                            <span className="absolute -top-6 right-0 bg-red-500 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
+                              复制失败
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
               
               <button
-                onClick={() => handleCopy(faq.answerText)}
-                className="mt-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1"
+                onClick={() => handleCopy(faq.answerText, `all-${index}`)}
+                className="mt-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1 relative"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                <span>复制答案</span>
+                <span>复制全部文字</span>
+                {copiedId === `all-${index}` && (
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                    已复制全部
+                  </span>
+                )}
+                {copiedId === `error-all-${index}` && (
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                    复制失败
+                  </span>
+                )}
               </button>
             </div>
           )}
