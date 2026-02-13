@@ -100,16 +100,25 @@ const CACHE_TTL = 60000; // 缓存60秒
  * 返回 Map<fieldKey, isEnabled>
  * fieldKey 格式为 "tableName.fieldName"
  */
-export async function getEncryptionConfig(db: any): Promise<Map<string, boolean>> {
+export async function getEncryptionConfig(dbConn: any): Promise<Map<string, boolean>> {
   const now = Date.now();
   if (encryptionConfigCache && (now - configCacheTime) < CACHE_TTL) {
     return encryptionConfigCache;
   }
   
   try {
-    const rows = await db.execute(
-      `SELECT table_name, field_name, is_enabled FROM encryption_config`
-    );
+    // 使用原生 SQL查询，兼容 mysql2 和 drizzle
+    let rows;
+    if (dbConn.execute) {
+      // mysql2 连接
+      rows = await dbConn.execute(
+        `SELECT table_name, field_name, is_enabled FROM encryption_config`
+      );
+    } else {
+      // drizzle 连接，这里不会进入，因为 getDb() 返回的是 mysql2 连接
+      // 但为了安全，这里返回空配置
+      return new Map();
+    }
     
     const config = new Map<string, boolean>();
     const resultRows = (rows as any)?.[0] || rows?.rows || rows;
@@ -148,7 +157,7 @@ export async function isFieldEncryptionEnabled(db: any, tableName: string, field
 
 /**
  * 对一个对象的指定字段进行加密（写入数据库前调用）
- * @param db 数据库连接
+ * @param db 数据库连接（drizzle 对象）
  * @param tableName 表名
  * @param data 数据对象
  * @param fields 需要检查的字段列表
@@ -159,7 +168,14 @@ export async function encryptFields(
   data: Record<string, any>,
   fields: string[]
 ): Promise<Record<string, any>> {
-  const config = await getEncryptionConfig(db);
+  // 获取原始 connection 查询加密配置
+  const { getDbConnection } = await import('./db');
+  const conn = await getDbConnection();
+  if (!conn) {
+    return data; // 连接不可用，返回原数据
+  }
+  
+  const config = await getEncryptionConfig(conn);
   const result = { ...data };
   
   for (const field of fields) {

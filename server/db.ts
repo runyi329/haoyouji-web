@@ -48,6 +48,10 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _guestDb: ReturnType<typeof drizzle> | null = null;
 let _ledgerDb: ReturnType<typeof drizzle> | null = null;
 
+// 存储原始 mysql2 connection
+let _connection: mysql.Connection | null = null;
+let _guestConnection: mysql.Connection | null = null;
+
 const GUEST_USER_ID = 5070293;
 
 // 全局变量，用于存储当前请求是否是游客
@@ -82,6 +86,7 @@ export async function getDb(forceGuest: boolean = false) {
           ssl: isLocalhost ? false : { rejectUnauthorized: false },
           charset: 'utf8mb4',
         });
+        _guestConnection = connection;
         _guestDb = drizzle(connection);
         console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
         } catch (error) {
@@ -116,6 +121,7 @@ export async function getDb(forceGuest: boolean = false) {
           ssl: isLocalhost ? false : { rejectUnauthorized: false },
           charset: 'utf8mb4',
         });
+        _connection = connection;
         _db = drizzle(connection);
         
         let dbType = "Manus数据库";
@@ -142,6 +148,21 @@ export async function getDb(forceGuest: boolean = false) {
 export async function getLedgerDb() {
   // 游客用户使用与getDb相同的数据库
   return getDb();
+}
+
+/**
+ * 获取原始 mysql2 connection 对象（用于直接执行 SQL）
+ * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
+ */
+export async function getDbConnection(forceGuest: boolean = false): Promise<mysql.Connection | null> {
+  // 先调用 getDb() 确保连接已创建
+  await getDb(forceGuest);
+  
+  if (forceGuest || _currentIsGuest) {
+    return _guestConnection;
+  }
+  
+  return _connection;
 }
 
 // ==================== 用户相关 ====================
