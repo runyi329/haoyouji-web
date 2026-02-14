@@ -41,6 +41,7 @@ export default function LedgerSettings() {
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
+  const [showRemovePicker, setShowRemovePicker] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [searchUsername, setSearchUsername] = useState("");
   const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
@@ -156,18 +157,7 @@ export default function LedgerSettings() {
                     创建人
                   </div>
                 )}
-                {/* 移除按钮（只有创建人可以移除其他成员，且不能移除自己） */}
-                {ledgerData?.userRole === 'owner' && member.role !== 'owner' && (
-                  <button
-                    onClick={() => {
-                      setMemberToRemove(member);
-                      setShowRemoveDialog(true);
-                    }}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+
               </div>
               <div className="text-sm text-gray-900 mt-1">
                 {member.nickname || "用户"}
@@ -175,7 +165,7 @@ export default function LedgerSettings() {
             </div>
           ))}
           
-          {/* 邀请按钮 */}
+          {/* 邀请按钮（+号） */}
           <button 
             onClick={() => setShowInviteDialog(true)}
             className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
@@ -185,6 +175,19 @@ export default function LedgerSettings() {
             </div>
             <div className="text-sm mt-1" style={{ color: themeColors.primary }}>邀请伙伴</div>
           </button>
+
+          {/* 移除成员按钮（-号）：创建人和管理员可见，且有非owner成员时才显示 */}
+          {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
+            <button 
+              onClick={() => setShowRemovePicker(true)}
+              className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
+            >
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center border-red-400">
+                <span className="text-3xl text-red-500">−</span>
+              </div>
+              <div className="text-sm mt-1 text-red-500">移除成员</div>
+            </button>
+          )}
         </div>
       </div>
 
@@ -386,6 +389,54 @@ export default function LedgerSettings() {
               关闭
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 移除成员选择弹窗 */}
+      <Dialog open={showRemovePicker} onOpenChange={setShowRemovePicker}>
+        <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
+          <DialogTitle className="text-lg font-semibold mb-4">选择要移除的成员</DialogTitle>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {members?.filter((m: any) => m.role !== 'owner').map((member: any) => (
+              <div
+                key={member.userId}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <UserAvatar
+                    username={member.username}
+                    avatar={member.avatar}
+                    nickname={member.nickname}
+                    size="sm"
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">{member.nickname || member.username}</div>
+                    <div className="text-xs text-gray-400">
+                      {member.role === 'admin' ? '管理员' : '普通成员'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setMemberToRemove(member);
+                    setShowRemovePicker(false);
+                    setShowRemoveDialog(true);
+                  }}
+                  className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  移除
+                </button>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            className="w-full mt-3"
+            onClick={() => setShowRemovePicker(false)}
+          >
+            取消
+          </Button>
         </DialogContent>
       </Dialog>
 
