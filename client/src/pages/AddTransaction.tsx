@@ -154,10 +154,9 @@ const AddTransaction = () => {
     ],
   };
 
-  // 获取顶级分类（parentId = null）
+  // 获取顶级分类（parentId = null）- 收入和支出共享同一套分类
   const { data: topCategories = [], isLoading: isLoadingTop } = trpc.ledger.getCategories.useQuery({
     ledgerId,
-    type: transactionType,
     parentId: null,
   });
 
@@ -171,11 +170,10 @@ const AddTransaction = () => {
     }
   }, [isEditMode, topCategories.length > 0 ? topCategories[0]?.id : null]);
 
-  // 动态加载子分类 - 使用固定的3个查询(最多支持3级分类)
+  // 动态加载子分类 - 使用固定的3个查询(最多支持3级分类) - 收入和支出共享分类
   const level1Query = trpc.ledger.getCategories.useQuery(
     {
       ledgerId,
-      type: transactionType,
       parentId: selectedCategoryPath[0] || null,
     },
     { enabled: selectedCategoryPath.length >= 1 }
@@ -184,7 +182,6 @@ const AddTransaction = () => {
   const level2Query = trpc.ledger.getCategories.useQuery(
     {
       ledgerId,
-      type: transactionType,
       parentId: selectedCategoryPath[1] || null,
     },
     { enabled: selectedCategoryPath.length >= 2 }

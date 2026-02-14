@@ -85,10 +85,9 @@ export default function LedgerFilter() {
     });
   };
 
-  // 获取账本分类
+  // 获取账本分类（收入和支出共享同一套分类）
   const { data: categoriesData } = trpc.ledger.getCategories.useQuery({ 
     ledgerId,
-    type: selectedType === "all" ? undefined : (selectedType as "income" | "expense")
   });
 
   // 构建分类层级关系
