@@ -75,10 +75,9 @@ const LedgerCategories = () => {
     });
   };
 
-  // 从后端API获取分类数据
+  // 从后端API获取分类数据（收入和支出共享同一套分类）
   const { data: categoriesData, refetch: refetchCategories } = trpc.ledger.getCategories.useQuery({
     ledgerId: Number(id),
-    type: "expense",
   });
 
   // 添加分类的mutation
@@ -161,7 +160,7 @@ const LedgerCategories = () => {
         <button onClick={() => setLocation(`/ledger/${id}`)}>
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-semibold">账本支出条目</h1>
+        <h1 className="text-lg font-semibold">账本分类管理</h1>
         <div className="w-5" />
       </div>
 
