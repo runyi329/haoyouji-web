@@ -456,7 +456,7 @@ export default function TransactionDetail() {
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
           {/* 申请报销按钮 - 只在未报销状态显示 */}
-          {displayStatus === 'none' && transaction.type === 'expense' && (
+          {displayStatus === 'none' && (
             <button 
               onClick={() => setShowReimbursementForm(true)}
               className="w-full py-3 bg-[#A80000] hover:bg-[#8a0000] text-white rounded-lg font-medium text-base transition-colors"
