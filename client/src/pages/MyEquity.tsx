@@ -668,40 +668,15 @@ export default function MyEquity() {
         </div>
         {/* 第一层结束 */}
 
-        {/* 第二层：合伙人资产增值中控台 */}
-        <div className="mt-6 pt-6 pb-6 px-4 bg-[#F4F5F7]">
-          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1">节点共享中心</h2>
-          <p className="text-xs text-gray-500 mb-5 px-1">身份荣誉 · 成就加成 · 晋升路径</p>
-          
-          {/* 第一部分：成就勋章卡片 */}
-          <div className="mb-6">
-            <NodeAchievementBadge
-              level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
-              equityBonus={0.009}
-              contributionScore={equity.details?.inviteCount * 2 || 0}
-              marketShare={0.06}
-              isQualified={equity.details?.inviteCount >= 1}
-              estimatedEquityBonus={0.0015}
-            />
-          </div>
-          
-          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1 mt-8">合伙人资产增值中控台</h2>
-          <p className="text-xs text-gray-500 mb-5 px-1">精密模拟 + 三阶引擎 + 智能路径</p>
-          
-          {/* 精密中控台模拟器 */}
-          <div className="mb-5">
-            <PrecisionSimulator
-              currentInvites={equity.details?.inviteCount || 0}
-              currentNetworkSize={equity.details?.referralNetworkCount || 0}
-              currentActiveDays={7}
-              leverageMultiplier={equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1.00}
-              onSimulationChange={(result) => setSimulationResult(result)}
-            />
-          </div>
-          
-          {/* 三阶增值引擎 */}
-          <ThreeTierEngine
-            leverageMultiplier={equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1.00}
+        {/* 第二层：节点共享中心 */}
+        <div className="mt-6 px-4">
+          <NodeAchievementBadge
+            level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
+            equityBonus={0.009}
+            contributionScore={equity.details?.inviteCount * 2 || 0}
+            marketShare={0.06}
+            isQualified={equity.details?.inviteCount >= 1}
+            estimatedEquityBonus={0.0015}
           />
         </div>
 
