@@ -1,20 +1,43 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
+// ============================================================
+// 晋升规则配置
+// ============================================================
+const TIER_RULES = {
+  standard: { contactMin: 50, tagMin: 3, nodeShare: 0, label: '标准节点', weightLabel: '基础' },
+  advanced: { contactMin: 100, tagMin: 5, nodeShare: 5, label: '高级节点', weightLabel: '2× 权重' },
+  super: { contactMin: 150, tagMin: 10, nodeShare: 5, label: '超级节点', weightLabel: '5× 权重' },
+};
+
+// ============================================================
+// Props
+// ============================================================
 interface NodeAchievementBadgeProps {
-  // 当前节点等级
+  /** 当前节点等级 */
   level: 'none' | 'standard' | 'advanced' | 'super';
-  // 节点激励奖（如 0.009 表示 0.9%）
+  /** 节点激励奖（小数，如 0.009 = 0.9%） */
   equityBonus: number;
-  // 贡献分
+  /** 贡献分 */
   contributionScore: number;
-  // 市场占比（如 0.06 表示 6%）
+  /** 市场占比（小数，如 0.06 = 6%） */
   marketShare: number;
-  // 是否已达标
+  /** 是否已达标 */
   isQualified: boolean;
-  // 预计节点激励奖（未达标时显示）
+  /** 预计激活收益（小数） */
   estimatedEquityBonus?: number;
+  /** 人脉数量 */
+  contactCount?: number;
+  /** 人均标签数 */
+  tagAverage?: number;
+  /** 已培育标准节点数 */
+  standardNodeCount?: number;
+  /** 已培育高级节点数 */
+  advancedNodeCount?: number;
 }
 
+// ============================================================
+// 主组件
+// ============================================================
 const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   level,
   equityBonus,
@@ -22,9 +45,15 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   marketShare,
   isQualified,
   estimatedEquityBonus = 0.0015,
+  contactCount = 0,
+  tagAverage = 0,
+  standardNodeCount = 0,
+  advancedNodeCount = 0,
 }) => {
   const [displayedBonus, setDisplayedBonus] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showPromotion, setShowPromotion] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // Count-up 动画
   useEffect(() => {
@@ -32,17 +61,14 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
       setDisplayedBonus(0);
       return;
     }
-
-    const duration = 1500; // 1.5秒
+    const duration = 1500;
     const steps = 60;
     const increment = equityBonus / steps;
     let current = 0;
     let step = 0;
-
     const timer = setInterval(() => {
       step++;
       current += increment;
-      
       if (step >= steps) {
         setDisplayedBonus(equityBonus);
         clearInterval(timer);
@@ -50,194 +76,600 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
         setDisplayedBonus(current);
       }
     }, duration / steps);
-
     return () => clearInterval(timer);
   }, [equityBonus, isQualified]);
 
-  // 节点配置
-  const nodeConfig = {
-    none: {
-      name: '准合伙人',
-      color: '#999999',
-      badge: 'L0',
-    },
-    standard: {
-      name: '标准节点',
-      color: '#C0C0C0',
-      badge: 'L1',
-    },
-    advanced: {
-      name: '高级节点',
-      color: '#5B9BD5',
-      badge: 'L2',
-    },
-    super: {
-      name: '超级节点',
-      color: '#FFD700',
-      badge: 'L3',
-    },
+  // 计算下一等级信息
+  const getNextTier = () => {
+    if (level === 'super') return null;
+    if (level === 'advanced') return { key: 'super' as const, ...TIER_RULES.super };
+    if (level === 'standard') return { key: 'advanced' as const, ...TIER_RULES.advanced };
+    return { key: 'standard' as const, ...TIER_RULES.standard };
   };
 
+  const nextTier = getNextTier();
+
+  // 计算晋升进度
+  const getPromotionProgress = () => {
+    if (!nextTier) return [];
+    const items: { label: string; current: number; target: number; done: boolean }[] = [];
+
+    items.push({
+      label: '人脉数量',
+      current: contactCount,
+      target: nextTier.contactMin,
+      done: contactCount >= nextTier.contactMin,
+    });
+    items.push({
+      label: '标签完善',
+      current: tagAverage,
+      target: nextTier.tagMin,
+      done: tagAverage >= nextTier.tagMin,
+    });
+
+    if (nextTier.key === 'advanced') {
+      items.push({
+        label: '培育标准节点',
+        current: standardNodeCount,
+        target: nextTier.nodeShare,
+        done: standardNodeCount >= nextTier.nodeShare,
+      });
+    }
+    if (nextTier.key === 'super') {
+      items.push({
+        label: '培育高级节点',
+        current: advancedNodeCount,
+        target: nextTier.nodeShare,
+        done: advancedNodeCount >= nextTier.nodeShare,
+      });
+    }
+
+    return items;
+  };
+
+  const promotionItems = getPromotionProgress();
+  const promotionSummary = nextTier
+    ? promotionItems.filter(i => !i.done).length > 0
+      ? `距离"${nextTier.label}"还需：${promotionItems.filter(i => !i.done).map(i => `${i.label} ${i.current}/${i.target}`).join('、')}`
+      : `已满足"${nextTier.label}"全部条件`
+    : '已达最高等级';
+
+  // ============================================================
+  // 顶部卡片样式（三段式进化）
+  // ============================================================
+  const getTopCardStyle = () => {
+    switch (level) {
+      case 'none':
+        return 'bg-[#F5F5F5] text-gray-600';
+      case 'standard':
+        return 'bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white';
+      case 'advanced':
+        return 'bg-gradient-to-br from-[#0a1628] to-[#1a2744] text-white';
+      case 'super':
+        return 'bg-gradient-to-br from-[#1a1a2e] via-[#2d2d44] to-[#1a1a2e] text-white';
+    }
+  };
+
+  const getBonusColor = () => {
+    switch (level) {
+      case 'none': return 'text-gray-400';
+      case 'standard': return 'text-white';
+      case 'advanced': return 'text-amber-400';
+      case 'super': return 'text-amber-300';
+    }
+  };
+
+  const getStatusDotColor = () => {
+    if (!isQualified) return '#F59E0B';
+    switch (level) {
+      case 'standard': return '#10B981';
+      case 'advanced': return '#60A5FA';
+      case 'super': return '#FBBF24';
+      default: return '#F59E0B';
+    }
+  };
+
+  const bonusValue = isQualified
+    ? `+${(displayedBonus * 100).toFixed(4)}`
+    : level === 'none'
+      ? `+${(estimatedEquityBonus * 100).toFixed(4)}`
+      : `+X.XXXX`;
+
+  const nodeConfig: Record<string, { name: string; badge: string }> = {
+    none: { name: '准合伙人', badge: 'L0' },
+    standard: { name: '标准节点', badge: 'L1' },
+    advanced: { name: '高级节点', badge: 'L2' },
+    super: { name: '超级节点', badge: 'L3' },
+  };
   const config = nodeConfig[level];
 
   return (
-    <div className="space-y-0">
-      {/* 红色顶盖（对标第一层） */}
-      <div 
-        className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm opacity-90">节点贡献激励</span>
-          <div className="flex items-center space-x-2">
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{
-                backgroundColor: isQualified ? '#10B981' : '#F59E0B',
-              }}
-            />
-            <svg
-              className={`w-5 h-5 opacity-90 transition-transform ${
-                isExpanded ? 'rotate-180' : ''
-              }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-        
-        <div className="flex items-baseline space-x-2">
-          <span className="text-5xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {isQualified ? (
-              <>+{(displayedBonus * 100).toFixed(4)}</>
-            ) : (
-              <>+{(estimatedEquityBonus * 100).toFixed(4)}</>
-            )}
-          </span>
-          <span className="text-2xl opacity-90">%</span>
-        </div>
-        
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs opacity-60">
-            {isQualified ? '节点共享加成收益' : '预计激活后收益'}
-          </span>
-          <span className="text-xs opacity-60 bg-white/10 px-2 py-0.5 rounded-full">
-            {config.name}
-          </span>
-        </div>
+    <>
+      <div className="space-y-0">
+        {/* ====== 顶部进化卡片 ====== */}
+        <div
+          className={`relative overflow-hidden p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all ${getTopCardStyle()}`}
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {/* 超级节点：钛金流光动效 */}
+          {level === 'super' && (
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              <div
+                className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%]"
+                style={{
+                  background: 'conic-gradient(from 0deg, transparent 0%, rgba(251,191,36,0.08) 10%, transparent 20%, rgba(251,191,36,0.05) 30%, transparent 40%)',
+                  animation: 'titaniumSpin 8s linear infinite',
+                }}
+              />
+            </div>
+          )}
 
-        {/* 展开后的详细内容 */}
-        {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
-            {/* 左右分列：贡献分 vs 市场占比 */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* 左侧：贡献分 */}
-              <div className="bg-white/10 rounded-xl p-3">
-                <div className="text-xs opacity-70 mb-1">贡献分</div>
-                <div className="text-2xl font-bold">{contributionScore}</div>
-                <div className="text-xs opacity-60 mt-1">累计节点贡献</div>
-              </div>
-              
-              {/* 右侧：市场占比 */}
-              <div className="bg-white/10 rounded-xl p-3">
-                <div className="text-xs opacity-70 mb-1">市场占比</div>
-                <div className="text-2xl font-bold">{(marketShare * 100).toFixed(2)}%</div>
-                <div className="text-xs opacity-60 mt-1">在贡献池中</div>
+          {/* 高级节点：微光粒子 */}
+          {level === 'advanced' && (
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-1 h-1 rounded-full bg-blue-400/30"
+                  style={{
+                    left: `${15 + i * 15}%`,
+                    top: `${20 + (i % 3) * 25}%`,
+                    animation: `floatParticle ${3 + i * 0.5}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.3}s`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 未达成：半透明勋章水印 */}
+          {level === 'none' && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-[0.06] pointer-events-none">
+              <svg width="100" height="100" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            </div>
+          )}
+
+          <div className="relative z-10">
+            {/* 标题行 */}
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-sm ${level === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
+                节点贡献激励
+              </span>
+              <div className="flex items-center space-x-2">
+                {/* 规则入口 (?) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowRules(true);
+                  }}
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    level === 'none'
+                      ? 'bg-gray-300 text-gray-600 hover:bg-gray-400'
+                      : 'bg-white/20 text-white/80 hover:bg-white/30'
+                  }`}
+                >
+                  ?
+                </button>
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: getStatusDotColor() }}
+                />
+                <svg
+                  className={`w-5 h-5 transition-transform ${level === 'none' ? 'text-gray-400' : 'opacity-90'} ${isExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
             </div>
 
-            {/* 实时贡献墙 */}
-            <div className="bg-white/10 rounded-xl p-3">
-              <div className="text-xs font-semibold opacity-90 mb-2">📊 实时贡献墙（动态）</div>
-              <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+            {/* 核心数值 */}
+            <div className="flex items-baseline space-x-2">
+              <span
+                className={`text-5xl font-bold ${getBonusColor()}`}
+                style={{
+                  fontVariantNumeric: 'tabular-nums',
+                  ...(level === 'super' ? { animation: 'breathePulse 3s ease-in-out infinite' } : {}),
+                }}
+              >
+                {bonusValue}
+              </span>
+              <span className={`text-2xl ${level === 'none' ? 'text-gray-400' : 'opacity-90'}`}>%</span>
+            </div>
+
+            {/* 副标题 */}
+            <div className="mt-2 flex items-center justify-between">
+              <span className={`text-xs ${level === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
+                {level === 'none' ? '待激活身份：准合伙人' : isQualified ? '节点共享加成收益' : '预计激活后收益'}
+              </span>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  level === 'none'
+                    ? 'bg-gray-300 text-gray-600'
+                    : level === 'advanced'
+                      ? 'bg-blue-500/20 text-blue-300'
+                      : level === 'super'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'bg-white/10 text-white/80'
+                }`}
+              >
+                {config.name}
+              </span>
+            </div>
+
+            {/* 未达成状态：三段式进度条 */}
+            {level === 'none' && (
+              <div className="mt-4 pt-4 border-t border-gray-300/50 space-y-3">
+                <div className="text-xs text-gray-500 font-semibold mb-2">激活条件</div>
+                {/* 人脉数量 */}
                 <div>
-                  <div className="opacity-70 mb-1">邀请人数</div>
-                  <div className="font-bold text-lg">{contributionScore / 2}人</div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>人脉数量</span>
+                    <span className={contactCount >= 50 ? 'text-green-600 font-semibold' : 'text-orange-500'}>
+                      {contactCount}/{TIER_RULES.standard.contactMin}
+                      {contactCount >= 50 ? ' ✓' : ' (待补齐)'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-300 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${contactCount >= 50 ? 'bg-green-500' : 'bg-orange-400'}`}
+                      style={{ width: `${Math.min(100, (contactCount / 50) * 100)}%` }}
+                    />
+                  </div>
                 </div>
+                {/* 标签完善 */}
                 <div>
-                  <div className="opacity-70 mb-1">贡献分</div>
-                  <div className="font-bold text-lg">{contributionScore}</div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>标签完善</span>
+                    <span className={tagAverage >= 3 ? 'text-green-600 font-semibold' : 'text-orange-500'}>
+                      {tagAverage}/{TIER_RULES.standard.tagMin}
+                      {tagAverage >= 3 ? ' ✓' : ' (待补齐)'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-300 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${tagAverage >= 3 ? 'bg-green-500' : 'bg-orange-400'}`}
+                      style={{ width: `${Math.min(100, (tagAverage / 3) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400 mt-2 italic">
+                  补齐资料即可激活 +{(estimatedEquityBonus * 100).toFixed(4)}% 收益
                 </div>
               </div>
-              <div className="text-xs opacity-70 leading-relaxed">
+            )}
+
+            {/* 达成后展开的详细内容 */}
+            {isExpanded && level !== 'none' && (
+              <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
+                    <div className="text-xs opacity-70 mb-1">贡献分</div>
+                    <div className="text-2xl font-bold">{contributionScore}</div>
+                    <div className="text-xs opacity-60 mt-1">累计节点贡献</div>
+                  </div>
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
+                    <div className="text-xs opacity-70 mb-1">市场占比</div>
+                    <div className="text-2xl font-bold">{(marketShare * 100).toFixed(2)}%</div>
+                    <div className="text-xs opacity-60 mt-1">在贡献池中</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ====== 灰色底座 ====== */}
+        <div className="bg-gray-50 rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
+          {/* 身份成就 vs 加成收益 */}
+          <div className="grid grid-cols-2 gap-6 mb-5 relative">
+            {/* 左侧：身份成就 */}
+            <div>
+              <div className="text-xs text-gray-500 mb-1 flex items-center">
+                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                身份成就
+              </div>
+              <div className="flex items-baseline space-x-1">
+                <span className="text-2xl font-bold text-gray-900">{config.name}</span>
+              </div>
+              <div className="mt-1 text-xs text-gray-400">
                 {isQualified ? (
-                  <>当前已激活节点共享权证，享受 +{(equityBonus * 100).toFixed(4)}% 股权加成</>
+                  <span className="text-green-600 font-medium">权益激活中 ●</span>
                 ) : (
-                  <>完成基础确权后即可激活节点共享权证，预计享受 +{(estimatedEquityBonus * 100).toFixed(4)}% 股权加成</>
+                  '待激活状态'
                 )}
               </div>
             </div>
+
+            {/* 中间分割线 */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300" style={{ transform: 'translateX(-50%)' }} />
+
+            {/* 右侧：加成收益 */}
+            <div className="text-right">
+              <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
+                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                加成收益
+              </div>
+              <div
+                className={`text-2xl font-bold ${level === 'advanced' ? 'text-blue-600' : level === 'super' ? 'text-amber-600' : 'text-orange-600'}`}
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {isQualified ? `+${(displayedBonus * 100).toFixed(4)}%` : level === 'none' ? `+${(estimatedEquityBonus * 100).toFixed(4)}%` : '+X.XXXX%'}
+              </div>
+              <div className="mt-1 text-xs text-gray-400">
+                {isQualified ? '实时生效中' : '预计收益'}
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* 虚线分割 */}
+          <div className="border-t border-dashed border-gray-300 my-4" />
+
+          {/* 底部数据 */}
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <div className="text-gray-500 mb-1">贡献分</div>
+              <div className="text-lg font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {contributionScore}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-gray-500 mb-1">市场占比</div>
+              <div className="text-lg font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {(marketShare * 100).toFixed(2)}%
+              </div>
+            </div>
+          </div>
+
+          {/* ====== 晋升推演区（Accordion） ====== */}
+          {nextTier && (
+            <>
+              <div className="border-t border-dashed border-gray-300 my-4" />
+              <div>
+                <button
+                  onClick={() => setShowPromotion(!showPromotion)}
+                  className="w-full flex items-center justify-between text-left group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500 truncate">{promotionSummary}</div>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-gray-400 flex-shrink-0 ml-2 transition-transform ${showPromotion ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showPromotion && (
+                  <div className="mt-4 space-y-4 bg-white rounded-xl p-4">
+                    <div className="text-xs font-semibold text-gray-700 mb-3">
+                      晋升路线图 → {nextTier.label}
+                    </div>
+
+                    {promotionItems.map((item, idx) => (
+                      <div key={idx}>
+                        <div className="flex justify-between text-xs mb-1.5">
+                          <span className="text-gray-600">{item.label}</span>
+                          <span className={item.done ? 'text-green-600 font-semibold' : 'text-gray-500'}>
+                            {item.current}/{item.target}
+                            {item.done ? ' ✓' : ''}
+                          </span>
+                        </div>
+                        <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${item.done ? 'bg-green-500' : 'bg-[#A80000]'}`}
+                            style={{ width: `${Math.min(100, (item.current / item.target) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* 达成标准节点后：通往高级节点的悬浮微缩卡片 */}
+          {level === 'standard' && (
+            <>
+              <div className="border-t border-dashed border-gray-300 my-4" />
+              <div
+                className="bg-gradient-to-r from-[#0a1628] to-[#1a2744] rounded-xl p-3 cursor-pointer hover:shadow-md transition-all"
+                onClick={() => setShowPromotion(!showPromotion)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-blue-300 font-semibold">通往高级节点</div>
+                    <div className="text-[10px] text-blue-400/60 mt-0.5">解锁 2× 权重加成</div>
+                  </div>
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 达成高级节点后：通往超级节点的悬浮微缩卡片 */}
+          {level === 'advanced' && (
+            <>
+              <div className="border-t border-dashed border-gray-300 my-4" />
+              <div
+                className="bg-gradient-to-r from-[#1a1a2e] to-[#2d2d44] rounded-xl p-3 cursor-pointer hover:shadow-md transition-all"
+                onClick={() => setShowPromotion(!showPromotion)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-amber-300 font-semibold">通往超级节点</div>
+                    <div className="text-[10px] text-amber-400/60 mt-0.5">解锁 5× 权重加成 + 钛金流光特效</div>
+                  </div>
+                  <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* 白色/浅灰容器（对标第一层） */}
-      <div className="bg-gray-50 rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
-        {/* 左右双列：身份成就 vs 加成收益 */}
-        <div className="grid grid-cols-2 gap-6 mb-5 relative">
-          {/* 左侧：身份成就 */}
-          <div>
-            <div className="text-xs text-gray-500 mb-1 flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-              </svg>
-              身份成就
+      {/* ====== 规则白皮书 Bottom Sheet ====== */}
+      {showRules && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          {/* 遮罩 */}
+          <div
+            className="absolute inset-0 bg-black/40 transition-opacity"
+            onClick={() => setShowRules(false)}
+          />
+          {/* 弹窗内容 */}
+          <div className="relative w-full max-w-md bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto animate-slide-up">
+            {/* 拖拽指示条 */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 bg-gray-300 rounded-full" />
             </div>
-            <div className="flex items-baseline space-x-1">
-              <span className="text-2xl font-bold text-gray-900">{config.name}</span>
-            </div>
-            <div className="mt-1 text-xs text-gray-400">
-              {isQualified ? '权益激活中' : '待激活状态'}
-            </div>
-          </div>
-          
-          {/* 中间分割线 */}
-          <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300" style={{transform: 'translateX(-50%)'}}></div>
-          
-          {/* 右侧：加成收益 */}
-          <div className="text-right">
-            <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
-              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              加成收益
-            </div>
-            <div className="text-2xl font-bold text-orange-600" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {isQualified ? (
-                <>+{(displayedBonus * 100).toFixed(4)}%</>
-              ) : (
-                <>+{(estimatedEquityBonus * 100).toFixed(4)}%</>
-              )}
-            </div>
-            <div className="mt-1 text-xs text-gray-400">
-              {isQualified ? '实时生效中' : '预计收益'}
+
+            <div className="px-5 pb-6">
+              {/* 标题 */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">合伙人晋升准则</h3>
+                <button
+                  onClick={() => setShowRules(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* 对比表 */}
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2.5 px-2 text-gray-500 font-medium">维度</th>
+                      <th className="text-center py-2.5 px-2 text-gray-700 font-bold">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[#A80000]">L1</span>
+                          <span>标准节点</span>
+                        </div>
+                      </th>
+                      <th className="text-center py-2.5 px-2 text-gray-700 font-bold">
+                        <div className="flex flex-col items-center">
+                          <span className="text-blue-600">L2</span>
+                          <span>高级节点</span>
+                        </div>
+                      </th>
+                      <th className="text-center py-2.5 px-2 text-gray-700 font-bold">
+                        <div className="flex flex-col items-center">
+                          <span className="text-amber-600">L3</span>
+                          <span>超级节点</span>
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-2 text-gray-600">人脉基数</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 50</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 100</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 150</td>
+                    </tr>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-2 text-gray-600">人均标签</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 3</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 5</td>
+                      <td className="py-3 px-2 text-center font-semibold">≥ 10</td>
+                    </tr>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-2 text-gray-600">节点共享</td>
+                      <td className="py-3 px-2 text-center text-gray-400">—</td>
+                      <td className="py-3 px-2 text-center font-semibold">5名标准节点</td>
+                      <td className="py-3 px-2 text-center font-semibold">5名高级节点</td>
+                    </tr>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-2 text-gray-600">权重加成</td>
+                      <td className="py-3 px-2 text-center">
+                        <span className="px-2 py-0.5 bg-red-50 text-[#A80000] rounded-full font-semibold">基础</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-semibold">2× 权重</span>
+                      </td>
+                      <td className="py-3 px-2 text-center">
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full font-semibold">5× 权重</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 当前状态指示 */}
+              <div className="mt-5 p-3 bg-gray-50 rounded-xl">
+                <div className="text-xs text-gray-500 mb-1">您当前的等级</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-900">{config.name}</span>
+                  {nextTier && (
+                    <span className="text-xs text-gray-400">
+                      下一目标：{nextTier.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 说明文案 */}
+              <div className="mt-4 space-y-3 text-xs text-gray-500 leading-relaxed">
+                <p>
+                  <strong className="text-gray-700">关于节点共享：</strong>
+                  当您帮助其他股东达到标准节点/高级节点等级时，即视为完成一次"节点共享"。这不仅提升您的等级，也壮大了整个合伙人网络。
+                </p>
+                <p>
+                  <strong className="text-gray-700">关于权重加成：</strong>
+                  权重直接影响您在贡献池中的分配比例。高级节点享受 2 倍权重，意味着同等贡献分下，您的股权加成是标准节点的 2 倍。
+                </p>
+                <p>
+                  <strong className="text-gray-700">等级保持：</strong>
+                  一旦达成某等级，只要持续满足基础条件（人脉基数和标签），等级不会降低。
+                </p>
+              </div>
             </div>
           </div>
         </div>
-        
-        {/* 虚线分割 */}
-        <div className="border-t border-dashed border-gray-300 my-4"></div>
-        
-        {/* 底部数据展示 */}
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div>
-            <div className="text-gray-500 mb-1">贡献分</div>
-            <div className="text-lg font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {contributionScore}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-gray-500 mb-1">市场占比</div>
-            <div className="text-lg font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {(marketShare * 100).toFixed(2)}%
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+
+      {/* ====== CSS 动画 ====== */}
+      <style>{`
+        @keyframes titaniumSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes breathePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.92; transform: scale(1.01); }
+        }
+        @keyframes floatParticle {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+          50% { transform: translateY(-8px) scale(1.5); opacity: 0.6; }
+        }
+        @keyframes animate-slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        .animate-slide-up {
+          animation: animate-slide-up 0.3s ease-out;
+        }
+      `}</style>
+    </>
   );
 };
 
