@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 interface NodeAchievementBadgeProps {
   // 当前节点等级
   level: 'none' | 'standard' | 'advanced' | 'super';
-  // 节点共享奖（如 0.009 表示 0.9%）
+  // 节点激励奖（如 0.009 表示 0.9%）
   equityBonus: number;
   // 贡献分
   contributionScore: number;
@@ -11,7 +11,7 @@ interface NodeAchievementBadgeProps {
   marketShare: number;
   // 是否已达标
   isQualified: boolean;
-  // 预计节点共享奖（未达标时显示）
+  // 预计节点激励奖（未达标时显示）
   estimatedEquityBonus?: number;
 }
 
@@ -88,7 +88,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm opacity-90">节点共享权证</span>
+          <span className="text-sm opacity-90">节点贡献激励</span>
           <div className="flex items-center space-x-2">
             <div
               className="w-2 h-2 rounded-full"
