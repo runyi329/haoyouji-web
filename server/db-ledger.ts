@@ -704,6 +704,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
   // 获取所有成员，关联users表获取username和avatar
   const members = await db
     .select({
+      id: ledgerMembers.id,
       userId: ledgerMembers.userId,
       role: ledgerMembers.role,
       nickname: ledgerMembers.nickname,

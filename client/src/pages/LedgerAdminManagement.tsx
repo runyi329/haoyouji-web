@@ -153,7 +153,7 @@ export default function LedgerAdminManagement() {
               ) : (
                 <Select
                   value={member.role}
-                  onValueChange={(value) => handleRoleChange(member.userId, value as 'admin' | 'member')}
+                  onValueChange={(value) => handleRoleChange(member.id, value as 'admin' | 'member')}
                 >
                   <SelectTrigger className="w-[120px]">
                     <SelectValue />
