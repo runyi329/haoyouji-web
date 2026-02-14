@@ -800,55 +800,54 @@ const AddTransaction = () => {
 
       {/* 日期选择抽屉 */}
       <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
-        <SheetContent side="bottom" className="h-auto max-h-[70vh]">
-          <div className="p-4">
-            {/* 月份导航 */}
-            {/* 日期导航 - 复刻参考图片样式 */}
-            <div className="flex items-center mb-4 relative">
+        <SheetContent side="bottom" className="h-auto max-h-[90vh] overflow-y-auto">
+          <div className="p-4 max-w-lg mx-auto">
+            {/* 日期导航 */}
+            <div className="flex items-center mb-3 relative">
               {/* 外层箭头 - 控制年份 */}
-              <button onClick={prevYear} className="p-2">
-                <ChevronLeft className="w-6 h-6 text-gray-400" />
+              <button onClick={prevYear} className="p-1.5">
+                <ChevronLeft className="w-5 h-5 text-gray-400" />
               </button>
               
               {/* 内层箭头 - 控制月份 */}
-              <button onClick={prevMonth} className="p-2">
-                <ChevronLeft className="w-6 h-6 text-blue-500" />
+              <button onClick={prevMonth} className="p-1.5">
+                <ChevronLeft className="w-5 h-5 text-blue-500" />
               </button>
               
               {/* 年月显示 */}
-              <div className="text-lg font-medium mx-4">
+              <div className="text-base font-medium mx-3">
                 {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
               </div>
               
               {/* 内层箭头 - 控制月份 */}
-              <button onClick={nextMonth} className="p-2">
-                <ChevronRight className="w-6 h-6 text-blue-500" />
+              <button onClick={nextMonth} className="p-1.5">
+                <ChevronRight className="w-5 h-5 text-blue-500" />
               </button>
               
               {/* 外层箭头 - 控制年份 */}
-              <button onClick={nextYear} className="p-2">
-                <ChevronRight className="w-6 h-6 text-gray-400" />
+              <button onClick={nextYear} className="p-1.5">
+                <ChevronRight className="w-5 h-5 text-gray-400" />
               </button>
               
               {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="ml-auto px-4 py-1.5 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
+                className="ml-auto px-3 py-1 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
               >
                 今天
               </button>
             </div>
 
             {/* 星期标题 */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+            <div className="grid grid-cols-7 gap-1 mb-1">
               {weekDays.map((day) => (
-                <div key={day} className="text-center text-xs text-blue-500 py-1">
+                <div key={day} className="text-center text-xs text-blue-500 py-0.5">
                   {day}
                 </div>
               ))}
             </div>
 
-            {/* 日期网格 */}
+            {/* 日期网格 - 使用固定高度而非 aspect-square，确保电脑端完整显示 */}
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => {
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
@@ -860,7 +859,7 @@ const AddTransaction = () => {
                     key={index}
                     onClick={() => handleDateSelect(day)}
                     className={`
-                      aspect-square flex items-center justify-center text-sm rounded
+                      h-9 sm:h-10 flex items-center justify-center text-sm rounded
                       ${!isCurrentMonth ? "text-gray-300" : "text-gray-800"}
                       ${isSelected ? "bg-blue-500 text-white font-semibold" : ""}
                       ${isTodayDate && !isSelected ? "border border-blue-500" : ""}
