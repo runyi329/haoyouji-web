@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useColorTheme } from "@/contexts/ColorThemeContext";
+// 不再使用动态主题，固定红色配色
 import { Button } from "@/components/ui/button";
 
 import MembersDialog from "@/components/MembersDialog";
@@ -21,9 +21,9 @@ export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
   
-  // 获取全局主题色
-  const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
+  // 固定使用红色主题（#A80000），确保与全局风格统一
+  const THEME_PRIMARY = '#A80000';
+  const THEME_ACCENT1 = '#FFFFFF';
 
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   console.log('[LedgerDetail] params:', params, 'ledgerId:', ledgerId);
@@ -105,16 +105,16 @@ export default function LedgerDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: `${themeColors.primary}15` }}>
-        <div style={{ color: themeColors.text }} className="text-lg">加载中...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#A8000015' }}>
+        <div style={{ color: '#1F2937' }} className="text-lg">加载中...</div>
       </div>
     );
   }
   
   if (error || !ledgerData) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: `${themeColors.primary}15` }}>
-        <div style={{ color: themeColors.text }} className="text-lg">账本不存在或您没有权限访问</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#A8000015' }}>
+        <div style={{ color: '#1F2937' }} className="text-lg">账本不存在或您没有权限访问</div>
       </div>
     );
   }
@@ -176,7 +176,7 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: themeColors.primary, color: themeColors.accent1 }}>
+      <div className="pb-4" style={{ backgroundColor: THEME_PRIMARY, color: THEME_ACCENT1 }}>
         {/* 标题栏 */}
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <button
@@ -223,24 +223,24 @@ export default function LedgerDetail() {
           <div className="flex items-center gap-2">
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: themeColors.accent1 }}
+              style={{ backgroundColor: THEME_ACCENT1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             >
-              <Settings className="w-5 h-5" style={{ color: themeColors.primary }} />
+              <Settings className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
             </div>
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: themeColors.accent1 }}
+              style={{ backgroundColor: THEME_ACCENT1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
-              <Search className="w-5 h-5" style={{ color: themeColors.primary }} />
+              <Search className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
             </div>
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: themeColors.accent1 }}
+              style={{ backgroundColor: THEME_ACCENT1 }}
               onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
             >
-              <BarChart3 className="w-5 h-5" style={{ color: themeColors.primary }} />
+              <BarChart3 className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
             </div>
           </div>
         </div>
@@ -447,7 +447,7 @@ export default function LedgerDetail() {
       <Button
         onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
         className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-        style={{ backgroundColor: themeColors.primary }}
+        style={{ backgroundColor: THEME_PRIMARY }}
         size="icon"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">

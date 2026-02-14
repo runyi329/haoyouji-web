@@ -32,22 +32,16 @@ const allProvinces = [
   '海外', '其他'
 ];
 
-// 颜色映射函数
+// 颜色映射函数——不再映射到动态主题变量，保持标签原始颜色
 function mapColorToTheme(color: string): string {
-  const colorMap: Record<string, string> = {
-    '#3b82f6': 'var(--color-primary)',
-    '#A80000': 'var(--color-secondary)',
-    '#ec4899': 'var(--color-accent)',
-    '#f59e0b': 'var(--color-accent2)',
-  };
-  return colorMap[color] || color;
+  return color;
 }
 
-// 根据距离上次联络的天数返回颜色
+// 根据距离上次联络的天数返回颜色（固定红色系）
 function getInteractionStatusColor(days: number | null): string {
-  const primary = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#9333EA';
-  const secondary = getComputedStyle(document.documentElement).getPropertyValue('--color-secondary').trim() || '#A78BFA';
-  const accent2 = getComputedStyle(document.documentElement).getPropertyValue('--color-accent2').trim() || '#8B7FA0';
+  const primary = '#A80000';   // 深红色
+  const secondary = '#dd4444'; // 中红色
+  const accent2 = '#d4a0a0';   // 浅红灰
   
   if (days === null) return accent2;
   if (days <= 30) return primary;
@@ -209,35 +203,35 @@ export default function RegionMap() {
                 {/* 推荐人状态 */}
                 {contact.hasReferrer !== undefined && (
                   contact.hasReferrer ? (
-                    <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }} />
+                    <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : '#A80000' }} />
                   ) : (
                     <UserX className="h-4 w-4 text-gray-400" />
                   )
                 )}
                 {/* 累计沟通次数 */}
                 {contact.totalInteractions > 0 && (
-                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : '#A80000' }}>
                     <Smile className="h-4 w-4" />
                     <span className="text-xs font-medium">×{contact.totalInteractions}</span>
                   </div>
                 )}
                 {/* 直接推荐数 */}
                 {contact.directReferrals > 0 && (
-                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : '#A80000' }}>
                     <Layers2 className="h-4 w-4" />
                     <span className="text-xs font-medium">×{contact.directReferrals}</span>
                   </div>
                 )}
                 {/* 间接推荐数 */}
                 {contact.indirectReferrals > 0 && (
-                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : 'var(--color-primary)' }}>
+                  <div className="flex items-center gap-0.5" style={{ color: contact.isShared ? '#9ca3af' : '#A80000' }}>
                     <Layers3 className="h-4 w-4" />
                     <span className="text-xs font-medium">×{contact.indirectReferrals}</span>
                   </div>
                 )}
                 {/* 共享标识 */}
                 {contact.isShared && (
-                  <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-primary)' }}>
+                  <div className="flex items-center gap-1 text-xs" style={{ color: '#A80000' }}>
                     <Handshake className="h-3 w-3" />
                     <span>{contact.sharerName}</span>
                   </div>
@@ -356,17 +350,18 @@ export default function RegionMap() {
                         aspect-square rounded-lg border transition-all duration-200
                         flex flex-col items-center justify-center gap-0.5 p-1
                         ${selectedProvince === stat.name
-                          ? 'bg-primary text-primary-foreground border-primary shadow-md scale-105'
+                          ? 'shadow-md scale-105'
                           : stat.value > 0
-                          ? 'bg-white border-gray-200 hover:border-primary hover:shadow-sm active:scale-95'
+                          ? 'bg-white border-gray-200 hover:shadow-sm active:scale-95'
                           : 'bg-gray-50 border-gray-100 text-gray-400'
                         }
                       `}
+                      style={selectedProvince === stat.name ? { backgroundColor: '#A80000', color: '#FFFFFF', borderColor: '#A80000' } : {}}
                     >
-                      <span className={`
-                        text-base font-bold leading-none
-                        ${selectedProvince === stat.name ? 'text-primary-foreground' : 'text-primary'}
-                      `}>
+                      <span
+                        className="text-base font-bold leading-none"
+                        style={{ color: selectedProvince === stat.name ? '#FFFFFF' : '#A80000' }}
+                      >
                         {stat.value}
                       </span>
                       <span className="text-[10px] leading-none">
@@ -384,7 +379,7 @@ export default function RegionMap() {
           <div className="w-80 bg-background border-l border-border overflow-y-auto flex flex-col">
             <div className="p-4 border-b border-border shrink-0">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-primary" />
+                <MapPin className="w-5 h-5" style={{ color: '#A80000' }} />
                 {selectedProvince}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -407,7 +402,7 @@ export default function RegionMap() {
             <DrawerContent className="h-[60vh]">
               <DrawerHeader>
                 <DrawerTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
+                  <MapPin className="w-5 h-5" style={{ color: '#A80000' }} />
                   {selectedProvince}
                 </DrawerTitle>
                 <p className="text-sm text-muted-foreground mt-1">

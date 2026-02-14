@@ -3,6 +3,11 @@ import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
+// 固定红色主题配色（与全局风格统一）
+const THEME_PRIMARY = '#A80000';       // 深红色（10+人）
+const THEME_PRIMARY_60 = '#c46666';    // 60%深红+40%白（5-9人）
+const THEME_PRIMARY_30 = '#e0b3b3';    // 30%深红+70%白（1-4人）
+
 // ProvinceStats interface
 interface ProvinceStats {
   name: string;
@@ -137,7 +142,7 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
               padding: [0, 0, 2, 0]
             },
             count: {
-              color: 'var(--color-primary)',
+              color: THEME_PRIMARY,
               fontSize: 11,
               fontWeight: 'bold',
               align: 'center'
@@ -154,8 +159,8 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
             show: !isMobile
           },
           itemStyle: {
-            areaColor: 'color-mix(in srgb, var(--color-primary) 30%, white)',
-            borderColor: 'color-mix(in srgb, var(--color-primary) 60%, white)',
+            areaColor: THEME_PRIMARY_30,
+            borderColor: THEME_PRIMARY_60,
             borderWidth: 1
           }
         },
@@ -165,8 +170,8 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
             color: '#fff'
           },
           itemStyle: {
-            areaColor: 'var(--color-primary)',
-            borderColor: 'var(--color-primary)',
+            areaColor: THEME_PRIMARY,
+            borderColor: THEME_PRIMARY,
             borderWidth: 1
           }
         }
@@ -185,9 +190,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
           fontSize: 10
         },
         pieces: [
-          { min: 10, label: '10+ 人', color: 'var(--color-primary)' },
-          { min: 5, max: 9, label: '5-9 人', color: 'color-mix(in srgb, var(--color-primary) 60%, white)' },
-          { min: 1, max: 4, label: '1-4 人', color: 'color-mix(in srgb, var(--color-primary) 30%, white)' },
+          { min: 10, label: '10+ 人', color: THEME_PRIMARY },
+          { min: 5, max: 9, label: '5-9 人', color: THEME_PRIMARY_60 },
+          { min: 1, max: 4, label: '1-4 人', color: THEME_PRIMARY_30 },
           { value: 0, label: '0 人', color: '#f4f4f5' }
         ],
         seriesIndex: 0 // 仅作用于第一个系列（地图）
@@ -215,9 +220,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
           },
           symbolSize: 10,
           itemStyle: {
-            color: 'var(--color-primary)',
+            color: THEME_PRIMARY,
             shadowBlur: 10,
-            shadowColor: 'var(--color-primary)'
+            shadowColor: THEME_PRIMARY
           },
           zlevel: 1,
           data: selectedProvince ? data.filter(item => item.name === selectedProvince).map(item => {
