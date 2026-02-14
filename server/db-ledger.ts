@@ -2606,11 +2606,16 @@ export async function setMemberRole(
   const targetMember = await db
     .select()
     .from(ledgerMembers)
-    .where(eq(ledgerMembers.id, memberId))
+    .where(
+      and(
+        eq(ledgerMembers.id, memberId),
+        eq(ledgerMembers.ledgerId, ledgerId)
+      )
+    )
     .limit(1)
     .then((rows: any[]) => rows[0]);
   
-  if (!targetMember || targetMember.ledgerId !== ledgerId) {
+  if (!targetMember) {
     throw new Error('成员不存在');
   }
   
