@@ -132,11 +132,11 @@ export default function Home() {
     }
   }, [isLiulifan, needsAttentionCount, hasPlayedSound]);
 
-  const baseBanners = [
+  const banners = [
     {
       id: 1,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/share.webp",
-      title: "人脉共享"
+      image: "/carousel-friend-share.png",
+      title: "好友共享"
     },
     {
       id: 2,
@@ -149,17 +149,6 @@ export default function Home() {
       title: "AI社交"
     }
   ];
-
-  const banners = isLiulifan
-    ? [
-        ...baseBanners,
-        {
-          id: 4,
-          image: "/carousel-friend-share.png",
-          title: "好友共享"
-        }
-      ]
-    : baseBanners;
 
   const features = [
     { name: "地域", icon: MapPin, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
