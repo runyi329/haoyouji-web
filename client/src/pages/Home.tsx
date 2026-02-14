@@ -13,7 +13,8 @@ import {
   Loader2,
   User,
   LogOut,
-  UserCircle
+  UserCircle,
+  Bell
 } from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 import {
@@ -27,7 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
@@ -46,8 +47,45 @@ function formatCurrency(num: number): string {
   return "¥" + num.toLocaleString("zh-CN");
 }
 
+// 使用Web Audio API生成提示音（两声清脆的"叮叮"）
+function playReminderSound() {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    const playTone = (startTime: number, frequency: number, duration: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, startTime);
+      
+      // 音量包络：快速升起，缓慢衰减
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+    
+    const now = audioContext.currentTime;
+    // 第一声 "叮"（较高音）
+    playTone(now, 880, 0.3);
+    // 第二声 "叮"（更高音，间隔0.2秒）
+    playTone(now + 0.25, 1100, 0.3);
+    // 第三声 "叮"（最高音，间隔0.2秒）
+    playTone(now + 0.5, 1320, 0.4);
+  } catch (e) {
+    console.log('Audio playback not supported:', e);
+  }
+}
+
 export default function Home() {
   const { user } = useAuth();
+  const isLiulifan = user?.username === 'liulifan';
   
   // 获取基础统计数据
   const { data: stats, isLoading, refetch, isFetching } = trpc.contacts.stats.useQuery(undefined, {
@@ -67,7 +105,32 @@ export default function Home() {
   // 获取邀请统计
   const { data: inviteInfo } = trpc.invite.getMyInviteInfo.useQuery();
 
+  // 仅liulifan用户：获取需要关注的人数
+  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined, {
+    enabled: isLiulifan,
+    staleTime: 30000,
+  });
+
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [hasPlayedSound, setHasPlayedSound] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
+
+  // 声音提醒：页面加载后如果有需要关注的人，播放提示音 + 启动跳动动画
+  useEffect(() => {
+    if (isLiulifan && needsAttentionCount > 0 && !hasPlayedSound) {
+      // 延迟1秒播放，让页面先加载完
+      const timer = setTimeout(() => {
+        playReminderSound();
+        setHasPlayedSound(true);
+        setIsAnimating(true);
+        // 跳动动画持续5秒后停止（但角标始终显示）
+        setTimeout(() => setIsAnimating(false), 5000);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLiulifan, needsAttentionCount, hasPlayedSound]);
 
   const banners = [
     {
@@ -91,7 +154,6 @@ export default function Home() {
     { name: "地域", icon: MapPin, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
     { name: "共享", icon: Handshake, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/sharing` },
     { name: "数据", icon: BarChart2, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/data-comparison` },
-    { name: "刷新", icon: RefreshCw, color: "bg-red-50 text-[#A80000]", href: "" },
   ];
 
   const metricsLeft = [
@@ -109,9 +171,7 @@ export default function Home() {
   ];
 
   const handleLogout = () => {
-    // 清除登录状态
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    // 跳转到登录页
     window.location.href = `${BASE_URL}/login`;
   };
 
@@ -121,6 +181,33 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+      {/* 跳动动画的CSS */}
+      <style>{`
+        @keyframes bellShake {
+          0% { transform: rotate(0deg); }
+          10% { transform: rotate(14deg); }
+          20% { transform: rotate(-12deg); }
+          30% { transform: rotate(10deg); }
+          40% { transform: rotate(-8deg); }
+          50% { transform: rotate(6deg); }
+          60% { transform: rotate(-4deg); }
+          70% { transform: rotate(2deg); }
+          80% { transform: rotate(-1deg); }
+          90% { transform: rotate(1deg); }
+          100% { transform: rotate(0deg); }
+        }
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
+        }
+        .bell-shake {
+          animation: bellShake 0.8s ease-in-out infinite;
+        }
+        .badge-pulse {
+          animation: badgePulse 1s ease-in-out infinite;
+        }
+      `}</style>
+
       {/* Header Banner Carousel */}
       <div className="relative">
         <Carousel 
@@ -226,22 +313,53 @@ export default function Home() {
 
           {features.map((feature) => {
             const Icon = feature.icon;
-            const isRefresh = feature.name === "刷新";
-            
             return (
               <a
                 key={feature.name}
-                href={isRefresh ? undefined : feature.href}
-                onClick={isRefresh ? handleRefresh : undefined}
+                href={feature.href}
                 className="flex flex-col items-center space-y-2 cursor-pointer"
               >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm ${isRefresh && isFetching ? 'animate-spin' : ''}`}>
+                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="text-xs font-medium text-gray-600">{feature.name}</span>
               </a>
             );
           })}
+
+          {/* 第5个按钮：liulifan显示提醒按钮，其他用户显示刷新按钮 */}
+          {isLiulifan ? (
+            <a
+              href={`${BASE_URL}/parent/contacts/list?filter=needsAttention`}
+              className="flex flex-col items-center space-y-2 cursor-pointer relative"
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm relative ${
+                needsAttentionCount > 0 
+                  ? 'bg-[#A80000] text-white' 
+                  : 'bg-red-50 text-[#A80000]'
+              }`}>
+                <Bell className={`w-5 h-5 ${isAnimating ? 'bell-shake' : ''}`} />
+                {/* 红色角标 */}
+                {needsAttentionCount > 0 && (
+                  <span className={`absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white ${isAnimating ? 'badge-pulse' : ''}`}>
+                    {needsAttentionCount > 99 ? '99+' : needsAttentionCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-medium text-gray-600">提醒</span>
+            </a>
+          ) : (
+            <a
+              href={undefined}
+              onClick={handleRefresh}
+              className="flex flex-col items-center space-y-2 cursor-pointer"
+            >
+              <div className={`w-10 h-10 rounded-full bg-red-50 text-[#A80000] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-medium text-gray-600">刷新</span>
+            </a>
+          )}
         </div>
       </div>
 
