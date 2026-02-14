@@ -564,31 +564,7 @@ export default function MyEquity() {
                   </div>
                 </div>
                 
-                {/* 卡片2：实时贡献墙（动态） */}
-                <div className="bg-white/10 rounded-lg p-3 border border-white/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold opacity-90">📊 实时贡献墙（动态）</div>
-                    <div className="text-xs opacity-70">我的业绩</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <div className="opacity-70">邀请人数</div>
-                      <div className="font-bold text-lg">{equity.details?.inviteCount || 0}人</div>
-                    </div>
-                    <div>
-                      <div className="opacity-70">人脉网络</div>
-                      <div className="font-bold text-lg">{equity.details?.referralNetworkCount || 0}人</div>
-                    </div>
-                  </div>
-                  <div className="text-xs opacity-60 mt-2">
-                    贡献股权：{((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)).toFixed(3)}%
-                  </div>
-                  <div className="text-xs opacity-60">
-                    杭杆放大后：{(((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)) * (equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1)).toFixed(3)}%
-                  </div>
-                </div>
-                
-                {/* 卡片3：如何提升占比（攻略） */}
+                {/* 卡片2：如何提升占比（攻略） */}
                 <div className="bg-gradient-to-r from-green-400/20 to-emerald-400/20 rounded-lg p-3 border border-green-400/30">
                   <div className="text-xs font-semibold opacity-90 mb-2">🚀 如何提升占比？</div>
                   <div className="space-y-1.5 text-xs">

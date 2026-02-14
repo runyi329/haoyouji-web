@@ -149,11 +149,18 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               </div>
             </div>
 
-            {/* 节点等级说明 */}
+            {/* 实时贡献墙 */}
             <div className="bg-white/10 rounded-xl p-3">
-              <div className="text-xs font-semibold opacity-90 mb-2 flex items-center gap-2">
-                <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-bold">{config.badge}</span>
-                {config.name}
+              <div className="text-xs font-semibold opacity-90 mb-2">📊 实时贡献墙（动态）</div>
+              <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                <div>
+                  <div className="opacity-70 mb-1">邀请人数</div>
+                  <div className="font-bold text-lg">{contributionScore / 2}人</div>
+                </div>
+                <div>
+                  <div className="opacity-70 mb-1">贡献分</div>
+                  <div className="font-bold text-lg">{contributionScore}</div>
+                </div>
               </div>
               <div className="text-xs opacity-70 leading-relaxed">
                 {isQualified ? (
