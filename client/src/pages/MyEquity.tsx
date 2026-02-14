@@ -9,9 +9,12 @@ import PrecisionSimulator, { SimulationResult } from "@/components/PrecisionSimu
 import ThreeTierEngine from "@/components/ThreeTierEngine";
 import AchievementWall from "@/components/AchievementWall";
 import CompanyEquityStructure from "@/components/CompanyEquityStructure";
+import CompanyEquityStructureCard from "@/components/CompanyEquityStructureCard";
 import LegalAgreementZone from "@/components/LegalAgreementZone";
+import LegalAgreementCard from "@/components/LegalAgreementCard";
 import BlockchainProof from "@/components/BlockchainProof";
 import InvestorFAQ from "@/components/InvestorFAQ";
+import FAQCard from "@/components/FAQCard";
 import NodeAchievementBadge from "@/components/NodeAchievementBadge";
 
 // FAQ手风琴组件
@@ -685,23 +688,14 @@ export default function MyEquity() {
           <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">股东保障中心</h2>
           <p className="text-xs text-gray-500 mb-6 px-1">契约、背书与底层逻辑 —— 为660位创始股东构建信任基石</p>
 
-          {/* 模块一：成就勋章墙 */}
+          {/* 模块一：公司股权分配 */}
           <div className="mb-6">
-            <AchievementWall
-              inviteCount={equity.details?.inviteCount || 0}
-              investmentAmount={equity.details?.userInvestment || 0}
-              networkSize={equity.details?.referralNetworkCount || 0}
-            />
+            <CompanyEquityStructureCard />
           </div>
 
-          {/* 模块二：公司股权透视图 */}
+          {/* 模块二：在线签署 */}
           <div className="mb-6">
-            <CompanyEquityStructure />
-          </div>
-
-          {/* 模块三：法律契约区 */}
-          <div className="mb-6">
-            <LegalAgreementZone
+            <LegalAgreementCard
               agreements={[
                 {
                   id: 'equity-investment-agreement',
@@ -721,9 +715,9 @@ export default function MyEquity() {
             />
           </div>
 
-          {/* 模块四：常见问题 */}
+          {/* 模块三：常见问题 */}
           <div className="mb-6">
-            <FAQAccordion />
+            <FAQCard />
           </div>
         </div>
 
