@@ -301,6 +301,7 @@ export default function MyEquity() {
   const { data: poolConfig } = trpc.equity.getPoolConfig.useQuery();
   const { data: valuationHistory } = trpc.equity.getValuationHistory.useQuery();
   const { data: recentActivities } = trpc.equity.getRecentActivities.useQuery();
+  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
   
   const [simulateInvites, setSimulateInvites] = useState(0);
   const [simulateInvestment, setSimulateInvestment] = useState(0);
@@ -656,6 +657,10 @@ export default function MyEquity() {
             marketShare={0.06}
             isQualified={equity.details?.inviteCount >= 1}
             estimatedEquityBonus={0.0015}
+            contactCount={overviewStats?.totalContacts || 0}
+            tagAverage={0}
+            standardNodeCount={0}
+            advancedNodeCount={0}
           />
         </div>
 
