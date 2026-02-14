@@ -5,9 +5,8 @@ import { Link } from "wouter";
 import { useState, useEffect, createElement } from "react";
 import { toast } from "sonner";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
-import MultiDimensionSimulator, { SimulationResult } from "@/components/MultiDimensionSimulator";
-import HighValueActions from "@/components/HighValueActions";
-import PUScoreboard from "@/components/PUScoreboard";
+import PrecisionSimulator, { SimulationResult } from "@/components/PrecisionSimulator";
+import ThreeTierEngine from "@/components/ThreeTierEngine";
 import AchievementWall from "@/components/AchievementWall";
 import CompanyEquityStructure from "@/components/CompanyEquityStructure";
 import LegalAgreementZone from "@/components/LegalAgreementZone";
@@ -668,39 +667,26 @@ export default function MyEquity() {
         </div>
         {/* 第一层结束 */}
 
-        {/* 第二层：动态增值实验室 */}
-        <div className="mt-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3 px-1">动态增值实验室</h2>
+        {/* 第二层：合伙人资产增值中控台 */}
+        <div className="mt-6 pt-6 pb-6 px-4 bg-[#F4F5F7]">
+          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1">合伙人资产增值中控台</h2>
+          <p className="text-xs text-gray-500 mb-5 px-1">精密模拟 + 三阶引擎 + 智能路径</p>
           
-          {/* 纯白色大容器：三大模块 */}
-          <Card className="p-5 rounded-2xl shadow-sm bg-white space-y-6">
-            {/* A. 顶部：多维实时模拟器 */}
-            <MultiDimensionSimulator
+          {/* 精密中控台模拟器 */}
+          <div className="mb-5">
+            <PrecisionSimulator
               currentInvites={equity.details?.inviteCount || 0}
               currentNetworkSize={equity.details?.referralNetworkCount || 0}
               currentActiveDays={7}
               leverageMultiplier={equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1.00}
               onSimulationChange={(result) => setSimulationResult(result)}
             />
-            
-            {/* 逻辑分割线 */}
-            <div className="border-t border-dashed border-gray-200"></div>
-            
-            {/* B. 中部：高价值增值动作推荐 */}
-            <HighValueActions />
-            
-            {/* 逻辑分割线 */}
-            <div className="border-t border-dashed border-gray-200"></div>
-            
-            {/* C. 底部：PU积分实时看板 */}
-            <PUScoreboard
-              currentPU={1250}
-              currentRank={equity.ranking?.rank || 1}
-              totalShareholders={equity.ranking?.total || 660}
-              nextLevelPU={2000}
-              nextLevelName="黄金合伙人"
-            />
-          </Card>
+          </div>
+          
+          {/* 三阶增值引擎 */}
+          <ThreeTierEngine
+            leverageMultiplier={equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1.00}
+          />
         </div>
 
         {/* 第三层：合伙人保障中心 */}
