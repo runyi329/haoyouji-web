@@ -12,6 +12,7 @@ import CompanyEquityStructure from "@/components/CompanyEquityStructure";
 import LegalAgreementZone from "@/components/LegalAgreementZone";
 import BlockchainProof from "@/components/BlockchainProof";
 import InvestorFAQ from "@/components/InvestorFAQ";
+import NodeAchievementBadge from "@/components/NodeAchievementBadge";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -669,7 +670,22 @@ export default function MyEquity() {
 
         {/* 第二层：合伙人资产增值中控台 */}
         <div className="mt-6 pt-6 pb-6 px-4 bg-[#F4F5F7]">
-          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1">合伙人资产增值中控台</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1">节点共享中心</h2>
+          <p className="text-xs text-gray-500 mb-5 px-1">身份荣誉 · 成就加成 · 晋升路径</p>
+          
+          {/* 第一部分：成就勋章卡片 */}
+          <div className="mb-6">
+            <NodeAchievementBadge
+              level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
+              equityBonus={0.009}
+              contributionScore={equity.details?.inviteCount * 2 || 0}
+              marketShare={0.06}
+              isQualified={equity.details?.inviteCount >= 1}
+              estimatedEquityBonus={0.0015}
+            />
+          </div>
+          
+          <h2 className="text-lg font-bold text-gray-900 mb-1 px-1 mt-8">合伙人资产增值中控台</h2>
           <p className="text-xs text-gray-500 mb-5 px-1">精密模拟 + 三阶引擎 + 智能路径</p>
           
           {/* 精密中控台模拟器 */}
