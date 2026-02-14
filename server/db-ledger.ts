@@ -1877,6 +1877,9 @@ export async function getTransactionsList(
   if (options?.amountMax) {
     conditions.push(sql`${ledgerRecords.amount} <= ${options.amountMax}`);
   }
+  if (options?.memberId) {
+    conditions.push(eq(ledgerRecords.createdBy, options.memberId));
+  }
   
   // 注意：不过滤审批状态，返回所有记账（包括待审批的）
   // 前端会根据 approvalStatus 字段显示不同的状态图标
