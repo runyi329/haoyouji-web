@@ -57,24 +57,24 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   // 节点配置
   const nodeConfig = {
     none: {
-      icon: '📍',
       name: '准合伙人',
       color: '#999999',
+      badge: 'L0',
     },
     standard: {
-      icon: '📍',
       name: '标准节点',
       color: '#C0C0C0',
+      badge: 'L1',
     },
     advanced: {
-      icon: '🔷',
       name: '高级节点',
       color: '#5B9BD5',
+      badge: 'L2',
     },
     super: {
-      icon: '💎',
       name: '超级节点',
       color: '#FFD700',
+      badge: 'L3',
     },
   };
 
@@ -151,8 +151,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
             {/* 节点等级说明 */}
             <div className="bg-white/10 rounded-xl p-3">
-              <div className="text-xs font-semibold opacity-90 mb-2">
-                {config.icon} {config.name}
+              <div className="text-xs font-semibold opacity-90 mb-2 flex items-center gap-2">
+                <span className="bg-white/20 px-2 py-0.5 rounded text-xs font-bold">{config.badge}</span>
+                {config.name}
               </div>
               <div className="text-xs opacity-70 leading-relaxed">
                 {isQualified ? (
@@ -173,7 +174,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {/* 左侧：身份成就 */}
           <div>
             <div className="text-xs text-gray-500 mb-1 flex items-center">
-              <span className="mr-1">{config.icon}</span>
+              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
               身份成就
             </div>
             <div className="flex items-baseline space-x-1">

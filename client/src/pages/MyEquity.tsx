@@ -669,7 +669,7 @@ export default function MyEquity() {
         {/* 第一层结束 */}
 
         {/* 第二层：节点共享中心 */}
-        <div className="mt-6 px-4">
+        <div className="mt-6">
           <NodeAchievementBadge
             level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
             equityBonus={0.009}
@@ -682,7 +682,7 @@ export default function MyEquity() {
 
         {/* 第三层：合伙人保障中心 */}
         <div className="mt-6 pt-6 pb-6 px-4 bg-gray-50">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">合伙人保障中心</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">股东保障中心</h2>
           <p className="text-xs text-gray-500 mb-6 px-1">契约、背书与底层逻辑 —— 为660位创始股东构建信任基石</p>
 
           {/* 模块一：成就勋章墙 */}
@@ -721,17 +721,9 @@ export default function MyEquity() {
             />
           </div>
 
-          {/* 模块四：智能FAQ */}
+          {/* 模块四：常见问题 */}
           <div className="mb-6">
-            <InvestorFAQ />
-          </div>
-
-          {/* 神来之笔：区块链存证标签 */}
-          <div>
-            <BlockchainProof
-              totalShareholders={equity.ranking?.total || 660}
-              lastSyncTime={new Date().toISOString()}
-            />
+            <FAQAccordion />
           </div>
         </div>
 
