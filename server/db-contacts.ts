@@ -1584,11 +1584,43 @@ export async function getContactsOverviewStats(parentUserId: number) {
     ? Math.round(totalIntervalDays / contactsWithInteractions)
     : 0;
 
+  // 计算最近7天每天联络的不同联系人数均值
+  const sevenDaysAgoTs = now - 7 * 24 * 60 * 60 * 1000;
+  const dailyContactMap = new Map<string, Set<number>>(); // dateStr -> Set<contactId>
+  for (const interaction of allInteractions) {
+    if (interaction.interactionDate >= sevenDaysAgoTs) {
+      const dateStr = new Date(interaction.interactionDate).toISOString().slice(0, 10);
+      if (!dailyContactMap.has(dateStr)) {
+        dailyContactMap.set(dateStr, new Set());
+      }
+      dailyContactMap.get(dateStr)!.add(interaction.contactId);
+    }
+  }
+  // 计算7天中每天联络的不同人数，取均值
+  let totalDailyContacts = 0;
+  for (const [, contactSet] of dailyContactMap) {
+    totalDailyContacts += contactSet.size;
+  }
+  const dailyContactFrequency = dailyContactMap.size > 0
+    ? Math.round((totalDailyContacts / 7) * 10) / 10  // 保留1位小数
+    : 0;
+
+  // 计算人均标签数
+  let totalTagCount = 0;
+  for (const [, tags] of contactTagsMap) {
+    totalTagCount += tags.length;
+  }
+  const averageTagCount = totalContacts > 0
+    ? Math.round((totalTagCount / totalContacts) * 10) / 10  // 保留1位小数
+    : 0;
+
   return {
     totalContacts,
     averageInteractionInterval,
     needsAttentionCount,
     monthlyActiveCount,
+    dailyContactFrequency,
+    averageTagCount,
   };
 }
 

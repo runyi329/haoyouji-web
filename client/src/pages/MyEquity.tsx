@@ -658,7 +658,8 @@ export default function MyEquity() {
             isQualified={equity.details?.inviteCount >= 1}
             estimatedEquityBonus={0.0015}
             contactCount={overviewStats?.totalContacts || 0}
-            tagAverage={0}
+            tagAverage={overviewStats?.averageTagCount || 0}
+            contactFrequency={overviewStats?.dailyContactFrequency || 0}
             standardNodeCount={0}
             advancedNodeCount={0}
           />
