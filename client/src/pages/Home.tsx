@@ -264,6 +264,18 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 专属祝福语 - 仅vesen可见 */}
+      {user?.username === 'vesen' && (
+        <div className="px-4 mt-3">
+          <div className="bg-gradient-to-r from-[#A80000] to-[#d44] rounded-2xl p-4 shadow-lg text-center">
+            <p className="text-white text-lg font-bold tracking-wider">
+              🎉 老周，新年快乐！🎉
+            </p>
+            <p className="text-white/80 text-xs mt-1">祝您新的一年万事如意、财源广进</p>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex flex-col items-center space-y-1 text-[#A80000]">
