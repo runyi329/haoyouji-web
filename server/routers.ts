@@ -6020,15 +6020,15 @@ export const appRouter = router({
         }
       }),
 
-    // 设置成员角色（owner设置admin）
+    // 设置成员角色（owner设置admin）重写版：使用targetUserId
     setMemberRole: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        memberId: z.number(),
+        targetUserId: z.number(),
         role: z.enum(['admin', 'member']),
       }))
       .mutation(async ({ ctx, input }) => {
-        return await dbLedger.setMemberRole(input.ledgerId, ctx.user.id, input.memberId, input.role);
+        return await dbLedger.setMemberRole(input.ledgerId, ctx.user.id, input.targetUserId, input.role);
       }),
 
     // 管理报销（管理员操作）

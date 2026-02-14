@@ -2576,60 +2576,69 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
 
 /**
  * 设置成员角色（仅owner可操作）
+ * 重写版本：使用targetUserId而不是memberId来标识目标成员
  */
 export async function setMemberRole(
   ledgerId: number,
-  userId: number,
-  memberId: number,
+  operatorUserId: number,
+  targetUserId: number,
   role: 'admin' | 'member'
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证操作者是owner
-  const operatorMember = await db
+  console.log('[setMemberRole] 调用参数:', { ledgerId, operatorUserId, targetUserId, role });
+  
+  // 第1步：验证操作者是owner
+  const operatorRows = await db
     .select()
     .from(ledgerMembers)
     .where(
       and(
         eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, userId)
+        eq(ledgerMembers.userId, operatorUserId)
       )
     )
-    .limit(1)
-    .then((rows: any[]) => rows[0]);
+    .limit(1);
   
-  if (!operatorMember || operatorMember.role !== 'owner') {
+  console.log('[setMemberRole] 操作者查询结果:', operatorRows);
+  
+  if (operatorRows.length === 0 || operatorRows[0].role !== 'owner') {
     throw new Error('只有账本所有者可以设置管理员');
   }
   
-  // 获取目标成员信息
-  const targetMember = await db
+  // 第2步：通过userId+ledgerId查找目标成员
+  const targetRows = await db
     .select()
     .from(ledgerMembers)
     .where(
       and(
-        eq(ledgerMembers.id, memberId),
-        eq(ledgerMembers.ledgerId, ledgerId)
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, targetUserId)
       )
     )
-    .limit(1)
-    .then((rows: any[]) => rows[0]);
+    .limit(1);
   
-  if (!targetMember) {
-    throw new Error('成员不存在');
+  console.log('[setMemberRole] 目标成员查询结果:', targetRows);
+  
+  if (targetRows.length === 0) {
+    throw new Error('目标成员不存在于该账本中');
   }
   
-  // 不能修改owner的角色
+  const targetMember = targetRows[0];
+  
+  // 第3步：不能修改owner的角色
   if (targetMember.role === 'owner') {
     throw new Error('不能修改所有者的角色');
   }
   
-  // 更新角色
+  // 第4步：更新角色（通过记录的主键id更新）
   await db
     .update(ledgerMembers)
     .set({ role })
-    .where(eq(ledgerMembers.id, memberId));
+    .where(eq(ledgerMembers.id, targetMember.id));
+  
+  console.log('[setMemberRole] 角色更新成功:', { targetMemberId: targetMember.id, newRole: role });
   
   return { success: true };
 }

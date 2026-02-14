@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { ChevronLeft } from "lucide-react";
@@ -30,7 +29,7 @@ export default function LedgerAdminManagement() {
   // 获取账本成员列表
   const { data: members, refetch } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
-  // 设置成员角色的mutation
+  // 设置成员角色的mutation - 重写版：使用targetUserId
   const utils = trpc.useUtils();
   const setRoleMutation = trpc.ledger.setMemberRole.useMutation({
     onSuccess: () => {
@@ -38,32 +37,19 @@ export default function LedgerAdminManagement() {
       utils.ledger.getMembers.invalidate({ ledgerId });
       refetch();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(error.message || "设置失败");
     },
   });
 
-  // 处理角色变更
-  const handleRoleChange = (memberId: number, newRole: 'admin' | 'member') => {
+  // 处理角色变更 - 直接传递 member.userId
+  const handleRoleChange = (targetUserId: number, newRole: 'admin' | 'member') => {
+    console.log('[前端] handleRoleChange 调用:', { ledgerId, targetUserId, role: newRole });
     setRoleMutation.mutate({
       ledgerId,
-      memberId,
+      targetUserId,
       role: newRole,
     });
-  };
-
-  // 获取角色显示文本
-  const getRoleText = (role: string) => {
-    switch (role) {
-      case 'owner':
-        return '创始人';
-      case 'admin':
-        return '管理员';
-      case 'member':
-        return '普通成员';
-      default:
-        return '未知';
-    }
   };
 
   if (isLoading) {
@@ -122,7 +108,7 @@ export default function LedgerAdminManagement() {
           成员列表
         </div>
         
-        {members?.map((member) => (
+        {members?.map((member: any) => (
           <div 
             key={member.userId} 
             className="flex items-center justify-between px-4 py-4 border-b border-gray-100 last:border-b-0"
@@ -153,7 +139,7 @@ export default function LedgerAdminManagement() {
               ) : (
                 <Select
                   value={member.role}
-                  onValueChange={(value) => handleRoleChange(member.id, value as 'admin' | 'member')}
+                  onValueChange={(value: string) => handleRoleChange(member.userId, value as 'admin' | 'member')}
                 >
                   <SelectTrigger className="w-[120px]">
                     <SelectValue />
