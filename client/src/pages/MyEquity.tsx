@@ -468,7 +468,7 @@ export default function MyEquity() {
           onClick={() => setIsEquityExpanded(!isEquityExpanded)}
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm opacity-90">我的股权</span>
+            <span className="text-sm opacity-90">资本权证资产</span>
             <div className="flex items-center space-x-2">
               <TrendingUp className="w-5 h-5 opacity-90" />
               <svg
@@ -659,18 +659,28 @@ export default function MyEquity() {
           />
         </div>
 
-        {/* 第三层：合伙人保障中心 */}
-        <div className="mt-6 pt-6 pb-6 px-4 bg-gray-50">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 px-1">股东保障中心</h2>
-          <p className="text-xs text-gray-500 mb-6 px-1">契约、背书与底层逻辑 —— 为660位创始股东构建信任基石</p>
-
-          {/* 模块一：公司股权分配 */}
-          <div className="mb-6">
-            <CompanyEquityStructureCard />
+        {/* 第三层：股东保障中心 */}
+        <div className="mt-6">
+          {/* 红色标题区 */}
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-2xl mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm opacity-90">股东保障中心</span>
+              <svg className="w-5 h-5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div className="text-lg font-bold">契约、背书与底层逻辑</div>
+            <div className="mt-1">
+              <span className="text-xs opacity-60">为660位创始股东构建信任基石</span>
+            </div>
           </div>
 
-          {/* 模块二：在线签署 */}
-          <div className="mb-6">
+          {/* 三个子模块直接排列，每个都自带红色顶盖+灰色底座 */}
+          <div className="space-y-4">
+            {/* 模块一：公司股权分配 */}
+            <CompanyEquityStructureCard />
+
+            {/* 模块二：在线签署 */}
             <LegalAgreementCard
               agreements={[
                 {
@@ -689,10 +699,8 @@ export default function MyEquity() {
                 toast.success('协议下载中...');
               }}
             />
-          </div>
 
-          {/* 模块三：常见问题 */}
-          <div className="mb-6">
+            {/* 模块三：常见问题 */}
             <FAQCard />
           </div>
         </div>
