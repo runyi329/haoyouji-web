@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/_core/hooks/useAuth";
+import ReimbursementForm from "@/components/ReimbursementForm";
 
 export default function TransactionDetail() {
   const [, params] = useRoute("/ledger/:ledgerId/transaction/:transactionId");
@@ -48,6 +49,7 @@ export default function TransactionDetail() {
   const [comment, setComment] = useState('');
   
   // ========== 报销功能状态（全新实现）==========
+  const [showReimbursementForm, setShowReimbursementForm] = useState(false);
   const [rbDialogOpen, setRbDialogOpen] = useState(false);
   const [rbNote, setRbNote] = useState('');
   const [rbVoucher, setRbVoucher] = useState<string | null>(null);
@@ -91,6 +93,34 @@ export default function TransactionDetail() {
       toast.error(err.message || '操作失败');
     },
   });
+
+  // 申请报销mutation
+  const applyReimbursementMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      setRbLocalStatus('pending');
+      toast.success('报销申请已提交');
+      setShowReimbursementForm(false);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || '提交失败');
+    },
+  });
+
+  // 处理报销申请提交
+  const handleReimbursementSubmit = (data: {
+    content: string;
+    amount: number;
+    receiptCount: number;
+    notes: string;
+    voucherImage?: string;
+  }) => {
+    applyReimbursementMutation.mutate({
+      recordId: transactionId,
+      description: `[报销] ${data.content}${data.notes ? ' | 备注: ' + data.notes : ''} | 单据${data.receiptCount}张`,
+      reimbursementStatus: 'pending' as const,
+    });
+  };
 
   // 打开报销对话框
   const openRbDialog = () => {
@@ -425,6 +455,15 @@ export default function TransactionDetail() {
 
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
+          {/* 申请报销按钮 - 只在未报销状态显示 */}
+          {displayStatus === 'none' && transaction.type === 'expense' && (
+            <button 
+              onClick={() => setShowReimbursementForm(true)}
+              className="w-full py-3 bg-[#A80000] hover:bg-[#8a0000] text-white rounded-lg font-medium text-base transition-colors"
+            >
+              申请报销
+            </button>
+          )}
           <button 
             onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
             className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
@@ -596,6 +635,20 @@ export default function TransactionDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 电子报销单申请表 */}
+      <ReimbursementForm
+        open={showReimbursementForm}
+        onOpenChange={setShowReimbursementForm}
+        transactionDate={transaction?.date}
+        transactionCategory={transaction?.category}
+        transactionSubcategory={transaction?.subcategory}
+        transactionAmount={transaction?.amount}
+        transactionDescription={transaction?.description}
+        transactionType={transaction?.type}
+        onSubmit={handleReimbursementSubmit}
+        isPending={applyReimbursementMutation.isPending}
+      />
     </div>
   );
 }
