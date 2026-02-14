@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HelpCircle, Copy, Check } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+
 
 interface FAQItem {
   id: string;
@@ -77,7 +77,7 @@ export default function FAQCard() {
         setCopiedAll(true);
         setTimeout(() => setCopiedAll(false), 2000);
       }
-      toast.success('已复制到剪贴板');
+      // 复制成功提示已通过按钮状态变化体现
     });
   };
 
