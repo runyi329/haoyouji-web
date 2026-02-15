@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Clock } from 'lucide-react';
 
 // ============================================================
@@ -331,7 +332,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 <span className="font-medium">查阅合伙人晋升准则</span>
               </button>
               <button
-                onClick={() => {/* TODO: 打开历史确权账单 */}}
+                onClick={() => window.location.href = '/parent/equity-history'}
                 className="flex items-center space-x-1 px-3 py-2 rounded-lg border border-[#C5B358] bg-gradient-to-r from-yellow-50 to-orange-50 hover:from-yellow-100 hover:to-orange-100 transition-all text-[#C5B358] hover:text-[#A80000] shadow-sm"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
