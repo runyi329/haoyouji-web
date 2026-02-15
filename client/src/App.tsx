@@ -110,6 +110,7 @@ const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
 const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
 const MyEquity = lazy(() => import("./pages/MyEquity"));
+const MyEquityRedWhite = lazy(() => import("./pages/MyEquity_RedWhite"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -161,7 +162,8 @@ function Router() {
         <Route path="/parent/academy" component={Academy} />
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
-        <Route path="/parent/my-equity" component={MyEquity} />
+        <Route path="/parent/my-equity" component={MyEquityRedWhite} />
+        <Route path="/parent/my-equity-old" component={MyEquity} />
         <Route path="/parent/profile/invite" component={InviteCode} />
         <Route path="/invited-friends" component={InvitedFriendsList} />
 
