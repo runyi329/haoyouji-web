@@ -256,19 +256,19 @@ export async function getUserSeatNumber(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 获取每个用户的首笔投资时间，按时间排序
+  // 获取每个用户的首笔投资时间，按时间排序，日期相同时按记录创建时间排序
   const firstInvestments = await db.execute(sql`
-    SELECT user_id, MIN(investment_date) as first_investment_date
+    SELECT user_id, MIN(investment_date) as first_investment_date, MIN(created_at) as first_created_at
     FROM equity_investments
     GROUP BY user_id
-    ORDER BY first_investment_date ASC
+    ORDER BY first_investment_date ASC, first_created_at ASC
   `);
   
   // 兼容不同数据库驱动的返回格式
   const rawRows = Array.isArray(firstInvestments) 
     ? (Array.isArray(firstInvestments[0]) ? firstInvestments[0] : firstInvestments)
     : (firstInvestments.rows || []);
-  const rows = rawRows as { user_id: number; first_investment_date: string }[];
+  const rows = rawRows as { user_id: number; first_investment_date: string; first_created_at: string }[];
   const seatIndex = rows.findIndex(r => Number(r.user_id) === userId);
   
   if (seatIndex === -1) {
@@ -289,16 +289,16 @@ export async function getAllSeatNumbers(): Promise<Map<number, number>> {
   if (!db) throw new Error("Database not available");
   
   const firstInvestments = await db.execute(sql`
-    SELECT user_id, MIN(investment_date) as first_investment_date
+    SELECT user_id, MIN(investment_date) as first_investment_date, MIN(created_at) as first_created_at
     FROM equity_investments
     GROUP BY user_id
-    ORDER BY first_investment_date ASC
+    ORDER BY first_investment_date ASC, first_created_at ASC
   `);
   
   const rawRows = Array.isArray(firstInvestments) 
     ? (Array.isArray(firstInvestments[0]) ? firstInvestments[0] : firstInvestments)
     : (firstInvestments.rows || []);
-  const rows = rawRows as { user_id: number; first_investment_date: string }[];
+  const rows = rawRows as { user_id: number; first_investment_date: string; first_created_at: string }[];
   
   const seatMap = new Map<number, number>();
   rows.forEach((row, index) => {
