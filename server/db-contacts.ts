@@ -1586,8 +1586,14 @@ export async function getContactsOverviewStats(parentUserId: number) {
     ? Math.round(totalIntervalDays / contactsWithInteractions)
     : 0;
 
-  // 计算最近7天每天联络的不同联系人数均值（仅统计自己的联系人，不含共享）
-  const sevenDaysAgoTs = now - 7 * 24 * 60 * 60 * 1000;
+  // 计算自然周（周一到周日）每天联络的不同联系人数日均值（仅统计自己的联系人，不含共享）
+  const weekStartTs = getBeijingThisWeekStart(); // 本周一 00:00:00 的UTC时间戳
+  
+  // 计算本周已过去的天数（包含今天）
+  const beijingOffset = 8 * 60 * 60 * 1000;
+  const beijingNow = new Date(now + beijingOffset);
+  const dayOfWeek = beijingNow.getUTCDay(); // 0=周日
+  const daysPassed = dayOfWeek === 0 ? 7 : dayOfWeek; // 周一=1, 周二=2, ..., 周日=7
   
   // 获取仅属于自己的联系人ID
   const myOwnContacts = await db.select({ id: contacts.id })
@@ -1597,22 +1603,24 @@ export async function getContactsOverviewStats(parentUserId: number) {
   
   const dailyContactMap = new Map<string, Set<number>>(); // dateStr -> Set<contactId>
   for (const interaction of allInteractions) {
-    // 只统计自己的联系人的联络记录
-    if (interaction.interactionDate >= sevenDaysAgoTs && myOwnContactIds.has(interaction.contactId)) {
-      const dateStr = new Date(interaction.interactionDate).toISOString().slice(0, 10);
+    // 只统计自己的联系人的联络记录，且在本周内
+    if (interaction.interactionDate >= weekStartTs && myOwnContactIds.has(interaction.contactId)) {
+      // 使用北京时间的日期字符串
+      const beijingDate = new Date(interaction.interactionDate + beijingOffset);
+      const dateStr = beijingDate.toISOString().slice(0, 10);
       if (!dailyContactMap.has(dateStr)) {
         dailyContactMap.set(dateStr, new Set());
       }
       dailyContactMap.get(dateStr)!.add(interaction.contactId);
     }
   }
-  // 计算7天中每天联络的不同人数，取均值
+  // 计算自然周内每天联络的不同人数，除以已过去天数取日均值
   let totalDailyContacts = 0;
   for (const [, contactSet] of dailyContactMap) {
     totalDailyContacts += contactSet.size;
   }
-  const dailyContactFrequency = dailyContactMap.size > 0
-    ? Math.round((totalDailyContacts / 7) * 10) / 10  // 保留1位小数
+  const dailyContactFrequency = daysPassed > 0
+    ? Math.round((totalDailyContacts / daysPassed) * 10) / 10  // 保留1位小数
     : 0;
 
   // 计算人均标签数
