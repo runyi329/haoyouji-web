@@ -490,39 +490,61 @@ export default function MyEquity() {
             <span className="text-2xl opacity-90">%</span>
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs opacity-60">在公司总股本中的占比</span>
+            <span className="text-xs opacity-60">当前综合权重</span>
             <span className="text-xs opacity-60 bg-white/10 px-2 py-0.5 rounded-full">
               截止 {timestampStr}
             </span>
           </div>
+
+          {/* === 权重拆解区域（始终可见） === */}
+          {(() => {
+            const baseEquity = equity.investmentEquity || 0;
+            const contribEquity = (equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0);
+            const totalEq = baseEquity + contribEquity;
+            const basePct = totalEq > 0 ? (baseEquity / totalEq) * 100 : 100;
+            const contribPct = totalEq > 0 ? (contribEquity / totalEq) * 100 : 0;
+            return (
+              <div className="mt-4 pt-3 border-t border-white/15">
+                {/* 拆解数值 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-2 h-2 rounded-full bg-white/80" />
+                    <span className="text-xs opacity-70">基础权证</span>
+                    <span className="text-sm font-bold">{baseEquity.toFixed(4)}%</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                    <span className="text-xs opacity-70">贡献加成</span>
+                    <span className="text-sm font-bold text-yellow-300">+{contribEquity.toFixed(4)}%</span>
+                  </div>
+                </div>
+                {/* 横向比例条 */}
+                <div className="h-2 rounded-full overflow-hidden bg-white/10 flex">
+                  <div
+                    className="h-full bg-white/70 transition-all duration-700"
+                    style={{ width: `${Math.max(basePct, 2)}%` }}
+                  />
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 transition-all duration-700"
+                    style={{ width: `${Math.max(contribPct, contribEquity > 0 ? 2 : 0)}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[10px] opacity-50">
+                  <span>资本底盘 · 极难被稀释</span>
+                  <span>动态 · 由市场贡献转化</span>
+                </div>
+              </div>
+            );
+          })()}
           
           {/* 展开后的股权透视内容 */}
           {isEquityExpanded && (
             <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
-              {/* 左右分列：资金股权 vs 贡献股权 */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* 左侧：资金股权 */}
-                <div className="bg-white/10 rounded-xl p-3">
-                  <div className="text-xs opacity-70 mb-1">资金股权</div>
-                  <div className="text-2xl font-bold">{(equity.investmentEquity || 0).toFixed(3)}%</div>
-                  <div className="text-xs opacity-60 mt-1">底仓，由投资转化</div>
-                </div>
-                
-                {/* 右侧：贡献股权（显示基础值） */}
-                <div className="bg-white/10 rounded-xl p-3">
-                  <div className="text-xs opacity-70 mb-1">贡献股权（基础）</div>
-                  <div className="text-2xl font-bold">
-                    {((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)).toFixed(3)}%
-                  </div>
-                  <div className="text-xs opacity-60 mt-1">动态，由市场业绩转化</div>
-                </div>
-              </div>
-              
-              {/* 下方：杭杆系数和放大后的值 */}
+              {/* 杠杆系数区域 */}
               <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-3 border border-yellow-400/30">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <div className="text-xs opacity-70 mb-1">身份杭杆系数 (L)</div>
+                    <div className="text-xs opacity-70 mb-1">身份杠杆系数 (K)</div>
                     <div className="text-3xl font-bold text-yellow-300">
                       {equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01).toFixed(2) : '1.00'}x
                     </div>
@@ -534,49 +556,65 @@ export default function MyEquity() {
                     </div>
                   </div>
                 </div>
-                {/* 杭杆放大后的贡献股权 */}
+                {/* 杠杆放大后的贡献股权 */}
                 {showLeverageAnimation && (
                   <div className="pt-2 border-t border-yellow-400/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs opacity-70">杭杆放大后：</div>
+                      <div className="text-xs opacity-70">杠杆放大后贡献加成：</div>
                       <div className="text-2xl font-bold text-yellow-300 animate-pulse">
-                        {(((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)) * (equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1)).toFixed(3)}%
+                        {(((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)) * (equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1)).toFixed(4)}%
                       </div>
                     </div>
                     <div className="text-xs opacity-60 mt-1 text-right">
-                      ✨ 您的努力被公司制度放大了！
+                      等级越高，同等贡献产出效率越高
                     </div>
                   </div>
                 )}
               </div>
               
-              {/* 三张卡片堆叠 */}
+              {/* 资产明细卡片 */}
               <div className="space-y-2 mt-3">
                 {/* 卡片1：股权底仓（静态） */}
                 <div className="bg-white/10 rounded-lg p-3 border border-white/20">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold opacity-90">💼 股权底仓（静态）</div>
+                    <div className="text-xs font-semibold opacity-90">资本底仓（静态）</div>
                     <div className="text-xs opacity-70">我的投资</div>
                   </div>
                   <div className="flex items-baseline space-x-1">
-                    <span className="text-xl font-bold">￥{(equity.details?.userInvestment || 0).toLocaleString()}</span>
+                    <span className="text-xl font-bold">{(equity.details?.userInvestment || 0).toLocaleString()}</span>
+                    <span className="text-sm opacity-70">元</span>
                   </div>
                   <div className="text-xs opacity-60 mt-1">
-                    转化为 {(equity.investmentEquity || 0).toFixed(3)}% 股权
+                    转化为 {(equity.investmentEquity || 0).toFixed(4)}% 基础权证
                   </div>
                 </div>
                 
-                {/* 卡片2：如何提升占比（攻略） */}
+                {/* 卡片2：贡献明细 */}
+                <div className="bg-white/10 rounded-lg p-3 border border-white/20">
+                  <div className="text-xs font-semibold opacity-90 mb-2">贡献加成明细</div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="opacity-70">邀请贡献（{equity.details?.inviteCount || 0}人）</span>
+                      <span className="font-bold">+{(equity.inviteEquity || 0).toFixed(4)}%</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="opacity-70">人脉网络（{equity.details?.referralNetworkCount || 0}人）</span>
+                      <span className="font-bold">+{(equity.referralNetworkEquity || 0).toFixed(4)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 卡片3：如何提升占比 */}
                 <div className="bg-gradient-to-r from-green-400/20 to-emerald-400/20 rounded-lg p-3 border border-green-400/30">
-                  <div className="text-xs font-semibold opacity-90 mb-2">🚀 如何提升占比？</div>
+                  <div className="text-xs font-semibold opacity-90 mb-2">如何提升占比？</div>
                   <div className="space-y-1.5 text-xs">
                     <div className="flex items-start space-x-2">
                       <span className="opacity-70">•</span>
-                      <span className="opacity-80">追加投资：增加资金股权底仓</span>
+                      <span className="opacity-80">追加投资：增加基础权证底仓</span>
                     </div>
                     <div className="flex items-start space-x-2">
                       <span className="opacity-70">•</span>
-                      <span className="opacity-80">邀请好友：每邀请1人获得额外股权</span>
+                      <span className="opacity-80">邀请好友：每邀请1人获得额外贡献加成</span>
                     </div>
                     <div className="flex items-start space-x-2">
                       <span className="opacity-70">•</span>
@@ -584,7 +622,7 @@ export default function MyEquity() {
                     </div>
                     <div className="flex items-start space-x-2">
                       <span className="opacity-70">•</span>
-                      <span className="opacity-80 font-semibold text-yellow-300">杭杆放大：越早进场，系数越高</span>
+                      <span className="opacity-80 font-semibold text-yellow-300">提升节点等级：等级越高，杠杆系数越大</span>
                     </div>
                   </div>
                 </div>
