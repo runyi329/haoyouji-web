@@ -453,7 +453,7 @@ export default function MyEquity() {
         <div className="space-y-0">
         {/* 1. 股权透视卡片（可点击展开） */}
         <Card 
-          className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
+          className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-3.5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
           onClick={() => setIsEquityExpanded(!isEquityExpanded)}
         >
           {/* 席位编号 - 右上角 */}
@@ -481,10 +481,10 @@ export default function MyEquity() {
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-5xl font-bold">{equity.totalEquity.toFixed(4)}</span>
-            <span className="text-2xl opacity-90">%</span>
+            <span className="text-4xl font-bold">{equity.totalEquity.toFixed(4)}</span>
+            <span className="text-xl opacity-90">%</span>
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs opacity-60">当前综合权重</span>
             <span className="text-xs opacity-60 bg-white/10 px-2 py-0.5 rounded-full">
               截止 {timestampStr}
@@ -499,7 +499,7 @@ export default function MyEquity() {
             const basePct = totalEq > 0 ? (baseEquity / totalEq) * 100 : 100;
             const contribPct = totalEq > 0 ? (contribEquity / totalEq) * 100 : 0;
             return (
-              <div className="mt-4 pt-3 border-t border-white/15">
+              <div className="mt-2.5 pt-2.5 border-t border-white/15">
                 {/* 拆解数值 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-1.5">
@@ -534,14 +534,14 @@ export default function MyEquity() {
           
           {/* 展开后的股权透视内容 */}
           {isEquityExpanded && (
-            <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+            <div className="mt-2.5 pt-2.5 border-t border-white/20 space-y-2.5">
               {/* 动态杠杆系数区域 */}
-              <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-4 border border-yellow-400/30">
+              <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-3 border border-yellow-400/30">
                 {/* 杠杆主数值 + 席位信息 */}
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <div className="text-xs opacity-70 mb-1">资本杠杆系数</div>
-                    <div className="text-3xl font-bold text-yellow-300 font-mono">
+                    <div className="text-2xl font-bold text-yellow-300 font-mono">
                       {equity.dynamicLeverage ? `${equity.dynamicLeverage.leverage.toFixed(4)}x` : '1.0000x'}
                     </div>
                     <div className="text-[10px] opacity-50 mt-0.5">已锁定 · 永久有效</div>
@@ -556,7 +556,7 @@ export default function MyEquity() {
 
                 {/* 红利余量进度条 */}
                 {equity.dynamicLeverage?.currentRound && (
-                  <div className="mt-2">
+                  <div className="mt-1.5">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] opacity-60">
                         {equity.dynamicLeverage.currentRound.name}（{equity.dynamicLeverage.currentRound.maxLeverage}x → {equity.dynamicLeverage.currentRound.minLeverage}x）
@@ -585,7 +585,7 @@ export default function MyEquity() {
 
                 {/* 犹豫成本计费器 */}
                 {equity.dynamicLeverage && equity.details?.userInvestment ? (
-                  <div className="mt-3 pt-3 border-t border-yellow-400/20">
+                  <div className="mt-2 pt-2 border-t border-yellow-400/20">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <div className="text-[10px] opacity-50 mb-0.5">当前价值</div>
