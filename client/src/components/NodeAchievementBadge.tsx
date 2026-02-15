@@ -142,7 +142,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             <div className="text-right">
               <div className={`text-xs ${level === 'none' ? 'text-gray-400' : 'opacity-70'} mb-1`}>市场权重</div>
               <div className="text-2xl font-bold text-yellow-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                +{(contribEquity * 100).toFixed(4)}%
+                +{(contribEquity).toFixed(4)}%
               </div>
               <div className={`text-[10px] ${level === 'none' ? 'text-gray-400' : 'opacity-60'} mt-0.5`}>
                 由共享人脉贡献决定
@@ -262,7 +262,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-600">共享加成权重</span>
-                  <span className="text-sm font-bold text-[#A80000]">+{(contribEquity * 100).toFixed(4)}%</span>
+                  <span className="text-sm font-bold text-[#A80000]">+{(contribEquity).toFixed(4)}%</span>
                 </div>
               </div>
             </div>
