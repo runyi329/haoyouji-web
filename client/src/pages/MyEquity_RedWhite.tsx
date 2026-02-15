@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, Trophy, Sparkles, DollarSign } from "lucide-react";
 import { useState } from "react";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
-import NodeAchievementBadgeRedWhite from "@/components/NodeAchievementBadge_RedWhite";
+import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
 
 export default function MyEquityRedWhite() {
@@ -253,26 +253,27 @@ export default function MyEquityRedWhite() {
 
         {/* ============ 第二层：贡献加成中心（红白双引擎） ============ */}
         <div id="market-contribution-section">
-          <NodeAchievementBadgeRedWhite
-            level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
-            equityBonus={0.009}
-            contributionScore={equity.details?.inviteCount * 2 || 0}
-            marketShare={0.06}
-            isQualified={equity.details?.inviteCount >= 1}
-            estimatedEquityBonus={0.0015}
-            contactCount={overviewStats?.totalContacts || 0}
-            tagAverage={overviewStats?.averageTagCount || 0}
-            contactFrequency={overviewStats?.dailyContactFrequency || 0}
-            standardNodeCount={0}
-            advancedNodeCount={0}
-            totalEquity={equity.totalEquity || 0}
+          <DualEngineAccelerator
+            // 股权加成相关
+            equityMultiplier={1.2}
             investmentEquity={equity.investmentEquity || 0}
-            contribEquity={(equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)}
-            inviteEquity={equity.inviteEquity || 0}
-            referralNetworkEquity={equity.referralNetworkEquity || 0}
-            inviteCount={equity.details?.inviteCount || 0}
-            referralNetworkCount={equity.details?.referralNetworkCount || 0}
-            dynamicLeverage={equity.dynamicLeverage || null}
+            
+            // 身份加成相关
+            identityMultiplier={equity.details?.inviteCount >= 1 ? 1.0 : 0.0}
+            nodeLevel={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
+            
+            // 已达成资产（向下兼容统计）
+            standardNodes={equity.details?.inviteCount || 0}
+            advancedNodes={Math.floor((equity.details?.inviteCount || 0) * 0.25)}
+            superNodes={Math.floor((equity.details?.inviteCount || 0) * 0.04)}
+            
+            // 正在培育（潜力向上折算）
+            potentialStandard={Math.floor((equity.details?.referralNetworkCount || 0) * 0.88)}
+            potentialAdvanced={Math.floor((equity.details?.referralNetworkCount || 0) * 0.09)}
+            potentialSuper={Math.floor((equity.details?.referralNetworkCount || 0) * 0.02)}
+            
+            // 总培育数
+            totalCultivating={equity.details?.referralNetworkCount || 0}
           />
         </div>
 
