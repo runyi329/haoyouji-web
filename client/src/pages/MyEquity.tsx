@@ -457,16 +457,14 @@ export default function MyEquity() {
           onClick={() => setIsEquityExpanded(!isEquityExpanded)}
         >
           {/* 席位编号 - 右上角 */}
-          {equity.dynamicLeverage && (
-            <div className="flex justify-end mb-1">
-              <span className="text-[10px] font-mono tracking-wider opacity-50 bg-white/10 px-2 py-0.5 rounded">
-                编号 {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm opacity-90">资本权证资产</span>
             <div className="flex items-center space-x-2">
+              {equity.dynamicLeverage && (
+                <span className="text-[10px] font-mono tracking-wider opacity-50 bg-white/10 px-1.5 py-0.5 rounded">
+                  编号 {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
+                </span>
+              )}
               <TrendingUp className="w-5 h-5 opacity-90" />
               <svg
                 className={`w-5 h-5 opacity-90 transition-transform ${
@@ -481,14 +479,12 @@ export default function MyEquity() {
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-4xl font-bold">{equity.totalEquity.toFixed(4)}</span>
-            <span className="text-xl opacity-90">%</span>
+            <span className="text-5xl font-bold">{equity.totalEquity.toFixed(4)}</span>
+            <span className="text-2xl opacity-90">%</span>
           </div>
-          <div className="mt-1.5 flex items-center justify-between">
+          <div className="mt-1 flex items-center justify-between">
             <span className="text-xs opacity-60">当前综合权重</span>
-            <span className="text-xs opacity-60 bg-white/10 px-2 py-0.5 rounded-full">
-              截止 {timestampStr}
-            </span>
+            <span className="text-[10px] opacity-50">截止 {timestampStr}</span>
           </div>
 
           {/* === 权重拆解区域（始终可见） === */}
@@ -499,22 +495,22 @@ export default function MyEquity() {
             const basePct = totalEq > 0 ? (baseEquity / totalEq) * 100 : 100;
             const contribPct = totalEq > 0 ? (contribEquity / totalEq) * 100 : 0;
             return (
-              <div className="mt-2.5 pt-2.5 border-t border-white/15">
-                {/* 拆解数值 */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-white/80" />
-                    <span className="text-xs opacity-70">基础权证</span>
-                    <span className="text-sm font-bold">{baseEquity.toFixed(4)}%</span>
+              <div className="mt-2 pt-2 border-t border-white/15">
+                {/* 拆解：单行紧凑布局 */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                    <span className="opacity-70">基础权证</span>
+                    <span className="font-bold">{baseEquity.toFixed(4)}%</span>
                   </div>
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                    <span className="text-xs opacity-70">贡献加成</span>
-                    <span className="text-sm font-bold text-yellow-300">+{contribEquity.toFixed(4)}%</span>
+                  <div className="flex items-center space-x-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                    <span className="opacity-70">贡献加成</span>
+                    <span className="font-bold text-yellow-300">+{contribEquity.toFixed(4)}%</span>
                   </div>
                 </div>
                 {/* 横向比例条 */}
-                <div className="h-2 rounded-full overflow-hidden bg-white/10 flex">
+                <div className="h-1.5 rounded-full overflow-hidden bg-white/10 flex mt-1.5">
                   <div
                     className="h-full bg-white/70 transition-all duration-700"
                     style={{ width: `${Math.max(basePct, 2)}%` }}
@@ -524,9 +520,9 @@ export default function MyEquity() {
                     style={{ width: `${Math.max(contribPct, contribEquity > 0 ? 2 : 0)}%` }}
                   />
                 </div>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] opacity-50">
-                  <span>资本底盘 · 极难被稀释</span>
-                  <span>动态 · 由市场贡献转化</span>
+                <div className="mt-1 flex items-center justify-between text-[10px] opacity-50">
+                  <span>资本底盘 · 静态确权</span>
+                  <span>市场贡献 · 动态增长</span>
                 </div>
               </div>
             );
