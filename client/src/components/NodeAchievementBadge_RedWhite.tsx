@@ -180,10 +180,10 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-600">人脉规模</span>
                   <span className={`text-[10px] font-medium ${contactCount >= (nextTier?.contactMin || 50) ? 'text-[#C5B358]' : 'text-gray-400'}`}>
-                    {contactCount >= (nextTier?.contactMin || 50) ? '✅ 已达标' : '⚠️ 待提升'}
+                    {contactCount >= (nextTier?.contactMin || 50) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${contactCount >= (nextTier?.contactMin || 50) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (contactCount / (nextTier?.contactMin || 50)) * 100)}%` }}
@@ -199,10 +199,10 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-600">标签完善</span>
                   <span className={`text-[10px] font-medium ${tagAverage >= (nextTier?.tagMin || 1) ? 'text-[#C5B358]' : 'text-gray-400'}`}>
-                    {tagAverage >= (nextTier?.tagMin || 1) ? '✅ 已达标' : '⚠️ 待提升'}
+                    {tagAverage >= (nextTier?.tagMin || 1) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${tagAverage >= (nextTier?.tagMin || 1) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (tagAverage / (nextTier?.tagMin || 1)) * 100)}%` }}
@@ -217,11 +217,11 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-600">联络频率</span>
-                  <span className={`text-[10px] font-medium ${contactFrequency >= (nextTier?.frequencyMin || 3) ? 'text-[#C5B358]' : 'text-red-500'}`}>
-                    {contactFrequency >= (nextTier?.frequencyMin || 3) ? '✅ 已达标' : '❌ 未开启'}
+                  <span className={`text-[10px] font-medium ${contactFrequency >= (nextTier?.frequencyMin || 3) ? 'text-[#C5B358]' : 'text-gray-400'}`}>
+                    {contactFrequency >= (nextTier?.frequencyMin || 3) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${contactFrequency >= (nextTier?.frequencyMin || 3) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (contactFrequency / (nextTier?.frequencyMin || 3)) * 100)}%` }}
@@ -257,11 +257,9 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 {standardNodeCount > 0 ? (
                   <span className="text-sm font-bold text-gray-900">{standardNodeCount} 名</span>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-400">0 名</span>
-                    <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">
-                      [去培育]
-                    </button>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-lg font-bold text-gray-400">0</span>
+                    <span className="text-gray-300">→</span>
                   </div>
                 )}
               </div>
@@ -272,11 +270,9 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 {advancedNodeCount > 0 ? (
                   <span className="text-sm font-bold text-gray-900">{advancedNodeCount} 名</span>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-400">0 名</span>
-                    <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">
-                      [去培育]
-                    </button>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-lg font-bold text-gray-400">0</span>
+                    <span className="text-gray-300">→</span>
                   </div>
                 )}
               </div>
@@ -284,11 +280,9 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               {/* 已培育超级节点 */}
               <div className="flex items-center justify-between py-2 border-b border-gray-200">
                 <span className="text-xs text-gray-600">已培育超端节点</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-gray-400">0 名</span>
-                  <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">
-                    [去培育]
-                  </button>
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-lg font-bold text-gray-400">0</span>
+                  <span className="text-gray-300">→</span>
                 </div>
               </div>
             </div>
@@ -305,7 +299,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
           {/* 底部仪式感区域 */}
           <div className="pt-3 border-t border-gray-200 space-y-3">
             {/* 印章图标 + 确权状态 */}
-            <div className="relative text-center text-[10px] text-gray-400 bg-yellow-50 py-3 px-4 rounded-lg">
+            <div className="relative text-center py-2">
               {/* 印章图标背景 */}
               <div className="absolute inset-0 flex items-center justify-center opacity-5">
                 <svg className="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
@@ -314,7 +308,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               </div>
               {/* 文案内容 */}
               <div className="relative z-10 space-y-1">
-                <div className="font-medium text-[#A80000]">✅ 区块链资产已确权 · {getCountdown()}</div>
+                <div className="text-[10px] text-[#C5B358]">🕐 距离本周资产定格还剩 {getCountdown()}</div>
                 <div className="text-gray-500">
                   💡 "每周日晚，一份诚实的财富存证，任何时候不可更改、不可篡改。"
                 </div>
