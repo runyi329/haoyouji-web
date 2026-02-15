@@ -183,7 +183,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                     {contactCount >= (nextTier?.contactMin || 50) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
+                <div className="bg-gray-100 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${contactCount >= (nextTier?.contactMin || 50) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (contactCount / (nextTier?.contactMin || 50)) * 100)}%` }}
@@ -202,7 +202,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                     {tagAverage >= (nextTier?.tagMin || 1) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
+                <div className="bg-gray-100 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${tagAverage >= (nextTier?.tagMin || 1) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (tagAverage / (nextTier?.tagMin || 1)) * 100)}%` }}
@@ -221,7 +221,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                     {contactFrequency >= (nextTier?.frequencyMin || 3) ? '✓' : '●'}
                   </span>
                 </div>
-                <div className="bg-gray-200 rounded-full overflow-hidden" style={{ height: '3px' }}>
+                <div className="bg-gray-100 rounded-full overflow-hidden" style={{ height: '3px' }}>
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${contactFrequency >= (nextTier?.frequencyMin || 3) ? 'bg-[#C5B358]' : 'bg-[#A80000]'}`}
                     style={{ width: `${Math.min(100, (contactFrequency / (nextTier?.frequencyMin || 3)) * 100)}%` }}
@@ -237,7 +237,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
             <div className="mt-3 pt-3 border-t border-gray-200">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-600">本周个人贡献分</span>
-                <span className="text-sm font-bold text-blue-600">+100 点</span>
+                <span className="text-sm font-bold" style={{ color: '#333333' }}>+100 点</span>
               </div>
             </div>
           </div>
@@ -259,7 +259,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 ) : (
                   <div className="flex items-center justify-between w-full">
                     <span className="text-lg font-bold text-gray-400">0</span>
-                    <span className="text-gray-300">→</span>
+                    <span className="text-[#C5B358]">→</span>
                   </div>
                 )}
               </div>
@@ -272,7 +272,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 ) : (
                   <div className="flex items-center justify-between w-full">
                     <span className="text-lg font-bold text-gray-400">0</span>
-                    <span className="text-gray-300">→</span>
+                    <span className="text-[#C5B358]">→</span>
                   </div>
                 )}
               </div>
@@ -282,7 +282,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
                 <span className="text-xs text-gray-600">已培育超端节点</span>
                 <div className="flex items-center justify-between w-full">
                   <span className="text-lg font-bold text-gray-400">0</span>
-                  <span className="text-gray-300">→</span>
+                  <span className="text-[#C5B358]">→</span>
                 </div>
               </div>
             </div>
@@ -328,7 +328,7 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               </button>
               <button
                 onClick={() => setLocation('/parent/equity-history')}
-                className="flex items-center space-x-1 px-3 py-2 rounded-lg border border-[#C5B358] bg-gradient-to-r from-yellow-50 to-orange-50 hover:from-yellow-100 hover:to-orange-100 transition-all text-[#C5B358] hover:text-[#A80000] shadow-sm"
+                className="flex items-center space-x-1 px-3 py-2 rounded-lg border border-[#C5B358] bg-[#C5B358]/5 hover:bg-[#C5B358]/10 transition-all text-[#C5B358] hover:text-[#A80000] shadow-sm"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />

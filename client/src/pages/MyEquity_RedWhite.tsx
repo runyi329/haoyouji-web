@@ -58,14 +58,14 @@ export default function MyEquityRedWhite() {
     {
       label: '邀请贡献',
       value: equity.inviteEquity || 0,
-      color: '#FF6B6B',
+      color: '#C5B358',
       upgradeLabel: '贡献加成（邀请）',
       description: `已邀请 ${equity.details?.inviteCount || 0} 人`
     },
     {
       label: '人脉贡献',
       value: equity.referralNetworkEquity || 0,
-      color: '#F59E0B',
+      color: '#C5B358',
       upgradeLabel: '贡献加成（人脉）',
       description: `人脉网络 ${equity.details?.referralNetworkCount || 0} 人`
     },
@@ -115,7 +115,7 @@ export default function MyEquityRedWhite() {
                 {/* 估值 */}
                 <div>
                   <div className="text-xs opacity-70 mb-0.5">我的股权估值</div>
-                  <div className="text-2xl font-bold text-yellow-300">
+                  <div className="text-2xl font-bold" style={{ color: '#C5B358' }}>
                     ¥{(equity.estimatedValue / 10000).toFixed(2)}万
                   </div>
                 </div>
@@ -179,7 +179,7 @@ export default function MyEquityRedWhite() {
                   我的股权估值
                 </div>
                 <div className="flex items-baseline space-x-1">
-                  <span className="text-2xl font-bold text-orange-600">
+                  <span className="text-2xl font-bold" style={{ color: '#C5B358' }}>
                     ¥{(equity.estimatedValue / 10000).toFixed(2)}
                   </span>
                   <span className="text-sm text-gray-600">万</span>
@@ -268,7 +268,7 @@ export default function MyEquityRedWhite() {
                       className="h-full rounded-full transition-all duration-1000"
                       style={{
                         width: `${equity.dynamicLeverage.currentRound.progress * 100}%`,
-                        background: 'linear-gradient(90deg, #F59E0B, #EF4444)',
+                        background: '#800000',
                       }}
                     />
                   </div>
@@ -283,22 +283,22 @@ export default function MyEquityRedWhite() {
 
               {/* 犹豫成本计费器 */}
               {equity.dynamicLeverage && equity.details?.userInvestment ? (
-                <div className="mt-3 pt-3 border-t border-yellow-200">
+                <div className="mt-3 pt-3 border-t border-gray-200">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="text-[10px] text-gray-500 mb-0.5">当前价值</div>
-                      <div className="text-sm font-bold text-green-600">
+                      <div className="text-sm font-bold" style={{ color: '#C5B358' }}>
                         {(equity.details.userInvestment / 10000).toFixed(0)}万 → {((equity.details.userInvestment * equity.dynamicLeverage.leverage) / 10000).toFixed(2)}万
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-[10px] text-gray-500 mb-0.5">犹豫成本</div>
-                      <div className="text-sm font-bold text-red-600">
+                      <div className="text-sm font-bold" style={{ color: '#800000' }}>
                         -{((equity.details.userInvestment * equity.dynamicLeverage.hesitationCost) / 10000).toFixed(2)}万
                       </div>
                     </div>
                   </div>
-                  <div className="text-[10px] text-red-500 mt-1.5 text-right">
+                  <div className="text-[10px] text-gray-600 mt-1.5 text-right">
                     若错过本轮，资产将缩水 {(equity.dynamicLeverage.hesitationCost * 10000).toFixed(0)} 权证点
                   </div>
                 </div>
@@ -441,7 +441,7 @@ export default function MyEquityRedWhite() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">0/1 份协议</span>
-                  <span className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded">待签署</span>
+                  <span className="text-xs px-2 py-1 bg-[#C5B358]/10 text-[#C5B358] rounded">待签署</span>
                 </div>
                 <div className="pt-2 border-t border-gray-200">
                   <div className="text-xs text-gray-600 mb-1">电子股权投资协议</div>
