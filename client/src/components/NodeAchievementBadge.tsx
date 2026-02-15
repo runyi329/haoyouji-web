@@ -27,6 +27,10 @@ interface NodeAchievementBadgeProps {
   totalEquity?: number;        // 总权重（与第一层相同）
   investmentEquity?: number;   // 基础权证（资本部分）
   contribEquity?: number;      // 贡献加成（市场贡献部分）
+  inviteEquity?: number;       // 邀请贡献股权
+  referralNetworkEquity?: number; // 人脉网络股权
+  inviteCount?: number;        // 邀请人数
+  referralNetworkCount?: number; // 人脉网络人数
 }
 
 // ============================================================
@@ -102,6 +106,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   totalEquity = 0,
   investmentEquity = 0,
   contribEquity = 0,
+  inviteEquity = 0,
+  referralNetworkEquity = 0,
+  inviteCount = 0,
+  referralNetworkCount = 0,
 }) => {
   const [displayedBonus, setDisplayedBonus] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -343,17 +351,50 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               </div>
             )}
 
-            {/* 达成后展开的详细内容 */}
+            {/* 达成后展开的详细内容：累计确权筹码 + 实时市场权重 + 组织培育收益 + 社会化资产溢价 */}
             {isExpanded && level !== 'none' && (
               <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
+                {/* 顶部主数据：左右布局 */}
                 <div className="grid grid-cols-2 gap-3">
+                  {/* 左侧：累计确权筹码 */}
                   <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
-                    <div className="text-xs opacity-70 mb-1">贡献分</div>
-                    <div className="text-2xl font-bold">{contributionScore}</div>
+                    <div className="text-[10px] opacity-60 mb-1">累计确权筹码</div>
+                    <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {contributionScore.toLocaleString()}
+                    </div>
+                    <div className="text-[10px] opacity-50 mt-0.5">点</div>
                   </div>
+                  {/* 右侧：实时市场权重 */}
                   <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
-                    <div className="text-xs opacity-70 mb-1">市场占比</div>
-                    <div className="text-2xl font-bold">{(marketShare * 100).toFixed(2)}%</div>
+                    <div className="text-[10px] opacity-60 mb-1">实时市场权重</div>
+                    <div className="text-2xl font-bold text-yellow-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      +{contribEquity.toFixed(4)}%
+                    </div>
+                    <div className="text-[10px] opacity-50 mt-0.5">全场占比</div>
+                  </div>
+                </div>
+
+                {/* 中部方块：组织培育收益 + 社会化资产溢价 */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 左侧：组织培育收益 */}
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-blue-900/20 border-blue-500/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
+                    <div className="text-[10px] opacity-60 mb-1">组织培育收益</div>
+                    <div className="text-xl font-bold text-green-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      +{(inviteEquity * 100).toFixed(4)}%
+                    </div>
+                    <div className="text-[10px] opacity-50 mt-1">
+                      {inviteCount} 位核心节点贡献
+                    </div>
+                  </div>
+                  {/* 右侧：社会化资产溢价 */}
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-blue-900/20 border-blue-500/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
+                    <div className="text-[10px] opacity-60 mb-1">社会化资产溢价</div>
+                    <div className="text-xl font-bold text-blue-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      +{(referralNetworkEquity * 100).toFixed(4)}%
+                    </div>
+                    <div className="text-[10px] opacity-50 mt-1">
+                      {referralNetworkCount.toLocaleString()} 人脉网络资产
+                    </div>
                   </div>
                 </div>
               </div>
@@ -363,7 +404,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
         {/* ====== 灰色底座 ====== */}
         <div className="bg-gray-50 rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
-          {/* === 市场贡献计费中心 === */}
+          {/* === 2x2 经营矩阵 === */}
           {(() => {
             // 等级系数
             const levelMultiplier = level === 'super' ? 5.0 : level === 'advanced' ? 2.0 : level === 'standard' ? 1.0 : 0;
@@ -377,22 +418,25 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             const contactPct = Math.min(1, contactCount / targetTier.contactMin);
             const tagPct = Math.min(1, tagAverage / targetTier.tagMin);
             const freqPct = Math.min(1, contactFrequency / targetTier.frequencyMin);
-            // 活跃度 = 四维平均值（无节点共享时取三维）
-            const activityScore = targetTier.nodeShare > 0 
-              ? (contactPct + tagPct + freqPct + Math.min(1, (level === 'advanced' ? standardNodeCount : advancedNodeCount) / targetTier.nodeShare)) / 4
-              : (contactPct + tagPct + freqPct) / 3;
-            const activityPct = Math.round(activityScore * 100);
-            
-            // 基础产出（模拟数据，后续接入真实结算）
-            const baseOutput = Math.round(contributionScore * 0.6);
-            const leverageBonus = Math.round(contributionScore * 0.3);
-            const networkBonus = Math.round(contributionScore * 0.1);
-            const weeklyOutput = Math.round(baseOutput * activityScore * levelMultiplier) || 0;
+            const nodeShareTarget = targetTier.nodeShare;
+            const nodeShareCurrent = level === 'advanced' ? standardNodeCount : advancedNodeCount;
+            const nodeSharePct = nodeShareTarget > 0 ? Math.min(1, nodeShareCurrent / nodeShareTarget) : 0;
             
             // 计算本周剩余天数（到周日）
             const now = new Date();
-            const dayOfWeek = now.getDay(); // 0=周日
+            const dayOfWeek = now.getDay();
             const daysLeft = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+            
+            // 状态标签
+            const getStatusLabel = (pct: number) => {
+              if (pct >= 1) return { text: '✅ 已达标', color: 'text-green-600' };
+              if (pct >= 0.5) return { text: '🏃 进行中', color: 'text-yellow-600' };
+              return { text: '⚠️ 待提升', color: 'text-orange-500' };
+            };
+            
+            const contactStatus = getStatusLabel(contactPct);
+            const tagStatus = getStatusLabel(tagPct);
+            const freqStatus = getStatusLabel(freqPct);
             
             return (
               <div className="mb-5">
@@ -400,133 +444,90 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <div className="w-1 h-4 bg-[#A80000] rounded-full" />
-                    <span className="text-sm font-bold text-gray-900">市场贡献计费中心</span>
+                    <span className="text-sm font-bold text-gray-900">市场经营仪表盘</span>
                   </div>
                   <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                    {daysLeft > 0 ? `离定格还剩 ${daysLeft} 天` : '本周已定格'}
+                    {daysLeft > 0 ? `本周剩余 ${daysLeft} 天` : '本周已结算'}
                   </span>
                 </div>
                 
-                {/* 核心三数字 */}
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <div className="grid grid-cols-3 gap-3 relative">
-                    {/* 本周产出 */}
-                    <div className="text-center">
-                      <div className="text-[10px] text-gray-500 mb-1">本周产出</div>
-                      <div className="text-2xl font-bold text-[#A80000]" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        +{weeklyOutput}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">权证点</div>
+                {/* 2x2 矩阵方块 */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 左上 A：资源基石 */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-800">资源基石</span>
+                      <span className={`text-[10px] font-medium ${contactStatus.color}`}>{contactStatus.text}</span>
                     </div>
-                    
-                    {/* 分割线 */}
-                    <div className="absolute left-1/3 top-2 bottom-2 w-px bg-gray-200" />
-                    <div className="absolute left-2/3 top-2 bottom-2 w-px bg-gray-200" />
-                    
-                    {/* 累计资产 */}
-                    <div className="text-center">
-                      <div className="text-[10px] text-gray-500 mb-1">累计资产</div>
-                      <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {contributionScore.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">总权证点</div>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {contactCount.toLocaleString()}
                     </div>
-                    
-                    {/* 当前权重 */}
-                    <div className="text-center">
-                      <div className="text-[10px] text-gray-500 mb-1">当前权重</div>
-                      <div className="text-2xl font-bold text-orange-600" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {(marketShare * 100).toFixed(2)}%
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">占全场比例</div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                      规模: {contactCount} / {targetTier.contactMin}
                     </div>
+                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${contactPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, contactPct * 100)}%` }} />
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">支撑社会化资产的人脉底座</div>
                   </div>
-                  
-                  {/* 产出拆解明细 */}
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <div className="text-[10px] text-gray-500 mb-2 font-medium">本周产出拆解</div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                          <span className="text-gray-600">基础动作产出</span>
-                        </div>
-                        <span className="font-semibold text-gray-700">{baseOutput} 点</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-                          <span className="text-gray-600">等级杠杆加成 ({levelLabel})</span>
-                        </div>
-                        <span className="font-semibold text-yellow-600">+{leverageBonus} 点</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          <span className="text-gray-600">组织溢价奖励</span>
-                        </div>
-                        <span className="font-semibold text-blue-600">+{networkBonus} 点</span>
-                      </div>
+
+                  {/* 右上 B：资产质量 */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-800">资产质量</span>
+                      <span className={`text-[10px] font-medium ${tagStatus.color}`}>{tagStatus.text}</span>
                     </div>
-                    
-                    {/* 活跃度调节器 */}
-                    <div className="mt-3 pt-2 border-t border-gray-50">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-gray-500">本周活跃度 (A)</span>
-                        <span className={`font-bold ${activityPct >= 80 ? 'text-green-600' : activityPct >= 50 ? 'text-yellow-600' : 'text-red-500'}`}>
-                          {activityPct}%
-                        </span>
-                      </div>
-                      <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            activityPct >= 80 ? 'bg-green-500' : activityPct >= 50 ? 'bg-yellow-500' : 'bg-red-400'
-                          }`}
-                          style={{ width: `${activityPct}%` }}
-                        />
-                      </div>
-                      <div className="mt-1 text-[9px] text-gray-400">
-                        活跃度由人脉、标签、联络、共享四维指标综合计算
-                      </div>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {tagAverage.toFixed(1)}
                     </div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                      标签完善度: {tagAverage.toFixed(1)} / {targetTier.tagMin}
+                    </div>
+                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${tagPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, tagPct * 100)}%` }} />
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">决定人脉产出效率与权重释放</div>
+                  </div>
+
+                  {/* 左下 C：经营活跃 */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-800">经营活跃</span>
+                      <span className={`text-[10px] font-medium ${freqStatus.color}`}>{freqStatus.text}</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {contactFrequency}
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                      本周活跃: {contactFrequency} / {targetTier.frequencyMin} 人/日
+                    </div>
+                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${freqPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, freqPct * 100)}%` }} />
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">决定每周权证点入账速度</div>
+                  </div>
+
+                  {/* 右下 D：组织溢价 */}
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-gray-800">组织溢价</span>
+                      <span className="text-[10px] font-medium text-blue-600">🚀 {levelLabel}</span>
+                    </div>
+                    <div className={`text-2xl font-bold ${level === 'advanced' ? 'text-blue-600' : level === 'super' ? 'text-amber-600' : level === 'standard' ? 'text-[#A80000]' : 'text-gray-400'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {config.name}
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                      节点等级: {config.badge}
+                    </div>
+                    <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#A80000] to-yellow-500 transition-all duration-500" style={{ width: `${level === 'super' ? 100 : level === 'advanced' ? 66 : level === 'standard' ? 33 : 10}%` }} />
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">放大所有产出的核心杠杆</div>
                   </div>
                 </div>
               </div>
             );
           })()}
-
-          <div className="border-t border-dashed border-gray-300 my-4" />
-
-          {/* 身份成就 vs 加成收益 */}
-          <div className="grid grid-cols-2 gap-6 mb-4 relative">
-            <div>
-              <div className="text-xs text-gray-500 mb-1 flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                身份成就
-              </div>
-              <span className="text-2xl font-bold text-gray-900">{config.name}</span>
-              <div className="mt-1 text-xs text-gray-400">
-                {isQualified ? <span className="text-green-600 font-medium">权益激活中 ●</span> : '待激活状态'}
-              </div>
-            </div>
-            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300" style={{ transform: 'translateX(-50%)' }} />
-            <div className="text-right">
-              <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
-                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-                等级杠杆
-              </div>
-              <div className={`text-2xl font-bold ${level === 'advanced' ? 'text-blue-600' : level === 'super' ? 'text-amber-600' : 'text-orange-600'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {level === 'super' ? '5.0x' : level === 'advanced' ? '2.0x' : level === 'standard' ? '1.0x' : '---'}
-              </div>
-              <div className="mt-1 text-xs text-gray-400">
-                {isQualified ? '权重加成系数' : '待解锁'}
-              </div>
-            </div>
-          </div>
 
           {/* ====== 四维胶囊指标矩阵 ====== */}
           {nextTier && (
@@ -621,8 +622,15 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             </>
           )}
 
+          {/* 底部总结文案 */}
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="text-center text-[10px] text-gray-400 italic">
+              “您的每一份市场经营行为，均已转化为不可篡改的权证资产。”
+            </div>
+          </div>
+
           {/* 查阅规则入口 */}
-          <div className="mt-4 text-center">
+          <div className="mt-3 text-center">
             <button
               onClick={() => setShowRules(true)}
               className="text-xs text-gray-400 hover:text-[#A80000] transition-colors underline underline-offset-2"

@@ -308,20 +308,7 @@ export default function MyEquity() {
   const [simulateInvestment, setSimulateInvestment] = useState(0);
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
   const [isEquityExpanded, setIsEquityExpanded] = useState(false);
-  const [showLeverageAnimation, setShowLeverageAnimation] = useState(false);
-  
-  // 当展开时触发杭杆放大动画
-  useEffect(() => {
-    if (isEquityExpanded) {
-      // 延迟500ms后显示杭杆放大效果
-      const timer = setTimeout(() => {
-        setShowLeverageAnimation(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      setShowLeverageAnimation(false);
-    }
-  }, [isEquityExpanded]);
+
 
   if (isLoading) {
     return (
@@ -556,74 +543,59 @@ export default function MyEquity() {
                     </div>
                   </div>
                 </div>
-                {/* 杠杆放大后的贡献股权 */}
-                {showLeverageAnimation && (
-                  <div className="pt-2 border-t border-yellow-400/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs opacity-70">杠杆放大后贡献加成：</div>
-                      <div className="text-2xl font-bold text-yellow-300 animate-pulse">
-                        {(((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)) * (equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01) : 1)).toFixed(4)}%
-                      </div>
-                    </div>
-                    <div className="text-xs opacity-60 mt-1 text-right">
-                      等级越高，同等贡献产出效率越高
-                    </div>
-                  </div>
-                )}
               </div>
               
-              {/* 资产明细卡片 */}
-              <div className="space-y-2 mt-3">
-                {/* 卡片1：股权底仓（静态） */}
-                <div className="bg-white/10 rounded-lg p-3 border border-white/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold opacity-90">资本底仓（静态）</div>
-                    <div className="text-xs opacity-70">我的投资</div>
-                  </div>
-                  <div className="flex items-baseline space-x-1">
-                    <span className="text-xl font-bold">{(equity.details?.userInvestment || 0).toLocaleString()}</span>
-                    <span className="text-sm opacity-70">元</span>
-                  </div>
-                  <div className="text-xs opacity-60 mt-1">
-                    转化为 {(equity.investmentEquity || 0).toFixed(4)}% 基础权证
-                  </div>
+              {/* 资本底仓（静态） */}
+              <div className="bg-white/10 rounded-lg p-3 border border-white/20">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-semibold opacity-90">资本底仓（静态确权）</div>
+                  <div className="text-xs opacity-70">我的投资</div>
                 </div>
-                
-                {/* 卡片2：贡献明细 */}
-                <div className="bg-white/10 rounded-lg p-3 border border-white/20">
-                  <div className="text-xs font-semibold opacity-90 mb-2">贡献加成明细</div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="opacity-70">邀请贡献（{equity.details?.inviteCount || 0}人）</span>
-                      <span className="font-bold">+{(equity.inviteEquity || 0).toFixed(4)}%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="opacity-70">人脉网络（{equity.details?.referralNetworkCount || 0}人）</span>
-                      <span className="font-bold">+{(equity.referralNetworkEquity || 0).toFixed(4)}%</span>
-                    </div>
-                  </div>
+                <div className="flex items-baseline space-x-1">
+                  <span className="text-xl font-bold">{(equity.details?.userInvestment || 0).toLocaleString()}</span>
+                  <span className="text-sm opacity-70">元</span>
                 </div>
+                <div className="text-xs opacity-60 mt-1">
+                  转化为 {(equity.investmentEquity || 0).toFixed(4)}% 基础权证
+                </div>
+              </div>
 
-                {/* 卡片3：如何提升占比 */}
-                <div className="bg-gradient-to-r from-green-400/20 to-emerald-400/20 rounded-lg p-3 border border-green-400/30">
-                  <div className="text-xs font-semibold opacity-90 mb-2">如何提升占比？</div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex items-start space-x-2">
-                      <span className="opacity-70">•</span>
-                      <span className="opacity-80">追加投资：增加基础权证底仓</span>
+              {/* 股权确权状态 */}
+              <div className="bg-white/10 rounded-lg p-3 border border-white/20">
+                <div className="text-xs font-semibold opacity-90 mb-2">确权状态</div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="opacity-70">电子股权协议</span>
+                    <span className="font-bold text-yellow-300">待签署</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="opacity-70">权证下发状态</span>
+                    <span className="font-bold text-green-400">已确权</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 贡献加成引导钩子 → 滚动到第二层 */}
+              <div
+                className="bg-gradient-to-r from-yellow-400/10 to-orange-400/10 rounded-lg p-3 border border-yellow-400/20 cursor-pointer hover:border-yellow-400/40 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const el = document.getElementById('market-contribution-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs opacity-70 mb-0.5">贡献加成</div>
+                    <div className="text-lg font-bold text-yellow-300">
+                      +{((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)).toFixed(4)}%
                     </div>
-                    <div className="flex items-start space-x-2">
-                      <span className="opacity-70">•</span>
-                      <span className="opacity-80">邀请好友：每邀请1人获得额外贡献加成</span>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <span className="opacity-70">•</span>
-                      <span className="opacity-80">拓展人脉：人脉网络贡献股权</span>
-                    </div>
-                    <div className="flex items-start space-x-2">
-                      <span className="opacity-70">•</span>
-                      <span className="opacity-80 font-semibold text-yellow-300">提升节点等级：等级越高，杠杆系数越大</span>
-                    </div>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-[10px] opacity-50">查看市场贡献明细</span>
+                    <svg className="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                    </svg>
                   </div>
                 </div>
               </div>
@@ -688,7 +660,7 @@ export default function MyEquity() {
         {/* 第一层结束 */}
 
         {/* 第二层：市场贡献中心 */}
-        <div className="mt-6">
+        <div id="market-contribution-section" className="mt-6">
           <NodeAchievementBadge
             level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
             equityBonus={0.009}
@@ -704,6 +676,10 @@ export default function MyEquity() {
             totalEquity={equity.totalEquity || 0}
             investmentEquity={equity.investmentEquity || 0}
             contribEquity={(equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)}
+            inviteEquity={equity.inviteEquity || 0}
+            referralNetworkEquity={equity.referralNetworkEquity || 0}
+            inviteCount={equity.details?.inviteCount || 0}
+            referralNetworkCount={equity.details?.referralNetworkCount || 0}
           />
         </div>
 
