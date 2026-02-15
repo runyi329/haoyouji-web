@@ -534,7 +534,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       {dynamicLeverage ? `${dynamicLeverage.leverage.toFixed(4)}x` : config.name}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-1">
-                      {dynamicLeverage ? `No. ${String(dynamicLeverage.seatNumber).padStart(4, '0')} · ${config.name}` : `节点等级: ${config.badge}`}
+                      {dynamicLeverage ? `编号 ${String(dynamicLeverage.seatNumber).padStart(4, '0')} · ${config.name}` : `节点等级: ${config.badge}`}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-gradient-to-r from-[#A80000] to-yellow-500 transition-all duration-500" style={{ width: `${dynamicLeverage ? Math.min(100, (dynamicLeverage.leverage / 2.0) * 100) : (level === 'super' ? 100 : level === 'advanced' ? 66 : level === 'standard' ? 33 : 10)}%` }} />

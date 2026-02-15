@@ -282,6 +282,33 @@ export async function getUserSeatNumber(userId: number) {
 }
 
 /**
+ * 获取所有用户的席位编号映射（按首笔投资时间排序）
+ */
+export async function getAllSeatNumbers(): Promise<Map<number, number>> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const firstInvestments = await db.execute(sql`
+    SELECT user_id, MIN(investment_date) as first_investment_date
+    FROM equity_investments
+    GROUP BY user_id
+    ORDER BY first_investment_date ASC
+  `);
+  
+  const rawRows = Array.isArray(firstInvestments) 
+    ? (Array.isArray(firstInvestments[0]) ? firstInvestments[0] : firstInvestments)
+    : (firstInvestments.rows || []);
+  const rows = rawRows as { user_id: number; first_investment_date: string }[];
+  
+  const seatMap = new Map<number, number>();
+  rows.forEach((row, index) => {
+    seatMap.set(Number(row.user_id), index + 1);
+  });
+  
+  return seatMap;
+}
+
+/**
  * 计算动态杠杆系数
  * 基于席位编号，越早进入杠杆越高
  * 波次管理：T1创始波次 2.0x→1.8x，T2加速波次 1.8x→1.5x，T3标准波次 1.5x→1.2x

@@ -460,7 +460,7 @@ export default function MyEquity() {
           {equity.dynamicLeverage && (
             <div className="flex justify-end mb-1">
               <span className="text-[10px] font-mono tracking-wider opacity-50 bg-white/10 px-2 py-0.5 rounded">
-                Equity No. {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
+                编号 {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
               </span>
             </div>
           )}
@@ -547,7 +547,7 @@ export default function MyEquity() {
                     <div className="text-[10px] opacity-50 mt-0.5">已锁定 · 永久有效</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs opacity-70">No. {equity.dynamicLeverage ? String(equity.dynamicLeverage.seatNumber).padStart(4, '0') : '0000'}</div>
+                    <div className="text-xs opacity-70">编号 {equity.dynamicLeverage ? String(equity.dynamicLeverage.seatNumber).padStart(4, '0') : '0000'}</div>
                     <div className="text-xs opacity-60 mt-1">
                       {equity.details?.userInvestment ? `${(equity.details.userInvestment / 10000).toFixed(0)}万级别` : '未投资'}
                     </div>
