@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Clock } from 'lucide-react';
 
 // ============================================================
 // 晋升规则配置（四维）
@@ -121,8 +122,9 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
             </span>
             <div className="flex items-center space-x-2">
               {/* 倒计时 */}
-              <span className={`text-[10px] font-mono ${level === 'none' ? 'text-gray-400' : 'opacity-60'} bg-white/10 px-2 py-0.5 rounded`}>
-                距离资产定格还剩 {getCountdown()}
+              <span className={`text-[10px] font-mono ${level === 'none' ? 'text-gray-400' : 'opacity-60'} bg-white/10 px-2 py-0.5 rounded flex items-center space-x-1`}>
+                <Clock className="w-3 h-3" style={{ color: '#C5B358' }} />
+                <span>距离资产定格还剩 {getCountdown()}</span>
               </span>
               {/* 问号按钮 */}
               <button
@@ -317,20 +319,28 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               </div>
             </div>
 
-            {/* 查阅规则入口 */}
-            <div className="flex items-center justify-center space-x-2 text-xs">
+            {/* 查阅规则入口 - 官方文件入口风格 */}
+            <div className="flex items-center justify-center space-x-3 text-xs">
               <button
                 onClick={() => setShowRules(true)}
-                className="text-gray-400 hover:text-[#A80000] transition-colors underline underline-offset-2"
+                className="flex items-center space-x-1 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:border-[#A80000] hover:bg-red-50 transition-all text-gray-600 hover:text-[#A80000]"
               >
-                查阅合伙人晋升准则
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="font-medium">查阅合伙人晋升准则</span>
               </button>
-              <span className="text-gray-300">|</span>
               <button
                 onClick={() => {/* TODO: 打开历史确权账单 */}}
-                className="text-[#C5B358] hover:text-[#A80000] transition-colors underline underline-offset-2 font-medium"
+                className="flex items-center space-x-1 px-3 py-2 rounded-lg border border-[#C5B358] bg-gradient-to-r from-yellow-50 to-orange-50 hover:from-yellow-100 hover:to-orange-100 transition-all text-[#C5B358] hover:text-[#A80000] shadow-sm"
               >
-                查阅历史确权周报 →
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                <span className="font-medium">查阅历史确权周报</span>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
           </div>
