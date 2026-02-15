@@ -258,6 +258,9 @@ export default function MyEquityRedWhite() {
             nodeLevel={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
             contribEquity={equity.contribEquity || 0}
             
+            // 底部基座相关
+            contactCount={overviewStats?.totalContacts || 0}
+            
             // 股权加成相关
             equityMultiplier={1.2}
             investmentEquity={equity.investmentEquity || 0}

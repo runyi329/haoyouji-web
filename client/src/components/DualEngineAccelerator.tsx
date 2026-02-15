@@ -6,6 +6,9 @@ interface DualEngineAcceleratorProps {
   nodeLevel: 'none' | 'standard' | 'advanced' | 'super'; // 当前节点等级
   contribEquity: number; // 市场权重（贡献加成）
   
+  // 底部基座相关
+  contactCount: number; // 当前人脉规模
+  
   // 股权加成相关
   equityMultiplier: number; // 股权加成倍数，如 1.2
   investmentEquity: number; // 投资股权
@@ -65,6 +68,16 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return `${days}天${hours}小时`;
+  };
+  
+  // 获取目标人数（根据节点等级）
+  const getTargetCount = () => {
+    switch (props.nodeLevel) {
+      case 'standard': return 50;
+      case 'advanced': return 150;
+      case 'super': return 200;
+      default: return 50;
+    }
   };
   
   return (
@@ -310,24 +323,48 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </button>
         </div>
         
-        {/* 底座状态条 */}
-        <div className="flex items-center justify-center space-x-3 pt-2 text-[10px] text-gray-500">
-          <span className="flex items-center space-x-1">
-            <span className="text-green-500">✓</span>
-            <span>规模</span>
-          </span>
-          <span className="text-gray-300">|</span>
-          <span className="flex items-center space-x-1">
-            <span className="text-green-500">✓</span>
-            <span>标签</span>
-          </span>
-          <span className="text-gray-300">|</span>
-          <span className="flex items-center space-x-1">
-            <span className="text-green-500">✓</span>
-            <span>频率</span>
-          </span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-600">个人确权：本周已生效</span>
+        {/* ====== 底部基座：身份勋章与确权基石 ====== */}
+        <div className="mt-4 pt-3 border-t border-gray-200 bg-gradient-to-r from-gray-50/50 to-[#C5B358]/5 rounded-lg px-3 py-2.5">
+          <div className="grid grid-cols-3 gap-4 items-center">
+            
+            {/* 左侧：身份勋章区（荣誉象征） */}
+            <div className="flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-[#C5B358]" />
+              <div>
+                <div className="text-[9px] text-gray-400">当前等级</div>
+                <div className="text-xs font-bold text-gray-900">{config.name}</div>
+              </div>
+            </div>
+            
+            {/* 中间：规模实时进度（安全感来源） */}
+            <div className="text-center">
+              <div className="text-[9px] text-gray-400 mb-0.5">规模</div>
+              <div className="text-xs">
+                <span className="font-bold text-gray-900">{props.contactCount}</span>
+                <span className="text-gray-400">/{getTargetCount()}</span>
+                {props.contactCount >= getTargetCount() && (
+                  <span className="ml-1 text-[9px] text-[#C5B358]">（已超额）</span>
+                )}
+              </div>
+            </div>
+            
+            {/* 右侧：确权状态汇总（合规感） */}
+            <div className="text-right">
+              <div className="flex items-center justify-end space-x-2 text-[10px]">
+                <span className="flex items-center space-x-1">
+                  <span className="text-green-500">✓</span>
+                  <span className="text-gray-600">标签</span>
+                </span>
+                <span className="text-gray-300">|</span>
+                <span className="flex items-center space-x-1">
+                  <span className="text-green-500">✓</span>
+                  <span className="text-gray-600">频率</span>
+                </span>
+              </div>
+              <div className="text-[9px] text-gray-400 mt-0.5">状态：本周生效中</div>
+            </div>
+            
+          </div>
         </div>
       </div>
     </div>
