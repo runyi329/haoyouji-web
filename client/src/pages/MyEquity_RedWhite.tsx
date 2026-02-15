@@ -139,89 +139,8 @@ export default function MyEquityRedWhite() {
 
           {/* 白色区域（明细） */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 权重拆解 */}
+            {/* 1. 个人资产结构图（左图右数布局） */}
             <div>
-              <div className="flex items-center justify-between text-sm mb-2">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-2 h-2 rounded-full bg-white border-2 border-[#A80000]" />
-                  <span className="text-gray-600">资本权证</span>
-                  <span className="font-bold text-gray-900">{baseEquity.toFixed(4)}%</span>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-2 h-2 rounded-full bg-[#C5B358]" />
-                  <span className="text-gray-600">贡献加成</span>
-                  <span className="font-bold text-[#C5B358]">+{contribEquity.toFixed(4)}%</span>
-                </div>
-              </div>
-              {/* 双色进度条 */}
-              <div className="h-2 rounded-full overflow-hidden bg-gray-200 flex">
-                <div
-                  className="h-full bg-[#A80000] transition-all duration-700"
-                  style={{ width: `${Math.max(basePct, 2)}%` }}
-                />
-                <div
-                  className="h-full bg-[#C5B358] transition-all duration-700"
-                  style={{ width: `${Math.max(contribPct, contribEquity > 0 ? 2 : 0)}%` }}
-                />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-[10px] text-gray-500">
-                <span>资本权证</span>
-                <span>贡献加成</span>
-              </div>
-            </div>
-
-            {/* 2. 资产仪表盘（左右双列布局） */}
-            <div className="grid grid-cols-2 gap-4 relative">
-              {/* 左侧：我的股权估值 */}
-              <div>
-                <div className="text-xs text-gray-500 mb-1 flex items-center">
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  我的股权估值
-                </div>
-                <div className="flex items-baseline space-x-1">
-                  <span className="text-2xl font-bold" style={{ color: '#C5B358' }}>
-                    ¥{(equity.estimatedValue / 10000).toFixed(2)}
-                  </span>
-                  <span className="text-sm text-gray-600">万</span>
-                </div>
-                <div className="mt-1 text-xs text-gray-400">
-                  基于估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
-                </div>
-              </div>
-
-              {/* 中间分割线 */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-300" style={{ transform: 'translateX(-50%)' }}></div>
-
-              {/* 右侧：当前持股排名 */}
-              <div className="text-right">
-                <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
-                  <Trophy className="w-3 h-3 mr-1" />
-                  当前持股排名
-                </div>
-                {equity.ranking ? (
-                  <>
-                    <div className="text-2xl font-bold text-gray-900">No.{equity.ranking.rank}</div>
-                    <div className="mt-1 text-xs text-gray-400">
-                      共{equity.ranking.total}位股东
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-2xl font-bold text-gray-400">--</div>
-                )}
-              </div>
-            </div>
-
-            {/* 虚线分割 */}
-            <div className="border-t border-dashed border-gray-300"></div>
-
-            {/* 3. 实时股权资产图谱 */}
-            <div>
-              <div className="text-xs font-light text-gray-600 mb-3 flex items-center" style={{ letterSpacing: '0.5px' }}>
-                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="#C5B358" viewBox="0 0 24 24" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 300 }}>个人资产结构图</span>
-              </div>
               <EquityEnergyRing
                 parts={equityParts}
                 othersValue={othersValue}
@@ -229,10 +148,7 @@ export default function MyEquityRedWhite() {
               />
             </div>
 
-            {/* 虚线分割 */}
-            <div className="border-t border-dashed border-gray-300"></div>
-
-            {/* 4. 动态杠杆系数 */}
+            {/* 2. 动态杠杆系数 */}
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
