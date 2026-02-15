@@ -687,7 +687,7 @@ export default function MyEquity() {
         </div>
         {/* 第一层结束 */}
 
-        {/* 第二层：节点共享中心 */}
+        {/* 第二层：市场贡献中心 */}
         <div className="mt-6">
           <NodeAchievementBadge
             level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
@@ -701,6 +701,9 @@ export default function MyEquity() {
             contactFrequency={overviewStats?.dailyContactFrequency || 0}
             standardNodeCount={0}
             advancedNodeCount={0}
+            totalEquity={equity.totalEquity || 0}
+            investmentEquity={equity.investmentEquity || 0}
+            contribEquity={(equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)}
           />
         </div>
 
