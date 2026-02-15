@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { HelpCircle, Copy, Check } from 'lucide-react';
-
+import { Copy, Check, ChevronDown } from 'lucide-react';
 
 interface FAQItem {
   id: string;
@@ -9,12 +8,10 @@ interface FAQItem {
 }
 
 /**
- * 常见问题卡片 - 红白风格版本
- * 对标第一层和第二层的视觉风格
- * 使用原来的三个问题
+ * 常见问题 - 内容组件（无外壳）
+ * 用于嵌入 ShareholderSection 手风琴中
  */
 export default function FAQCard() {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
@@ -77,7 +74,6 @@ export default function FAQCard() {
         setCopiedAll(true);
         setTimeout(() => setCopiedAll(false), 2000);
       }
-      // 复制成功提示已通过按钮状态变化体现
     });
   };
 
@@ -89,133 +85,71 @@ export default function FAQCard() {
   };
 
   return (
-    <div className="space-y-0">
-      {/* 红色顶盖 */}
-      <div 
-        className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm opacity-90">常见问题</span>
-          <div className="flex items-center space-x-2">
-            <HelpCircle className="w-5 h-5 opacity-90" />
-            <svg
-              className={`w-5 h-5 opacity-90 transition-transform ${
-                isExpanded ? 'rotate-180' : ''
-              }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+    <div>
+      {/* 手风琴问答列表 */}
+      <div className="space-y-2 mb-4">
+        {faqs.map((faq, index) => (
+          <div key={faq.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            {/* 问题标题 */}
+            <button
+              onClick={() => setOpenIndex(openIndex === index ? null : index)}
+              className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-        
-        <div className="flex items-baseline space-x-2">
-          <span className="text-5xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {faqs.length}
-          </span>
-          <span className="text-2xl opacity-90">个</span>
-        </div>
-        
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs opacity-60">核心问题解答</span>
-          <span className="text-xs opacity-60 bg-white/10 px-2 py-0.5 rounded-full">
-            股权相关
-          </span>
-        </div>
+              <span className="text-sm font-semibold text-gray-900 text-left flex-1">
+                {index + 1}. {faq.question}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${
+                  openIndex === index ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
 
-        {/* 展开后的详细内容 */}
-        {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
-            {faqs.map((faq, index) => (
-              <div key={faq.id} className="bg-white/10 rounded-xl p-3">
-                <div className="text-sm font-semibold mb-2">{index + 1}. {faq.question}</div>
-                <div className="text-xs opacity-80 leading-relaxed whitespace-pre-line">
+            {/* 答案内容 */}
+            {openIndex === index && (
+              <div className="px-3 pb-3 border-t border-gray-100">
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mt-3 mb-3">
                   {faq.answer}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 白色/浅灰容器 */}
-      <div className="bg-gray-50 rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
-        {/* 手风琴列表 */}
-        <div className="space-y-3 mb-4">
-          {faqs.map((faq, index) => (
-            <div key={faq.id} className="border border-gray-200 rounded-xl overflow-hidden">
-              {/* 问题标题 */}
-              <button
-                onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="w-full p-4 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
-              >
-                <span className="text-sm font-semibold text-gray-900 text-left">
-                  {index + 1}. {faq.question}
-                </span>
-                <svg
-                  className={`w-5 h-5 text-gray-500 transition-transform flex-shrink-0 ml-2 ${
-                    openIndex === index ? 'rotate-180' : ''
-                  }`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                <button
+                  onClick={() => copyText(faq.answer, index)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* 答案内容 */}
-              {openIndex === index && (
-                <div className="p-4 bg-gray-50 border-t border-gray-200">
-                  <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-3">
-                    {faq.answer}
-                  </div>
-                  <button
-                    onClick={() => copyText(faq.answer, index)}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
-                  >
-                    {copiedIndex === index ? (
-                      <>
-                        <Check className="w-3 h-3" />
-                        <span>已复制</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>复制此答案</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* 虚线分割 */}
-        <div className="border-t border-dashed border-gray-300 my-4"></div>
-
-        {/* 底部总复制按钮 */}
-        <button
-          onClick={copyAllFAQs}
-          className="w-full py-3 bg-white border-2 border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center justify-center gap-2"
-        >
-          {copiedAll ? (
-            <>
-              <Check className="w-4 h-4 text-green-600" />
-              <span className="text-green-600">已复制全部</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-4 h-4" />
-              <span>复制全部问答</span>
-            </>
-          )}
-        </button>
+                  {copiedIndex === index ? (
+                    <>
+                      <Check className="w-3 h-3" />
+                      <span>已复制</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>复制此答案</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
+
+      {/* 底部总复制按钮 */}
+      <button
+        onClick={copyAllFAQs}
+        className="w-full py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2"
+      >
+        {copiedAll ? (
+          <>
+            <Check className="w-4 h-4 text-green-600" />
+            <span className="text-green-600">已复制全部</span>
+          </>
+        ) : (
+          <>
+            <Copy className="w-4 h-4" />
+            <span>复制全部问答</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }

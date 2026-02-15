@@ -16,6 +16,7 @@ import BlockchainProof from "@/components/BlockchainProof";
 import InvestorFAQ from "@/components/InvestorFAQ";
 import FAQCard from "@/components/FAQCard";
 import NodeAchievementBadge from "@/components/NodeAchievementBadge";
+import ShareholderSection from "@/components/ShareholderSection";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -665,11 +666,11 @@ export default function MyEquity() {
           />
         </div>
 
-        {/* 第三层：股东保障中心 */}
-        <div className="mt-6">
-          {/* 红色标题区 */}
-          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-2xl mb-4">
-            <div className="flex items-center justify-between mb-2">
+        {/* 第三层：股东保障中心 - 统一红帽子+灰色底座 */}
+        <div className="mt-6 space-y-0">
+          {/* 红色顶盖（红帽子） */}
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none">
+            <div className="flex items-center justify-between mb-3">
               <span className="text-sm opacity-90">股东保障中心</span>
               <svg className="w-5 h-5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -679,35 +680,75 @@ export default function MyEquity() {
             <div className="mt-1">
               <span className="text-xs opacity-60">为660位创始股东构建信任基石</span>
             </div>
+            {/* 三项概览 */}
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="bg-white/10 rounded-xl p-2.5 text-center">
+                <div className="text-2xl font-bold">100%</div>
+                <div className="text-xs opacity-60 mt-0.5">股权分配</div>
+              </div>
+              <div className="bg-white/10 rounded-xl p-2.5 text-center">
+                <div className="text-2xl font-bold">0/1</div>
+                <div className="text-xs opacity-60 mt-0.5">协议签署</div>
+              </div>
+              <div className="bg-white/10 rounded-xl p-2.5 text-center">
+                <div className="text-2xl font-bold">3</div>
+                <div className="text-xs opacity-60 mt-0.5">核心问答</div>
+              </div>
+            </div>
           </div>
 
-          {/* 三个子模块直接排列，每个都自带红色顶盖+灰色底座 */}
-          <div className="space-y-4">
-            {/* 模块一：公司股权分配 */}
-            <CompanyEquityStructureCard />
+          {/* 灰色底座 */}
+          <div className="bg-gray-50 rounded-t-none rounded-b-3xl p-5">
+            {/* 模块一：公司股权分配 - 内嵌手风琴 */}
+            <ShareholderSection
+              title="公司股权分配"
+              subtitle="4个股权池 · 总股本100%"
+              icon="shield"
+              defaultOpen={false}
+            >
+              <CompanyEquityStructureCard />
+            </ShareholderSection>
 
-            {/* 模块二：在线签署 */}
-            <LegalAgreementCard
-              agreements={[
-                {
-                  id: 'equity-investment-agreement',
-                  title: '电子股权投资协议',
-                  description: '明确股东权益、义务及退出机制',
-                  status: 'unsigned',
-                  hashValue: '0x7a2d8f3e9c1b5a4d6f8e2c9a1b3d5e7f9a2c4e6d8f1a3b5c7d9e1f3a5b7c9d1e3f',
-                  blockchainTxId: 'BH9872F3A...A82',
-                },
-              ]}
-              onSign={(id) => {
-                toast.info('正在跳转到签署页面...');
-              }}
-              onDownload={(id) => {
-                toast.success('协议下载中...');
-              }}
-            />
+            <div className="border-t border-dashed border-gray-300 my-4"></div>
 
-            {/* 模块三：常见问题 */}
-            <FAQCard />
+            {/* 模块二：在线签署 - 内嵌手风琴 */}
+            <ShareholderSection
+              title="在线签署"
+              subtitle="0/1 份协议已签署"
+              icon="file"
+              defaultOpen={false}
+            >
+              <LegalAgreementCard
+                agreements={[
+                  {
+                    id: 'equity-investment-agreement',
+                    title: '电子股权投资协议',
+                    description: '明确股东权益、义务及退出机制',
+                    status: 'unsigned',
+                    hashValue: '0x7a2d8f3e9c1b5a4d6f8e2c9a1b3d5e7f9a2c4e6d8f1a3b5c7d9e1f3a5b7c9d1e3f',
+                    blockchainTxId: 'BH9872F3A...A82',
+                  },
+                ]}
+                onSign={(id) => {
+                  toast.info('正在跳转到签署页面...');
+                }}
+                onDownload={(id) => {
+                  toast.success('协议下载中...');
+                }}
+              />
+            </ShareholderSection>
+
+            <div className="border-t border-dashed border-gray-300 my-4"></div>
+
+            {/* 模块三：常见问题 - 内嵌手风琴 */}
+            <ShareholderSection
+              title="常见问题"
+              subtitle="3个核心问题解答"
+              icon="help"
+              defaultOpen={false}
+            >
+              <FAQCard />
+            </ShareholderSection>
           </div>
         </div>
 
