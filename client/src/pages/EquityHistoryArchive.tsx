@@ -213,6 +213,21 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; onClick: () => void }> 
 const EquityHistoryArchive: React.FC = () => {
   const [, setLocation] = useLocation();
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
+  const [displayCount, setDisplayCount] = useState(10); // 每次显示10条
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // 加载更多
+  const handleLoadMore = () => {
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setDisplayCount(prev => prev + 10);
+      setIsLoadingMore(false);
+    }, 500);
+  };
+
+  // 显示的报告列表
+  const displayedReports = mockReports.slice(0, displayCount);
+  const hasMore = displayCount < mockReports.length;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -247,22 +262,25 @@ const EquityHistoryArchive: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <div className="text-white/70 text-xs mb-1">累计确权</div>
-              <div className="text-white text-2xl font-bold">
-                {mockOverview.totalWeeks} <span className="text-base font-normal">周</span>
-              </div>
+          {/* 第一行：累计确权 */}
+          <div className="mb-3">
+            <div className="text-white/70 text-xs mb-1">累计确权</div>
+            <div className="text-white text-3xl font-bold">
+              {mockOverview.totalWeeks} <span className="text-lg font-normal">周</span>
             </div>
+          </div>
+
+          {/* 第二行：历史最高加成 + 总增长权重 */}
+          <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="text-white/70 text-xs mb-1">历史最高加成</div>
-              <div className="text-white text-2xl font-bold">
+              <div className="text-white text-xl font-bold">
                 +{mockOverview.highestWeightGain.toFixed(4)}%
               </div>
             </div>
             <div>
               <div className="text-white/70 text-xs mb-1">总增长权重</div>
-              <div className="text-[#C5B358] text-2xl font-bold">
+              <div className="text-[#C5B358] text-xl font-bold">
                 +{mockOverview.totalWeightGain.toFixed(4)}%
               </div>
             </div>
@@ -287,15 +305,89 @@ const EquityHistoryArchive: React.FC = () => {
         />
       </div>
 
+      {/* 积分统计区域 */}
+      <div className="bg-white mx-4 mb-4 rounded-xl p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold text-gray-900">积分统计</div>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-1">累计积分</div>
+            <div className="text-2xl font-bold text-[#C5B358]">
+              {mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.pointsGain, 0)}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-1">本月积分</div>
+            <div className="text-2xl font-bold text-gray-900">
+              {mockReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.pointsGain, 0)}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-1">平均周积分</div>
+            <div className="text-2xl font-bold text-gray-900">
+              {Math.round(mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.pointsGain, 0) / mockReports.filter(r => r.status === 'confirmed').length)}
+            </div>
+            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 筛选功能 */}
+      <div className="px-4 mb-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <button className="px-4 py-2 rounded-lg bg-[#A80000] text-white text-sm font-medium whitespace-nowrap">
+            全部
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
+            2026年
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
+            Q1
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
+            Q2
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
+            已确权
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
+            未确权
+          </button>
+        </div>
+      </div>
+
       {/* 主体：确权周报卡片流 */}
       <div className="px-4 pb-6 space-y-4">
-        {mockReports.map((report) => (
+        {displayedReports.map((report) => (
           <WeeklyReportCard
             key={report.weekNumber}
             report={report}
             onClick={() => setSelectedReport(report)}
           />
         ))}
+
+        {/* 加载更多按钮 */}
+        {hasMore && (
+          <div className="flex justify-center pt-4">
+            <button
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="px-6 py-3 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoadingMore ? '加载中...' : `加载更多（还有 ${mockReports.length - displayCount} 周）`}
+            </button>
+          </div>
+        )}
+
+        {/* 已加载全部提示 */}
+        {!hasMore && mockReports.length > 10 && (
+          <div className="text-center text-sm text-gray-400 pt-4">
+            已加载全部 {mockReports.length} 周的确权记录
+          </div>
+        )}
       </div>
 
       {/* 详情弹窗 */}
