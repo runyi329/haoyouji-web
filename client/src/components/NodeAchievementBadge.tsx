@@ -24,6 +24,9 @@ interface NodeAchievementBadgeProps {
   contactFrequency?: number;
   standardNodeCount?: number;
   advancedNodeCount?: number;
+  totalEquity?: number;        // 总权重（与第一层相同）
+  investmentEquity?: number;   // 基础权证（资本部分）
+  contribEquity?: number;      // 贡献加成（市场贡献部分）
 }
 
 // ============================================================
@@ -96,6 +99,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   contactFrequency = 0,
   standardNodeCount = 0,
   advancedNodeCount = 0,
+  totalEquity = 0,
+  investmentEquity = 0,
+  contribEquity = 0,
 }) => {
   const [displayedBonus, setDisplayedBonus] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -231,7 +237,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
               <span className={`text-sm ${level === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
-                节点贡献激励
+                市场贡献激励
               </span>
               <div className="flex items-center space-x-2">
                 <button
@@ -247,13 +253,12 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               </div>
             </div>
 
-            {/* 核心数值 */}
+            {/* 核心数值：与第一层相同的总权重 */}
             <div className="flex items-baseline space-x-2">
-              <span className={`text-5xl font-bold ${getBonusColor()}`} style={{
+              <span className={`text-5xl font-bold ${level === 'none' ? 'text-gray-800' : 'text-white'}`} style={{
                 fontVariantNumeric: 'tabular-nums',
-                ...(level === 'super' ? { animation: 'breathePulse 3s ease-in-out infinite' } : {}),
               }}>
-                {bonusValue}
+                {totalEquity.toFixed(4)}
               </span>
               <span className={`text-2xl ${level === 'none' ? 'text-gray-400' : 'opacity-90'}`}>%</span>
             </div>
@@ -261,7 +266,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             {/* 副标题 */}
             <div className="mt-2 flex items-center justify-between">
               <span className={`text-xs ${level === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
-                {level === 'none' ? '待激活身份：准合伙人' : isQualified ? '节点共享加成收益' : '预计激活后收益'}
+                当前综合权重
               </span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${
                 level === 'none' ? 'bg-gray-300 text-gray-600'
@@ -273,7 +278,48 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               </span>
             </div>
 
-            {/* 未达成状态：三段式进度条（简化版） */}
+            {/* === 权重拆解区域（始终可见，与第一层对称） === */}
+            {(() => {
+              const baseEq = investmentEquity || 0;
+              const contribEq = contribEquity || 0;
+              const totalEq = baseEq + contribEq;
+              const basePct = totalEq > 0 ? (baseEq / totalEq) * 100 : 100;
+              const contribPct = totalEq > 0 ? (contribEq / totalEq) * 100 : 0;
+              return (
+                <div className="mt-4 pt-3 border-t border-white/15">
+                  {/* 拆解数值 */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-1.5">
+                      <div className="w-2 h-2 rounded-full bg-white/80" />
+                      <span className="text-xs opacity-70">基础权证</span>
+                      <span className="text-sm font-bold">{baseEq.toFixed(4)}%</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                      <span className="text-xs opacity-70">贡献加成</span>
+                      <span className="text-sm font-bold text-yellow-300">+{contribEq.toFixed(4)}%</span>
+                    </div>
+                  </div>
+                  {/* 横向比例条 */}
+                  <div className="h-2 rounded-full overflow-hidden bg-white/10 flex">
+                    <div
+                      className="h-full bg-white/70 transition-all duration-700"
+                      style={{ width: `${Math.max(basePct, 2)}%` }}
+                    />
+                    <div
+                      className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 transition-all duration-700"
+                      style={{ width: `${Math.max(contribPct, contribEq > 0 ? 2 : 0)}%` }}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[10px] opacity-50">
+                    <span>资本底盘 · 静态确权</span>
+                    <span>市场贡献 · 动态增长</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 未达成状态：激活条件预览 */}
             {level === 'none' && (
               <div className="mt-4 pt-4 border-t border-gray-300/50 space-y-2">
                 <div className="text-xs text-gray-500 font-semibold">激活条件预览</div>
@@ -292,7 +338,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                   </div>
                 </div>
                 <div className="text-xs text-gray-400 italic">
-                  补齐资料即可激活 +{(estimatedEquityBonus * 100).toFixed(4)}% 收益
+                  补齐资料即可激活贡献加成收益
                 </div>
               </div>
             )}
