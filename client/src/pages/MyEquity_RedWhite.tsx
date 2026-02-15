@@ -254,13 +254,16 @@ export default function MyEquityRedWhite() {
         {/* ============ 第二层：贡献加成中心（红白双引擎） ============ */}
         <div id="market-contribution-section">
           <DualEngineAccelerator
+            // 红色区域相关
+            nodeLevel={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
+            contribEquity={equity.contribEquity || 0}
+            
             // 股权加成相关
             equityMultiplier={1.2}
             investmentEquity={equity.investmentEquity || 0}
             
             // 身份加成相关
             identityMultiplier={equity.details?.inviteCount >= 1 ? 1.0 : 0.0}
-            nodeLevel={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
             
             // 已达成资产（向下兼容统计）
             standardNodes={equity.details?.inviteCount || 0}

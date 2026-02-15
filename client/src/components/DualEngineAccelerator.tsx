@@ -1,14 +1,17 @@
-import { HelpCircle, TrendingUp, Shield, Award, ChevronRight } from "lucide-react";
+import { HelpCircle, TrendingUp, Shield, Award, ChevronRight, Clock } from "lucide-react";
 import { useState } from "react";
 
 interface DualEngineAcceleratorProps {
+  // 红色区域相关
+  nodeLevel: 'none' | 'standard' | 'advanced' | 'super'; // 当前节点等级
+  contribEquity: number; // 市场权重（贡献加成）
+  
   // 股权加成相关
   equityMultiplier: number; // 股权加成倍数，如 1.2
   investmentEquity: number; // 投资股权
   
   // 身份加成相关
   identityMultiplier: number; // 身份加成倍数，如 1.0
-  nodeLevel: 'none' | 'standard' | 'advanced' | 'super'; // 当前节点等级
   
   // 已达成资产（向下兼容统计）
   standardNodes: number; // 标准节点数（含高级/超级）
@@ -28,22 +31,93 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
   const [showAchievedHelp, setShowAchievedHelp] = useState(false);
   const [showCultivatingHelp, setShowCultivatingHelp] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   
   // 计算总收益倍数
   const totalMultiplier = props.equityMultiplier + props.identityMultiplier;
   
+  // 节点配置
+  const nodeConfig: Record<string, { name: string; badge: string }> = {
+    none: { name: '准合伙人', badge: 'L0' },
+    standard: { name: '标准节点', badge: 'L1' },
+    advanced: { name: '高级节点', badge: 'L2' },
+    super: { name: '超级节点', badge: 'L3' },
+  };
+  const config = nodeConfig[props.nodeLevel];
+  
+  // 顶部卡片样式
+  const getTopCardStyle = () => {
+    switch (props.nodeLevel) {
+      case 'none': return 'bg-[#F5F5F5] text-gray-600';
+      case 'standard': return 'bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white';
+      case 'advanced': return 'bg-gradient-to-br from-[#0a1628] to-[#1a2744] text-white';
+      case 'super': return 'bg-gradient-to-br from-[#1a1a2e] via-[#2d2d44] to-[#1a1a2e] text-white';
+    }
+  };
+  
+  // 计算倒计时（到本周日24:00）
+  const getCountdown = () => {
+    const now = new Date();
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() + (7 - now.getDay()));
+    sunday.setHours(23, 59, 59, 999);
+    const diff = sunday.getTime() - now.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    return `${days}天${hours}小时`;
+  };
+  
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-      {/* 顶部：红色标题栏 */}
-      <div className="bg-gradient-to-r from-[#A80000] to-[#8a0000] text-white px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">贡献加成中心</span>
-          <TrendingUp className="w-4 h-4 opacity-90" />
+    <div className="space-y-0">
+      {/* ====== 红色区域（汇总） ====== */}
+      <div className={`relative overflow-hidden p-4 rounded-t-2xl ${getTopCardStyle()}`}>
+        {/* 标题行 */}
+        <div className="flex items-center justify-between mb-3">
+          <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
+            市场贡献激励
+          </span>
+          <div className="flex items-center space-x-2">
+            {/* 倒计时 */}
+            <span className={`text-[10px] font-mono ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} bg-white/10 px-2 py-0.5 rounded flex items-center space-x-1`}>
+              <Clock className="w-3 h-3" style={{ color: '#C5B358' }} />
+              <span>距离资产定格还剩 {getCountdown()}</span>
+            </span>
+            {/* 问号按钮 */}
+            <button
+              onClick={() => setShowRules(true)}
+              className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            >
+              <span className="text-xs">?</span>
+            </button>
+          </div>
+        </div>
+        {/* 左右布局：我的身份 | 市场权重 */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* 左侧：我的身份 */}
+          <div>
+            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-1`}>我的身份</div>
+            <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {config.name}
+            </div>
+            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} mt-0.5`}>
+              由个人人脉贡献决定
+            </div>
+          </div>
+          {/* 右侧：市场权重 */}
+          <div className="text-right">
+            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-1`}>市场权重</div>
+            <div className="text-2xl font-bold text-[#C5B358]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              +{(props.contribEquity).toFixed(4)}%
+            </div>
+            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} mt-0.5`}>
+              由共享人脉贡献决定
+            </div>
+          </div>
         </div>
       </div>
       
-      {/* 白色内容区 */}
-      <div className="p-4 space-y-4">
+      {/* ====== 白色区域（明细） ====== */}
+      <div className="bg-[#F9F9F9] rounded-b-3xl p-4 space-y-5">
         
         {/* ============ 一、收益倍数计算器 ============ */}
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
