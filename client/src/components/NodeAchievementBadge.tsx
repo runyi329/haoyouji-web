@@ -31,6 +31,21 @@ interface NodeAchievementBadgeProps {
   referralNetworkEquity?: number; // 人脉网络股权
   inviteCount?: number;        // 邀请人数
   referralNetworkCount?: number; // 人脉网络人数
+  dynamicLeverage?: {            // 动态杠杆数据
+    leverage: number;
+    seatNumber: number;
+    totalSeats: number;
+    currentRound: {
+      name: string;
+      label: string;
+      maxLeverage: number;
+      minLeverage: number;
+      progress: number;
+    };
+    nextRound: { name: string; label: string; maxLeverage: number } | null;
+    nextRoundLeverage: number;
+    hesitationCost: number;
+  } | null;
 }
 
 // ============================================================
@@ -110,6 +125,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   referralNetworkEquity = 0,
   inviteCount = 0,
   referralNetworkCount = 0,
+  dynamicLeverage = null,
 }) => {
   const [displayedBonus, setDisplayedBonus] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -407,8 +423,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {/* === 2x2 经营矩阵 === */}
           {(() => {
             // 等级系数
-            const levelMultiplier = level === 'super' ? 5.0 : level === 'advanced' ? 2.0 : level === 'standard' ? 1.0 : 0;
-            const levelLabel = level === 'super' ? '5.0x' : level === 'advanced' ? '2.0x' : level === 'standard' ? '1.0x' : '0x';
+            // 动态杠杆系数（优先使用动态值，回退到等级固定值）
+            const levelMultiplier = dynamicLeverage ? dynamicLeverage.leverage : (level === 'super' ? 5.0 : level === 'advanced' ? 2.0 : level === 'standard' ? 1.0 : 0);
+            const levelLabel = dynamicLeverage ? `${dynamicLeverage.leverage.toFixed(4)}x` : (level === 'super' ? '5.0x' : level === 'advanced' ? '2.0x' : level === 'standard' ? '1.0x' : '0x');
             
             // 四维活跃度计算（A系数）
             const targetTier = level === 'none' ? TIER_RULES.standard 
@@ -507,20 +524,20 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     <div className="text-[9px] text-gray-400 mt-1">决定每周权证点入账速度</div>
                   </div>
 
-                  {/* 右下 D：组织溢价 */}
+                  {/* 右下 D：组织溢价（动态杠杆） */}
                   <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-bold text-gray-800">组织溢价</span>
                       <span className="text-[10px] font-medium text-blue-600">🚀 {levelLabel}</span>
                     </div>
-                    <div className={`text-2xl font-bold ${level === 'advanced' ? 'text-blue-600' : level === 'super' ? 'text-amber-600' : level === 'standard' ? 'text-[#A80000]' : 'text-gray-400'}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {config.name}
+                    <div className="text-2xl font-bold text-[#A80000] font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {dynamicLeverage ? `${dynamicLeverage.leverage.toFixed(4)}x` : config.name}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-1">
-                      节点等级: {config.badge}
+                      {dynamicLeverage ? `No. ${String(dynamicLeverage.seatNumber).padStart(4, '0')} · ${config.name}` : `节点等级: ${config.badge}`}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[#A80000] to-yellow-500 transition-all duration-500" style={{ width: `${level === 'super' ? 100 : level === 'advanced' ? 66 : level === 'standard' ? 33 : 10}%` }} />
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#A80000] to-yellow-500 transition-all duration-500" style={{ width: `${dynamicLeverage ? Math.min(100, (dynamicLeverage.leverage / 2.0) * 100) : (level === 'super' ? 100 : level === 'advanced' ? 66 : level === 'standard' ? 33 : 10)}%` }} />
                     </div>
                     <div className="text-[9px] text-gray-400 mt-1">放大所有产出的核心杠杆</div>
                   </div>

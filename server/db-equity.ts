@@ -249,6 +249,87 @@ export async function deleteInvestment(id: number) {
 }
 
 /**
+ * 获取用户的席位编号（按首笔投资时间排序）
+ * 每个用户只取第一笔投资的时间来排序
+ */
+export async function getUserSeatNumber(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 获取每个用户的首笔投资时间，按时间排序
+  const firstInvestments = await db.execute(sql`
+    SELECT user_id, MIN(investment_date) as first_investment_date
+    FROM equity_investments
+    GROUP BY user_id
+    ORDER BY first_investment_date ASC
+  `);
+  
+  const rows = firstInvestments.rows as { user_id: number; first_investment_date: string }[];
+  const seatIndex = rows.findIndex(r => Number(r.user_id) === userId);
+  
+  if (seatIndex === -1) {
+    return { seatNumber: 0, totalSeats: rows.length };
+  }
+  
+  return {
+    seatNumber: seatIndex + 1, // 1-based
+    totalSeats: rows.length,
+  };
+}
+
+/**
+ * 计算动态杠杆系数
+ * 基于席位编号，越早进入杠杆越高
+ * 波次管理：T1创始波次 2.0x→1.8x，T2加速波次 1.8x→1.5x，T3标准波次 1.5x→1.2x
+ * 每位微减 0.0001
+ */
+export function calculateDynamicLeverage(seatNumber: number, totalSeats: number) {
+  // 波次配置（后续可改为从数据库读取）
+  const rounds = [
+    { name: 'T1 创始波次', maxLeverage: 2.0, minLeverage: 1.8, label: '创始轮' },
+    { name: 'T2 加速波次', maxLeverage: 1.8, minLeverage: 1.5, label: '加速轮' },
+    { name: 'T3 标准波次', maxLeverage: 1.5, minLeverage: 1.2, label: '标准轮' },
+  ];
+  
+  // 当前波次进度（模拟数据：85%，后续可从数据库读取）
+  const currentRoundIndex = 0; // T1创始波次
+  const currentRoundProgress = 0.85; // 85%已消耗
+  
+  const currentRound = rounds[currentRoundIndex];
+  const nextRound = rounds[currentRoundIndex + 1];
+  
+  // 基于席位编号计算精确杠杆
+  // 在当前波次范围内线性递减：每位减少 0.0001
+  const decayPerSeat = 0.0001;
+  const baseLeverage = currentRound.maxLeverage - (seatNumber - 1) * decayPerSeat;
+  // 确保不低于当前波次最小值
+  const leverage = Math.max(currentRound.minLeverage, baseLeverage);
+  
+  // 犹豫成本：下一波次的杠杆预估
+  const nextRoundLeverage = nextRound ? nextRound.maxLeverage : 1.0;
+  
+  return {
+    leverage: Number(leverage.toFixed(4)),
+    seatNumber,
+    totalSeats,
+    currentRound: {
+      name: currentRound.name,
+      label: currentRound.label,
+      maxLeverage: currentRound.maxLeverage,
+      minLeverage: currentRound.minLeverage,
+      progress: currentRoundProgress,
+    },
+    nextRound: nextRound ? {
+      name: nextRound.name,
+      label: nextRound.label,
+      maxLeverage: nextRound.maxLeverage,
+    } : null,
+    nextRoundLeverage,
+    hesitationCost: Number((leverage - nextRoundLeverage).toFixed(4)),
+  };
+}
+
+/**
  * 计算用户的股权信息
  */
 export async function calculateUserEquity(userId: number) {
