@@ -52,21 +52,21 @@ export default function MyEquityRedWhite() {
       label: '投资股份',
       value: equity.investmentEquity || 0,
       color: '#A80000',
-      upgradeLabel: '原始核心权证',
+      upgradeLabel: '资本权证',
       description: '稳健底仓，由投资转化'
     },
     {
       label: '邀请贡献',
       value: equity.inviteEquity || 0,
       color: '#FF6B6B',
-      upgradeLabel: '渠道裂变加权',
+      upgradeLabel: '贡献加成（邀请）',
       description: `已邀请 ${equity.details?.inviteCount || 0} 人`
     },
     {
       label: '人脉贡献',
       value: equity.referralNetworkEquity || 0,
       color: '#F59E0B',
-      upgradeLabel: '社会化杠杆溢价',
+      upgradeLabel: '贡献加成（人脉）',
       description: `人脉网络 ${equity.details?.referralNetworkCount || 0} 人`
     },
   ];
@@ -88,7 +88,7 @@ export default function MyEquityRedWhite() {
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm opacity-90 font-medium">资本权证资产</span>
+              <span className="text-sm opacity-90 font-medium">综合权重</span>
               <div className="flex items-center space-x-2">
                 {equity.dynamicLeverage && (
                   <span className="text-[10px] font-mono tracking-wider opacity-60 bg-white/10 px-2 py-0.5 rounded">
@@ -107,7 +107,7 @@ export default function MyEquityRedWhite() {
                   <span className="text-5xl font-bold">{equity.totalEquity.toFixed(4)}</span>
                   <span className="text-2xl opacity-90">%</span>
                 </div>
-                <div className="mt-1 text-xs opacity-60">当前综合权重</div>
+                <div className="mt-1 text-xs opacity-60">综合权重</div>
               </div>
 
               {/* 右侧：估值 + 排名 */}
@@ -144,7 +144,7 @@ export default function MyEquityRedWhite() {
               <div className="flex items-center justify-between text-sm mb-2">
                 <div className="flex items-center space-x-1.5">
                   <div className="w-2 h-2 rounded-full bg-white border-2 border-[#A80000]" />
-                  <span className="text-gray-600">基础权证</span>
+                  <span className="text-gray-600">资本权证</span>
                   <span className="font-bold text-gray-900">{baseEquity.toFixed(4)}%</span>
                 </div>
                 <div className="flex items-center space-x-1.5">
@@ -165,8 +165,8 @@ export default function MyEquityRedWhite() {
                 />
               </div>
               <div className="mt-1.5 flex items-center justify-between text-[10px] text-gray-500">
-                <span>资本底盘 · 静态确权</span>
-                <span>市场贡献 · 动态增长</span>
+                <span>资本权证</span>
+                <span>贡献加成</span>
               </div>
             </div>
 
@@ -216,11 +216,11 @@ export default function MyEquityRedWhite() {
 
             {/* 3. 实时股权资产图谱 */}
             <div>
-              <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <div className="text-xs font-light text-gray-600 mb-3 flex items-center" style={{ letterSpacing: '0.5px' }}>
+                <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="#C5B358" viewBox="0 0 24 24" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                实时股权资产图谱
+                <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 300 }}>个人资产结构图</span>
               </div>
               <EquityEnergyRing
                 parts={equityParts}
@@ -308,7 +308,7 @@ export default function MyEquityRedWhite() {
             {/* 5. 资本底仓（静态确权） */}
             <div className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold text-gray-700">资本底仓（静态确权）</div>
+                <div className="text-sm font-semibold text-gray-700">资本权证</div>
                 <div className="text-xs text-gray-500">我的投资</div>
               </div>
               <div className="flex items-baseline space-x-1">
@@ -318,7 +318,7 @@ export default function MyEquityRedWhite() {
                 <span className="text-sm text-gray-600">元</span>
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                转化为 {(equity.investmentEquity || 0).toFixed(4)}% 基础权证
+                转化为 {(equity.investmentEquity || 0).toFixed(4)}% 资本权证
               </div>
             </div>
 
@@ -335,7 +335,7 @@ export default function MyEquityRedWhite() {
         </div>
         {/* 第一层结束 */}
 
-        {/* ============ 第二层：市场贡献中心（红白双引擎） ============ */}
+        {/* ============ 第二层：贡献加成中心（红白双引擎） ============ */}
         <div id="market-contribution-section">
           <NodeAchievementBadgeRedWhite
             level={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
