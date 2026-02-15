@@ -155,7 +155,7 @@ export const equityRouter = router({
       return await dbEquity.getEquityRulesDetail();
     }),
 
-  // 获取增强的股权信息（包含估值、排名等）
+  // 获取增强的股权信息（包含估值、排名、席位编号、动态杠杆等）
   getMyEquityEnhanced: protectedProcedure
     .query(async ({ ctx }) => {
       const equity = await dbEquity.calculateUserEquity(ctx.user.id);
@@ -165,12 +165,20 @@ export const equityRouter = router({
       const ranking = await dbEquity.getShareholderRanking(ctx.user.id);
       const poolStatus = await dbEquity.getPoolStatus();
       
+      // 获取席位编号和动态杠杆
+      const seat = await dbEquity.getUserSeatNumber(ctx.user.id);
+      const dynamicLeverage = seat.seatNumber > 0 
+        ? dbEquity.calculateDynamicLeverage(seat.seatNumber, seat.totalSeats)
+        : null;
+      
       return {
         ...equity,
         estimatedValue,
         companyValuation,
         ranking,
         poolStatus,
+        seat,
+        dynamicLeverage,
       };
     }),
 

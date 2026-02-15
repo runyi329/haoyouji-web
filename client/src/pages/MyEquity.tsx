@@ -456,6 +456,14 @@ export default function MyEquity() {
           className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-5 rounded-t-2xl rounded-b-none shadow-none border-none cursor-pointer transition-all"
           onClick={() => setIsEquityExpanded(!isEquityExpanded)}
         >
+          {/* 席位编号 - 右上角 */}
+          {equity.dynamicLeverage && (
+            <div className="flex justify-end mb-1">
+              <span className="text-[10px] font-mono tracking-wider opacity-50 bg-white/10 px-2 py-0.5 rounded">
+                Equity No. {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm opacity-90">资本权证资产</span>
             <div className="flex items-center space-x-2">
@@ -527,22 +535,76 @@ export default function MyEquity() {
           {/* 展开后的股权透视内容 */}
           {isEquityExpanded && (
             <div className="mt-4 pt-4 border-t border-white/20 space-y-3">
-              {/* 杠杆系数区域 */}
-              <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-3 border border-yellow-400/30">
-                <div className="flex items-center justify-between mb-2">
+              {/* 动态杠杆系数区域 */}
+              <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-xl p-4 border border-yellow-400/30">
+                {/* 杠杆主数值 + 席位信息 */}
+                <div className="flex items-center justify-between mb-3">
                   <div>
-                    <div className="text-xs opacity-70 mb-1">身份杠杆系数 (K)</div>
-                    <div className="text-3xl font-bold text-yellow-300">
-                      {equity.ranking ? (1 + (equity.ranking.total - equity.ranking.rank) * 0.01).toFixed(2) : '1.00'}x
+                    <div className="text-xs opacity-70 mb-1">资本杠杆系数</div>
+                    <div className="text-3xl font-bold text-yellow-300 font-mono">
+                      {equity.dynamicLeverage ? `${equity.dynamicLeverage.leverage.toFixed(4)}x` : '1.0000x'}
                     </div>
+                    <div className="text-[10px] opacity-50 mt-0.5">已锁定 · 永久有效</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs opacity-70">第{equity.ranking?.rank || 0}位进入</div>
+                    <div className="text-xs opacity-70">No. {equity.dynamicLeverage ? String(equity.dynamicLeverage.seatNumber).padStart(4, '0') : '0000'}</div>
                     <div className="text-xs opacity-60 mt-1">
                       {equity.details?.userInvestment ? `${(equity.details.userInvestment / 10000).toFixed(0)}万级别` : '未投资'}
                     </div>
                   </div>
                 </div>
+
+                {/* 红利余量进度条 */}
+                {equity.dynamicLeverage?.currentRound && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] opacity-60">
+                        {equity.dynamicLeverage.currentRound.name}（{equity.dynamicLeverage.currentRound.maxLeverage}x → {equity.dynamicLeverage.currentRound.minLeverage}x）
+                      </span>
+                      <span className="text-[10px] text-yellow-300 font-bold">
+                        剩余 {Math.round((1 - equity.dynamicLeverage.currentRound.progress) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden bg-white/10">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{
+                          width: `${equity.dynamicLeverage.currentRound.progress * 100}%`,
+                          background: 'linear-gradient(90deg, #F59E0B, #EF4444)',
+                        }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-yellow-200/70 mt-1">
+                      本轮高倍红利席位即将收官
+                      {equity.dynamicLeverage.nextRound && (
+                        <span>，下一轮杠杆将下调至 {equity.dynamicLeverage.nextRound.maxLeverage}x</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 犹豫成本计费器 */}
+                {equity.dynamicLeverage && equity.details?.userInvestment ? (
+                  <div className="mt-3 pt-3 border-t border-yellow-400/20">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[10px] opacity-50 mb-0.5">当前价值</div>
+                        <div className="text-sm font-bold text-green-400">
+                          {(equity.details.userInvestment / 10000).toFixed(0)}万 → {((equity.details.userInvestment * equity.dynamicLeverage.leverage) / 10000).toFixed(2)}万
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] opacity-50 mb-0.5">犹豫成本</div>
+                        <div className="text-sm font-bold text-red-400">
+                          -{((equity.details.userInvestment * equity.dynamicLeverage.hesitationCost) / 10000).toFixed(2)}万
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-red-300/60 mt-1 text-right">
+                      若错过本轮，资产将缩水 {(equity.dynamicLeverage.hesitationCost * 10000).toFixed(0)} 权证点
+                    </div>
+                  </div>
+                ) : null}
               </div>
               
               {/* 资本底仓（静态） */}
@@ -680,6 +742,7 @@ export default function MyEquity() {
             referralNetworkEquity={equity.referralNetworkEquity || 0}
             inviteCount={equity.details?.inviteCount || 0}
             referralNetworkCount={equity.details?.referralNetworkCount || 0}
+            dynamicLeverage={equity.dynamicLeverage || null}
           />
         </div>
 
