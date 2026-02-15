@@ -225,7 +225,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-600">本周个人贡献分</span>
-                  <span className="text-sm font-bold text-[#A80000]">+100 点</span>
+                  <span className="text-sm font-bold text-blue-600">+100 点</span>
                 </div>
               </div>
             </div>
@@ -242,19 +242,36 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 已培育标准节点 */}
                 <div className="flex items-center justify-between py-2 border-b border-gray-200">
                   <span className="text-xs text-gray-600">已培育标准节点</span>
-                  <span className="text-sm font-bold text-gray-900">{standardNodeCount} 名</span>
+                  {standardNodeCount > 0 ? (
+                    <span className="text-sm font-bold text-gray-900">{standardNodeCount} 名</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-400">0 名</span>
+                      <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">[去培育]</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 已培育高级节点 */}
                 <div className="flex items-center justify-between py-2 border-b border-gray-200">
                   <span className="text-xs text-gray-600">已培育高级节点</span>
-                  <span className="text-sm font-bold text-gray-900">{advancedNodeCount} 名</span>
+                  {advancedNodeCount > 0 ? (
+                    <span className="text-sm font-bold text-gray-900">{advancedNodeCount} 名</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-400">0 名</span>
+                      <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">[去培育]</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 已培育超级节点 */}
                 <div className="flex items-center justify-between py-2 border-b border-gray-200">
                   <span className="text-xs text-gray-600">已培育超级节点</span>
-                  <span className="text-sm font-bold text-gray-900">0 名</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400">0 名</span>
+                    <button className="text-[10px] text-gray-400 hover:text-[#A80000] transition-colors px-2 py-0.5 border border-gray-300 rounded">[去培育]</button>
+                  </div>
                 </div>
               </div>
 
@@ -262,25 +279,48 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-600">共享加成权重</span>
-                  <span className="text-sm font-bold text-[#A80000]">+{(contribEquity).toFixed(4)}%</span>
+                  <span className="text-base font-extrabold text-yellow-600">+{(contribEquity).toFixed(4)}%</span>
                 </div>
               </div>
             </div>
 
-            {/* 底部总结文案 */}
+            {/* 本周结算倒计时 */}
             <div className="pt-3 border-t border-gray-200">
-              <div className="text-center text-[10px] text-gray-400 italic">
-                "您的每一份市场经营行为，均已转化为不可篡改的权证资产。"
+              <div className="text-center text-[10px] text-gray-500 bg-yellow-50 py-2 px-3 rounded-lg">
+                ⏰ 距离本周资产定格还剩：<span className="font-bold text-[#A80000]">3天 14小时</span>
+              </div>
+            </div>
+
+            {/* 底部总结文案 */}
+            <div className="pt-3">
+              <div className="relative text-center text-[10px] text-gray-400 italic bg-gray-50 py-3 px-4 rounded-lg">
+                {/* 印章图标背景 */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-5">
+                  <svg className="w-16 h-16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                </div>
+                {/* 文案内容 */}
+                <div className="relative z-10">
+                  📜 "您的每一份市场经营行为，均已转化为不可篡改的权证资产。"
+                </div>
               </div>
             </div>
 
             {/* 查阅规则入口 */}
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <button
                 onClick={() => setShowRules(true)}
                 className="text-xs text-gray-400 hover:text-[#A80000] transition-colors underline underline-offset-2"
               >
                 查阅合伙人晋升准则
+              </button>
+              <div className="text-xs text-gray-400">/</div>
+              <button
+                onClick={() => {/* TODO: 打开历史确权账单 */}}
+                className="text-xs text-gray-400 hover:text-[#A80000] transition-colors underline underline-offset-2"
+              >
+                查阅历史确权周报 →
               </button>
             </div>
           </div>
