@@ -374,7 +374,7 @@ export default function MyEquityRedWhite() {
             {/* 4. 常见问题（FAQ） */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">常见问题</div>
-              <div className="text-xs text-gray-500 mb-3">3个核心问题解答</div>
+              <div className="text-xs text-gray-500 mb-3">4个核心问题解答</div>
               <div className="space-y-2">
                 <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
                   1. 我投这点钱到底占多少股？
@@ -384,6 +384,9 @@ export default function MyEquityRedWhite() {
                 </button>
                 <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
                   3. 比例动态在变，如何保证合规又不乱？
+                </button>
+                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
+                  4. 为什么我们的股价是锚定"全国熟人关系"数据？
                 </button>
               </div>
             </div>
