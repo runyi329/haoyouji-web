@@ -10,22 +10,32 @@ export const equityRouter = router({
       return await dbEquity.calculateUserEquity(ctx.user.id);
     }),
   
-  // 获取所有股东的股权信息（管理员）
+  // 获取所有股东的股权信息（管理员），附带席位编号
   getAllShareholders: protectedProcedure
     .query(async ({ ctx }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
       }
-      return await dbEquity.getAllShareholdersEquity();
+      const shareholders = await dbEquity.getAllShareholdersEquity();
+      const seatMap = await dbEquity.getAllSeatNumbers();
+      return shareholders.map(sh => ({
+        ...sh,
+        seatNumber: seatMap.get(sh.userId) || 0,
+      }));
     }),
   
-  // 获取所有投资记录（管理员）
+  // 获取所有投资记录（管理员），附带席位编号
   getAllInvestments: protectedProcedure
     .query(async ({ ctx }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
       }
-      return await dbEquity.getAllInvestments();
+      const investments = await dbEquity.getAllInvestments();
+      const seatMap = await dbEquity.getAllSeatNumbers();
+      return investments.map(inv => ({
+        ...inv,
+        seatNumber: inv.userId ? (seatMap.get(inv.userId) || 0) : 0,
+      }));
     }),
   
   // 添加投资记录（管理员）

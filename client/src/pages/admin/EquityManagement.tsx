@@ -650,6 +650,7 @@ export default function EquityManagement() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">编号</th>
                     <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">股东</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">总股份</th>
                     <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">投资股份</th>
@@ -660,6 +661,9 @@ export default function EquityManagement() {
                 <tbody>
                   {shareholders.map((shareholder: any) => (
                     <tr key={shareholder.userId} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-2 text-sm font-mono text-[#A80000] font-semibold">
+                        {shareholder.seatNumber ? String(shareholder.seatNumber).padStart(4, '0') : '-'}
+                      </td>
                       <td className="py-3 px-2 text-sm">{shareholder.userName}</td>
                       <td className="py-3 px-2 text-sm text-right font-bold text-[#A80000]">
                         {shareholder.totalEquity.toFixed(4)}%
@@ -702,6 +706,7 @@ export default function EquityManagement() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">编号</th>
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">股东</th>
                   <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">投资金额</th>
                   <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">投资日期</th>
@@ -713,6 +718,9 @@ export default function EquityManagement() {
                 {investments && investments.length > 0 ? (
                   investments.map((investment: any) => (
                     <tr key={investment.id} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-2 text-sm font-mono text-[#A80000] font-semibold">
+                        {investment.seatNumber ? String(investment.seatNumber).padStart(4, '0') : '-'}
+                      </td>
                       <td className="py-3 px-2 text-sm">{investment.userName || investment.username}</td>
                       <td className="py-3 px-2 text-sm text-right font-semibold">
                         ¥{Number(investment.investmentAmount).toLocaleString('zh-CN')}
@@ -741,7 +749,7 @@ export default function EquityManagement() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
                       暂无投资记录
                     </td>
                   </tr>
