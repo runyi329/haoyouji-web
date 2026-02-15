@@ -264,7 +264,11 @@ export async function getUserSeatNumber(userId: number) {
     ORDER BY first_investment_date ASC
   `);
   
-  const rows = firstInvestments.rows as { user_id: number; first_investment_date: string }[];
+  // 兼容不同数据库驱动的返回格式
+  const rawRows = Array.isArray(firstInvestments) 
+    ? (Array.isArray(firstInvestments[0]) ? firstInvestments[0] : firstInvestments)
+    : (firstInvestments.rows || []);
+  const rows = rawRows as { user_id: number; first_investment_date: string }[];
   const seatIndex = rows.findIndex(r => Number(r.user_id) === userId);
   
   if (seatIndex === -1) {
