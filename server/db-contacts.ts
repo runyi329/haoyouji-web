@@ -1470,6 +1470,8 @@ export async function getContactsOverviewStats(parentUserId: number) {
       averageInteractionInterval: 0,
       needsAttentionCount: 0,
       monthlyActiveCount: 0,
+      dailyContactFrequency: 0,
+      averageTagCount: 0,
     };
   }
 
@@ -1584,11 +1586,19 @@ export async function getContactsOverviewStats(parentUserId: number) {
     ? Math.round(totalIntervalDays / contactsWithInteractions)
     : 0;
 
-  // 计算最近7天每天联络的不同联系人数均值
+  // 计算最近7天每天联络的不同联系人数均值（仅统计自己的联系人，不含共享）
   const sevenDaysAgoTs = now - 7 * 24 * 60 * 60 * 1000;
+  
+  // 获取仅属于自己的联系人ID
+  const myOwnContacts = await db.select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, parentUserId));
+  const myOwnContactIds = new Set(myOwnContacts.map(c => c.id));
+  
   const dailyContactMap = new Map<string, Set<number>>(); // dateStr -> Set<contactId>
   for (const interaction of allInteractions) {
-    if (interaction.interactionDate >= sevenDaysAgoTs) {
+    // 只统计自己的联系人的联络记录
+    if (interaction.interactionDate >= sevenDaysAgoTs && myOwnContactIds.has(interaction.contactId)) {
       const dateStr = new Date(interaction.interactionDate).toISOString().slice(0, 10);
       if (!dailyContactMap.has(dateStr)) {
         dailyContactMap.set(dateStr, new Set());
