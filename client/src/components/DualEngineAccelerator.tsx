@@ -150,9 +150,9 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             {/* 总倍数（大圆环） */}
             <div className="relative">
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#A80000] to-[#8a0000] flex items-center justify-center shadow-lg">
-                <div className="text-center">
+                <div className="flex items-baseline justify-center">
                   <div className="text-2xl font-bold text-white">{totalMultiplier.toFixed(1)}</div>
-                  <div className="text-[10px] text-white/70">倍</div>
+                  <div className="text-[10px] text-white/70 ml-0.5">倍</div>
                 </div>
               </div>
               {/* 微弱金属反光动效 */}
@@ -165,33 +165,32 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             {/* 拆解公式 */}
             <div className="flex items-center space-x-2">
               {/* 股权加成 */}
-              <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-3 py-2 min-w-[80px]">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Shield className="w-3 h-3 text-[#A80000]" />
-                  <span className="text-[10px] text-gray-600">股权加成</span>
-                </div>
-                <div className="text-lg font-bold text-[#A80000]">{props.equityMultiplier.toFixed(1)}倍</div>
+              <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-2.5 py-2 flex items-center space-x-1" style={{ whiteSpace: 'nowrap' }}>
+                <span className="text-[10px] text-gray-600">💰资产</span>
+                <button
+                  onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
+                <div className="text-xl font-bold text-[#C5B358]">+{props.equityMultiplier.toFixed(1)}</div>
               </div>
               
               {/* 加号 */}
               <div className="text-[#C5B358] text-xl font-bold">+</div>
               
               {/* 身份加成 */}
-              <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-3 py-2 min-w-[80px]">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Award className="w-3 h-3 text-[#C5B358]" />
-                  <span className="text-[10px] text-gray-600">身份加成</span>
-                </div>
-                <div className="text-lg font-bold text-[#C5B358]">{props.identityMultiplier.toFixed(1)}倍</div>
+              <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-2.5 py-2 flex items-center space-x-1" style={{ whiteSpace: 'nowrap' }}>
+                <span className="text-[10px] text-gray-600">🎖️等级</span>
+                <button
+                  onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
+                <div className="text-xl font-bold text-[#C5B358]">+{props.identityMultiplier.toFixed(1)}</div>
               </div>
             </div>
-          </div>
-          
-          {/* 说明文字 */}
-          <div className="mt-3 text-center">
-            <span className="text-[10px] text-gray-500">由股权资产包决定</span>
-            <span className="text-[10px] text-gray-400 mx-2">+</span>
-            <span className="text-[10px] text-gray-500">由当前个人等级决定</span>
           </div>
           
           {/* 问号弹窗 */}
@@ -211,11 +210,11 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           )}
         </div>
         
-        {/* ============ 二、资产阶梯双翼（40/60比例） ============ */}
-        <div className="grid grid-cols-[40%_60%] gap-3">
+        {/* ============ 二、资产阶梯双翼（细线分隔） ============ */}
+        <div className="flex items-stretch">
           
-          {/* 左翼：已达成资产（向下兼容统计） */}
-          <div className="bg-gray-50 rounded-xl p-3">
+          {/* 左翼：已达成资产（金黄色成就感） */}
+          <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-gray-600 font-medium">已达成节点</span>
               <button
@@ -226,20 +225,20 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               </button>
             </div>
             
-            {/* 核心数值 */}
-            <div className="text-3xl font-bold text-[#A80000] mb-3">{props.standardNodes}</div>
+            {/* 核心数值（金黄色） */}
+            <div className="text-3xl font-bold text-[#C5B358] mb-3">{props.standardNodes}</div>
             
             {/* 明细展示（字号递减） */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">标准权</span>
-                <span className="font-medium text-gray-900">{props.standardNodes}</span>
+                <span className="font-medium text-[#C5B358]">{props.standardNodes}</span>
               </div>
               <div className="text-[10px] text-gray-400 pl-2">（含高级/超级）</div>
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">高级权</span>
-                <span className="font-medium text-gray-900">{props.advancedNodes}</span>
+                <span className="font-medium text-[#C5B358]">{props.advancedNodes}</span>
               </div>
               <div className="text-[10px] text-gray-400 pl-2">（含超级）</div>
               
@@ -258,42 +257,41 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             )}
           </div>
           
-          {/* 右翼：资产培育中心（潜力向上折算） */}
-          <div className="bg-gradient-to-br from-[#C5B358]/5 to-[#C5B358]/10 rounded-xl p-3 border border-[#C5B358]/20">
+          {/* 中间分隔线 */}
+          <div className="w-px bg-gray-300 mx-2"></div>
+          
+          {/* 右翼：资产培育中心（红白配色） */}
+          <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-gray-600 font-medium">正在培育</span>
               <button
                 onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
-                className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                className="text-gray-400 hover:text-[#A80000] transition-colors"
               >
                 <HelpCircle className="w-3 h-3" />
               </button>
             </div>
             
-            {/* 核心数值（带金色呼吸光晕） */}
-            <div className="relative mb-3">
-              <div className="text-3xl font-bold text-[#C5B358]">{props.totalCultivating}</div>
-              {/* 金色呼吸光晕 */}
-              <div className="absolute -inset-1 bg-[#C5B358]/20 rounded-lg blur-sm animate-pulse -z-10"></div>
-            </div>
+            {/* 核心数值（红色） */}
+            <div className="text-3xl font-bold text-[#A80000] mb-3">{props.totalCultivating}</div>
             
             {/* 明细展示 */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">潜在标准</span>
-                <span className="font-medium text-gray-900">{props.potentialStandard}</span>
+                <span className="font-medium text-[#A80000]">{props.potentialStandard}</span>
               </div>
               <div className="text-[10px] text-gray-400 pl-2">新邀约活跃者</div>
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">潜在高级</span>
-                <span className="font-medium text-gray-900">{props.potentialAdvanced}</span>
+                <span className="font-medium text-[#A80000]">{props.potentialAdvanced}</span>
               </div>
               <div className="text-[10px] text-gray-400 pl-2">由标准升级中</div>
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">潜在超级</span>
-                <span className="font-medium text-[#C5B358]">{props.potentialSuper}</span>
+                <span className="font-medium text-[#A80000]">{props.potentialSuper}</span>
               </div>
               <div className="text-[10px] text-gray-400 pl-2">由高级冲刺中</div>
             </div>
