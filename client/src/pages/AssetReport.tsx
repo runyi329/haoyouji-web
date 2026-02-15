@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, Shield, Lock, ArrowRight } from "lucide-react";
+import { Loader2, TrendingUp, Shield, Lock, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -8,227 +9,242 @@ export default function AssetReport() {
   const { data: stats, isLoading } = trpc.contacts.stats.useQuery();
   
   // 模拟全国节点总数（实际应从后端获取）
-  const totalNodes = 12850;
+  const totalNodes = 1280520;
   
   // 对标价值（每人）
-  const benchmarkValue = 200;
-  
-  // 当前每股参考含金量
-  const pricePerShare = 18.50;
+  const benchmarkValue = 100;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#1A1A1A] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#D4AF37]" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#800000]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] text-white pb-20">
-      {/* 第一屏：资产定名 */}
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 border-2 border-[#D4AF37] mx-4 my-8 rounded-lg">
-        <div className="text-center space-y-6">
-          {/* 火漆印章 */}
-          <div className="flex justify-center">
-            <div className="w-24 h-24 rounded-full border-4 border-[#D4AF37] flex items-center justify-center bg-[#8B0000]">
-              <Shield className="w-12 h-12 text-[#D4AF37]" />
-            </div>
-          </div>
-          
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* 返回按钮 */}
+      <div className="fixed top-4 left-4 z-50">
+        <Link href={BASE_URL}>
+          <a className="flex items-center space-x-2 bg-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+            <ArrowLeft className="w-5 h-5 text-[#800000]" />
+            <span className="text-[#800000] font-medium">返回首页</span>
+          </a>
+        </Link>
+      </div>
+
+      {/* 顶部：红区（Red Zone） */}
+      <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-16 pb-12 rounded-b-[30px]">
+        <div className="text-center space-y-4">
           {/* 主标题 */}
-          <h1 className="text-4xl font-serif text-[#D4AF37]">
-            数字资产确权公示
+          <h1 className="text-2xl font-bold">
+            全国熟人信任资产估值
           </h1>
           
+          {/* 核心数字（动态心跳感） */}
+          <div className="text-6xl font-bold animate-pulse">
+            {totalNodes.toLocaleString()}
+          </div>
+          
           {/* 副标题 */}
-          <p className="text-xl text-gray-300">
-            让信任可定价，让社交可增值
+          <p className="text-lg text-white/90">
+            当前全平台有效信任节点总数
+          </p>
+          
+          {/* 小字说明 */}
+          <p className="text-sm text-white/70 mt-4">
+            每一个节点，都是在为全平台的股价注资
           </p>
         </div>
       </div>
 
-      {/* 第二屏：锚定逻辑 */}
-      <div className="min-h-screen flex flex-col justify-center px-6 py-12 space-y-8">
-        <h2 className="text-2xl font-bold text-[#D4AF37] text-center">
-          为什么您的"确权股"具有真实含金量？
-        </h2>
-        
-        {/* 对比图表 */}
-        <div className="space-y-4">
-          <div className="bg-[#2A2A2A] p-4 rounded-lg">
-            <div className="text-gray-400 text-sm mb-2">普通社交</div>
-            <div className="text-gray-500">碎片化数据 = 0 价值</div>
-          </div>
-          
-          <div className="bg-[#8B0000] p-4 rounded-lg">
-            <div className="text-[#D4AF37] text-sm mb-2">本平台</div>
-            <div className="text-white">全国强信任熟人节点 = 标准资产单元</div>
-          </div>
-        </div>
-        
-        {/* 对标清单 */}
-        <div className="space-y-3 text-sm">
-          <div className="flex justify-between text-gray-400">
-            <span>叮咚买菜（基础消费数据）</span>
-            <span className="text-[#D4AF37]">¥150+/节点</span>
-          </div>
-          <div className="flex justify-between text-gray-400">
-            <span>脉脉（中端职场关系）</span>
-            <span className="text-[#D4AF37]">¥300+/节点</span>
-          </div>
-          <div className="flex justify-between text-white font-bold">
-            <span>本平台（全国强信任熟人）</span>
-            <span className="text-[#D4AF37]">初始锚定 ¥{benchmarkValue}/节点</span>
-          </div>
-        </div>
-        
-        {/* 金句 */}
-        <div className="text-center text-[#D4AF37] italic text-lg mt-8">
-          "每一条录入的人脉，都是在为全平台的股价注资。"
-        </div>
-      </div>
-
-      {/* 第三屏：增长黑卡 */}
-      <div className="min-h-screen flex flex-col justify-center px-6 py-12 space-y-8">
-        <h2 className="text-2xl font-bold text-[#D4AF37] text-center">
-          股价增长的"分子/分母"法则
-        </h2>
-        
-        {/* 视觉化展示 */}
-        <div className="space-y-6">
-          <div className="bg-[#2A2A2A] p-6 rounded-lg">
-            <div className="text-[#D4AF37] font-bold mb-2">分母（固定）</div>
-            <div className="text-gray-300 text-sm">
-              系统严控确权股发放总量（线性增长）
-            </div>
-            <div className="mt-4 h-2 bg-[#8B0000] rounded-full w-1/3"></div>
-          </div>
-          
-          <div className="bg-[#2A2A2A] p-6 rounded-lg">
-            <div className="text-[#D4AF37] font-bold mb-2">分子（爆发）</div>
-            <div className="text-gray-300 text-sm">
-              全国熟人网络呈指数级裂变（几何增长）
-            </div>
-            <div className="mt-4 h-2 bg-[#D4AF37] rounded-full w-full"></div>
-          </div>
-        </div>
-        
-        {/* 结论 */}
-        <div className="bg-[#8B0000] p-6 rounded-lg">
-          <div className="text-[#D4AF37] font-bold text-center mb-3">
-            分子增长 &gt; 分母增长 = 股价单边上扬
-          </div>
-          <div className="text-gray-300 text-sm text-center">
-            现在进场，您拿到的每一股，都是在资产池爆发前夜的"原始资产"
-          </div>
-        </div>
-        
-        {/* 资产演进路径 */}
-        <div className="mt-8 space-y-3 text-sm">
-          <div className="text-[#D4AF37] font-bold mb-4">【资产演进路径】</div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400">第一阶段：累计 1万 信任节点</span>
-            <span className="text-[#D4AF37]">¥1X.XX</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400">第二阶段：累计 10万 信任节点</span>
-            <span className="text-[#D4AF37]">¥XX.XX</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-white font-bold">目标阶段：累计 100万 信任节点</span>
-            <span className="text-[#D4AF37] font-bold">¥XXX.XX</span>
-          </div>
-          <div className="text-gray-500 text-xs mt-4">
-            （注：数据基于人脉资产锚定算法，实时更新）
-          </div>
-        </div>
-      </div>
-
-      {/* 第四屏：安全保障 */}
-      <div className="min-h-screen flex flex-col justify-center px-6 py-12 space-y-8">
-        <h2 className="text-2xl font-bold text-[#D4AF37] text-center">
-          周确权 · 终身制 · 数字化
-        </h2>
-        
-        {/* 三条核心承诺 */}
-        <div className="space-y-6">
-          <div className="flex items-start space-x-4">
-            <div className="w-12 h-12 rounded-full bg-[#8B0000] flex items-center justify-center flex-shrink-0">
-              <Lock className="w-6 h-6 text-[#D4AF37]" />
-            </div>
-            <div>
-              <div className="text-[#D4AF37] font-bold mb-1">每周确权</div>
-              <div className="text-gray-300 text-sm">
-                每周一定格身价，不可篡改
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-4">
-            <div className="w-12 h-12 rounded-full bg-[#8B0000] flex items-center justify-center flex-shrink-0">
-              <Shield className="w-6 h-6 text-[#D4AF37]" />
-            </div>
-            <div>
-              <div className="text-[#D4AF37] font-bold mb-1">档案永久</div>
-              <div className="text-gray-300 text-sm">
-                确权股录入数字档案，受协议保护
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-4">
-            <div className="w-12 h-12 rounded-full bg-[#8B0000] flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="w-6 h-6 text-[#D4AF37]" />
-            </div>
-            <div>
-              <div className="text-[#D4AF37] font-bold mb-1">价值流转</div>
-              <div className="text-gray-300 text-sm">
-                分红、回购、转换，全凭确权股数
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 第五屏：Call to Action */}
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
-        <div className="text-center space-y-8">
-          <h2 className="text-3xl font-bold text-[#D4AF37]">
-            激活您的熟人财富
+      {/* 中部：白区卡片一（对标逻辑） */}
+      <div className="px-6 mt-6">
+        <Card className="p-6 shadow-lg">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            为什么您的"熟人信任节点"更具增值潜力？
           </h2>
-          <p className="text-xl text-gray-300">
-            定格您的数字化身价
-          </p>
           
-          {/* 当前数据展示 */}
-          <div className="bg-[#2A2A2A] p-8 rounded-lg space-y-4 mt-8">
-            <div className="text-center">
-              <div className="text-gray-400 text-sm mb-2">当前平台节点总数</div>
-              <div className="text-[#D4AF37] text-4xl font-bold">
-                {totalNodes.toLocaleString()}
+          {/* 对标表格 */}
+          <div className="space-y-3">
+            {/* 叮咚买菜 */}
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold text-gray-900">叮咚买菜</span>
+                <span className="text-gray-500 text-lg font-bold">≈ ¥714/人</span>
               </div>
-              <div className="text-gray-500 text-xs mt-1">个全国信任节点</div>
+              <div className="text-sm text-gray-600">
+                约50亿估值 / 700万用户 · 基础消费流转
+              </div>
             </div>
             
-            <div className="border-t border-gray-700 pt-4">
-              <div className="text-gray-400 text-sm mb-2">当前每股参考含金量</div>
-              <div className="text-[#D4AF37] text-3xl font-bold">
-                ¥{pricePerShare}
+            {/* LinkedIn */}
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold text-gray-900">LinkedIn</span>
+                <span className="text-gray-500 text-lg font-bold">≈ ¥450/人</span>
               </div>
-              <div className="text-gray-500 text-xs mt-1">/ 确权股</div>
+              <div className="text-sm text-gray-600">
+                262亿美元收购 / 4亿用户 · 职场社交关系
+              </div>
+            </div>
+            
+            {/* 本平台 */}
+            <div className="bg-[#800000] p-4 rounded-lg relative">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold text-white">本平台</span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[#C5B358] text-2xl font-bold">¥{benchmarkValue}/人</span>
+                  <span className="bg-[#C5B358] text-[#800000] text-xs px-2 py-1 rounded font-bold">
+                    极度低估·建议入场
+                  </span>
+                </div>
+              </div>
+              <div className="text-sm text-white/90">
+                全国强信任关系网络 · 高转化熟人节点
+              </div>
             </div>
           </div>
           
-          {/* 返回首页按钮 */}
-          <a
-            href={BASE_URL}
-            className="inline-flex items-center space-x-2 bg-[#8B0000] text-white px-8 py-4 rounded-lg hover:bg-[#A80000] transition-colors mt-8"
-          >
-            <span>返回首页</span>
-            <ArrowRight className="w-5 h-5" />
-          </a>
-        </div>
+          {/* 包装话术 */}
+          <div className="mt-6 space-y-3 text-sm">
+            <div className="flex items-start space-x-2">
+              <span className="text-[#C5B358] font-bold">●</span>
+              <div>
+                <span className="font-bold text-gray-900">降维打击：</span>
+                <span className="text-gray-700">"买菜"只是单次的消费行为，而"熟人"是长期的信用资产。</span>
+              </div>
+            </div>
+            <div className="flex items-start space-x-2">
+              <span className="text-[#C5B358] font-bold">●</span>
+              <div>
+                <span className="font-bold text-gray-900">价值低估：</span>
+                <span className="text-gray-700">相比生鲜电商 ¥700+ 的估值，我们仅以其 1/7 的保守价值起步。</span>
+              </div>
+            </div>
+            <div className="flex items-start space-x-2">
+              <span className="text-[#C5B358] font-bold">●</span>
+              <div>
+                <span className="font-bold text-gray-900">增值逻辑：</span>
+                <span className="text-gray-700">每一个被打上标签（如：高净值、决策者、技术专家）的熟人节点，其商业变现能力是普通消费者的 10 倍以上。</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* 霸气回应 */}
+          <div className="mt-6 bg-[#FFF9E6] border-l-4 border-[#C5B358] p-4 rounded">
+            <p className="text-sm text-gray-800 italic">
+              "这就是我们的<span className="font-bold text-[#800000]">估值红利期</span>。叮咚买菜那是已经上市或者被收购后的'透支价'。我们现在定 ¥100，是给咱们早期合伙人留出了 <span className="font-bold text-[#800000]">7倍甚至10倍的翻盘空间</span>。等平台全国节点过千万的时候，每一个节点的商业租金和撮合价值，绝对不止这几百块。"
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* 中部：白区卡片二（股价公式） */}
+      <div className="px-6 mt-6">
+        <Card className="p-6 shadow-lg">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            股价判定与增值原理
+          </h2>
+          
+          {/* 公式展示 */}
+          <div className="bg-gray-50 p-6 rounded-lg mb-6">
+            <div className="text-center">
+              <div className="text-sm text-gray-600 mb-2">股价计算公式</div>
+              <div className="text-lg font-mono">
+                <span className="text-gray-900">股价 = </span>
+                <span className="text-[#800000] font-bold">
+                  (全国资产总量 + 现金储备)
+                </span>
+                <span className="text-gray-900"> / </span>
+                <span className="text-[#800000] font-bold">
+                  已发行确权股总数
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* 核心解释 */}
+          <div className="space-y-4">
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 rounded-full bg-[#800000] flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="font-bold text-gray-900 mb-1">数据资产化</div>
+                <div className="text-sm text-gray-700">
+                  每录入一条熟人数据，分子（资产总量）即刻增长。
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 rounded-full bg-[#800000] flex items-center justify-center flex-shrink-0">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="font-bold text-gray-900 mb-1">保护机制</div>
+                <div className="text-sm text-gray-700">
+                  总资产增长速度（指数级）远超股数发行速度（线性）。
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 rounded-full bg-[#C5B358] flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">✓</span>
+              </div>
+              <div>
+                <div className="font-bold text-[#800000] mb-1">结论</div>
+                <div className="text-sm text-gray-700">
+                  只要全国人脉在增加，您的股价就在单边上扬。
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 底部：白区卡片三（确权保障） */}
+      <div className="px-6 mt-6 mb-8">
+        <Card className="p-6 shadow-lg">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            确权保障机制
+          </h2>
+          
+          <div className="space-y-4">
+            <div className="flex items-start space-x-3">
+              <span className="text-[#C5B358] text-2xl font-bold">●</span>
+              <div>
+                <div className="font-bold text-gray-900">每周定格</div>
+                <div className="text-sm text-gray-700">
+                  每周一结算最新股价，确保资产透明。
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <span className="text-[#C5B358] text-2xl font-bold">●</span>
+              <div>
+                <div className="font-bold text-gray-900">永久记录</div>
+                <div className="text-sm text-gray-700">
+                  所有确权股数均记录于数字档案，不可篡改。
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <span className="text-[#C5B358] text-2xl font-bold">●</span>
+              <div>
+                <div className="font-bold text-gray-900">价值流转</div>
+                <div className="text-sm text-gray-700">
+                  分红、回购、转换，全凭确权股数。
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
