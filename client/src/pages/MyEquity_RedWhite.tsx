@@ -322,21 +322,6 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 6. 股权确权状态 */}
-            <div className="bg-white rounded-xl p-4 border border-gray-200">
-              <div className="text-sm font-semibold text-gray-700 mb-3">确权状态</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">电子股权协议</span>
-                  <span className="font-bold text-[#C5B358]">待签署</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">权证下发状态</span>
-                  <span className="font-bold text-green-600">已确权</span>
-                </div>
-              </div>
-            </div>
-
             {/* 数据加密保护提示 */}
             <div className="text-center text-[10px] text-gray-400 pt-2">
               <span className="inline-flex items-center">
@@ -408,7 +393,22 @@ export default function MyEquityRedWhite() {
 
           {/* 白色区域（明细） */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 股权分配池明细 */}
+            {/* 1. 确权状态（从第一层移动过来） */}
+            <div className="bg-white rounded-xl p-4 border border-gray-200">
+              <div className="text-sm font-semibold text-gray-700 mb-3">确权状态</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">电子股权协议</span>
+                  <span className="font-bold text-[#C5B358]">待签署</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">权证下发状态</span>
+                  <span className="font-bold text-[#C5B358]">已确权</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. 股权分配池明细 */}
             <div className="bg-white rounded-xl p-4 border border-gray-200">
               <div className="text-sm font-semibold text-gray-700 mb-3">公司股权分配</div>
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -431,7 +431,7 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 2. 法律协议 */}
+            {/* 3. 法律协议 */}
             <div className="bg-white rounded-xl p-4 border border-gray-200">
               <div className="text-sm font-semibold text-gray-700 mb-3">在线签署</div>
               <div className="space-y-3">
@@ -455,7 +455,7 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 3. 常见问题（FAQ） */}
+            {/* 4. 常见问题（FAQ） */}
             <div className="bg-white rounded-xl p-4 border border-gray-200">
               <div className="text-sm font-semibold text-gray-700 mb-3">常见问题</div>
               <div className="text-xs text-gray-500 mb-3">3个核心问题解答</div>
