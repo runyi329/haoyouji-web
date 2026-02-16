@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLocation } from 'wouter';
 import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
+import { MoreVertical, Image, Share2 } from 'lucide-react';
 
 interface Tier {
   levelChar1: string;
@@ -16,14 +17,7 @@ const PromotionRules: React.FC = () => {
   const [, setLocation] = useLocation();
   const [showMenu, setShowMenu] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-
-  // 检测登录状态
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
-  }, []);
 
   const userTiers: Tier[] = [
     {
@@ -97,7 +91,7 @@ const PromotionRules: React.FC = () => {
       });
       
       const link = document.createElement('a');
-      link.download = '晋升准则.png';
+      link.download = '晋升攻略.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
       
@@ -131,64 +125,51 @@ const PromotionRules: React.FC = () => {
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-10">
         <div className="flex items-center">
-          {/* 只有登录用户才显示返回按钮 */}
-          {isLoggedIn && (
-            <button onClick={() => setLocation('/parent')} className="mr-4">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
+          <button onClick={() => setLocation('/parent')} className="mr-4">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
           <h1 className="text-xl font-bold">晋升攻略</h1>
         </div>
         
-        {/* 只有登录用户才显示三点菜单 */}
-        {isLoggedIn && (
-          <div className="relative">
-            <button 
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              disabled={isGenerating}
-            >
-              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="5" r="2" />
-                <circle cx="12" cy="12" r="2" />
-                <circle cx="12" cy="19" r="2" />
-              </svg>
-            </button>
-            
-            {/* 下拉菜单 */}
-            {showMenu && (
-              <>
-                <div 
-                  className="fixed inset-0 z-20" 
-                  onClick={() => setShowMenu(false)}
-                />
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-30 overflow-hidden">
-                  <button
-                    onClick={handleSaveImage}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                    disabled={isGenerating}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span>{isGenerating ? '生成中...' : '保存长图'}</span>
-                  </button>
-                  <button
-                    onClick={handleShareLink}
-                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
-                    <span>分享链接</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        {/* 三点菜单 */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            disabled={isGenerating}
+          >
+            <MoreVertical className="w-6 h-6" />
+          </button>
+          
+          {/* 下拉菜单 */}
+          {showMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-20" 
+                onClick={() => setShowMenu(false)}
+              />
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-30 overflow-hidden">
+                <button
+                  onClick={handleSaveImage}
+                  className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                  disabled={isGenerating}
+                >
+                  <Image className="w-5 h-5" />
+                  <span>{isGenerating ? '生成中...' : '保存长图'}</span>
+                </button>
+                <button
+                  onClick={handleShareLink}
+                  className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors border-t border-gray-100"
+                >
+                  <Share2 className="w-5 h-5" />
+                  <span>分享链接</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* 用户层 */}
