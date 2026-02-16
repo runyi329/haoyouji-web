@@ -1,7 +1,7 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation } from 'wouter';
 
 export default function PromotionRules() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
@@ -9,7 +9,7 @@ export default function PromotionRules() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
         <div className="flex items-center px-4 py-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => setLocation('/parent/my-equity')}
             className="text-gray-600 hover:text-gray-900"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
