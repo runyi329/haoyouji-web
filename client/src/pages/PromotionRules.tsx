@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
-import html2canvas from 'html2canvas';
 import { toast } from 'sonner';
-import { MoreVertical, Image, Share2 } from 'lucide-react';
+import { MoreVertical, Share2 } from 'lucide-react';
 
 interface Tier {
   levelChar1: string;
@@ -16,8 +15,6 @@ interface Tier {
 const PromotionRules: React.FC = () => {
   const [, setLocation] = useLocation();
   const [showMenu, setShowMenu] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   const userTiers: Tier[] = [
     {
@@ -73,50 +70,6 @@ const PromotionRules: React.FC = () => {
     }
   ];
 
-  // 生成长图
-  const handleSaveImage = async () => {
-    if (!contentRef.current) {
-      toast.error('页面元素未找到');
-      return;
-    }
-    
-    setIsGenerating(true);
-    setShowMenu(false);
-    
-    try {
-      toast.info('正在生成长图,请稍候...');
-      
-      // 简化配置，只使用基本参数
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#f9fafb',
-        logging: true
-      });
-      
-      // 转换为图片并下载
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.download = '晋升攻略.png';
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
-          toast.success('长图已保存!');
-        } else {
-          toast.error('图片生成失败');
-        }
-        setIsGenerating(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('生成长图失败:', error);
-      toast.error(`生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      setIsGenerating(false);
-    }
-  };
-
   // 分享链接
   const handleShareLink = () => {
     const url = window.location.href;
@@ -146,47 +99,17 @@ const PromotionRules: React.FC = () => {
           <h1 className="text-xl font-bold">晋升攻略</h1>
         </div>
         
-        {/* 三点菜单 */}
-        <div className="relative">
-          <button 
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            disabled={isGenerating}
-          >
-            <MoreVertical className="w-6 h-6" />
-          </button>
-          
-          {/* 下拉菜单 */}
-          {showMenu && (
-            <>
-              <div 
-                className="fixed inset-0 z-20" 
-                onClick={() => setShowMenu(false)}
-              />
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl z-30 overflow-hidden">
-                <button
-                  onClick={handleSaveImage}
-                  className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                  disabled={isGenerating}
-                >
-                  <Image className="w-5 h-5" />
-                  <span>{isGenerating ? '生成中...' : '保存长图'}</span>
-                </button>
-                <button
-                  onClick={handleShareLink}
-                  className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors border-t border-gray-100"
-                >
-                  <Share2 className="w-5 h-5" />
-                  <span>分享链接</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        {/* 分享按钮 */}
+        <button 
+          onClick={handleShareLink}
+          className="p-2 hover:bg-white/10 rounded-full transition-colors"
+        >
+          <Share2 className="w-6 h-6" />
+        </button>
       </div>
 
-      {/* 内容区域（用于截图） */}
-      <div ref={contentRef}>
+      {/* 内容区域 */}
+      <div>
       {/* 用户层 */}
       <div className="p-4">
         <h2 className="text-lg font-bold text-gray-800 mb-2">用户层(使用型)</h2>
