@@ -1,9 +1,9 @@
 // 商业计划书页面 - 红白双色卡片布局 v2.0
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 
 export default function BusinessPlan() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen bg-[#F5F5F5] pb-20">
@@ -11,7 +11,7 @@ export default function BusinessPlan() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="px-4 py-3 flex items-center">
           <button
-            onClick={() => navigate("/parent/profile")}
+            onClick={() => setLocation("/parent/profile")}
             className="flex items-center text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="w-5 h-5 mr-1" />
