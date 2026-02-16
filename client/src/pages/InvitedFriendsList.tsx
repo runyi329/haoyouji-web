@@ -256,7 +256,7 @@ export default function InvitedFriendsList() {
                   </div>
 
                   {/* 第二排：人脉统计 */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {/* 我的 */}
                     <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/20">
                       <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -281,6 +281,28 @@ export default function InvitedFriendsList() {
                       <span className="text-xs text-gray-600 dark:text-gray-400">全部</span>
                       <span className="text-sm text-[#A80000] dark:text-red-400 font-semibold">
                         {friend.totalContactsCount}
+                      </span>
+                    </div>
+                    
+                    {/* 标签数 */}
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
+                      <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">标签</span>
+                      <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
+                        {friend.tagsCount || 0}
+                      </span>
+                    </div>
+                    
+                    {/* 联络数 */}
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-orange-50 dark:bg-orange-900/20">
+                      <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">联络</span>
+                      <span className="text-sm text-orange-600 dark:text-orange-400 font-semibold">
+                        {friend.interactionsCount || 0}
                       </span>
                     </div>
                   </div>
