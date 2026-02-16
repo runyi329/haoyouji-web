@@ -53,7 +53,7 @@ const PromotionRules: React.FC = () => {
       contacts: 50,
       tagsPerPerson: 3,
       frequency: 3,
-      benefit: '专属邀请码+推荐加贡献持股权奖励'
+      benefit: '专属邀请码推荐+贡献持股权奖励'
     },
     {
       levelChar1: '高级',
