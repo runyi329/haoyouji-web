@@ -115,6 +115,7 @@ const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
+const BusinessPlan = lazy(() => import("./pages/BusinessPlan"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // 加载中组件
@@ -170,6 +171,7 @@ function Router() {
         <Route path="/parent/equity-history" component={EquityHistoryArchive} />
         <Route path="/parent/asset-report" component={AssetReport} />
         <Route path="/parent/promotion-rules" component={PromotionRules} />
+        <Route path="/parent/business-plan" component={BusinessPlan} />
         <Route path="/parent/profile/invite" component={InviteCode} />
         <Route path="/invited-friends" component={InvitedFriendsList} />
 

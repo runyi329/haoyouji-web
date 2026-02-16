@@ -408,7 +408,7 @@ export default function Profile() {
     { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-red-50 text-[#A80000]", badge: null, onClick: () => navigate("/parent/theme-settings") },
     { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-cyan-50 text-cyan-600", badge: null, onClick: () => navigate("/parent/academy") },
     { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-teal-50 text-teal-600", badge: null, onClick: () => toast("功能开发中") },
-    { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => navigate("/parent/business-plan") },
   ];
 
   // 根据顺序排序所有功能
