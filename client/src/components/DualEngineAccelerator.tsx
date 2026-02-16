@@ -386,30 +386,47 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           
           {/* 辅助信息卡片（距离下一等级差距） */}
           <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
+            {/* 晋升周期 */}
+            <div className="text-[10px] text-gray-400 mb-1 text-center">
+              晋升周期：{(() => {
+                const now = new Date();
+                const dayOfWeek = now.getDay();
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                return `${monday.getMonth() + 1}月${monday.getDate()}日 至 ${sunday.getMonth() + 1}月${sunday.getDate()}日`;
+              })()}
+            </div>
+            
             <div className="text-[10px] text-gray-500 mb-2 text-center">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需</div>
-            <div className="space-y-2">
-              {/* 人脉完成度 */}
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">人脉完成度</span>
+            
+            {/* 三维度一行显示 */}
+            <div className="flex items-center justify-between text-[10px] px-2">
+              {/* 人脉 */}
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-gray-600 mb-1">人脉</span>
                 <div>
                   <span className="font-bold text-gray-900">{Math.round((props.contactCount / (props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50)) * 100)}%</span>
-                  <span className="ml-1 text-[10px] text-gray-400">(累计 {props.contactCount}/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'})</span>
+                  <span className="ml-1 text-[9px] text-gray-400">({props.contactCount}/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'})</span>
                 </div>
               </div>
-              {/* 标签完成度 */}
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">标签完成度</span>
+              
+              {/* 标签 */}
+              <div className="flex flex-col items-center flex-1 border-l border-r border-gray-200 px-2">
+                <span className="text-gray-600 mb-1">标签</span>
+                <div>
+                  <span className="font-bold text-gray-900">33%</span>
+                  <span className="ml-1 text-[9px] text-gray-400">(100/300)</span>
+                </div>
+              </div>
+              
+              {/* 联络 */}
+              <div className="flex flex-col items-center flex-1">
+                <span className="text-gray-600 mb-1">联络</span>
                 <div>
                   <span className="font-bold text-gray-900">60%</span>
-                  <span className="ml-1 text-[10px] text-gray-400">(累计 3/5)</span>
-                </div>
-              </div>
-              {/* 联络完成度 */}
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">联络完成度</span>
-                <div>
-                  <span className="font-bold text-gray-900">80%</span>
-                  <span className="ml-1 text-[10px] text-gray-400">(累计 4/5)</span>
+                  <span className="ml-1 text-[9px] text-gray-400">(120/200)</span>
                 </div>
               </div>
             </div>
