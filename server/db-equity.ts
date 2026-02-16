@@ -681,9 +681,58 @@ export async function getUserPromotionStats(userId: number) {
     interactionCount = Number(interactionsResult?.count || 0);
   }
   
+  // 4. 判断当前等级（基于晋升攻略的要求）
+  let currentLevel = 'partner';  // 默认准合伙人
+  let levelName = '准合伙人';
+  
+  // 节点层判断
+  if (contactCount >= 150 && totalTagCount >= 500 && interactionCount >= 250) {
+    currentLevel = 'super';
+    levelName = '超级节点';
+  } else if (contactCount >= 100 && totalTagCount >= 300 && interactionCount >= 200) {
+    currentLevel = 'advanced';
+    levelName = '高级节点';
+  } else if (contactCount >= 50 && totalTagCount >= 100 && interactionCount >= 150) {
+    currentLevel = 'standard';
+    levelName = '标准节点';
+  }
+  // 用户层判断（如果不符合节点层）
+  else if (contactCount >= 30 && totalTagCount >= 100 && interactionCount >= 120) {
+    currentLevel = 'super_user';
+    levelName = '超级用户';
+  } else if (contactCount >= 20 && totalTagCount >= 50 && interactionCount >= 60) {
+    currentLevel = 'advanced_user';
+    levelName = '高级用户';
+  } else if (contactCount >= 10 && totalTagCount >= 20 && interactionCount >= 30) {
+    currentLevel = 'standard_user';
+    levelName = '标准用户';
+  }
+  
+  // 5. 计算本周的日期范围（周一到周日）
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  monday.setHours(0, 0, 0, 0);
+  
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+  
+  const formatDate = (date: Date) => {
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${month}月${day}日`;
+  };
+  
+  const qualifiedPeriod = `${formatDate(monday)}-${formatDate(sunday)}`;
+  
   return {
     contactCount,
     tagCount: totalTagCount,
     interactionCount,
+    currentLevel,
+    levelName,
+    qualifiedPeriod,
   };
 }
