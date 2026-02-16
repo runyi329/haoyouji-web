@@ -309,59 +309,87 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </div>
         </div>
         
-        {/* ============ 三、联动操作与快捷入口 ============ */}
-        <div className="grid grid-cols-2 gap-2 pt-2">
-          <button className="flex items-center justify-between bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-xs text-gray-700 transition-colors">
-            <span>查阅晋升准则</span>
-            <ChevronRight className="w-3 h-3 text-gray-400" />
+        {/* ============ 三、功能入口（双栏平铺） ============ */}
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          {/* 查阅晋升准则 */}
+          <button className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
+            <div className="flex items-center space-x-2">
+              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span className="text-xs font-medium text-gray-700">查阅晋升准则</span>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-blue-400" />
           </button>
-          <button className="flex items-center justify-between bg-gray-50 hover:bg-gray-100 rounded-lg px-3 py-2 text-xs text-gray-700 transition-colors">
-            <span>查阅历史周报</span>
-            <ChevronRight className="w-3 h-3 text-gray-400" />
+          
+          {/* 查阅历史周报 */}
+          <button className="flex items-center justify-between bg-gradient-to-br from-amber-50/30 to-amber-100/20 hover:from-amber-50/50 hover:to-amber-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-amber-100/30">
+            <div className="flex items-center space-x-2">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs font-medium text-gray-700">查阅历史周报</span>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
           </button>
         </div>
         
-        {/* ====== 底部基座：身份勋章与确权基石 ====== */}
-        <div className="mt-4 pt-3 border-t border-gray-200 bg-gradient-to-r from-gray-50/50 to-[#C5B358]/5 rounded-lg px-3 py-2.5">
-          <div className="grid grid-cols-3 gap-4 items-center">
+        {/* ====== 四、底部状态胶囊（结算感） ====== */}
+        <div className="mt-5 w-[95%] mx-auto">
+          {/* 胶囊形主卡片（当前等级） */}
+          <div className="relative bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full px-6 py-3.5 shadow-lg">
+            {/* 外阴影效果 */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full blur opacity-30 -z-10"></div>
             
-            {/* 左侧：身份勋章区（荣誉象征） */}
-            <div className="flex items-center space-x-2">
-              <Shield className="w-4 h-4 text-[#C5B358]" />
-              <div>
-                <div className="text-[9px] text-gray-400">当前等级</div>
-                <div className="text-xs font-bold text-gray-900">{config.name}</div>
+            {/* 内容：水平垂直居中 */}
+            <div className="flex items-center justify-center space-x-3">
+              <Shield className="w-5 h-5 text-white" />
+              <div className="text-center">
+                <span className="text-white text-sm font-bold">当前等级：</span>
+                <span className="text-white text-base font-bold ml-1">{config.name}</span>
               </div>
+              <Award className="w-5 h-5 text-white" />
             </div>
-            
-            {/* 中间：规模实时进度（安全感来源） */}
-            <div className="text-center">
-              <div className="text-[9px] text-gray-400 mb-0.5">规模</div>
-              <div className="text-xs">
-                <span className="font-bold text-gray-900">{props.contactCount}</span>
-                <span className="text-gray-400">/{getTargetCount()}</span>
-                {props.contactCount >= getTargetCount() && (
-                  <span className="ml-1 text-[9px] text-[#C5B358]">（已超额）</span>
-                )}
+          </div>
+          
+          {/* 辅助信息卡片（规模与状态） */}
+          <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
+            <div className="grid grid-cols-2 gap-4">
+              
+              {/* 左侧：规模实时进度 */}
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-4 h-4 text-[#C5B358]" />
+                <div>
+                  <div className="text-[9px] text-gray-400">规模</div>
+                  <div className="text-xs">
+                    <span className="font-bold text-gray-900">{props.contactCount}</span>
+                    <span className="text-gray-400">/{getTargetCount()}</span>
+                    {props.contactCount >= getTargetCount() && (
+                      <span className="ml-1 text-[9px] text-[#C5B358]">（已超额）</span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-            
-            {/* 右侧：确权状态汇总（合规感） */}
-            <div className="text-right">
-              <div className="flex items-center justify-end space-x-2 text-[10px]">
-                <span className="flex items-center space-x-1">
-                  <span className="text-green-500">✓</span>
-                  <span className="text-gray-600">标签</span>
-                </span>
-                <span className="text-gray-300">|</span>
-                <span className="flex items-center space-x-1">
-                  <span className="text-green-500">✓</span>
-                  <span className="text-gray-600">频率</span>
-                </span>
+              
+              {/* 右侧：确权状态 */}
+              <div className="flex items-center justify-end space-x-2">
+                <div className="text-right">
+                  <div className="flex items-center justify-end space-x-2 text-[10px]">
+                    <span className="flex items-center space-x-1">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-600">标签</span>
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span className="flex items-center space-x-1">
+                      <span className="text-green-500">✓</span>
+                      <span className="text-gray-600">频率</span>
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-gray-400 mt-0.5">状态：本周生效中</div>
+                </div>
               </div>
-              <div className="text-[9px] text-gray-400 mt-0.5">状态：本周生效中</div>
+              
             </div>
-            
           </div>
         </div>
       </div>
