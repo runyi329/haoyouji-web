@@ -202,47 +202,47 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </div>
           
           {/* 一行布局：总倍数 = 资本杠杆 + 贡献加速 */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             {/* 左侧：金色卡片显示总倍数 */}
-            <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-4 py-3 shadow-lg flex-shrink-0">
+            <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-3 py-2.5 shadow-lg flex-shrink-0">
               <div className="text-center">
-                <div className="text-3xl font-bold text-white">{totalMultiplier.toFixed(2)}</div>
-                <div className="text-xs text-white/80 mt-0.5">倍</div>
+                <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}</div>
+                <div className="text-[10px] text-white/80 mt-0.5">倍</div>
               </div>
             </div>
             
             {/* 等号 */}
-            <div className="text-gray-400 text-xl font-light flex-shrink-0">=</div>
+            <div className="text-gray-400 text-lg font-light flex-shrink-0">=</div>
             
             {/* 右侧：拆解公式 */}
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-1.5 flex-1">
               {/* 资本杠杆 */}
-              <div className="bg-white rounded-lg p-3 border border-gray-200 flex-1">
-                <div className="text-xs text-gray-500 mb-1">资本杠杆</div>
+              <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
+                <div className="text-[10px] text-gray-500 mb-0.5">资本杠杆</div>
                 <div className="flex items-baseline">
-                  <div className="text-xl font-bold text-[#C5B358]">
+                  <div className="text-lg font-bold text-[#C5B358] leading-tight">
                     +{((props.equityMultiplier - 1) * 100).toFixed(0)}%
                   </div>
-                  <div className="text-[#C5B358] ml-1">↑</div>
+                  <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">
+                <div className="text-[9px] text-gray-400 mt-0.5">
                   {props.equityMultiplier.toFixed(4)}x
                 </div>
               </div>
               
               {/* 加号 */}
-              <div className="text-[#C5B358] text-lg font-bold flex-shrink-0">+</div>
+              <div className="text-[#C5B358] text-base font-bold flex-shrink-0">+</div>
               
               {/* 贡献加速 */}
-              <div className="bg-white rounded-lg p-3 border border-gray-200 flex-1">
-                <div className="text-xs text-gray-500 mb-1">贡献加速</div>
+              <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
+                <div className="text-[10px] text-gray-500 mb-0.5">贡献加速</div>
                 <div className="flex items-baseline">
-                  <div className="text-xl font-bold text-[#C5B358]">
+                  <div className="text-lg font-bold text-[#C5B358] leading-tight">
                     +{(actualIdentityMultiplier * 100).toFixed(0)}%
                   </div>
-                  <div className="text-[#C5B358] ml-1">↑</div>
+                  <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">
+                <div className="text-[9px] text-gray-400 mt-0.5">
                   {props.promotionStats?.levelName || '准合伙人'}
                 </div>
               </div>
