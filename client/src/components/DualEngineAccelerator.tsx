@@ -388,31 +388,28 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
             <div className="text-[10px] text-gray-500 mb-2 text-center">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需</div>
             <div className="space-y-2">
-              {/* 人脉数 */}
+              {/* 人脉完成度 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">人脉数</span>
+                <span className="text-gray-600">人脉完成度</span>
                 <div>
-                  <span className="font-bold text-gray-900">{props.contactCount}</span>
-                  <span className="text-gray-400">/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'}</span>
-                  <span className="ml-1 text-[10px] text-[#A80000]">(还差{Math.max(0, (props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50) - props.contactCount)})</span>
+                  <span className="font-bold text-gray-900">{Math.round((props.contactCount / (props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50)) * 100)}%</span>
+                  <span className="ml-1 text-[10px] text-gray-400">(累计 {props.contactCount}/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'})</span>
                 </div>
               </div>
-              {/* 标签数 */}
+              {/* 标签完成度 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">标签数</span>
+                <span className="text-gray-600">标签完成度</span>
                 <div>
-                  <span className="font-bold text-gray-900">3</span>
-                  <span className="text-gray-400">/5</span>
-                  <span className="ml-1 text-[10px] text-[#A80000]">(还差2)</span>
+                  <span className="font-bold text-gray-900">60%</span>
+                  <span className="ml-1 text-[10px] text-gray-400">(累计 3/5)</span>
                 </div>
               </div>
-              {/* 联络数 */}
+              {/* 联络完成度 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">联络数</span>
+                <span className="text-gray-600">联络完成度</span>
                 <div>
-                  <span className="font-bold text-gray-900">4</span>
-                  <span className="text-gray-400">/5</span>
-                  <span className="ml-1 text-[10px] text-[#A80000]">(还差1)</span>
+                  <span className="font-bold text-gray-900">80%</span>
+                  <span className="ml-1 text-[10px] text-gray-400">(累计 4/5)</span>
                 </div>
               </div>
             </div>
