@@ -840,8 +840,6 @@ export async function getMyInvitedUsersStats(userId: number) {
   // - 潜在高级：达到标准用户或更高
   // - 潜在超级：达到高级用户或更高
   
-  const totalInvitedCount = usersWithCurrentLevel.length;
-  
   // 用户层面
   const potentialStandardUser = totalInvitedCount; // 所有邀请的人
   
