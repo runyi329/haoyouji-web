@@ -21,7 +21,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '标准',
       levelChar2: '用户',
       contacts: 10,
-      tagsPerPerson: 1,
+      tagsPerPerson: 20,
       frequency: 1,
       benefit: '全功能免费使用+脉动网礼品兑换'
     },
@@ -29,7 +29,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '高级',
       levelChar2: '用户',
       contacts: 20,
-      tagsPerPerson: 2,
+      tagsPerPerson: 50,
       frequency: 2,
       benefit: '标准权限全覆盖+私域好友共享会'
     },
@@ -37,7 +37,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '超级',
       levelChar2: '用户',
       contacts: 30,
-      tagsPerPerson: 3,
+      tagsPerPerson: 100,
       frequency: 3,
       benefit: '高级权限全覆盖+AI社交优先体验'
     }
@@ -48,7 +48,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '标准',
       levelChar2: '节点',
       contacts: 50,
-      tagsPerPerson: 3,
+      tagsPerPerson: 100,
       frequency: 3,
       benefit: '专属邀请码推荐+贡献持股权奖励'
     },
@@ -56,7 +56,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '高级',
       levelChar2: '节点',
       contacts: 100,
-      tagsPerPerson: 5,
+      tagsPerPerson: 300,
       frequency: 5,
       benefit: '标准权限全覆盖+业务端资源扶持'
     },
@@ -64,7 +64,7 @@ const PromotionRules: React.FC = () => {
       levelChar1: '超级',
       levelChar2: '节点',
       contacts: 150,
-      tagsPerPerson: 8,
+      tagsPerPerson: 500,
       frequency: 10,
       benefit: '高级权限全覆盖+受邀联合创始人'
     }
@@ -223,7 +223,7 @@ const PromotionRules: React.FC = () => {
             </p>
             <p>
               <span className="font-semibold text-gray-700">标签:</span>
-              所有联系人的平均标签数。例如3人中2人标签为0、1人标签为9,平均值为3。包含全局标签和个人标签。
+              所有好友的标签总和（包含全局标签和个人标签）。
             </p>
             <p>
               <span className="font-semibold text-gray-700">联络:</span>
