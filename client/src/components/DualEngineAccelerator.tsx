@@ -216,7 +216,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 左翼：已达成资产（金黄色成就感） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-600 font-medium">已达成节点</span>
+              <span className="text-xs text-gray-600 font-medium">已成功分享人脉节点</span>
               <button
                 onClick={() => setShowAchievedHelp(!showAchievedHelp)}
                 className="text-gray-400 hover:text-[#C5B358] transition-colors"
@@ -231,19 +231,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             {/* 明细展示（字号递减） */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">标准权</span>
+                <span className="text-gray-600">标准节点</span>
                 <span className="font-medium text-[#C5B358]">{props.standardNodes}</span>
               </div>
-              <div className="text-[10px] text-gray-400 pl-2">（含高级/超级）</div>
+
               
               <div className="flex items-center justify-between text-xs mt-2">
-                <span className="text-gray-600">高级权</span>
+                <span className="text-gray-600">高级节点</span>
                 <span className="font-medium text-[#C5B358]">{props.advancedNodes}</span>
               </div>
-              <div className="text-[10px] text-gray-400 pl-2">（含超级）</div>
+
               
               <div className="flex items-center justify-between text-xs mt-2">
-                <span className="text-gray-600">超级权</span>
+                <span className="text-gray-600">超级节点</span>
                 <span className="font-medium text-[#C5B358]">{props.superNodes}</span>
               </div>
             </div>
@@ -263,7 +263,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 右翼：资产培育中心（红白配色） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-600 font-medium">正在培育</span>
+              <span className="text-xs text-gray-600 font-medium">分享中人脉节点</span>
               <button
                 onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
                 className="text-gray-400 hover:text-[#A80000] transition-colors"
@@ -278,22 +278,22 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             {/* 明细展示 */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">潜在标准</span>
+                <span className="text-gray-600">潜在标准节点</span>
                 <span className="font-medium text-[#A80000]">{props.potentialStandard}</span>
               </div>
-              <div className="text-[10px] text-gray-400 pl-2">新邀约活跃者</div>
+
               
               <div className="flex items-center justify-between text-xs mt-2">
-                <span className="text-gray-600">潜在高级</span>
+                <span className="text-gray-600">潜在高级节点</span>
                 <span className="font-medium text-[#A80000]">{props.potentialAdvanced}</span>
               </div>
-              <div className="text-[10px] text-gray-400 pl-2">由标准升级中</div>
+
               
               <div className="flex items-center justify-between text-xs mt-2">
-                <span className="text-gray-600">潜在超级</span>
+                <span className="text-gray-600">潜在超级节点</span>
                 <span className="font-medium text-[#A80000]">{props.potentialSuper}</span>
               </div>
-              <div className="text-[10px] text-gray-400 pl-2">由高级冲刺中</div>
+
             </div>
             
             {/* 问号弹窗 */}
