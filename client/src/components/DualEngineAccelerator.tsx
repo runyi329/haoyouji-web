@@ -131,7 +131,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* 标题行 */}
         <div className="flex items-center justify-between mb-3">
           <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
-            市场贡献激励
+            市场贡献价值
           </span>
           {/* 问号按钮 */}
           <button
@@ -142,57 +142,32 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </button>
         </div>
         
-        {/* 左右布局：当前身份 | 晋升目标 */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* 左侧：当前身份 */}
-          <div>
-            <div className="text-2xl font-bold mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {config.name}
+        {/* 当前等级 */}
+        <div className="text-2xl font-bold mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {config.name}
+        </div>
+        
+        {/* 达标情况 + 达成时间 */}
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center">
+              <span className="text-[#C5B358] mr-1">✓</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>人脉数</span>
             </div>
-            
-            {/* 达标情况 */}
-            <div className="space-y-1 mb-2">
-              <div className="flex items-center text-xs">
-                <span className="text-[#C5B358] mr-1">✓</span>
-                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联系人达标</span>
-              </div>
-              <div className="flex items-center text-xs">
-                <span className="text-[#C5B358] mr-1">✓</span>
-                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签达标</span>
-              </div>
-              <div className="flex items-center text-xs">
-                <span className="text-[#C5B358] mr-1">✓</span>
-                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>互动达标</span>
-              </div>
+            <div className="flex items-center">
+              <span className="text-[#C5B358] mr-1">✓</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签数</span>
             </div>
-            
-            {/* 激活时间 */}
-            {props.promotionStats?.qualifiedPeriod && (
-              <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
-                激活时间：{props.promotionStats.qualifiedPeriod.split('-')[0]}
-              </div>
-            )}
-          </div>
-          
-          {/* 右侧：晋升目标 */}
-          <div className="text-right">
-            {/* 本轮晋升周期 */}
-            {props.promotionStats?.qualifiedPeriod && (
-              <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-2`}>
-                本轮晋升周期：{props.promotionStats.qualifiedPeriod}
-              </div>
-            )}
-            
-            {/* 距离下一级 */}
-            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'} mb-1`}>
-              距离高级节点还需：
-            </div>
-            <div className="space-y-0.5 text-[10px]" style={{ opacity: 0.7 }}>
-              <div>联系人 40人</div>
-              <div>标签 15个</div>
-              <div>互动 40次</div>
+            <div className="flex items-center">
+              <span className="text-[#C5B358] mr-1">✓</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联络数</span>
             </div>
           </div>
+          {props.promotionStats?.qualifiedPeriod && (
+            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
+              达成时间：{props.promotionStats.qualifiedPeriod.split('-')[0]}
+            </div>
+          )}
         </div>
       </div>
       
