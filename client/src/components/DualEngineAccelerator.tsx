@@ -59,8 +59,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   const achievedTitleRef = useRef<HTMLSpanElement>(null);
   const cultivatingTitleRef = useRef<HTMLSpanElement>(null);
   
+  // 根据promotionStats计算实际的等级加速
+  const getIdentityMultiplier = () => {
+    const level = props.promotionStats?.currentLevel;
+    if (level === 'standard' || level === 'standard_user') return 0.25;
+    if (level === 'advanced' || level === 'advanced_user') return 0.50;
+    if (level === 'super' || level === 'super_user') return 1.00;
+    return 0.0; // 准合伙人
+  };
+  
+  const actualIdentityMultiplier = getIdentityMultiplier();
+  
   // 计算总收益倍数
-  const totalMultiplier = props.equityMultiplier + props.identityMultiplier;
+  const totalMultiplier = props.equityMultiplier + actualIdentityMultiplier;
   
   // 节点配置
   const nodeConfig: Record<string, { name: string; badge: string }> = {
@@ -225,7 +236,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 <div className="flex items-center space-x-0.5 mb-0.5">
                   <span className="text-[9px] text-gray-600">等级</span>
                 </div>
-                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.identityMultiplier.toFixed(1)}</div>
+                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{actualIdentityMultiplier.toFixed(2)}</div>
               </div>
             </div>
           </div>
