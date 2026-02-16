@@ -84,41 +84,42 @@ export default function MyEquityRedWhite() {
   const othersValue = Math.max(0, 100 - (equity.totalEquity || 0));
 
   // 公司股权分配数据（根据后台股份池配置）
+  // 使用与第一部分饼图相同的配色方案：深红色和金色
   const companyEquityParts = [
     {
       label: '天使投资人',
       value: 30.00,
-      color: '#800000',
+      color: '#A80000',
       description: '30.00%'
     },
     {
       label: '创始团队/创始人',
       value: 40.00,
-      color: '#C5B358',
+      color: '#A80000',
       description: '40.00%'
     },
     {
       label: '员工持股平台',
       value: 15.00,
-      color: '#4A90E2',
+      color: '#C5B358',
       description: '15.00%'
     },
     {
       label: '市场贡献池',
       value: 12.50,
-      color: '#F5A623',
+      color: '#C5B358',
       description: '12.50%'
     },
     {
       label: '联合创始人',
       value: 2.50,
-      color: '#7ED321',
+      color: '#C5B358',
       description: '2.50%'
     },
     {
       label: '战略投资股东',
       value: 0.00,
-      color: '#9B9B9B',
+      color: '#C5B358',
       description: '0.00%'
     },
   ];
