@@ -201,38 +201,50 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
           </div>
           
-          {/* 总收益倍数卡片 */}
-          <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-xl p-4 shadow-lg">
-            <div className="text-center">
-              <div className="text-white/80 text-xs mb-1">总收益倍数</div>
-              <div className="flex items-baseline justify-center">
-                <div className="text-4xl font-bold text-white">{totalMultiplier.toFixed(2)}</div>
-                <div className="text-lg text-white/90 ml-1">倍</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* 拆解明细（两个并排卡片） */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* 资产杠杆 */}
-            <div className="bg-white rounded-lg p-3 border border-gray-200">
-              <div className="text-xs text-gray-500 mb-1">资产杠杆</div>
-              <div className="text-2xl font-bold text-[#C5B358]">
-                +{((props.equityMultiplier - 1) * 100).toFixed(0)}%
-              </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">
-                {props.equityMultiplier.toFixed(4)}x 杠杆系数
+          {/* 一行布局：总倍数 = 资本杠杆 + 贡献加速 */}
+          <div className="flex items-center justify-between gap-2">
+            {/* 左侧：金色卡片显示总倍数 */}
+            <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-4 py-3 shadow-lg flex-shrink-0">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-white">{totalMultiplier.toFixed(2)}</div>
+                <div className="text-xs text-white/80 mt-0.5">倍</div>
               </div>
             </div>
             
-            {/* 等级加速 */}
-            <div className="bg-white rounded-lg p-3 border border-gray-200">
-              <div className="text-xs text-gray-500 mb-1">等级加速</div>
-              <div className="text-2xl font-bold text-[#C5B358]">
-                +{(actualIdentityMultiplier * 100).toFixed(0)}%
+            {/* 等号 */}
+            <div className="text-gray-400 text-xl font-light flex-shrink-0">=</div>
+            
+            {/* 右侧：拆解公式 */}
+            <div className="flex items-center gap-2 flex-1">
+              {/* 资本杠杆 */}
+              <div className="bg-white rounded-lg p-3 border border-gray-200 flex-1">
+                <div className="text-xs text-gray-500 mb-1">资本杠杆</div>
+                <div className="flex items-baseline">
+                  <div className="text-xl font-bold text-[#C5B358]">
+                    +{((props.equityMultiplier - 1) * 100).toFixed(0)}%
+                  </div>
+                  <div className="text-[#C5B358] ml-1">↑</div>
+                </div>
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  {props.equityMultiplier.toFixed(4)}x
+                </div>
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">
-                {props.promotionStats?.levelName || '准合伙人'}
+              
+              {/* 加号 */}
+              <div className="text-[#C5B358] text-lg font-bold flex-shrink-0">+</div>
+              
+              {/* 贡献加速 */}
+              <div className="bg-white rounded-lg p-3 border border-gray-200 flex-1">
+                <div className="text-xs text-gray-500 mb-1">贡献加速</div>
+                <div className="flex items-baseline">
+                  <div className="text-xl font-bold text-[#C5B358]">
+                    +{(actualIdentityMultiplier * 100).toFixed(0)}%
+                  </div>
+                  <div className="text-[#C5B358] ml-1">↑</div>
+                </div>
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  {props.promotionStats?.levelName || '准合伙人'}
+                </div>
               </div>
             </div>
           </div>
