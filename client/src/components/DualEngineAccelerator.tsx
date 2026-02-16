@@ -133,41 +133,64 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
             市场贡献激励
           </span>
-          <div className="flex items-center space-x-2">
-            {/* 倒计时 */}
-            <span className={`text-[10px] font-mono ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} bg-white/10 px-2 py-0.5 rounded flex items-center space-x-1`}>
-              <Clock className="w-3 h-3" style={{ color: '#C5B358' }} />
-              <span>距离资产定格还剩 {getCountdown()}</span>
-            </span>
-            {/* 问号按钮 */}
-            <button
-              onClick={() => setShowRules(true)}
-              className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-            >
-              <span className="text-xs">?</span>
-            </button>
-          </div>
+          {/* 问号按钮 */}
+          <button
+            onClick={() => setShowRules(true)}
+            className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+          >
+            <span className="text-xs">?</span>
+          </button>
         </div>
-        {/* 左右布局：我的身份 | 市场权重 */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* 左侧：我的身份 */}
+        
+        {/* 左右布局：当前身份 | 晋升目标 */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* 左侧：当前身份 */}
           <div>
-            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-1`}>我的身份</div>
-            <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <div className="text-2xl font-bold mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
               {config.name}
             </div>
-            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} mt-0.5`}>
-              由个人人脉贡献决定
+            
+            {/* 达标情况 */}
+            <div className="space-y-1 mb-2">
+              <div className="flex items-center text-xs">
+                <span className="text-[#C5B358] mr-1">✓</span>
+                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联系人达标</span>
+              </div>
+              <div className="flex items-center text-xs">
+                <span className="text-[#C5B358] mr-1">✓</span>
+                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签达标</span>
+              </div>
+              <div className="flex items-center text-xs">
+                <span className="text-[#C5B358] mr-1">✓</span>
+                <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>互动达标</span>
+              </div>
             </div>
+            
+            {/* 激活时间 */}
+            {props.promotionStats?.qualifiedPeriod && (
+              <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
+                激活时间：{props.promotionStats.qualifiedPeriod.split('-')[0]}
+              </div>
+            )}
           </div>
-          {/* 右侧：市场权重 */}
+          
+          {/* 右侧：晋升目标 */}
           <div className="text-right">
-            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-1`}>市场权重</div>
-            <div className="text-2xl font-bold text-[#C5B358]" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              +{(props.contribEquity).toFixed(4)}%
+            {/* 本轮晋升周期 */}
+            {props.promotionStats?.qualifiedPeriod && (
+              <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-70'} mb-2`}>
+                本轮晋升周期：{props.promotionStats.qualifiedPeriod}
+              </div>
+            )}
+            
+            {/* 距离下一级 */}
+            <div className={`text-xs ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'} mb-1`}>
+              距离高级节点还需：
             </div>
-            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'} mt-0.5`}>
-              由共享人脉贡献决定
+            <div className="space-y-0.5 text-[10px]" style={{ opacity: 0.7 }}>
+              <div>联系人 40人</div>
+              <div>标签 15个</div>
+              <div>互动 40次</div>
             </div>
           </div>
         </div>
