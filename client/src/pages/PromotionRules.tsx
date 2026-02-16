@@ -138,7 +138,7 @@ const PromotionRules: React.FC = () => {
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-10">
         <div className="flex items-center">
-          <button onClick={() => setLocation('/parent')} className="mr-4">
+          <button onClick={() => setLocation('/parent/contacts')} className="mr-4">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
