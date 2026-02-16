@@ -162,33 +162,37 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             {/* 等号 */}
             <div className="text-gray-400 text-xl font-light">=</div>
             
-            {/* 拆解公式 */}
-            <div className="flex items-center space-x-2">
+            {/* 拆解公式（垂直布局） */}
+            <div className="flex items-center space-x-1.5">
               {/* 股权加成 */}
-              <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-2.5 py-2 flex items-center space-x-1" style={{ whiteSpace: 'nowrap' }}>
-                <span className="text-[10px] text-gray-600">💰资产</span>
-                <button
-                  onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                </button>
-                <div className="text-xl font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.equityMultiplier.toFixed(1)}</div>
+              <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
+                <div className="flex items-center space-x-0.5 mb-0.5">
+                  <span className="text-[9px] text-gray-600">资产</span>
+                  <button
+                    onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                    className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                  >
+                    <HelpCircle className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.equityMultiplier.toFixed(1)}</div>
               </div>
               
               {/* 加号 */}
-              <div className="text-[#C5B358] text-xl font-bold">+</div>
+              <div className="text-[#C5B358] text-lg font-bold">+</div>
               
               {/* 身份加成 */}
-              <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-2.5 py-2 flex items-center space-x-1" style={{ whiteSpace: 'nowrap' }}>
-                <span className="text-[10px] text-gray-600">🎖️等级</span>
-                <button
-                  onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                </button>
-                <div className="text-xl font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.identityMultiplier.toFixed(1)}</div>
+              <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
+                <div className="flex items-center space-x-0.5 mb-0.5">
+                  <span className="text-[9px] text-gray-600">等级</span>
+                  <button
+                    onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                    className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                  >
+                    <HelpCircle className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.identityMultiplier.toFixed(1)}</div>
               </div>
             </div>
           </div>
