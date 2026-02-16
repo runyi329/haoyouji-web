@@ -386,17 +386,44 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           
           {/* 辅助信息卡片（距离下一等级差距） */}
           <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
-            {/* 晋升周期 */}
-            <div className="text-[10px] text-gray-400 mb-1 text-center">
-              晋升周期：{(() => {
-                const now = new Date();
-                const dayOfWeek = now.getDay();
-                const monday = new Date(now);
-                monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                return `${monday.getMonth() + 1}月${monday.getDate()}日 至 ${sunday.getMonth() + 1}月${sunday.getDate()}日`;
-              })()}
+            {/* 晋升周期进度条 */}
+            <div className="mb-3">
+              <div className="text-[10px] text-gray-400 mb-2 text-center">晋升周期</div>
+              <div className="flex justify-between gap-1">
+                {(() => {
+                  const now = new Date();
+                  const today = now.getDay();
+                  const currentDate = now.getDate();
+                  const monday = new Date(now);
+                  monday.setDate(now.getDate() - (today === 0 ? 6 : today - 1));
+                  
+                  const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
+                  
+                  return weekDays.map((day, index) => {
+                    const date = new Date(monday);
+                    date.setDate(monday.getDate() + index);
+                    const dateNum = date.getDate();
+                    const isPast = index < (today === 0 ? 6 : today - 1);
+                    const isToday = index === (today === 0 ? 6 : today - 1);
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded text-[9px] ${
+                          isPast
+                            ? 'bg-gradient-to-b from-[#C5B358] to-[#D4AF37] text-white'
+                            : isToday
+                            ? 'bg-gradient-to-b from-[#B8A347] to-[#C5B358] text-white font-bold border-2 border-[#D4AF37]'
+                            : 'bg-gray-100 text-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">{dateNum}日</div>
+                        <div className="text-[8px] opacity-80">{day}</div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
             
             <div className="text-[10px] text-gray-500 mb-2 text-center">
