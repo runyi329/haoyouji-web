@@ -10,7 +10,7 @@ interface WeeklyReport {
   dateRange: string;
   status: 'confirmed' | 'idle';
   weightGain: number;
-  pointsGain: number;
+  equityGain: number;
   blockchainHash: string;
   personalContribution: {
     networkSize: number;
@@ -43,10 +43,10 @@ const mockOverview: ArchiveOverview = {
 const mockReports: WeeklyReport[] = [
   {
     weekNumber: '2026-W07',
-    dateRange: '02.09 - 02.15',
+    dateRange: '2026年2月9日 - 2月15日',
     status: 'confirmed',
     weightGain: 0.5500,
-    pointsGain: 120,
+    equityGain: 120,
     blockchainHash: '0x88f3a2d5c7b9e1f4a6d8c2e5f7a9b3c1d4e6f8a2',
     personalContribution: {
       networkSize: 2109,
@@ -62,10 +62,10 @@ const mockReports: WeeklyReport[] = [
   },
   {
     weekNumber: '2026-W06',
-    dateRange: '02.02 - 02.08',
+    dateRange: '2026年2月2日 - 2月8日',
     status: 'confirmed',
     weightGain: 0.4500,
-    pointsGain: 100,
+    equityGain: 100,
     blockchainHash: '0x77e2b1c6a8d0f3e5b7c9d1e3f5a7b9c1d3e5f7a1',
     personalContribution: {
       networkSize: 2000,
@@ -81,10 +81,10 @@ const mockReports: WeeklyReport[] = [
   },
   {
     weekNumber: '2026-W05',
-    dateRange: '01.26 - 02.01',
+    dateRange: '2026年1月26日 - 2月1日',
     status: 'idle',
     weightGain: 0,
-    pointsGain: 0,
+    equityGain: 0,
     blockchainHash: '',
     personalContribution: {
       networkSize: 1950,
@@ -100,10 +100,10 @@ const mockReports: WeeklyReport[] = [
   },
   {
     weekNumber: '2026-W04',
-    dateRange: '01.19 - 01.25',
+    dateRange: '2026年1月19日 - 1月25日',
     status: 'confirmed',
     weightGain: 0.6200,
-    pointsGain: 135,
+    equityGain: 135,
     blockchainHash: '0x66d1a0b5c7e9f2d4a6b8c0d2e4f6a8b0c2d4e6f0',
     personalContribution: {
       networkSize: 1900,
@@ -119,10 +119,10 @@ const mockReports: WeeklyReport[] = [
   },
   {
     weekNumber: '2026-W03',
-    dateRange: '01.12 - 01.18',
+    dateRange: '2026年1月12日 - 1月18日',
     status: 'confirmed',
     weightGain: 0.3800,
-    pointsGain: 85,
+    equityGain: 85,
     blockchainHash: '0x55c0b9a4d6e8f1c3a5b7c9d1e3f5a7b9c1d3e5f9',
     personalContribution: {
       networkSize: 1850,
@@ -187,9 +187,9 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; onClick: () => void }> 
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-500 mb-1">定格积分</div>
+            <div className="text-xs text-gray-500 mb-1">定格股权</div>
             <div className="text-lg font-medium text-gray-900">
-              +{report.pointsGain} PTS
+              +{report.equityGain} 张
             </div>
           </div>
         </div>
@@ -305,32 +305,32 @@ const EquityHistoryArchive: React.FC = () => {
         />
       </div>
 
-      {/* 积分统计区域 */}
+      {/* 股权统计区域 */}
       <div className="bg-white mx-4 mb-4 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-gray-900">积分统计</div>
+          <div className="text-sm font-semibold text-gray-900">股权统计</div>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">累计积分</div>
+            <div className="text-xs text-gray-500 mb-1">累计股权</div>
             <div className="text-2xl font-bold text-[#C5B358]">
-              {mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.pointsGain, 0)}
+              {mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
-            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">本月积分</div>
+            <div className="text-xs text-gray-500 mb-1">本月股权</div>
             <div className="text-2xl font-bold text-gray-900">
-              {mockReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.pointsGain, 0)}
+              {mockReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
-            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-gray-500 mb-1">平均周积分</div>
+            <div className="text-xs text-gray-500 mb-1">平均周股权</div>
             <div className="text-2xl font-bold text-gray-900">
-              {Math.round(mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.pointsGain, 0) / mockReports.filter(r => r.status === 'confirmed').length)}
+              {Math.round(mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0) / mockReports.filter(r => r.status === 'confirmed').length)}
             </div>
-            <div className="text-xs text-gray-400 mt-0.5">PTS</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
         </div>
       </div>

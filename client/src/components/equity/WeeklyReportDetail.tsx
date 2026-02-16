@@ -6,7 +6,7 @@ interface WeeklyReport {
   dateRange: string;
   status: 'confirmed' | 'idle';
   weightGain: number;
-  pointsGain: number;
+  equityGain: number;
   blockchainHash: string;
   personalContribution: {
     networkSize: number;
@@ -90,9 +90,9 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-white/70 text-xs mb-1">定格积分</div>
+                <div className="text-white/70 text-xs mb-1">定格股权</div>
                 <div className="text-white text-2xl font-bold">
-                  +{report.pointsGain} PTS
+                  +{report.equityGain} 张
                 </div>
               </div>
             </div>
