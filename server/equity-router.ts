@@ -213,10 +213,10 @@ export const equityRouter = router({
     .query(async ({ ctx }) => {
       return await dbEquity.getMyInvitedUsersStats(ctx.user.id);
     }),
-});
 
   // 获取用户的历史周报
   getWeeklyReports: protectedProcedure
     .query(async ({ ctx }) => {
       return await dbEquity.getUserWeeklyReports(ctx.user.id);
     }),
+});
