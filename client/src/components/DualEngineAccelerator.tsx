@@ -374,7 +374,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <div>● <span className="font-medium">超级节点：</span>曾经达到过超级用户的累计人数。</div>
                         
                         <div className="mt-2 text-xs text-gray-500 bg-amber-50 p-2 rounded">
-                          💡 <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。即使掉级了，也会计入累计，体现您的历史贡献。
+                          <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。即使掉级了，也会计入累计，体现您的历史贡献。
                         </div>
                       </div>
                     </div>
@@ -470,7 +470,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <div>● <span className="font-medium">潜在超级节点：</span>当前达到高级用户或更高的人数。</div>
                         
                         <div className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
-                          💡 <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。每个人同时拥有两重身份，体现您的当前业务拓展潜力。
+                          <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。每个人同时拥有两重身份，体现您的当前业务拓展潜力。
                         </div>
                       </div>
                     </div>

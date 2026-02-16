@@ -217,12 +217,12 @@ export default function MyEquityRedWhite() {
                   
                   <div className="space-y-2">
                     <div>
-                      <div className="font-medium text-gray-800">💰 资本股</div>
+                      <div className="font-medium text-gray-800">资本股</div>
                       <div className="text-sm text-gray-600 ml-5">您投资获得的固定股份。</div>
                     </div>
                     
                     <div>
-                      <div className="font-medium text-gray-800">🌟 资源股</div>
+                      <div className="font-medium text-gray-800">资源股</div>
                       <div className="text-sm text-gray-600 ml-5">每周根据您的市场贡献累积的股份：</div>
                       <div className="text-sm text-gray-600 ml-5 mt-1 bg-gray-50 p-2 rounded">
                         <div className="font-mono text-xs">本周新增股份 = （资本加速 + 身份加速）× 本周开拓的新用户数</div>
