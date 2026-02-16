@@ -270,8 +270,8 @@ export default function MyEquityRedWhite() {
             // 底部基座相关
             contactCount={overviewStats?.totalContacts || 0}
             
-            // 股权加成相关
-            equityMultiplier={1.2}
+            // 股权加成相关（使用实际的资本杠杆系数）
+            equityMultiplier={equity.dynamicLeverage?.leverage || 1.0}
             investmentEquity={equity.investmentEquity || 0}
             
             // 身份加成相关
