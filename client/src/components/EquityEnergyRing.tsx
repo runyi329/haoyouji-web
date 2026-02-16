@@ -78,13 +78,12 @@ export default function EquityEnergyRing({ parts, othersValue, totalEquity }: Eq
   // 生成环形路径（donut shape）
   const donutPath = (startAngle: number, endAngle: number) => {
     if (endAngle - startAngle >= 359.99) {
-      // 完整圆环
+      // 完整圆环：外圆顺时针 + 内圆逆时针，形成环形
       return `
         M ${cx} ${cy - outerRadius}
         A ${outerRadius} ${outerRadius} 0 1 1 ${cx - 0.01} ${cy - outerRadius}
-        Z
-        M ${cx} ${cy - innerRadius}
-        A ${innerRadius} ${innerRadius} 0 1 0 ${cx - 0.01} ${cy - innerRadius}
+        L ${cx - 0.01} ${cy - innerRadius}
+        A ${innerRadius} ${innerRadius} 0 1 0 ${cx} ${cy - innerRadius}
         Z
       `;
     }
