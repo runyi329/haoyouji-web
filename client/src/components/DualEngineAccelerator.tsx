@@ -219,7 +219,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               onClick={() => setShowContactHelp(!showContactHelp)}
               className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
             >
-              <span className="text-[#C5B358] mr-1">✓</span>
+              {(() => {
+                const currentContact = props.promotionStats?.contactCount || props.contactCount;
+                const targetContact = props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50;
+                const contactAchieved = currentContact >= targetContact;
+                return <span className={contactAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{contactAchieved ? '✓' : '✗'}</span>;
+              })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>人脉数</span>
             </div>
             <div 
@@ -227,7 +232,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               onClick={() => setShowTagHelp(!showTagHelp)}
               className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
             >
-              <span className="text-[#C5B358] mr-1">✓</span>
+              {(() => {
+                const currentTag = props.promotionStats?.tagCount || 0;
+                const targetTag = props.nodeLevel === 'standard' ? 300 : props.nodeLevel === 'advanced' ? 500 : 100;
+                const tagAchieved = currentTag >= targetTag;
+                return <span className={tagAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{tagAchieved ? '✓' : '✗'}</span>;
+              })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签数</span>
             </div>
             <div 
@@ -235,7 +245,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               onClick={() => setShowInteractionHelp(!showInteractionHelp)}
               className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
             >
-              <span className="text-[#C5B358] mr-1">✓</span>
+              {(() => {
+                const currentInteraction = props.promotionStats?.interactionCount || 0;
+                const targetInteraction = props.nodeLevel === 'standard' ? 200 : props.nodeLevel === 'advanced' ? 250 : 150;
+                const interactionAchieved = currentInteraction >= targetInteraction;
+                return <span className={interactionAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{interactionAchieved ? '✓' : '✗'}</span>;
+              })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联络数</span>
             </div>
           </div>
