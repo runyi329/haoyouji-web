@@ -53,7 +53,7 @@ const PromotionRules: React.FC = () => {
       contacts: 50,
       tagsPerPerson: 3,
       frequency: 3,
-      benefit: '开启倍率收益结算,获得节点经营团队组建权限'
+      benefit: '专属邀请码+推荐加贡献持股权奖励'
     },
     {
       levelChar1: '高级',
@@ -61,7 +61,7 @@ const PromotionRules: React.FC = () => {
       contacts: 100,
       tagsPerPerson: 5,
       frequency: 5,
-      benefit: '享有 2.2倍 收益爆发,并入围公司个人股权激励计划'
+      benefit: '标准权限全覆盖+业务端资源扶持'
     },
     {
       levelChar1: '超级',
@@ -69,7 +69,7 @@ const PromotionRules: React.FC = () => {
       contacts: 150,
       tagsPerPerson: 8,
       frequency: 10,
-      benefit: '享有公司最高级权益分红,受邀入公司战略合伙人'
+      benefit: '高级权限全覆盖+受邀联合创始人'
     }
   ];
 
