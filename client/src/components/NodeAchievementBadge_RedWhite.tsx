@@ -308,9 +308,9 @@ const NodeAchievementBadgeRedWhite: React.FC<NodeAchievementBadgeProps> = ({
               </div>
               {/* 文案内容 */}
               <div className="relative z-10 space-y-1">
-                <div className="text-[10px] text-[#C5B358]">🕐 距离本周资产定格还剩 {getCountdown()}</div>
-                <div className="text-gray-500">
-                  💡 "每周日晚，一份诚实的财富存证，任何时候不可更改、不可篡改。"
+                <div className="text-[10px] text-[#C5B358]">距离本周资产定格还剩 {getCountdown()}</div>
+                <div className="text-[10px] text-gray-500">
+                  “每周日晚，一份诚实的财富存证，任何时候不可更改、不可篡改。”
                 </div>
               </div>
             </div>
