@@ -188,19 +188,19 @@ const PromotionRules: React.FC = () => {
           <div className="space-y-2 text-xs text-gray-600 leading-relaxed">
             <p>
               <span className="font-semibold text-gray-700">人脉规模：</span>
-              指您在账户内添加的联系人总数，不考虑信息完整度，仅按添加数量统计。
+              账户内添加的联系人数量，不考虑信息完整度。
             </p>
             <p>
               <span className="font-semibold text-gray-700">标签深度：</span>
-              指您为所有联系人添加的平均标签数量。例如：您有3位联系人，其中2位标签数为0，1位标签数为9，则平均标签数为3。标签包含全局标签和个人标签。
+              所有联系人的平均标签数。例如3人中2人标签为0、1人标签为9，平均值为3。包含全局标签和个人标签。
             </p>
             <p>
               <span className="font-semibold text-gray-700">联络频次：</span>
-              指您在每个自然周（周一至周日）内，点击任意联系人进行联络的总次数。
+              每周（周一至周日）点击联系人进行联络的总次数。
             </p>
             <p className="pt-1 border-t border-gray-200 mt-3">
-              <span className="font-semibold text-gray-700">考核周期说明：</span>
-              本周权益基于上周达标情况。若上周达标，本周即可享有相应权益；若本周未达标，下周将无法享有该权益。系统会在其他页面提示您本周还差多少次联络，以便及时调整。
+              <span className="font-semibold text-gray-700">考核周期：</span>
+              本周权益取决于上周是否达标。上周达标，本周享有权益；本周未达标，下周失去权益。系统会提示您本周还差多少次联络。
             </p>
           </div>
         </div>
