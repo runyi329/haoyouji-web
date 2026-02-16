@@ -378,48 +378,43 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               <div className="text-center">
                 <span className="text-white text-sm font-bold">当前等级：</span>
                 <span className="text-white text-base font-bold ml-1">{config.name}</span>
+                <span className="text-white/70 text-[10px] ml-2">(上周符合)</span>
               </div>
               <Award className="w-5 h-5 text-white" />
             </div>
           </div>
           
-          {/* 辅助信息卡片（规模与状态） */}
+          {/* 辅助信息卡片（距离下一等级差距） */}
           <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
-            <div className="grid grid-cols-2 gap-4">
-              
-              {/* 左侧：规模实时进度 */}
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="w-4 h-4 text-[#C5B358]" />
+            <div className="text-[10px] text-gray-500 mb-2 text-center">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需</div>
+            <div className="space-y-2">
+              {/* 人脉数 */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">人脉数</span>
                 <div>
-                  <div className="text-[9px] text-gray-400">规模</div>
-                  <div className="text-xs">
-                    <span className="font-bold text-gray-900">{props.contactCount}</span>
-                    <span className="text-gray-400">/{getTargetCount()}</span>
-                    {props.contactCount >= getTargetCount() && (
-                      <span className="ml-1 text-[9px] text-[#C5B358]">（已超额）</span>
-                    )}
-                  </div>
+                  <span className="font-bold text-gray-900">{props.contactCount}</span>
+                  <span className="text-gray-400">/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'}</span>
+                  <span className="ml-1 text-[10px] text-[#A80000]">(还差{Math.max(0, (props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50) - props.contactCount)})</span>
                 </div>
               </div>
-              
-              {/* 右侧：确权状态 */}
-              <div className="flex items-center justify-end space-x-2">
-                <div className="text-right">
-                  <div className="flex items-center justify-end space-x-2 text-[10px]">
-                    <span className="flex items-center space-x-1">
-                      <span className="text-green-500">✓</span>
-                      <span className="text-gray-600">标签</span>
-                    </span>
-                    <span className="text-gray-300">|</span>
-                    <span className="flex items-center space-x-1">
-                      <span className="text-green-500">✓</span>
-                      <span className="text-gray-600">频率</span>
-                    </span>
-                  </div>
-                  <div className="text-[9px] text-gray-400 mt-0.5">状态：本周生效中</div>
+              {/* 标签数 */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">标签数</span>
+                <div>
+                  <span className="font-bold text-gray-900">3</span>
+                  <span className="text-gray-400">/5</span>
+                  <span className="ml-1 text-[10px] text-[#A80000]">(还差2)</span>
                 </div>
               </div>
-              
+              {/* 联络数 */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">联络数</span>
+                <div>
+                  <span className="font-bold text-gray-900">4</span>
+                  <span className="text-gray-400">/5</span>
+                  <span className="ml-1 text-[10px] text-[#A80000]">(还差1)</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
