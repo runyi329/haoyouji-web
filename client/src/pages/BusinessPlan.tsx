@@ -1,3 +1,4 @@
+// 商业计划书页面 - 红白双色卡片布局 v2.0
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "wouter";
 
