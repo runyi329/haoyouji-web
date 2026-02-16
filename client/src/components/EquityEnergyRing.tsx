@@ -42,14 +42,14 @@ export default function EquityEnergyRing({ parts, othersValue, totalEquity }: Eq
       value: capitalEquity,
       color: '#800000', // 深绯红
       upgradeLabel: '资本权证',
-      description: '静态投入权重'
+      description: '静态资金投入'
     },
     {
-      label: '贡献加成',
+      label: '资源权证',
       value: contributionEquity,
       color: '#C5B358', // 香槟金
-      upgradeLabel: '贡献加成',
-      description: '动态经营增量'
+      upgradeLabel: '资源权证',
+      description: '动态资源投入'
     }
   ].filter(p => p.value > 0);
   

@@ -218,9 +218,9 @@ export default function MyEquityRedWhite() {
                   
                   {/* 右侧：拆解公式 */}
                   <div className="flex items-center gap-1.5 flex-1">
-                    {/* 资本杠杆 */}
+                    {/* 资本加速 */}
                     <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                      <div className="text-[10px] text-gray-500 mb-0.5">资本杠杆</div>
+                      <div className="text-[10px] text-gray-500 mb-0.5">资本加速</div>
                       <div className="flex items-baseline">
                         <div className="text-lg font-bold text-[#C5B358] leading-tight">
                           +{((capitalLeverage - 1) * 100).toFixed(0)}%
@@ -235,9 +235,9 @@ export default function MyEquityRedWhite() {
                     {/* 加号 */}
                     <div className="text-[#C5B358] text-base font-bold flex-shrink-0">+</div>
                     
-                    {/* 贡献加速 */}
+                    {/* 资源加速 */}
                     <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                      <div className="text-[10px] text-gray-500 mb-0.5">贡献加速</div>
+                      <div className="text-[10px] text-gray-500 mb-0.5">资源加速</div>
                       <div className="flex items-baseline">
                         <div className="text-lg font-bold text-[#C5B358] leading-tight">
                           +{(contributionAcceleration * 100).toFixed(0)}%
