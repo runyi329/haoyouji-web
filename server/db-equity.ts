@@ -903,9 +903,17 @@ export async function getUserWeeklyReports(userId: number) {
     throw new Error("User not found");
   }
   
-  // 获取座位编号
-  const investment = await db.select().from(equityInvestments).where(eq(equityInvestments.userId, userId)).limit(1);
-  const seatNumber = investment && investment.length > 0 ? investment[0].seatNumber : 0;
+  // 获取座位编号，如果没有投资记录则使用用户ID
+  let seatNumber = user[0].id; // 默认使用用户ID
+  try {
+    const investment = await db.select().from(equityInvestments).where(eq(equityInvestments.userId, userId)).limit(1);
+    if (investment && investment.length > 0 && investment[0].seatNumber) {
+      seatNumber = investment[0].seatNumber;
+    }
+  } catch (error) {
+    console.error('[getUserWeeklyReports] Error fetching seat number:', error);
+    // 使用默认值（用户ID）
+  }
   
   const registrationDate = new Date(user[0].createdAt);
   const now = new Date();
