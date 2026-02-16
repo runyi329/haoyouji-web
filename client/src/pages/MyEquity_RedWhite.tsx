@@ -635,10 +635,14 @@ export default function MyEquityRedWhite() {
           </div>
 
           {/* 白色区域 */}
-          <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-4 mx-4">
+          <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-3 mx-4">
             {/* 1. 公司股权分配 */}
-            <div className="p-4">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center space-x-1 mb-3">
+                <svg className="w-4 h-4 text-[#A80000] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                </svg>
                 <span ref={companyEquityTitleRef} className="text-sm font-semibold text-gray-700">公司股权分配</span>
                 <button
                   ref={companyEquityHelpRef}
@@ -678,8 +682,13 @@ export default function MyEquityRedWhite() {
             </div>
 
             {/* 2. 在线签署 */}
-            <div className="p-4">
-              <div className="text-sm font-semibold text-gray-700 mb-3">在线签署</div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center space-x-1 mb-3">
+                <svg className="w-4 h-4 text-[#A80000] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-semibold text-gray-700">在线签署</span>
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">签署进度</span>
@@ -702,8 +711,13 @@ export default function MyEquityRedWhite() {
             </div>
 
             {/* 3. 常见问题 */}
-            <div className="p-4">
-              <div className="text-sm font-semibold text-gray-700 mb-3">常见问题</div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+              <div className="flex items-center space-x-1 mb-3">
+                <svg className="w-4 h-4 text-[#A80000] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm font-semibold text-gray-700">常见问题</span>
+              </div>
               <div className="text-xs text-gray-500 mb-3">4个核心问题解答</div>
               <div className="space-y-2">
                 <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
