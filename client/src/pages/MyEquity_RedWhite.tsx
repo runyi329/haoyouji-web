@@ -288,13 +288,22 @@ export default function MyEquityRedWhite() {
               <DollarSign className="w-5 h-5 opacity-90" />
             </div>
             
-            {/* 预留空间，与资源股红色帽子高度一致 */}
-            <div className="mb-2">
-              {/* 这里后续会添加内容 */}
+            {/* 投资金额 + 持股排名 */}
+            <div className="flex items-start justify-between mb-2">
+              <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {equity.capitalCertificate?.toLocaleString('zh-CN') || '0'}元
+              </div>
+              {equity.ranking && (
+                <div className="text-right">
+                  <div className="text-xs opacity-70 mb-0.5">当前持股排名</div>
+                  <div className="text-xl font-bold">No.{equity.ranking.rank}</div>
+                </div>
+              )}
             </div>
             
-            <div className="text-xs">
-              {/* 这里后续会添加内容 */}
+            {/* 底部信息 */}
+            <div className="text-xs opacity-60">
+              我的投资
             </div>
           </div>
 
