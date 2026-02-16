@@ -7,6 +7,8 @@ export default function PromotionRules() {
   const userTiers = [
     {
       level: '标准用户',
+      levelChar1: '标准',
+      levelChar2: '用户',
       contacts: '5人',
       tagsPerPerson: '人均1个',
       frequency: '日累计1人',
@@ -14,6 +16,8 @@ export default function PromotionRules() {
     },
     {
       level: '高级用户',
+      levelChar1: '高级',
+      levelChar2: '用户',
       contacts: '10人',
       tagsPerPerson: '人均2个',
       frequency: '日累计2人',
@@ -21,6 +25,8 @@ export default function PromotionRules() {
     },
     {
       level: '超级用户',
+      levelChar1: '超级',
+      levelChar2: '用户',
       contacts: '20人',
       tagsPerPerson: '人均3个',
       frequency: '日累计3人',
@@ -32,6 +38,8 @@ export default function PromotionRules() {
   const nodeTiers = [
     {
       level: '标准节点',
+      levelChar1: '标准',
+      levelChar2: '节点',
       contacts: '50人',
       tagsPerPerson: '人均3个',
       frequency: '日累计3人',
@@ -39,6 +47,8 @@ export default function PromotionRules() {
     },
     {
       level: '高级节点',
+      levelChar1: '高级',
+      levelChar2: '节点',
       contacts: '100人',
       tagsPerPerson: '人均5个',
       frequency: '日累计5人',
@@ -47,6 +57,8 @@ export default function PromotionRules() {
     },
     {
       level: '超级节点',
+      levelChar1: '超级',
+      levelChar2: '节点',
       contacts: '150人',
       tagsPerPerson: '人均8个',
       frequency: '日累计10人',
@@ -83,42 +95,42 @@ export default function PromotionRules() {
           </p>
         </div>
 
-        {/* 用户层卡片 */}
-        <div className="space-y-3 mb-10">
-          {userTiers.map((tier, index) => (
-            <div
-              key={index}
-              className="bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-2xl p-4 shadow-sm"
-            >
-              {/* 级别标题 */}
-              <div className="mb-3">
-                <h3 className="text-[15px] font-bold text-[#A80000]">{tier.level}</h3>
-              </div>
-
-              {/* 准入要求（横向布局，纯文字） */}
-              <div className="flex items-center justify-between mb-3.5 bg-gray-50/80 rounded-xl px-4 py-3">
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">人脉规模</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.contacts}</div>
-                </div>
-                <div className="w-px h-10 bg-gray-300" />
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">标签深度</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.tagsPerPerson}</div>
-                </div>
-                <div className="w-px h-10 bg-gray-300" />
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">联络频次</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.frequency}</div>
-                </div>
-              </div>
-
-              {/* 权益 */}
-              <div className="text-xs text-gray-600 leading-relaxed">
-                {tier.benefit}
-              </div>
-            </div>
-          ))}
+        {/* 用户层表格 */}
+        <div className="bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm mb-10">
+          <table className="w-full">
+            <tbody>
+              {userTiers.map((tier, index) => (
+                <>
+                  {/* 第1行：等级名称 + 3个指标 */}
+                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t border-gray-200' : ''}>
+                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar1}</div>
+                        <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar2}</div>
+                      </div>
+                    </td>
+                    <td className="text-center py-2.5 px-2 border-r border-gray-200">
+                      <div className="text-xs font-semibold text-gray-800">{tier.contacts}</div>
+                    </td>
+                    <td className="text-center py-2.5 px-2 border-r border-gray-200">
+                      <div className="text-xs font-semibold text-gray-800">{tier.tagsPerPerson}</div>
+                    </td>
+                    <td className="text-center py-2.5 px-2">
+                      <div className="text-xs font-semibold text-gray-800">{tier.frequency}</div>
+                    </td>
+                  </tr>
+                  {/* 第2行：权益（合并3列） */}
+                  <tr key={`${index}-row2`}>
+                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50">
+                      <div className="text-xs text-gray-600 leading-relaxed">
+                        {tier.benefit}
+                      </div>
+                    </td>
+                  </tr>
+                </>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* 节点层说明 */}
@@ -129,51 +141,51 @@ export default function PromotionRules() {
           </p>
         </div>
 
-        {/* 节点层卡片 */}
-        <div className="space-y-3">
-          {nodeTiers.map((tier, index) => (
-            <div
-              key={index}
-              className="bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-2xl p-4 shadow-sm"
-            >
-              {/* 级别标题 */}
-              <div className="mb-3">
-                <h3 className="text-[15px] font-bold text-[#A80000]">{tier.level}</h3>
-              </div>
-
-              {/* 准入要求（横向布局，纯文字） */}
-              <div className="flex items-center justify-between mb-3.5 bg-gray-50/80 rounded-xl px-4 py-3">
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">人脉规模</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.contacts}</div>
-                </div>
-                <div className="w-px h-10 bg-gray-300" />
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">标签深度</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.tagsPerPerson}</div>
-                </div>
-                <div className="w-px h-10 bg-gray-300" />
-                <div className="flex flex-col items-center">
-                  <div className="text-[10px] text-gray-500 mb-1">联络频次</div>
-                  <div className="text-sm font-bold text-gray-800">{tier.frequency}</div>
-                </div>
-              </div>
-
-              {/* 权益 */}
-              <div className="text-xs text-gray-600 leading-relaxed">
-                {tier.highlight ? (
-                  <span dangerouslySetInnerHTML={{
-                    __html: tier.benefit
-                      .replace(/2\.2倍/g, '<span class="font-bold text-[#C5B358]">2.2倍</span>')
-                      .replace(/股权激励/g, '<span class="font-semibold text-[#C5B358]">股权激励</span>')
-                      .replace(/股权分红/g, '<span class="font-bold text-[#C5B358]">股权分红</span>')
-                  }} />
-                ) : (
-                  tier.benefit
-                )}
-              </div>
-            </div>
-          ))}
+        {/* 节点层表格 */}
+        <div className="bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+          <table className="w-full">
+            <tbody>
+              {nodeTiers.map((tier, index) => (
+                <>
+                  {/* 第1行：等级名称 + 3个指标 */}
+                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t border-gray-200' : ''}>
+                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar1}</div>
+                        <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar2}</div>
+                      </div>
+                    </td>
+                    <td className="text-center py-2.5 px-2 border-r border-gray-200">
+                      <div className="text-xs font-semibold text-gray-800">{tier.contacts}</div>
+                    </td>
+                    <td className="text-center py-2.5 px-2 border-r border-gray-200">
+                      <div className="text-xs font-semibold text-gray-800">{tier.tagsPerPerson}</div>
+                    </td>
+                    <td className="text-center py-2.5 px-2">
+                      <div className="text-xs font-semibold text-gray-800">{tier.frequency}</div>
+                    </td>
+                  </tr>
+                  {/* 第2行：权益（合并3列） */}
+                  <tr key={`${index}-row2`}>
+                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50">
+                      <div className="text-xs text-gray-600 leading-relaxed">
+                        {tier.highlight ? (
+                          <span dangerouslySetInnerHTML={{
+                            __html: tier.benefit
+                              .replace(/2\.2倍/g, '<span class="font-bold text-[#C5B358]">2.2倍</span>')
+                              .replace(/股权激励/g, '<span class="font-semibold text-[#C5B358]">股权激励</span>')
+                              .replace(/股权分红/g, '<span class="font-bold text-[#C5B358]">股权分红</span>')
+                          }} />
+                        ) : (
+                          tier.benefit
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                </>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
