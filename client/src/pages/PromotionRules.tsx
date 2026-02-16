@@ -22,7 +22,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '用户',
       contacts: 10,
       tagsPerPerson: 20,
-      frequency: 1,
+      frequency: 30,
       benefit: '全功能免费使用+脉动网礼品兑换'
     },
     {
@@ -30,7 +30,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '用户',
       contacts: 20,
       tagsPerPerson: 50,
-      frequency: 2,
+      frequency: 60,
       benefit: '标准权限全覆盖+私域好友共享会'
     },
     {
@@ -38,7 +38,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '用户',
       contacts: 30,
       tagsPerPerson: 100,
-      frequency: 3,
+      frequency: 120,
       benefit: '高级权限全覆盖+AI社交优先体验'
     }
   ];
@@ -49,7 +49,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '节点',
       contacts: 50,
       tagsPerPerson: 100,
-      frequency: 3,
+      frequency: 150,
       benefit: '专属邀请码推荐+贡献持股权奖励'
     },
     {
@@ -57,7 +57,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '节点',
       contacts: 100,
       tagsPerPerson: 300,
-      frequency: 5,
+      frequency: 200,
       benefit: '标准权限全覆盖+业务端资源扶持'
     },
     {
@@ -65,7 +65,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '节点',
       contacts: 150,
       tagsPerPerson: 500,
-      frequency: 10,
+      frequency: 250,
       benefit: '高级权限全覆盖+受邀联合创始人'
     }
   ];
@@ -227,7 +227,7 @@ const PromotionRules: React.FC = () => {
             </p>
             <p>
               <span className="font-semibold text-gray-700">联络:</span>
-              每个自然周(周一至周日)登记联络人脉的次数。本周权益取决于上周是否达标,上周达标本周享有权益,本周未达标下周失去权益。系统会提示您本周还差多少次联络。
+              过去30天累计登记联络人脉的次数。
             </p>
           </div>
         </div>
