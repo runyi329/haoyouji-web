@@ -36,6 +36,9 @@ interface DualEngineAcceleratorProps {
     contactCount: number;
     tagCount: number;
     interactionCount: number;
+    currentLevel?: string;
+    levelName?: string;
+    qualifiedPeriod?: string;
   };
 }
 
@@ -386,31 +389,28 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 {/* 第一行：当前等级 + 加速倍率 */}
                 <div>
                   <span className="text-white text-sm font-bold">当前等级：</span>
-                  <span className="text-white text-base font-bold ml-1">{config.name}</span>
-                  <span className="text-white/90 text-xs font-bold ml-2">
-                    +{(props.identityMultiplier * 100).toFixed(0)}%
+                  <span className="text-white text-base font-bold ml-1">
+                    {props.promotionStats?.levelName || config.name}
                   </span>
+                  {(() => {
+                    // 根据实际等级显示加速倍率
+                    const level = props.promotionStats?.currentLevel;
+                    let multiplier = '';
+                    if (level === 'standard' || level === 'standard_user') multiplier = '+25%';
+                    else if (level === 'advanced' || level === 'advanced_user') multiplier = '+50%';
+                    else if (level === 'super' || level === 'super_user') multiplier = '+100%';
+                    
+                    return multiplier ? (
+                      <span className="text-white/90 text-xs font-bold ml-2">
+                        {multiplier}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 {/* 第二行：符合周期 */}
                 <div className="mt-0.5">
                   <span className="text-white/60 text-[9px]">
-                    符合周期：
-                    {(() => {
-                      const now = new Date();
-                      const today = now.getDay();
-                      // 计算上周一的日期
-                      const lastMonday = new Date(now);
-                      lastMonday.setDate(now.getDate() - (today === 0 ? 6 : today - 1) - 7);
-                      // 计算上周日的日期
-                      const lastSunday = new Date(lastMonday);
-                      lastSunday.setDate(lastMonday.getDate() + 6);
-                      
-                      const formatDate = (date: Date) => {
-                        return `${date.getMonth() + 1}月${date.getDate()}日`;
-                      };
-                      
-                      return `${formatDate(lastMonday)}-${formatDate(lastSunday)}`;
-                    })()}
+                    符合周期：{props.promotionStats?.qualifiedPeriod || '计算中...'}
                   </span>
                 </div>
               </div>
