@@ -294,12 +294,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               </div>
             </div>
             
-            {/* 核心数值（金黄色） */}
-            <div className="text-3xl font-bold text-[#C5B358] mb-3">
-              {props.invitedUsersStats?.achievedStandard || props.standardNodes}
-            </div>
-            
-            {/* 明细展示（字号递减） */}
+            {/* 明细展示 */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">标准节点</span>
@@ -360,11 +355,6 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   }
                 />
               </div>
-            </div>
-            
-            {/* 核心数值（红色） */}
-            <div className="text-3xl font-bold text-[#A80000] mb-3">
-              {props.invitedUsersStats?.potentialStandard || props.totalCultivating}
             </div>
             
             {/* 明细展示 */}
