@@ -3,7 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./db";
-import { users, contacts, contactSharingConnections } from "../drizzle/schema";
+import { users, contacts, contactSharingConnections, contactInteractions } from "../drizzle/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import QRCode from 'qrcode';
 
@@ -261,7 +261,37 @@ export const inviteRouter = router({
         
         const totalCount = ownCount + sharedCount;
         
-        console.log(`[getMyInvitedFriends] 用户 ${friend.username}(${friend.id}): 自己=${ownCount}, 共享=${sharedCount}, 全部=${totalCount}`);
+        // 2c. 获取该用户的标签总数（从contacts表的tags字段统计）
+        const contactsWithTags = await db
+          .select({ tags: contacts.tags })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, friend.id));
+        
+        let totalTagsCount = 0;
+        contactsWithTags.forEach(contact => {
+          if (contact.tags && Array.isArray(contact.tags)) {
+            totalTagsCount += contact.tags.length;
+          }
+        });
+        
+        // 2d. 获取该用户的联络记录总数
+        // 首先获取该用户的所有人脉ID
+        const userContactIds = await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, friend.id));
+        
+        let interactionsCount = 0;
+        if (userContactIds.length > 0) {
+          const contactIds = userContactIds.map(c => c.id);
+          const interactionsResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(contactInteractions)
+            .where(inArray(contactInteractions.contactId, contactIds));
+          interactionsCount = interactionsResult[0]?.count || 0;
+        }
+        
+        console.log(`[getMyInvitedFriends] 用户 ${friend.username}(${friend.id}): 自己=${ownCount}, 共享=${sharedCount}, 全部=${totalCount}, 标签=${totalTagsCount}, 联络=${interactionsCount}`);
         
         return {
           id: friend.id,
@@ -273,6 +303,8 @@ export const inviteRouter = router({
           ownContactsCount: ownCount,
           sharedContactsCount: sharedCount,
           totalContactsCount: totalCount,
+          tagsCount: totalTagsCount,
+          interactionsCount: interactionsCount,
         };
       })
     );
