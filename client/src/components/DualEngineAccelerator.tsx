@@ -347,7 +347,14 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">累计业务资产</span>
-              <div className="relative" style={{ visibility: 'hidden' }}>
+              <div className="relative">
+                <button
+                  ref={achievedHelpRef}
+                  onClick={() => setShowAchievedHelp(!showAchievedHelp)}
+                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
                 <Tooltip
                   isOpen={showAchievedHelp}
                   onClose={() => setShowAchievedHelp(false)}
@@ -356,9 +363,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
                       <div className="space-y-1.5">
-                        <div className="text-sm text-gray-600 italic">🌱 比喻：像种树一样，记录每棵树曾经达到的最高高度。</div>
-                        
-                        <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
+                        <div className="font-medium text-gray-700">用户层面（使用行为）：</div>
                         <div>● <span className="font-medium">标准用户：</span>曾经达到过标准用户或更高的累计人数。</div>
                         <div>● <span className="font-medium">高级用户：</span>曾经达到过高级用户或更高的累计人数。</div>
                         <div>● <span className="font-medium">超级用户：</span>曾经达到过超级用户的累计人数。</div>
@@ -438,7 +443,14 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">本周业务拓展</span>
-              <div className="relative" style={{ visibility: 'hidden' }}>
+              <div className="relative">
+                <button
+                  ref={cultivatingHelpRef}
+                  onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
+                  className="text-gray-400 hover:text-[#A80000] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
                 <Tooltip
                   isOpen={showCultivatingHelp}
                   onClose={() => setShowCultivatingHelp(false)}
@@ -447,9 +459,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
                       <div className="space-y-1.5">
-                        <div className="text-sm text-gray-600 italic">🌱 比喻：像看果园一样，所有的树苗都是潜在的，长得越好的潜力越大。</div>
-                        
-                        <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
+                        <div className="font-medium text-gray-700">用户层面（使用行为）：</div>
                         <div>● <span className="font-medium">潜在标准用户：</span>所有邀请的人（只要注册就算）。</div>
                         <div>● <span className="font-medium">潜在高级用户：</span>当前达到标准用户或更高的人数。</div>
                         <div>● <span className="font-medium">潜在超级用户：</span>当前达到高级用户或更高的人数。</div>
