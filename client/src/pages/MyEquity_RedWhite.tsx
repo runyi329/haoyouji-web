@@ -274,7 +274,7 @@ export default function MyEquityRedWhite() {
                     <div className="text-sm text-gray-700 space-y-2">
                       <div>
                         <p className="font-medium text-gray-800">1. 资产安全性（保底）：</p>
-                        <p className="ml-4 text-gray-600">传统的股权模式中，如果你不干活，股份可能会被收回或强制稀释。圪脉动，30%的天使池是您的资产避风港，不与劳动挂钩。这保证了您的投资安全，即使您只做一名纯粹的财务投资者。</p>
+                        <p className="ml-4 text-gray-600">传统的股权模式中，如果你不干活，股份可能会被收回或强制稀释。在脉动，30%的天使池是您的资产避风港，不与劳动挂钩。这保证了您的投资安全，即使您只做一名纯粹的财务投资者。</p>
                       </div>
                       <div>
                         <p className="font-medium text-gray-800">2. 收益爆发力（增益）：</p>
