@@ -9,15 +9,31 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorCount: number;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorCount: 0 };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // 如果错误次数小于3，尝试自动恢复
+    if (this.state.errorCount < 3) {
+      setTimeout(() => {
+        this.setState({ 
+          hasError: false, 
+          error: null,
+          errorCount: this.state.errorCount + 1 
+        });
+      }, 1000);
+    }
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -31,7 +47,8 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-4">页面出现错误</h2>
+            <p className="text-sm text-gray-600 mb-4">正在尝试自动恢复，或点击下方按钮刷新页面</p>
 
             <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
               <pre className="text-sm text-muted-foreground whitespace-break-spaces">
@@ -42,13 +59,13 @@ class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => window.location.reload()}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 cursor-pointer"
+                "flex items-center gap-2 px-6 py-3 rounded-lg",
+                "bg-[#A80000] text-white",
+                "hover:opacity-90 cursor-pointer transition-opacity"
               )}
             >
               <RotateCcw size={16} />
-              Reload Page
+              刷新页面
             </button>
           </div>
         </div>

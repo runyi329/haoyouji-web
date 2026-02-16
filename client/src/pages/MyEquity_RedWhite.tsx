@@ -11,10 +11,24 @@ import CompanyEquityPieChart from "@/components/CompanyEquityPieChart";
 
 export default function MyEquityRedWhite() {
   const [, setLocation] = useLocation();
-  const { data: enhanced, isLoading } = trpc.equity.getMyEquityEnhanced.useQuery();
-  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
-  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
-  const { data: invitedUsersStats } = trpc.equity.getMyInvitedUsersStats.useQuery();
+  const { data: enhanced, isLoading, error, refetch } = trpc.equity.getMyEquityEnhanced.useQuery(undefined, {
+    retry: 3,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5分钟缓存
+    cacheTime: 10 * 60 * 1000, // 10分钟缓存
+  });
+  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined, {
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery(undefined, {
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: invitedUsersStats } = trpc.equity.getMyInvitedUsersStats.useQuery(undefined, {
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+  });
   
   // 当前股权加速的帮助提示状态
   const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
@@ -30,6 +44,22 @@ export default function MyEquityRedWhite() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 mb-4">加载失败，请稍后重试</p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-[#A80000] text-white rounded-lg hover:opacity-90"
+          >
+            重新加载
+          </button>
+        </div>
       </div>
     );
   }
