@@ -30,6 +30,13 @@ interface DualEngineAcceleratorProps {
   
   // 总培育数（带金色呼吸光晕）
   totalCultivating: number;
+  
+  // 晋升数据统计（可选）
+  promotionStats?: {
+    contactCount: number;
+    tagCount: number;
+    interactionCount: number;
+  };
 }
 
 export default function DualEngineAccelerator(props: DualEngineAcceleratorProps) {
@@ -388,7 +395,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="mt-3 bg-gray-50/80 rounded-2xl px-4 py-3 border border-gray-200/50">
             {/* 晋升周期进度条 */}
             <div className="mb-3">
-              <div className="text-[10px] text-gray-400 mb-2 text-center">晋升周期</div>
+              <div className="text-[10px] text-gray-400 mb-2 text-center">本轮晋升周期</div>
               <div className="flex justify-between gap-1">
                 {(() => {
                   const now = new Date();
@@ -428,45 +435,57 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             
             <div className="text-[10px] text-gray-500 mb-2 text-center">
               距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需
-              <span className="text-gray-400">（{(() => {
-                const now = new Date();
-                const dayOfWeek = now.getDay();
-                const monday = new Date(now);
-                monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-                const sunday = new Date(monday);
-                sunday.setDate(monday.getDate() + 6);
-                return `${monday.getMonth() + 1}月${monday.getDate()}日-${sunday.getMonth() + 1}月${sunday.getDate()}日`;
-              })()}）</span>
             </div>
             
             {/* 三维度一行显示 */}
             <div className="flex items-center justify-between text-[10px] px-2">
-              {/* 人脉 */}
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-gray-600 mb-1">人脉</span>
-                <div>
-                  <span className="font-bold text-gray-900">{Math.round((props.contactCount / (props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50)) * 100)}%</span>
-                  <span className="ml-1 text-[9px] text-gray-400">({props.contactCount}/{props.nodeLevel === 'standard' ? '100' : props.nodeLevel === 'advanced' ? '150' : '50'})</span>
-                </div>
-              </div>
-              
-              {/* 标签 */}
-              <div className="flex flex-col items-center flex-1 border-l border-r border-gray-200 px-2">
-                <span className="text-gray-600 mb-1">标签</span>
-                <div>
-                  <span className="font-bold text-gray-900">33%</span>
-                  <span className="ml-1 text-[9px] text-gray-400">(100/300)</span>
-                </div>
-              </div>
-              
-              {/* 联络 */}
-              <div className="flex flex-col items-center flex-1">
-                <span className="text-gray-600 mb-1">联络</span>
-                <div>
-                  <span className="font-bold text-gray-900">60%</span>
-                  <span className="ml-1 text-[9px] text-gray-400">(120/200)</span>
-                </div>
-              </div>
+              {(() => {
+                // 获取真实数据
+                const currentContact = props.promotionStats?.contactCount || props.contactCount;
+                const currentTag = props.promotionStats?.tagCount || 0;
+                const currentInteraction = props.promotionStats?.interactionCount || 0;
+                
+                // 根据当前等级计算下一等级的目标
+                const targetContact = props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50;
+                const targetTag = props.nodeLevel === 'standard' ? 300 : props.nodeLevel === 'advanced' ? 500 : 100;
+                const targetInteraction = props.nodeLevel === 'standard' ? 200 : props.nodeLevel === 'advanced' ? 250 : 150;
+                
+                // 计算百分比
+                const contactPct = Math.min(100, Math.round((currentContact / targetContact) * 100));
+                const tagPct = Math.min(100, Math.round((currentTag / targetTag) * 100));
+                const interactionPct = Math.min(100, Math.round((currentInteraction / targetInteraction) * 100));
+                
+                return (
+                  <>
+                    {/* 人脉 */}
+                    <div className="flex flex-col items-center flex-1">
+                      <span className="text-gray-600 mb-1">人脉</span>
+                      <div>
+                        <span className="font-bold text-gray-900">{contactPct}%</span>
+                        <span className="ml-1 text-[9px] text-gray-400">({currentContact}/{targetContact})</span>
+                      </div>
+                    </div>
+                    
+                    {/* 标签 */}
+                    <div className="flex flex-col items-center flex-1 border-l border-r border-gray-200 px-2">
+                      <span className="text-gray-600 mb-1">标签</span>
+                      <div>
+                        <span className="font-bold text-gray-900">{tagPct}%</span>
+                        <span className="ml-1 text-[9px] text-gray-400">({currentTag}/{targetTag})</span>
+                      </div>
+                    </div>
+                    
+                    {/* 联络 */}
+                    <div className="flex flex-col items-center flex-1">
+                      <span className="text-gray-600 mb-1">联络</span>
+                      <div>
+                        <span className="font-bold text-gray-900">{interactionPct}%</span>
+                        <span className="ml-1 text-[9px] text-gray-400">({currentInteraction}/{targetInteraction})</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

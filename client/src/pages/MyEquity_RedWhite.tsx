@@ -11,6 +11,7 @@ export default function MyEquityRedWhite() {
   const [, setLocation] = useLocation();
   const { data: enhanced, isLoading } = trpc.equity.getMyEquityEnhanced.useQuery();
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
+  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
 
   if (isLoading) {
     return (
@@ -288,6 +289,9 @@ export default function MyEquityRedWhite() {
             
             // 总培育数
             totalCultivating={equity.details?.referralNetworkCount || 0}
+            
+            // 晋升数据统计
+            promotionStats={promotionStats}
           />
         </div>
 
