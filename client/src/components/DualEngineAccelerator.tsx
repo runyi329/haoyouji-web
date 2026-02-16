@@ -167,10 +167,10 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
       <div className="bg-[#F9F9F9] rounded-b-3xl p-4 space-y-5">
         
         {/* ============ 一、收益倍数计算器 ============ */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
+        <div className="space-y-3">
           {/* 标题 */}
-          <div className="flex items-center justify-between mb-3">
-            <span ref={multiplierTitleRef} className="text-xs text-gray-600 font-medium">当前股权加速</span>
+          <div className="flex items-center justify-between">
+            <span ref={multiplierTitleRef} className="text-sm text-gray-700 font-semibold">当前股权加速</span>
             <div className="relative">
               <button
                 ref={multiplierHelpRef}
@@ -187,13 +187,13 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   <div className="space-y-2">
                     <div className="font-bold text-gray-900">收益加速计算规则</div>
                     <div>
-                      <span className="font-medium">● 股权加成：</span>根据您持有的原始股权资产包额度及入场时间计算，体现您的资本贡献。
+                      <span className="font-medium">● 资产杠杆：</span>根据您的投资金额和入场顺序一次性锁定，体现资本贡献。
                     </div>
                     <div>
-                      <span className="font-medium">● 身份加成：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现您的人脉贡献。
+                      <span className="font-medium">● 等级加速：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现人脉贡献。
                     </div>
                     <div>
-                      <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (股权加成 + 身份加成) = 最终结算收益。
+                      <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (资产杠杆 + 等级加速) = 最终结算收益。
                     </div>
                   </div>
                 }
@@ -201,47 +201,41 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
           </div>
           
-          {/* 公式化布局 */}
-          <div className="flex items-center justify-center space-x-3">
-            {/* 总倍数（大圆环） */}
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#A80000] to-[#8a0000] flex items-center justify-center shadow-lg">
-                <div className="flex items-baseline justify-center">
-                  <div className="text-2xl font-bold text-white">{totalMultiplier.toFixed(1)}</div>
-                  <div className="text-[10px] text-white/70 ml-0.5">倍</div>
-                </div>
-              </div>
-              {/* 微弱金属反光动效 */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/20 to-transparent animate-pulse"></div>
-            </div>
-            
-            {/* 等号 */}
-            <div className="text-gray-400 text-xl font-light">=</div>
-            
-            {/* 拆解公式（垂直布局） */}
-            <div className="flex items-center space-x-1.5">
-              {/* 股权加成 */}
-              <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
-                <div className="flex items-center space-x-0.5 mb-0.5">
-                  <span className="text-[9px] text-gray-600">资产</span>
-                </div>
-                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.equityMultiplier.toFixed(1)}</div>
-              </div>
-              
-              {/* 加号 */}
-              <div className="text-[#C5B358] text-lg font-bold">+</div>
-              
-              {/* 身份加成 */}
-              <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
-                <div className="flex items-center space-x-0.5 mb-0.5">
-                  <span className="text-[9px] text-gray-600">等级</span>
-                </div>
-                <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{actualIdentityMultiplier.toFixed(2)}</div>
+          {/* 总收益倍数卡片 */}
+          <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-xl p-4 shadow-lg">
+            <div className="text-center">
+              <div className="text-white/80 text-xs mb-1">总收益倍数</div>
+              <div className="flex items-baseline justify-center">
+                <div className="text-4xl font-bold text-white">{totalMultiplier.toFixed(2)}</div>
+                <div className="text-lg text-white/90 ml-1">倍</div>
               </div>
             </div>
           </div>
           
-
+          {/* 拆解明细（两个并排卡片） */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* 资产杠杆 */}
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">资产杠杆</div>
+              <div className="text-2xl font-bold text-[#C5B358]">
+                +{((props.equityMultiplier - 1) * 100).toFixed(0)}%
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                {props.equityMultiplier.toFixed(4)}x 杠杆系数
+              </div>
+            </div>
+            
+            {/* 等级加速 */}
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">等级加速</div>
+              <div className="text-2xl font-bold text-[#C5B358]">
+                +{(actualIdentityMultiplier * 100).toFixed(0)}%
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                {props.promotionStats?.levelName || '准合伙人'}
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* ============ 二、资产阶梯双翼（细线分隔） ============ */}
