@@ -218,7 +218,12 @@ const EquityHistoryArchive: React.FC = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // 获取真实数据
-  const { data, isLoading } = trpc.equity.getWeeklyReports.useQuery();
+  const { data, isLoading, error, refetch } = trpc.equity.getWeeklyReports.useQuery(undefined, {
+    retry: 3,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5分钟缓存
+    cacheTime: 10 * 60 * 1000, // 10分钟缓存
+  });
   const overview = data?.overview || mockOverview;
   const allReports = data?.reports || mockReports;
 
@@ -239,6 +244,22 @@ const EquityHistoryArchive: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 mb-4">加载失败，请稍后重试</p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-[#A80000] text-white rounded-lg hover:opacity-90"
+          >
+            重新加载
+          </button>
+        </div>
       </div>
     );
   }
