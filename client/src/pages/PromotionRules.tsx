@@ -3,262 +3,189 @@ import { useLocation } from 'wouter';
 export default function PromotionRules() {
   const [, setLocation] = useLocation();
 
+  // 用户层数据
+  const userTiers = [
+    {
+      level: '标准用户',
+      contacts: '5人',
+      tagsPerPerson: '人均1个',
+      frequency: '日累计1人',
+      benefit: '开启基础功能，享有积分商城初级兑换权限',
+    },
+    {
+      level: '高级用户',
+      contacts: '10人',
+      tagsPerPerson: '人均2个',
+      frequency: '日累计2人',
+      benefit: '享有专属礼品定期兑换权限',
+    },
+    {
+      level: '超级用户',
+      contacts: '20人',
+      tagsPerPerson: '人均3个',
+      frequency: '日累计3人',
+      benefit: '获得线下人脉交流活动优先邀请权，免除参与费用',
+    },
+  ];
+
+  // 节点层数据
+  const nodeTiers = [
+    {
+      level: '标准节点',
+      contacts: '50人',
+      tagsPerPerson: '人均3个',
+      frequency: '日累计3人',
+      benefit: '开启倍率收益结算，获得节点经营团队组建权限',
+    },
+    {
+      level: '高级节点',
+      contacts: '100人',
+      tagsPerPerson: '人均5个',
+      frequency: '日累计5人',
+      benefit: '享有 2.2倍 收益爆发，并入围公司个人股权激励计划',
+      highlight: true,
+    },
+    {
+      level: '超级节点',
+      contacts: '150人',
+      tagsPerPerson: '人均8个',
+      frequency: '日累计10人',
+      benefit: '享有公司季度股权分红，受邀进入公司战略决策委员会',
+      highlight: true,
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+    <div className="min-h-screen bg-[#F5F5F5] pb-8">
       {/* 顶部导航栏 */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200">
-        <div className="flex items-center px-4 py-3">
+      <div className="sticky top-0 z-50 bg-gradient-to-r from-[#A80000] to-[#8a0000] text-white">
+        <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => setLocation('/parent/my-equity')}
-            className="text-gray-600 hover:text-gray-900"
+            className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="flex-1 text-center text-lg font-semibold text-gray-900">
-            晋升准则
-          </h1>
-          <div className="w-6"></div>
+          <h1 className="text-lg font-semibold">晋升准则</h1>
+          <div className="w-10" />
         </div>
       </div>
 
-      {/* 页面顶部说明 */}
-      <div className="px-4 py-6">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-6 mb-4">
-          <h2 className="text-base font-bold text-gray-900 mb-2">用户层（使用型）</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
+      {/* 主内容区 */}
+      <div className="px-4 pt-6">
+        {/* 用户层说明 */}
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-gray-800 mb-1">用户层（使用型）</h2>
+          <p className="text-xs text-gray-600 leading-relaxed">
             适合专注于个人人脉整理与日常社交的用户，我们为您准备了丰富的礼品与活动。
           </p>
         </div>
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6">
-          <h2 className="text-base font-bold text-gray-900 mb-2">节点层（经营型）</h2>
-          <p className="text-sm text-gray-600 leading-relaxed">
+
+        {/* 用户层卡片 */}
+        <div className="space-y-2 mb-6">
+          {userTiers.map((tier, index) => (
+            <div
+              key={index}
+              className="bg-white/50 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3"
+            >
+              {/* 级别标题 */}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-[#A80000]">{tier.level}</h3>
+              </div>
+
+              {/* 准入要求（横向布局） */}
+              <div className="flex items-center gap-3 text-xs text-gray-700 mb-2">
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="font-medium">{tier.contacts}</span>
+                </div>
+                <div className="w-px h-3 bg-gray-300" />
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  <span className="font-medium">{tier.tagsPerPerson}</span>
+                </div>
+                <div className="w-px h-3 bg-gray-300" />
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="font-medium">{tier.frequency}</span>
+                </div>
+              </div>
+
+              {/* 权益 */}
+              <div className="text-xs text-gray-600 leading-relaxed">
+                {tier.benefit}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 节点层说明 */}
+        <div className="mb-4 mt-8">
+          <h2 className="text-base font-semibold text-gray-800 mb-1">节点层（经营型）</h2>
+          <p className="text-xs text-gray-600 leading-relaxed">
             适合致力于人脉资产经营与价值创造的合作伙伴，您将深度参与公司的成长红利分享。
           </p>
         </div>
-      </div>
 
-      {/* 用户层卡片 */}
-      <div className="px-4 space-y-4">
-        {/* 卡片1：标准用户 */}
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">标准用户</h3>
-            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-              <span className="text-xl">🥉</span>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人脉规模</span>
-              <span className="text-base font-bold text-gray-900">5人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人均标签深度</span>
-              <span className="text-base font-bold text-gray-900">1个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">周均联络频次</span>
-              <span className="text-base font-bold text-gray-900">日累计1人</span>
-            </div>
-          </div>
+        {/* 节点层卡片 */}
+        <div className="space-y-2">
+          {nodeTiers.map((tier, index) => (
+            <div
+              key={index}
+              className="bg-white/50 backdrop-blur-sm border border-gray-200/50 rounded-xl p-3"
+            >
+              {/* 级别标题 */}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-[#A80000]">{tier.level}</h3>
+              </div>
 
-          <div className="bg-white/80 rounded-xl p-4">
-            <div className="text-xs text-gray-500 mb-1">核心权益</div>
-            <div className="text-sm text-gray-900 leading-relaxed">
-              开启基础功能，享有积分商城初级兑换权限
-            </div>
-          </div>
-        </div>
+              {/* 准入要求（横向布局） */}
+              <div className="flex items-center gap-3 text-xs text-gray-700 mb-2">
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="font-medium">{tier.contacts}</span>
+                </div>
+                <div className="w-px h-3 bg-gray-300" />
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  <span className="font-medium">{tier.tagsPerPerson}</span>
+                </div>
+                <div className="w-px h-3 bg-gray-300" />
+                <div className="flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span className="font-medium">{tier.frequency}</span>
+                </div>
+              </div>
 
-        {/* 卡片2：高级用户 */}
-        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">高级用户</h3>
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-xl">🥈</span>
+              {/* 权益 */}
+              <div className="text-xs text-gray-600 leading-relaxed">
+                {tier.highlight ? (
+                  <span dangerouslySetInnerHTML={{
+                    __html: tier.benefit
+                      .replace(/2\.2倍/g, '<span class="font-bold text-[#C5B358]">2.2倍</span>')
+                      .replace(/股权激励/g, '<span class="font-semibold text-[#C5B358]">股权激励</span>')
+                      .replace(/股权分红/g, '<span class="font-bold text-[#C5B358]">股权分红</span>')
+                  }} />
+                ) : (
+                  tier.benefit
+                )}
+              </div>
             </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人脉规模</span>
-              <span className="text-base font-bold text-gray-900">10人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人均标签深度</span>
-              <span className="text-base font-bold text-gray-900">2个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">周均联络频次</span>
-              <span className="text-base font-bold text-gray-900">日累计2人</span>
-            </div>
-          </div>
-
-          <div className="bg-white/80 rounded-xl p-4">
-            <div className="text-xs text-gray-500 mb-1">核心权益</div>
-            <div className="text-sm text-gray-900 leading-relaxed">
-              享有专属礼品定期兑换权限
-            </div>
-          </div>
-        </div>
-
-        {/* 卡片3：超级用户 */}
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">超级用户</h3>
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-              <span className="text-xl">🥇</span>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人脉规模</span>
-              <span className="text-base font-bold text-gray-900">20人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">人均标签深度</span>
-              <span className="text-base font-bold text-gray-900">3个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">周均联络频次</span>
-              <span className="text-base font-bold text-gray-900">日累计3人</span>
-            </div>
-          </div>
-
-          <div className="bg-white/80 rounded-xl p-4">
-            <div className="text-xs text-gray-500 mb-1">核心权益</div>
-            <div className="text-sm text-gray-900 leading-relaxed">
-              获得线下人脉交流活动优先邀请权，免除参与费用
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 视觉转场点 */}
-      <div className="px-4 py-8">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t-2 border-[#A80000]"></div>
-          </div>
-          <div className="relative flex justify-center">
-            <span className="bg-gradient-to-r from-[#A80000] to-[#C5B358] text-white px-6 py-2 rounded-full text-sm font-semibold shadow-lg">
-              从使用者到经营者，开启股权红利之路
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 节点层卡片 */}
-      <div className="px-4 space-y-4">
-        {/* 卡片4：标准节点 */}
-        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-white">标准节点</h3>
-            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-              <span className="text-xl">💼</span>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人脉规模</span>
-              <span className="text-base font-bold text-white">50人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人均标签深度</span>
-              <span className="text-base font-bold text-white">3个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">周均联络频次</span>
-              <span className="text-base font-bold text-white">日累计3人</span>
-            </div>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-            <div className="text-xs text-gray-300 mb-1">核心权益</div>
-            <div className="text-sm text-white leading-relaxed">
-              开启倍率收益结算，获得节点经营团队组建权限
-            </div>
-          </div>
-        </div>
-
-        {/* 卡片5：高级节点 */}
-        <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-white">高级节点</h3>
-            <div className="w-10 h-10 bg-indigo-700 rounded-full flex items-center justify-center">
-              <span className="text-xl">💎</span>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人脉规模</span>
-              <span className="text-base font-bold text-white">100人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人均标签深度</span>
-              <span className="text-base font-bold text-white">5个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">周均联络频次</span>
-              <span className="text-base font-bold text-white">日累计5人</span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-[#C5B358]/20 to-[#D4AF37]/20 backdrop-blur-sm rounded-xl p-4 border border-[#C5B358]/30">
-            <div className="text-xs text-gray-300 mb-1">核心权益</div>
-            <div className="text-sm text-white leading-relaxed">
-              享有 <span className="text-[#C5B358] font-bold text-base">2.2倍</span> 收益爆发，并入围公司个人<span className="text-[#C5B358] font-semibold">股权激励</span>计划
-            </div>
-          </div>
-        </div>
-
-        {/* 卡片6：超级节点 */}
-        <div className="bg-gradient-to-br from-amber-900 to-orange-900 rounded-2xl p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-white">超级节点</h3>
-            <div className="w-10 h-10 bg-amber-700 rounded-full flex items-center justify-center">
-              <span className="text-xl">👑</span>
-            </div>
-          </div>
-          
-          <div className="space-y-3 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人脉规模</span>
-              <span className="text-base font-bold text-white">150人</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">人均标签深度</span>
-              <span className="text-base font-bold text-white">8个</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-300">周均联络频次</span>
-              <span className="text-base font-bold text-white">日累计10人</span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-[#C5B358]/20 to-[#D4AF37]/20 backdrop-blur-sm rounded-xl p-4 border border-[#C5B358]/30">
-            <div className="text-xs text-gray-300 mb-1">核心权益</div>
-            <div className="text-sm text-white leading-relaxed">
-              享有公司季度<span className="text-[#C5B358] font-bold">股权分红</span>，受邀进入公司战略决策委员会
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 页面底部转换提示 */}
-      <div className="px-4 py-8">
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-[#C5B358]/30">
-          <div className="text-center">
-            <div className="text-sm text-gray-600 leading-relaxed">
-              当前为用户身份？只需提升<span className="font-semibold text-[#A80000]">"人均标签深度"</span>与<span className="font-semibold text-[#A80000]">"周联络频次"</span>，即可跨越至<span className="font-semibold text-[#A80000]">"节点身份"</span>，从使用者转变为经营者，分享股权红利！
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>
