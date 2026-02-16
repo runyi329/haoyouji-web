@@ -1,5 +1,6 @@
 import { HelpCircle, TrendingUp, Shield, Award, ChevronRight, Clock } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import Tooltip from "./Tooltip";
 
 interface DualEngineAcceleratorProps {
   // 红色区域相关
@@ -35,6 +36,11 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   const [showAchievedHelp, setShowAchievedHelp] = useState(false);
   const [showCultivatingHelp, setShowCultivatingHelp] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  
+  // 小问号按钮的ref
+  const multiplierHelpRef = useRef<HTMLButtonElement>(null);
+  const achievedHelpRef = useRef<HTMLButtonElement>(null);
+  const cultivatingHelpRef = useRef<HTMLButtonElement>(null);
   
   // 计算总收益倍数
   const totalMultiplier = props.equityMultiplier + props.identityMultiplier;
@@ -137,12 +143,34 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 标题 */}
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs text-gray-600 font-medium">当前股权加速</span>
-            <button
-              onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-              className="text-gray-400 hover:text-[#C5B358] transition-colors"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
+            <div className="relative">
+              <button
+                ref={multiplierHelpRef}
+                onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                className="text-gray-400 hover:text-[#C5B358] transition-colors"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <Tooltip
+                isOpen={showMultiplierHelp}
+                onClose={() => setShowMultiplierHelp(false)}
+                triggerRef={multiplierHelpRef}
+                content={
+                  <div className="space-y-2">
+                    <div className="font-bold text-gray-900">收益加速计算规则</div>
+                    <div>
+                      <span className="font-medium">● 股权加成：</span>根据您持有的原始股权资产包额度及入场时间计算，体现您的资本贡献。
+                    </div>
+                    <div>
+                      <span className="font-medium">● 身份加成：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现您的人脉贡献。
+                    </div>
+                    <div>
+                      <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (股权加成 + 身份加成) = 最终结算收益。
+                    </div>
+                  </div>
+                }
+              />
+            </div>
           </div>
           
           {/* 公式化布局 */}
@@ -168,12 +196,6 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               <div className="bg-[#A80000]/10 border border-[#A80000]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
                 <div className="flex items-center space-x-0.5 mb-0.5">
                   <span className="text-[9px] text-gray-600">资产</span>
-                  <button
-                    onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                    className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                  >
-                    <HelpCircle className="w-2.5 h-2.5" />
-                  </button>
                 </div>
                 <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.equityMultiplier.toFixed(1)}</div>
               </div>
@@ -185,33 +207,13 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               <div className="bg-[#C5B358]/10 border border-[#C5B358]/30 rounded-lg px-2 py-1.5 flex flex-col items-center min-w-[60px]">
                 <div className="flex items-center space-x-0.5 mb-0.5">
                   <span className="text-[9px] text-gray-600">等级</span>
-                  <button
-                    onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                    className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                  >
-                    <HelpCircle className="w-2.5 h-2.5" />
-                  </button>
                 </div>
                 <div className="text-base font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.identityMultiplier.toFixed(1)}</div>
               </div>
             </div>
           </div>
           
-          {/* 问号弹窗 */}
-          {showMultiplierHelp && (
-            <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-gray-700 space-y-2">
-              <div className="font-bold text-gray-900">收益加速计算规则</div>
-              <div>
-                <span className="font-medium">● 股权加成：</span>根据您持有的原始股权资产包额度及入场时间计算，体现您的资本贡献。
-              </div>
-              <div>
-                <span className="font-medium">● 身份加成：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现您的人脉贡献。
-              </div>
-              <div>
-                <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (股权加成 + 身份加成) = 最终结算收益。
-              </div>
-            </div>
-          )}
+
         </div>
         
         {/* ============ 二、资产阶梯双翼（细线分隔） ============ */}
@@ -221,12 +223,26 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-gray-600 font-medium">已成功分享人脉节点</span>
-              <button
-                onClick={() => setShowAchievedHelp(!showAchievedHelp)}
-                className="text-gray-400 hover:text-[#C5B358] transition-colors"
-              >
-                <HelpCircle className="w-3 h-3" />
-              </button>
+              <div className="relative">
+                <button
+                  ref={achievedHelpRef}
+                  onClick={() => setShowAchievedHelp(!showAchievedHelp)}
+                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
+                <Tooltip
+                  isOpen={showAchievedHelp}
+                  onClose={() => setShowAchievedHelp(false)}
+                  triggerRef={achievedHelpRef}
+                  content={
+                    <div>
+                      <div className="font-bold text-gray-900 mb-1">向下兼容统计原则</div>
+                      <div>若您培育出一个【超级节点】，由于其天然符合【高级】与【标准】的要求，系统将同步为您增加三级资产池的权数，助您数据最大化。</div>
+                    </div>
+                  }
+                />
+              </div>
             </div>
             
             {/* 核心数值（金黄色） */}
@@ -252,13 +268,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               </div>
             </div>
             
-            {/* 问号弹窗 */}
-            {showAchievedHelp && (
-              <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-[10px] text-gray-700">
-                <div className="font-bold text-gray-900 mb-1">向下兼容统计原则</div>
-                <div>若您培育出一个【超级节点】，由于其天然符合【高级】与【标准】的要求，系统将同步为您增加三级资产池的权数，助您数据最大化。</div>
-              </div>
-            )}
+
           </div>
           
           {/* 中间分隔线 */}
@@ -268,12 +278,29 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-gray-600 font-medium">分享中人脉节点</span>
-              <button
-                onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
-                className="text-gray-400 hover:text-[#A80000] transition-colors"
-              >
-                <HelpCircle className="w-3 h-3" />
-              </button>
+              <div className="relative">
+                <button
+                  ref={cultivatingHelpRef}
+                  onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
+                  className="text-gray-400 hover:text-[#A80000] transition-colors"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
+                <Tooltip
+                  isOpen={showCultivatingHelp}
+                  onClose={() => setShowCultivatingHelp(false)}
+                  triggerRef={cultivatingHelpRef}
+                  content={
+                    <div>
+                      <div className="font-bold text-gray-900 mb-1">潜力向上折算</div>
+                      <div className="space-y-1">
+                        <div>● 尚未达标的受邀人视为【潜在标准】。</div>
+                        <div>● 已达标节点将根据其活跃度，自动被系统识别为更高级别的【潜在对象】，提醒您重点辅导。</div>
+                      </div>
+                    </div>
+                  }
+                />
+              </div>
             </div>
             
             {/* 核心数值（红色） */}
@@ -300,16 +327,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
 
             </div>
             
-            {/* 问号弹窗 */}
-            {showCultivatingHelp && (
-              <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-[10px] text-gray-700">
-                <div className="font-bold text-gray-900 mb-1">潜力向上折算</div>
-                <div className="space-y-1">
-                  <div>● 尚未达标的受邀人视为【潜在标准】。</div>
-                  <div>● 已达标节点将根据其活跃度，自动被系统识别为更高级别的【潜在对象】，提醒您重点辅导。</div>
-                </div>
-              </div>
-            )}
+
           </div>
         </div>
         
