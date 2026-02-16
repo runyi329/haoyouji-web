@@ -29,26 +29,26 @@ const PromotionRules: React.FC = () => {
     {
       levelChar1: '标准',
       levelChar2: '用户',
-      contacts: 5,
+      contacts: 10,
       tagsPerPerson: 1,
       frequency: 1,
-      benefit: '开启基础功能,享有积分商城初级兑换权限'
+      benefit: '全功能免费使用+脉动网礼品兑换'
     },
     {
       levelChar1: '高级',
       levelChar2: '用户',
-      contacts: 10,
+      contacts: 20,
       tagsPerPerson: 2,
       frequency: 2,
-      benefit: '享有专属礼品定期兑换权限'
+      benefit: '标准权限全覆盖+私域好友共享会'
     },
     {
       levelChar1: '超级',
       levelChar2: '用户',
-      contacts: 20,
+      contacts: 30,
       tagsPerPerson: 3,
       frequency: 3,
-      benefit: '获得线下人脉交流活动优先邀请权,免除参与费用'
+      benefit: '高级权限全覆盖+AI社交优先体验'
     }
   ];
 
@@ -139,7 +139,7 @@ const PromotionRules: React.FC = () => {
               </svg>
             </button>
           )}
-          <h1 className="text-xl font-bold">晋升准则</h1>
+          <h1 className="text-xl font-bold">晋升攻略</h1>
         </div>
         
         {/* 只有登录用户才显示三点菜单 */}
