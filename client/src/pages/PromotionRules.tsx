@@ -87,7 +87,11 @@ const PromotionRules: React.FC = () => {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#f9fafb'
+        backgroundColor: '#f9fafb',
+        windowWidth: contentRef.current.scrollWidth,
+        windowHeight: contentRef.current.scrollHeight,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX
       });
       
       const link = document.createElement('a');
@@ -121,7 +125,7 @@ const PromotionRules: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20" ref={contentRef}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-10">
         <div className="flex items-center">
@@ -172,6 +176,8 @@ const PromotionRules: React.FC = () => {
         </div>
       </div>
 
+      {/* 内容区域（用于截图） */}
+      <div ref={contentRef}>
       {/* 用户层 */}
       <div className="p-4">
         <h2 className="text-lg font-bold text-gray-800 mb-2">用户层(使用型)</h2>
@@ -293,6 +299,7 @@ const PromotionRules: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
