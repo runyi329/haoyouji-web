@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'wouter';
 
 interface Tier {
   levelChar1: string;
@@ -11,7 +11,7 @@ interface Tier {
 }
 
 const PromotionRules: React.FC = () => {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   const userTiers: Tier[] = [
     {
@@ -71,7 +71,7 @@ const PromotionRules: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white p-4 flex items-center shadow-lg sticky top-0 z-10">
-        <button onClick={() => navigate(-1)} className="mr-4">
+        <button onClick={() => setLocation('/parent')} className="mr-4">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
