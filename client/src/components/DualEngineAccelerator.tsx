@@ -282,16 +282,22 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   content={
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
+                        <div className="text-sm text-gray-600 italic">🌱 比喻：像种树一样，记录每棵树曾经达到的最高高度。</div>
+                        
                         <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
-                        <div>● <span className="font-medium">标准用户：</span>您邀请的人中，曾经达到过标准用户的累计人数。</div>
-                        <div>● <span className="font-medium">高级用户：</span>您邀请的人中，曾经达到过高级用户的累计人数。</div>
-                        <div>● <span className="font-medium">超级用户：</span>您邀请的人中，曾经达到过超级用户的累计人数。</div>
+                        <div>● <span className="font-medium">标准用户：</span>曾经达到过标准用户或更高的累计人数。</div>
+                        <div>● <span className="font-medium">高级用户：</span>曾经达到过高级用户或更高的累计人数。</div>
+                        <div>● <span className="font-medium">超级用户：</span>曾经达到过超级用户的累计人数。</div>
+                        
                         <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
-                        <div>● <span className="font-medium">标准节点：</span>您邀请的人中，曾经达到过标准节点的累计人数。</div>
-                        <div>● <span className="font-medium">高级节点：</span>您邀请的人中，曾经达到过高级节点的累计人数。</div>
-                        <div>● <span className="font-medium">超级节点：</span>您邀请的人中，曾经达到过超级节点的累计人数。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：统计包含已掉级的用户，体现您的累计贡献。</div>
+                        <div>● <span className="font-medium">标准节点：</span>曾经达到过标准用户或更高的累计人数。</div>
+                        <div>● <span className="font-medium">高级节点：</span>曾经达到过高级用户或更高的累计人数。</div>
+                        <div>● <span className="font-medium">超级节点：</span>曍经达到过超级用户的累计人数。</div>
+                        
+                        <div className="mt-2 text-xs text-gray-500 bg-amber-50 p-2 rounded">
+                          💡 <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。即使掉级了，也会计入累计，体现您的历史贡献。
+                        </div>
                       </div>
                     </div>
                   }
@@ -374,16 +380,22 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   content={
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
+                        <div className="text-sm text-gray-600 italic">🌱 比喻：像看果园一样，所有的树苗都是潜在的，长得越好的潜力越大。</div>
+                        
                         <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
-                        <div>● <span className="font-medium">潜在标准用户：</span>您邀请的人中，当前是标准用户或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在高级用户：</span>您邀请的人中，当前是高级用户或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级用户：</span>您邀请的人中，当前是超级用户的人数。</div>
+                        <div>● <span className="font-medium">潜在标准用户：</span>所有邀请的人（只要注册就算）。</div>
+                        <div>● <span className="font-medium">潜在高级用户：</span>当前达到标准用户或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在超级用户：</span>当前达到高级用户或更高的人数。</div>
+                        
                         <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
-                        <div>● <span className="font-medium">潜在标准节点：</span>您邀请的人中，当前是标准节点或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在高级节点：</span>您邀请的人中，当前是高级节点或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级节点：</span>您邀请的人中，当前是超级节点的人数。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：基于本周实时等级计算，体现您的当前业务拓展潜力。</div>
+                        <div>● <span className="font-medium">潜在标准节点：</span>所有邀请的人（只要注册就算）。</div>
+                        <div>● <span className="font-medium">潜在高级节点：</span>当前达到标准用户或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在超级节点：</span>当前达到高级用户或更高的人数。</div>
+                        
+                        <div className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                          💡 <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。每个人同时拥有两重身份，体现您的当前业务拓展潜力。
+                        </div>
                       </div>
                     </div>
                   }
