@@ -174,12 +174,12 @@ export default function MyEquityRedWhite() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="max-w-md mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-md mx-auto py-4 space-y-4">
         
         {/* ============ 第一部分：综合股权概览 ============ */}
         <div className="space-y-0">
           {/* 红色区域 */}
-          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white px-4 py-4">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center space-x-1">
@@ -286,9 +286,8 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
           </div>
-
           {/* 白色区域 */}
-          <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
+          <div className="bg-white px-4 py-4 rounded-b-2xl shadow-sm mx-4">y-4">
             {/* 1. 当前股权加速（从原第二部分移上来） */}
             <div>
               <div className="space-y-3">
@@ -395,12 +394,10 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
         </div>
-        {/* 第一部分结束 */}
-
-        {/* ============ 第二部分：资金股 ============ */}
+        {/* 第一部分结束 */        {/* ============ 第三部分：当前股权加速 ============ */}
         <div className="space-y-0">
           {/* 红色区域 */}
-          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white px-4 py-4">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -435,7 +432,7 @@ export default function MyEquityRedWhite() {
           </div>
 
           {/* 白色区域 */}
-          <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
+          <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-4 mx-4">
             {/* 1. 资本杠杆系数 */}
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -554,10 +551,10 @@ export default function MyEquityRedWhite() {
           />
         </div>
 
-        {/* ============ 第四部分：股东保障中心 ============ */}
+        {/* ============ 第二部分：公司股东中心 ============ */}
         <div className="space-y-0">
           {/* 红色区域 */}
-          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white px-4 py-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm opacity-90 font-medium">股东保障中心</span>
@@ -570,7 +567,7 @@ export default function MyEquityRedWhite() {
           </div>
 
           {/* 白色区域 */}
-          <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
+          <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-4 mx-4">
             {/* 1. 公司股权分配 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">公司股权分配</div>
