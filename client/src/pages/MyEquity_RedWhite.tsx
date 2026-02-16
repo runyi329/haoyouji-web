@@ -1,12 +1,14 @@
-import { Card } from "@/components/ui/card";
+import React from "react";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, Trophy, Sparkles, DollarSign } from "lucide-react";
+import { Loader2, TrendingUp, Trophy, Sparkles, DollarSign, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 import { useState } from "react";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
 import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
 
 export default function MyEquityRedWhite() {
+  const [, setLocation] = useLocation();
   const { data: enhanced, isLoading } = trpc.equity.getMyEquityEnhanced.useQuery();
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
 
@@ -88,7 +90,13 @@ export default function MyEquityRedWhite() {
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm opacity-90 font-medium">综合权重</span>
+              <button 
+                onClick={() => setLocation('/')}
+                className="flex items-center space-x-1 text-sm opacity-90 font-medium hover:opacity-100 transition-opacity"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>返回</span>
+              </button>
               <div className="flex items-center space-x-2">
                 {equity.dynamicLeverage && (
                   <span className="text-[10px] font-mono tracking-wider opacity-60 bg-white/10 px-2 py-0.5 rounded">
