@@ -1,11 +1,12 @@
 import React from "react";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, Trophy, Sparkles, DollarSign, ArrowLeft } from "lucide-react";
+import { Loader2, TrendingUp, Trophy, Sparkles, DollarSign, ArrowLeft, HelpCircle } from "lucide-react";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
 import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
+import Tooltip from "@/components/Tooltip";
 
 export default function MyEquityRedWhite() {
   const [, setLocation] = useLocation();
@@ -13,6 +14,11 @@ export default function MyEquityRedWhite() {
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
   const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
   const { data: invitedUsersStats } = trpc.equity.getMyInvitedUsersStats.useQuery();
+  
+  // 当前股权加速的帮助提示状态
+  const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
+  const multiplierHelpRef = useRef<HTMLButtonElement>(null);
+  const multiplierTitleRef = useRef<HTMLSpanElement>(null);
 
   if (isLoading) {
     return (
@@ -76,19 +82,26 @@ export default function MyEquityRedWhite() {
   ];
   const othersValue = Math.max(0, 100 - (equity.totalEquity || 0));
 
-  const baseEquity = equity.investmentEquity || 0;
-  const contribEquity = (equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0);
-  const totalEq = baseEquity + contribEquity;
-  const basePct = totalEq > 0 ? (baseEquity / totalEq) * 100 : 100;
-  const contribPct = totalEq > 0 ? (contribEquity / totalEq) * 100 : 0;
+  // 计算当前股权加速的数据
+  const getIdentityMultiplier = () => {
+    const level = promotionStats?.currentLevel;
+    if (level === 'standard' || level === 'standard_user') return 0.25;
+    if (level === 'advanced' || level === 'advanced_user') return 0.50;
+    if (level === 'super' || level === 'super_user') return 1.00;
+    return 0.0; // 准合伙人
+  };
+  
+  const capitalLeverage = equity.dynamicLeverage?.leverage || 1.0;
+  const contributionAcceleration = getIdentityMultiplier();
+  const totalMultiplier = capitalLeverage + contributionAcceleration;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="max-w-md mx-auto px-4 py-4 space-y-4">
         
-        {/* ============ 第一层：资本权证中心（红白双引擎） ============ */}
+        {/* ============ 第一部分：综合股权概览 ============ */}
         <div className="space-y-0">
-          {/* 红色区域（汇总） */}
+          {/* 红色区域 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
@@ -147,9 +160,9 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
 
-          {/* 白色区域（明细） */}
+          {/* 白色区域 */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 个人资产结构图（左图右数布局） */}
+            {/* 1. 个人资产结构图 */}
             <div>
               <EquityEnergyRing
                 parts={equityParts}
@@ -158,7 +171,121 @@ export default function MyEquityRedWhite() {
               />
             </div>
 
-            {/* 2. 动态杠杆系数 */}
+            {/* 2. 当前股权加速（从原第二部分移上来） */}
+            <div className="p-4">
+              <div className="space-y-3">
+                {/* 标题 */}
+                <div className="flex items-center justify-between">
+                  <span ref={multiplierTitleRef} className="text-sm text-gray-700 font-semibold">当前股权加速</span>
+                  <div className="relative">
+                    <button
+                      ref={multiplierHelpRef}
+                      onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                    </button>
+                    <Tooltip
+                      isOpen={showMultiplierHelp}
+                      onClose={() => setShowMultiplierHelp(false)}
+                      triggerRef={multiplierTitleRef}
+                      content={
+                        <div className="space-y-2">
+                          <div className="font-bold text-gray-900">收益加速计算规则</div>
+                          <div>
+                            <span className="font-medium">● 资本杠杆：</span>根据您的投资金额和入场顺序一次性锁定，体现资本贡献。
+                          </div>
+                          <div>
+                            <span className="font-medium">● 贡献加速：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现人脉贡献。
+                          </div>
+                          <div>
+                            <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (资本杠杆 + 贡献加速) = 最终结算收益。
+                          </div>
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
+                
+                {/* 一行布局：总倍数 = 资本杠杆 + 贡献加速 */}
+                <div className="flex items-center gap-2">
+                  {/* 左侧：金色卡片显示总倍数 */}
+                  <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-3 py-2.5 shadow-lg flex-shrink-0">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}</div>
+                      <div className="text-[10px] text-white/80 mt-0.5">倍</div>
+                    </div>
+                  </div>
+                  
+                  {/* 等号 */}
+                  <div className="text-gray-400 text-lg font-light flex-shrink-0">=</div>
+                  
+                  {/* 右侧：拆解公式 */}
+                  <div className="flex items-center gap-1.5 flex-1">
+                    {/* 资本杠杆 */}
+                    <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
+                      <div className="text-[10px] text-gray-500 mb-0.5">资本杠杆</div>
+                      <div className="flex items-baseline">
+                        <div className="text-lg font-bold text-[#C5B358] leading-tight">
+                          +{((capitalLeverage - 1) * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
+                      </div>
+                      <div className="text-[9px] text-gray-400 mt-0.5">
+                        {capitalLeverage.toFixed(4)}x
+                      </div>
+                    </div>
+                    
+                    {/* 加号 */}
+                    <div className="text-[#C5B358] text-base font-bold flex-shrink-0">+</div>
+                    
+                    {/* 贡献加速 */}
+                    <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
+                      <div className="text-[10px] text-gray-500 mb-0.5">贡献加速</div>
+                      <div className="flex items-baseline">
+                        <div className="text-lg font-bold text-[#C5B358] leading-tight">
+                          +{(contributionAcceleration * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
+                      </div>
+                      <div className="text-[9px] text-gray-400 mt-0.5">
+                        {promotionStats?.levelName || '准合伙人'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 数据加密保护提示 */}
+            <div className="text-center text-[10px] text-gray-400 pt-2">
+              <span className="inline-flex items-center">
+                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                数据已加密保护，实时同步至 {timestampStr.split(' ')[0]}
+              </span>
+            </div>
+          </div>
+        </div>
+        {/* 第一部分结束 */}
+
+        {/* ============ 第二部分：资金股 ============ */}
+        <div className="space-y-0">
+          {/* 红色区域 */}
+          <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-sm opacity-90 font-medium">资金股</div>
+                <div className="text-xs opacity-60 mt-0.5">资本杠杆驱动</div>
+              </div>
+              <DollarSign className="w-5 h-5 opacity-90" />
+            </div>
+          </div>
+
+          {/* 白色区域 */}
+          <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
+            {/* 1. 资本杠杆系数 */}
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -231,7 +358,7 @@ export default function MyEquityRedWhite() {
               ) : null}
             </div>
 
-            {/* 5. 资本底仓（静态确权） */}
+            {/* 2. 资本权证 */}
             <div className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold text-gray-700">资本权证</div>
@@ -247,22 +374,12 @@ export default function MyEquityRedWhite() {
                 转化为 {(equity.investmentEquity || 0).toFixed(4)}% 资本权证
               </div>
             </div>
-
-            {/* 数据加密保护提示 */}
-            <div className="text-center text-[10px] text-gray-400 pt-2">
-              <span className="inline-flex items-center">
-                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                数据已加密保护，实时同步至 {timestampStr.split(' ')[0]}
-              </span>
-            </div>
           </div>
         </div>
-        {/* 第一层结束 */}
+        {/* 第二部分结束 */}
 
-        {/* ============ 第二层：贡献加成中心（红白双引擎） ============ */}
-        <div id="market-contribution-section">
+        {/* ============ 第三部分：资源股 ============ */}
+        <div id="resource-equity-section">
           <DualEngineAccelerator
             // 红色区域相关
             nodeLevel={equity.details?.inviteCount >= 1 ? 'standard' : 'none'}
@@ -302,9 +419,9 @@ export default function MyEquityRedWhite() {
           />
         </div>
 
-        {/* ============ 第三层：股东保障中心（红白双引擎） ============ */}
+        {/* ============ 第四部分：股东保障中心 ============ */}
         <div className="space-y-0">
-          {/* 红色区域（汇总） */}
+          {/* 红色区域 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm opacity-90 font-medium">股东保障中心</span>
@@ -314,7 +431,7 @@ export default function MyEquityRedWhite() {
             </div>
             <div className="text-xs opacity-70 mb-2">契约、背书与底层逻辑</div>
             
-            {/* 核心数据（左右双列布局） */}
+            {/* 核心数据 */}
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
                 <div className="text-xs opacity-70 mb-1">保障状态</div>
@@ -333,9 +450,9 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
 
-          {/* 白色区域（明细） */}
+          {/* 白色区域 */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 确权状态（从第一层移动过来） */}
+            {/* 1. 确权状态 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">确权状态</div>
               <div className="space-y-2 text-sm">
@@ -397,7 +514,7 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 4. 常见问题（FAQ） */}
+            {/* 4. 常见问题 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">常见问题</div>
               <div className="text-xs text-gray-500 mb-3">4个核心问题解答</div>
@@ -418,7 +535,7 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
         </div>
-        {/* 第三层结束 */}
+        {/* 第四部分结束 */}
 
       </div>
     </div>

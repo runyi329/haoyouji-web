@@ -141,9 +141,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
       <div className={`relative overflow-hidden p-4 rounded-t-2xl ${getTopCardStyle()}`}>
         {/* 标题行 */}
         <div className="flex items-center justify-between mb-3">
-          <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
-            市场贡献价值
-          </span>
+          <div>
+            <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
+              资源股
+            </span>
+            <div className="text-xs opacity-60 mt-0.5">贡献加速驱动</div>
+          </div>
           {/* 问号按钮 */}
           <button
             onClick={() => setShowRules(true)}
@@ -337,91 +340,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
       {/* ====== 白色区域（明细） ====== */}
       <div className="bg-[#F9F9F9] rounded-b-3xl p-4 space-y-5">
         
-        {/* ============ 一、收益倍数计算器 ============ */}
-        <div className="space-y-3">
-          {/* 标题 */}
-          <div className="flex items-center justify-between">
-            <span ref={multiplierTitleRef} className="text-sm text-gray-700 font-semibold">当前股权加速</span>
-            <div className="relative">
-              <button
-                ref={multiplierHelpRef}
-                onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                className="text-gray-400 hover:text-[#C5B358] transition-colors"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-              <Tooltip
-                isOpen={showMultiplierHelp}
-                onClose={() => setShowMultiplierHelp(false)}
-                triggerRef={multiplierTitleRef}
-                content={
-                  <div className="space-y-2">
-                    <div className="font-bold text-gray-900">收益加速计算规则</div>
-                    <div>
-                      <span className="font-medium">● 资产杠杆：</span>根据您的投资金额和入场顺序一次性锁定，体现资本贡献。
-                    </div>
-                    <div>
-                      <span className="font-medium">● 等级加速：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现人脉贡献。
-                    </div>
-                    <div>
-                      <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (资产杠杆 + 等级加速) = 最终结算收益。
-                    </div>
-                  </div>
-                }
-              />
-            </div>
-          </div>
-          
-          {/* 一行布局：总倍数 = 资本杠杆 + 贡献加速 */}
-          <div className="flex items-center gap-2">
-            {/* 左侧：金色卡片显示总倍数 */}
-            <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-3 py-2.5 shadow-lg flex-shrink-0">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}</div>
-                <div className="text-[10px] text-white/80 mt-0.5">倍</div>
-              </div>
-            </div>
-            
-            {/* 等号 */}
-            <div className="text-gray-400 text-lg font-light flex-shrink-0">=</div>
-            
-            {/* 右侧：拆解公式 */}
-            <div className="flex items-center gap-1.5 flex-1">
-              {/* 资本杠杆 */}
-              <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                <div className="text-[10px] text-gray-500 mb-0.5">资本杠杆</div>
-                <div className="flex items-baseline">
-                  <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                    +{((props.equityMultiplier - 1) * 100).toFixed(0)}%
-                  </div>
-                  <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
-                </div>
-                <div className="text-[9px] text-gray-400 mt-0.5">
-                  {props.equityMultiplier.toFixed(4)}x
-                </div>
-              </div>
-              
-              {/* 加号 */}
-              <div className="text-[#C5B358] text-base font-bold flex-shrink-0">+</div>
-              
-              {/* 贡献加速 */}
-              <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                <div className="text-[10px] text-gray-500 mb-0.5">贡献加速</div>
-                <div className="flex items-baseline">
-                  <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                    +{(actualIdentityMultiplier * 100).toFixed(0)}%
-                  </div>
-                  <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
-                </div>
-                <div className="text-[9px] text-gray-400 mt-0.5">
-                  {props.promotionStats?.levelName || '准合伙人'}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* ============ 二、资产阶梯双翼（细线分隔） ============ */}
+        {/* ============ 一、资产阶梯双翼（细线分隔） ============ */}
         <div className="flex items-stretch">
           
           {/* 左翼：已达成资产（金黄色成就感） */}
@@ -619,7 +538,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </div>
         </div>
         
-        {/* ============ 三、功能入口（双栏平铺） ============ */}
+        {/* ============ 二、功能入口（双栏平铺） ============ */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           {/* 查阅晋升准则 - 跳转到晋升规则页面 */}
           <button 
