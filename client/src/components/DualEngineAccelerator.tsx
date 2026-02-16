@@ -347,14 +347,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">累计业务资产</span>
-              <div className="relative">
-                <button
-                  ref={achievedHelpRef}
-                  onClick={() => setShowAchievedHelp(!showAchievedHelp)}
-                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                </button>
+              <div className="relative" style={{ visibility: 'hidden' }}>
                 <Tooltip
                   isOpen={showAchievedHelp}
                   onClose={() => setShowAchievedHelp(false)}
@@ -373,7 +366,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
                         <div>● <span className="font-medium">标准节点：</span>曾经达到过标准用户或更高的累计人数。</div>
                         <div>● <span className="font-medium">高级节点：</span>曾经达到过高级用户或更高的累计人数。</div>
-                        <div>● <span className="font-medium">超级节点：</span>曍经达到过超级用户的累计人数。</div>
+                        <div>● <span className="font-medium">超级节点：</span>曾经达到过超级用户的累计人数。</div>
                         
                         <div className="mt-2 text-xs text-gray-500 bg-amber-50 p-2 rounded">
                           💡 <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。即使掉级了，也会计入累计，体现您的历史贡献。
@@ -445,14 +438,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">本周业务拓展</span>
-              <div className="relative">
-                <button
-                  ref={cultivatingHelpRef}
-                  onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
-                  className="text-gray-400 hover:text-[#A80000] transition-colors"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                </button>
+              <div className="relative" style={{ visibility: 'hidden' }}>
                 <Tooltip
                   isOpen={showCultivatingHelp}
                   onClose={() => setShowCultivatingHelp(false)}
