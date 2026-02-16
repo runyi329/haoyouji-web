@@ -285,7 +285,12 @@ export default function MyEquityRedWhite() {
                 <span className="text-sm font-medium opacity-90">资金股</span>
                 <div className="text-xs opacity-60 mt-0.5">资本杠杆驱动</div>
               </div>
-              <DollarSign className="w-5 h-5 opacity-90" />
+              {/* 问号按钮 */}
+              <button
+                className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <span className="text-xs">?</span>
+              </button>
             </div>
             
             {/* 投资金额 + 持股排名 */}
@@ -303,7 +308,7 @@ export default function MyEquityRedWhite() {
             
             {/* 底部信息 */}
             <div className="text-xs opacity-60">
-              我的投资
+              转化为 {(equity.investmentEquity || 0).toFixed(4)}% 资本权证
             </div>
           </div>
 
@@ -382,22 +387,6 @@ export default function MyEquityRedWhite() {
               ) : null}
             </div>
 
-            {/* 2. 资本权证 */}
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-semibold text-gray-700">资本权证</div>
-                <div className="text-xs text-gray-500">我的投资</div>
-              </div>
-              <div className="flex items-baseline space-x-1">
-                <span className="text-2xl font-bold text-gray-900">
-                  {(equity.details?.userInvestment || 0).toLocaleString()}
-                </span>
-                <span className="text-sm text-gray-600">元</span>
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                转化为 {(equity.investmentEquity || 0).toFixed(4)}% 资本权证
-              </div>
-            </div>
           </div>
         </div>
         {/* 第二部分结束 */}
