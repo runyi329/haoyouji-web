@@ -75,7 +75,10 @@ const PromotionRules: React.FC = () => {
 
   // 生成长图
   const handleSaveImage = async () => {
-    if (!contentRef.current) return;
+    if (!contentRef.current) {
+      toast.error('页面元素未找到');
+      return;
+    }
     
     setIsGenerating(true);
     setShowMenu(false);
@@ -83,27 +86,33 @@ const PromotionRules: React.FC = () => {
     try {
       toast.info('正在生成长图,请稍候...');
       
+      // 简化配置，只使用基本参数
       const canvas = await html2canvas(contentRef.current, {
         scale: 2,
         useCORS: true,
-        logging: false,
+        allowTaint: true,
         backgroundColor: '#f9fafb',
-        windowWidth: contentRef.current.scrollWidth,
-        windowHeight: contentRef.current.scrollHeight,
-        scrollY: -window.scrollY,
-        scrollX: -window.scrollX
+        logging: true
       });
       
-      const link = document.createElement('a');
-      link.download = '晋升攻略.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      
-      toast.success('长图已保存!');
+      // 转换为图片并下载
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = '晋升攻略.png';
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+          toast.success('长图已保存!');
+        } else {
+          toast.error('图片生成失败');
+        }
+        setIsGenerating(false);
+      }, 'image/png');
     } catch (error) {
       console.error('生成长图失败:', error);
-      toast.error('生成长图失败,请重试');
-    } finally {
+      toast.error(`生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
       setIsGenerating(false);
     }
   };
