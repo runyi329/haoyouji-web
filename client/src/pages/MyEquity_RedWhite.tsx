@@ -179,7 +179,6 @@ export default function MyEquityRedWhite() {
                   <span className="text-5xl font-bold">{equity.totalEquity.toFixed(4)}</span>
                   <span className="text-2xl opacity-90">%</span>
                 </div>
-                <div className="mt-1 text-xs opacity-60">综合权重</div>
               </div>
 
               {/* 右侧：估值 + 排名 */}
