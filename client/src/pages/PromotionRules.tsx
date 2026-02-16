@@ -76,7 +76,7 @@ const PromotionRules: React.FC = () => {
     
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(() => {
-        toast.success('链接已复制到剪贴板!');
+        toast.success('链接已复制到剪贴板!', { duration: 500 });
         setShowMenu(false);
       }).catch(() => {
         toast.error('复制失败,请手动复制');
