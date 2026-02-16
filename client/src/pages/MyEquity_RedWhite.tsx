@@ -294,8 +294,11 @@ export default function MyEquityRedWhite() {
             // 晋升数据统计
             promotionStats={promotionStats}
             
-            // 邀请用户统计
+            // 邮请用户统计
             invitedUsersStats={invitedUsersStats}
+            
+            // 排名
+            ranking={equity.ranking?.rank}
           />
         </div>
 

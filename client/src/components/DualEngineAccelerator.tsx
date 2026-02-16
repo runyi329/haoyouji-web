@@ -41,7 +41,7 @@ interface DualEngineAcceleratorProps {
     qualifiedPeriod?: string;
   };
   
-  // 邀请用户统计（可选）
+  // 邮请用户统计（可选）
   invitedUsersStats?: {
     achievedStandard: number;
     achievedAdvanced: number;
@@ -50,6 +50,9 @@ interface DualEngineAcceleratorProps {
     potentialAdvanced: number;
     potentialSuper: number;
   };
+  
+  // 排名（可选）
+  ranking?: number;
 }
 
 export default function DualEngineAccelerator(props: DualEngineAcceleratorProps) {
@@ -142,9 +145,17 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </button>
         </div>
         
-        {/* 当前等级 */}
-        <div className="text-2xl font-bold mb-2" style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {config.name}
+        {/* 当前等级 + 当前贡献排名 */}
+        <div className="flex items-start justify-between mb-2">
+          <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {config.name}
+          </div>
+          {props.ranking && (
+            <div className="text-right">
+              <div className="text-xs opacity-70 mb-0.5">当前贡献排名</div>
+              <div className="text-xl font-bold">No.{props.ranking}</div>
+            </div>
+          )}
         </div>
         
         {/* 达标情况 + 达成时间 */}
