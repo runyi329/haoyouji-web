@@ -7,6 +7,7 @@ import EquityEnergyRing from "@/components/EquityEnergyRing";
 import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
 import Tooltip from "@/components/Tooltip";
+import CompanyEquityPieChart from "@/components/CompanyEquityPieChart";
 
 export default function MyEquityRedWhite() {
   const [, setLocation] = useLocation();
@@ -81,6 +82,46 @@ export default function MyEquityRedWhite() {
     },
   ];
   const othersValue = Math.max(0, 100 - (equity.totalEquity || 0));
+
+  // 公司股权分配数据（根据后台股份池配置）
+  const companyEquityParts = [
+    {
+      label: '天使投资人',
+      value: 30.00,
+      color: '#800000',
+      description: '30.00%'
+    },
+    {
+      label: '创始团队/创始人',
+      value: 40.00,
+      color: '#C5B358',
+      description: '40.00%'
+    },
+    {
+      label: '员工持股平台',
+      value: 15.00,
+      color: '#4A90E2',
+      description: '15.00%'
+    },
+    {
+      label: '市场贡献池',
+      value: 12.50,
+      color: '#F5A623',
+      description: '12.50%'
+    },
+    {
+      label: '联合创始人',
+      value: 2.50,
+      color: '#7ED321',
+      description: '2.50%'
+    },
+    {
+      label: '战略投资股东',
+      value: 0.00,
+      color: '#9B9B9B',
+      description: '0.00%'
+    },
+  ];
 
   // 计算当前股权加速的数据
   const getIdentityMultiplier = () => {
@@ -436,74 +477,26 @@ export default function MyEquityRedWhite() {
         <div className="space-y-0">
           {/* 红色区域 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm opacity-90 font-medium">股东保障中心</span>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm opacity-90 font-medium">股东保障中心</span>
+                <div className="text-xs opacity-70 mt-1">契约、背书与底层逻辑</div>
+              </div>
               <svg className="w-5 h-5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-            </div>
-            <div className="text-xs opacity-70 mb-2">契约、背书与底层逻辑</div>
-            
-            {/* 核心数据 */}
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              <div>
-                <div className="text-xs opacity-70 mb-1">保障状态</div>
-                <div className="text-2xl font-bold text-[#C5B358]">100%</div>
-                <div className="text-[10px] opacity-60 mt-0.5">确权</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs opacity-70 mb-1">已签署协议</div>
-                <div className="text-2xl font-bold">0/1</div>
-                <div className="text-[10px] opacity-60 mt-0.5">份</div>
-              </div>
-            </div>
-
-            <div className="mt-3 text-[10px] opacity-50 text-center">
-              为660位创始股东构建信任基石
             </div>
           </div>
 
           {/* 白色区域 */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 确权状态 */}
-            <div className="p-4">
-              <div className="text-sm font-semibold text-gray-700 mb-3">确权状态</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">电子股权协议</span>
-                  <span className="font-bold text-[#C5B358]">待签署</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">权证下发状态</span>
-                  <span className="font-bold text-[#C5B358]">已确权</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. 股权分配池明细 */}
+            {/* 1. 公司股权分配 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">公司股权分配</div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">创始股东</div>
-                  <div className="text-xl font-bold text-gray-900">660人</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-500 mb-0.5">当前估值</div>
-                  <div className="text-xl font-bold text-gray-900">6600万</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 mb-0.5">期权池余额</div>
-                  <div className="text-xl font-bold text-gray-900">25%</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-500 mb-0.5">总股本</div>
-                  <div className="text-xl font-bold text-gray-900">100%</div>
-                </div>
-              </div>
+              <CompanyEquityPieChart parts={companyEquityParts} />
             </div>
 
-            {/* 3. 法律协议 */}
+            {/* 2. 在线签署 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">在线签署</div>
               <div className="space-y-3">
@@ -527,7 +520,7 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 4. 常见问题 */}
+            {/* 3. 常见问题 */}
             <div className="p-4">
               <div className="text-sm font-semibold text-gray-700 mb-3">常见问题</div>
               <div className="text-xs text-gray-500 mb-3">4个核心问题解答</div>
