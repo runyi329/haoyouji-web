@@ -727,33 +727,6 @@ export async function getUserPromotionStats(userId: number) {
   
   const qualifiedPeriod = `${formatDate(monday)}-${formatDate(sunday)}`;
   
-  // 6. 更新历史最高等级
-  const levelPriority: Record<string, number> = {
-    'partner': 0,
-    'standard_user': 1,
-    'advanced_user': 2,
-    'super_user': 3,
-    'standard': 4,
-    'advanced': 5,
-    'super': 6,
-  };
-  
-  // 获取用户当前的历史最高等级
-  const [userResult] = await db
-    .select({ highestLevelAchieved: users.highestLevelAchieved })
-    .from(users)
-    .where(eq(users.id, userId));
-  
-  const currentHighest = userResult?.highestLevelAchieved || 'partner';
-  
-  // 如果当前等级高于历史最高等级，则更新
-  if (levelPriority[currentLevel] > levelPriority[currentHighest]) {
-    await db
-      .update(users)
-      .set({ highestLevelAchieved: currentLevel })
-      .where(eq(users.id, userId));
-  }
-  
   return {
     contactCount,
     tagCount: totalTagCount,
@@ -761,77 +734,5 @@ export async function getUserPromotionStats(userId: number) {
     currentLevel,
     levelName,
     qualifiedPeriod,
-  };
-}
-
-/**
- * 获取我邀请的用户统计
- * @param userId 用户ID
- * @returns 已成功分享和分享中的人脉节点统计
- */
-export async function getMyInvitedUsersStats(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  // 1. 获取我邀请的所有用户
-  const invitedUsers = await db
-    .select({
-      id: users.id,
-      highestLevelAchieved: users.highestLevelAchieved,
-    })
-    .from(users)
-    .where(eq(users.invitedByUserId, userId));
-  
-  // 2. 为每个邀请的用户计算当前等级
-  const usersWithCurrentLevel = await Promise.all(
-    invitedUsers.map(async (user) => {
-      const stats = await getUserPromotionStats(user.id);
-      return {
-        id: user.id,
-        highestLevelAchieved: user.highestLevelAchieved || 'partner',
-        currentLevel: stats.currentLevel,
-      };
-    })
-  );
-  
-  // 3. 统计已成功分享（基于历史最高等级，包含关系）
-  const achievedStandard = usersWithCurrentLevel.filter(u => 
-    ['standard_user', 'advanced_user', 'super_user', 'standard', 'advanced', 'super']
-    .includes(u.highestLevelAchieved)
-  ).length;
-  
-  const achievedAdvanced = usersWithCurrentLevel.filter(u => 
-    ['advanced_user', 'super_user', 'advanced', 'super']
-    .includes(u.highestLevelAchieved)
-  ).length;
-  
-  const achievedSuper = usersWithCurrentLevel.filter(u => 
-    ['super_user', 'super']
-    .includes(u.highestLevelAchieved)
-  ).length;
-  
-  // 4. 统计分享中（基于当前等级，包含关系）
-  const potentialStandard = usersWithCurrentLevel.length; // 所有邀请的人
-  
-  const potentialAdvanced = usersWithCurrentLevel.filter(u => 
-    ['standard_user', 'advanced_user', 'super_user', 'standard', 'advanced', 'super']
-    .includes(u.currentLevel)
-  ).length;
-  
-  const potentialSuper = usersWithCurrentLevel.filter(u => 
-    ['advanced_user', 'super_user', 'advanced', 'super']
-    .includes(u.currentLevel)
-  ).length;
-  
-  return {
-    // 已成功分享（曾经达到过）
-    achievedStandard,
-    achievedAdvanced,
-    achievedSuper,
-    
-    // 分享中（当前状态）
-    potentialStandard,
-    potentialAdvanced,
-    potentialSuper,
   };
 }

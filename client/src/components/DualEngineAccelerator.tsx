@@ -40,16 +40,6 @@ interface DualEngineAcceleratorProps {
     levelName?: string;
     qualifiedPeriod?: string;
   };
-  
-  // 邀请用户统计（可选）
-  invitedUsersStats?: {
-    achievedStandard: number;
-    achievedAdvanced: number;
-    achievedSuper: number;
-    potentialStandard: number;
-    potentialAdvanced: number;
-    potentialSuper: number;
-  };
 }
 
 export default function DualEngineAccelerator(props: DualEngineAcceleratorProps) {
@@ -280,14 +270,9 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   onClose={() => setShowAchievedHelp(false)}
                   triggerRef={achievedTitleRef}
                   content={
-                    <div className="space-y-2">
-                      <div className="font-bold text-gray-900">统计规则</div>
-                      <div className="space-y-1">
-                        <div>● <span className="font-medium">标准节点：</span>您邀请的人中，曾经达到过标准节点的累计人数（包含已掉级的）。</div>
-                        <div>● <span className="font-medium">高级节点：</span>您邀请的人中，曾经达到过高级节点的累计人数（包含已掉级的）。</div>
-                        <div>● <span className="font-medium">超级节点：</span>您邀请的人中，曾经达到过超级节点的累计人数（包含已掉级的）。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：高级节点同时计入标准节点，超级节点同时计入高级和标准节点。</div>
-                      </div>
+                    <div>
+                      <div className="font-bold text-gray-900 mb-1">向下兼容统计原则</div>
+                      <div>若您培育出一个【超级节点】，由于其天然符合【高级】与【标准】的要求，系统将同步为您增加三级资产池的权数，助您数据最大化。</div>
                     </div>
                   }
                 />
@@ -295,33 +280,25 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
             
             {/* 核心数值（金黄色） */}
-            <div className="text-3xl font-bold text-[#C5B358] mb-3">
-              {props.invitedUsersStats?.achievedStandard || props.standardNodes}
-            </div>
+            <div className="text-3xl font-bold text-[#C5B358] mb-3">{props.standardNodes}</div>
             
             {/* 明细展示（字号递减） */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">标准节点</span>
-                <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedStandard || props.standardNodes}
-                </span>
+                <span className="font-medium text-[#C5B358]">{props.standardNodes}</span>
               </div>
 
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">高级节点</span>
-                <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedAdvanced || props.advancedNodes}
-                </span>
+                <span className="font-medium text-[#C5B358]">{props.advancedNodes}</span>
               </div>
 
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">超级节点</span>
-                <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedSuper || props.superNodes}
-                </span>
+                <span className="font-medium text-[#C5B358]">{props.superNodes}</span>
               </div>
             </div>
             
@@ -348,13 +325,11 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   onClose={() => setShowCultivatingHelp(false)}
                   triggerRef={cultivatingTitleRef}
                   content={
-                    <div className="space-y-2">
-                      <div className="font-bold text-gray-900">统计规则</div>
+                    <div>
+                      <div className="font-bold text-gray-900 mb-1">潜力向上折算</div>
                       <div className="space-y-1">
-                        <div>● <span className="font-medium">潜在标准节点：</span>您邀请的所有人（不管现在是什么等级）。</div>
-                        <div>● <span className="font-medium">潜在高级节点：</span>您邀请的人中，当前是标准节点或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级节点：</span>您邀请的人中，当前是高级节点或更高的人数。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：潜在节点是根据当前等级实时计算，体现您的培育潜力。</div>
+                        <div>● 尚未达标的受邀人视为【潜在标准】。</div>
+                        <div>● 已达标节点将根据其活跃度，自动被系统识别为更高级别的【潜在对象】，提醒您重点辅导。</div>
                       </div>
                     </div>
                   }
@@ -363,33 +338,25 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
             
             {/* 核心数值（红色） */}
-            <div className="text-3xl font-bold text-[#A80000] mb-3">
-              {props.invitedUsersStats?.potentialStandard || props.totalCultivating}
-            </div>
+            <div className="text-3xl font-bold text-[#A80000] mb-3">{props.totalCultivating}</div>
             
             {/* 明细展示 */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">潜在标准节点</span>
-                <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialStandard || props.potentialStandard}
-                </span>
+                <span className="font-medium text-[#A80000]">{props.potentialStandard}</span>
               </div>
 
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">潜在高级节点</span>
-                <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialAdvanced || props.potentialAdvanced}
-                </span>
+                <span className="font-medium text-[#A80000]">{props.potentialAdvanced}</span>
               </div>
 
               
               <div className="flex items-center justify-between text-xs mt-2">
                 <span className="text-gray-600">潜在超级节点</span>
-                <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialSuper || props.potentialSuper}
-                </span>
+                <span className="font-medium text-[#A80000]">{props.potentialSuper}</span>
               </div>
 
             </div>
