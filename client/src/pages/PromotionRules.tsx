@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
-import { MoreVertical, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
+import { trpc } from '../lib/trpc';
 
 interface Tier {
   levelChar1: string;
@@ -15,6 +16,9 @@ interface Tier {
 const PromotionRules: React.FC = () => {
   const [, setLocation] = useLocation();
   const [showMenu, setShowMenu] = useState(false);
+
+  // 获取用户晋升统计数据
+  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
 
   const userTiers: Tier[] = [
     {
@@ -86,6 +90,46 @@ const PromotionRules: React.FC = () => {
     }
   };
 
+  // 根据等级获取加速倍率
+  const getMultiplier = (level: string) => {
+    switch (level) {
+      case 'standard': return '+25%';
+      case 'advanced': return '+50%';
+      case 'super': return '+100%';
+      default: return '';
+    }
+  };
+
+  // 计算进度百分比
+  const getProgress = (current: number, target: number) => {
+    return Math.min(Math.round((current / target) * 100), 100);
+  };
+
+  // 判断是否达标
+  const isQualified = (current: number, target: number) => {
+    return current >= target;
+  };
+
+  // 获取当前等级的要求
+  const getCurrentTierRequirements = () => {
+    const level = promotionStats?.currentLevel || 'partner';
+    
+    // 节点层
+    if (level === 'super') return nodeTiers[2];
+    if (level === 'advanced') return nodeTiers[1];
+    if (level === 'standard') return nodeTiers[0];
+    
+    // 用户层
+    if (level === 'super_user') return userTiers[2];
+    if (level === 'advanced_user') return userTiers[1];
+    if (level === 'standard_user') return userTiers[0];
+    
+    // 准合伙人（默认）
+    return null;
+  };
+
+  const currentTier = getCurrentTierRequirements();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
       {/* 顶部导航栏 */}
@@ -110,6 +154,92 @@ const PromotionRules: React.FC = () => {
 
       {/* 内容区域 */}
       <div>
+        {/* 金色胶囊：当前等级 */}
+        {promotionStats && promotionStats.currentLevel !== 'partner' && (
+          <div className="p-4 pb-2">
+            <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full px-6 py-3 shadow-lg">
+              <div className="text-center">
+                <div className="text-white text-base font-bold">
+                  🏆 当前等级：{promotionStats.levelName} {getMultiplier(promotionStats.currentLevel)}
+                </div>
+                <div className="text-white/90 text-xs mt-1">
+                  符合周期：{promotionStats.qualifiedPeriod}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 三维度进度显示 */}
+        {promotionStats && currentTier && (
+          <div className="p-4 pt-2">
+            <div className="bg-white rounded-lg shadow-md p-4">
+              <h3 className="text-sm font-bold text-gray-800 mb-3">当前进度</h3>
+              <div className="space-y-3">
+                {/* 人脉进度 */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-gray-600">人脉</span>
+                    {isQualified(promotionStats.contactCount, currentTier.contacts) ? (
+                      <span className="text-[#C5B358] font-bold text-sm">✓ 已达标</span>
+                    ) : (
+                      <span className="text-xs text-gray-500">
+                        {getProgress(promotionStats.contactCount, currentTier.contacts)}% ({promotionStats.contactCount}/{currentTier.contacts})
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${getProgress(promotionStats.contactCount, currentTier.contacts)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 标签进度 */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-gray-600">标签</span>
+                    {isQualified(promotionStats.tagCount, currentTier.tagsPerPerson) ? (
+                      <span className="text-[#C5B358] font-bold text-sm">✓ 已达标</span>
+                    ) : (
+                      <span className="text-xs text-gray-500">
+                        {getProgress(promotionStats.tagCount, currentTier.tagsPerPerson)}% ({promotionStats.tagCount}/{currentTier.tagsPerPerson})
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${getProgress(promotionStats.tagCount, currentTier.tagsPerPerson)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 联络进度 */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-gray-600">联络</span>
+                    {isQualified(promotionStats.interactionCount, currentTier.frequency) ? (
+                      <span className="text-[#C5B358] font-bold text-sm">✓ 已达标</span>
+                    ) : (
+                      <span className="text-xs text-gray-500">
+                        {getProgress(promotionStats.interactionCount, currentTier.frequency)}% ({promotionStats.interactionCount}/{currentTier.frequency})
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${getProgress(promotionStats.interactionCount, currentTier.frequency)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       {/* 用户层 */}
       <div className="p-4">
         <h2 className="text-lg font-bold text-gray-800 mb-2">用户层(使用型)</h2>
