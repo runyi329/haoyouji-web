@@ -795,6 +795,13 @@ export async function getMyInvitedUsersStats(userId: number) {
   );
   
   // 3. 统计累计业务资产（基于历史最高等级）
+  // 用户层面和节点层面规则相同：
+  // - 标准：曾经达到过标准用户或更高
+  // - 高级：曾经达到过高级用户或更高
+  // - 超级：曾经达到过超级用户
+  
+  const totalInvitedCount = usersWithCurrentLevel.length;
+  
   // 用户层面
   const achievedStandardUser = usersWithCurrentLevel.filter(u => 
     ['standard_user', 'advanced_user', 'super_user']
@@ -811,52 +818,53 @@ export async function getMyInvitedUsersStats(userId: number) {
     .includes(u.highestLevelAchieved)
   ).length;
   
-  // 节点层面
+  // 节点层面（规则与用户层面相同）
   const achievedStandardNode = usersWithCurrentLevel.filter(u => 
-    ['standard', 'advanced', 'super']
+    ['standard_user', 'advanced_user', 'super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
   const achievedAdvancedNode = usersWithCurrentLevel.filter(u => 
-    ['advanced', 'super']
+    ['advanced_user', 'super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
   const achievedSuperNode = usersWithCurrentLevel.filter(u => 
-    ['super']
+    ['super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
   // 4. 统计本周业务拓展（基于当前等级）
+  // 用户层面和节点层面规则相同：
+  // - 潜在标准：所有邀请的人
+  // - 潜在高级：达到标准用户或更高
+  // - 潜在超级：达到高级用户或更高
+  
+  const totalInvitedCount = usersWithCurrentLevel.length;
+  
   // 用户层面
-  const potentialStandardUser = usersWithCurrentLevel.filter(u => 
+  const potentialStandardUser = totalInvitedCount; // 所有邀请的人
+  
+  const potentialAdvancedUser = usersWithCurrentLevel.filter(u => 
     ['standard_user', 'advanced_user', 'super_user']
     .includes(u.currentLevel)
   ).length;
   
-  const potentialAdvancedUser = usersWithCurrentLevel.filter(u => 
+  const potentialSuperUser = usersWithCurrentLevel.filter(u => 
     ['advanced_user', 'super_user']
     .includes(u.currentLevel)
   ).length;
   
-  const potentialSuperUser = usersWithCurrentLevel.filter(u => 
-    ['super_user']
-    .includes(u.currentLevel)
-  ).length;
-  
-  // 节点层面
-  const potentialStandardNode = usersWithCurrentLevel.filter(u => 
-    ['standard', 'advanced', 'super']
-    .includes(u.currentLevel)
-  ).length;
+  // 节点层面（规则与用户层面相同）
+  const potentialStandardNode = totalInvitedCount; // 所有邀请的人
   
   const potentialAdvancedNode = usersWithCurrentLevel.filter(u => 
-    ['advanced', 'super']
+    ['standard_user', 'advanced_user', 'super_user']
     .includes(u.currentLevel)
   ).length;
   
   const potentialSuperNode = usersWithCurrentLevel.filter(u => 
-    ['super']
+    ['advanced_user', 'super_user']
     .includes(u.currentLevel)
   ).length;
   
