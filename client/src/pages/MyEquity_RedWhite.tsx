@@ -156,7 +156,6 @@ export default function MyEquityRedWhite() {
                     编号 {String(equity.dynamicLeverage.seatNumber).padStart(4, '0')}
                   </span>
                 )}
-                <TrendingUp className="w-5 h-5 opacity-90" />
               </div>
             </div>
 
