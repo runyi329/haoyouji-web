@@ -320,20 +320,7 @@ export default function BusinessPlan() {
             <h2 className="text-xl font-bold text-white mb-1">融资与愿景</h2>
             <p className="text-white/80 text-sm">诚邀您成为"脉动网"的合伙人</p>
           </div>
-          <div className="p-6 space-y-6">
-            {/* 天使轮融资计划 */}
-            <div className="bg-gradient-to-br from-[#A80000] to-[#660000] rounded-lg p-6 text-white">
-              <h3 className="font-semibold text-xl mb-4">天使轮融资计划</h3>
-              <div className="space-y-3">
-                <p className="leading-relaxed">
-                  本轮计划融资<span className="text-[#C5B358] font-bold text-2xl mx-1">6600万元</span>，资金50%将用市场份额的扩张以及城市节点布局和市场教育，加速网络效应形成。
-                </p>
-                <p className="leading-relaxed">
-                  50%将用于公司的运营与技术的储备，重点布局AI时代对脉动网的全面赋能，夯实项目技术壁垒与市场覆盖基础。
-                </p>
-              </div>
-            </div>
-
+          <div className="p-6">
             {/* 愿景与价值共享 */}
             <div className="bg-[#F9F9F9] rounded-lg p-6">
               <h3 className="font-semibold text-gray-900 mb-3 text-lg">愿景与价值共享</h3>
