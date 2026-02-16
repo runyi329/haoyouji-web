@@ -135,18 +135,18 @@ export default function Home() {
   const banners = [
     {
       id: 1,
-      image: "/carousel-friend-share.webp",
-      title: "好友共享"
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/newyear-v1.webp",
+      title: "脉动送福 2026"
     },
     {
       id: 2,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/decentral.webp",
-      title: "去中心化人脉管理"
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/newyear-v2.webp",
+      title: "2026年人脉涌动"
     },
     {
       id: 3,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.webp",
-      title: "AI社交"
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/newyear-v3.webp",
+      title: "脉涌动"
     }
   ];
 
