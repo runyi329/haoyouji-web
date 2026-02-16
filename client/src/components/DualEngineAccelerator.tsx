@@ -375,42 +375,46 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* ====== 四、底部状态胶囊（结算感） ====== */}
         <div className="mt-5 w-[95%] mx-auto">
           {/* 胶囊形主卡片（当前等级） */}
-          <div className="relative bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full px-6 py-3.5 shadow-lg">
+          <div className="relative bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full px-6 py-4 shadow-lg">
             {/* 外阴影效果 */}
             <div className="absolute -inset-0.5 bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-full blur opacity-30 -z-10"></div>
             
-            {/* 内容：水平垂直居中 */}
-            <div className="flex items-center justify-center space-x-3">
-              <Shield className="w-5 h-5 text-white" />
-              <div className="text-center">
-                <span className="text-white text-sm font-bold">当前等级：</span>
-                <span className="text-white text-base font-bold ml-1">{config.name}</span>
-              </div>
+            {/* 内容：垂直居中 */}
+            <div className="flex items-center justify-center space-x-2">
               <Award className="w-5 h-5 text-white" />
+              <div className="text-center">
+                {/* 第一行：当前等级 + 加速倍率 */}
+                <div>
+                  <span className="text-white text-sm font-bold">当前等级：</span>
+                  <span className="text-white text-base font-bold ml-1">{config.name}</span>
+                  <span className="text-white/90 text-xs font-bold ml-2">
+                    +{(props.identityMultiplier * 100).toFixed(0)}%
+                  </span>
+                </div>
+                {/* 第二行：符合周期 */}
+                <div className="mt-0.5">
+                  <span className="text-white/60 text-[9px]">
+                    符合周期：
+                    {(() => {
+                      const now = new Date();
+                      const today = now.getDay();
+                      // 计算上周一的日期
+                      const lastMonday = new Date(now);
+                      lastMonday.setDate(now.getDate() - (today === 0 ? 6 : today - 1) - 7);
+                      // 计算上周日的日期
+                      const lastSunday = new Date(lastMonday);
+                      lastSunday.setDate(lastMonday.getDate() + 6);
+                      
+                      const formatDate = (date: Date) => {
+                        return `${date.getMonth() + 1}月${date.getDate()}日`;
+                      };
+                      
+                      return `${formatDate(lastMonday)}-${formatDate(lastSunday)}`;
+                    })()}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          {/* 符合周期说明 */}
-          <div className="mt-1.5 text-center">
-            <span className="text-[9px] text-gray-400">
-              符合周期：
-              {(() => {
-                const now = new Date();
-                const today = now.getDay();
-                // 计算上周一的日期
-                const lastMonday = new Date(now);
-                lastMonday.setDate(now.getDate() - (today === 0 ? 6 : today - 1) - 7);
-                // 计算上周日的日期
-                const lastSunday = new Date(lastMonday);
-                lastSunday.setDate(lastMonday.getDate() + 6);
-                
-                const formatDate = (date: Date) => {
-                  return `${date.getMonth() + 1}月${date.getDate()}日`;
-                };
-                
-                return `${formatDate(lastMonday)}-${formatDate(lastSunday)}`;
-              })()}
-            </span>
           </div>
           
           {/* 辅助信息卡片（距离下一等级差距） */}
