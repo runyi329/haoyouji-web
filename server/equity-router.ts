@@ -208,9 +208,4 @@ export const equityRouter = router({
     .query(async ({ ctx }) => {
       return await dbEquity.getUserPromotionStats(ctx.user.id);
     }),
-  // 获取我邀请的用户统计
-  getMyInvitedUsersStats: protectedProcedure
-    .query(async ({ ctx }) => {
-      return await dbEquity.getMyInvitedUsersStats(ctx.user.id);
-    }),
 });

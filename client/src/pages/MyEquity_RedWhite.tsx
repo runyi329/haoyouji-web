@@ -12,7 +12,6 @@ export default function MyEquityRedWhite() {
   const { data: enhanced, isLoading } = trpc.equity.getMyEquityEnhanced.useQuery();
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery();
   const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
-  const { data: invitedUsersStats } = trpc.equity.getMyInvitedUsersStats.useQuery();
 
   if (isLoading) {
     return (
@@ -293,9 +292,6 @@ export default function MyEquityRedWhite() {
             
             // 晋升数据统计
             promotionStats={promotionStats}
-            
-            // 邀请用户统计
-            invitedUsersStats={invitedUsersStats}
           />
         </div>
 
