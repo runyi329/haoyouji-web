@@ -1,4 +1,4 @@
-import { HelpCircle, TrendingUp, Shield, Award, ChevronRight, Clock } from "lucide-react";
+import { HelpCircle, TrendingUp, Shield, Award, ChevronRight, Clock, Check } from "lucide-react";
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import Tooltip from "./Tooltip";
@@ -477,14 +477,25 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const tagPct = Math.min(100, Math.round((currentTag / targetTag) * 100));
                 const interactionPct = Math.min(100, Math.round((currentInteraction / targetInteraction) * 100));
                 
+                // 判断是否达标
+                const contactAchieved = currentContact >= targetContact;
+                const tagAchieved = currentTag >= targetTag;
+                const interactionAchieved = currentInteraction >= targetInteraction;
+                
                 return (
                   <>
                     {/* 人脉 */}
                     <div className="flex flex-col items-center flex-1">
                       <span className="text-gray-600 mb-1">人脉</span>
                       <div>
-                        <span className="font-bold text-gray-900">{contactPct}%</span>
-                        <span className="ml-1 text-[9px] text-gray-400">({currentContact}/{targetContact})</span>
+                        {contactAchieved ? (
+                          <Check className="w-5 h-5 text-[#C5B358]" />
+                        ) : (
+                          <>
+                            <span className="font-bold text-gray-900">{contactPct}%</span>
+                            <span className="ml-1 text-[9px] text-gray-400">({currentContact}/{targetContact})</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     
@@ -492,8 +503,14 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="flex flex-col items-center flex-1 border-l border-r border-gray-200 px-2">
                       <span className="text-gray-600 mb-1">标签</span>
                       <div>
-                        <span className="font-bold text-gray-900">{tagPct}%</span>
-                        <span className="ml-1 text-[9px] text-gray-400">({currentTag}/{targetTag})</span>
+                        {tagAchieved ? (
+                          <Check className="w-5 h-5 text-[#C5B358]" />
+                        ) : (
+                          <>
+                            <span className="font-bold text-gray-900">{tagPct}%</span>
+                            <span className="ml-1 text-[9px] text-gray-400">({currentTag}/{targetTag})</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     
@@ -501,8 +518,14 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="flex flex-col items-center flex-1">
                       <span className="text-gray-600 mb-1">联络</span>
                       <div>
-                        <span className="font-bold text-gray-900">{interactionPct}%</span>
-                        <span className="ml-1 text-[9px] text-gray-400">({currentInteraction}/{targetInteraction})</span>
+                        {interactionAchieved ? (
+                          <Check className="w-5 h-5 text-[#C5B358]" />
+                        ) : (
+                          <>
+                            <span className="font-bold text-gray-900">{interactionPct}%</span>
+                            <span className="ml-1 text-[9px] text-gray-400">({currentInteraction}/{targetInteraction})</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </>
