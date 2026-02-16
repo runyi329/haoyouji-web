@@ -105,13 +105,9 @@ export default function MyEquityRedWhite() {
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
-              <button 
-                onClick={() => setLocation('/')}
-                className="flex items-center space-x-1 text-sm opacity-90 font-medium hover:opacity-100 transition-opacity"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>返回</span>
-              </button>
+              <div>
+                <span className="text-sm font-medium opacity-90">综合股权</span>
+              </div>
               <div className="flex items-center space-x-2">
                 {equity.dynamicLeverage && (
                   <span className="text-[10px] font-mono tracking-wider opacity-60 bg-white/10 px-2 py-0.5 rounded">
@@ -154,25 +150,25 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
-            {/* 时间戳 */}
-            <div className="mt-3 text-[10px] opacity-50 text-right">
-              截止 {timestampStr}
+            {/* 底部：返回按钮 + 时间戳 */}
+            <div className="mt-3 flex items-center justify-between">
+              <button 
+                onClick={() => setLocation('/')}
+                className="flex items-center space-x-1 text-sm opacity-90 font-medium hover:opacity-100 transition-opacity"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>返回</span>
+              </button>
+              <div className="text-[10px] opacity-50">
+                截止 {timestampStr}
+              </div>
             </div>
           </div>
 
           {/* 白色区域 */}
           <div className="bg-[#F9F9F9] p-4 rounded-b-3xl space-y-4">
-            {/* 1. 个人资产结构图 */}
+            {/* 1. 当前股权加速（从原第二部分移上来） */}
             <div>
-              <EquityEnergyRing
-                parts={equityParts}
-                othersValue={othersValue}
-                totalEquity={equity.totalEquity}
-              />
-            </div>
-
-            {/* 2. 当前股权加速（从原第二部分移上来） */}
-            <div className="p-4">
               <div className="space-y-3">
                 {/* 标题 */}
                 <div className="flex items-center justify-between">
@@ -257,6 +253,15 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
+            {/* 2. 个人资产结构图 */}
+            <div>
+              <EquityEnergyRing
+                parts={equityParts}
+                othersValue={othersValue}
+                totalEquity={equity.totalEquity}
+              />
+            </div>
+
             {/* 数据加密保护提示 */}
             <div className="text-center text-[10px] text-gray-400 pt-2">
               <span className="inline-flex items-center">
@@ -274,12 +279,22 @@ export default function MyEquityRedWhite() {
         <div className="space-y-0">
           {/* 红色区域 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
-            <div className="flex items-center justify-between mb-2">
+            {/* 标题行 */}
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-sm opacity-90 font-medium">资金股</div>
+                <span className="text-sm font-medium opacity-90">资金股</span>
                 <div className="text-xs opacity-60 mt-0.5">资本杠杆驱动</div>
               </div>
               <DollarSign className="w-5 h-5 opacity-90" />
+            </div>
+            
+            {/* 预留空间，与资源股红色帽子高度一致 */}
+            <div className="mb-2">
+              {/* 这里后续会添加内容 */}
+            </div>
+            
+            <div className="text-xs">
+              {/* 这里后续会添加内容 */}
             </div>
           </div>
 
