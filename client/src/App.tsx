@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 
 
 // HMR 热更新提示音模块
@@ -214,6 +215,9 @@ function Router() {
 }
 
 function App() {
+  // 版本检测（临时强制更新机制）
+  useVersionCheck();
+
   // 解锁音频上下文（移动端需要用户交互后才能播放音频）
   useEffect(() => {
     const unlockAudio = () => {
