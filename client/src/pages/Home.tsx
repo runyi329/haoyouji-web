@@ -135,7 +135,7 @@ export default function Home() {
   const banners = [
     {
       id: 1,
-      image: "/carousel-friend-share.png",
+      image: "/carousel-friend-share.webp",
       title: "好友共享"
     },
     {
