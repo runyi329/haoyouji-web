@@ -142,24 +142,63 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* 标题行 */}
         <div className="flex items-center justify-between mb-3">
           <div>
-            <span className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
+            <span ref={multiplierTitleRef} className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
               资源股
             </span>
             <div className="text-xs opacity-60 mt-0.5">贡献加速驱动</div>
           </div>
           {/* 问号按钮 */}
           <button
-            onClick={() => setShowRules(true)}
+            ref={multiplierHelpRef}
+            onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
             className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
           >
             <span className="text-xs">?</span>
           </button>
         </div>
         
+        {/* 资源股帮助弹窗 */}
+        <Tooltip
+          isOpen={showMultiplierHelp}
+          onClose={() => setShowMultiplierHelp(false)}
+          triggerRef={multiplierTitleRef}
+          content={
+            <div className="space-y-3">
+              <div className="font-bold text-gray-900 text-base">市场贡献池（12.5%）：给“劳动”以超额回报</div>
+              <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+                <p>这是为活跃的、不断让“人脉动起来”的合伙人设立的周奖金池。</p>
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                  <p className="font-medium text-amber-900">分配逻辑：</p>
+                  <p className="text-sm text-amber-800 mt-1">根据每周的真实行为贡献（邀约、标签、分享）进行结算。</p>
+                </div>
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                  <p className="font-medium text-blue-900">杠杆效应：</p>
+                  <p className="text-sm text-blue-800 mt-1">如果您是持有 2.0 的资本加速，您在 12.5% 市场池里的劳动产出，将是相同节点的 2 倍。</p>
+                </div>
+                <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                  <p className="font-medium text-green-900">核心好处：多劳多得，上不封顶。</p>
+                  <p className="text-sm text-green-800 mt-1">这是一个流动的、爆发性的池子。如果您既有资本加速，又有资源加速（自己符合标准节点 25%、高级节点 50%、超级节点 100%），又积极参与经营，您将同时横跨两个池子，获得超越阶层的“三重复利”。</p>
+                </div>
+              </div>
+            </div>
+          }
+        />
+        
         {/* 当前等级 + 当前贡献排名 */}
         <div className="flex items-start justify-between mb-2">
-          <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {config.name}
+          <div className="flex items-center space-x-1">
+            <span ref={achievedTitleRef} className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {config.name}
+            </span>
+            <button
+              ref={achievedHelpRef}
+              onClick={() => setShowAchievedHelp(!showAchievedHelp)}
+              className="text-white/60 hover:text-white/90 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
           </div>
           {props.ranking && (
             <div className="text-right">
@@ -203,6 +242,34 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
           )}
         </div>
+        
+        {/* 节点级别帮助弹窗 */}
+        <Tooltip
+          isOpen={showAchievedHelp}
+          onClose={() => setShowAchievedHelp(false)}
+          triggerRef={achievedTitleRef}
+          content={
+            <div className="space-y-3">
+              <div className="font-bold text-gray-900 text-base">资源加速机制</div>
+              <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+                <p>不同节点级别在 12.5% 市场贡献池中享有不同的资源加速：</p>
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                  <p className="font-medium text-blue-900">标准节点：+25% 资源加速</p>
+                  <p className="text-sm text-blue-800 mt-1">您的市场贡献权重将增加 25%，即每周结算时您的贡献会乘以 1.25 倍。</p>
+                </div>
+                <div className="bg-purple-50 border-l-4 border-purple-400 p-3 rounded">
+                  <p className="font-medium text-purple-900">高级节点：+50% 资源加速</p>
+                  <p className="text-sm text-purple-800 mt-1">您的市场贡献权重将增加 50%，即每周结算时您的贡献会乘以 1.50 倍。</p>
+                </div>
+                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                  <p className="font-medium text-amber-900">超级节点：+100% 资源加速</p>
+                  <p className="text-sm text-amber-800 mt-1">您的市场贡献权重将翻倍，即每周结算时您的贡献会乘以 2.00 倍。</p>
+                </div>
+                <p className="text-gray-600 mt-2">资源加速与资本加速可以叠加，形成“三重复利”效应。</p>
+              </div>
+            </div>
+          }
+        />
         
         {/* 人脉数弹窗 */}
         <Tooltip
