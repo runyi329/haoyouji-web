@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface Tier {
@@ -8,15 +8,10 @@ interface Tier {
   tagsPerPerson: number;
   frequency: number;
   benefit: string;
-  showTooltip: boolean;
 }
 
 const PromotionRules: React.FC = () => {
   const navigate = useNavigate();
-  const [modalContent, setModalContent] = useState<{
-    title: string;
-    description: string;
-  } | null>(null);
 
   const userTiers: Tier[] = [
     {
@@ -25,8 +20,7 @@ const PromotionRules: React.FC = () => {
       contacts: 5,
       tagsPerPerson: 1,
       frequency: 1,
-      benefit: '开启基础功能，享有积分商城初级兑换权限',
-      showTooltip: true
+      benefit: '开启基础功能，享有积分商城初级兑换权限'
     },
     {
       levelChar1: '高级',
@@ -34,8 +28,7 @@ const PromotionRules: React.FC = () => {
       contacts: 10,
       tagsPerPerson: 2,
       frequency: 2,
-      benefit: '享有专属礼品定期兑换权限',
-      showTooltip: false
+      benefit: '享有专属礼品定期兑换权限'
     },
     {
       levelChar1: '超级',
@@ -43,8 +36,7 @@ const PromotionRules: React.FC = () => {
       contacts: 20,
       tagsPerPerson: 3,
       frequency: 3,
-      benefit: '获得线下人脉交流活动优先邀请权，免除参与费用',
-      showTooltip: false
+      benefit: '获得线下人脉交流活动优先邀请权，免除参与费用'
     }
   ];
 
@@ -55,8 +47,7 @@ const PromotionRules: React.FC = () => {
       contacts: 50,
       tagsPerPerson: 3,
       frequency: 3,
-      benefit: '开启倍率收益结算，获得节点经营团队组建权限',
-      showTooltip: true
+      benefit: '开启倍率收益结算，获得节点经营团队组建权限'
     },
     {
       levelChar1: '高级',
@@ -64,8 +55,7 @@ const PromotionRules: React.FC = () => {
       contacts: 100,
       tagsPerPerson: 5,
       frequency: 5,
-      benefit: '享有 2.2倍 收益爆发，并入围公司个人股权激励计划',
-      showTooltip: false
+      benefit: '享有 2.2倍 收益爆发，并入围公司个人股权激励计划'
     },
     {
       levelChar1: '超级',
@@ -73,32 +63,9 @@ const PromotionRules: React.FC = () => {
       contacts: 150,
       tagsPerPerson: 8,
       frequency: 10,
-      benefit: '享有公司最高级权益分红，受邀入公司战略合伙人',
-      showTooltip: false
+      benefit: '享有公司最高级权益分红，受邀入公司战略合伙人'
     }
   ];
-
-  const handleModalOpen = (type: 'contacts' | 'tags' | 'frequency') => {
-    const content = {
-      contacts: {
-        title: '人脉规模',
-        description: '指您在"好友记"中录入并维护的有效联系人总数'
-      },
-      tags: {
-        title: '标签深度',
-        description: '指平均每位联系人身上添加的标签数量'
-      },
-      frequency: {
-        title: '联络频次',
-        description: '指您每日平均与多少位联系人进行有效互动'
-      }
-    };
-    setModalContent(content[type]);
-  };
-
-  const handleModalClose = () => {
-    setModalContent(null);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
@@ -127,61 +94,24 @@ const PromotionRules: React.FC = () => {
                   {/* 第1行：等级名称 + 3个指标 */}
                   <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
                     <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
-                      <div className="flex flex-col items-center justify-center gap-1">
+                      <div className="flex flex-col items-center justify-center">
                         <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar1}</div>
                         <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar2}</div>
-                        {tier.showTooltip && (
-                          <div className="flex gap-1 mt-1">
-                            <button
-                              onClick={() => handleModalOpen('contacts')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleModalOpen('tags')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleModalOpen('frequency')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.contacts}</span>
+                      <div className="text-xs text-gray-600">
+                        人脉×<span className="font-bold text-gray-800">{tier.contacts}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.tagsPerPerson}</span>
+                      <div className="text-xs text-gray-600">
+                        标签×<span className="font-bold text-gray-800">{tier.tagsPerPerson}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.frequency}</span>
+                      <div className="text-xs text-gray-600">
+                        联络×<span className="font-bold text-gray-800">{tier.frequency}</span>
                       </div>
                     </td>
                   </tr>
@@ -215,61 +145,24 @@ const PromotionRules: React.FC = () => {
                   {/* 第1行：等级名称 + 3个指标 */}
                   <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
                     <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
-                      <div className="flex flex-col items-center justify-center gap-1">
+                      <div className="flex flex-col items-center justify-center">
                         <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar1}</div>
                         <div className="text-sm font-bold text-[#A80000] leading-tight">{tier.levelChar2}</div>
-                        {tier.showTooltip && (
-                          <div className="flex gap-1 mt-1">
-                            <button
-                              onClick={() => handleModalOpen('contacts')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleModalOpen('tags')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleModalOpen('frequency')}
-                              className="flex-shrink-0"
-                            >
-                              <svg className="w-3 h-3 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.contacts}</span>
+                      <div className="text-xs text-gray-600">
+                        人脉×<span className="font-bold text-gray-800">{tier.contacts}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.tagsPerPerson}</span>
+                      <div className="text-xs text-gray-600">
+                        标签×<span className="font-bold text-gray-800">{tier.tagsPerPerson}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        <span className="text-sm font-bold text-gray-800">{tier.frequency}</span>
+                      <div className="text-xs text-gray-600">
+                        联络×<span className="font-bold text-gray-800">{tier.frequency}</span>
                       </div>
                     </td>
                   </tr>
@@ -287,40 +180,6 @@ const PromotionRules: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* 模态窗口 */}
-      {modalContent && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={handleModalClose}
-        >
-          <div 
-            className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-bold text-gray-800">{modalContent.title}</h3>
-              <button 
-                onClick={handleModalClose}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-              {modalContent.description}
-            </p>
-            <button
-              onClick={handleModalClose}
-              className="w-full bg-[#A80000] text-white py-2.5 rounded-lg font-medium hover:bg-[#8B0000] transition-colors"
-            >
-              我知道了
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
