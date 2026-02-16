@@ -287,7 +287,7 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
           {/* 白色区域 */}
-          <div className="bg-white px-4 py-4 rounded-b-2xl shadow-sm mx-4">y-4">
+          <div className="bg-white px-4 py-4 rounded-b-2xl shadow-sm mx-4">
             {/* 1. 当前股权加速（从原第二部分移上来） */}
             <div>
               <div className="space-y-3">
@@ -394,7 +394,9 @@ export default function MyEquityRedWhite() {
             </div>
           </div>
         </div>
-        {/* 第一部分结束 */        {/* ============ 第三部分：当前股权加速 ============ */}
+        {/* 第一部分结束 */}
+
+        {/* ============ 第三部分：当前股权加速 ============ */}
         <div className="space-y-0">
           {/* 红色区域 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white px-4 py-4">
