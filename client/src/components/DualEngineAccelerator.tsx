@@ -266,7 +266,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 左翼：已达成资产（金黄色成就感） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">已成功分享人脉节点</span>
+              <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">累计业务资产</span>
               <div className="relative">
                 <button
                   ref={achievedHelpRef}
@@ -283,10 +283,15 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
                       <div className="space-y-1">
-                        <div>● <span className="font-medium">标准节点：</span>您邀请的人中，曾经达到过标准节点的累计人数（包含已掉级的）。</div>
-                        <div>● <span className="font-medium">高级节点：</span>您邀请的人中，曾经达到过高级节点的累计人数（包含已掉级的）。</div>
-                        <div>● <span className="font-medium">超级节点：</span>您邀请的人中，曾经达到过超级节点的累计人数（包含已掉级的）。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：高级节点同时计入标准节点，超级节点同时计入高级和标准节点。</div>
+                        <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
+                        <div>● <span className="font-medium">标准用户：</span>您邀请的人中，曾经达到过标准用户的累计人数。</div>
+                        <div>● <span className="font-medium">高级用户：</span>您邀请的人中，曾经达到过高级用户的累计人数。</div>
+                        <div>● <span className="font-medium">超级用户：</span>您邀请的人中，曾经达到过超级用户的累计人数。</div>
+                        <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
+                        <div>● <span className="font-medium">标准节点：</span>您邀请的人中，曾经达到过标准节点的累计人数。</div>
+                        <div>● <span className="font-medium">高级节点：</span>您邀请的人中，曾经达到过高级节点的累计人数。</div>
+                        <div>● <span className="font-medium">超级节点：</span>您邀请的人中，曾经达到过超级节点的累计人数。</div>
+                        <div className="mt-2 text-xs text-gray-500">注：统计包含已掉级的用户，体现您的累计贡献。</div>
                       </div>
                     </div>
                   }
@@ -296,26 +301,50 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             
             {/* 明细展示 */}
             <div className="space-y-1">
+              {/* 用户层面 */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">标准用户</span>
+                <span className="font-medium text-[#C5B358]">
+                  {props.invitedUsersStats?.achieved?.standardUser || 0}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">高级用户</span>
+                <span className="font-medium text-[#C5B358]">
+                  {props.invitedUsersStats?.achieved?.advancedUser || 0}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">超级用户</span>
+                <span className="font-medium text-[#C5B358]">
+                  {props.invitedUsersStats?.achieved?.superUser || 0}
+                </span>
+              </div>
+              
+              {/* 分隔线：区分用户层面和节点层面 */}
+              <div className="h-[3px] bg-gradient-to-r from-transparent via-[#C5B358]/20 to-transparent my-2"></div>
+              
+              {/* 节点层面 */}
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">标准节点</span>
                 <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedStandard || props.standardNodes}
+                  {props.invitedUsersStats?.achieved?.standardNode || 0}
                 </span>
               </div>
-
               
-              <div className="flex items-center justify-between text-xs mt-2">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">高级节点</span>
                 <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedAdvanced || props.advancedNodes}
+                  {props.invitedUsersStats?.achieved?.advancedNode || 0}
                 </span>
               </div>
-
               
-              <div className="flex items-center justify-between text-xs mt-2">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">超级节点</span>
                 <span className="font-medium text-[#C5B358]">
-                  {props.invitedUsersStats?.achievedSuper || props.superNodes}
+                  {props.invitedUsersStats?.achieved?.superNode || 0}
                 </span>
               </div>
             </div>
@@ -329,7 +358,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 右翼：资产培育中心（红白配色） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">分享中人脉节点</span>
+              <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">本周业务拓展</span>
               <div className="relative">
                 <button
                   ref={cultivatingHelpRef}
@@ -346,10 +375,15 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                     <div className="space-y-2">
                       <div className="font-bold text-gray-900">统计规则</div>
                       <div className="space-y-1">
-                        <div>● <span className="font-medium">潜在标准节点：</span>您邀请的所有人（不管现在是什么等级）。</div>
-                        <div>● <span className="font-medium">潜在高级节点：</span>您邀请的人中，当前是标准节点或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级节点：</span>您邀请的人中，当前是高级节点或更高的人数。</div>
-                        <div className="mt-2 text-xs text-gray-500">注：潜在节点是根据当前等级实时计算，体现您的培育潜力。</div>
+                        <div className="font-medium text-gray-700 mt-2">用户层面（使用行为）：</div>
+                        <div>● <span className="font-medium">潜在标准用户：</span>您邀请的人中，当前是标准用户或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在高级用户：</span>您邀请的人中，当前是高级用户或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在超级用户：</span>您邀请的人中，当前是超级用户的人数。</div>
+                        <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
+                        <div>● <span className="font-medium">潜在标准节点：</span>您邀请的人中，当前是标准节点或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在高级节点：</span>您邀请的人中，当前是高级节点或更高的人数。</div>
+                        <div>● <span className="font-medium">潜在超级节点：</span>您邀请的人中，当前是超级节点的人数。</div>
+                        <div className="mt-2 text-xs text-gray-500">注：基于本周实时等级计算，体现您的当前业务拓展潜力。</div>
                       </div>
                     </div>
                   }
@@ -359,26 +393,50 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             
             {/* 明细展示 */}
             <div className="space-y-1">
+              {/* 用户层面 */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">潜在标准用户</span>
+                <span className="font-medium text-[#A80000]">
+                  {props.invitedUsersStats?.potential?.standardUser || 0}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">潜在高级用户</span>
+                <span className="font-medium text-[#A80000]">
+                  {props.invitedUsersStats?.potential?.advancedUser || 0}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">潜在超级用户</span>
+                <span className="font-medium text-[#A80000]">
+                  {props.invitedUsersStats?.potential?.superUser || 0}
+                </span>
+              </div>
+              
+              {/* 分隔线：区分用户层面和节点层面 */}
+              <div className="h-[3px] bg-gradient-to-r from-transparent via-[#A80000]/20 to-transparent my-2"></div>
+              
+              {/* 节点层面 */}
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">潜在标准节点</span>
                 <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialStandard || props.potentialStandard}
+                  {props.invitedUsersStats?.potential?.standardNode || 0}
                 </span>
               </div>
-
               
-              <div className="flex items-center justify-between text-xs mt-2">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">潜在高级节点</span>
                 <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialAdvanced || props.potentialAdvanced}
+                  {props.invitedUsersStats?.potential?.advancedNode || 0}
                 </span>
               </div>
-
               
-              <div className="flex items-center justify-between text-xs mt-2">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">潜在超级节点</span>
                 <span className="font-medium text-[#A80000]">
-                  {props.invitedUsersStats?.potentialSuper || props.potentialSuper}
+                  {props.invitedUsersStats?.potential?.superNode || 0}
                 </span>
               </div>
 

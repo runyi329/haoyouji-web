@@ -794,44 +794,91 @@ export async function getMyInvitedUsersStats(userId: number) {
     })
   );
   
-  // 3. 统计已成功分享（基于历史最高等级，包含关系）
-  const achievedStandard = usersWithCurrentLevel.filter(u => 
-    ['standard_user', 'advanced_user', 'super_user', 'standard', 'advanced', 'super']
+  // 3. 统计累计业务资产（基于历史最高等级）
+  // 用户层面
+  const achievedStandardUser = usersWithCurrentLevel.filter(u => 
+    ['standard_user', 'advanced_user', 'super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
-  const achievedAdvanced = usersWithCurrentLevel.filter(u => 
-    ['advanced_user', 'super_user', 'advanced', 'super']
+  const achievedAdvancedUser = usersWithCurrentLevel.filter(u => 
+    ['advanced_user', 'super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
-  const achievedSuper = usersWithCurrentLevel.filter(u => 
-    ['super_user', 'super']
+  const achievedSuperUser = usersWithCurrentLevel.filter(u => 
+    ['super_user']
     .includes(u.highestLevelAchieved)
   ).length;
   
-  // 4. 统计分享中（基于当前等级，包含关系）
-  const potentialStandard = usersWithCurrentLevel.length; // 所有邀请的人
+  // 节点层面
+  const achievedStandardNode = usersWithCurrentLevel.filter(u => 
+    ['standard', 'advanced', 'super']
+    .includes(u.highestLevelAchieved)
+  ).length;
   
-  const potentialAdvanced = usersWithCurrentLevel.filter(u => 
-    ['standard_user', 'advanced_user', 'super_user', 'standard', 'advanced', 'super']
+  const achievedAdvancedNode = usersWithCurrentLevel.filter(u => 
+    ['advanced', 'super']
+    .includes(u.highestLevelAchieved)
+  ).length;
+  
+  const achievedSuperNode = usersWithCurrentLevel.filter(u => 
+    ['super']
+    .includes(u.highestLevelAchieved)
+  ).length;
+  
+  // 4. 统计本周业务拓展（基于当前等级）
+  // 用户层面
+  const potentialStandardUser = usersWithCurrentLevel.filter(u => 
+    ['standard_user', 'advanced_user', 'super_user']
     .includes(u.currentLevel)
   ).length;
   
-  const potentialSuper = usersWithCurrentLevel.filter(u => 
-    ['advanced_user', 'super_user', 'advanced', 'super']
+  const potentialAdvancedUser = usersWithCurrentLevel.filter(u => 
+    ['advanced_user', 'super_user']
+    .includes(u.currentLevel)
+  ).length;
+  
+  const potentialSuperUser = usersWithCurrentLevel.filter(u => 
+    ['super_user']
+    .includes(u.currentLevel)
+  ).length;
+  
+  // 节点层面
+  const potentialStandardNode = usersWithCurrentLevel.filter(u => 
+    ['standard', 'advanced', 'super']
+    .includes(u.currentLevel)
+  ).length;
+  
+  const potentialAdvancedNode = usersWithCurrentLevel.filter(u => 
+    ['advanced', 'super']
+    .includes(u.currentLevel)
+  ).length;
+  
+  const potentialSuperNode = usersWithCurrentLevel.filter(u => 
+    ['super']
     .includes(u.currentLevel)
   ).length;
   
   return {
-    // 已成功分享（曾经达到过）
-    achievedStandard,
-    achievedAdvanced,
-    achievedSuper,
+    // 累计业务资产（曾经达到过）
+    achieved: {
+      standardUser: achievedStandardUser,
+      advancedUser: achievedAdvancedUser,
+      superUser: achievedSuperUser,
+      standardNode: achievedStandardNode,
+      advancedNode: achievedAdvancedNode,
+      superNode: achievedSuperNode,
+    },
     
-    // 分享中（当前状态）
-    potentialStandard,
-    potentialAdvanced,
-    potentialSuper,
+    // 本周业务拓展（当前状态）
+    potential: {
+      standardUser: potentialStandardUser,
+      advancedUser: potentialAdvancedUser,
+      superUser: potentialSuperUser,
+      standardNode: potentialStandardNode,
+      advancedNode: potentialAdvancedNode,
+      superNode: potentialSuperNode,
+    },
   };
 }
