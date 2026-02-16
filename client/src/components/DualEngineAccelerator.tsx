@@ -136,7 +136,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
           {/* 标题 */}
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-600 font-medium">当前总收益倍数</span>
+            <span className="text-xs text-gray-600 font-medium">当前股权加速</span>
             <button
               onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
               className="text-gray-400 hover:text-[#C5B358] transition-colors"
@@ -173,7 +173,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 >
                   <HelpCircle className="w-3 h-3" />
                 </button>
-                <div className="text-xl font-bold text-[#C5B358]">+{props.equityMultiplier.toFixed(1)}</div>
+                <div className="text-xl font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.equityMultiplier.toFixed(1)}</div>
               </div>
               
               {/* 加号 */}
@@ -188,7 +188,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 >
                   <HelpCircle className="w-3 h-3" />
                 </button>
-                <div className="text-xl font-bold text-[#C5B358]">+{props.identityMultiplier.toFixed(1)}</div>
+                <div className="text-xl font-bold text-[#C5B358]" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>+{props.identityMultiplier.toFixed(1)}</div>
               </div>
             </div>
           </div>
