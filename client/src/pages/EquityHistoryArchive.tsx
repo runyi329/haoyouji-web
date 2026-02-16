@@ -200,7 +200,7 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; onClick: () => void }> 
         <>
           <div className="border-t border-gray-200 pt-3">
             <div className="text-[10px] text-gray-400 truncate">
-              区块链存证哈希：{report.blockchainHash}
+              区块链存证哈希：{report.blockchainHash.slice(0, -6)}******
             </div>
           </div>
         </>

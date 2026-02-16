@@ -165,7 +165,7 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-gray-600 mb-1">区块链存证哈希</div>
                 <div className="text-[10px] text-gray-500 break-all font-mono">
-                  {report.blockchainHash}
+                  {report.blockchainHash.slice(0, -6)}******
                 </div>
                 <div className="text-xs text-gray-400 mt-2">
                   ✓ 数据已加密保护，实时同步至 2026/02/15 17:25
