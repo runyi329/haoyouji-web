@@ -141,7 +141,7 @@ export default function PromotionRules() {
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative flex items-center justify-center gap-1.5">
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
@@ -149,7 +149,7 @@ export default function PromotionRules() {
                         {tier.showTooltip && (
                           <button
                             onClick={() => handleModalOpen('contacts')}
-                            className="ml-1 flex-shrink-0"
+                            className="absolute left-[calc(50%+18px)] flex-shrink-0"
                           >
                             <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -159,7 +159,7 @@ export default function PromotionRules() {
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative flex items-center justify-center gap-1.5">
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                         </svg>
@@ -167,7 +167,7 @@ export default function PromotionRules() {
                         {tier.showTooltip && (
                           <button
                             onClick={() => handleModalOpen('tags')}
-                            className="ml-1 flex-shrink-0"
+                            className="absolute left-[calc(50%+10px)] flex-shrink-0"
                           >
                             <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -177,7 +177,7 @@ export default function PromotionRules() {
                       </div>
                     </td>
                     <td className="text-center py-3 px-2">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative flex items-center justify-center gap-1.5">
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
@@ -185,7 +185,7 @@ export default function PromotionRules() {
                         {tier.showTooltip && (
                           <button
                             onClick={() => handleModalOpen('frequency')}
-                            className="ml-1 flex-shrink-0"
+                            className="absolute left-[calc(50%+10px)] flex-shrink-0"
                           >
                             <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -250,7 +250,7 @@ export default function PromotionRules() {
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="relative flex items-center justify-center gap-1.5">
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                         </svg>
@@ -258,7 +258,7 @@ export default function PromotionRules() {
                         {tier.showTooltip && (
                           <button
                             onClick={() => handleModalOpen('tags')}
-                            className="ml-1 flex-shrink-0"
+                            className="absolute left-[calc(50%+10px)] flex-shrink-0"
                           >
                             <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#A80000]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
