@@ -42,6 +42,11 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   const achievedHelpRef = useRef<HTMLButtonElement>(null);
   const cultivatingHelpRef = useRef<HTMLButtonElement>(null);
   
+  // 标题元素的ref（用于小箭头指向）
+  const multiplierTitleRef = useRef<HTMLSpanElement>(null);
+  const achievedTitleRef = useRef<HTMLSpanElement>(null);
+  const cultivatingTitleRef = useRef<HTMLSpanElement>(null);
+  
   // 计算总收益倍数
   const totalMultiplier = props.equityMultiplier + props.identityMultiplier;
   
@@ -142,7 +147,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
           {/* 标题 */}
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-gray-600 font-medium">当前股权加速</span>
+            <span ref={multiplierTitleRef} className="text-xs text-gray-600 font-medium">当前股权加速</span>
             <div className="relative">
               <button
                 ref={multiplierHelpRef}
@@ -154,7 +159,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               <Tooltip
                 isOpen={showMultiplierHelp}
                 onClose={() => setShowMultiplierHelp(false)}
-                triggerRef={multiplierHelpRef}
+                triggerRef={multiplierTitleRef}
                 content={
                   <div className="space-y-2">
                     <div className="font-bold text-gray-900">收益加速计算规则</div>
@@ -222,7 +227,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 左翼：已达成资产（金黄色成就感） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-600 font-medium">已成功分享人脉节点</span>
+              <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">已成功分享人脉节点</span>
               <div className="relative">
                 <button
                   ref={achievedHelpRef}
@@ -234,7 +239,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 <Tooltip
                   isOpen={showAchievedHelp}
                   onClose={() => setShowAchievedHelp(false)}
-                  triggerRef={achievedHelpRef}
+                  triggerRef={achievedTitleRef}
                   content={
                     <div>
                       <div className="font-bold text-gray-900 mb-1">向下兼容统计原则</div>
@@ -277,7 +282,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 右翼：资产培育中心（红白配色） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-600 font-medium">分享中人脉节点</span>
+              <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">分享中人脉节点</span>
               <div className="relative">
                 <button
                   ref={cultivatingHelpRef}
@@ -289,7 +294,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 <Tooltip
                   isOpen={showCultivatingHelp}
                   onClose={() => setShowCultivatingHelp(false)}
-                  triggerRef={cultivatingHelpRef}
+                  triggerRef={cultivatingTitleRef}
                   content={
                     <div>
                       <div className="font-bold text-gray-900 mb-1">潜力向上折算</div>
