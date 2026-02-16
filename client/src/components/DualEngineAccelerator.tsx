@@ -385,10 +385,32 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               <div className="text-center">
                 <span className="text-white text-sm font-bold">当前等级：</span>
                 <span className="text-white text-base font-bold ml-1">{config.name}</span>
-                <span className="text-white/70 text-[10px] ml-2">(上周符合)</span>
               </div>
               <Award className="w-5 h-5 text-white" />
             </div>
+          </div>
+          
+          {/* 符合周期说明 */}
+          <div className="mt-1.5 text-center">
+            <span className="text-[9px] text-gray-400">
+              符合周期：
+              {(() => {
+                const now = new Date();
+                const today = now.getDay();
+                // 计算上周一的日期
+                const lastMonday = new Date(now);
+                lastMonday.setDate(now.getDate() - (today === 0 ? 6 : today - 1) - 7);
+                // 计算上周日的日期
+                const lastSunday = new Date(lastMonday);
+                lastSunday.setDate(lastMonday.getDate() + 6);
+                
+                const formatDate = (date: Date) => {
+                  return `${date.getMonth() + 1}月${date.getDate()}日`;
+                };
+                
+                return `${formatDate(lastMonday)}-${formatDate(lastSunday)}`;
+              })()}
+            </span>
           </div>
           
           {/* 辅助信息卡片（距离下一等级差距） */}
