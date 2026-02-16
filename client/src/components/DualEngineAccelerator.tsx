@@ -61,11 +61,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   const [showAchievedHelp, setShowAchievedHelp] = useState(false);
   const [showCultivatingHelp, setShowCultivatingHelp] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showContactHelp, setShowContactHelp] = useState(false);
+  const [showTagHelp, setShowTagHelp] = useState(false);
+  const [showInteractionHelp, setShowInteractionHelp] = useState(false);
   
   // 小问号按钮的ref
   const multiplierHelpRef = useRef<HTMLButtonElement>(null);
   const achievedHelpRef = useRef<HTMLButtonElement>(null);
   const cultivatingHelpRef = useRef<HTMLButtonElement>(null);
+  
+  // 红色区域三个指标的ref
+  const contactIndicatorRef = useRef<HTMLDivElement>(null);
+  const tagIndicatorRef = useRef<HTMLDivElement>(null);
+  const interactionIndicatorRef = useRef<HTMLDivElement>(null);
   
   // 标题元素的ref（用于小箭头指向）
   const multiplierTitleRef = useRef<HTMLSpanElement>(null);
@@ -161,15 +169,27 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* 达标情况 + 达成时间 */}
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-3">
-            <div className="flex items-center">
+            <div 
+              ref={contactIndicatorRef}
+              onClick={() => setShowContactHelp(!showContactHelp)}
+              className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
+            >
               <span className="text-[#C5B358] mr-1">✓</span>
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>人脉数</span>
             </div>
-            <div className="flex items-center">
+            <div 
+              ref={tagIndicatorRef}
+              onClick={() => setShowTagHelp(!showTagHelp)}
+              className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
+            >
               <span className="text-[#C5B358] mr-1">✓</span>
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签数</span>
             </div>
-            <div className="flex items-center">
+            <div 
+              ref={interactionIndicatorRef}
+              onClick={() => setShowInteractionHelp(!showInteractionHelp)}
+              className="flex items-center cursor-pointer hover:opacity-70 transition-opacity"
+            >
               <span className="text-[#C5B358] mr-1">✓</span>
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联络数</span>
             </div>
@@ -180,6 +200,138 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             </div>
           )}
         </div>
+        
+        {/* 人脉数弹窗 */}
+        <Tooltip
+          isOpen={showContactHelp}
+          onClose={() => setShowContactHelp(false)}
+          triggerRef={contactIndicatorRef}
+          content={
+            <div className="space-y-3">
+              <div className="font-bold text-gray-900">人脉数进度</div>
+              
+              {/* 本轮晋升周期 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {props.promotionStats?.qualifiedPeriod || '计算中...'}
+                </div>
+              </div>
+              
+              {/* 进度详情 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                {(() => {
+                  const currentContact = props.promotionStats?.contactCount || props.contactCount;
+                  const targetContact = props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50;
+                  const contactPct = Math.min(100, Math.round((currentContact / targetContact) * 100));
+                  const contactAchieved = currentContact >= targetContact;
+                  
+                  return (
+                    <div className="text-sm">
+                      {contactAchieved ? (
+                        <span className="text-[#C5B358] font-bold">✓ 已达标</span>
+                      ) : (
+                        <>
+                          <span className="font-bold text-gray-900">{contactPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentContact}/{targetContact})</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          }
+        />
+        
+        {/* 标签数弹窗 */}
+        <Tooltip
+          isOpen={showTagHelp}
+          onClose={() => setShowTagHelp(false)}
+          triggerRef={tagIndicatorRef}
+          content={
+            <div className="space-y-3">
+              <div className="font-bold text-gray-900">标签数进度</div>
+              
+              {/* 本轮晋升周期 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {props.promotionStats?.qualifiedPeriod || '计算中...'}
+                </div>
+              </div>
+              
+              {/* 进度详情 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                {(() => {
+                  const currentTag = props.promotionStats?.tagCount || 0;
+                  const targetTag = props.nodeLevel === 'standard' ? 300 : props.nodeLevel === 'advanced' ? 500 : 100;
+                  const tagPct = Math.min(100, Math.round((currentTag / targetTag) * 100));
+                  const tagAchieved = currentTag >= targetTag;
+                  
+                  return (
+                    <div className="text-sm">
+                      {tagAchieved ? (
+                        <span className="text-[#C5B358] font-bold">✓ 已达标</span>
+                      ) : (
+                        <>
+                          <span className="font-bold text-gray-900">{tagPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentTag}/{targetTag})</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          }
+        />
+        
+        {/* 联络数弹窗 */}
+        <Tooltip
+          isOpen={showInteractionHelp}
+          onClose={() => setShowInteractionHelp(false)}
+          triggerRef={interactionIndicatorRef}
+          content={
+            <div className="space-y-3">
+              <div className="font-bold text-gray-900">联络数进度</div>
+              
+              {/* 本轮晋升周期 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {props.promotionStats?.qualifiedPeriod || '计算中...'}
+                </div>
+              </div>
+              
+              {/* 进度详情 */}
+              <div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                {(() => {
+                  const currentInteraction = props.promotionStats?.interactionCount || 0;
+                  const targetInteraction = props.nodeLevel === 'standard' ? 200 : props.nodeLevel === 'advanced' ? 250 : 150;
+                  const interactionPct = Math.min(100, Math.round((currentInteraction / targetInteraction) * 100));
+                  const interactionAchieved = currentInteraction >= targetInteraction;
+                  
+                  return (
+                    <div className="text-sm">
+                      {interactionAchieved ? (
+                        <span className="text-[#C5B358] font-bold">✓ 已达标</span>
+                      ) : (
+                        <>
+                          <span className="font-bold text-gray-900">{interactionPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentInteraction}/{targetInteraction})</span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          }
+        />
       </div>
       
       {/* ====== 白色区域（明细） ====== */}
