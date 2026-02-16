@@ -291,7 +291,7 @@ export default function MyEquityRedWhite() {
             {/* 投资金额 + 持股排名 */}
             <div className="flex items-start justify-between mb-2">
               <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {equity.capitalCertificate?.toLocaleString('zh-CN') || '0'}元
+                {(equity.details?.userInvestment || 0).toLocaleString()}元
               </div>
               {equity.ranking && (
                 <div className="text-right">
