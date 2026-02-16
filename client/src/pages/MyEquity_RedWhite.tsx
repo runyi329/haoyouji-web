@@ -238,35 +238,53 @@ export default function MyEquityRedWhite() {
               onClose={() => setShowEquityHelp(false)}
               triggerRef={equityTitleRef}
               content={
-                <div className="space-y-3">
-                  <div className="font-bold text-gray-900">什么是综合股权？</div>
-                  <div className="text-sm text-gray-700">
-                    综合股权是您在脉动的实际收益股权，由两部分组成：
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                  <div className="text-sm text-gray-700 leading-relaxed">
+                    我们深知，每一个伟大的公司都始于两种力量的汇聚：<strong>敢于在早期注入信任的资本</strong>，以及<strong>持续为平台开疆拓土的汗水</strong>。为此，我们设立了两个独立的权益池，总计拨比 <strong>42.5%</strong>，用算法确保公平。
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div>
-                      <div className="font-medium text-gray-800">资本股</div>
-                      <div className="text-sm text-gray-600 ml-5">您投资获得的固定股份。</div>
-                    </div>
-                    
-                    <div>
-                      <div className="font-medium text-gray-800">资源股</div>
-                      <div className="text-sm text-gray-600 ml-5">每周根据您的市场贡献累积的股份：</div>
-                      <div className="text-sm text-gray-600 ml-5 mt-1 bg-gray-50 p-2 rounded">
-                        <div className="font-mono text-xs">本周新增股份 = （资本加速 + 身份加速）× 本周开拓的新用户数</div>
-                        <div className="text-xs text-gray-500 mt-1.5">
-                          · 资本加速：基于您的资本股<br/>
-                          · 身份加速：基于您的节点等级<br/>
-                          · 本周业绩：您开拓的新用户数量
-                        </div>
+
+                  <div className="space-y-3">
+                    <div className="font-bold text-gray-900 text-base">一、天使股东池（30%）：给“眼光”以终身尊严</div>
+                    <div className="text-sm text-gray-700 space-y-2">
+                      <p>这是为早期投入资金的天使合伙人设立的专属池。</p>
+                      <p><strong>分配逻辑：</strong>根据“入场早晚”与“投资额度”双重加权。</p>
+                      <p><strong>资本加速：</strong>入场越早，静态权重越高（从 2.0 依次递减至 1.0）。</p>
+                      <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
+                        <p className="font-medium text-amber-900">核心好处：一旦锁定，终身受益。</p>
+                        <p className="text-sm text-amber-800 mt-1">只要您进入了天使池，无论您后期是否参与经营，您持有的这部分静态权重都将永久锁定在30%的总额内。这不仅是投资，更是您在脉动生态中的底气。</p>
                       </div>
-                      <div className="text-sm text-gray-600 ml-5 mt-1">资源股<strong>只增不减</strong>，每周累积到您的总股权中。</div>
                     </div>
                   </div>
-                  
-                  <div className="text-sm font-medium text-gray-800 pt-2 border-t border-gray-200">
-                    综合股权 = 资本股 + 累积的资源股
+
+                  <div className="space-y-3">
+                    <div className="font-bold text-gray-900 text-base">二、市场贡献池（12.5%）：给“劳动”以超额回报</div>
+                    <div className="text-sm text-gray-700 space-y-2">
+                      <p>这是为活跃的、不断让“人脉动起来”的合伙人设立的周奖金池。</p>
+                      <p><strong>分配逻辑：</strong>根据每周的真实行为贡献（邀约、标签、分享）进行结算。</p>
+                      <p><strong>杠杆效应：</strong>如果您是持有2.0的资本加速，您在12.5%市场池里的劳动产出，将是相同节点的2倍。</p>
+                      <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                        <p className="font-medium text-green-900">核心好处：多劳多得，上不封顶。</p>
+                        <p className="text-sm text-green-800 mt-1">这是一个流动的、爆发性的池子。如果您既有资本加速，又有资源加速（自己符合标准节点25%、高级节点50%、超级节点100%），又积极参与经营，您将同时横跨两个池子，获得超越阶层的“三重复利”。</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-3 border-t border-gray-200">
+                    <div className="font-bold text-gray-900 text-base">为什么我们要把两个池子分开？</div>
+                    <div className="text-sm text-gray-700 space-y-2">
+                      <div>
+                        <p className="font-medium text-gray-800">1. 资产安全性（保底）：</p>
+                        <p className="ml-4 text-gray-600">传统的股权模式中，如果你不干活，股份可能会被收回或强制稀释。圪脉动，30%的天使池是您的资产避风港，不与劳动挂钩。这保证了您的投资安全，即使您只做一名纯粹的财务投资者。</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">2. 收益爆发力（增益）：</p>
+                        <p className="ml-4 text-gray-600">12.5%的市场池是核动力引擎。它保证了平台永远有新鲜血液，永远在产出社交数据。当平台因为这12.5%的激励而估值翻倍时，您手里那30%的静态资产价值也会同步翻倍。</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">3. 防止“大户吸血”：</p>
+                        <p className="ml-4 text-gray-600">如果42.5%混在一起，不干活的大户会分走绝大部分劳动者的奖励，导致平台死亡。现在，劳动者在12.5%的池子里享有绝对的统治权，这确保了平台能够持续良性扩张。</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               }
