@@ -20,6 +20,11 @@ export default function MyEquityRedWhite() {
   const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
   const multiplierHelpRef = useRef<HTMLButtonElement>(null);
   const multiplierTitleRef = useRef<HTMLSpanElement>(null);
+  
+  // 综合股权的帮助提示状态
+  const [showEquityHelp, setShowEquityHelp] = useState(false);
+  const equityHelpRef = useRef<HTMLButtonElement>(null);
+  const equityTitleRef = useRef<HTMLSpanElement>(null);
 
   if (isLoading) {
     return (
@@ -147,8 +152,15 @@ export default function MyEquityRedWhite() {
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white p-4 rounded-t-2xl">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
-              <div>
-                <span className="text-sm font-medium opacity-90">综合股权</span>
+              <div className="flex items-center space-x-1">
+                <span ref={equityTitleRef} className="text-sm font-medium opacity-90">综合股权</span>
+                <button
+                  ref={equityHelpRef}
+                  onClick={() => setShowEquityHelp(!showEquityHelp)}
+                  className="text-white/60 hover:text-white/90 transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
               </div>
               <div className="flex items-center space-x-2">
                 {equity.dynamicLeverage && (
@@ -191,6 +203,46 @@ export default function MyEquityRedWhite() {
               </div>
             </div>
 
+            {/* 综合股权帮助弹窗 */}
+            <Tooltip
+              isOpen={showEquityHelp}
+              onClose={() => setShowEquityHelp(false)}
+              triggerRef={equityTitleRef}
+              content={
+                <div className="space-y-3">
+                  <div className="font-bold text-gray-900">什么是综合股权？</div>
+                  <div className="text-sm text-gray-700">
+                    综合股权是您在脉动的实际收益股权，由两部分组成：
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div>
+                      <div className="font-medium text-gray-800">💰 资本股</div>
+                      <div className="text-sm text-gray-600 ml-5">您投资获得的固定股份。</div>
+                    </div>
+                    
+                    <div>
+                      <div className="font-medium text-gray-800">🌟 资源股</div>
+                      <div className="text-sm text-gray-600 ml-5">每周根据您的市场贡献累积的股份：</div>
+                      <div className="text-sm text-gray-600 ml-5 mt-1 bg-gray-50 p-2 rounded">
+                        <div className="font-mono text-xs">本周新增股份 = （资本加速 + 身份加速）× 本周开拓的新用户数</div>
+                        <div className="text-xs text-gray-500 mt-1.5">
+                          · 资本加速：基于您的资本股<br/>
+                          · 身份加速：基于您的节点等级<br/>
+                          · 本周业绩：您开拓的新用户数量
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-600 ml-5 mt-1">资源股<strong>只增不减</strong>，每周累积到您的总股权中。</div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm font-medium text-gray-800 pt-2 border-t border-gray-200">
+                    综合股权 = 资本股 + 累积的资源股
+                  </div>
+                </div>
+              }
+            />
+            
             {/* 底部：返回按钮 + 时间戳 */}
             <div className="mt-3 flex items-center justify-between">
               <button 
