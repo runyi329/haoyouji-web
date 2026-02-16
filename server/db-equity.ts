@@ -897,11 +897,15 @@ export async function getUserWeeklyReports(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  // 获取用户注册时间
+  // 获取用户注册时间和座位编号
   const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user || user.length === 0) {
     throw new Error("User not found");
   }
+  
+  // 获取座位编号
+  const investment = await db.select().from(equityInvestments).where(eq(equityInvestments.userId, userId)).limit(1);
+  const seatNumber = investment && investment.length > 0 ? investment[0].seatNumber : 0;
   
   const registrationDate = new Date(user[0].createdAt);
   const now = new Date();
@@ -978,7 +982,7 @@ export async function getUserWeeklyReports(userId: number) {
   
   // 计算概览数据
   const overview = {
-    archiveId: user[0].id.toString().padStart(4, '0'),
+    archiveId: seatNumber.toString().padStart(4, '0'),
     totalWeeks: reports.length,
     highestWeightGain: Math.max(...reports.map(r => r.weightGain), 0),
     totalWeightGain: reports.reduce((sum, r) => sum + r.weightGain, 0),
