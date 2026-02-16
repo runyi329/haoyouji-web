@@ -98,6 +98,38 @@ function vitePluginManusDebugCollector(): Plugin {
     },
 
     configureServer(server: ViteDevServer) {
+      // GET /api/version: Version check endpoint
+      server.middlewares.use("/api/version", (req, res, next) => {
+        if (req.method !== "GET") {
+          return next();
+        }
+
+        try {
+          const configPath = path.join(PROJECT_ROOT, "server", "version-config.json");
+          const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          
+          const now = new Date();
+          const forceUpdateUntil = config.forceUpdateUntil ? new Date(config.forceUpdateUntil) : null;
+          
+          // 判断是否在强制更新期内
+          const shouldCheckVersion = forceUpdateUntil && now < forceUpdateUntil;
+          
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            version: config.version,
+            shouldCheckVersion,
+            forceUpdateUntil: config.forceUpdateUntil
+          }));
+        } catch (error) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            version: "1.0.0",
+            shouldCheckVersion: false,
+            forceUpdateUntil: null
+          }));
+        }
+      });
+
       // POST /__manus__/logs: Browser sends logs (written directly to files)
       server.middlewares.use("/__manus__/logs", (req, res, next) => {
         if (req.method !== "POST") {
