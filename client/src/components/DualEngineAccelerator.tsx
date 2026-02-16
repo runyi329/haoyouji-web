@@ -340,7 +340,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         
         {/* ============ 三、功能入口（双栏平铺） ============ */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          {/* 查阅晋升准则 */}
+          {/* 查阅晋升准则 - 跳转到晋升规则页面 */}
           <button 
             onClick={() => setLocation('/parent/promotion-rules')}
             className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
