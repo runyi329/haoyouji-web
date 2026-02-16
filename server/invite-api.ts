@@ -3,7 +3,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./db";
-import { users, contacts, contactSharingConnections, contactInteractions } from "../drizzle/schema";
+import { users, contacts, contactSharingConnections, contactInteractions, contactTags, personalContactTags } from "../drizzle/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import QRCode from 'qrcode';
 
@@ -261,18 +261,22 @@ export const inviteRouter = router({
         
         const totalCount = ownCount + sharedCount;
         
-        // 2c. 获取该用户的标签总数（从contacts表的tags字段统计）
-        const contactsWithTags = await db
-          .select({ tags: contacts.tags })
-          .from(contacts)
-          .where(eq(contacts.parentUserId, friend.id));
+        // 2c. 获取该用户的标签总数（全局标签 + 个人标签）
+        // 全局标签：contact_tags表中该用户创建的标签
+        const globalTagsResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(contactTags)
+          .where(eq(contactTags.parentUserId, friend.id));
+        const globalTagsCount = globalTagsResult[0]?.count || 0;
         
-        let totalTagsCount = 0;
-        contactsWithTags.forEach(contact => {
-          if (contact.tags && Array.isArray(contact.tags)) {
-            totalTagsCount += contact.tags.length;
-          }
-        });
+        // 个人标签：personal_contact_tags表中该用户创建的标签
+        const personalTagsResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(personalContactTags)
+          .where(eq(personalContactTags.parentUserId, friend.id));
+        const personalTagsCount = personalTagsResult[0]?.count || 0;
+        
+        const totalTagsCount = globalTagsCount + personalTagsCount;
         
         // 2d. 获取该用户的联络记录总数
         // 首先获取该用户的所有人脉ID
