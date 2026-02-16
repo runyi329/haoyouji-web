@@ -203,4 +203,9 @@ export const equityRouter = router({
     .query(async () => {
       return await dbEquity.getRecentActivities(10);
     }),
+  // 获取用户晋升数据统计
+  getPromotionStats: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await dbEquity.getUserPromotionStats(ctx.user.id);
+    }),
 });

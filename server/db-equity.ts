@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { equityInvestments, equityRules, equityContributions, users, contacts } from "../drizzle/schema";
+import { equityInvestments, equityRules, equityContributions, users, contacts, contactTags, personalContactTags, contactInteractions } from "../drizzle/schema";
 import { eq, sql, sum, and, inArray } from "drizzle-orm";
 
 /**
@@ -618,4 +618,72 @@ export async function recordActivity(userId: number, activityType: 'investment' 
     INSERT INTO equity_activities (user_id, activity_type, value)
     VALUES (${userId}, ${activityType}, ${value})
   `);
+}
+
+/**
+ * 获取用户晋升数据统计
+ * @param userId 用户ID
+ * @returns 人脉数、标签数、联络数
+ */
+export async function getUserPromotionStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 1. 统计人脉数（用户自己添加的联系人总数）
+  const [contactsResult] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, userId));
+  
+  const contactCount = Number(contactsResult?.count || 0);
+  
+  // 2. 统计标签数（全局标签 + 个人标签）
+  const [globalTagsResult] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(contactTags)
+    .where(eq(contactTags.parentUserId, userId));
+  
+  const [personalTagsResult] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(personalContactTags)
+    .where(eq(personalContactTags.parentUserId, userId));
+  
+  const globalTagCount = Number(globalTagsResult?.count || 0);
+  const personalTagCount = Number(personalTagsResult?.count || 0);
+  const totalTagCount = globalTagCount + personalTagCount;
+  
+  // 3. 统计联络数（过去30天，包括今天）
+  // 获取30天前的日期
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  
+  // 先获取用户的所有联系人ID
+  const userContacts = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, userId));
+  
+  const contactIds = userContacts.map(c => c.id);
+  
+  let interactionCount = 0;
+  if (contactIds.length > 0) {
+    const [interactionsResult] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(contactInteractions)
+      .where(
+        and(
+          inArray(contactInteractions.contactId, contactIds),
+          sql`${contactInteractions.interactionDate} >= ${thirtyDaysAgoStr}`
+        )
+      );
+    
+    interactionCount = Number(interactionsResult?.count || 0);
+  }
+  
+  return {
+    contactCount,
+    tagCount: totalTagCount,
+    interactionCount,
+  };
 }
