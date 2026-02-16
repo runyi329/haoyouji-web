@@ -888,3 +888,104 @@ export async function getMyInvitedUsersStats(userId: number) {
     },
   };
 }
+
+/**
+ * 获取用户的历史周报
+ * 从用户注册日期开始，按自然周生成周报列表
+ */
+export async function getUserWeeklyReports(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 获取用户注册时间
+  const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user || user.length === 0) {
+    throw new Error("User not found");
+  }
+  
+  const registrationDate = new Date(user[0].createdAt);
+  const now = new Date();
+  
+  // 计算从注册到现在有多少个自然周
+  // 自然周定义：周一到周日
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 调整到周一
+    return new Date(d.setDate(diff));
+  };
+  
+  const getWeekEnd = (weekStart: Date) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + 6); // 周日
+    return d;
+  };
+  
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${year}年${month}月${day}日`;
+  };
+  
+  const getWeekNumber = (date: Date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+  };
+  
+  // 生成周报列表
+  const reports = [];
+  let currentWeekStart = getWeekStart(registrationDate);
+  const nowWeekStart = getWeekStart(now);
+  
+  while (currentWeekStart <= nowWeekStart) {
+    const weekEnd = getWeekEnd(currentWeekStart);
+    const weekNumber = getWeekNumber(currentWeekStart);
+    const dateRange = `${formatDate(currentWeekStart)} - ${formatDate(weekEnd)}`;
+    
+    // TODO: 这里暂时使用默认值，后续需要根据实际数据计算
+    reports.push({
+      weekNumber,
+      dateRange,
+      status: 'confirmed' as const,
+      weightGain: 0,
+      equityGain: 0,
+      blockchainHash: `0x${Math.random().toString(16).substring(2, 42)}`,
+      personalContribution: {
+        networkSize: 0,
+        tagCompleteness: 0,
+        contactFrequency: 0,
+      },
+      sharedContribution: {
+        seniorNodes: 0,
+        advancedNodes: 0,
+        superNodes: 0,
+      },
+      nationalRank: 0,
+    });
+    
+    // 移动到下一周
+    currentWeekStart = new Date(currentWeekStart);
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  }
+  
+  // 反转数组，最新的周报在前面
+  reports.reverse();
+  
+  // 计算概览数据
+  const overview = {
+    archiveId: user[0].id.toString().padStart(4, '0'),
+    totalWeeks: reports.length,
+    highestWeightGain: Math.max(...reports.map(r => r.weightGain), 0),
+    totalWeightGain: reports.reduce((sum, r) => sum + r.weightGain, 0),
+  };
+  
+  return {
+    overview,
+    reports,
+  };
+}

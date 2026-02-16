@@ -3,6 +3,7 @@ import { ArrowLeft, Shield, TrendingUp } from 'lucide-react';
 import { useLocation } from 'wouter';
 import AssetGrowthChart from '../components/equity/AssetGrowthChart';
 import WeeklyReportDetail from '../components/equity/WeeklyReportDetail';
+import { trpc } from '../lib/trpc';
 
 // 类型定义
 interface WeeklyReport {
@@ -215,6 +216,11 @@ const EquityHistoryArchive: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
   const [displayCount, setDisplayCount] = useState(10); // 每次显示10条
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
+  // 获取真实数据
+  const { data, isLoading } = trpc.equity.getWeeklyReports.useQuery();
+  const overview = data?.overview || mockOverview;
+  const allReports = data?.reports || mockReports;
 
   // 加载更多
   const handleLoadMore = () => {
@@ -226,9 +232,17 @@ const EquityHistoryArchive: React.FC = () => {
   };
 
   // 显示的报告列表
-  const displayedReports = mockReports.slice(0, displayCount);
-  const hasMore = displayCount < mockReports.length;
+  const displayedReports = allReports.slice(0, displayCount);
+  const hasMore = displayCount < allReports.length;
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <div className="text-gray-500">加载中...</div>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       {/* 顶部导航 */}
@@ -258,7 +272,7 @@ const EquityHistoryArchive: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="text-white/80 text-sm">资产总档案</div>
             <div className="text-white/80 text-xs">
-              档案编号 No.{mockOverview.archiveId}
+              档案编号 No.{overview.archiveId}
             </div>
           </div>
 
@@ -266,7 +280,7 @@ const EquityHistoryArchive: React.FC = () => {
           <div className="mb-3">
             <div className="text-white/70 text-xs mb-1">累计确权</div>
             <div className="text-white text-3xl font-bold">
-              {mockOverview.totalWeeks} <span className="text-lg font-normal">周</span>
+              {overview.totalWeeks} <span className="text-lg font-normal">周</span>
             </div>
           </div>
 
@@ -275,13 +289,13 @@ const EquityHistoryArchive: React.FC = () => {
             <div>
               <div className="text-white/70 text-xs mb-1">历史最高加成</div>
               <div className="text-white text-xl font-bold">
-                +{mockOverview.highestWeightGain.toFixed(4)}%
+                +{overview.highestWeightGain.toFixed(4)}%
               </div>
             </div>
             <div>
               <div className="text-white/70 text-xs mb-1">总增长权重</div>
               <div className="text-[#C5B358] text-xl font-bold">
-                +{mockOverview.totalWeightGain.toFixed(4)}%
+                +{overview.totalWeightGain.toFixed(4)}%
               </div>
             </div>
           </div>
@@ -295,7 +309,7 @@ const EquityHistoryArchive: React.FC = () => {
           <TrendingUp className="w-4 h-4 text-[#C5B358]" />
         </div>
         <AssetGrowthChart
-          data={mockReports
+          data={allReports
             .filter(r => r.status === 'confirmed')
             .reverse()
             .map(r => ({
@@ -314,21 +328,21 @@ const EquityHistoryArchive: React.FC = () => {
           <div className="text-center">
             <div className="text-xs text-gray-500 mb-1">累计股权</div>
             <div className="text-2xl font-bold text-[#C5B358]">
-              {mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)}
+              {allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
             <div className="text-xs text-gray-500 mb-1">本月股权</div>
             <div className="text-2xl font-bold text-gray-900">
-              {mockReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.equityGain, 0)}
+              {allReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
             <div className="text-xs text-gray-500 mb-1">平均周股权</div>
             <div className="text-2xl font-bold text-gray-900">
-              {Math.round(mockReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0) / mockReports.filter(r => r.status === 'confirmed').length)}
+              {Math.round(allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0) / allReports.filter(r => r.status === 'confirmed').length)}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
@@ -377,15 +391,15 @@ const EquityHistoryArchive: React.FC = () => {
               disabled={isLoadingMore}
               className="px-6 py-3 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoadingMore ? '加载中...' : `加载更多（还有 ${mockReports.length - displayCount} 周）`}
+              {isLoadingMore ? '加载中...' : `加载更多（还有 ${allReports.length - displayCount} 周）`}
             </button>
           </div>
         )}
 
         {/* 已加载全部提示 */}
-        {!hasMore && mockReports.length > 10 && (
+        {!hasMore && allReports.length > 10 && (
           <div className="text-center text-sm text-gray-400 pt-4">
-            已加载全部 {mockReports.length} 周的确权记录
+            已加载全部 {allReports.length} 周的确权记录
           </div>
         )}
       </div>
