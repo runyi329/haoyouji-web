@@ -127,10 +127,10 @@ const PromotionRulesPublic: React.FC = () => {
         <div className="relative">
           <button 
             onClick={() => setShowMenu(!showMenu)}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            className="p-3 hover:bg-white/10 rounded-full transition-colors"
             disabled={isGenerating}
           >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
               <circle cx="12" cy="5" r="2" />
               <circle cx="12" cy="12" r="2" />
               <circle cx="12" cy="19" r="2" />
