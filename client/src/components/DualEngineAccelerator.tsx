@@ -58,7 +58,8 @@ interface DualEngineAcceleratorProps {
 export default function DualEngineAccelerator(props: DualEngineAcceleratorProps) {
   const [, setLocation] = useLocation();
   const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
-  const [showAchievedHelp, setShowAchievedHelp] = useState(false);
+  const [showNodeLevelHelp, setShowNodeLevelHelp] = useState(false); // 节点级别问号
+  const [showAchievedHelp, setShowAchievedHelp] = useState(false); // 累计业务资产问号
   const [showCultivatingHelp, setShowCultivatingHelp] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [showContactHelp, setShowContactHelp] = useState(false);
@@ -67,7 +68,8 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   
   // 小问号按钮的ref
   const multiplierHelpRef = useRef<HTMLButtonElement>(null);
-  const achievedHelpRef = useRef<HTMLButtonElement>(null);
+  const nodeLevelHelpRef = useRef<HTMLButtonElement>(null); // 节点级别问号
+  const achievedHelpRef = useRef<HTMLButtonElement>(null); // 累计业务资产问号
   const cultivatingHelpRef = useRef<HTMLButtonElement>(null);
   
   // 红色区域三个指标的ref
@@ -77,7 +79,8 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   
   // 标题元素的ref（用于小箭头指向）
   const multiplierTitleRef = useRef<HTMLSpanElement>(null);
-  const achievedTitleRef = useRef<HTMLSpanElement>(null);
+  const nodeLevelTitleRef = useRef<HTMLSpanElement>(null); // 节点级别标题
+  const achievedTitleRef = useRef<HTMLSpanElement>(null); // 累计业务资产标题
   const cultivatingTitleRef = useRef<HTMLSpanElement>(null);
   
   // 根据promotionStats计算实际的等级加速
@@ -187,12 +190,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* 当前等级 + 当前贡献排名 */}
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center space-x-1">
-            <span ref={achievedTitleRef} className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <span ref={nodeLevelTitleRef} className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
               {config.name}
             </span>
             <button
-              ref={achievedHelpRef}
-              onClick={() => setShowAchievedHelp(!showAchievedHelp)}
+              ref={nodeLevelHelpRef}
+              onClick={() => setShowNodeLevelHelp(!showNodeLevelHelp)}
               className="text-white/60 hover:text-white/90 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,9 +248,9 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         
         {/* 节点级别帮助弹窗 */}
         <Tooltip
-          isOpen={showAchievedHelp}
-          onClose={() => setShowAchievedHelp(false)}
-          triggerRef={achievedTitleRef}
+          isOpen={showNodeLevelHelp}
+          onClose={() => setShowNodeLevelHelp(false)}
+          triggerRef={nodeLevelTitleRef}
           content={
             <div className="space-y-3">
               <div className="font-bold text-gray-900 text-base">资源加速机制</div>
