@@ -1,5 +1,6 @@
 import { HelpCircle, TrendingUp, Shield, Award, ChevronRight, Clock } from "lucide-react";
 import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import Tooltip from "./Tooltip";
 
 interface DualEngineAcceleratorProps {
@@ -32,6 +33,7 @@ interface DualEngineAcceleratorProps {
 }
 
 export default function DualEngineAccelerator(props: DualEngineAcceleratorProps) {
+  const [, setLocation] = useLocation();
   const [showMultiplierHelp, setShowMultiplierHelp] = useState(false);
   const [showAchievedHelp, setShowAchievedHelp] = useState(false);
   const [showCultivatingHelp, setShowCultivatingHelp] = useState(false);
@@ -339,7 +341,9 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* ============ 三、功能入口（双栏平铺） ============ */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           {/* 查阅晋升准则 */}
-          <button className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
+          <button 
+            onClick={() => setLocation('/parent/promotion-rules')}
+            className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
             <div className="flex items-center space-x-2">
               <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
