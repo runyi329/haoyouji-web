@@ -399,7 +399,18 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               })()}
             </div>
             
-            <div className="text-[10px] text-gray-500 mb-2 text-center">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需</div>
+            <div className="text-[10px] text-gray-500 mb-2 text-center">
+              距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}还需
+              <span className="text-gray-400">（{(() => {
+                const now = new Date();
+                const dayOfWeek = now.getDay();
+                const monday = new Date(now);
+                monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+                const sunday = new Date(monday);
+                sunday.setDate(monday.getDate() + 6);
+                return `${monday.getMonth() + 1}月${monday.getDate()}日-${sunday.getMonth() + 1}月${sunday.getDate()}日`;
+              })()}）</span>
+            </div>
             
             {/* 三维度一行显示 */}
             <div className="flex items-center justify-between text-[10px] px-2">
