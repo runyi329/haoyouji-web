@@ -49,14 +49,28 @@ export default function Tooltip({ content, isOpen, onClose, triggerRef }: Toolti
       }
     };
 
+    // 滚动时自动关闭浮窗
+    const handleScroll = () => {
+      onClose();
+    };
+
+    // 触摸时自动关闭浮窗
+    const handleTouchStart = () => {
+      onClose();
+    };
+
     // 延迟添加事件监听，避免立即触发
     const timer = setTimeout(() => {
       document.addEventListener('click', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true); // true表示捕获阶段，可以监听所有滚动事件
+      document.addEventListener('touchstart', handleTouchStart);
     }, 100);
 
     return () => {
       clearTimeout(timer);
       document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('touchstart', handleTouchStart);
     };
   }, [isOpen, onClose, triggerRef]);
 
