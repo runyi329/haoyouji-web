@@ -703,7 +703,7 @@ export default function MyEquityRedWhite() {
                   <div className="text-[10px] text-gray-400 mb-2">
                     明确股东权益、义务及退出机制
                   </div>
-                  <button className="w-full py-2 bg-[#A80000] text-white rounded-lg text-sm font-medium hover:bg-[#8a0000] transition-colors">
+                  <button onClick={() => toast.info('没有需要签署的新合同')} className="w-full py-2 bg-[#A80000] text-white rounded-lg text-sm font-medium hover:bg-[#8a0000] transition-colors">
                     立即签署
                   </button>
                 </div>
@@ -718,19 +718,31 @@ export default function MyEquityRedWhite() {
                 </svg>
                 <span className="text-sm font-semibold text-gray-700">常见问题</span>
               </div>
-              <div className="text-xs text-gray-500 mb-3">4个核心问题解答</div>
+
               <div className="space-y-2">
-                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
-                  1. 我投这点钱到底占多少股？
+                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>1. 我投这点钱到底占多少股？</span>
                 </button>
-                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
-                  2. 别人投的多了，我会被稀释吗？
+                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>2. 别人投的多了，我会被稀释吗？</span>
                 </button>
-                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
-                  3. 比例动态在变，如何保证合规又不乱？
+                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>3. 比例动态在变，如何保证合规又不乱？</span>
                 </button>
-                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors">
-                  4. 为什么我们的股价是锚定"全国熟人关系"数据？
+                <button className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <span>4. 为什么我们的股价是锦定“全国熟人关系”数据？</span>
                 </button>
               </div>
             </div>
