@@ -240,9 +240,13 @@ export default function Login() {
                   </button>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     我已阅读、理解并同意
-                    <a href="#" className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    <Link href="/privacy-policy">
+                      <a className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    </Link>
                     、
-                    <a href="#" className="text-gray-800 underline mx-1">《用户协议》</a>
+                    <Link href="/user-agreement">
+                      <a className="text-gray-800 underline mx-1">《用户协议》</a>
+                    </Link>
                   </p>
                 </div>
               </form>
@@ -349,34 +353,22 @@ export default function Login() {
                   </button>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     我已阅读、理解并同意
-                    <a href="#" className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    <Link href="/privacy-policy">
+                      <a className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    </Link>
                     、
-                    <a href="#" className="text-gray-800 underline mx-1">《用户协议》</a>
+                    <Link href="/user-agreement">
+                      <a className="text-gray-800 underline mx-1">《用户协议》</a>
+                    </Link>
                   </p>
                 </div>
               </form>
             )}
           </div>
 
-          {/* 底部Logo - 去掉白色背景，融入红色背景 */}
+          {/* 底部特效区域 - 预留给后续特效 */}
           <div className="flex-1 flex items-center justify-center mt-12">
-            <div 
-              className="cursor-pointer"
-              onMouseDown={handlePressStart}
-              onMouseUp={handlePressEnd}
-              onMouseLeave={handlePressEnd}
-              onTouchStart={handlePressStart}
-              onTouchEnd={handlePressEnd}
-              onTouchCancel={handlePressEnd}
-              title="长按2秒以游客身份登录"
-            >
-              <img 
-                src="/maidong-hyy.png" 
-                alt="脉动" 
-                className="h-20 opacity-70 hover:opacity-90 transition-opacity"
-                style={{ filter: 'brightness(0) invert(1)' }}
-              />
-            </div>
+            {/* 特效占位区域 */}
           </div>
         </div>
       </main>

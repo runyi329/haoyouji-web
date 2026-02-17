@@ -119,6 +119,8 @@ const AssetReport = lazy(() => import("./pages/AssetReport"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
 const BusinessPlan = lazy(() => import("./pages/BusinessPlan"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const UserAgreement = lazy(() => import("./pages/UserAgreement"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -141,6 +143,8 @@ function Router() {
         {/* 脉动Dashboard */}
         <Route path="/contacts" component={ContactsManagement} />
         <Route path="/login" component={Login} />
+        <Route path="/privacy-policy" component={PrivacyPolicy} />
+        <Route path="/user-agreement" component={UserAgreement} />
         
         {/* 后台管理 */}
         <Route path="/admin" component={Admin} />
