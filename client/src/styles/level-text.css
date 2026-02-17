@@ -1,22 +1,24 @@
-/* 等级文字 - 红色底色 + 金色光线滚动 */
+/* 等级文字 - 红色底色 + 金色光线斜向掠过 */
 
 /* 标准用户/标准节点 */
 .level-text-standard {
   color: #A80000;
   position: relative;
   background: linear-gradient(
-    90deg,
+    110deg,
     transparent 0%,
-    transparent 40%,
-    #FFD700 50%,
-    transparent 60%,
+    transparent 45%,
+    #FFD700 48%,
+    #FFFACD 50%,
+    #FFD700 52%,
+    transparent 55%,
     transparent 100%
   );
-  background-size: 200% 100%;
+  background-size: 300% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: gold-shine-standard 3s ease-in-out infinite;
+  animation: gold-sweep-standard 3s linear infinite;
 }
 
 .level-text-standard::before {
@@ -28,12 +30,12 @@
   z-index: -1;
 }
 
-@keyframes gold-shine-standard {
-  0%, 100% {
-    background-position: -100% 0;
+@keyframes gold-sweep-standard {
+  0% {
+    background-position: -150% 0;
   }
-  50% {
-    background-position: 200% 0;
+  100% {
+    background-position: 250% 0;
   }
 }
 
@@ -42,18 +44,20 @@
   color: #A80000;
   position: relative;
   background: linear-gradient(
-    90deg,
+    110deg,
     transparent 0%,
-    transparent 35%,
-    #FFD700 50%,
-    transparent 65%,
+    transparent 46%,
+    #FFD700 48.5%,
+    #FFFACD 50%,
+    #FFD700 51.5%,
+    transparent 54%,
     transparent 100%
   );
-  background-size: 200% 100%;
+  background-size: 300% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: gold-shine-advanced 2.5s ease-in-out infinite;
+  animation: gold-sweep-advanced 2.5s linear infinite;
 }
 
 .level-text-advanced::before {
@@ -65,12 +69,12 @@
   z-index: -1;
 }
 
-@keyframes gold-shine-advanced {
-  0%, 100% {
-    background-position: -100% 0;
+@keyframes gold-sweep-advanced {
+  0% {
+    background-position: -150% 0;
   }
-  50% {
-    background-position: 200% 0;
+  100% {
+    background-position: 250% 0;
   }
 }
 
@@ -79,20 +83,20 @@
   color: #A80000;
   position: relative;
   background: linear-gradient(
-    90deg,
+    110deg,
     transparent 0%,
-    transparent 30%,
-    #FFD700 45%,
+    transparent 47%,
+    #FFD700 49%,
     #FFFACD 50%,
-    #FFD700 55%,
-    transparent 70%,
+    #FFD700 51%,
+    transparent 53%,
     transparent 100%
   );
-  background-size: 200% 100%;
+  background-size: 300% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: gold-shine-super 2s ease-in-out infinite;
+  animation: gold-sweep-super 2s linear infinite;
 }
 
 .level-text-super::before {
@@ -104,11 +108,11 @@
   z-index: -1;
 }
 
-@keyframes gold-shine-super {
-  0%, 100% {
-    background-position: -100% 0;
+@keyframes gold-sweep-super {
+  0% {
+    background-position: -150% 0;
   }
-  50% {
-    background-position: 200% 0;
+  100% {
+    background-position: 250% 0;
   }
 }
