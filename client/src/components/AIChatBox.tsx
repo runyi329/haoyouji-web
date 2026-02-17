@@ -177,7 +177,7 @@ export function AIChatBox({
                   )}
                 >
                   {message.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none [&_p]:my-1 [&_pre]:my-2 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5">
+                    <div className="prose prose-sm max-w-none [&_p]:my-1 [&_pre]:my-2 [&_ul]:my-1 [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:pl-5 [&_li]:my-0.5 break-words">
                       <Streamdown>{message.content}</Streamdown>
                     </div>
                   ) : (
@@ -209,7 +209,7 @@ export function AIChatBox({
       {/* Input Area */}
       <form
         onSubmit={handleSubmit}
-        className="flex gap-2 p-3 bg-white border-t border-gray-200 items-end"
+        className="flex gap-2 p-3 pb-6 bg-white border-t border-gray-200 items-end"
       >
         <Textarea
           ref={textareaRef}
