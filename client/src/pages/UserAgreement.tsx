@@ -20,8 +20,8 @@ export default function UserAgreement() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-sm p-8">
           <div className="prose prose-sm max-w-none">
-            <p className="text-gray-500 text-sm mb-6">更新日期：2024年2月17日</p>
-            <p className="text-gray-500 text-sm mb-8">生效日期：2024年2月17日</p>
+            <p className="text-gray-500 text-sm mb-6">更新日期：2026年1月13日</p>
+            <p className="text-gray-500 text-sm mb-8">生效日期：2026年1月13日</p>
 
             <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">欢迎使用脉动</h2>
             <p className="text-gray-700 leading-relaxed mb-4">
@@ -158,7 +158,7 @@ export default function UserAgreement() {
               如果您对本协议有任何疑问、意见或建议，可以通过以下方式与我们联系：
             </p>
             <p className="text-gray-700 leading-relaxed mb-4">
-              电子邮件：support@maidong.com
+              电子邮件：runyimacau@gmail.com
             </p>
             <p className="text-gray-700 leading-relaxed mb-4">
               一般情况下，我们将在15天内回复。
