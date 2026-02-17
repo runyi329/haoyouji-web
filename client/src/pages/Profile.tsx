@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { trpc } from "@/lib/trpc";
-import { AvatarWithGlow } from "@/components/AvatarWithGlow";
+
 import { blobToBase64, compressAvatar } from "@/utils/imageUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -441,11 +441,10 @@ export default function Profile() {
         <div className="flex items-center gap-4">
           {/* 头像 */}
           <div className="relative group flex-shrink-0">
-            <AvatarWithGlow
+            <img
               src={displayAvatar}
               alt="用户头像"
-              nodeLevel={equityData?.details?.promotionStats?.currentLevel}
-              className="w-16 h-16"
+              className="w-16 h-16 rounded-full object-cover"
             />
             <button
               onClick={handleAvatarClick}
