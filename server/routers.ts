@@ -6104,8 +6104,14 @@ export const appRouter = router({
         })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const dbAI = await import('./db-ai-assistant');
-        return await dbAI.queryWithAI(ctx.user.id, input.query, input.history);
+        try {
+          const dbAI = await import('./db-ai-assistant');
+          const result = await dbAI.queryWithAI(ctx.user.id, input.query, input.history);
+          return { answer: result.result };
+        } catch (error: any) {
+          console.error('[Router] AI query error:', error.message);
+          throw error;
+        }
       }),
     
     // 获取AI助手的提示词配置
