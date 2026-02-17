@@ -527,3 +527,177 @@ ${prompts.segment4}`;
 
   return systemPrompt;
 }
+
+
+/**
+ * 获取AI工具列表
+ * @returns 工具列表
+ */
+export async function getToolsList() {
+  // 返回所有可用的工具定义
+  return {
+    tools: [
+      {
+        name: "searchContacts",
+        description: "搜索人脉。可以按姓名、公司、地区、职位等条件搜索。",
+        category: "人脉管理",
+        parameters: [
+          { name: "name", type: "string", description: "姓名（支持模糊搜索）", required: false },
+          { name: "company", type: "string", description: "公司名称（支持模糊搜索）", required: false },
+          { name: "region", type: "string", description: "地区（支持模糊搜索）", required: false },
+          { name: "position", type: "string", description: "职位（支持模糊搜索）", required: false },
+        ]
+      },
+      {
+        name: "countContacts",
+        description: "统计人脉数量。可以按地区、公司等条件统计。",
+        category: "人脉管理",
+        parameters: [
+          { name: "region", type: "string", description: "地区（可选）", required: false },
+          { name: "company", type: "string", description: "公司（可选）", required: false },
+        ]
+      },
+      {
+        name: "addContact",
+        description: "添加新的人脉。",
+        category: "人脉管理",
+        parameters: [
+          { name: "name", type: "string", description: "姓名（必填）", required: true },
+          { name: "phone", type: "string", description: "电话", required: false },
+          { name: "company", type: "string", description: "公司", required: false },
+          { name: "position", type: "string", description: "职位", required: false },
+          { name: "region", type: "string", description: "地区", required: false },
+          { name: "gender", type: "string", description: "性别", required: false },
+        ]
+      },
+      {
+        name: "updateContact",
+        description: "修改人脉信息。需要提供人脉ID和要修改的字段。",
+        category: "人脉管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "name", type: "string", description: "姓名", required: false },
+          { name: "phone", type: "string", description: "电话", required: false },
+          { name: "company", type: "string", description: "公司", required: false },
+          { name: "position", type: "string", description: "职位", required: false },
+          { name: "region", type: "string", description: "地区", required: false },
+          { name: "gender", type: "string", description: "性别", required: false },
+        ]
+      },
+      {
+        name: "deleteContact",
+        description: "删除人脉。需要提供人脉ID。",
+        category: "人脉管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+        ]
+      },
+      {
+        name: "addContactInteraction",
+        description: "为人脉添加联络记录（打卡）。",
+        category: "人脉管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "note", type: "string", description: "联络备注", required: true },
+        ]
+      },
+      {
+        name: "getEarliestContactDate",
+        description: "获取最早的人脉创建时间，用于计算使用天数。",
+        category: "人脉管理",
+        parameters: []
+      },
+      {
+        name: "getContactDetail",
+        description: "获取人脉的详细信息，包括扩展字段和标签。",
+        category: "人脉管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+        ]
+      },
+      {
+        name: "addTagToContact",
+        description: "为人脉添加标签。",
+        category: "标签管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "tagName", type: "string", description: "标签名称", required: true },
+        ]
+      },
+      {
+        name: "removeTagFromContact",
+        description: "从人脉移除标签。",
+        category: "标签管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "tagName", type: "string", description: "标签名称", required: true },
+        ]
+      },
+      {
+        name: "updateContactField",
+        description: "添加或更新人脉的扩展字段（如银行卡、生日、微信等）。",
+        category: "扩展字段",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "categoryName", type: "string", description: "字段分类名称（如「银行卡」、「生日」、「微信」）", required: true },
+          { name: "value", type: "string", description: "字段值", required: true },
+        ]
+      },
+      {
+        name: "deleteContactField",
+        description: "删除人脉的扩展字段。",
+        category: "扩展字段",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "categoryName", type: "string", description: "字段分类名称", required: true },
+        ]
+      },
+      {
+        name: "setContactReferrer",
+        description: "设置人脉的推荐人。",
+        category: "人脉管理",
+        parameters: [
+          { name: "contactId", type: "number", description: "人脉ID", required: true },
+          { name: "referrerName", type: "string", description: "推荐人姓名", required: true },
+        ]
+      },
+      {
+        name: "queryCompanyInfo",
+        description: "查询企业工商信息，包括公司名称、注册资本、法人代表、成立时间、经营状态等。适用于了解企业背景、验证企业真实性。",
+        category: "企业查询",
+        parameters: [
+          { name: "searchKey", type: "string", description: "搜索关键词，可以是公司名称、统一社会信用代码等", required: true },
+        ]
+      },
+    ]
+  };
+}
+
+/**
+ * 获取API密钥配置状态
+ * @returns API密钥状态
+ */
+export async function getApiKeysStatus() {
+  return {
+    apiKeys: [
+      {
+        name: "DEEPSEEK_API_KEY",
+        description: "DeepSeek AI API密钥",
+        configured: !!process.env.DEEPSEEK_API_KEY,
+        value: process.env.DEEPSEEK_API_KEY ? `${process.env.DEEPSEEK_API_KEY.substring(0, 10)}...` : null,
+      },
+      {
+        name: "QICHACHA_APP_KEY",
+        description: "企查查 APP KEY",
+        configured: !!process.env.QICHACHA_APP_KEY,
+        value: process.env.QICHACHA_APP_KEY || null,
+      },
+      {
+        name: "QICHACHA_SECRET_KEY",
+        description: "企查查 SECRET KEY",
+        configured: !!process.env.QICHACHA_SECRET_KEY,
+        value: process.env.QICHACHA_SECRET_KEY ? `${process.env.QICHACHA_SECRET_KEY.substring(0, 10)}...` : null,
+      },
+    ]
+  };
+}

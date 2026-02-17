@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowLeft, Save, RotateCcw, Loader2 } from 'lucide-react';
 import CompanyReportManagement from '@/components/CompanyReportManagement';
+import ToolsList from '@/components/ai/ToolsList';
+import ApiKeysStatus from '@/components/ai/ApiKeysStatus';
 
 interface PromptsConfig {
   systemPrompt: string;
@@ -356,6 +358,12 @@ export default function AIManagement() {
                   />
                 </CardContent>
               </Card>
+
+              {/* 工具列表 */}
+              <ToolsList />
+
+              {/* API配置状态 */}
+              <ApiKeysStatus />
             </>
           ) : null}
         </TabsContent>

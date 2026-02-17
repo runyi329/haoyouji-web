@@ -6140,6 +6140,26 @@ export const appRouter = router({
         await dbAI.saveAssistantPrompts(input);
         return { success: true };
       }),
+    
+    // 获取AI工具列表
+    getTools: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const dbAI = await import('./db-ai-assistant');
+        return await dbAI.getToolsList();
+      }),
+    
+    // 获取API密钥配置状态
+    getApiStatus: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+        }
+        const dbAI = await import('./db-ai-assistant');
+        return await dbAI.getApiKeysStatus();
+      }),
   }),
   
   // 邀请系统

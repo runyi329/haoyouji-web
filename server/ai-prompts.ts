@@ -201,8 +201,41 @@ export async function resetPromptsConfig() {
 }
 
 /**
+ * 获取AI工具列表
+ */
+router.get('/api/ai/assistant/tools', async (req, res) => {
+  try {
+    const dbAI = await import('./db-ai-assistant');
+    const result = await dbAI.getToolsList();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[获取工具列表] 错误:', error);
+    res.status(500).json({ 
+      error: '获取工具列表失败',
+      message: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+});
+
+/**
+ * 获取API密钥配置状态
+ */
+router.get('/api/ai/assistant/api-status', async (req, res) => {
+  try {
+    const dbAI = await import('./db-ai-assistant');
+    const result = await dbAI.getApiKeysStatus();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('[获取API状态] 错误:', error);
+    res.status(500).json({ 
+      error: '获取API状态失败',
+      message: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+});
+
+/**
  * 导出默认配置（供测试使用）
  */
 export const DEFAULT_PROMPTS_CONFIG = DEFAULT_PROMPTS;
-
 export default router;
