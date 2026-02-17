@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
+import "@/styles/level-text.css";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -66,6 +67,25 @@ function getLevelText(level?: string): string {
       return "超级节点";
     default:
       return "我的";
+  }
+}
+
+// 根据等级返回样式类名
+function getLevelClassName(level?: string): string {
+  if (!level) return "text-gray-600";
+  
+  switch (level) {
+    case 'standard_user':
+    case 'standard':
+      return "level-text-standard";
+    case 'advanced_user':
+    case 'advanced':
+      return "level-text-advanced";
+    case 'super_user':
+    case 'super':
+      return "level-text-super";
+    default:
+      return "text-gray-600";
   }
 }
 
@@ -325,7 +345,9 @@ export default function Home() {
                     <User className="w-5 h-5 text-white" />
                   )}
                 </div>
-                <span className="text-xs font-medium text-gray-600">{getLevelText(promotionStats?.currentLevel)}</span>
+                <span className={`text-xs font-medium ${getLevelClassName(promotionStats?.currentLevel)}`}>
+                  {getLevelText(promotionStats?.currentLevel)}
+                </span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
