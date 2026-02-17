@@ -1,18 +1,14 @@
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState("login");
+  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   
   // 登录表单
   const [loginUsername, setLoginUsername] = useState("");
@@ -31,7 +27,6 @@ export default function Login() {
     const inviteCode = params.get('invite');
     if (inviteCode) {
       setRegInviteCode(inviteCode);
-      // 自动切换到注册标签页
       setActiveTab("register");
     }
   }, []);
@@ -56,22 +51,19 @@ export default function Login() {
   });
 
   const handleGuestLogin = () => {
-    // 使用游客账户登录
     guestLoginMutation.mutate({
       username: "guest_dev",
       password: "guest123",
     });
   };
   
-  // 处理长按开始
   const handlePressStart = () => {
     const timer = setTimeout(() => {
       handleGuestLogin();
-    }, 2000); // 2秒
+    }, 2000);
     setPressTimer(timer);
   };
   
-  // 处理长按结束
   const handlePressEnd = () => {
     if (pressTimer) {
       clearTimeout(pressTimer);
@@ -82,10 +74,7 @@ export default function Login() {
   const loginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("登录成功！");
-      // 先刷新认证状态
       utils.auth.me.invalidate();
-      // 给浏览器200ms时间处理cookie，特别是安卓浏览器
-      // 使用href而不是replace，确保cookie被正确携带
       setTimeout(() => {
         window.location.href = "/";
       }, 200);
@@ -98,10 +87,7 @@ export default function Login() {
   const registerMutation = trpc.auth.registerWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("注册成功！");
-      // 先刷新认证状态
       utils.auth.me.invalidate();
-      // 给浏览器200ms时间处理cookie，特别是安卓浏览器
-      // 使用href而不是replace，确保cookie被正确携带
       setTimeout(() => {
         window.location.href = "/";
       }, 200);
@@ -115,6 +101,10 @@ export default function Login() {
     e.preventDefault();
     if (!loginUsername || !loginPassword) {
       toast.error("请填写用户名和密码");
+      return;
+    }
+    if (!agreedToTerms) {
+      toast.error("请先阅读并同意隐私条款和用户协议");
       return;
     }
     loginMutation.mutate({
@@ -141,6 +131,10 @@ export default function Login() {
       toast.error("密码长度至少6个字符");
       return;
     }
+    if (!agreedToTerms) {
+      toast.error("请先阅读并同意隐私条款和用户协议");
+      return;
+    }
     registerMutation.mutate({
       username: regUsername,
       password: regPassword,
@@ -150,23 +144,233 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* 顶部导航 - 固定在顶部 */}
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#A80000' }}>
+      {/* 顶部返回按钮 */}
       <header className="absolute top-0 left-0 right-0 p-4 z-10">
         <Link href="/">
-          <Button variant="ghost" size="icon" className="hover:bg-gray-100">
-            <ArrowLeft className="w-6 h-6 text-gray-700" />
-          </Button>
+          <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+            <ArrowLeft className="w-6 h-6 text-white" />
+          </button>
         </Link>
       </header>
 
-      {/* 主内容区域 - 扩大到整个屏幕 */}
+      {/* 主内容区域 */}
       <main className="flex-1 flex items-center justify-center px-6 py-20">
         <div className="w-full max-w-md">
-          {/* Logo区域 - 使用新图标，点击进入游客模式 */}
-          <div className="text-center mb-8">
+          {/* 登录/注册卡片 */}
+          <div className="bg-white rounded-3xl p-6 shadow-2xl">
+            {/* Tab切换 */}
+            <div className="flex mb-6">
+              <button
+                onClick={() => setActiveTab("login")}
+                className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
+                  activeTab === "login" ? "text-gray-800" : "text-gray-400"
+                }`}
+              >
+                登录
+                {activeTab === "login" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab("register")}
+                className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
+                  activeTab === "register" ? "text-gray-800" : "text-gray-400"
+                }`}
+              >
+                注册
+                {activeTab === "register" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
+                )}
+              </button>
+            </div>
+
+            {/* 登录表单 */}
+            {activeTab === "login" && (
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* 用户名输入框 */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <User className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="请输入用户名"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                </div>
+
+                {/* 密码输入框 */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <Lock className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="请输入密码"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+
+                {/* 登录按钮 */}
+                <button
+                  type="submit"
+                  disabled={loginMutation.isPending}
+                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                >
+                  {loginMutation.isPending ? "登录中..." : "登录"}
+                </button>
+
+                {/* 协议勾选 */}
+                <div className="flex items-start gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAgreedToTerms(!agreedToTerms)}
+                    className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      agreedToTerms ? "bg-green-500 border-green-500" : "border-gray-300"
+                    }`}
+                  >
+                    {agreedToTerms && (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    我已阅读、理解并同意
+                    <a href="#" className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    、
+                    <a href="#" className="text-gray-800 underline mx-1">《用户协议》</a>
+                  </p>
+                </div>
+              </form>
+            )}
+
+            {/* 注册表单 */}
+            {activeTab === "register" && (
+              <form onSubmit={handleRegister} className="space-y-4">
+                {/* 用户名输入框 */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <User className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="请输入用户名"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                </div>
+
+                {/* 昵称输入框 */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="昵称（可选）"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                </div>
+
+                {/* 邀请码输入框 */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="邀请码（可选）"
+                    value={regInviteCode}
+                    onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                    maxLength={6}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors font-mono"
+                  />
+                </div>
+
+                {/* 密码输入框 */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <Lock className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="请输入密码"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+
+                {/* 确认密码输入框 */}
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                    <Lock className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="确认密码"
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                  />
+                </div>
+
+                {/* 注册按钮 */}
+                <button
+                  type="submit"
+                  disabled={registerMutation.isPending}
+                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                >
+                  {registerMutation.isPending ? "注册中..." : "注册"}
+                </button>
+
+                {/* 协议勾选 */}
+                <div className="flex items-start gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAgreedToTerms(!agreedToTerms)}
+                    className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      agreedToTerms ? "bg-green-500 border-green-500" : "border-gray-300"
+                    }`}
+                  >
+                    {agreedToTerms && (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    我已阅读、理解并同意
+                    <a href="#" className="text-gray-800 underline mx-1">《隐私条款》</a>
+                    、
+                    <a href="#" className="text-gray-800 underline mx-1">《用户协议》</a>
+                  </p>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* 底部Logo */}
+          <div className="mt-12 text-center">
             <div 
-              className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden shadow-lg cursor-pointer hover:shadow-xl transition-shadow active:scale-95"
+              className="inline-block cursor-pointer"
               onMouseDown={handlePressStart}
               onMouseUp={handlePressEnd}
               onMouseLeave={handlePressEnd}
@@ -178,220 +382,10 @@ export default function Login() {
               <img 
                 src="/maidong-hyy.png" 
                 alt="脉动" 
-                className="w-full h-full object-cover"
+                className="h-16 opacity-80 hover:opacity-100 transition-opacity"
               />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              脉动
-            </h1>
-            <p className="text-lg text-gray-600">让人脉动起来</p>
           </div>
-
-          {/* 登录/注册卡片 */}
-          <Card className="w-full p-8 shadow-xl border-2 border-gray-200 bg-white">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              {/* 登录表单 */}
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="space-y-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="login-username" className="text-base font-medium text-gray-700">
-                      用户名
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="login-username"
-                        placeholder="请输入用户名"
-                        value={loginUsername}
-                        onChange={(e) => setLoginUsername(e.target.value)}
-                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="login-password" className="text-base font-medium text-gray-700">
-                      密码
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="login-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="请输入密码"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        className="pl-12 pr-12 h-14 text-lg border-2 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-14 text-lg font-semibold text-white border-0 rounded-lg shadow-md"
-                    style={{
-                      backgroundColor: 'var(--color-primary)',
-                    }}
-                    disabled={loginMutation.isPending}
-                  >
-                    {loginMutation.isPending ? "登录中..." : "登录"}
-                  </Button>
-
-                  {/* 登录/注册切换按钮 */}
-                  <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
-                    <TabsTrigger 
-                      value="login" 
-                      className="text-base font-medium data-[state=active]:bg-white"
-                      style={{
-                        '--tw-text-opacity': '1'
-                      }}
-                      data-active-color="var(--color-primary)"
-                    >
-                      登录
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="register"
-                      className="text-base font-medium data-[state=active]:bg-white"
-                      style={{
-                        '--tw-text-opacity': '1'
-                      }}
-                      data-active-color="var(--color-primary)"
-                    >
-                      注册
-                    </TabsTrigger>
-                  </TabsList>
-                </form>
-              </TabsContent>
-
-              {/* 注册表单 */}
-              <TabsContent value="register">
-                <form onSubmit={handleRegister} className="space-y-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="reg-username" className="text-base font-medium text-gray-700">
-                      用户名
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="reg-username"
-                        placeholder="3-20个字符，字母数字下划线"
-                        value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="reg-name" className="text-base font-medium text-gray-700">
-                      昵称（可选）
-                    </Label>
-                    <Input
-                      id="reg-name"
-                      placeholder="显示名称"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      className="h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="reg-invite" className="text-base font-medium text-gray-700">
-                      邀请码（可选）
-                    </Label>
-                    <Input
-                      id="reg-invite"
-                      placeholder="6位邀请码"
-                      value={regInviteCode}
-                      onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
-                      maxLength={6}
-                      className="h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500 font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="reg-password" className="text-base font-medium text-gray-700">
-                      密码
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="reg-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="至少6个字符"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className="pl-12 pr-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label htmlFor="reg-confirm" className="text-base font-medium text-gray-700">
-                      确认密码
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        id="reg-confirm"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="再次输入密码"
-                        value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        className="pl-12 h-14 text-lg border-2 border-gray-300 focus:border-green-500 focus:ring-green-500"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-14 text-lg font-semibold bg-green-600 hover:bg-green-700 text-white border-0 rounded-lg shadow-md"
-                    disabled={registerMutation.isPending}
-                  >
-                    {registerMutation.isPending ? "注册中..." : "注册"}
-                  </Button>
-
-                  {/* 登录/注册切换按钮 */}
-                  <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100 mt-6">
-                    <TabsTrigger 
-                      value="login" 
-                      className="text-base font-medium data-[state=active]:bg-white"
-                      style={{
-                        '--tw-text-opacity': '1'
-                      }}
-                      data-active-color="var(--color-primary)"
-                    >
-                      登录
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="register"
-                      className="text-base font-medium data-[state=active]:bg-white"
-                      style={{
-                        '--tw-text-opacity': '1'
-                      }}
-                      data-active-color="var(--color-primary)"
-                    >
-                      注册
-                    </TabsTrigger>
-                  </TabsList>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </Card>
         </div>
       </main>
     </div>
