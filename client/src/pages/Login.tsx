@@ -144,9 +144,9 @@ export default function Login() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: '#A80000' }}>
+    <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
       {/* 主内容区域 */}
-      <main className="flex-1 flex flex-col px-6 pt-8 overflow-y-auto">
+      <main className="flex-1 flex flex-col px-6 pt-8 overflow-y-auto touch-pan-y">
         <div className="w-full max-w-md">
           {/* 登录/注册卡片 */}
           <div className="bg-white rounded-3xl p-6 shadow-2xl">
