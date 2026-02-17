@@ -153,16 +153,31 @@ export default function Profile() {
   const { isInstallable, isInstalled, isIOSSafari, promptInstall } = usePWAInstall();
 
   // 获取当前用户信息
-  const { data: user, refetch: refetchUser } = trpc.auth.me.useQuery();
+  const { data: user, refetch: refetchUser, isLoading: userLoading } = trpc.auth.me.useQuery(undefined, {
+    retry: 1,
+    staleTime: 30000,
+  });
   
   // 获取当前用户积分
-  const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery();
+  const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
 
   // 获取用户股权数据（用于显示节点等级光环）
-  const { data: equityData } = trpc.equity.getMyEquity.useQuery();
+  const { data: equityData } = trpc.equity.getMyEquity.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
 
   // 获取用户功能顺序配置
-  const { data: favoritesData, refetch: refetchFavorites } = trpc.profileFeatures.getFavorites.useQuery();
+  const { data: favoritesData, refetch: refetchFavorites } = trpc.profileFeatures.getFavorites.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
 
   // 保存功能顺序配置
   const saveFavoritesMutation = trpc.profileFeatures.saveFavorites.useMutation({
@@ -426,6 +441,21 @@ export default function Profile() {
     if (indexB !== -1) return 1;
     return 0;
   });
+
+  // 如果用户信息还在加载中，显示加载状态
+  if (userLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+      </div>
+    );
+  }
+
+  // 如果没有用户信息，重定向到登录页
+  if (!user) {
+    window.location.href = "https://www.jiangyuchen.cn/login";
+    return null;
+  }
 
   return (
     <div className="bg-gray-50 pb-24 max-w-md mx-auto relative shadow-2xl">
