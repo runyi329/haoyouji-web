@@ -8,12 +8,7 @@ import { useLocation } from "wouter";
 
 export default function AIChat() {
   const [, navigate] = useLocation();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "system",
-      content: "你是脉动应用的AI助手，可以帮助用户查询企业信息、管理人脉关系、解答问题等。"
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   // AI查询mutation
   const aiQueryMutation = trpc.aiAssistant.query.useMutation({
@@ -34,16 +29,20 @@ export default function AIChat() {
   });
 
   const handleSendMessage = (content: string) => {
+    // 先获取当前的历史记录（不包括system消息）
+    const currentHistory = messages.filter(m => m.role !== "system");
+    
     // 添加用户消息到聊天记录
-    setMessages(prev => [...prev, {
+    const newUserMessage: Message = {
       role: "user",
       content
-    }]);
+    };
+    setMessages(prev => [...prev, newUserMessage]);
 
-    // 调用AI助手API
+    // 调用AI助手API，传递当前历史记录
     aiQueryMutation.mutate({
       query: content,
-      history: messages.filter(m => m.role !== "system") // 不发送system消息
+      history: currentHistory.length > 0 ? currentHistory : undefined
     });
   };
 
@@ -73,7 +72,7 @@ export default function AIChat() {
       {/* 聊天区域 */}
       <div className="h-[calc(100vh-3.5rem)]">
         <AIChatBox
-          messages={messages.filter(m => m.role !== "system")}
+          messages={messages}
           onSendMessage={handleSendMessage}
           isLoading={aiQueryMutation.isPending}
           placeholder="输入消息，例如：帮我查一下腾讯"
