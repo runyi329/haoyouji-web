@@ -123,7 +123,7 @@ export function AIChatBox({
           <div className="flex h-full flex-col items-center justify-center gap-6 p-4">
             <div className="flex flex-col items-center gap-3 text-gray-400">
               <Bot className="w-16 h-16" />
-              <p className="text-sm">{emptyStateMessage}</p>
+              <p className="text-xs">{emptyStateMessage}</p>
             </div>
 
             {suggestedPrompts && suggestedPrompts.length > 0 && (
@@ -133,7 +133,7 @@ export function AIChatBox({
                     key={index}
                     onClick={() => onSendMessage(prompt)}
                     disabled={isLoading}
-                    className="rounded-lg bg-white px-4 py-3 text-sm text-left shadow-sm hover:shadow-md transition-shadow disabled:cursor-not-allowed disabled:opacity-50 border border-gray-100"
+                    className="rounded-lg bg-white px-4 py-3 text-xs text-left shadow-sm hover:shadow-md transition-shadow disabled:cursor-not-allowed disabled:opacity-50 border border-gray-100"
                   >
                     {prompt}
                   </button>
@@ -177,11 +177,11 @@ export function AIChatBox({
                   )}
                 >
                   {message.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none [&_p]:my-1 [&_pre]:my-2 [&_ul]:my-1 [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:pl-5 [&_li]:my-0.5 break-words">
+                    <div className="prose prose-xs max-w-none text-xs [&_p]:my-1 [&_pre]:my-2 [&_ul]:my-1 [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:pl-5 [&_li]:my-0.5 break-words [&_p]:text-xs [&_li]:text-xs [&_strong]:text-xs [&_code]:text-xs">
                       <Streamdown>{message.content}</Streamdown>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    <p className="whitespace-pre-wrap text-xs leading-relaxed">
                       {message.content}
                     </p>
                   )}
