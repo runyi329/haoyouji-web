@@ -1,35 +1,28 @@
-/* 等级文字 - 红色底色 + 金色光线斜向掠过 */
+/* 等级文字 - 红色底色 + 金色光线只在文字上掠过 */
 
 /* 标准用户/标准节点 */
 .level-text-standard {
-  color: #A80000;
   position: relative;
   display: inline-block;
-}
-
-.level-text-standard::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  color: #A80000;
   background: linear-gradient(
     110deg,
-    transparent 0%,
-    transparent 45%,
-    rgba(255, 215, 0, 0.6) 48%,
-    rgba(255, 250, 205, 0.8) 50%,
-    rgba(255, 215, 0, 0.6) 52%,
-    transparent 55%,
-    transparent 100%
+    #A80000 0%,
+    #A80000 45%,
+    #FFD700 48%,
+    #FFFACD 50%,
+    #FFD700 52%,
+    #A80000 55%,
+    #A80000 100%
   );
   background-size: 300% 100%;
-  animation: gold-sweep-standard 3s linear infinite;
-  pointer-events: none;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
 }
 
-@keyframes gold-sweep-standard {
+@keyframes gold-sweep {
   0% {
     background-position: -150% 0;
   }
@@ -40,76 +33,44 @@
 
 /* 高级用户/高级节点 */
 .level-text-advanced {
-  color: #A80000;
   position: relative;
   display: inline-block;
-}
-
-.level-text-advanced::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  color: #A80000;
   background: linear-gradient(
     110deg,
-    transparent 0%,
-    transparent 46%,
-    rgba(255, 215, 0, 0.65) 48.5%,
-    rgba(255, 250, 205, 0.85) 50%,
-    rgba(255, 215, 0, 0.65) 51.5%,
-    transparent 54%,
-    transparent 100%
+    #A80000 0%,
+    #A80000 46%,
+    #FFD700 48.5%,
+    #FFFACD 50%,
+    #FFD700 51.5%,
+    #A80000 54%,
+    #A80000 100%
   );
   background-size: 300% 100%;
-  animation: gold-sweep-advanced 2.5s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes gold-sweep-advanced {
-  0% {
-    background-position: -150% 0;
-  }
-  100% {
-    background-position: 250% 0;
-  }
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
 }
 
 /* 超级用户/超级节点 */
 .level-text-super {
-  color: #A80000;
   position: relative;
   display: inline-block;
-}
-
-.level-text-super::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  color: #A80000;
   background: linear-gradient(
     110deg,
-    transparent 0%,
-    transparent 47%,
-    rgba(255, 215, 0, 0.7) 49%,
-    rgba(255, 250, 205, 0.9) 50%,
-    rgba(255, 215, 0, 0.7) 51%,
-    transparent 53%,
-    transparent 100%
+    #A80000 0%,
+    #A80000 47%,
+    #FFD700 49%,
+    #FFFACD 50%,
+    #FFD700 51%,
+    #A80000 53%,
+    #A80000 100%
   );
   background-size: 300% 100%;
-  animation: gold-sweep-super 2s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes gold-sweep-super {
-  0% {
-    background-position: -150% 0;
-  }
-  100% {
-    background-position: 250% 0;
-  }
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
 }
