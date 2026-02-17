@@ -262,9 +262,11 @@ export default function AIManagement() {
             <div className="flex items-center justify-center min-h-[400px]">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : assistantConfig ? (
+          ) : (
             <>
-              <div className="flex justify-end gap-2 mb-4">
+              {assistantConfig && (
+                <>
+                  <div className="flex justify-end gap-2 mb-4">
                 <Button
                   variant="outline"
                   onClick={handleAssistantReset}
@@ -358,14 +360,16 @@ export default function AIManagement() {
                   />
                 </CardContent>
               </Card>
+                </>
+              )}
 
-              {/* 工具列表 */}
+              {/* 工具列表 - 始终显示 */}
               <ToolsList />
 
-              {/* API配置状态 */}
+              {/* API配置状态 - 始终显示 */}
               <ApiKeysStatus />
             </>
-          ) : null}
+          )}
         </TabsContent>
 
         {/* 代码备忘录 */}
