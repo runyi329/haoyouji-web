@@ -619,3 +619,63 @@ export async function setContactReferrer(
 
   return { success: true, referrerName };
 }
+
+/**
+ * 查询企业工商信息（企查查API）
+ */
+export async function queryCompanyInfo(searchKey: string) {
+  const appKey = process.env.QICHACHA_APP_KEY;
+  const secretKey = process.env.QICHACHA_SECRET_KEY;
+  
+  if (!appKey || !secretKey) {
+    throw new Error("企查查API密钥未配置，请联系管理员");
+  }
+  
+  try {
+    // 1. 生成时间戳（精确到秒）
+    const timespan = Math.floor(Date.now() / 1000).toString();
+    
+    // 2. 生成签名 Token = MD5(Key + Timespan + SecretKey)
+    const crypto = await import('crypto');
+    const token = crypto
+      .createHash('md5')
+      .update(appKey + timespan + secretKey)
+      .digest('hex')
+      .toUpperCase();
+    
+    // 3. 调用企查查API
+    const url = `https://api.qichacha.com/FuzzySearch/GetList?key=${appKey}&searchKey=${encodeURIComponent(searchKey)}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Token': token,
+        'Timespan': timespan
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[企查查API错误]', errorText);
+      throw new Error(`企查查API调用失败: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // 4. 处理返回结果
+    if (data.Status !== '200') {
+      throw new Error(`企查查API返回错误: ${data.Message || '未知错误'}`);
+    }
+    
+    // 返回搜索结果
+    return {
+      success: true,
+      total: data.Result?.length || 0,
+      companies: data.Result || []
+    };
+    
+  } catch (error: any) {
+    console.error('[queryCompanyInfo错误]', error);
+    throw new Error(`查询企业信息失败: ${error.message}`);
+  }
+}

@@ -13,6 +13,7 @@ import {
   updateContactField,
   deleteContactField,
   setContactReferrer,
+  queryCompanyInfo,
 } from "./ai-tools";
 
 /**
@@ -237,6 +238,23 @@ export async function queryWithAI(
         },
       },
     },
+    {
+      type: "function",
+      function: {
+        name: "queryCompanyInfo",
+        description: "查询企业工商信息，包括公司名称、注册资本、法人代表、成立时间、经营状态等。适用于了解企业背景、验证企业真实性。",
+        parameters: {
+          type: "object",
+          properties: {
+            searchKey: {
+              type: "string",
+              description: "搜索关键词，可以是公司名称、统一社会信用代码等"
+            },
+          },
+          required: ["searchKey"],
+        },
+      },
+    },
   ];
 
   // 构建消息历史
@@ -374,6 +392,9 @@ export async function queryWithAI(
                 functionArgs.contactId,
                 functionArgs.referrerName
               );
+              break;
+            case "queryCompanyInfo":
+              functionResult = await queryCompanyInfo(functionArgs.searchKey);
               break;
             default:
               functionResult = { error: "未知的函数调用" };
