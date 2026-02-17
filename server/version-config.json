@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "forceUpdateUntil": "2026-02-18T23:59:59+08:00",
-  "comment": "微光粒子环绕效果"
+  "comment": "移除头像光环特效"
 }
