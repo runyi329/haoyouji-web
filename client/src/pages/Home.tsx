@@ -47,6 +47,28 @@ function formatCurrency(num: number): string {
   return "¥" + num.toLocaleString("zh-CN");
 }
 
+// 根据等级返回显示文字
+function getLevelText(level?: string): string {
+  if (!level) return "我的";
+  
+  switch (level) {
+    case 'standard_user':
+      return "标准用户";
+    case 'advanced_user':
+      return "高级用户";
+    case 'super_user':
+      return "超级用户";
+    case 'standard':
+      return "标准节点";
+    case 'advanced':
+      return "高级节点";
+    case 'super':
+      return "超级节点";
+    default:
+      return "我的";
+  }
+}
+
 // 使用Web Audio API生成提示音（两声清脆的"叮叮"）
 function playReminderSound() {
   try {
@@ -104,6 +126,9 @@ export default function Home() {
   
   // 获取邀请统计
   const { data: inviteInfo } = trpc.invite.getMyInviteInfo.useQuery();
+  
+  // 获取晋升数据（用于显示等级）
+  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
 
   // 仅liulifan用户：获取需要关注的人数
   const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined, {
@@ -300,7 +325,7 @@ export default function Home() {
                     <User className="w-5 h-5 text-white" />
                   )}
                 </div>
-                <span className="text-xs font-medium text-gray-600">我的</span>
+                <span className="text-xs font-medium text-gray-600">{getLevelText(promotionStats?.currentLevel)}</span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
