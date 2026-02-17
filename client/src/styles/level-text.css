@@ -4,30 +4,29 @@
 .level-text-standard {
   color: #A80000;
   position: relative;
+  display: inline-block;
+}
+
+.level-text-standard::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
     110deg,
     transparent 0%,
     transparent 45%,
-    #FFD700 48%,
-    #FFFACD 50%,
-    #FFD700 52%,
+    rgba(255, 215, 0, 0.6) 48%,
+    rgba(255, 250, 205, 0.8) 50%,
+    rgba(255, 215, 0, 0.6) 52%,
     transparent 55%,
     transparent 100%
   );
   background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   animation: gold-sweep-standard 3s linear infinite;
-}
-
-.level-text-standard::before {
-  content: attr(data-text);
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: #A80000;
-  z-index: -1;
+  pointer-events: none;
 }
 
 @keyframes gold-sweep-standard {
@@ -43,30 +42,29 @@
 .level-text-advanced {
   color: #A80000;
   position: relative;
+  display: inline-block;
+}
+
+.level-text-advanced::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
     110deg,
     transparent 0%,
     transparent 46%,
-    #FFD700 48.5%,
-    #FFFACD 50%,
-    #FFD700 51.5%,
+    rgba(255, 215, 0, 0.65) 48.5%,
+    rgba(255, 250, 205, 0.85) 50%,
+    rgba(255, 215, 0, 0.65) 51.5%,
     transparent 54%,
     transparent 100%
   );
   background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   animation: gold-sweep-advanced 2.5s linear infinite;
-}
-
-.level-text-advanced::before {
-  content: attr(data-text);
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: #A80000;
-  z-index: -1;
+  pointer-events: none;
 }
 
 @keyframes gold-sweep-advanced {
@@ -82,30 +80,29 @@
 .level-text-super {
   color: #A80000;
   position: relative;
+  display: inline-block;
+}
+
+.level-text-super::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
     110deg,
     transparent 0%,
     transparent 47%,
-    #FFD700 49%,
-    #FFFACD 50%,
-    #FFD700 51%,
+    rgba(255, 215, 0, 0.7) 49%,
+    rgba(255, 250, 205, 0.9) 50%,
+    rgba(255, 215, 0, 0.7) 51%,
     transparent 53%,
     transparent 100%
   );
   background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   animation: gold-sweep-super 2s linear infinite;
-}
-
-.level-text-super::before {
-  content: attr(data-text);
-  position: absolute;
-  left: 0;
-  top: 0;
-  color: #A80000;
-  z-index: -1;
+  pointer-events: none;
 }
 
 @keyframes gold-sweep-super {
