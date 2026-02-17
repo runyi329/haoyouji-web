@@ -286,31 +286,57 @@ export async function queryWithAI(
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
       let response;
-      try {
-        response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "deepseek-chat",
-            messages,
-            tools,
-            temperature: 0.7,
-            max_tokens: 2000,
-          }),
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') {
-          console.error('[AI] Request timeout after 30 seconds');
-          throw new Error('AI请求超时，请稍后重试');
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount <= maxRetries) {
+        try {
+          console.log(`[AI] Attempt ${retryCount + 1}/${maxRetries + 1} to call DeepSeek API`);
+          
+          response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages,
+              tools,
+              temperature: 0.7,
+              max_tokens: 2000,
+            }),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          break; // 成功则跳出重试循环
+          
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          console.error(`[AI] Fetch attempt ${retryCount + 1} failed:`, {
+            name: fetchError.name,
+            message: fetchError.message,
+            cause: fetchError.cause,
+          });
+          
+          if (fetchError.name === 'AbortError') {
+            throw new Error('AI请求超时，请稍后重试');
+          }
+          
+          retryCount++;
+          
+          if (retryCount > maxRetries) {
+            console.error('[AI] All retry attempts failed');
+            throw new Error(`网络连接失败，已重试${maxRetries}次。请检查网络连接或稍后再试。`);
+          }
+          
+          // 等待一段时间后重试（指数退避）
+          const waitTime = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+          console.log(`[AI] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
-        throw fetchError;
       }
 
       if (!response.ok) {
