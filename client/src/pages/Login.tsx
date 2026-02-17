@@ -218,7 +218,11 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={loginMutation.isPending}
-                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                  className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
+                    loginUsername && loginPassword && agreedToTerms
+                      ? 'bg-[#A80000] text-white hover:bg-[#8B0000]'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
                 >
                   {loginMutation.isPending ? "登录中..." : "登录"}
                 </button>
@@ -331,7 +335,11 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={registerMutation.isPending}
-                  className="w-full py-3 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300 transition-colors disabled:opacity-50"
+                  className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
+                    regUsername && regPassword && regConfirmPassword && regName && agreedToTerms
+                      ? 'bg-[#A80000] text-white hover:bg-[#8B0000]'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
                 >
                   {registerMutation.isPending ? "注册中..." : "注册"}
                 </button>
