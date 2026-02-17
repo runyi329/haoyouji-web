@@ -1,14 +1,14 @@
-/* 等级文字光线流动动画 */
+/* 等级文字光线流动动画 - 纯红金配色 */
 
-/* 标准用户/标准节点 - 金色光线 */
+/* 标准用户/标准节点 - 纯金色光线 */
 .level-text-standard {
   background: linear-gradient(
     90deg,
-    #C5B358 0%,
-    #F59E0B 25%,
-    #FBBF24 50%,
-    #F59E0B 75%,
-    #C5B358 100%
+    #B8860B 0%,
+    #DAA520 25%,
+    #FFD700 50%,
+    #DAA520 75%,
+    #B8860B 100%
   );
   background-size: 200% 100%;
   background-clip: text;
@@ -26,15 +26,17 @@
   }
 }
 
-/* 高级用户/高级节点 - 橙金色光线 */
+/* 高级用户/高级节点 - 红金混合光线 */
 .level-text-advanced {
   background: linear-gradient(
     90deg,
-    #F59E0B 0%,
-    #FB923C 25%,
-    #F97316 50%,
-    #FB923C 75%,
-    #F59E0B 100%
+    #B8860B 0%,
+    #DAA520 20%,
+    #DC143C 40%,
+    #FFD700 50%,
+    #DC143C 60%,
+    #DAA520 80%,
+    #B8860B 100%
   );
   background-size: 200% 100%;
   background-clip: text;
@@ -52,17 +54,17 @@
   }
 }
 
-/* 超级用户/超级节点 - 红金渐变光线 */
+/* 超级用户/超级节点 - 深红金渐变光线 */
 .level-text-super {
   background: linear-gradient(
     90deg,
-    #A80000 0%,
-    #DC2626 20%,
-    #F59E0B 40%,
-    #FBBF24 50%,
-    #F59E0B 60%,
-    #DC2626 80%,
-    #A80000 100%
+    #8B0000 0%,
+    #A80000 15%,
+    #DC143C 30%,
+    #FFD700 50%,
+    #DC143C 70%,
+    #A80000 85%,
+    #8B0000 100%
   );
   background-size: 200% 100%;
   background-clip: text;
