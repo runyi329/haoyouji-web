@@ -399,7 +399,7 @@ export default function Profile() {
     { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-pink-50 text-pink-600", badge: null, onClick: () => toast("功能开发中") },
     { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-green-50 text-green-600", badge: null, onClick: () => toast("功能开发中") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-yellow-50 text-yellow-600", badge: null, onClick: () => navigate("/parent/points") },
-    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/parent/ai-assistant") },
+    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
   // 账户管理功能
