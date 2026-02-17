@@ -13,120 +13,116 @@ export const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({
   nodeLevel,
   className = "w-16 h-16"
 }) => {
-  // 临时测试：强制显示标准节点光环
+  // 临时测试：强制显示标准节点效果
   const testLevel = 'standard';
-  console.log('AvatarWithGlow rendered, nodeLevel:', nodeLevel, 'testLevel:', testLevel);
-  // 根据节点等级确定光环样式
-  const getGlowStyle = (): React.CSSProperties => {
-    const baseStyle: React.CSSProperties = {
-      position: 'relative',
-      borderRadius: '50%',
-      overflow: 'hidden',
-      border: '2px solid rgba(255, 255, 255, 0.3)',
-      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-    };
+  const level = testLevel || nodeLevel;
 
-    // 使用testLevel进行测试
-    const level = testLevel || nodeLevel;
-
+  // 根据节点等级确定粒子数量和颜色
+  const getParticleConfig = () => {
     if (level === 'standard' || level === 'standard_user') {
-      // 标准节点 - 金色光环
       return {
-        ...baseStyle,
-        boxShadow: `
-          0 0 0 4px rgba(245, 158, 11, 0.6),
-          0 0 20px 4px rgba(251, 191, 36, 0.4),
-          0 10px 15px -3px rgba(0, 0, 0, 0.1)
-        `,
-        animation: 'glow-breathe-standard 3s ease-in-out infinite',
+        count: 3,
+        color: '#F59E0B', // 金色
+        size: 4,
+        duration: 8, // 环绕周期（秒）
       };
     } else if (level === 'advanced' || level === 'advanced_user') {
-      // 高级节点 - 橙红色双层光环
       return {
-        ...baseStyle,
-        boxShadow: `
-          0 0 0 4px rgba(239, 68, 68, 0.5),
-          0 0 0 6px rgba(249, 115, 22, 0.3),
-          0 0 30px 6px rgba(239, 68, 68, 0.4),
-          0 10px 15px -3px rgba(0, 0, 0, 0.1)
-        `,
-        animation: 'glow-breathe-advanced 2.5s ease-in-out infinite',
+        count: 4,
+        color: '#EF4444', // 橙红色
+        size: 5,
+        duration: 6,
       };
     } else if (level === 'super' || level === 'super_user') {
-      // 超级节点 - 彩虹渐变光环
       return {
-        ...baseStyle,
-        boxShadow: `
-          0 0 0 4px rgba(245, 158, 11, 0.4),
-          0 0 0 8px rgba(139, 92, 246, 0.2),
-          0 0 40px 8px rgba(245, 158, 11, 0.3),
-          0 0 60px 12px rgba(139, 92, 246, 0.2),
-          0 10px 15px -3px rgba(0, 0, 0, 0.1)
-        `,
-        animation: 'glow-breathe-super 2s ease-in-out infinite, glow-rainbow 5s linear infinite',
+        count: 6,
+        color: '#8B5CF6', // 紫色
+        size: 6,
+        duration: 5,
       };
     }
-
-    return baseStyle;
+    return null;
   };
+
+  const config = getParticleConfig();
+
+  if (!config) {
+    // 非节点用户，不显示粒子
+    return (
+      <div className={className} style={{ borderRadius: '50%', overflow: 'hidden' }}>
+        <img src={src} alt={alt} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
+  // 生成粒子
+  const particles = Array.from({ length: config.count }, (_, i) => {
+    const delay = (i / config.count) * config.duration;
+    return (
+      <div
+        key={i}
+        className="particle"
+        style={{
+          '--delay': `${delay}s`,
+          '--duration': `${config.duration}s`,
+          '--color': config.color,
+          '--size': `${config.size}px`,
+        } as React.CSSProperties}
+      />
+    );
+  });
 
   return (
     <>
       <style>{`
-        @keyframes glow-breathe-standard {
-          0%, 100% {
-            transform: scale(1);
-            filter: brightness(1);
-          }
-          50% {
-            transform: scale(1.02);
-            filter: brightness(1.1);
-          }
-        }
-
-        @keyframes glow-breathe-advanced {
-          0%, 100% {
-            transform: scale(1);
-            filter: brightness(1);
-          }
-          50% {
-            transform: scale(1.04);
-            filter: brightness(1.15);
-          }
-        }
-
-        @keyframes glow-breathe-super {
-          0%, 100% {
-            transform: scale(1);
-            filter: brightness(1) hue-rotate(0deg);
-          }
-          50% {
-            transform: scale(1.06);
-            filter: brightness(1.2) hue-rotate(10deg);
-          }
-        }
-
-        @keyframes glow-rainbow {
+        @keyframes orbit {
           0% {
-            filter: hue-rotate(0deg);
+            transform: rotate(0deg) translateX(40px) rotate(0deg);
+            opacity: 0;
           }
-          50% {
-            filter: hue-rotate(30deg);
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
           }
           100% {
-            filter: hue-rotate(0deg);
+            transform: rotate(360deg) translateX(40px) rotate(-360deg);
+            opacity: 0;
           }
         }
+
+        .avatar-container {
+          position: relative;
+          display: inline-block;
+        }
+
+        .avatar-container .particle {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: var(--size);
+          height: var(--size);
+          background: var(--color);
+          border-radius: 50%;
+          box-shadow: 0 0 8px var(--color), 0 0 12px var(--color);
+          animation: orbit var(--duration) linear infinite;
+          animation-delay: var(--delay);
+          pointer-events: none;
+        }
+
+        .avatar-container .avatar-image {
+          border-radius: 50%;
+          overflow: hidden;
+          position: relative;
+          z-index: 1;
+        }
       `}</style>
-      <div 
-        className={className}
-        style={getGlowStyle()}
-      >
-        <img
-          src={src}
-          alt={alt}
-          className="w-full h-full object-cover"
-        />
+      <div className={`avatar-container ${className}`}>
+        <div className="avatar-image" style={{ width: '100%', height: '100%' }}>
+          <img src={src} alt={alt} className="w-full h-full object-cover" />
+        </div>
+        {particles}
       </div>
     </>
   );
