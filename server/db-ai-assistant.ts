@@ -285,8 +285,9 @@ export async function queryWithAI(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
+      let response;
       try {
-        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        response = await fetch("https://api.deepseek.com/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -303,16 +304,6 @@ export async function queryWithAI(
         });
         
         clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("[AI] DeepSeek API error:", {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText
-          });
-          throw new Error(`DeepSeek API 错误 (${response.status}): ${errorText.substring(0, 100)}`);
-        }
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
@@ -320,6 +311,16 @@ export async function queryWithAI(
           throw new Error('AI请求超时，请稍后重试');
         }
         throw fetchError;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[AI] DeepSeek API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`DeepSeek API 错误 (${response.status}): ${errorText.substring(0, 100)}`);
       }
 
       const data = await response.json();
