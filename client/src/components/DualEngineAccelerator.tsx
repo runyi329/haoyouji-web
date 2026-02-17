@@ -141,7 +141,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   return (
     <div className="space-y-0">
       {/* ====== 红色区域（汇总） ====== */}
-      <div className={`relative overflow-hidden p-4 rounded-t-2xl ${getTopCardStyle()}`}>
+      <div className={`relative overflow-hidden p-4 ${getTopCardStyle()}`}>
         {/* 标题行 */}
         <div className="flex items-center justify-between mb-3">
           <div>
