@@ -819,7 +819,7 @@ export default function MyEquity() {
             {/* 模块三：常见问题 - 内嵌手风琴 */}
             <ShareholderSection
               title="常见问题"
-              subtitle="3个核心问题解答"
+              subtitle=""
               icon="help"
               defaultOpen={false}
             >

@@ -95,14 +95,16 @@ export default function FAQCard() {
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
               className="w-full p-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
             >
-              <span className="text-sm font-semibold text-gray-900 text-left flex-1">
-                {index + 1}. {faq.question}
-              </span>
-              <ChevronDown
-                className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${
-                  openIndex === index ? 'rotate-180' : ''
-                }`}
-              />
+              <div className="flex items-center gap-2 flex-1">
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
+                    openIndex === index ? 'rotate-180' : ''
+                  }`}
+                />
+                <span className="text-sm font-semibold text-gray-900 text-left">
+                  {index + 1}. {faq.question}
+                </span>
+              </div>
             </button>
 
             {/* 答案内容 */}
