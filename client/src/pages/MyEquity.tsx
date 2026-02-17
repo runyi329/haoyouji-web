@@ -806,7 +806,7 @@ export default function MyEquity() {
                   },
                 ]}
                 onSign={(id) => {
-                  toast.info('正在跳转到签署页面...');
+                  toast.info('没有需要签署的新合同');
                 }}
                 onDownload={(id) => {
                   toast.success('协议下载中...');
