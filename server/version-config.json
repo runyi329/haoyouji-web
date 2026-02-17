@@ -1,5 +1,5 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "forceUpdateUntil": "2026-02-18T23:59:59+08:00",
-  "comment": "红色底色+金色光线滚动"
+  "comment": "优化金色光线效果"
 }
