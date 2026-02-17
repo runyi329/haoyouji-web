@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AIChatBox, Message } from "@/components/AIChatBox";
-import BottomNav from "@/components/BottomNav";
+
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
@@ -55,7 +55,7 @@ export default function AIChat() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative shadow-2xl">
       {/* 顶部标题栏 */}
       <header className="bg-gradient-to-br from-[#A80000] to-[#d44] sticky top-0 z-10 shadow-sm">
         <div className="px-4 py-3 flex items-center">
@@ -71,7 +71,7 @@ export default function AIChat() {
       </header>
 
       {/* 聊天区域 */}
-      <div className="h-[calc(100vh-8rem)]">
+      <div className="h-[calc(100vh-3.5rem)]">
         <AIChatBox
           messages={messages.filter(m => m.role !== "system")}
           onSendMessage={handleSendMessage}
@@ -83,8 +83,7 @@ export default function AIChat() {
         />
       </div>
 
-      {/* 底部导航栏 */}
-      <BottomNav />
+
     </div>
   );
 }
