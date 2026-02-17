@@ -145,17 +145,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#A80000' }}>
-      {/* 顶部返回按钮 */}
-      <header className="absolute top-0 left-0 right-0 p-4 z-10">
-        <Link href="/">
-          <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
-            <ArrowLeft className="w-6 h-6 text-white" />
-          </button>
-        </Link>
-      </header>
-
       {/* 主内容区域 */}
-      <main className="flex-1 flex items-center justify-center px-6 py-20">
+      <main className="flex-1 flex flex-col px-6 pt-8">
         <div className="w-full max-w-md">
           {/* 登录/注册卡片 */}
           <div className="bg-white rounded-3xl p-6 shadow-2xl">
@@ -367,10 +358,10 @@ export default function Login() {
             )}
           </div>
 
-          {/* 底部Logo */}
-          <div className="mt-12 text-center">
+          {/* 底部Logo - 去掉白色背景，融入红色背景 */}
+          <div className="flex-1 flex items-center justify-center mt-12">
             <div 
-              className="inline-block cursor-pointer"
+              className="cursor-pointer"
               onMouseDown={handlePressStart}
               onMouseUp={handlePressEnd}
               onMouseLeave={handlePressEnd}
@@ -382,7 +373,8 @@ export default function Login() {
               <img 
                 src="/maidong-hyy.png" 
                 alt="脉动" 
-                className="h-16 opacity-80 hover:opacity-100 transition-opacity"
+                className="h-20 opacity-70 hover:opacity-90 transition-opacity"
+                style={{ filter: 'brightness(0) invert(1)' }}
               />
             </div>
           </div>
