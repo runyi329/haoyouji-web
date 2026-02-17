@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { trpc } from "@/lib/trpc";
+import "@/styles/avatar-glow.css";
 import { blobToBase64, compressAvatar } from "@/utils/imageUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,6 +156,9 @@ export default function Profile() {
   
   // 获取当前用户积分
   const { data: pointsData } = trpc.pointSystem.getMyPoints.useQuery();
+
+  // 获取用户股权数据（用于显示节点等级光环）
+  const { data: equityData } = trpc.equity.getMyEquity.useQuery();
 
   // 获取用户功能顺序配置
   const { data: favoritesData, refetch: refetchFavorites } = trpc.profileFeatures.getFavorites.useQuery();
@@ -437,7 +441,12 @@ export default function Profile() {
         <div className="flex items-center gap-4">
           {/* 头像 */}
           <div className="relative group flex-shrink-0">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/30 shadow-lg">
+            <div className={`w-16 h-16 rounded-full overflow-hidden border-2 border-white/30 shadow-lg ${
+              equityData?.details?.promotionStats?.currentLevel === 'standard' || equityData?.details?.promotionStats?.currentLevel === 'standard_user' ? 'avatar-glow-standard' :
+              equityData?.details?.promotionStats?.currentLevel === 'advanced' || equityData?.details?.promotionStats?.currentLevel === 'advanced_user' ? 'avatar-glow-advanced' :
+              equityData?.details?.promotionStats?.currentLevel === 'super' || equityData?.details?.promotionStats?.currentLevel === 'super_user' ? 'avatar-glow-super' :
+              ''
+            }`}>
               <img
                 src={displayAvatar}
                 alt="用户头像"
