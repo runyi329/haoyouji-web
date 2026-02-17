@@ -47,17 +47,18 @@ export function useVersionCheck() {
           return;
         }
 
-        // 检测到版本号变化，自动刷新页面
+        // 检测到版本号变化，仅记录日志，不自动刷新
         if (currentVersionRef.current !== data.version) {
-          console.log('[VersionCheck] 检测到新版本，准备刷新页面', {
+          console.log('[VersionCheck] 检测到新版本', {
             old: currentVersionRef.current,
             new: data.version,
           });
+          console.log('[VersionCheck] 自动刷新已禁用，请手动刷新页面');
           
-          // 延迟1秒刷新，确保日志输出
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
+          // 暂时禁用自动刷新，避免影响用户体验
+          // setTimeout(() => {
+          //   window.location.reload();
+          // }, 1000);
         }
       } catch (error) {
         console.error('[VersionCheck] 版本检测失败:', error);
