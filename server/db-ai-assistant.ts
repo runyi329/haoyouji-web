@@ -274,28 +274,52 @@ export async function queryWithAI(
   let iteration = 0;
 
   try {
+    console.log('[AI] Starting query with DeepSeek API');
+    console.log('[AI] API Key configured:', apiKey ? 'yes' : 'no');
+    
     while (iteration < maxIterations) {
       iteration++;
+      console.log(`[AI] Iteration ${iteration}/${maxIterations}`);
 
-      const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages,
-          tools,
-          temperature: 0.7,
-          max_tokens: 2000,
-        }),
-      });
+      // 添加超时控制
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("DeepSeek API error:", errorText);
-        throw new Error(`DeepSeek API error: ${response.status}`);
+      try {
+        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages,
+            tools,
+            temperature: 0.7,
+            max_tokens: 2000,
+          }),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("[AI] DeepSeek API error:", {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`DeepSeek API 错误 (${response.status}): ${errorText.substring(0, 100)}`);
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.error('[AI] Request timeout after 30 seconds');
+          throw new Error('AI请求超时，请稍后重试');
+        }
+        throw fetchError;
       }
 
       const data = await response.json();
@@ -414,9 +438,22 @@ export async function queryWithAI(
 
     // 如果达到最大迭代次数，返回错误
     throw new Error("AI调用次数过多，请简化您的问题");
-  } catch (error) {
-    console.error("AI query error:", error);
-    throw new Error("AI查询失败，请稍后重试");
+  } catch (error: any) {
+    console.error("[AI] Query error:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // 返回更友好的错误信息
+    if (error.message.includes('DEEPSEEK_API_KEY')) {
+      throw error; // 保留原始错误信息
+    }
+    if (error.message.includes('超时')) {
+      throw error; // 保留超时错误信息
+    }
+    
+    throw new Error(`AI查询失败: ${error.message}`);
   }
 }
 
