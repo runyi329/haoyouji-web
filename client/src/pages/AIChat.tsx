@@ -54,7 +54,7 @@ export default function AIChat() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative shadow-2xl">
+    <div className="h-screen bg-gray-50 max-w-md mx-auto relative shadow-2xl overflow-hidden flex flex-col">
       {/* 顶部标题栏 */}
       <header className="bg-gradient-to-br from-[#A80000] to-[#d44] sticky top-0 z-10 shadow-sm">
         <div className="px-4 py-3 flex items-center">
@@ -70,7 +70,7 @@ export default function AIChat() {
       </header>
 
       {/* 聊天区域 */}
-      <div className="h-[calc(100vh-3.5rem)]">
+      <div className="flex-1 overflow-hidden">
         <AIChatBox
           messages={messages}
           onSendMessage={handleSendMessage}
