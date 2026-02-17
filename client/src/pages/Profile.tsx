@@ -428,7 +428,7 @@ export default function Profile() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="bg-gray-50 pb-24 max-w-md mx-auto relative shadow-2xl">
       {/* 顶部用户信息卡片 */}
       <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6">
         {/* 返回按钮 */}
