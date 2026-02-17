@@ -1,83 +1,114 @@
-/* 等级文字光线流动动画 - 纯红金配色 */
+/* 等级文字 - 红色底色 + 金色光线滚动 */
 
-/* 标准用户/标准节点 - 纯金色光线 */
+/* 标准用户/标准节点 */
 .level-text-standard {
+  color: #A80000;
+  position: relative;
   background: linear-gradient(
     90deg,
-    #B8860B 0%,
-    #DAA520 25%,
+    transparent 0%,
+    transparent 40%,
     #FFD700 50%,
-    #DAA520 75%,
-    #B8860B 100%
+    transparent 60%,
+    transparent 100%
   );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: shimmer-standard 3s ease-in-out infinite;
+  animation: gold-shine-standard 3s ease-in-out infinite;
 }
 
-@keyframes shimmer-standard {
+.level-text-standard::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #A80000;
+  z-index: -1;
+}
+
+@keyframes gold-shine-standard {
   0%, 100% {
-    background-position: 0% 50%;
+    background-position: -100% 0;
   }
   50% {
-    background-position: 100% 50%;
+    background-position: 200% 0;
   }
 }
 
-/* 高级用户/高级节点 - 红金混合光线 */
+/* 高级用户/高级节点 */
 .level-text-advanced {
+  color: #A80000;
+  position: relative;
   background: linear-gradient(
     90deg,
-    #B8860B 0%,
-    #DAA520 20%,
-    #DC143C 40%,
+    transparent 0%,
+    transparent 35%,
     #FFD700 50%,
-    #DC143C 60%,
-    #DAA520 80%,
-    #B8860B 100%
+    transparent 65%,
+    transparent 100%
   );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: shimmer-advanced 2.5s ease-in-out infinite;
+  animation: gold-shine-advanced 2.5s ease-in-out infinite;
 }
 
-@keyframes shimmer-advanced {
+.level-text-advanced::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #A80000;
+  z-index: -1;
+}
+
+@keyframes gold-shine-advanced {
   0%, 100% {
-    background-position: 0% 50%;
+    background-position: -100% 0;
   }
   50% {
-    background-position: 100% 50%;
+    background-position: 200% 0;
   }
 }
 
-/* 超级用户/超级节点 - 深红金渐变光线 */
+/* 超级用户/超级节点 */
 .level-text-super {
+  color: #A80000;
+  position: relative;
   background: linear-gradient(
     90deg,
-    #8B0000 0%,
-    #A80000 15%,
-    #DC143C 30%,
-    #FFD700 50%,
-    #DC143C 70%,
-    #A80000 85%,
-    #8B0000 100%
+    transparent 0%,
+    transparent 30%,
+    #FFD700 45%,
+    #FFFACD 50%,
+    #FFD700 55%,
+    transparent 70%,
+    transparent 100%
   );
   background-size: 200% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: shimmer-super 2s ease-in-out infinite;
+  animation: gold-shine-super 2s ease-in-out infinite;
 }
 
-@keyframes shimmer-super {
+.level-text-super::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #A80000;
+  z-index: -1;
+}
+
+@keyframes gold-shine-super {
   0%, 100% {
-    background-position: 0% 50%;
+    background-position: -100% 0;
   }
   50% {
-    background-position: 100% 50%;
+    background-position: 200% 0;
   }
 }
