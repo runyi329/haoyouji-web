@@ -1,5 +1,5 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "forceUpdateUntil": "2026-02-18T23:59:59+08:00",
   "comment": "设置forceUpdateUntil为ISO时间字符串（如'2026-02-18T23:59:59+08:00'）以启用临时强制更新，设置为null则禁用"
 }
