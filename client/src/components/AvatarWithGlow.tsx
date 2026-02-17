@@ -13,6 +13,9 @@ export const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({
   nodeLevel,
   className = "w-16 h-16"
 }) => {
+  // 临时测试：强制显示标准节点光环
+  const testLevel = 'standard';
+  console.log('AvatarWithGlow rendered, nodeLevel:', nodeLevel, 'testLevel:', testLevel);
   // 根据节点等级确定光环样式
   const getGlowStyle = (): React.CSSProperties => {
     const baseStyle: React.CSSProperties = {
@@ -23,7 +26,10 @@ export const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({
       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
     };
 
-    if (nodeLevel === 'standard' || nodeLevel === 'standard_user') {
+    // 使用testLevel进行测试
+    const level = testLevel || nodeLevel;
+
+    if (level === 'standard' || level === 'standard_user') {
       // 标准节点 - 金色光环
       return {
         ...baseStyle,
@@ -34,7 +40,7 @@ export const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({
         `,
         animation: 'glow-breathe-standard 3s ease-in-out infinite',
       };
-    } else if (nodeLevel === 'advanced' || nodeLevel === 'advanced_user') {
+    } else if (level === 'advanced' || level === 'advanced_user') {
       // 高级节点 - 橙红色双层光环
       return {
         ...baseStyle,
@@ -46,7 +52,7 @@ export const AvatarWithGlow: React.FC<AvatarWithGlowProps> = ({
         `,
         animation: 'glow-breathe-advanced 2.5s ease-in-out infinite',
       };
-    } else if (nodeLevel === 'super' || nodeLevel === 'super_user') {
+    } else if (level === 'super' || level === 'super_user') {
       // 超级节点 - 彩虹渐变光环
       return {
         ...baseStyle,
