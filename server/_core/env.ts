@@ -11,6 +11,8 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
+  qichachaAppKey: process.env.QICHACHA_APP_KEY ?? "",
+  qichachaSecretKey: process.env.QICHACHA_SECRET_KEY ?? "",
 };
 
 // 启动时调试日志
