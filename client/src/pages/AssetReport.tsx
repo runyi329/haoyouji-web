@@ -566,7 +566,7 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-2">先进的估值算法——AI驱动的实时价值计算</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                我们与全球顶尖的数据科学家合作，独创了一套基于Web3理念的动态估值引擎。该引擎融合了人工智能、拓扑数据分析与实时折现模型，确保每一份贡献都能被精准量化。
+                我们与全球顶尖的数据公司合作，独创了一套基于Web3理念的动态估值引擎。该引擎融合了人工智能、拓扑数据分析与实时折现模型，确保每一份贡献都能被精准量化。
               </p>
               <p className="font-bold text-gray-900">1. 从“线性加法”到“拓扑指数”的跃迁</p>
               <p>
