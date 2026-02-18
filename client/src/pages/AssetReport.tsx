@@ -853,6 +853,113 @@ function ListItem({
           </div>
         </div>
       )
+    },
+    {
+      id: 6,
+      title: "人脉做减法，收入做乘法",
+      tag: "新",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3">
+              大多数人以为，人脉越多越好。但真相是：您的社交网络可能正在被99%的"水分"稀释。
+            </p>
+            <p>
+              就像牛奶提纯一样，真正的价值提升，不在于"加水扩张"，而在于"脱水提纯"。
+            </p>
+          </div>
+
+          {/* 牛奶提纯实验 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">一、 一个挑战直觉的数学实验：牛奶提纯</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                假设您手头有 100 斤普通牛奶，经检测，其中的核心营养成分（蛋白质）占比为 1%，其余 99 斤全是水分。
+              </p>
+              <p>
+                现在，您想通过蒸发水分的方式进行"提纯"，让蛋白质的含量占比提升到 2%。
+              </p>
+              <p className="font-semibold text-gray-900 mt-3">
+                请问：您需要蒸发掉多少水分？
+              </p>
+              <ul className="list-disc list-inside space-y-1 mt-2">
+                <li><strong>您的直觉：</strong> 蛋白质只提升了 1%，蒸发掉 1 斤水左右吧？</li>
+                <li><strong>数学事实：</strong> 为了让浓度翻倍，您必须蒸发掉 <span className="text-[#A80000] font-bold">50 斤</span> 水！整整一半！</li>
+              </ul>
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-3">
+                <p className="text-sm text-gray-700">
+                  <strong>逻辑真相：</strong> 当蛋白质占比从 1% 提升到 2% 时，意味着干物质与水分的比例从 1:99 变成了 1:49。为了维持这个比例，总重量必须从 100 斤减半到 50 斤。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 社交真相 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">二、 社交真相：您的人脉系统里有多少"水分"？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                大多数人的朋友圈，就像那 100 斤还没提纯的淡奶：
+              </p>
+              <ul className="list-disc list-inside space-y-2 mt-2">
+                <li>
+                  <strong>传统模式（加水社交）：</strong> 当别人向您炫耀"人脉过千"时，他们实际上是在做最没效率的事——往牛奶里不停地加水。看似总量庞大，实则核心价值被稀释到了极致。
+                </li>
+                <li>
+                  <strong>身价瓶颈：</strong> 由于"邓巴数"限制，您的精力被 99% 的无效水分（点赞之交、路人流量）耗尽，导致那核心的 1% 价值根本无法显现。
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 脉动网的提纯 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">三、 脉动网：您社交资产的"高温离心机"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                脉动网不要求您每天去拼命社交，我们只要求您做一个 1% 的小行动：
+              </p>
+              <ul className="list-disc list-inside space-y-2 mt-2">
+                <li>
+                  <strong>小行动（脱水）：</strong> 每天花 5 分钟，通过脉动网为您最核心的 1-2% 关系录入精准标签。
+                </li>
+                <li>
+                  <strong>大重组（提纯）：</strong> 这个微小的动作，本质上是在帮您的社交网络进行"脱水"。虽然您的社交规模精炼了（聚焦在核心的 150 人黄金圈），但因为核心价值浓度翻倍，您整个人脉资产包的"身价"也随之翻倍。
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 结论 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">四、 结论：身价提升的秘密，是"提纯"而非"扩张"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <ul className="list-disc list-inside space-y-2">
+                <li>
+                  <strong>脉动逻辑：</strong> 我们提供一套共享协议。您录入的那 1% 高浓度标签，就像提纯后的"精乳"，在平台的放大作用下，其触达价值和资产分红，远超那 100 斤兑水的平庸流量。
+                </li>
+                <li>
+                  <strong>我们的建议：</strong> 别再做"加水"的勤奋者。在脉动网，做一个懂得提纯、掌握核心资产的真正赢家。
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* 配套海报 */}
+          <div className="mt-4">
+            <div className="text-xs text-gray-500 mb-2">点击查看大图</div>
+            <div className="relative">
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/LCDRnxTTlZoqtsgY.jpg" 
+                alt="人脉做减法收入做乘法海报" 
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/LCDRnxTTlZoqtsgY.jpg")}
+              />
+            </div>
+          </div>
+        </div>
+      )
     }
   ];
 
