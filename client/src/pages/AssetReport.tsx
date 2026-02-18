@@ -216,27 +216,7 @@ export default function AssetReport() {
       tag: "新",
       content: (
         <div className="space-y-4">
-          {/* 副标题 */}
-          <div className="text-sm text-gray-700 leading-relaxed">
-            <p className="mb-3 font-bold text-gray-900">
-              为什么1890万老师中，只有懂“平台杠杆”的人能实现财富跃迁？
-            </p>
-          </div>
-
-          {/* 一个残酷的对比 */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-gray-900 mb-2">一个残酷的对比</div>
-            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-              <p>
-                抖音英语老师雪梨，曾在线下教育机构工作8年。线下小班教学，每天最多触达20-30个学生。2020年转型线上平台后，通过微信视频号和抖音发布教学内容，如今拥有<span className="font-bold text-[#800000]">560万粉丝</span>，单场直播触达<span className="font-bold text-[#800000]">2.3万人</span>。即使每个课程只卖99元，一个晚上也能轻松收入过百万。
-              </p>
-              <p className="pt-2 font-bold text-[#800000]">
-                核心差异：线下一天触达20人，线上一场触达2.3万人——触达能力提升超1000倍。决定收入上限的，不是其他老师不会教，而是触达人数。
-              </p>
-            </div>
-          </div>
-
-          {/* 你的人脉正在“折旧” */}
+          {/* 你的人脉正在"折旧" */}
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="font-bold text-gray-900 mb-2">你的人脉正在“折旧”</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
@@ -261,6 +241,19 @@ export default function AssetReport() {
               </div>
               <p className="pt-2 font-bold text-[#800000]">
                 问题本质：不是你的人脉不够多，而是你的触达能力太有限。
+              </p>
+            </div>
+          </div>
+
+          {/* 一个真实的案例 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">一个真实的案例</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                抖音英语老师雪梨，曾在线下教育机构工作8年。线下小班教学，每天最多触达20-30个学生。2020年转型线上平台后，通过微信视频号和抖音发布教学内容，如今拥有<span className="font-bold text-[#800000]">560万粉丝</span>，单场直播触达<span className="font-bold text-[#800000]">2.3万人</span>。即使每个课程只卖99元，一个晚上也能轻松收入过百万。
+              </p>
+              <p className="pt-2 font-bold text-[#800000]">
+                核心差异：线下一天触达20人，线上一场触达2.3万人——触达能力提升超1000倍。决定收入上限的，不是其他老师不会教，而是触达人数。
               </p>
             </div>
           </div>
