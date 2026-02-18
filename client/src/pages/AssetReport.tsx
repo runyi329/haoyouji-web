@@ -212,8 +212,127 @@ export default function AssetReport() {
     },
     {
       id: 2,
-      title: "价值对标：为什么现在是最佳入场时机？",
+      title: "价值不在于“拥有”，而在于“触达”",
       tag: "新",
+      content: (
+        <div className="space-y-4">
+          {/* 副标题 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3 font-bold text-gray-900">
+              为什么1890万老师中，只有懂“平台杠杆”的人能实现财富跃迁？
+            </p>
+          </div>
+
+          {/* 一个残酷的真相 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">一个残酷的真相</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                全国有1890万名教师，但只有极少数人实现了财富自由。差距不在于教学水平，而在于对“价值触达”的理解。
+              </p>
+              <div className="bg-white p-3 rounded space-y-2">
+                <div>
+                  <span className="font-bold text-gray-900">传统英语老师的困境：</span>
+                  <span className="text-gray-700">在线下开私教班，每课200元。即使教学质量再好，也受限于体力、时间和地理位置。一天最多教10个学生，月收入上限6万元。这是典型的“体力变现”模式——你的价值被困在教室的四堵墙内。</span>
+                </div>
+                <div>
+                  <span className="font-bold text-gray-900">平台型教师的突破：</span>
+                  <span className="text-gray-700">将同样的课程打包成99元的数字产品，通过平台触达全网。即使教学效果只有线下的一半，但因为触达了100万人，总价值达到9900万元。这就是“触达变现”的威力。</span>
+                </div>
+              </div>
+              <p className="pt-2 font-bold text-[#800000]">
+                核心差异：决定财富上限的，不是你的单次服务质量，而是你被触达的人数。
+              </p>
+            </div>
+          </div>
+
+          {/* 你的人脉正在“折旧” */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">你的人脉正在“折旧”</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                很多人热衷于扩展人脉，微信好友动辄上千。但科学研究告诉我们一个残酷的事实：
+              </p>
+              <div className="bg-white p-3 rounded space-y-2">
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-gray-900">邓巴数限制：</span>
+                    <span className="text-gray-700">人类大脑只能有效维护约150个深度关系。</span>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-gray-900">现实困境：</span>
+                    <span className="text-gray-700">你有2000个微信好友，但90%的人常年不联系。他们躺在你的通讯录里，既不产生价值，还在随时间贬值。这些“沉睡的人脉”就像银行里的死钱，毫无收益。</span>
+                  </div>
+                </div>
+              </div>
+              <p className="pt-2 font-bold text-[#800000]">
+                问题本质：不是你的人脉不够多，而是你的触达能力太有限。
+              </p>
+            </div>
+          </div>
+
+          {/* 脉动的解决方案 */}
+          <div className="bg-[#800000] p-4 rounded-lg">
+            <div className="font-bold text-white mb-3">脉动的解决方案：让人脉资产“核裂变”</div>
+            <div className="text-sm text-white/90 leading-relaxed space-y-3">
+              <p>
+                我们不要求你增加人脉数量，我们只帮你提高触达效率。通过三大核心机制，让你的存量人脉产生指数级价值：
+              </p>
+              <div className="space-y-3">
+                <div className="bg-white/10 p-3 rounded">
+                  <div className="font-bold text-[#FFA500] mb-1">1. 好友共享（流量杠杆）</div>
+                  <p className="text-white/90 mb-2">
+                    你手里的人脉通过平台共享给有需要的人。就像老师的录播课，一份资源可以卖给全网。你的人脉每被触达一次，你就产生一次价值回报。
+                  </p>
+                  <div className="bg-white/10 p-2 rounded text-xs">
+                    <span className="font-bold text-[#FFA500]">举例：</span>
+                    <span className="text-white/90">你认识一位资深律师，平时只能帮你自己。但通过脉动，这位律师的信息被100个有法律需求的人触达，你从中获得触达收益。律师获得客户，需求方解决问题，你获得回报——三方共赢。</span>
+                  </div>
+                </div>
+                <div className="bg-white/10 p-3 rounded">
+                  <div className="font-bold text-[#FFA500] mb-1">2. 分布式管理（数字资产化）</div>
+                  <p className="text-white/90">
+                    利用系统代替大脑，打破“邓巴数”限制。你为每个好友添加的标签（行业、技能、资源），都是在将人脉“资产化”。系统会自动帮你匹配需求，让人脉在平台生态中自动产生价值。
+                  </p>
+                </div>
+                <div className="bg-white/10 p-3 rounded">
+                  <div className="font-bold text-[#FFA500] mb-1">3. AI智能触达</div>
+                  <p className="text-white/90">
+                    AI像24小时在线的助理，帮你进行精准匹配与社交维护。你无需亲自社交，AI帮你完成从“认识”到“成交”的触达闭环。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 最后的思考 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">最后的思考</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                2025年，全国有1890万名教师，老师并不稀缺。稀缺的是能触达百万人的“共享节点”。
+              </p>
+              <p>
+                同理：拥有人脉并不稀缺，稀缺的是<span className="font-bold text-[#800000]">“让人脉被全网触达”的能力</span>。
+              </p>
+              <p className="pt-2 border-t border-gray-200">
+                在脉动平台，你无需成为社交达人。只要认真维护现有的社交圈，通过我们的“共享引擎”，你的存量人脉将通过触达产生不可估量的指数级收益。
+              </p>
+              <p className="font-bold text-[#800000] text-center pt-2">
+                加入脉动，从“拥有者”变成“触达者”。
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 4,
+      title: "价值对标：为什么现在是最佳入场时机？",
       content: (
         <div className="space-y-4">
           {/* 对标表格 */}
@@ -285,7 +404,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 3,
+      id: 5,
       title: "股价增值原理：您的资产如何持续升值？",
       content: (
         <div className="space-y-4">
@@ -336,7 +455,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 4,
+      id: 6,
       title: "确权保障：您的资产如何得到保护？",
       content: (
         <div className="space-y-3 text-sm">
@@ -370,12 +489,10 @@ export default function AssetReport() {
             </div>
           </div>
         </div>
-      )
-    },
+      )    },
     {
-      id: 5,
-      title: "立即行动：如何开始迁移数据？",
-      content: (
+      id: 7,
+      title: "立即行动：如何开始经营您的人脉资产？",    content: (
         <div className="space-y-4">
           <div className="space-y-3 text-sm">
             <div className="flex items-start space-x-2">
