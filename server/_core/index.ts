@@ -92,6 +92,11 @@ async function startServer() {
   // Ledger export router
   const ledgerExportModule = await import('../ledger-export.js');
   app.use(ledgerExportModule.default);
+  // Valuation management routers
+  const valuationModule = await import('../routes/valuation.js');
+  app.use('/api/valuation', valuationModule.default);
+  const adminValuationModule = await import('../routes/admin/valuation.js');
+  app.use('/api/admin/valuation', adminValuationModule.default);
   // tRPC API
   app.use(
     "/api/trpc",

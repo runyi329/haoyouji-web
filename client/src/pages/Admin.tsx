@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import ValuationManagement from "./admin/ValuationManagement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -303,6 +304,10 @@ export default function Admin() {
             <TabsTrigger value="equity" className="text-xs sm:text-sm">
               <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
               股权管理
+            </TabsTrigger>
+            <TabsTrigger value="valuation" className="text-xs sm:text-sm">
+              <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
+              市值管理
             </TabsTrigger>
           </TabsList>
 
@@ -722,6 +727,9 @@ export default function Admin() {
                 </Button>
               </Link>
             </Card>
+          </TabsContent>
+          <TabsContent value="valuation">
+            <ValuationManagement />
           </TabsContent>
         </Tabs>
       </main>
