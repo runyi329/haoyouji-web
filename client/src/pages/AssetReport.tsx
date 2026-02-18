@@ -216,9 +216,9 @@ export default function AssetReport() {
       tag: "新",
       content: (
         <div className="space-y-4">
-          {/* 你的人脉正在"折旧" */}
+          {/* 你的人脉正在"沉睡" */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-gray-900 mb-2">你的人脉正在“折旧”</div>
+            <div className="font-bold text-gray-900 mb-2">你的人脉正在"沉睡"</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 很多人热衷于扩展人脉，微信好友动辄上千。但科学研究告诉我们一个残酷的事实：
