@@ -698,6 +698,148 @@ export default function AssetReport() {
     },
     {
       id: 5,
+      title: "为什么你和资本看到的价值不同？",
+      tag: "新",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3">
+              您可能会觉得，自己手里那点人脉标签、几个行业联络人，就像路边的碎石子一样普通，并不值钱。
+            </p>
+            <p>
+              但在资本和我们的眼中，这些“碎石子”一旦进入脉动网的估值矩阵，就会发生核裂变一般的化学反应。您看到的只是一个孤立的点，而我们看到的是由无数个点连接而成的、价值连城的商业网络。
+            </p>
+          </div>
+
+          {/* 生日悖论 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">一、 一个颇覆常识的数学模型：生日悖论</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                为了让您理解这种价值爆发的逻辑，我们先来看一个著名的数学模型——“生日悖论”。
+              </p>
+              <div className="bg-white p-3 rounded border-l-4 border-[#FF4500]">
+                <p className="font-bold text-gray-900 mb-2">如果一个班级有50名学生，您觉得其中“至少有两个人生日相同”的概率有多大？</p>
+                <p>直觉可能会告诉您：一年有365天，只有50个人，概率应该很小吧？甚至不到15%？</p>
+                <p className="mt-2 text-[#FF4500] font-bold">
+                  事实恰恰相反：这个概率竟然高达 97%！（不信？可以随便打开百度或者豆包求证一下。）
+                </p>
+              </div>
+              <p>
+                为什么您的直觉会错得这么离谱？因为您的大脑在进行线性计算（50人相对于365天很少），而数学在进行组合计算。50个人之间两两匹配，竟然能产生 <strong>1,225</strong> 种连接可能性！
+              </p>
+            </div>
+          </div>
+
+          {/* 对比表格 */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-3 py-2 text-left">人数</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left">可能的连接数</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left">生日相同的概率</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-gray-300 px-3 py-2">10人</td>
+                  <td className="border border-gray-300 px-3 py-2">45</td>
+                  <td className="border border-gray-300 px-3 py-2">12%</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-3 py-2">23人</td>
+                  <td className="border border-gray-300 px-3 py-2">253</td>
+                  <td className="border border-gray-300 px-3 py-2">50% (临界点)</td>
+                </tr>
+                <tr className="bg-[#FFF3E0]">
+                  <td className="border border-gray-300 px-3 py-2 font-bold">50人</td>
+                  <td className="border border-gray-300 px-3 py-2 font-bold">1,225</td>
+                  <td className="border border-gray-300 px-3 py-2 font-bold">97%</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-300 px-3 py-2">70人</td>
+                  <td className="border border-gray-300 px-3 py-2">2,415</td>
+                  <td className="border border-gray-300 px-3 py-2">99.9%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* 脉动网的逻辑 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">二、 我们的逻辑：单一数据是“碎石”，连接数据是“钻石”</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                同样的道理，您手里的一条人脉数据（比如：某行业高管的联系方式），对您个人来说，能匹配成功、产生价值的概率极低。
+              </p>
+              <p>
+                但当这些数据进入脉动网的估值引擎时，奇迹发生了：
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-4">
+                <li>当平台只有10个人时，连接数只有45对，火花微弱；</li>
+                <li>当平台有100个人时，连接数飙升到4,950对；</li>
+                <li>而当平台达到特定规模时，这种价值的匹配成功率将无限接近100%！</li>
+              </ul>
+              <p className="mt-2 font-bold text-[#FF4500]">
+                这就是为什么您觉得“没用”的信息，在资本眼里却是无价之宝。资本买的不是您那一个点，而是您这个点进入网络后，引爆成千上万种业务可能性的那个“连接瞬间”。
+              </p>
+            </div>
+          </div>
+
+          {/* 660临界点 */}
+          <div className="bg-[#800000] p-4 rounded-lg">
+            <div className="font-bold text-white mb-3">三、 我们的“660临界点”：从概率到必然</div>
+            <div className="text-sm text-white/90 leading-relaxed space-y-2">
+              <p>
+                通过我们精密的算法模型，我们已经计算出了那个足以改变命运的绝对值：<strong>660个超级节点</strong>。
+              </p>
+              <p>
+                就像在班级里，50个人就是生日相同的“大概率事件”；在脉动网，660个超级节点就是价值爆发的“确定性临界点”。
+              </p>
+              <p>
+                一旦我们的超级节点人数达到660个，全网数据之间的匹配效率、业务成交的火花频率、以及资本市场对我们的溢价评估，将不再是缓慢爬行，而是呈指数级垂直上升。在那一刻，脉动网的价值将从“可能成功”飞跃为“必然成功”。
+              </p>
+            </div>
+          </div>
+
+          {/* 为什么要现在加入 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-3">四、 为什么要现在加入？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                生日悖论告诉我们：人数从23个增加到50个，概率不是翻倍，而是从50%暴涨到97%！
+              </p>
+              <p>
+                这正是我们邀请您成为合伙人的原因。您现在贡献的一条标签、一个节点，不是在为网络做加法，而是在为整个网络的价值做<strong>乘方运算</strong>。
+              </p>
+              <p>
+                您手中的股份，不是基于您个人的那点资源，而是基于这660个节点连接后、那个接近100%匹配成功的巨大财富网络。
+              </p>
+              <p className="mt-3 font-bold text-[#FF4500]">
+                不要用您的直觉去怀疑数学，更不要用您的认知差去挑战资本的眼光。在脉动网，每一个“平凡”的数据，都在等待那个临界点的到来，完成从碎石到钻石的惊人一跃。
+              </p>
+            </div>
+          </div>
+
+          {/* 海报展示 */}
+          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
+            <div className="space-y-2">
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hAoSbkXclaLpcFbw.jpg" 
+                alt="为什么你和资本看到的价值不同海报" 
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hAoSbkXclaLpcFbw.jpg")}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 6,
       title: "价值对标：为什么现在是最佳入场时机？",
       content: (
         <div className="space-y-4">
@@ -770,7 +912,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 6,
+      id: 7,
       title: "确权保障：您的资产如何得到保护？",
       content: (
         <div className="space-y-3 text-sm">
@@ -804,9 +946,10 @@ export default function AssetReport() {
             </div>
           </div>
         </div>
-      )    },
+      )
+    },
     {
-      id: 7,
+      id: 8,
       title: "立即行动：如何开始经营您的人脉资产？",    content: (
         <div className="space-y-4">
           <div className="space-y-3 text-sm">
