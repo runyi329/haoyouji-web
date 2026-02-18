@@ -101,8 +101,106 @@ export default function AssetReport() {
   const listItems: ListItem[] = [
     {
       id: 1,
-      title: "价值对标：为什么现在是最佳入场时机？",
+      title: "数据主权觉醒：你该有的数据价值与权益变革",
       tag: "热",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3">
+              在数字时代，我们每天使用各种App"免费"服务，却不知不觉中成了平台的"商品"。当一个互联网产品免费时，你不是客户，而是被售卖的商品。你的每一次点击、购买和社交互动，都在暗中被标价。
+            </p>
+            <p>
+              以下通过三个真实收购案例，我们来算一笔账，看看你的数据到底价值几何。这些数据不是抽象的概念，而是直接转化为"收购价"的真实价值。
+            </p>
+          </div>
+
+          {/* 案例1：买菜App */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">1. 买菜App：每个用户价值约700元</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                以叮咚买菜和美团的并购案为例（50多亿人民币，最高活跃用户700万），美团收购这类社区电商时，看重的不是送货车队，而是用户背后的家庭消费数据——你买的每一颗白菜、每份食材，都记录了你的生活习惯和消费偏好。
+              </p>
+              <div className="flex items-start space-x-2 bg-white p-3 rounded">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你在App上买菜，本质上是免费为平台贡献了宝贵数据，而平台转手就变现了。你只拿到了白菜，平台却增加了身价。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 案例2：共享出行 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">2. 共享出行：180亿被平台独享</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                摩拜单车被美团180亿人民币收购时，核心资产是用户的出行轨迹——你住在哪个小区、上班去哪里、日常路径如何。这些数据能生成"城市交通热力图"，用于广告精准投放或城市规划。
+              </p>
+              <div className="flex items-start space-x-2 bg-white p-3 rounded">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">你每天顶着太阳骑车，其实是在用体力为平台采集数据，平台却独享180亿收益，而你什么也拿不到。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 案例3：社交通讯 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">3. 社交/通讯工具：每个用户价值约280元</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                参考Facebook（现Meta）以190亿美元收购WhatsApp的案例。这是一个纯通讯软件，没有广告收入，为什么值这么多钱？因为里面藏着数亿用户的社交关系网——你的联系人、聊天频率，都能被用于算法优化和广告。
+              </p>
+              <div className="flex items-start space-x-2 bg-white p-3 rounded">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">折算下来，每个用户只需"呆在里面"，就值约40美元（折合人民币280元）。你的社交数据被平台垄断，你却一无所获。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 脉动方案 */}
+          <div className="bg-[#800000] p-4 rounded-lg">
+            <div className="font-bold text-white mb-3">脉动平台的共赢方案：从被动到主动收益</div>
+            <div className="text-sm text-white/90 leading-relaxed space-y-3">
+              <p>
+                在脉动，我们打破了传统互联网的"数据霸权"。你的数据值钱，这不该由平台独吞。我们主张好友人脉的共享，通过用户互动，实现共赢：
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FFA500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-white">传统平台：</span>
+                    <span className="text-white/90">你贡献数据，平台卖钱，你得0元。</span>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FFA500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-white">脉动平台：</span>
+                    <span className="text-white/90">你维护人脉、积极共享，平台通过AI算法将数据溢价转化为直接价值，直接返还给你。</span>
+                  </div>
+                </div>
+              </div>
+              <p className="pt-2 border-t border-white/20">
+                在脉动，你不是在为别人创造价值，而是在经营自己的"人脉资产包"。每一次点击联络，都是在为你的资产"除尘"和"增值"。加入脉动，觉醒你的数据主权，从"被售卖"转向"主动变现"。
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 2,
+      title: "价值对标：为什么现在是最佳入场时机？",
+      tag: "新",
       content: (
         <div className="space-y-4">
           {/* 对标表格 */}
@@ -174,9 +272,8 @@ export default function AssetReport() {
       )
     },
     {
-      id: 2,
+      id: 3,
       title: "股价增值原理：您的资产如何持续升值？",
-      tag: "新",
       content: (
         <div className="space-y-4">
           {/* 公式展示 */}
@@ -226,7 +323,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 3,
+      id: 4,
       title: "确权保障：您的资产如何得到保护？",
       content: (
         <div className="space-y-3 text-sm">
@@ -263,7 +360,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 4,
+      id: 5,
       title: "立即行动：如何开始迁移数据？",
       content: (
         <div className="space-y-4">
