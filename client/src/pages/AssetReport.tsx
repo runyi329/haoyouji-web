@@ -159,7 +159,10 @@ function ListItem({
       {/* 分割线 */}
       <div className="border-b border-gray-100" />
     </div>
-  export default function AssetReport() {
+  )
+}
+
+export default function AssetReport() {
   const { data: stats, isLoading } = trpc.getStats.useQuery();
   const [expandedId, setExpandedId] = React.useState<number | null>(null);
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
