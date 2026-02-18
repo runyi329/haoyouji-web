@@ -1064,12 +1064,26 @@ export const userProfiles = mysqlTable("user_profiles", {
 	verifiedAt: timestamp("verified_at", { mode: 'string' }),
 	
 	// 支付账号
+	paymentMethod: mysqlEnum("payment_method", ["bank_card", "digital_wallet", "alipay", "wechat"]),
+	
+	// 银行卡
 	bankName: varchar("bank_name", { length: 100 }),
 	bankAccountNumber: varchar("bank_account_number", { length: 50 }),
 	bankAccountName: varchar("bank_account_name", { length: 100 }),
+	
+	// 数字钱包
+	walletNetwork: varchar("wallet_network", { length: 50 }), // TRC20, ERC20等
 	digitalWalletAddress: varchar("digital_wallet_address", { length: 255 }),
+	walletQrCodeUrl: text("wallet_qr_code_url"), // 钱包收款码
+	
+	// 支付宝
 	alipayAccount: varchar("alipay_account", { length: 100 }),
-	wechatAccount: varchar("wechat_account", { length: 100 }),
+	alipayAccountName: varchar("alipay_account_name", { length: 100 }), // 收款人姓名
+	alipayQrCodeUrl: text("alipay_qr_code_url"), // 支付宝收款码
+	
+	// 微信
+	wechatQrCodeUrl: text("wechat_qr_code_url"), // 微信收款码
+	wechatAccountName: varchar("wechat_account_name", { length: 100 }), // 收款人姓名
 	
 	// 时间戳
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
