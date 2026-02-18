@@ -1,25 +1,83 @@
-import { useState } from "react";
-import { AIChatBox, Message } from "@/components/AIChatBox";
+import { useState, useEffect } from "react";
+import { AIChatBox, Message, Session } from "@/components/AIChatBox";
 
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
-import { useLocation } from "wouter";
 
 export default function AIChat() {
-  const [, navigate] = useLocation();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<number | undefined>();
+  const [pointsBalance, setPointsBalance] = useState<number>(0);
+
+  // 获取用户信息（积分余额）
+  const { data: userInfo } = trpc.user.getProfile.useQuery();
+
+  // 获取会话列表
+  const { data: sessionsData, refetch: refetchSessions } = trpc.aiAssistant.getSessions.useQuery({
+    page: 1,
+    limit: 20,
+  });
+
+  // 获取会话详情
+  const sessionDetailQuery = trpc.aiAssistant.getSessionDetail.useQuery(
+    { sessionId: currentSessionId! },
+    { enabled: !!currentSessionId }
+  );
+
+  // 创建新会话
+  const createSessionMutation = trpc.aiAssistant.createSession.useMutation({
+    onSuccess: (data) => {
+      setCurrentSessionId(data.sessionId);
+      setMessages([]);
+      refetchSessions();
+      toast.success("已创建新对话");
+    },
+    onError: (error) => {
+      toast.error(`创建对话失败: ${error.message}`);
+    },
+  });
+
+  // 删除会话
+  const deleteSessionMutation = trpc.aiAssistant.deleteSession.useMutation({
+    onSuccess: () => {
+      refetchSessions();
+      // 如果删除的是当前会话，创建新会话
+      if (currentSessionId) {
+        setCurrentSessionId(undefined);
+        setMessages([]);
+      }
+      toast.success("已删除对话");
+    },
+    onError: (error) => {
+      toast.error(`删除对话失败: ${error.message}`);
+    },
+  });
 
   // AI查询mutation
   const aiQueryMutation = trpc.aiAssistant.query.useMutation({
     onSuccess: (response) => {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: response.answer
+        content: response.answer,
+        tokensUsed: response.tokensUsed,
+        cost: response.cost,
       }]);
+
+      // 更新积分余额
+      if (response.balanceAfter !== undefined) {
+        setPointsBalance(response.balanceAfter);
+      }
+
+      // 更新当前会话ID
+      if (response.sessionId) {
+        setCurrentSessionId(response.sessionId);
+      }
+
+      // 刷新会话列表
+      refetchSessions();
     },
     onError: (error) => {
-      toast.error(`AI助手出错: ${error.message}`);
+      toast.error(`AI查询失败: ${error.message}`);
       // 添加错误消息到聊天记录
       setMessages(prev => [...prev, {
         role: "assistant",
@@ -28,10 +86,27 @@ export default function AIChat() {
     }
   });
 
+  // 更新积分余额
+  useEffect(() => {
+    if (userInfo?.points !== undefined) {
+      setPointsBalance(userInfo.points);
+    }
+  }, [userInfo]);
+
+  // 加载会话详情
+  useEffect(() => {
+    if (sessionDetailQuery.data) {
+      const sessionMessages: Message[] = sessionDetailQuery.data.messages.map(msg => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        tokensUsed: msg.tokens_used,
+        cost: msg.cost,
+      }));
+      setMessages(sessionMessages);
+    }
+  }, [sessionDetailQuery.data]);
+
   const handleSendMessage = (content: string) => {
-    // 先获取当前的历史记录（不包括system消息）
-    const currentHistory = messages.filter(m => m.role !== "system");
-    
     // 添加用户消息到聊天记录
     const newUserMessage: Message = {
       role: "user",
@@ -39,11 +114,25 @@ export default function AIChat() {
     };
     setMessages(prev => [...prev, newUserMessage]);
 
-    // 调用AI助手API，传递当前历史记录
+    // 调用AI助手API
     aiQueryMutation.mutate({
       query: content,
-      history: currentHistory.length > 0 ? currentHistory : undefined
+      sessionId: currentSessionId,
     });
+  };
+
+  const handleSelectSession = (sessionId: number) => {
+    setCurrentSessionId(sessionId);
+  };
+
+  const handleNewSession = () => {
+    createSessionMutation.mutate({ title: "新对话" });
+  };
+
+  const handleDeleteSession = (sessionId: number) => {
+    if (confirm("确定要删除这个对话吗？")) {
+      deleteSessionMutation.mutate({ sessionId });
+    }
   };
 
   const suggestedPrompts = [
@@ -53,36 +142,25 @@ export default function AIChat() {
     "我的人脉网络有多少人？",
   ];
 
+  const sessions: Session[] = sessionsData?.sessions || [];
+
   return (
-    <div className="h-screen bg-gray-50 max-w-md mx-auto relative shadow-2xl overflow-hidden flex flex-col">
-      {/* 顶部标题栏 */}
-      <header className="bg-gradient-to-br from-[#A80000] to-[#d44] sticky top-0 z-10 shadow-sm">
-        <div className="px-4 py-3 flex items-center">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-1 text-white/80 text-sm px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回
-          </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-12">AI助手</h1>
-        </div>
-      </header>
-
-      {/* 聊天区域 */}
-      <div className="flex-1 overflow-hidden">
-        <AIChatBox
-          messages={messages}
-          onSendMessage={handleSendMessage}
-          isLoading={aiQueryMutation.isPending}
-          placeholder="输入消息，例如：帮我查一下腾讯"
-          emptyStateMessage="👋 你好！我是脉动AI助手"
-          suggestedPrompts={suggestedPrompts}
-          height="100%"
-        />
-      </div>
-
-
+    <div className="h-screen bg-white overflow-hidden">
+      <AIChatBox
+        messages={messages}
+        onSendMessage={handleSendMessage}
+        isLoading={aiQueryMutation.isPending}
+        placeholder="输入消息，例如：帮我查一下腾讯的企业信息"
+        emptyStateMessage="👋 你好！我是脉动AI助手"
+        suggestedPrompts={suggestedPrompts}
+        pointsBalance={pointsBalance}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+        onDeleteSession={handleDeleteSession}
+        height="100vh"
+      />
     </div>
   );
 }

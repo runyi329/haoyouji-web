@@ -6098,6 +6098,7 @@ export const appRouter = router({
     query: protectedProcedure
       .input(z.object({
         query: z.string(),
+        sessionId: z.number().optional(),
         history: z.array(z.object({
           role: z.string(),
           content: z.string(),
@@ -6106,8 +6107,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         try {
           const dbAI = await import('./db-ai-assistant');
-          const result = await dbAI.queryWithAI(ctx.user.id, input.query, input.history);
-          return { answer: result.result };
+          const result = await dbAI.queryWithAI(ctx.user.id, input.query, input.sessionId, input.history);
+          return {
+            answer: result.result,
+            tokensUsed: result.tokensUsed,
+            cost: result.cost,
+            balanceAfter: result.balanceAfter,
+            sessionId: result.sessionId,
+          };
         } catch (error: any) {
           console.error('[Router] AI query error:', error.message);
           throw error;
@@ -6159,6 +6166,61 @@ export const appRouter = router({
         }
         const dbAI = await import('./db-ai-assistant');
         return await dbAI.getApiKeysStatus();
+      }),
+    
+    // 获取用户的会话列表
+    getSessions: protectedProcedure
+      .input(z.object({
+        page: z.number().default(1),
+        limit: z.number().default(20),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbSessions = await import('./db-ai-sessions');
+        return await dbSessions.getUserSessions(ctx.user.id, input.page, input.limit);
+      }),
+    
+    // 获取会话详情（包含消息历史）
+    getSessionDetail: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbSessions = await import('./db-ai-sessions');
+        return await dbSessions.getSessionDetail(input.sessionId, ctx.user.id);
+      }),
+    
+    // 创建新会话
+    createSession: protectedProcedure
+      .input(z.object({
+        title: z.string().default('新对话'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbSessions = await import('./db-ai-sessions');
+        const sessionId = await dbSessions.createSession(ctx.user.id, input.title);
+        return { sessionId };
+      }),
+    
+    // 更新会话标题
+    updateSessionTitle: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        title: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbSessions = await import('./db-ai-sessions');
+        await dbSessions.updateSessionTitle(input.sessionId, ctx.user.id, input.title);
+        return { success: true };
+      }),
+    
+    // 删除会话
+    deleteSession: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbSessions = await import('./db-ai-sessions');
+        await dbSessions.deleteSession(input.sessionId, ctx.user.id);
+        return { success: true };
       }),
   }),
   

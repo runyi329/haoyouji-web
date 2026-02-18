@@ -15,6 +15,17 @@ import {
   setContactReferrer,
   queryCompanyInfo,
 } from "./ai-tools";
+import {
+  createSession,
+  saveMessage,
+  autoGenerateSessionTitle,
+  getSessionHistory,
+} from "./db-ai-sessions";
+import {
+  getUserPoints,
+  deductPoints,
+  calculateAICost,
+} from "./db-points";
 
 /**
  * 使用AI查询人脉信息（支持Function Calling）
@@ -26,13 +37,38 @@ import {
 export async function queryWithAI(
   userId: number,
   query: string,
+  sessionId?: number,
   history?: Array<{ role: string; content: string }>
-) {
+): Promise<{
+  result: string;
+  tokensUsed: number;
+  cost: number;
+  balanceAfter: number;
+  sessionId: number;
+}> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   
   if (!apiKey) {
     throw new Error("DEEPSEEK_API_KEY 环境变量未配置，请联系管理员配置");
   }
+
+  // 检查用户积分余额
+  const currentBalance = await getUserPoints(userId);
+  if (currentBalance <= 0) {
+    throw new Error("积分余额不足，请充值后继续使用AI助手");
+  }
+
+  // 如果没有提供sessionId，创建新会话
+  let currentSessionId = sessionId;
+  let isNewSession = false;
+  if (!currentSessionId) {
+    currentSessionId = await createSession(userId, "新对话");
+    isNewSession = true;
+    console.log(`[AI] Created new session ${currentSessionId} for user ${userId}`);
+  }
+
+  // 保存用户消息
+  await saveMessage(currentSessionId, "user", query, 0, 0);
 
   // 从数据库获取提示词
   const systemPrompt = await buildSystemPrompt();
@@ -272,6 +308,9 @@ export async function queryWithAI(
 
   let maxIterations = 5; // 最多迭代5次
   let iteration = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let totalTokens = 0;
 
   try {
     console.log('[AI] Starting query with DeepSeek API');
@@ -356,12 +395,48 @@ export async function queryWithAI(
         throw new Error("AI未能生成有效回复");
       }
 
+      // 累积token使用量
+      if (data.usage) {
+        totalPromptTokens += data.usage.prompt_tokens || 0;
+        totalCompletionTokens += data.usage.completion_tokens || 0;
+        totalTokens += data.usage.total_tokens || 0;
+        console.log(`[AI] Iteration ${iteration} usage:`, data.usage);
+      }
+
       messages.push(assistantMessage);
 
       // 如果AI没有调用工具，直接返回结果
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+        const result = assistantMessage.content || "AI未能生成有效回复";
+        
+        // 使用累积的token总量计算费用
+        const cost = calculateAICost(totalPromptTokens, totalCompletionTokens);
+        
+        console.log(`[AI] Total usage - Prompt: ${totalPromptTokens}, Completion: ${totalCompletionTokens}, Total: ${totalTokens}, Cost: ${cost}`);
+        
+        // 扣除积分
+        const balanceAfter = await deductPoints(
+          userId,
+          cost,
+          "ai_message",
+          null,
+          `AI对话消费 (${totalTokens} tokens)`
+        );
+        
+        // 保存AI回复
+        await saveMessage(currentSessionId, "assistant", result, totalTokens, cost);
+        
+        // 如果是新会话，自动生成标题
+        if (isNewSession) {
+          await autoGenerateSessionTitle(currentSessionId, userId, query);
+        }
+        
         return {
-          result: assistantMessage.content || "AI未能生成有效回复",
+          result,
+          tokensUsed: totalTokens,
+          cost,
+          balanceAfter,
+          sessionId: currentSessionId,
         };
       }
 
