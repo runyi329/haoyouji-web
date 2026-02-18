@@ -48,6 +48,14 @@ router.get("/profile", async (req, res) => {
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.userId, userId));
+    
+    console.log("[获取用户资料] userId:", userId);
+    console.log("[获取用户资料] profile:", profile ? {
+      paymentMethod: profile.paymentMethod,
+      bankName: profile.bankName,
+      bankAccountNumber: profile.bankAccountNumber,
+      bankAccountName: profile.bankAccountName
+    } : "null");
 
     // 获取收件地址
     const addresses = await db
@@ -190,6 +198,7 @@ router.post(
 
       // 解析表单数据
       const data = JSON.parse(req.body.data || "{}");
+      console.log("[更新支付账号] 接收到的数据:", data);
       const files = req.files as {
         [fieldname: string]: Express.Multer.File[];
       };
@@ -255,17 +264,34 @@ router.post(
         .from(userProfiles)
         .where(eq(userProfiles.userId, userId));
 
+      console.log("[更新支付账号] 准备更新的数据:", updateData);
+      console.log("[更新支付账号] 现有profile:", existing ? "exists" : "not exists");
+      
       if (existing) {
         await db
           .update(userProfiles)
           .set(updateData)
           .where(eq(userProfiles.userId, userId));
+        console.log("[更新支付账号] 更新成功");
       } else {
         await db.insert(userProfiles).values({
           userId,
           ...updateData,
         });
+        console.log("[更新支付账号] 创建成功");
       }
+      
+      // 验证保存结果
+      const [saved] = await db
+        .select()
+        .from(userProfiles)
+        .where(eq(userProfiles.userId, userId));
+      console.log("[更新支付账号] 保存后的数据:", {
+        paymentMethod: saved.paymentMethod,
+        bankName: saved.bankName,
+        bankAccountNumber: saved.bankAccountNumber,
+        bankAccountName: saved.bankAccountName
+      });
 
       res.json({ 
         success: true,
