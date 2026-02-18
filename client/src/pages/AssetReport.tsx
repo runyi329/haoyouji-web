@@ -520,17 +520,12 @@ export default function AssetReport() {
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="font-bold text-gray-900 mb-2">价值的源泉——用户行为即价值创造</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-              <div className="bg-[#FFF9E6] p-3 rounded border border-[#FFA500]">
-                <div className="flex items-start space-x-2">
-                  <span className="text-[#FFA500] text-lg flex-shrink-0">⚡</span>
-                  <div className="text-xs">
-                    <span className="font-bold text-gray-900">不要小看你的每一次行为！</span>
-                    <span className="text-gray-700">每一次打标签、每一次共享、每一个新好友，都在为整个网络注入价值。网络效应会将你的贡献放大百倍、千倍，直接推高公司估值，而你也将从中获得相应的回报。</span>
-                  </div>
-                </div>
-              </div>
               <p>
-                您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
+                不要小看你的每一次行为！每一次打标签、每一次共享、每一个新好友，都在为整个网络注入价值。网络效应会将你的贡献放大百倍、千倍，直接推高公司估值，而你也将从中获得相应的回报。您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
+              </p>
+              <p className="text-xs">
+                <span className="text-gray-500">相关阅读：</span>
+                <a href="#" className="text-[#800000] underline ml-1" onClick={(e) => { e.preventDefault(); /* 后续添加跳转逻辑 */ }}>生日悖论</a>
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
