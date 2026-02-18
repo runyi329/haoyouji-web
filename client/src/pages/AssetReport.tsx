@@ -488,6 +488,112 @@ export default function AssetReport() {
     },
     {
       id: 4,
+      title: "脉动网的价值估值逻辑",
+      tag: "新",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">我们如何定义“价值”？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                在传统的商业世界里，一家公司的价值通常由其财务报表决定，这是一个相对静态且滞后的过程。然而，我们认为，一个真正具有生命力的网络，其价值应该由全网用户的实时行为共同铸就，如同一个生生不息的“数字生命体”。
+              </p>
+              <p>
+                因此，我们的估值体系不再依赖于过时的年度审计，而是建立在一套先进的、由AI驱动的实时估值模型之上。这确保了公司的每一分价值增长，都与全网用户的每一次有效贡献毫秒级同步。
+              </p>
+            </div>
+          </div>
+
+          {/* 价值的源泉 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">价值的源泉——用户行为即价值创造</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <blockquote className="border-l-4 border-[#800000] pl-4 italic text-gray-600 my-2">
+                “每个人都是一座金矿，关键在于如何挖掘和连接。”
+              </blockquote>
+              <p>
+                您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="p-2 border border-gray-200">用户行为</th>
+                      <th className="p-2 border border-gray-200">对应的价值贡献</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="p-2 border border-gray-200 font-bold">完善人脉标签</td>
+                      <td className="p-2 border border-gray-200">注入“高纯度数据资产”，提升网络信息密度</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 border border-gray-200 font-bold">共享人脉网络</td>
+                      <td className="p-2 border border-gray-200">注入“网络流动性资本”，激活潜在商业机会</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 border border-gray-200 font-bold">邀请新朋友</td>
+                      <td className="p-2 border border-gray-200">注入“原始增量红利”，扩张网络价值边界</td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 border border-gray-200 font-bold">培养活跃节点</td>
+                      <td className="p-2 border border-gray-200">注入“生态繁育能量”，创造价值的二阶增长</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="pt-2">
+                这种机制的核心是强大的<b>网络效应</b>。根据经典的梅特卡夫定律（Metcalfe's Law），一个网络的价值与其节点数的平方成正比。这意味着，每增加一个新用户，带来的价值不是线性的“+1”，而是与其他所有节点建立新连接的指数级爆发。
+              </p>
+            </div>
+          </div>
+
+          {/* 估值算法 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">先进的估值算法——AI驱动的实时价值计算</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                我们与全球顶尖的数据科学家合作，独创了一套基于Web3理念的动态估值引擎。该引擎融合了人工智能、拓扑数据分析与实时折现模型，确保每一份贡献都能被精准量化。
+              </p>
+              <p className="font-bold text-gray-900">1. 从“线性加法”到“拓扑指数”的跃迁</p>
+              <p>
+                我们的AI引擎识别的是全网节点的“拓扑结构”，关心的不只是“有多少人”，更是“这些人如何连接”，这使得估值模型更接近梅特卡夫定律所描述的指数级增长曲线。
+              </p>
+              <p className="font-bold text-gray-900">2. AI驱动的实时行为价值折现</p>
+              <p>
+                系统通过AI实时扫描并分析全网节点的行为数据（如信息熵增益α、网络流动性β、价值握手γ），并将其对网络未来可能产生的现金流，通过算法瞬间折现到当下的总估值中。
+              </p>
+            </div>
+          </div>
+
+          {/* 总结 */}
+          <div className="bg-[#800000] p-4 rounded-lg">
+            <div className="font-bold text-white mb-3">我们是一个利益高度统一的价值共同体</div>
+            <div className="text-sm text-white/90 leading-relaxed">
+              <p>
+                维护人脉，即是增值资产；拓展连接，即是实时加仓。公司实时估值的每一次跳动，都是全网所有节点共同努力的真实回馈。
+              </p>
+            </div>
+          </div>
+
+          {/* 海报展示 */}
+          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
+            <div className="space-y-2">
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oHGzHPCONtyApGMj.jpg" 
+                alt="脉动网的价值估值逻辑海报" 
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oHGzHPCONtyApGMj.jpg")}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 5,
       title: "价值对标：为什么现在是最佳入场时机？",
       content: (
         <div className="space-y-4">
@@ -560,7 +666,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 5,
+      id: 6,
       title: "股价增值原理：您的资产如何持续升值？",
       content: (
         <div className="space-y-4">
@@ -611,7 +717,7 @@ export default function AssetReport() {
       )
     },
     {
-      id: 6,
+      id: 7,
       title: "确权保障：您的资产如何得到保护？",
       content: (
         <div className="space-y-3 text-sm">
@@ -647,7 +753,7 @@ export default function AssetReport() {
         </div>
       )    },
     {
-      id: 7,
+      id: 8,
       title: "立即行动：如何开始经营您的人脉资产？",    content: (
         <div className="space-y-4">
           <div className="space-y-3 text-sm">
