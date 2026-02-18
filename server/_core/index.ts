@@ -97,9 +97,6 @@ async function startServer() {
   app.use('/api/valuation', valuationModule.default);
   const adminValuationModule = await import('../admin-valuation-api.js');
   app.use('/api/admin/valuation', adminValuationModule.default);
-  // Reset points API (temporary)
-  const resetPointsModule = await import('../reset-points-api.js');
-  resetPointsModule.registerResetPointsApi(app);
   // tRPC API
   app.use(
     "/api/trpc",
