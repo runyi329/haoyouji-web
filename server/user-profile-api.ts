@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { users, userProfiles, shippingAddresses } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { uploadImageToCOS } from "./cos-upload";
+import { sdk } from "./_core/sdk";
 
 const router = express.Router();
 
@@ -12,10 +13,10 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(file.originalname.toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    if (extname && mimetype) {
+    if (extname || mimetype) {
       cb(null, true);
     } else {
       cb(new Error("只允许上传图片文件"));
@@ -23,10 +24,40 @@ const upload = multer({
   },
 });
 
-// 获取用户资料
+// ==================== 认证辅助函数 ====================
+
+async function getUserId(req: express.Request): Promise<number | null> {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    return user?.id || null;
+  } catch (error) {
+    console.error("[认证] 获取用户ID失败:", error);
+    return null;
+  }
+}
+
+// 确保 userProfiles 记录存在
+async function ensureProfile(db: any, userId: number) {
+  const [existing] = await db
+    .select()
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId));
+  if (!existing) {
+    await db.insert(userProfiles).values({ userId });
+    const [created] = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, userId));
+    return created;
+  }
+  return existing;
+}
+
+// ==================== 获取用户资料 ====================
+
 router.get("/profile", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -36,29 +67,17 @@ router.get("/profile", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 获取用户基本信息
     const [user] = await db.select().from(users).where(eq(users.id, userId));
-
     if (!user) {
       return res.status(404).json({ error: "用户不存在" });
     }
 
-    // 获取用户扩展资料
     const [profile] = await db
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.userId, userId));
-    
-    console.log("[获取用户资料] userId:", userId);
-    console.log("[获取用户资料] profile:", profile ? {
-      paymentMethod: profile.paymentMethod,
-      bankName: profile.bankName,
-      bankAccountNumber: profile.bankAccountNumber,
-      bankAccountName: profile.bankAccountName
-    } : "null");
 
-    // 获取收件地址
-    const addresses = await db
+    const addressList = await db
       .select()
       .from(shippingAddresses)
       .where(eq(shippingAddresses.userId, userId));
@@ -71,7 +90,7 @@ router.get("/profile", async (req, res) => {
         displayName: user.displayName,
       },
       profile: profile || null,
-      addresses: addresses || [],
+      addresses: addressList || [],
     });
   } catch (error) {
     console.error("[获取用户资料] 错误:", error);
@@ -79,10 +98,11 @@ router.get("/profile", async (req, res) => {
   }
 });
 
-// 更新基本信息
+// ==================== 更新基本信息 ====================
+
 router.post("/profile/basic", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -94,29 +114,16 @@ router.post("/profile/basic", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 更新users表
     await db
       .update(users)
       .set({ displayName, email })
       .where(eq(users.id, userId));
 
-    // 更新或创建userProfiles表
-    const [existing] = await db
-      .select()
-      .from(userProfiles)
+    await ensureProfile(db, userId);
+    await db
+      .update(userProfiles)
+      .set({ phone })
       .where(eq(userProfiles.userId, userId));
-
-    if (existing) {
-      await db
-        .update(userProfiles)
-        .set({ phone })
-        .where(eq(userProfiles.userId, userId));
-    } else {
-      await db.insert(userProfiles).values({
-        userId,
-        phone,
-      });
-    }
 
     res.json({ success: true });
   } catch (error) {
@@ -125,10 +132,11 @@ router.post("/profile/basic", async (req, res) => {
   }
 });
 
-// 更新实名认证
+// ==================== 更新实名认证 ====================
+
 router.post("/profile/verification", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -140,34 +148,20 @@ router.post("/profile/verification", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 检查是否已认证
-    const [existing] = await db
-      .select()
-      .from(userProfiles)
-      .where(eq(userProfiles.userId, userId));
+    const profile = await ensureProfile(db, userId);
 
-    if (existing && existing.verificationStatus === "approved") {
+    if (profile.verificationStatus === "approved") {
       return res.status(400).json({ error: "已通过实名认证，无法修改" });
     }
 
-    // 更新或创建userProfiles表
-    if (existing) {
-      await db
-        .update(userProfiles)
-        .set({
-          realName,
-          idNumber,
-          verificationStatus: "pending",
-        })
-        .where(eq(userProfiles.userId, userId));
-    } else {
-      await db.insert(userProfiles).values({
-        userId,
+    await db
+      .update(userProfiles)
+      .set({
         realName,
-        idNumber,
+        idCardNumber: idNumber,
         verificationStatus: "pending",
-      });
-    }
+      })
+      .where(eq(userProfiles.userId, userId));
 
     res.json({ success: true });
   } catch (error) {
@@ -176,19 +170,92 @@ router.post("/profile/verification", async (req, res) => {
   }
 });
 
-// 更新支付账号（支持文件上传）
+// ==================== 支付账号管理 ====================
+
+// 获取所有已绑定的支付方式
+router.get("/profile/payment", async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    const [profile] = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, userId));
+
+    if (!profile) {
+      return res.json({ payments: {} });
+    }
+
+    // 构建已绑定的支付方式对象
+    const payments: any = {};
+
+    // 银行卡
+    if (profile.bankAccountNumber) {
+      payments.bank_card = {
+        bankName: profile.bankName || "",
+        bankAccountNumber: profile.bankAccountNumber,
+        bankAccountName: profile.bankAccountName || "",
+      };
+    }
+
+    // 数字钱包
+    if (profile.digitalWalletAddress || profile.walletQrCodeUrl) {
+      payments.digital_wallet = {
+        walletNetwork: profile.walletNetwork || "TRC20",
+        digitalWalletAddress: profile.digitalWalletAddress || "",
+        walletQrCodeUrl: profile.walletQrCodeUrl || "",
+      };
+    }
+
+    // 支付宝
+    if (profile.alipayAccount || profile.alipayQrCodeUrl) {
+      payments.alipay = {
+        alipayAccount: profile.alipayAccount || "",
+        alipayAccountName: profile.alipayAccountName || "",
+        alipayQrCodeUrl: profile.alipayQrCodeUrl || "",
+      };
+    }
+
+    // 微信
+    if (profile.wechatQrCodeUrl || profile.wechatAccountName) {
+      payments.wechat = {
+        wechatAccountName: profile.wechatAccountName || "",
+        wechatQrCodeUrl: profile.wechatQrCodeUrl || "",
+      };
+    }
+
+    console.log(`[获取支付信息] userId:${userId}, 已绑定:`, Object.keys(payments));
+
+    res.json({ payments });
+  } catch (error) {
+    console.error("[获取支付信息] 错误:", error);
+    res.status(500).json({ error: "服务器错误" });
+  }
+});
+
+// 保存/更新某种支付方式
 router.post(
-  "/profile/payment",
-  upload.fields([
-    { name: "walletQrCode", maxCount: 1 },
-    { name: "alipayQrCode", maxCount: 1 },
-    { name: "wechatQrCode", maxCount: 1 },
-  ]),
+  "/profile/payment/:type",
+  upload.single("qrcode"),
   async (req, res) => {
     try {
-      const userId = (req as any).user?.id;
+      const userId = await getUserId(req);
       if (!userId) {
         return res.status(401).json({ error: "未登录" });
+      }
+
+      const { type } = req.params;
+      const validTypes = ["bank_card", "digital_wallet", "alipay", "wechat"];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: "无效的支付方式" });
       }
 
       const db = await getDb();
@@ -196,122 +263,123 @@ router.post(
         return res.status(500).json({ error: "数据库连接失败" });
       }
 
+      await ensureProfile(db, userId);
+
       // 解析表单数据
       const data = JSON.parse(req.body.data || "{}");
-      console.log("[更新支付账号] 接收到的数据:", data);
-      const files = req.files as {
-        [fieldname: string]: Express.Multer.File[];
-      };
+      const file = req.file;
 
-      // 上传图片到COS
-      let walletQrCodeUrl: string | undefined;
-      let alipayQrCodeUrl: string | undefined;
-      let wechatQrCodeUrl: string | undefined;
+      console.log(`[保存支付方式:${type}] userId:${userId}, data:`, data, "hasFile:", !!file);
 
-      if (files.walletQrCode && files.walletQrCode[0]) {
-        walletQrCodeUrl = await uploadImageToCOS(
-          files.walletQrCode[0].buffer,
-          "payment-qrcodes"
-        );
+      // 上传收款码图片
+      let qrCodeUrl: string | undefined;
+      if (file) {
+        qrCodeUrl = await uploadImageToCOS(file.buffer, "payment-qrcodes");
+        console.log(`[保存支付方式:${type}] 收款码上传成功:`, qrCodeUrl);
       }
 
-      if (files.alipayQrCode && files.alipayQrCode[0]) {
-        alipayQrCodeUrl = await uploadImageToCOS(
-          files.alipayQrCode[0].buffer,
-          "payment-qrcodes"
-        );
-      }
+      // 根据支付方式类型准备更新数据
+      const updateData: any = {};
 
-      if (files.wechatQrCode && files.wechatQrCode[0]) {
-        wechatQrCodeUrl = await uploadImageToCOS(
-          files.wechatQrCode[0].buffer,
-          "payment-qrcodes"
-        );
-      }
-
-      // 准备更新数据
-      const updateData: any = {
-        paymentMethod: data.paymentMethod,
-      };
-
-      // 根据支付方式添加对应字段
-      if (data.paymentMethod === "bank_card") {
-        updateData.bankName = data.bankName;
-        updateData.bankAccountNumber = data.bankAccountNumber;
-        updateData.bankAccountName = data.bankAccountName;
-      } else if (data.paymentMethod === "digital_wallet") {
-        updateData.walletNetwork = data.walletNetwork;
-        updateData.digitalWalletAddress = data.digitalWalletAddress;
-        if (walletQrCodeUrl) {
-          updateData.walletQrCodeUrl = walletQrCodeUrl;
+      if (type === "bank_card") {
+        updateData.bankName = data.bankName || null;
+        updateData.bankAccountNumber = data.bankAccountNumber || null;
+        updateData.bankAccountName = data.bankAccountName || null;
+      } else if (type === "digital_wallet") {
+        updateData.walletNetwork = data.walletNetwork || "TRC20";
+        updateData.digitalWalletAddress = data.digitalWalletAddress || null;
+        if (qrCodeUrl) {
+          updateData.walletQrCodeUrl = qrCodeUrl;
         }
-      } else if (data.paymentMethod === "alipay") {
-        updateData.alipayAccount = data.alipayAccount;
-        updateData.alipayAccountName = data.alipayAccountName;
-        if (alipayQrCodeUrl) {
-          updateData.alipayQrCodeUrl = alipayQrCodeUrl;
+      } else if (type === "alipay") {
+        updateData.alipayAccount = data.alipayAccount || null;
+        updateData.alipayAccountName = data.alipayAccountName || null;
+        if (qrCodeUrl) {
+          updateData.alipayQrCodeUrl = qrCodeUrl;
         }
-      } else if (data.paymentMethod === "wechat") {
-        updateData.wechatAccountName = data.wechatAccountName;
-        if (wechatQrCodeUrl) {
-          updateData.wechatQrCodeUrl = wechatQrCodeUrl;
+      } else if (type === "wechat") {
+        updateData.wechatAccountName = data.wechatAccountName || null;
+        if (qrCodeUrl) {
+          updateData.wechatQrCodeUrl = qrCodeUrl;
         }
       }
 
-      // 更新或创建userProfiles表
-      const [existing] = await db
-        .select()
-        .from(userProfiles)
+      console.log(`[保存支付方式:${type}] 更新数据:`, updateData);
+
+      await db
+        .update(userProfiles)
+        .set(updateData)
         .where(eq(userProfiles.userId, userId));
 
-      console.log("[更新支付账号] 准备更新的数据:", updateData);
-      console.log("[更新支付账号] 现有profile:", existing ? "exists" : "not exists");
-      
-      if (existing) {
-        await db
-          .update(userProfiles)
-          .set(updateData)
-          .where(eq(userProfiles.userId, userId));
-        console.log("[更新支付账号] 更新成功");
-      } else {
-        await db.insert(userProfiles).values({
-          userId,
-          ...updateData,
-        });
-        console.log("[更新支付账号] 创建成功");
-      }
-      
-      // 验证保存结果
-      const [saved] = await db
-        .select()
-        .from(userProfiles)
-        .where(eq(userProfiles.userId, userId));
-      console.log("[更新支付账号] 保存后的数据:", {
-        paymentMethod: saved.paymentMethod,
-        bankName: saved.bankName,
-        bankAccountNumber: saved.bankAccountNumber,
-        bankAccountName: saved.bankAccountName
-      });
-
-      res.json({ 
+      res.json({
         success: true,
-        urls: {
-          walletQrCodeUrl,
-          alipayQrCodeUrl,
-          wechatQrCodeUrl,
-        }
+        qrCodeUrl: qrCodeUrl || null,
       });
     } catch (error) {
-      console.error("[更新支付账号] 错误:", error);
+      console.error("[保存支付方式] 错误:", error);
       res.status(500).json({ error: "服务器错误" });
     }
   }
 );
 
-// 添加收件地址
+// 删除某种支付方式
+router.delete("/profile/payment/:type", async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+
+    const { type } = req.params;
+    const validTypes = ["bank_card", "digital_wallet", "alipay", "wechat"];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: "无效的支付方式" });
+    }
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    // 根据类型清除对应字段
+    const clearData: any = {};
+
+    if (type === "bank_card") {
+      clearData.bankName = null;
+      clearData.bankAccountNumber = null;
+      clearData.bankAccountName = null;
+    } else if (type === "digital_wallet") {
+      clearData.walletNetwork = null;
+      clearData.digitalWalletAddress = null;
+      clearData.walletQrCodeUrl = null;
+    } else if (type === "alipay") {
+      clearData.alipayAccount = null;
+      clearData.alipayAccountName = null;
+      clearData.alipayQrCodeUrl = null;
+    } else if (type === "wechat") {
+      clearData.wechatAccountName = null;
+      clearData.wechatQrCodeUrl = null;
+    }
+
+    await db
+      .update(userProfiles)
+      .set(clearData)
+      .where(eq(userProfiles.userId, userId));
+
+    console.log(`[删除支付方式:${type}] userId:${userId}`);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[删除支付方式] 错误:", error);
+    res.status(500).json({ error: "服务器错误" });
+  }
+});
+
+// ==================== 收件地址管理 ====================
+
 router.post("/profile/address", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -323,7 +391,6 @@ router.post("/profile/address", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 如果设置为默认地址，先取消其他默认地址
     if (isDefault) {
       await db
         .update(shippingAddresses)
@@ -331,7 +398,6 @@ router.post("/profile/address", async (req, res) => {
         .where(eq(shippingAddresses.userId, userId));
     }
 
-    // 添加新地址
     await db.insert(shippingAddresses).values({
       userId,
       recipientName,
@@ -352,10 +418,9 @@ router.post("/profile/address", async (req, res) => {
   }
 });
 
-// 更新收件地址
 router.put("/profile/address/:id", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -368,7 +433,6 @@ router.put("/profile/address/:id", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 如果设置为默认地址，先取消其他默认地址
     if (isDefault) {
       await db
         .update(shippingAddresses)
@@ -376,7 +440,6 @@ router.put("/profile/address/:id", async (req, res) => {
         .where(eq(shippingAddresses.userId, userId));
     }
 
-    // 更新地址
     await db
       .update(shippingAddresses)
       .set({
@@ -404,10 +467,9 @@ router.put("/profile/address/:id", async (req, res) => {
   }
 });
 
-// 删除收件地址
 router.delete("/profile/address/:id", async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await getUserId(req);
     if (!userId) {
       return res.status(401).json({ error: "未登录" });
     }
@@ -419,7 +481,6 @@ router.delete("/profile/address/:id", async (req, res) => {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    // 删除地址
     await db
       .delete(shippingAddresses)
       .where(
