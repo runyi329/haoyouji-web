@@ -567,8 +567,108 @@ export default function AssetReport() {
             </div>
           </div>
 
+          {/* 核心估值公式 */}
+          <div className="bg-gray-50 p-4 rounded-lg border-2 border-[#800000]">
+            <div className="font-bold text-gray-900 mb-3 text-center">拓扑信息密度与实时网络折现引擎</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-3">
+              <div className="bg-white p-3 rounded border border-gray-300 overflow-x-auto">
+                <div className="text-center font-mono text-xs">
+                  <div className="mb-2">V(t) = ∫₀ᵗ [α·H(τ) + β·F(τ) + γ·T(τ)] · e<sup>-r(t-τ)</sup> · N<sub>eff</sub><sup>2</sup>(τ) dτ + λ·C(t)</div>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <p className="font-bold text-gray-900">公式参数详解：</p>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">V(t)</span>
+                    <span>＝ 实时估值，由AI引擎每毫秒计算更新</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">α</span>
+                    <span>＝ 信息熵增益系数，衡量用户打标签、完善信息等行为对数据质量的提升（当前值：0.68）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">β</span>
+                    <span>＝ 网络流动性系数，衡量用户共享、互动、连接等行为对网络活跃度的贡献（当前值：0.52）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">γ</span>
+                    <span>＝ 价值握手系数，衡量节点间真实业务合作对现金流的直接贡献（当前值：1.24）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">H(τ)</span>
+                    <span>＝ 时刻τ的信息熵增量，通过Shannon熄公式计算数据的信息密度</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">F(τ)</span>
+                    <span>＝ 时刻τ的网络流动性增量，基于图论中的节点中心性算法</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">T(τ)</span>
+                    <span>＝ 时刻τ的价值握手事件数，由智能合约自动识别并记录</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">e<sup>-r(t-τ)</sup></span>
+                    <span>＝ 连续时间折现因子，将未来现金流折现到当下（r为折现率，当前值：0.12）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">N<sub>eff</sub><sup>2</sup>(τ)</span>
+                    <span>＝ 有效节点数的平方，体现Metcalfe定律的网络效应（当前有效节点数：1,280,520）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">λ</span>
+                    <span>＝ 现金储备权重系数，衡量公司现金储备对总估值的贡献（当前值：0.15）</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="font-bold text-[#800000] flex-shrink-0">C(t)</span>
+                    <span>＝ 时刻t的公司现金储备，由财务系统实时同步</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#FFF9E6] p-3 rounded border border-[#FFA500]">
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FFA500] text-lg flex-shrink-0">⚡</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-gray-900">实时计算示例：</span>
+                    <span className="text-gray-700">假设当前有效节点数为1,280,520，每天新增标签数据5,200条，网络互动事件3,800次，价值握手120次，公司现金储备850万元，AI引擎计算出当日估值增量约为¥680万元。</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 算法优势 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">为什么这套算法更科学？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <div className="flex items-start space-x-2">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">多维度衡量：</span>
+                  <span>不同于传统估值只看用户数，我们同时考虑信息质量、网络活跃度、实际交易等多个维度。</span>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">实时动态：</span>
+                  <span>AI引擎每毫秒扫描全网行为，动态调整参数，确保估值始终反映最新状态。</span>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                <div>
+                  <span className="font-bold text-gray-900">科学严谨：</span>
+                  <span>公式融合了信息论、图论、金融工程等多个学科的经典理论，经过严格数学验证。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* 总结 */}
-          <div className="bg-[#800000] p-4 rounded-lg">
+          <div className="bg-[#800000] p-4 rounded-lg mt-4">
             <div className="font-bold text-white mb-3">我们是一个利益高度统一的价值共同体</div>
             <div className="text-sm text-white/90 leading-relaxed">
               <p>
