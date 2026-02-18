@@ -520,9 +520,6 @@ export default function AssetReport() {
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="font-bold text-gray-900 mb-2">价值的源泉——用户行为即价值创造</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-              <blockquote className="border-l-4 border-[#800000] pl-4 italic text-gray-600 my-2">
-                “每个人都是一座金矿，关键在于如何挖掘和连接。”
-              </blockquote>
               <p>
                 您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
               </p>
