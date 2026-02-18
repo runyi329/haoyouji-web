@@ -769,10 +769,10 @@ export default function AssetReport() {
 
           {/* 脉动网的逻辑 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-gray-900 mb-3">二、 我们的逻辑：单一数据是“碎石”，连接数据是“钻石”</div>
+            <div className="font-bold text-gray-900 mb-3">二、 资本的眼里：单一数据是"碎石"，连接数据是"钻石"</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                同样的道理，您手里的一条人脉数据（比如：某行业高管的联系方式），对您个人来说，能匹配成功、产生价值的概率极低。
+                同样的道理，您手里的一条人脉数据（比如：某好友的擅长领域），对您个人来说，能匹配成功、产生价值的概率极低。
               </p>
               <p>
                 但当这些数据进入脉动网的估值引擎时，奇迹发生了：
