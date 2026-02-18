@@ -85,18 +85,15 @@ export default function AssetReport() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 返回按钮 */}
-      <div className="fixed top-4 left-4 z-50">
+      {/* 顶部：红区（Red Zone） - 核心价值主张 */}
+      <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-12 rounded-b-[30px] relative">
+        {/* 返回按钮 - 固定在红色区域内 */}
         <Link href={BASE_URL}>
-          <a className="flex items-center space-x-2 bg-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-            <ArrowLeft className="w-5 h-5 text-[#800000]" />
-            <span className="text-[#800000] font-medium">返回首页</span>
+          <a className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6">
+            <ArrowLeft className="w-5 h-5" />
+            <span className="font-medium">返回</span>
           </a>
         </Link>
-      </div>
-
-      {/* 顶部：红区（Red Zone） - 核心价值主张 */}
-      <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-16 pb-12 rounded-b-[30px]">
         <div className="text-center space-y-4">
           {/* 主标题 */}
           <h1 className="text-2xl font-bold">
