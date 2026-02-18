@@ -209,7 +209,8 @@ export function AIChatBox({
       {/* Input Area */}
       <form
         onSubmit={handleSubmit}
-        className="flex gap-2 p-3 pb-6 bg-white border-t border-gray-200 items-end"
+        className="flex gap-2 p-3 bg-white border-t border-gray-200 items-end"
+        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <Textarea
           ref={textareaRef}
