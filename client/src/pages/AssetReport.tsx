@@ -358,6 +358,135 @@ export default function AssetReport() {
       )
     },
     {
+      id: 3,
+      title: "资本眼里的用户价值：为什么我们的数据价值更高？",
+      tag: "新",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3">
+              在资本市场，一个项目的估值核心，并非仅仅是用户数量，而是其数据资产的**商业厚度**与**网络密度**。相较于传统互联网项目，我们正在构建的商业关系网络，在单用户价值上实现了指数级的提升。
+            </p>
+          </div>
+
+          {/* 维度差异 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">一、维度的差异：从"物理点位"到"商业图谱"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                传统流量型产品，如共享单车或充电宝，其数据本质是低频、浅层的物理轨迹。每个用户只是一个孤立的数据点，商业挖掘潜力有限。
+              </p>
+              <p>
+                与此不同，我们构建的是一张高度结构化的<span className="font-bold text-[#800000]">商业关系图谱</span>。在这里，每一位用户不再是孤立的点，而是连接着上百个高价值商业节点的枢纽。
+              </p>
+              <div className="bg-white p-3 rounded mt-2">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2">对比维度</th>
+                      <th className="text-left py-2">传统流量产品</th>
+                      <th className="text-left py-2">我们的网络</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="py-2 font-bold">数据性质</td>
+                      <td className="py-2">低频、浅层轨迹</td>
+                      <td className="py-2 text-[#800000] font-bold">高频、深层信用</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="py-2 font-bold">资产厚度</td>
+                      <td className="py-2">1用户=1数据点</td>
+                      <td className="py-2 text-[#800000] font-bold">1用户≈100+节点</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-bold">商业价值</td>
+                      <td className="py-2">难以深度挖掘</td>
+                      <td className="py-2 text-[#800000] font-bold">持续收益</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* 密度革命 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">二、密度的革命：百倍杠杆的估值逻辑</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                网络效应理论告诉我们，网络的价值与其节点的连接密度密切相关。高密度的网络能创造更强大的网络效应和防御壁垒。
+              </p>
+              <div className="bg-white p-3 rounded space-y-2">
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-gray-900">低密度数据：</span>
+                    <span className="text-gray-700">在传统模型中，1个用户只产生1个数据点，价值增长是线性的。</span>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
+                  <div>
+                    <span className="font-bold text-gray-900">高密度资产：</span>
+                    <span className="text-gray-700">在我们这里，资产价值由"用户数"与"商业关系节点数"的乘积决定，实现了指数级增长。</span>
+                  </div>
+                </div>
+              </div>
+              <p className="pt-2 font-bold text-[#800000]">
+                这种由高密度连接驱动的价值模型，正是资本市场重新评估我们单用户价值的核心动力。
+              </p>
+            </div>
+          </div>
+
+          {/* 竞争壁垒 */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="font-bold text-gray-900 mb-2">三、竞争壁垒：从"流量红利"到"信用底座"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <p>
+                缺乏数据深度的项目，竞争门槛极低，往往陷入"烧钱换规模"的恶性循环。而我们从第一天起，就在构建一个无法被轻易复制的<span className="font-bold text-[#800000]">高质量商业关系数据库</span>。
+              </p>
+              <div className="bg-white p-3 rounded">
+                <p className="text-gray-700 italic">
+                  这种壁垒的核心在于"真实性"与"排他性"。每一条人脉标签都由用户基于真实的社交链条手动维护，其背后是真实验证的商业信用。
+                </p>
+              </div>
+              <p className="pt-2">
+                我们正在解决商业社会中最昂贵的成本——<span className="font-bold text-[#800000]">信任与链接</span>。当一个网络成为全球商业链接的"信用底座"时，它就构筑了最坚实的竞争壁垒。
+              </p>
+            </div>
+          </div>
+
+          {/* 我们的共同事业 */}
+          <div className="bg-[#800000] p-4 rounded-lg">
+            <div className="font-bold text-white mb-3">我们的共同事业</div>
+            <div className="text-sm text-white/90 leading-relaxed space-y-3">
+              <p>
+                共享单车解决了"行"的问题，估值在百亿级。而我们正在通过高密度的社交资产确权，构建商业社会的"信用引擎"。
+              </p>
+              <p className="pt-2 border-t border-white/20">
+                在这个资本眼里的万亿级赛道上，每一位积极维护人脉标签的用户，不仅是这个高密度资产的贡献者，更是其未来价值的<span className="font-bold text-[#FFA500]">第一批共享者</span>。
+              </p>
+            </div>
+          </div>
+
+          {/* 海报展示 */}
+          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
+            <div className="space-y-2">
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/vpsjLZjwuUasCZks.jpg" 
+                alt="资本眼里的用户价值海报" 
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/vpsjLZjwuUasCZks.jpg')}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 4,
       title: "价值对标：为什么现在是最佳入场时机？",
       content: (
