@@ -256,53 +256,65 @@ export default function ProfileEdit() {
   const savePayment = async (type: PaymentType) => {
     setSavingPayment(true);
     try {
-      const formData = new FormData();
-      let data: any = {};
+      let res: Response;
 
       if (type === "bank_card") {
-        data = { ...bankForm };
-      } else if (type === "digital_wallet") {
-        data = {
-          walletNetwork: walletForm.walletNetwork,
-          digitalWalletAddress: walletForm.digitalWalletAddress,
-          keepExistingQrCode: !walletForm.qrCodeFile,
-        };
-        if (walletForm.qrCodeFile) {
-          formData.append("qrcode", walletForm.qrCodeFile);
+        // 银行卡使用JSON格式发送（不需要文件上传）
+        res = await fetch(`/api/user/profile/payment/bank_card`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(bankForm),
+        });
+      } else {
+        // 其他支付方式使用FormData（支持文件上传）
+        const formData = new FormData();
+        let data: any = {};
+
+        if (type === "digital_wallet") {
+          data = {
+            walletNetwork: walletForm.walletNetwork,
+            digitalWalletAddress: walletForm.digitalWalletAddress,
+          };
+          if (walletForm.qrCodeFile) {
+            formData.append("qrcode", walletForm.qrCodeFile);
+          }
+        } else if (type === "alipay") {
+          data = {
+            alipayAccount: alipayForm.inputMethod === "account" ? alipayForm.alipayAccount : "",
+            alipayAccountName: alipayForm.alipayAccountName,
+          };
+          if (alipayForm.qrCodeFile) {
+            formData.append("qrcode", alipayForm.qrCodeFile);
+          }
+        } else if (type === "wechat") {
+          data = {
+            wechatAccountName: wechatForm.wechatAccountName,
+          };
+          if (wechatForm.qrCodeFile) {
+            formData.append("qrcode", wechatForm.qrCodeFile);
+          }
         }
-      } else if (type === "alipay") {
-        data = {
-          alipayAccount: alipayForm.inputMethod === "account" ? alipayForm.alipayAccount : "",
-          alipayAccountName: alipayForm.alipayAccountName,
-        };
-        if (alipayForm.qrCodeFile) {
-          formData.append("qrcode", alipayForm.qrCodeFile);
-        }
-      } else if (type === "wechat") {
-        data = {
-          wechatAccountName: wechatForm.wechatAccountName,
-        };
-        if (wechatForm.qrCodeFile) {
-          formData.append("qrcode", wechatForm.qrCodeFile);
-        }
+
+        formData.append("data", JSON.stringify(data));
+
+        res = await fetch(`/api/user/profile/payment/${type}`, {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
       }
-
-      formData.append("data", JSON.stringify(data));
-
-      const res = await fetch(`/api/user/profile/payment/${type}`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
 
       if (res.ok) {
         showMsg("success", "保存成功");
         setEditingType(null);
         await loadPayments();
       } else {
-        showMsg("error", "保存失败");
+        const errData = await res.json().catch(() => ({}));
+        showMsg("error", errData.error || "保存失败");
       }
     } catch (error) {
+      console.error("保存支付方式失败:", error);
       showMsg("error", "保存失败");
     } finally {
       setSavingPayment(false);

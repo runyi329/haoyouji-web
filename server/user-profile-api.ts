@@ -37,14 +37,14 @@ async function getUserId(req: express.Request): Promise<number | null> {
 }
 
 // 确保 userProfiles 记录存在
-async function ensureProfile(db: any, userId: number) {
-  const [existing] = await db
+async function ensureProfile(dbConn: any, userId: number) {
+  const [existing] = await dbConn
     .select()
     .from(userProfiles)
     .where(eq(userProfiles.userId, userId));
   if (!existing) {
-    await db.insert(userProfiles).values({ userId });
-    const [created] = await db
+    await dbConn.insert(userProfiles).values({ userId });
+    const [created] = await dbConn
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.userId, userId));
@@ -62,22 +62,22 @@ router.get("/profile", async (req, res) => {
       return res.status(401).json({ error: "未登录" });
     }
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    const [user] = await dbConn.select().from(users).where(eq(users.id, userId));
     if (!user) {
       return res.status(404).json({ error: "用户不存在" });
     }
 
-    const [profile] = await db
+    const [profile] = await dbConn
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.userId, userId));
 
-    const addressList = await db
+    const addressList = await dbConn
       .select()
       .from(shippingAddresses)
       .where(eq(shippingAddresses.userId, userId));
@@ -109,18 +109,18 @@ router.post("/profile/basic", async (req, res) => {
 
     const { displayName, email, phone } = req.body;
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    await db
+    await dbConn
       .update(users)
       .set({ displayName, email })
       .where(eq(users.id, userId));
 
-    await ensureProfile(db, userId);
-    await db
+    await ensureProfile(dbConn, userId);
+    await dbConn
       .update(userProfiles)
       .set({ phone })
       .where(eq(userProfiles.userId, userId));
@@ -143,18 +143,18 @@ router.post("/profile/verification", async (req, res) => {
 
     const { realName, idNumber } = req.body;
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    const profile = await ensureProfile(db, userId);
+    const profile = await ensureProfile(dbConn, userId);
 
     if (profile.verificationStatus === "approved") {
       return res.status(400).json({ error: "已通过实名认证，无法修改" });
     }
 
-    await db
+    await dbConn
       .update(userProfiles)
       .set({
         realName,
@@ -180,12 +180,12 @@ router.get("/profile/payment", async (req, res) => {
       return res.status(401).json({ error: "未登录" });
     }
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    const [profile] = await db
+    const [profile] = await dbConn
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.userId, userId));
@@ -241,88 +241,178 @@ router.get("/profile/payment", async (req, res) => {
   }
 });
 
-// 保存/更新某种支付方式
-router.post(
-  "/profile/payment/:type",
-  upload.single("qrcode"),
-  async (req, res) => {
-    try {
-      const userId = await getUserId(req);
-      if (!userId) {
-        return res.status(401).json({ error: "未登录" });
-      }
-
-      const { type } = req.params;
-      const validTypes = ["bank_card", "digital_wallet", "alipay", "wechat"];
-      if (!validTypes.includes(type)) {
-        return res.status(400).json({ error: "无效的支付方式" });
-      }
-
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "数据库连接失败" });
-      }
-
-      await ensureProfile(db, userId);
-
-      // 解析表单数据
-      const data = JSON.parse(req.body.data || "{}");
-      const file = req.file;
-
-      console.log(`[保存支付方式:${type}] userId:${userId}, data:`, data, "hasFile:", !!file);
-
-      // 上传收款码图片
-      let qrCodeUrl: string | undefined;
-      if (file) {
-        qrCodeUrl = await uploadImageToCOS(file.buffer, "payment-qrcodes");
-        console.log(`[保存支付方式:${type}] 收款码上传成功:`, qrCodeUrl);
-      }
-
-      // 根据支付方式类型准备更新数据
-      const updateData: any = {};
-
-      if (type === "bank_card") {
-        updateData.bankName = data.bankName || null;
-        updateData.bankAccountNumber = data.bankAccountNumber || null;
-        updateData.bankAccountName = data.bankAccountName || null;
-      } else if (type === "digital_wallet") {
-        updateData.walletNetwork = data.walletNetwork || "TRC20";
-        updateData.digitalWalletAddress = data.digitalWalletAddress || null;
-        if (qrCodeUrl) {
-          updateData.walletQrCodeUrl = qrCodeUrl;
-        }
-      } else if (type === "alipay") {
-        updateData.alipayAccount = data.alipayAccount || null;
-        updateData.alipayAccountName = data.alipayAccountName || null;
-        if (qrCodeUrl) {
-          updateData.alipayQrCodeUrl = qrCodeUrl;
-        }
-      } else if (type === "wechat") {
-        updateData.wechatAccountName = data.wechatAccountName || null;
-        if (qrCodeUrl) {
-          updateData.wechatQrCodeUrl = qrCodeUrl;
-        }
-      }
-
-      console.log(`[保存支付方式:${type}] 更新数据:`, updateData);
-
-      await db
-        .update(userProfiles)
-        .set(updateData)
-        .where(eq(userProfiles.userId, userId));
-
-      res.json({
-        success: true,
-        qrCodeUrl: qrCodeUrl || null,
-      });
-    } catch (error) {
-      console.error("[保存支付方式] 错误:", error);
-      res.status(500).json({ error: "服务器错误" });
+// ========== 银行卡保存（纯JSON，不需要文件上传） ==========
+router.post("/profile/payment/bank_card", async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
     }
-  }
-);
 
-// 删除某种支付方式
+    const dbConn = await getDb();
+    if (!dbConn) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    await ensureProfile(dbConn, userId);
+
+    const { bankName, bankAccountNumber, bankAccountName } = req.body;
+
+    console.log(`[保存银行卡] userId:${userId}, bankName:${bankName}, bankAccountNumber:${bankAccountNumber}, bankAccountName:${bankAccountName}`);
+
+    await dbConn
+      .update(userProfiles)
+      .set({
+        bankName: bankName || null,
+        bankAccountNumber: bankAccountNumber || null,
+        bankAccountName: bankAccountName || null,
+      })
+      .where(eq(userProfiles.userId, userId));
+
+    console.log(`[保存银行卡] 保存成功 userId:${userId}`);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[保存银行卡] 错误:", error);
+    res.status(500).json({ error: "保存银行卡失败: " + (error instanceof Error ? error.message : "未知错误") });
+  }
+});
+
+// ========== 数字钱包保存（支持文件上传） ==========
+router.post("/profile/payment/digital_wallet", upload.single("qrcode"), async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+
+    const dbConn = await getDb();
+    if (!dbConn) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    await ensureProfile(dbConn, userId);
+
+    const data = JSON.parse(req.body.data || "{}");
+    const file = req.file;
+
+    console.log(`[保存数字钱包] userId:${userId}, data:`, data, "hasFile:", !!file);
+
+    let qrCodeUrl: string | undefined;
+    if (file) {
+      qrCodeUrl = await uploadImageToCOS(file.buffer, "payment-qrcodes");
+    }
+
+    const updateData: any = {
+      walletNetwork: data.walletNetwork || "TRC20",
+      digitalWalletAddress: data.digitalWalletAddress || null,
+    };
+    if (qrCodeUrl) {
+      updateData.walletQrCodeUrl = qrCodeUrl;
+    }
+
+    await dbConn
+      .update(userProfiles)
+      .set(updateData)
+      .where(eq(userProfiles.userId, userId));
+
+    res.json({ success: true, qrCodeUrl: qrCodeUrl || null });
+  } catch (error) {
+    console.error("[保存数字钱包] 错误:", error);
+    res.status(500).json({ error: "保存数字钱包失败" });
+  }
+});
+
+// ========== 支付宝保存（支持文件上传） ==========
+router.post("/profile/payment/alipay", upload.single("qrcode"), async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+
+    const dbConn = await getDb();
+    if (!dbConn) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    await ensureProfile(dbConn, userId);
+
+    const data = JSON.parse(req.body.data || "{}");
+    const file = req.file;
+
+    console.log(`[保存支付宝] userId:${userId}, data:`, data, "hasFile:", !!file);
+
+    let qrCodeUrl: string | undefined;
+    if (file) {
+      qrCodeUrl = await uploadImageToCOS(file.buffer, "payment-qrcodes");
+    }
+
+    const updateData: any = {
+      alipayAccount: data.alipayAccount || null,
+      alipayAccountName: data.alipayAccountName || null,
+    };
+    if (qrCodeUrl) {
+      updateData.alipayQrCodeUrl = qrCodeUrl;
+    }
+
+    await dbConn
+      .update(userProfiles)
+      .set(updateData)
+      .where(eq(userProfiles.userId, userId));
+
+    res.json({ success: true, qrCodeUrl: qrCodeUrl || null });
+  } catch (error) {
+    console.error("[保存支付宝] 错误:", error);
+    res.status(500).json({ error: "保存支付宝失败" });
+  }
+});
+
+// ========== 微信保存（支持文件上传） ==========
+router.post("/profile/payment/wechat", upload.single("qrcode"), async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: "未登录" });
+    }
+
+    const dbConn = await getDb();
+    if (!dbConn) {
+      return res.status(500).json({ error: "数据库连接失败" });
+    }
+
+    await ensureProfile(dbConn, userId);
+
+    const data = JSON.parse(req.body.data || "{}");
+    const file = req.file;
+
+    console.log(`[保存微信] userId:${userId}, data:`, data, "hasFile:", !!file);
+
+    let qrCodeUrl: string | undefined;
+    if (file) {
+      qrCodeUrl = await uploadImageToCOS(file.buffer, "payment-qrcodes");
+    }
+
+    const updateData: any = {
+      wechatAccountName: data.wechatAccountName || null,
+    };
+    if (qrCodeUrl) {
+      updateData.wechatQrCodeUrl = qrCodeUrl;
+    }
+
+    await dbConn
+      .update(userProfiles)
+      .set(updateData)
+      .where(eq(userProfiles.userId, userId));
+
+    res.json({ success: true, qrCodeUrl: qrCodeUrl || null });
+  } catch (error) {
+    console.error("[保存微信] 错误:", error);
+    res.status(500).json({ error: "保存微信失败" });
+  }
+});
+
+// ========== 删除支付方式 ==========
 router.delete("/profile/payment/:type", async (req, res) => {
   try {
     const userId = await getUserId(req);
@@ -336,8 +426,8 @@ router.delete("/profile/payment/:type", async (req, res) => {
       return res.status(400).json({ error: "无效的支付方式" });
     }
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
@@ -361,7 +451,7 @@ router.delete("/profile/payment/:type", async (req, res) => {
       clearData.wechatQrCodeUrl = null;
     }
 
-    await db
+    await dbConn
       .update(userProfiles)
       .set(clearData)
       .where(eq(userProfiles.userId, userId));
@@ -386,19 +476,19 @@ router.post("/profile/address", async (req, res) => {
 
     const { recipientName, phone, province, city, district, detailAddress, postalCode, label, isDefault } = req.body;
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
     if (isDefault) {
-      await db
+      await dbConn
         .update(shippingAddresses)
         .set({ isDefault: false })
         .where(eq(shippingAddresses.userId, userId));
     }
 
-    await db.insert(shippingAddresses).values({
+    await dbConn.insert(shippingAddresses).values({
       userId,
       recipientName,
       phone,
@@ -428,19 +518,19 @@ router.put("/profile/address/:id", async (req, res) => {
     const addressId = parseInt(req.params.id);
     const { recipientName, phone, province, city, district, detailAddress, postalCode, label, isDefault } = req.body;
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
     if (isDefault) {
-      await db
+      await dbConn
         .update(shippingAddresses)
         .set({ isDefault: false })
         .where(eq(shippingAddresses.userId, userId));
     }
 
-    await db
+    await dbConn
       .update(shippingAddresses)
       .set({
         recipientName,
@@ -476,12 +566,12 @@ router.delete("/profile/address/:id", async (req, res) => {
 
     const addressId = parseInt(req.params.id);
 
-    const db = await getDb();
-    if (!db) {
+    const dbConn = await getDb();
+    if (!dbConn) {
       return res.status(500).json({ error: "数据库连接失败" });
     }
 
-    await db
+    await dbConn
       .delete(shippingAddresses)
       .where(
         and(
