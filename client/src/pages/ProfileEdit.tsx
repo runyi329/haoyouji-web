@@ -299,8 +299,8 @@ export default function ProfileEdit() {
 
     return (
       <div className="px-5 py-4 border border-gray-200 rounded-lg bg-white">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm font-medium text-gray-500">支付方式</span>
               <span className="px-2.5 py-0.5 bg-[#A80000] text-white text-xs font-medium rounded">
@@ -314,16 +314,16 @@ export default function ProfileEdit() {
             {/* 银行卡信息 */}
             {paymentMethod === "bank_card" && (
               <div className="space-y-2">
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">银行名称：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">银行名称：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.bankName}</span>
                 </div>
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">银行卡号：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">银行卡号：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.bankAccountNumber}</span>
                 </div>
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">持卡人：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">持卡人：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.bankAccountName}</span>
                 </div>
               </div>
@@ -332,21 +332,21 @@ export default function ProfileEdit() {
             {/* 数字钱包信息 */}
             {paymentMethod === "digital_wallet" && (
               <div className="space-y-2">
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">收款网络：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">收款网络：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.walletNetwork}</span>
                 </div>
                 {paymentForm.digitalWalletAddress && (
-                  <div className="flex items-center text-sm">
-                    <span className="text-gray-500 w-24">钱包地址：</span>
+                  <div className="flex items-start text-sm gap-2">
+                    <span className="text-gray-500 flex-shrink-0">钱包地址：</span>
                     <span className="text-gray-900 font-medium font-mono text-xs break-all">
                       {paymentForm.digitalWalletAddress}
                     </span>
                   </div>
                 )}
                 {paymentForm.walletQrCodeUrl && (
-                  <div className="flex items-center text-sm">
-                    <span className="text-gray-500 w-24">收款码：</span>
+                  <div className="flex items-center text-sm gap-2">
+                    <span className="text-gray-500">收款码：</span>
                     <span className="text-blue-600 text-xs">已上传</span>
                   </div>
                 )}
@@ -357,19 +357,19 @@ export default function ProfileEdit() {
             {paymentMethod === "alipay" && (
               <div className="space-y-2">
                 {paymentForm.alipayAccount && (
-                  <div className="flex items-center text-sm">
-                    <span className="text-gray-500 w-24">支付宝账号：</span>
+                  <div className="flex items-center text-sm gap-2">
+                    <span className="text-gray-500">支付宝账号：</span>
                     <span className="text-gray-900 font-medium">{paymentForm.alipayAccount}</span>
                   </div>
                 )}
                 {paymentForm.alipayQrCodeUrl && (
-                  <div className="flex items-center text-sm">
-                    <span className="text-gray-500 w-24">收款码：</span>
+                  <div className="flex items-center text-sm gap-2">
+                    <span className="text-gray-500">收款码：</span>
                     <span className="text-blue-600 text-xs">已上传</span>
                   </div>
                 )}
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">收款人：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">收款人：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.alipayAccountName}</span>
                 </div>
               </div>
@@ -379,13 +379,13 @@ export default function ProfileEdit() {
             {paymentMethod === "wechat" && (
               <div className="space-y-2">
                 {paymentForm.wechatQrCodeUrl && (
-                  <div className="flex items-center text-sm">
-                    <span className="text-gray-500 w-24">收款码：</span>
+                  <div className="flex items-center text-sm gap-2">
+                    <span className="text-gray-500">收款码：</span>
                     <span className="text-blue-600 text-xs">已上传</span>
                   </div>
                 )}
-                <div className="flex items-center text-sm">
-                  <span className="text-gray-500 w-24">收款人：</span>
+                <div className="flex items-center text-sm gap-2">
+                  <span className="text-gray-500">收款人：</span>
                   <span className="text-gray-900 font-medium">{paymentForm.wechatAccountName}</span>
                 </div>
               </div>
@@ -393,16 +393,16 @@ export default function ProfileEdit() {
           </div>
 
           {/* 编辑和删除按钮 */}
-          <div className="flex gap-3 ml-6">
+          <div className="flex gap-3 items-start">
             <button
               onClick={handleEditPayment}
-              className="text-sm text-[#A80000] hover:text-[#800000] font-medium transition-colors"
+              className="text-sm text-[#A80000] hover:text-[#800000] font-medium transition-colors whitespace-nowrap"
             >
               编辑
             </button>
             <button
               onClick={handleDeletePayment}
-              className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
+              className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors whitespace-nowrap"
             >
               删除
             </button>
