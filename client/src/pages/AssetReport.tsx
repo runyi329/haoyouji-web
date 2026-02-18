@@ -508,10 +508,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-2">我们如何定义“价值”？</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                在传统的商业世界里，一家公司的价值通常由其财务报表决定，这是一个相对静态且滞后的过程。然而，我们认为，一个真正具有生命力的网络，其价值应该由全网用户的实时行为共同铸就，如同一个生生不息的“数字生命体”。
+                比起那些靠财务报表和讲PPT决定估值的公司而言，脉动网是一家真正具有生命力的网络。其价值应该由全网用户的实时行为共同铸就，如同一个生生不息的“数字生命体”。
               </p>
               <p>
-                因此，我们的估值体系不再依赖于过时的年度审计，而是建立在一套先进的、由AI驱动的实时估值模型之上。这确保了公司的每一分价值增长，都与全网用户的每一次有效贡献毫秒级同步。
+                因此，我们的估值体系不再依赖于过时的年度审计、夸张的PPT讲故事，而是建立在一套先进的、由人工智能驱动的实时估值模型之上。这确保了公司的每一分价值增长，都与全网用户的每一次有效贡献毫秒级同步。
               </p>
             </div>
           </div>
@@ -520,6 +520,15 @@ export default function AssetReport() {
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="font-bold text-gray-900 mb-2">价值的源泉——用户行为即价值创造</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
+              <div className="bg-[#FFF9E6] p-3 rounded border border-[#FFA500]">
+                <div className="flex items-start space-x-2">
+                  <span className="text-[#FFA500] text-lg flex-shrink-0">⚡</span>
+                  <div className="text-xs">
+                    <span className="font-bold text-gray-900">不要小看你的每一次行为！</span>
+                    <span className="text-gray-700">每一次打标签、每一次共享、每一个新好友，都在为整个网络注入价值。网络效应会将你的贡献放大百倍、千倍，直接推高公司估值，而你也将从中获得相应的回报。</span>
+                  </div>
+                </div>
+              </div>
               <p>
                 您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
               </p>
