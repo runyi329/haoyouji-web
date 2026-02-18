@@ -263,30 +263,16 @@ export default function AssetReport() {
             <div className="font-bold text-white mb-3">脉动的解决方案：让人脉资产“核裂变”</div>
             <div className="text-sm text-white/90 leading-relaxed space-y-3">
               <p>
-                我们不要求你增加人脉数量，我们只帮你提高触达效率。通过三大核心机制，让你的存量人脉产生指数级价值：
+                我们不要求你增加人脉数量，我们只帮你提高触达效率。通过好友共享机制，让你的存量人脉产生指数级价值：
               </p>
-              <div className="space-y-3">
-                <div className="bg-white/10 p-3 rounded">
-                  <div className="font-bold text-[#FFA500] mb-1">1. 好友共享（流量杠杆）</div>
-                  <p className="text-white/90 mb-2">
-                    您通过平台与更多的人分享了你的人脉信息，就像老师的录播课，可以把自己的资源共享给更多需要的学生。你的人脉每共享一次，价值就提升一步。
-                  </p>
-                  <div className="bg-white/10 p-2 rounded text-xs">
-                    <span className="font-bold text-[#FFA500]">举例：</span>
-                    <span className="text-white/90">你认识一位资深律师，平时只能帮你自己。但是通过脉动共享，有更多有需求的人可以看到你给这位律师人脉打的主观标签，从而通过你的介绍获得律师的服务。你创造了一个三赢的局面。</span>
-                  </div>
-                </div>
-                <div className="bg-white/10 p-3 rounded">
-                  <div className="font-bold text-[#FFA500] mb-1">2. 分布式管理（数字资产化）</div>
-                  <p className="text-white/90">
-                    利用系统代替大脑，打破“邓巴数”限制。你为每个好友添加的标签（行业、技能、资源），都是在将人脉“资产化”。系统会自动帮你匹配需求，让人脉在平台生态中自动产生价值。
-                  </p>
-                </div>
-                <div className="bg-white/10 p-3 rounded">
-                  <div className="font-bold text-[#FFA500] mb-1">3. AI智能触达</div>
-                  <p className="text-white/90">
-                    AI像24小时在线的助理，帮你进行精准匹配与社交维护。你无需亲自社交，AI帮你完成从“认识”到“成交”的触达闭环。
-                  </p>
+              <div className="bg-white/10 p-3 rounded">
+                <div className="font-bold text-[#FFA500] mb-1">好友共享（流量杠杆）</div>
+                <p className="text-white/90 mb-2">
+                  您通过平台与更多的人分享了你的人脉信息，就像老师的录播课，可以把自己的资源共享给更多需要的学生。你的人脉每共享一次，价值就提升一步。
+                </p>
+                <div className="bg-white/10 p-2 rounded text-xs">
+                  <span className="font-bold text-[#FFA500]">举例：</span>
+                  <span className="text-white/90">你认识一位资深律师，平时只能帮你自己。但是通过脉动共享，有更多有需求的人可以看到你给这位律师人脉打的主观标签，从而通过你的介绍获得律师的服务。你创造了一个三赢的局面。</span>
                 </div>
               </div>
             </div>
