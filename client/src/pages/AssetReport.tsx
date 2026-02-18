@@ -1015,16 +1015,14 @@ export default function AssetReport() {
         <div className="text-center space-y-4 relative z-10">
           
           {/* 核心数字：实时估值 */}
-          <div className="relative">
+          <div>
             {isValuationLoading ? (
               <Loader2 className="w-12 h-12 animate-spin mx-auto" />
             ) : (
-              <div className="text-5xl font-bold animate-pulse">
+              <div className="text-5xl font-bold">
                 ¥{(currentValuation / 10000).toFixed(1)}万
               </div>
             )}
-            {/* 金色光效 */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/20 to-transparent animate-shimmer"></div>
           </div>
           
           {/* 副标题 */}
@@ -1040,16 +1038,7 @@ export default function AssetReport() {
           </div>
         </div>
 
-        {/* 添加闪光动画 */}
-        <style jsx>{`
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-          }
-          .animate-shimmer {
-            animation: shimmer 3s infinite;
-          }
-        `}</style>
+
       </div>
 
       {/* 中部：列表区域（新浪热榜风格） */}
