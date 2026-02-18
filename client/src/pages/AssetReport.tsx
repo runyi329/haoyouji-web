@@ -304,7 +304,7 @@ export default function AssetReport() {
                 </div>
               </div>
               <p className="pt-2 font-bold text-[#800000]">
-                问题本质：不是你的人脉不够多，而是你的触达能力太有限。<span className="block mt-2">价值不在于“拥有”，而在于“触达”。</span>
+                问题本质：不是你的人脉不够多，而是你的触达能力太有限。<span className="block mt-2">每个人都是一座金矿，关键在于如何挖掘和连接。价值不在于“拥有”，而在于“触达”。</span>
               </p>
             </div>
           </div>
