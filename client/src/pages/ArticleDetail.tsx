@@ -1,5 +1,5 @@
 import React from "react";
-import { useRoute, Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { ArrowLeft, Share2, Check } from "lucide-react";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
@@ -101,8 +101,8 @@ const articles = [
 ];
 
 export default function ArticleDetail() {
-  const [, params] = useRoute("/article/:id");
-  const articleId = params?.id ? parseInt(params.id) : null;
+  const params = useParams();
+  const articleId = params.id ? parseInt(params.id) : null;
   const article = articles.find(a => a.id === articleId);
   const [copied, setCopied] = React.useState(false);
 
