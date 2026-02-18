@@ -269,13 +269,6 @@ export default function AssetReport() {
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
               />
-              <button
-                onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
-                className="w-full mt-3 bg-[#A80000] text-white py-2 px-4 rounded-lg font-medium active:bg-[#8a0000] transition-colors"
-              >
-                💾 保存到相册
-              </button>
-              <p className="text-xs text-gray-400 text-center mt-1">或长按图片保存</p>
             </div>
           </div>
         </div>
@@ -359,13 +352,6 @@ export default function AssetReport() {
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
               />
-              <button
-                onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
-                className="w-full mt-3 bg-[#A80000] text-white py-2 px-4 rounded-lg font-medium active:bg-[#8a0000] transition-colors"
-              >
-                💾 保存到相册
-              </button>
-              <p className="text-xs text-gray-400 text-center mt-1">或长按图片保存</p>
             </div>
           </div>
         </div>
@@ -657,16 +643,7 @@ export default function AssetReport() {
               className="w-full h-auto rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
-            {/* 下载按钮 */}
-            <a
-              href={previewImage}
-              download="脉动海报.jpg"
-              className="block w-full mt-4 bg-[#A80000] text-white py-3 px-6 rounded-lg font-medium text-center active:bg-[#8a0000] transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              💾 保存到相册
-            </a>
-            <p className="text-white/60 text-center mt-2 text-xs">或长按图片保存</p>
+
           </div>
         </div>
       )}
