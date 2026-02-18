@@ -100,6 +100,9 @@ async function startServer() {
   // User profile management router
   const userProfileModule = await import('../user-profile-api.js');
   app.use('/api/user', userProfileModule.default);
+  // Admin user profile router
+  const adminUserProfileModule = await import('../admin-user-profile-api.js');
+  app.use('/api/admin', adminUserProfileModule.default);
   // tRPC API
   app.use(
     "/api/trpc",

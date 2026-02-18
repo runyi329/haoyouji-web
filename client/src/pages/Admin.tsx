@@ -50,6 +50,7 @@ import AntonymManager from "./admin/AntonymManager";
 import CharacterManager from "./admin/CharacterManager";
 import GameRewardManager from "./admin/GameRewardManager";
 import { InvitationManager } from "./admin/InvitationManager";
+import { CreditCard } from "lucide-react";
 import VocabularyMasterManager from "./admin/VocabularyMasterManager";
 import AccountRelationshipManager from "./admin/AccountRelationshipManager";
 import MasterLibraryManager from "./admin/MasterLibraryManager";
@@ -80,6 +81,10 @@ export default function Admin() {
   
   // 删除用户
   const [showDeleteUser, setShowDeleteUser] = useState<number | null>(null);
+  
+  // 查看用户支付信息
+  const [showUserPayment, setShowUserPayment] = useState<number | null>(null);
+  const [userPaymentData, setUserPaymentData] = useState<any>(null);
 
   const { data: users, refetch: refetchUsers } = trpc.admin.getUsers.useQuery(undefined, {
     enabled: user?.role === "super_admin",
@@ -490,6 +495,26 @@ export default function Admin() {
                         <Share className="w-4 h-4" />
                       </Button>
                       
+                      {/* 查看支付信息 */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-8 h-8"
+                        onClick={async () => {
+                          try {
+                            const response = await fetch(`/api/admin/user-profile/${u.id}`);
+                            const data = await response.json();
+                            setUserPaymentData(data);
+                            setShowUserPayment(u.id);
+                          } catch (error) {
+                            toast.error("获取用户支付信息失败");
+                          }
+                        }}
+                        title="查看支付信息"
+                      >
+                        <CreditCard className="w-4 h-4" />
+                      </Button>
+                      
                       {/* 编辑用户 */}
                       <Dialog
                         open={showEditUser === u.id}
@@ -618,9 +643,195 @@ export default function Admin() {
                         </DialogContent>
                       </Dialog>
                     </div>
-                  </div>
-                ))}
+                  </div>                ))}
               </div>
+              
+              {/* 查看用户支付信息 Dialog */}
+              <Dialog open={showUserPayment !== null} onOpenChange={(open) => !open && setShowUserPayment(null)}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>用户支付信息</DialogTitle>
+                  </DialogHeader>
+                  {userPaymentData && (
+                    <div className="space-y-4">
+                      {/* 基本信息 */}
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <h3 className="text-sm font-medium text-gray-700 mb-3">基本信息</h3>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-500">用户名：</span>
+                            <span className="ml-2 font-medium">{userPaymentData.user?.username}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">姓名：</span>
+                            <span className="ml-2 font-medium">{userPaymentData.user?.name || '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">邮箱：</span>
+                            <span className="ml-2 font-medium">{userPaymentData.user?.email || '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">积分：</span>
+                            <span className="ml-2 font-medium">{userPaymentData.user?.points || 0}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 支付账号 */}
+                      {userPaymentData.profile?.payment_method ? (
+                        <div className="p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
+                            <h3 className="text-sm font-medium text-gray-700">支付账号</h3>
+                            <span className="px-2.5 py-0.5 bg-[#A80000] text-white text-xs font-medium rounded">
+                              {userPaymentData.profile.payment_method === 'bank_card' && '银行卡'}
+                              {userPaymentData.profile.payment_method === 'digital_wallet' && '数字钱包'}
+                              {userPaymentData.profile.payment_method === 'alipay' && '支付宝'}
+                              {userPaymentData.profile.payment_method === 'wechat' && '微信'}
+                            </span>
+                          </div>
+                          
+                          {/* 银行卡 */}
+                          {userPaymentData.profile.payment_method === 'bank_card' && (
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">银行名称：</span>
+                                <span className="font-medium">{userPaymentData.profile.bank_name}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">银行卡号：</span>
+                                <span className="font-medium font-mono">{userPaymentData.profile.bank_account_number}</span>
+                              </div>
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">持卡人：</span>
+                                <span className="font-medium">{userPaymentData.profile.bank_account_name}</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 数字钱包 */}
+                          {userPaymentData.profile.payment_method === 'digital_wallet' && (
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">收款网络：</span>
+                                <span className="font-medium">{userPaymentData.profile.wallet_network}</span>
+                              </div>
+                              {userPaymentData.profile.digital_wallet_address && (
+                                <div className="flex items-start">
+                                  <span className="text-gray-500 min-w-[100px] flex-shrink-0">钱包地址：</span>
+                                  <span className="font-medium font-mono text-xs break-all">{userPaymentData.profile.digital_wallet_address}</span>
+                                </div>
+                              )}
+                              {userPaymentData.profile.wallet_qr_code_url && (
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <a href={userPaymentData.profile.wallet_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* 支付宝 */}
+                          {userPaymentData.profile.payment_method === 'alipay' && (
+                            <div className="space-y-2 text-sm">
+                              {userPaymentData.profile.alipay_account && (
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 min-w-[100px]">支付宝账号：</span>
+                                  <span className="font-medium">{userPaymentData.profile.alipay_account}</span>
+                                </div>
+                              )}
+                              {userPaymentData.profile.alipay_qr_code_url && (
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <a href={userPaymentData.profile.alipay_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                </div>
+                              )}
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">收款人：</span>
+                                <span className="font-medium">{userPaymentData.profile.alipay_account_name}</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 微信 */}
+                          {userPaymentData.profile.payment_method === 'wechat' && (
+                            <div className="space-y-2 text-sm">
+                              {userPaymentData.profile.wechat_qr_code_url && (
+                                <div className="flex items-center">
+                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <a href={userPaymentData.profile.wechat_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                </div>
+                              )}
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">收款人：</span>
+                                <span className="font-medium">{userPaymentData.profile.wechat_account_name}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-gray-500 text-sm">
+                          该用户尚未绑定支付账号
+                        </div>
+                      )}
+                      
+                      {/* 实名认证 */}
+                      {userPaymentData.profile?.real_name && (
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">实名认证</h3>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center">
+                              <span className="text-gray-500 min-w-[100px]">真实姓名：</span>
+                              <span className="font-medium">{userPaymentData.profile.real_name}</span>
+                            </div>
+                            {userPaymentData.profile.id_card_number && (
+                              <div className="flex items-center">
+                                <span className="text-gray-500 min-w-[100px]">身份证号：</span>
+                                <span className="font-medium font-mono">{userPaymentData.profile.id_card_number}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center">
+                              <span className="text-gray-500 min-w-[100px]">认证状态：</span>
+                              <span className={`px-2 py-0.5 text-xs rounded ${
+                                userPaymentData.profile.verification_status === 'verified' ? 'bg-green-100 text-green-700' :
+                                userPaymentData.profile.verification_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {userPaymentData.profile.verification_status === 'verified' && '已认证'}
+                                {userPaymentData.profile.verification_status === 'pending' && '待审核'}
+                                {userPaymentData.profile.verification_status === 'rejected' && '已拒绝'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 收件地址 */}
+                      {userPaymentData.addresses && userPaymentData.addresses.length > 0 && (
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">收件地址</h3>
+                          <div className="space-y-3">
+                            {userPaymentData.addresses.map((addr: any, index: number) => (
+                              <div key={index} className="p-3 bg-white border border-gray-200 rounded text-sm">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-medium">{addr.recipient_name}</span>
+                                  <span className="text-gray-500">{addr.recipient_phone}</span>
+                                  {addr.is_default && (
+                                    <span className="px-2 py-0.5 bg-[#A80000] text-white text-xs rounded">默认</span>
+                                  )}
+                                </div>
+                                <p className="text-gray-600">{addr.address}</p>
+                                {addr.postal_code && (
+                                  <p className="text-gray-500 text-xs mt-1">邮编：{addr.postal_code}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </Card>
           </TabsContent>
 
