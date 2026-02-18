@@ -120,7 +120,7 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-2">1. 买菜App：每个用户价值约700元</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                以叮咚买菜和美团的并购案为例（50多亿人民币，最高活跃用户700万），美团收购这类社区电商时，看重的不是送货车队，而是用户背后的家庭消费数据——你买的每一颗白菜、每份食材，都记录了你的生活习惯和消费偏好。
+                以叮咚买菜和美团的并购案为例（50多亿人民币，最高活跃用户700万），美团收购这类社区电商时，看重的不是送货车队，而是用户背后的家庭消费数据——你买的每一颗白菜、每份食材，都记录了你的生活习惯和消费偏好。（<a href="https://finance.sina.cn/stock/jdts/2026-02-16/detail-inhmyzkh2857813.d.html" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] text-xs">来源：新浪财经</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
@@ -128,10 +128,6 @@ export default function AssetReport() {
                   <span className="font-bold text-gray-900">算账：</span>
                   <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你在App上买菜，本质上是免费为平台贡献了宝贵数据，而平台转手就变现了。你只拿到了白菜，平台却增加了身价。</span>
                 </div>
-              </div>
-              {/* 来源链接 */}
-              <div className="mt-2 text-xs text-gray-500">
-                来源：<a href="https://finance.sina.cn/stock/jdts/2026-02-16/detail-inhmyzkh2857813.d.html" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪财经</a>
               </div>
             </div>
           </div>
@@ -141,7 +137,7 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-2">2. 共享出行：180亿被平台独享</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                摩拜单车被美团180亿人民币收购时，核心资产是用户的出行轨迹——你住在哪个小区、上班去哪里、日常路径如何。这些数据能生成"城市交通热力图"，用于广告精准投放或城市规划。
+                摩拜单车被美团180亿人民币收购时，核心资产是用户的出行轨迹——你住在哪个小区、上班去哪里、日常路径如何。这些数据能生成"城市交通热力图"，用于广告精准投放或城市规划。（<a href="http://tech.sina.cn/zt_d/mobikemeituan" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] text-xs">来源：新浪科技</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
@@ -149,10 +145,6 @@ export default function AssetReport() {
                   <span className="font-bold text-gray-900">算账：</span>
                   <span className="text-gray-700">你每天顶着太阳骑车，其实是在用体力为平台采集数据，平台却独享180亿收益，而你什么也拿不到。</span>
                 </div>
-              </div>
-              {/* 来源链接 */}
-              <div className="mt-2 text-xs text-gray-500">
-                来源：<a href="http://tech.sina.cn/zt_d/mobikemeituan" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪科技</a>
               </div>
             </div>
           </div>
@@ -162,7 +154,7 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-2">3. 社交/通讯工具：每个用户价值约280元</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                参考Facebook（现Meta）以190亿美元收购WhatsApp的案例。这是一个纯通讯软件，没有广告收入，为什么值这么多钱？因为里面藏着数亿用户的社交关系网——你的联系人、聊天频率，都能被用于算法优化和广告。
+                参考Facebook（现Meta）以190亿美元收购WhatsApp的案例。这是一个纯通讯软件，没有广告收入，为什么值这么多钱？因为里面藏着数亿用户的社交关系网——你的联系人、聊天频率，都能被用于算法优化和广告。（<a href="http://tech.sina.com.cn/i/2014-02-20/06389176473.shtml" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] text-xs">来源：新浪科技</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
@@ -170,10 +162,6 @@ export default function AssetReport() {
                   <span className="font-bold text-gray-900">算账：</span>
                   <span className="text-gray-700">折算下来，每个用户只需"呆在里面"，就值约40美元（折合人民币280元）。你的社交数据被平台垄断，你却一无所获。</span>
                 </div>
-              </div>
-              {/* 来源链接 */}
-              <div className="mt-2 text-xs text-gray-500">
-                来源：<a href="http://tech.sina.com.cn/i/2014-02-20/06389176473.shtml" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪科技</a>
               </div>
             </div>
           </div>
