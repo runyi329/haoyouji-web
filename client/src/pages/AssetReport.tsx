@@ -278,23 +278,14 @@ export default function AssetReport() {
             </div>
           </div>
 
-          {/* 最后的思考 */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-gray-900 mb-2">最后的思考</div>
-            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-              <p>
-                2025年，全国有1890万名教师，老师并不稀缺。稀缺的是能触达百万人的“共享节点”。
-              </p>
-              <p>
-                同理：拥有人脉并不稀缺，稀缺的是<span className="font-bold text-[#800000]">“让人脉被全网触达”的能力</span>。
-              </p>
-              <p className="pt-2 border-t border-gray-200">
-                在脉动平台，你无需成为社交达人。只要认真维护现有的社交圈，通过我们的“共享引擎”，你的存量人脉将通过触达产生不可估量的指数级收益。
-              </p>
-              <p className="font-bold text-[#800000] text-center pt-2">
-                加入脉动，从“拥有者”变成“触达者”。
-              </p>
-            </div>
+          {/* 海报展示 */}
+          <div className="mt-6 text-center">
+            <img 
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg" 
+              alt="我们的人脉有什么价值海报" 
+              className="w-full max-w-md mx-auto rounded-lg shadow-lg"
+            />
+            <p className="text-xs text-gray-500 mt-2">长按保存海报</p>
           </div>
         </div>
       )
