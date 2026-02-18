@@ -116,6 +116,7 @@ const MyEquityRedWhite = lazy(() => import("./pages/MyEquity_RedWhite"));
 const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
+const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
 const BusinessPlan = lazy(() => import("./pages/BusinessPlan"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -176,6 +177,7 @@ function Router() {
         <Route path="/parent/my-equity-old" component={MyEquity} />
         <Route path="/parent/equity-history" component={EquityHistoryArchive} />
         <Route path="/parent/asset-report" component={AssetReport} />
+        <Route path="/article/:id" component={ArticleDetail} />
         <Route path="/parent/promotion-rules" component={PromotionRules} />
         <Route path="/parent/business-plan" component={BusinessPlan} />
         <Route path="/parent/profile/invite" component={InviteCode} />

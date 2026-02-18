@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Loader2, ChevronDown, ArrowLeft } from "lucide-react";
+import { Loader2, ChevronDown, ArrowLeft, Share2, Check } from "lucide-react";
 import { Link } from "wouter";
 import { useState as useReactState, useEffect } from "react";
 
@@ -90,6 +90,20 @@ function ListItem({
   onToggle: () => void;
 }) {
   const itemRef = React.useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  // 分享功能
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止展开/收起
+    const shareUrl = `${BASE_URL}/article/${item.id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('复制失败:', error);
+    }
+  };
 
   // 当展开状态变化时，滚动到项目顶部
   React.useEffect(() => {
@@ -152,6 +166,25 @@ function ListItem({
         <div className="px-4 pb-4 border-t border-gray-100">
           <div className="pt-4">
             {item.content}
+          </div>
+          {/* 分享按钮 */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <button
+              onClick={handleShare}
+              className="flex items-center justify-center space-x-2 w-full py-2.5 bg-[#A80000] hover:bg-[#800000] text-white rounded-lg transition-colors"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span className="text-sm font-medium">链接已复制</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4" />
+                  <span className="text-sm font-medium">分享文章</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
