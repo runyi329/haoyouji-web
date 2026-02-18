@@ -101,7 +101,7 @@ export default function AssetReport() {
   const listItems: ListItem[] = [
     {
       id: 1,
-      title: "你的数据谁在赚钱？",
+      title: "我们的数据谁在赚钱？",
       tag: "热",
       content: (
         <div className="space-y-4">
@@ -212,7 +212,7 @@ export default function AssetReport() {
     },
     {
       id: 2,
-      title: "你的人脉有什么价值？",
+      title: "我们的人脉有什么价值？",
       tag: "新",
       content: (
         <div className="space-y-4">
