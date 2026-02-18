@@ -639,15 +639,7 @@ export default function AssetReport() {
                 </div>
               </div>
 
-              <div className="bg-[#FFF9E6] p-3 rounded border border-[#FFA500]">
-                <div className="flex items-start space-x-2">
-                  <span className="text-[#FFA500] text-lg flex-shrink-0">⚡</span>
-                  <div className="text-xs">
-                    <span className="font-bold text-gray-900">实时计算示例：</span>
-                    <span className="text-gray-700">假设当前有效节点数为1,280,520，每天新增标签数据5,200条，网络互动事件3,800次，价值握手120次，公司现金储备850万元，AI引擎计算出当日估值增量约为¥680万元。</span>
-                  </div>
-                </div>
-              </div>
+
             </div>
           </div>
 
