@@ -657,8 +657,16 @@ export default function AssetReport() {
               className="w-full h-auto rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
-            {/* 提示文字 */}
-            <p className="text-white text-center mt-4 text-sm">长按图片保存到相册</p>
+            {/* 下载按钮 */}
+            <a
+              href={previewImage}
+              download="脉动海报.jpg"
+              className="block w-full mt-4 bg-[#A80000] text-white py-3 px-6 rounded-lg font-medium text-center active:bg-[#8a0000] transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              💾 保存到相册
+            </a>
+            <p className="text-white/60 text-center mt-2 text-xs">或长按图片保存</p>
           </div>
         </div>
       )}
