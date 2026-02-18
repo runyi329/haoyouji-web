@@ -62,20 +62,45 @@ export default function ProfileEdit() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.basic) {
-          setBasicForm(data.basic);
-        }
-        if (data.verification) {
-          setVerificationForm(data.verification);
-        }
-        if (data.payment && data.payment.paymentMethod) {
-          setPaymentMethod(data.payment.paymentMethod);
-          setPaymentForm({
-            ...paymentForm,
-            ...data.payment,
+        
+        // 加载基本信息
+        if (data.user) {
+          setBasicForm({
+            name: data.user.displayName || "",
+            nickname: data.user.username || "",
+            email: data.user.email || "",
+            phone: data.profile?.phone || "",
           });
-          setHasSavedPayment(true);
-          setIsEditingPayment(false);
+        }
+        
+        // 加载实名认证信息
+        if (data.profile) {
+          setVerificationForm({
+            realName: data.profile.realName || "",
+            idCardNumber: data.profile.idCardNumber || "",
+            verificationStatus: data.profile.verificationStatus || "pending",
+          });
+          
+          // 加载支付账号信息
+          if (data.profile.paymentMethod) {
+            setPaymentMethod(data.profile.paymentMethod);
+            setPaymentForm({
+              bankName: data.profile.bankName || "",
+              bankAccountNumber: data.profile.bankAccountNumber || "",
+              bankAccountName: data.profile.bankAccountName || "",
+              walletNetwork: data.profile.walletNetwork || "TRC20",
+              digitalWalletAddress: data.profile.digitalWalletAddress || "",
+              walletQrCode: null,
+              walletQrCodeUrl: data.profile.walletQrCodeUrl || "",
+              wechatQrCode: null,
+              wechatQrCodeUrl: data.profile.wechatQrCodeUrl || "",
+              wechatAccountName: data.profile.wechatAccountName || "",
+            });
+            setHasSavedPayment(true);
+            setIsEditingPayment(false);
+          } else {
+            setHasSavedPayment(false);
+          }
         }
       }
     } catch (error) {
@@ -400,7 +425,7 @@ export default function ProfileEdit() {
             </Link>
             <h1 className="text-base font-semibold text-gray-900">编辑资料</h1>
           </div>
-          {(activeTab !== "payment" || (activeTab === "payment" && isEditingPayment)) && (
+          {(activeTab !== "payment" || !hasSavedPayment || isEditingPayment) && (
             <button
               onClick={handleSaveProfile}
               disabled={saving}
