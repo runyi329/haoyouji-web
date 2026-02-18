@@ -1,15 +1,22 @@
 import express from 'express';
-import { pool } from '../../db';
+import { getDb } from './db';
+import { sql } from 'drizzle-orm';
 
 const router = express.Router();
 
 // 获取所有权重配置
 router.get('/weights', async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM valuation_weights ORDER BY id ASC'
-    );
-    res.json(rows);
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: '数据库不可用' });
+    }
+    
+    const result = await db.execute(sql`
+      SELECT * FROM valuation_weights ORDER BY id ASC
+    `);
+    
+    res.json(result);
   } catch (error) {
     console.error('获取权重配置失败:', error);
     res.status(500).json({ error: '获取权重配置失败' });
@@ -24,26 +31,25 @@ router.put('/weights', async (req, res) => {
     return res.status(400).json({ error: '参数格式错误' });
   }
 
-  const connection = await pool.getConnection();
-  
   try {
-    await connection.beginTransaction();
-    
-    for (const weight of weights) {
-      await connection.query(
-        'UPDATE valuation_weights SET weight_value = ?, is_enabled = ? WHERE id = ?',
-        [weight.weight_value, weight.is_enabled ? 1 : 0, weight.id]
-      );
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: '数据库不可用' });
     }
     
-    await connection.commit();
+    // 逐个更新权重配置
+    for (const weight of weights) {
+      await db.execute(sql`
+        UPDATE valuation_weights 
+        SET weight_value = ${weight.weight_value}, is_enabled = ${weight.is_enabled ? 1 : 0} 
+        WHERE id = ${weight.id}
+      `);
+    }
+    
     res.json({ success: true });
   } catch (error) {
-    await connection.rollback();
     console.error('更新权重配置失败:', error);
     res.status(500).json({ error: '更新权重配置失败' });
-  } finally {
-    connection.release();
   }
 });
 

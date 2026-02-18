@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from 'wouter';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || '';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface ValuationWeight {
   id: number;
