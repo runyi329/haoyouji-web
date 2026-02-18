@@ -38,7 +38,13 @@ export default function ProfileEdit() {
     digitalWalletAddress: "",
     walletQrCode: null as File | null,
     walletQrCodeUrl: "",
-    // 数字钱包
+    // 支付宝
+    alipayAccount: "",
+    alipayAccountName: "",
+    alipayQrCode: null as File | null,
+    alipayQrCodeUrl: "",
+    alipayInputMethod: "account" as "account" | "qrcode",
+    // 微信
     wechatQrCode: null as File | null,
     wechatQrCodeUrl: "",
     wechatAccountName: "",
@@ -92,6 +98,11 @@ export default function ProfileEdit() {
               digitalWalletAddress: data.profile.digitalWalletAddress || "",
               walletQrCode: null,
               walletQrCodeUrl: data.profile.walletQrCodeUrl || "",
+              alipayAccount: data.profile.alipayAccount || "",
+              alipayAccountName: data.profile.alipayAccountName || "",
+              alipayQrCode: null,
+              alipayQrCodeUrl: data.profile.alipayQrCodeUrl || "",
+              alipayInputMethod: (data.profile.alipayAccount ? "account" : "qrcode") as "account" | "qrcode",
               wechatQrCode: null,
               wechatQrCodeUrl: data.profile.wechatQrCodeUrl || "",
               wechatAccountName: data.profile.wechatAccountName || "",
