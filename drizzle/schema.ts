@@ -1044,3 +1044,70 @@ export const equityContributions = mysqlTable("equity_contributions", {
 	index("idx_contribution_type").on(table.contributionType),
 	index("idx_created_at").on(table.createdAt),
 ]);
+
+// ==================== 用户扩展资料系统 ====================
+
+export const userProfiles = mysqlTable("user_profiles", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull().unique(),
+	
+	// 基本信息
+	nickname: varchar({ length: 100 }),
+	phone: varchar({ length: 20 }),
+	
+	// 实名认证
+	realName: varchar("real_name", { length: 100 }),
+	idCardNumber: varchar("id_card_number", { length: 18 }),
+	idCardFrontUrl: text("id_card_front_url"),
+	idCardBackUrl: text("id_card_back_url"),
+	verificationStatus: mysqlEnum("verification_status", ['pending', 'verified', 'rejected']).default('pending'),
+	verifiedAt: timestamp("verified_at", { mode: 'string' }),
+	
+	// 支付账号
+	bankName: varchar("bank_name", { length: 100 }),
+	bankAccountNumber: varchar("bank_account_number", { length: 50 }),
+	bankAccountName: varchar("bank_account_name", { length: 100 }),
+	digitalWalletAddress: varchar("digital_wallet_address", { length: 255 }),
+	alipayAccount: varchar("alipay_account", { length: 100 }),
+	wechatAccount: varchar("wechat_account", { length: 100 }),
+	
+	// 时间戳
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_user_id").on(table.userId),
+	index("idx_verification_status").on(table.verificationStatus),
+]);
+
+export const shippingAddresses = mysqlTable("shipping_addresses", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	
+	// 地址信息
+	recipientName: varchar("recipient_name", { length: 100 }).notNull(),
+	recipientPhone: varchar("recipient_phone", { length: 20 }).notNull(),
+	province: varchar({ length: 50 }),
+	city: varchar({ length: 50 }),
+	district: varchar({ length: 50 }),
+	detailedAddress: text("detailed_address").notNull(),
+	postalCode: varchar("postal_code", { length: 10 }),
+	
+	// 标记
+	isDefault: tinyint("is_default").default(0).notNull(),
+	label: varchar({ length: 20 }), // 家、公司、学校等
+	
+	// 时间戳
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_user_id").on(table.userId),
+	index("idx_is_default").on(table.isDefault),
+]);
+
+// TypeScript类型定义
+export type UserProfile = typeof userProfiles.$inferSelect;
+export type InsertUserProfile = typeof userProfiles.$inferInsert;
+export type ShippingAddress = typeof shippingAddresses.$inferSelect;
+export type InsertShippingAddress = typeof shippingAddresses.$inferInsert;

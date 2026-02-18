@@ -80,6 +80,7 @@ const TagAnalytics = lazy(() => import("./pages/TagAnalytics"));
 const SharingSettings = lazy(() => import("./pages/parent/contacts/SharingSettings"));
 const ThemeSettings = lazy(() => import("./pages/parent/ThemeSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
+const ProfileEdit = lazy(() => import("./pages/ProfileEdit"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
 const InviteCode = lazy(() => import("./pages/InviteCode"));
 const InvitedFriendsList = lazy(() => import("./pages/InvitedFriendsList"));
@@ -211,6 +212,7 @@ function Router() {
         <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
+        <Route path="/profile/edit" component={ProfileEdit} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />
