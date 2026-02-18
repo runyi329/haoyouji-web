@@ -129,6 +129,10 @@ export default function AssetReport() {
                   <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你在App上买菜，本质上是免费为平台贡献了宝贵数据，而平台转手就变现了。你只拿到了白菜，平台却增加了身价。</span>
                 </div>
               </div>
+              {/* 来源链接 */}
+              <div className="mt-2 text-xs text-gray-500">
+                来源：<a href="https://finance.sina.cn/stock/jdts/2026-02-16/detail-inhmyzkh2857813.d.html" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪财经</a>
+              </div>
             </div>
           </div>
 
@@ -146,6 +150,10 @@ export default function AssetReport() {
                   <span className="text-gray-700">你每天顶着太阳骑车，其实是在用体力为平台采集数据，平台却独享180亿收益，而你什么也拿不到。</span>
                 </div>
               </div>
+              {/* 来源链接 */}
+              <div className="mt-2 text-xs text-gray-500">
+                来源：<a href="http://tech.sina.cn/zt_d/mobikemeituan" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪科技</a>
+              </div>
             </div>
           </div>
 
@@ -162,6 +170,10 @@ export default function AssetReport() {
                   <span className="font-bold text-gray-900">算账：</span>
                   <span className="text-gray-700">折算下来，每个用户只需"呆在里面"，就值约40美元（折合人民币280元）。你的社交数据被平台垄断，你却一无所获。</span>
                 </div>
+              </div>
+              {/* 来源链接 */}
+              <div className="mt-2 text-xs text-gray-500">
+                来源：<a href="http://tech.sina.com.cn/i/2014-02-20/06389176473.shtml" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline">新浪科技</a>
               </div>
             </div>
           </div>
