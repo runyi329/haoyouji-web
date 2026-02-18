@@ -269,11 +269,11 @@ export default function AssetReport() {
                 <div className="bg-white/10 p-3 rounded">
                   <div className="font-bold text-[#FFA500] mb-1">1. 好友共享（流量杠杆）</div>
                   <p className="text-white/90 mb-2">
-                    你手里的人脉通过平台共享给有需要的人。就像老师的录播课，一份资源可以卖给全网。你的人脉每被触达一次，你就产生一次价值回报。
+                    您通过平台与更多的人分享了你的人脉信息，就像老师的录播课，可以把自己的资源共享给更多需要的学生。你的人脉每共享一次，价值就提升一步。
                   </p>
                   <div className="bg-white/10 p-2 rounded text-xs">
                     <span className="font-bold text-[#FFA500]">举例：</span>
-                    <span className="text-white/90">你认识一位资深律师，平时只能帮你自己。但通过脉动，这位律师的信息被100个有法律需求的人触达，你从中获得触达收益。律师获得客户，需求方解决问题，你获得回报——三方共赢。</span>
+                    <span className="text-white/90">你认识一位资深律师，平时只能帮你自己。但是通过脉动共享，有更多有需求的人可以看到你给这位律师人脉打的主观标签，从而通过你的介绍获得律师的服务。你创造了一个三赢的局面。</span>
                   </div>
                 </div>
                 <div className="bg-white/10 p-3 rounded">
