@@ -573,9 +573,10 @@ export default function ProfileEdit() {
             {activeTab === "payment" && (
               <div className="space-y-6">
                 {/* 如果已保存且不在编辑状态，显示已保存的信息 */}
-                {hasSavedPayment && !isEditingPayment ? (
-                  renderSavedPaymentInfo()
-                ) : (
+                {hasSavedPayment && !isEditingPayment && renderSavedPaymentInfo()}
+                
+                {/* 编辑模式或没有保存信息时，显示表单 */}
+                {(!hasSavedPayment || isEditingPayment) && (
                   <>
                     {/* 支付方式选择 */}
                     <div>
