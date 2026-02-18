@@ -5,6 +5,69 @@ import { Link } from "wouter";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
+// 保存图片到相册
+const saveImageToAlbum = async (imageUrl: string) => {
+  try {
+    // @ts-ignore - 微信小程序 API
+    if (typeof wx !== 'undefined' && wx.saveImageToPhotosAlbum) {
+      // 先下载图片
+      // @ts-ignore
+      wx.downloadFile({
+        url: imageUrl,
+        success: (res: any) => {
+          if (res.statusCode === 200) {
+            // 保存到相册
+            // @ts-ignore
+            wx.saveImageToPhotosAlbum({
+              filePath: res.tempFilePath,
+              success: () => {
+                // @ts-ignore
+                wx.showToast({
+                  title: '保存成功',
+                  icon: 'success'
+                });
+              },
+              fail: (err: any) => {
+                if (err.errMsg.includes('auth deny')) {
+                  // @ts-ignore
+                  wx.showModal({
+                    title: '提示',
+                    content: '需要您授权保存相册权限',
+                    success: (modalRes: any) => {
+                      if (modalRes.confirm) {
+                        // @ts-ignore
+                        wx.openSetting();
+                      }
+                    }
+                  });
+                } else {
+                  // @ts-ignore
+                  wx.showToast({
+                    title: '保存失败',
+                    icon: 'none'
+                  });
+                }
+              }
+            });
+          }
+        },
+        fail: () => {
+          // @ts-ignore
+          wx.showToast({
+            title: '下载失败',
+            icon: 'none'
+          });
+        }
+      });
+    } else {
+      // 非小程序环境，提示长按保存
+      alert('请长按图片保存到相册');
+    }
+  } catch (error) {
+    console.error('保存图片失败:', error);
+  }
+};
+
 // 列表项数据类型
 interface ListItem {
   id: number;
@@ -204,7 +267,13 @@ export default function AssetReport() {
                 alt="你的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md"
               />
-              <p className="text-sm text-gray-500 text-center">长按保存海报</p>
+              <button
+                onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
+                className="w-full mt-3 bg-[#A80000] text-white py-2 px-4 rounded-lg font-medium active:bg-[#8a0000] transition-colors"
+              >
+                💾 保存到相册
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-1">或长按图片保存</p>
             </div>
           </div>
         </div>
@@ -279,13 +348,22 @@ export default function AssetReport() {
           </div>
 
           {/* 海报展示 */}
-          <div className="mt-6 text-center">
-            <img 
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg" 
-              alt="我们的人脉有什么价值海报" 
-              className="w-full max-w-md mx-auto rounded-lg shadow-lg"
-            />
-            <p className="text-xs text-gray-500 mt-2">长按保存海报</p>
+          <div className="bg-gray-50 p-4 rounded-lg mt-4">
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
+            <div className="space-y-2">
+              <img 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg" 
+                alt="我们的人脉有什么价值海报" 
+                className="w-full rounded-lg shadow-md"
+              />
+              <button
+                onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
+                className="w-full mt-3 bg-[#A80000] text-white py-2 px-4 rounded-lg font-medium active:bg-[#8a0000] transition-colors"
+              >
+                💾 保存到相册
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-1">或长按图片保存</p>
+            </div>
           </div>
         </div>
       )
