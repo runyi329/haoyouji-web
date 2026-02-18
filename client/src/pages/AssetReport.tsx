@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ChevronDown, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
@@ -88,6 +88,17 @@ function ListItem({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const itemRef = React.useRef<HTMLDivElement>(null);
+
+  // 当展开状态变化时，滚动到项目顶部
+  React.useEffect(() => {
+    if (isExpanded && itemRef.current) {
+      // 延迟一点执行，等待DOM更新完成
+      setTimeout(() => {
+        itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [isExpanded]);
   // 序号颜色：前3名使用渐变色，其他使用灰色
   const getNumberColor = (idx: number) => {
     if (idx === 0) return "text-[#FF4500]"; // 第1名：橙红色
@@ -104,7 +115,7 @@ function ListItem({
   };
 
   return (
-    <div className="bg-white">
+    <div ref={itemRef} className="bg-white">
       {/* 列表项头部 - 始终可见 */}
       <div 
         className="flex items-center px-4 py-2.5 cursor-pointer active:bg-gray-50 transition-colors"
