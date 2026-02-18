@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ChevronDown, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
+import { useState as useReactState, useEffect } from "react";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -158,13 +159,28 @@ function ListItem({
       {/* 分割线 */}
       <div className="border-b border-gray-100" />
     </div>
-  );
-}
+  export default function AssetReport() {
+  const { data: stats, isLoading } = trpc.getStats.useQuery();
+  const [expandedId, setExpandedId] = React.useState<number | null>(null);
+  const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+  const [currentValuation, setCurrentValuation] = useReactState(0);
+  const [isValuationLoading, setIsValuationLoading] = useReactState(true);
 
-export default function AssetReport() {
-  const { data: stats, isLoading } = trpc.contacts.stats.useQuery();
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // 加载当前估值
+  useEffect(() => {
+    const fetchValuation = async () => {
+      try {
+        const response = await fetch(`${BASE_URL}/api/valuation/current`);
+        const data = await response.json();
+        setCurrentValuation(data.total_valuation);
+      } catch (error) {
+        console.error('获取估值失败:', error);
+      } finally {
+        setIsValuationLoading(false);
+      }
+    };
+    fetchValuation();
+  }, []);
   
   // 模拟全国节点总数（实际应从后端获取）
   const totalNodes = 1280520;
@@ -850,39 +866,77 @@ export default function AssetReport() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 顶部：红区（Red Zone） - 核心价值主张 */}
-      <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-12 rounded-b-[30px] relative">
+      {/* 顶部：红区（Red Zone） - 实时估值展示 */}
+      <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-12 rounded-b-[30px] relative overflow-hidden">
+        {/* 背景装饰：半透明公式和专业术语 */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+          <div className="absolute top-10 left-4 text-xs font-mono transform -rotate-12">
+            V(t) = ∫₀ᵗ [α·H(τ) + β·F(τ) + γ·T(τ)] · e^(-r(t-τ)) · N²ₑff(τ) dτ
+          </div>
+          <div className="absolute top-24 right-6 text-xs transform rotate-6">
+            拓扑信息密度
+          </div>
+          <div className="absolute bottom-16 left-8 text-xs font-mono transform -rotate-6">
+            α = 0.68 | β = 0.52 | γ = 1.24
+          </div>
+          <div className="absolute bottom-28 right-4 text-xs transform rotate-12">
+            网络折现引擎
+          </div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-6xl font-bold opacity-5">
+            AI
+          </div>
+        </div>
+
         {/* 返回按钮 */}
         <Link href={BASE_URL}>
-          <a className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6">
+          <a className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6 relative z-10">
             <ArrowLeft className="w-5 h-5" />
             <span className="font-medium">返回</span>
           </a>
         </Link>
         
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 relative z-10">
           {/* 主标题 */}
-          <h1 className="text-2xl font-bold">
-            为什么要把人脉数据迁移到这里？
+          <h1 className="text-xl font-bold">
+            脉动网实时估值
           </h1>
           
-          {/* 核心数字 */}
-          <div className="text-5xl font-bold">
-            {totalNodes.toLocaleString()}
+          {/* 核心数字：实时估值 */}
+          <div className="relative">
+            {isValuationLoading ? (
+              <Loader2 className="w-12 h-12 animate-spin mx-auto" />
+            ) : (
+              <div className="text-5xl font-bold animate-pulse">
+                ¥{(currentValuation / 10000).toFixed(1)}万
+              </div>
+            )}
+            {/* 金色光效 */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/20 to-transparent animate-shimmer"></div>
           </div>
           
           {/* 副标题 */}
-          <p className="text-base text-white/90">
-            全国有效信任节点总数
+          <p className="text-sm text-white/80">
+            基于AI实时计算的平台估值
           </p>
           
           {/* 核心价值主张 */}
-          <div className="mt-4 text-sm text-white/90">
+          <div className="mt-4 text-xs text-white/70">
             <p>
-              每一个节点都在为全平台的股价注资
+              每一个用户行为都在实时推高平台价值
             </p>
           </div>
         </div>
+
+        {/* 添加闪光动画 */}
+        <style jsx>{`
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+          .animate-shimmer {
+            animation: shimmer 3s infinite;
+          }
+        `}</style>
       </div>
 
       {/* 中部：列表区域（新浪热榜风格） */}
