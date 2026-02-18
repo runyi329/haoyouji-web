@@ -212,7 +212,7 @@ export default function AssetReport() {
     },
     {
       id: 2,
-      title: "价值不在于“拥有”，而在于“触达”",
+      title: "你的人脉有什么价值？",
       tag: "新",
       content: (
         <div className="space-y-4">
@@ -240,7 +240,7 @@ export default function AssetReport() {
                 </div>
               </div>
               <p className="pt-2 font-bold text-[#800000]">
-                问题本质：不是你的人脉不够多，而是你的触达能力太有限。
+                问题本质：不是你的人脉不够多，而是你的触达能力太有限。<span className="block mt-2">价值不在于“拥有”，而在于“触达”。</span>
               </p>
             </div>
           </div>
