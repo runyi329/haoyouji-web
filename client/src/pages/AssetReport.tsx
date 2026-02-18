@@ -223,25 +223,15 @@ export default function AssetReport() {
             </p>
           </div>
 
-          {/* 一个残酷的真相 */}
+          {/* 一个残酷的对比 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-gray-900 mb-2">一个残酷的真相</div>
+            <div className="font-bold text-gray-900 mb-2">一个残酷的对比</div>
             <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
-                全国有1890万名教师，但只有极少数人实现了财富自由。差距不在于教学水平，而在于对“价值触达”的理解。
+                抖音英语老师雪梨，曾在线下教育机构工作8年。线下小班教学，每天最多触达20-30个学生。2020年转型线上平台后，通过微信视频号和抖音发布教学内容，如今拥有<span className="font-bold text-[#800000]">560万粉丝</span>，单场直播触达<span className="font-bold text-[#800000]">2.3万人</span>。即使每个课程只卖99元，一个晚上也能轻松收入过百万。
               </p>
-              <div className="bg-white p-3 rounded space-y-2">
-                <div>
-                  <span className="font-bold text-gray-900">传统英语老师的困境：</span>
-                  <span className="text-gray-700">在线下开私教班，每课200元。即使教学质量再好，也受限于体力、时间和地理位置。一天最多教10个学生，月收入上限6万元。这是典型的“体力变现”模式——你的价值被困在教室的四堵墙内。</span>
-                </div>
-                <div>
-                  <span className="font-bold text-gray-900">平台型教师的突破：</span>
-                  <span className="text-gray-700">将同样的课程打包成99元的数字产品，通过平台触达全网。即使教学效果只有线下的一半，但因为触达了100万人，总价值达到9900万元。这就是“触达变现”的威力。</span>
-                </div>
-              </div>
               <p className="pt-2 font-bold text-[#800000]">
-                核心差异：决定财富上限的，不是你的单次服务质量，而是你被触达的人数。
+                核心差异：线下一天触达20人，线上一场触达2.3万人——触达能力提升超1000倍。决定收入上限的，不是其他老师不会教，而是触达人数。
               </p>
             </div>
           </div>
