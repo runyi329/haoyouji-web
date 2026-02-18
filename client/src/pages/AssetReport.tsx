@@ -200,7 +200,7 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/mHPPedQPYBupwtkn.jpg" 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg" 
                 alt="你的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md"
               />
