@@ -667,57 +667,6 @@ export default function AssetReport() {
     },
     {
       id: 6,
-      title: "股价增值原理：您的资产如何持续升值？",
-      content: (
-        <div className="space-y-4">
-          {/* 公式展示 */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="text-center">
-              <div className="text-sm text-gray-600 mb-2">股价计算公式</div>
-              <div className="text-sm font-mono">
-                <span className="text-gray-900">股价 = </span>
-                <span className="text-[#800000] font-bold">
-                  (全国资产总量 + 现金储备)
-                </span>
-                <span className="text-gray-900"> / </span>
-                <span className="text-[#800000] font-bold">
-                  已发行确权股总数
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          {/* 核心解释 */}
-          <div className="space-y-3 text-sm">
-            <div className="flex items-start space-x-2">
-              <div className="w-6 h-6 rounded-full bg-[#800000] flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">1</span>
-              </div>
-              <div>
-                <div className="font-bold text-gray-900 mb-1">数据资产化</div>
-                <div className="text-gray-700">
-                  每录入一条熟人数据，分子（资产总量）即刻增长。
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-2">
-              <div className="w-6 h-6 rounded-full bg-[#800000] flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">2</span>
-              </div>
-              <div>
-                <div className="font-bold text-gray-900 mb-1">保护机制</div>
-                <div className="text-gray-700">
-                  总资产增长速度（指数级）远超股数发行速度（线性），股价自然上涨。
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 7,
       title: "确权保障：您的资产如何得到保护？",
       content: (
         <div className="space-y-3 text-sm">
@@ -753,7 +702,7 @@ export default function AssetReport() {
         </div>
       )    },
     {
-      id: 8,
+      id: 7,
       title: "立即行动：如何开始经营您的人脉资产？",    content: (
         <div className="space-y-4">
           <div className="space-y-3 text-sm">
