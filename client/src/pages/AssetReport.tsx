@@ -44,7 +44,7 @@ function ListItem({
     <div className="bg-white">
       {/* 列表项头部 - 始终可见 */}
       <div 
-        className="flex items-center px-4 py-4 cursor-pointer active:bg-gray-50 transition-colors"
+        className="flex items-center px-4 py-2.5 cursor-pointer active:bg-gray-50 transition-colors"
         onClick={onToggle}
       >
         {/* 左侧序号 */}
@@ -54,18 +54,18 @@ function ListItem({
         
         {/* 中间标题 */}
         <div className="flex-1 px-3">
-          <span className="text-gray-900 text-base">{item.title}</span>
+          <span className="text-gray-900 text-sm">{item.title}</span>
         </div>
         
         {/* 右侧：标签 + 箭头 */}
         <div className="flex items-center space-x-2 flex-shrink-0">
           {item.tag && (
-            <span className={`text-xs px-2 py-0.5 rounded ${getTagColor(item.tag)}`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${getTagColor(item.tag)}`}>
               {item.tag}
             </span>
           )}
           <ChevronDown 
-            className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+            className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
               isExpanded ? 'rotate-180' : ''
             }`} 
           />
