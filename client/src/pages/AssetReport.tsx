@@ -264,10 +264,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg" 
-                alt="你的数据谁在赚钱海报" 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VuEaPpkChloHQDeI.jpg" 
+                alt="我们的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
+                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VuEaPpkChloHQDeI.jpg')}
               />
             </div>
           </div>
@@ -347,10 +347,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg" 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/sNrNfyCJWacnoJkj.jpg" 
                 alt="我们的人脉有什么价值海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
+                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/sNrNfyCJWacnoJkj.jpg')}
               />
             </div>
           </div>
