@@ -573,7 +573,35 @@ export default function ProfileEdit() {
             {activeTab === "payment" && (
               <div className="space-y-6">
                 {/* 如果已保存且不在编辑状态，显示已保存的信息 */}
-                {hasSavedPayment && !isEditingPayment && renderSavedPaymentInfo()}
+                {hasSavedPayment && !isEditingPayment && (
+                  <>
+                    {renderSavedPaymentInfo()}
+                    
+                    {/* 添加其他支付方式 */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">添加其他支付方式</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { value: "digital_wallet", label: "数字钱包" },
+                          { value: "alipay", label: "支付宝" },
+                          { value: "wechat", label: "微信" },
+                        ].map((method) => (
+                          <button
+                            key={method.value}
+                            type="button"
+                            onClick={() => {
+                              setPaymentMethod(method.value as any);
+                              setIsEditingPayment(true);
+                            }}
+                            className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
+                          >
+                            {method.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
                 
                 {/* 编辑模式或没有保存信息时，显示表单 */}
                 {(!hasSavedPayment || isEditingPayment) && (
