@@ -235,7 +235,7 @@ export default function AssetReport() {
                   <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
                   <div>
                     <span className="font-bold text-gray-900">现实困境：</span>
-                    <span className="text-gray-700">你有2000个微信好友，但90%的人常年不联系。他们躺在你的通讯录里，既不产生价值，还在随时间贬值。这些“沉睡的人脉”就像银行里的死钱，毫无收益。</span>
+                    <span className="text-gray-700">你有几千个微信好友，但95%的人常年不维护。他们躺在你的微信里既不产生价值，还在随时间贬值。</span>
                   </div>
                 </div>
               </div>
