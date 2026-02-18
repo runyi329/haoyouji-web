@@ -320,11 +320,7 @@ export default function Profile() {
 
   // 处理编辑个人信息
   const handleEditProfile = () => {
-    setEditForm({
-      name: user?.name || "",
-      email: user?.email || "",
-    });
-    setIsEditDialogOpen(true);
+    navigate("/profile/edit");
   };
 
   // 提交个人信息更新

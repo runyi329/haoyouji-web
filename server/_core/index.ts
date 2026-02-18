@@ -97,6 +97,9 @@ async function startServer() {
   app.use('/api/valuation', valuationModule.default);
   const adminValuationModule = await import('../admin-valuation-api.js');
   app.use('/api/admin/valuation', adminValuationModule.default);
+  // User profile management router
+  const userProfileModule = await import('../user-profile-api.js');
+  app.use('/api/user', userProfileModule.default);
   // tRPC API
   app.use(
     "/api/trpc",
