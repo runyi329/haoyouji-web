@@ -175,9 +175,8 @@ export default function ProfileEdit() {
           <button
             onClick={handleSaveProfile}
             disabled={saving || activeTab === 'address'}
-            className="flex items-center gap-2 px-4 py-2 bg-[#A80000] text-white rounded-lg hover:bg-[#800000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-[#A80000] text-white rounded-lg hover:bg-[#800000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4" />
             {saving ? '保存中...' : '保存'}
           </button>
         </div>
