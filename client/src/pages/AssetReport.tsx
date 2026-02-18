@@ -153,6 +153,7 @@ function ListItem({
 export default function AssetReport() {
   const { data: stats, isLoading } = trpc.contacts.stats.useQuery();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   // 模拟全国节点总数（实际应从后端获取）
   const totalNodes = 1280520;
@@ -265,7 +266,8 @@ export default function AssetReport() {
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg" 
                 alt="你的数据谁在赚钱海报" 
-                className="w-full rounded-lg shadow-md"
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
               />
               <button
                 onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/VypmCpzNUoXNLSQC.jpg')}
@@ -354,7 +356,8 @@ export default function AssetReport() {
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg" 
                 alt="我们的人脉有什么价值海报" 
-                className="w-full rounded-lg shadow-md"
+                className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
               />
               <button
                 onClick={() => saveImageToAlbum('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MAuQMOLygKpWahmQ.jpg')}
@@ -632,6 +635,33 @@ export default function AssetReport() {
           />
         ))}
       </div>
+
+      {/* 图片全屏预览 */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-2xl w-full">
+            {/* 关闭按钮 */}
+            <button
+              className="absolute -top-12 right-0 text-white text-2xl w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
+              onClick={() => setPreviewImage(null)}
+            >
+              ×
+            </button>
+            {/* 图片 */}
+            <img 
+              src={previewImage} 
+              alt="海报预览" 
+              className="w-full h-auto rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            {/* 提示文字 */}
+            <p className="text-white text-center mt-4 text-sm">长按图片保存到相册</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
