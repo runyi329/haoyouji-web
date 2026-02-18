@@ -200,18 +200,18 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-3">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/bYcNPhsDrPOSkaMT.jpg" 
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/omNxgjghEPxmUAnK.jpg" 
                 alt="你的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md"
               />
               <a 
-                href="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/bYcNPhsDrPOSkaMT.jpg" 
+                href="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/omNxgjghEPxmUAnK.jpg" 
                 download="你的数据谁在赚钱.jpg"
                 className="block w-full bg-[#800000] text-white text-center py-3 rounded-lg font-bold"
               >
-                点击下载海报
+                📥 下载海报到相册
               </a>
-              <p className="text-xs text-gray-500 text-center">长按图片也可保存到相册</p>
+              <p className="text-xs text-gray-500 text-center">或长按图片（2-3秒）保存</p>
             </div>
           </div>
         </div>
