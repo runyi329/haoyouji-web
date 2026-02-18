@@ -228,7 +228,7 @@ router.post(
       // 根据支付方式添加对应字段
       if (data.paymentMethod === "bank_card") {
         updateData.bankName = data.bankName;
-        updateData.bankCardNumber = data.bankCardNumber;
+        updateData.bankAccountNumber = data.bankAccountNumber;
         updateData.bankAccountName = data.bankAccountName;
       } else if (data.paymentMethod === "digital_wallet") {
         updateData.walletNetwork = data.walletNetwork;
