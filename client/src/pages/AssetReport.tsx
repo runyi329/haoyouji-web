@@ -108,7 +108,7 @@ export default function AssetReport() {
           {/* 引言 */}
           <div className="text-sm text-gray-700 leading-relaxed">
             <p className="mb-3">
-              在数字时代，我们每天使用各种App"免费"服务，却不知不觉中成了平台的"商品"。当一个互联网产品免费时，你不是客户，而是被售卖的商品。你的每一次点击、购买和社交互动，都在暗中被标价。
+              在数字时代，我们每天使用各种App服务，却不知不觉中成了平台的"商品"。你付费消费的同时，你的每一次点击、购买和社交互动，都在暗中被标价——但这份数据价值，你一分钱也没拿到。
             </p>
             <p>
               以下通过三个真实收购案例，我们来算一笔账，看看你的数据到底价值几何。这些数据不是抽象的概念，而是直接转化为"收购价"的真实价值。
@@ -126,7 +126,7 @@ export default function AssetReport() {
                 <span className="text-[#FF4500] font-bold flex-shrink-0">●</span>
                 <div>
                   <span className="font-bold text-gray-900">算账：</span>
-                  <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你在App上买菜，本质上是免费为平台贡献了宝贵数据，而平台转手就变现了。你只拿到了白菜，平台却增加了身价。</span>
+                  <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你付费买菜的同时，还为平台贡献了宝贵数据，而平台转手就把这份数据变现了。你只拿到了白菜，平台却增加了身价。</span>
                 </div>
               </div>
             </div>
