@@ -26,6 +26,8 @@ export default function ProfileEdit() {
 
   // 支付账号表单
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
+  const [hasSavedPayment, setHasSavedPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     // 银行卡
     bankName: "",
@@ -36,13 +38,7 @@ export default function ProfileEdit() {
     digitalWalletAddress: "",
     walletQrCode: null as File | null,
     walletQrCodeUrl: "",
-    // 支付宝
-    alipayAccount: "",
-    alipayAccountName: "",
-    alipayQrCode: null as File | null,
-    alipayQrCodeUrl: "",
-    alipayInputMethod: "account" as "account" | "qrcode",
-    // 微信
+    // 数字钱包
     wechatQrCode: null as File | null,
     wechatQrCodeUrl: "",
     wechatAccountName: "",
@@ -72,12 +68,14 @@ export default function ProfileEdit() {
         if (data.verification) {
           setVerificationForm(data.verification);
         }
-        if (data.payment) {
+        if (data.payment && data.payment.paymentMethod) {
           setPaymentMethod(data.payment.paymentMethod);
           setPaymentForm({
             ...paymentForm,
             ...data.payment,
           });
+          setHasSavedPayment(true);
+          setIsEditingPayment(false);
         }
       }
     } catch (error) {
@@ -152,6 +150,12 @@ export default function ProfileEdit() {
       if (res.ok) {
         setMessage({ type: "success", text: "保存成功" });
         setTimeout(() => setMessage(null), 2000);
+        
+        // 如果是支付账号，保存成功后切换到只读模式
+        if (activeTab === "payment") {
+          setHasSavedPayment(true);
+          setIsEditingPayment(false);
+        }
       } else {
         setMessage({ type: "error", text: "保存失败" });
         setTimeout(() => setMessage(null), 2000);
@@ -171,6 +175,49 @@ export default function ProfileEdit() {
         ...paymentForm,
         [field]: file,
       });
+    }
+  };
+
+  const handleEditPayment = () => {
+    setIsEditingPayment(true);
+  };
+
+  const handleDeletePayment = async () => {
+    if (!confirm("确定要删除支付账号信息吗？")) return;
+
+    try {
+      const res = await fetch("/api/user/profile/payment", {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        setPaymentMethod(null);
+        setPaymentForm({
+          bankName: "",
+          bankAccountNumber: "",
+          bankAccountName: "",
+          walletNetwork: "TRC20",
+          digitalWalletAddress: "",
+          walletQrCode: null,
+          walletQrCodeUrl: "",
+          alipayAccount: "",
+          alipayAccountName: "",
+          alipayQrCode: null,
+          alipayQrCodeUrl: "",
+          alipayInputMethod: "account",
+          wechatQrCode: null,
+          wechatQrCodeUrl: "",
+          wechatAccountName: "",
+        });
+        setHasSavedPayment(false);
+        setIsEditingPayment(false);
+        setMessage({ type: "success", text: "删除成功" });
+        setTimeout(() => setMessage(null), 2000);
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "删除失败" });
+      setTimeout(() => setMessage(null), 2000);
     }
   };
 
@@ -221,6 +268,125 @@ export default function ProfileEdit() {
     }
   };
 
+  // 渲染已保存的支付信息
+  const renderSavedPaymentInfo = () => {
+    if (!hasSavedPayment || !paymentMethod) return null;
+
+    return (
+      <div className="px-5 py-4 border border-gray-200 rounded-lg bg-white">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-medium text-gray-500">支付方式</span>
+              <span className="px-2.5 py-0.5 bg-[#A80000] text-white text-xs font-medium rounded">
+                {paymentMethod === "bank_card" && "银行卡"}
+                {paymentMethod === "digital_wallet" && "数字钱包"}
+                {paymentMethod === "alipay" && "支付宝"}
+                {paymentMethod === "wechat" && "微信"}
+              </span>
+            </div>
+
+            {/* 银行卡信息 */}
+            {paymentMethod === "bank_card" && (
+              <div className="space-y-2">
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">银行名称：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.bankName}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">银行卡号：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.bankAccountNumber}</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">持卡人：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.bankAccountName}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 数字钱包信息 */}
+            {paymentMethod === "digital_wallet" && (
+              <div className="space-y-2">
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">收款网络：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.walletNetwork}</span>
+                </div>
+                {paymentForm.digitalWalletAddress && (
+                  <div className="flex items-center text-sm">
+                    <span className="text-gray-500 w-24">钱包地址：</span>
+                    <span className="text-gray-900 font-medium font-mono text-xs break-all">
+                      {paymentForm.digitalWalletAddress}
+                    </span>
+                  </div>
+                )}
+                {paymentForm.walletQrCodeUrl && (
+                  <div className="flex items-center text-sm">
+                    <span className="text-gray-500 w-24">收款码：</span>
+                    <span className="text-blue-600 text-xs">已上传</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 支付宝信息 */}
+            {paymentMethod === "alipay" && (
+              <div className="space-y-2">
+                {paymentForm.alipayAccount && (
+                  <div className="flex items-center text-sm">
+                    <span className="text-gray-500 w-24">支付宝账号：</span>
+                    <span className="text-gray-900 font-medium">{paymentForm.alipayAccount}</span>
+                  </div>
+                )}
+                {paymentForm.alipayQrCodeUrl && (
+                  <div className="flex items-center text-sm">
+                    <span className="text-gray-500 w-24">收款码：</span>
+                    <span className="text-blue-600 text-xs">已上传</span>
+                  </div>
+                )}
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">收款人：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.alipayAccountName}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 微信信息 */}
+            {paymentMethod === "wechat" && (
+              <div className="space-y-2">
+                {paymentForm.wechatQrCodeUrl && (
+                  <div className="flex items-center text-sm">
+                    <span className="text-gray-500 w-24">收款码：</span>
+                    <span className="text-blue-600 text-xs">已上传</span>
+                  </div>
+                )}
+                <div className="flex items-center text-sm">
+                  <span className="text-gray-500 w-24">收款人：</span>
+                  <span className="text-gray-900 font-medium">{paymentForm.wechatAccountName}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 编辑和删除按钮 */}
+          <div className="flex gap-3 ml-6">
+            <button
+              onClick={handleEditPayment}
+              className="text-sm text-[#A80000] hover:text-[#800000] font-medium transition-colors"
+            >
+              编辑
+            </button>
+            <button
+              onClick={handleDeletePayment}
+              className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
+            >
+              删除
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
@@ -234,13 +400,15 @@ export default function ProfileEdit() {
             </Link>
             <h1 className="text-base font-semibold text-gray-900">编辑资料</h1>
           </div>
-          <button
-            onClick={handleSaveProfile}
-            disabled={saving}
-            className="px-5 py-1.5 bg-[#A80000] text-white text-sm font-medium rounded-md hover:bg-[#800000] disabled:opacity-50 transition-colors"
-          >
-            {saving ? "保存中..." : "保存"}
-          </button>
+          {(activeTab !== "payment" || (activeTab === "payment" && isEditingPayment)) && (
+            <button
+              onClick={handleSaveProfile}
+              disabled={saving}
+              className="px-5 py-1.5 bg-[#A80000] text-white text-sm font-medium rounded-md hover:bg-[#800000] disabled:opacity-50 transition-colors"
+            >
+              {saving ? "保存中..." : "保存"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -368,216 +536,223 @@ export default function ProfileEdit() {
             {/* 支付账号 */}
             {activeTab === "payment" && (
               <div className="space-y-6">
-                {/* 支付方式选择 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">选择支付方式</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: "bank_card", label: "银行卡" },
-                      { value: "digital_wallet", label: "数字钱包" },
-                      { value: "alipay", label: "支付宝" },
-                      { value: "wechat", label: "微信" },
-                    ].map((method) => (
-                      <button
-                        key={method.value}
-                        type="button"
-                        onClick={() => setPaymentMethod(method.value as any)}
-                        className={`px-4 py-3.5 border-2 rounded-lg text-sm font-medium transition-all ${
-                          paymentMethod === method.value
-                            ? "border-[#A80000] bg-red-50 text-[#A80000]"
-                            : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {method.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 银行卡表单 */}
-                {paymentMethod === "bank_card" && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100">
+                {/* 如果已保存且不在编辑状态，显示已保存的信息 */}
+                {hasSavedPayment && !isEditingPayment ? (
+                  renderSavedPaymentInfo()
+                ) : (
+                  <>
+                    {/* 支付方式选择 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">银行名称</label>
-                      <input
-                        type="text"
-                        value={paymentForm.bankName}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, bankName: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                        placeholder="例如：中国工商银行"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">银行卡号</label>
-                      <input
-                        type="text"
-                        value={paymentForm.bankAccountNumber}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, bankAccountNumber: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                        placeholder="请输入银行卡号"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">持卡人姓名</label>
-                      <input
-                        type="text"
-                        value={paymentForm.bankAccountName}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, bankAccountName: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                        placeholder="请输入持卡人姓名"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 数字钱包表单 */}
-                {paymentMethod === "digital_wallet" && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">收款网络</label>
-                      <select
-                        value={paymentForm.walletNetwork}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, walletNetwork: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                      >
-                        <option value="TRC20">TRC20 (USDT-Tron)</option>
-                        <option value="ERC20">ERC20 (USDT-Ethereum)</option>
-                        <option value="BEP20">BEP20 (USDT-BSC)</option>
-                        <option value="BTC">Bitcoin (BTC)</option>
-                        <option value="ETH">Ethereum (ETH)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">钱包地址</label>
-                      <input
-                        type="text"
-                        value={paymentForm.digitalWalletAddress}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, digitalWalletAddress: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                        placeholder="请输入钱包地址"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">或上传收款二维码</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleFileChange(e, "walletQrCode")}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#A80000] file:text-white hover:file:bg-[#800000] transition-all"
-                      />
-                      {paymentForm.walletQrCode && (
-                        <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.walletQrCode.name}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 支付宝表单 */}
-                {paymentMethod === "alipay" && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100">
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentForm({ ...paymentForm, alipayInputMethod: "account" })}
-                        className={`flex-1 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                          paymentForm.alipayInputMethod === "account"
-                            ? "border-[#A80000] bg-red-50 text-[#A80000]"
-                            : "border-gray-200 text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        输入账号
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentForm({ ...paymentForm, alipayInputMethod: "qrcode" })}
-                        className={`flex-1 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                          paymentForm.alipayInputMethod === "qrcode"
-                            ? "border-[#A80000] bg-red-50 text-[#A80000]"
-                            : "border-gray-200 text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        上传收款码
-                      </button>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">选择支付方式</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { value: "bank_card", label: "银行卡" },
+                          { value: "digital_wallet", label: "数字钱包" },
+                          { value: "alipay", label: "支付宝" },
+                          { value: "wechat", label: "微信" },
+                        ].map((method) => (
+                          <button
+                            key={method.value}
+                            type="button"
+                            onClick={() => setPaymentMethod(method.value as any)}
+                            className={`px-4 py-3.5 border-2 rounded-lg text-sm font-medium transition-all ${
+                              paymentMethod === method.value
+                                ? "border-[#A80000] bg-red-50 text-[#A80000]"
+                                : "border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {method.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    {paymentForm.alipayInputMethod === "account" ? (
-                      <>
+                    {/* 银行卡表单 */}
+                    {paymentMethod === "bank_card" && (
+                      <div className="space-y-4 pt-4 border-t border-gray-100">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">支付宝账号</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">银行名称</label>
                           <input
                             type="text"
-                            value={paymentForm.alipayAccount}
-                            onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccount: e.target.value })}
+                            value={paymentForm.bankName}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, bankName: e.target.value })}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                            placeholder="手机号或邮箱"
+                            placeholder="例如：中国工商银行"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">收款人姓名</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">银行卡号</label>
                           <input
                             type="text"
-                            value={paymentForm.alipayAccountName}
-                            onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccountName: e.target.value })}
+                            value={paymentForm.bankAccountNumber}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, bankAccountNumber: e.target.value })}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                            placeholder="请输入收款人姓名"
+                            placeholder="请输入银行卡号"
                           />
                         </div>
-                      </>
-                    ) : (
-                      <>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">上传支付宝收款码</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">持卡人姓名</label>
+                          <input
+                            type="text"
+                            value={paymentForm.bankAccountName}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, bankAccountName: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                            placeholder="请输入持卡人姓名"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 数字钱包表单 */}
+                    {paymentMethod === "digital_wallet" && (
+                      <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">收款网络</label>
+                          <select
+                            value={paymentForm.walletNetwork}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, walletNetwork: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                          >
+                            <option value="TRC20">TRC20 (USDT-Tron)</option>
+                            <option value="ERC20">ERC20 (USDT-Ethereum)</option>
+                            <option value="BEP20">BEP20 (USDT-BSC)</option>
+                            <option value="BTC">Bitcoin (BTC)</option>
+                            <option value="ETH">Ethereum (ETH)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">钱包地址</label>
+                          <input
+                            type="text"
+                            value={paymentForm.digitalWalletAddress}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, digitalWalletAddress: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                            placeholder="请输入钱包地址"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">或上传收款二维码</label>
                           <input
                             type="file"
                             accept="image/*"
-                            onChange={(e) => handleFileChange(e, "alipayQrCode")}
+                            onChange={(e) => handleFileChange(e, "walletQrCode")}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#A80000] file:text-white hover:file:bg-[#800000] transition-all"
                           />
-                          {paymentForm.alipayQrCode && (
-                            <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.alipayQrCode.name}</p>
+                          {paymentForm.walletQrCode && (
+                            <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.walletQrCode.name}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 支付宝表单 */}
+                    {paymentMethod === "alipay" && (
+                      <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentForm({ ...paymentForm, alipayInputMethod: "account" })}
+                            className={`flex-1 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                              paymentForm.alipayInputMethod === "account"
+                                ? "border-[#A80000] bg-red-50 text-[#A80000]"
+                                : "border-gray-200 text-gray-700 hover:border-gray-300"
+                            }`}
+                          >
+                            输入账号
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentForm({ ...paymentForm, alipayInputMethod: "qrcode" })}
+                            className={`flex-1 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                              paymentForm.alipayInputMethod === "qrcode"
+                                ? "border-[#A80000] bg-red-50 text-[#A80000]"
+                                : "border-gray-200 text-gray-700 hover:border-gray-300"
+                            }`}
+                          >
+                            上传收款码
+                          </button>
+                        </div>
+
+                        {paymentForm.alipayInputMethod === "account" ? (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">支付宝账号</label>
+                              <input
+                                type="text"
+                                value={paymentForm.alipayAccount}
+                                onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccount: e.target.value })}
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                                placeholder="手机号或邮箱"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">收款人姓名</label>
+                              <input
+                                type="text"
+                                value={paymentForm.alipayAccountName}
+                                onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccountName: e.target.value })}
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                                placeholder="请输入收款人姓名"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">上传支付宝收款码</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleFileChange(e, "alipayQrCode")}
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#A80000] file:text-white hover:file:bg-[#800000] transition-all"
+                              />
+                              {paymentForm.alipayQrCode && (
+                                <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.alipayQrCode.name}</p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">收款人姓名</label>
+                              <input
+                                type="text"
+                                value={paymentForm.alipayAccountName}
+                                onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccountName: e.target.value })}
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
+                                placeholder="请输入收款人姓名"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 微信表单 */}
+                    {paymentMethod === "wechat" && (
+                      <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">上传微信收款码</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileChange(e, "wechatQrCode")}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#A80000] file:text-white hover:file:bg-[#800000] transition-all"
+                          />
+                          {paymentForm.wechatQrCode && (
+                            <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.wechatQrCode.name}</p>
                           )}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">收款人姓名</label>
                           <input
                             type="text"
-                            value={paymentForm.alipayAccountName}
-                            onChange={(e) => setPaymentForm({ ...paymentForm, alipayAccountName: e.target.value })}
+                            value={paymentForm.wechatAccountName}
+                            onChange={(e) => setPaymentForm({ ...paymentForm, wechatAccountName: e.target.value })}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
                             placeholder="请输入收款人姓名"
                           />
                         </div>
-                      </>
+                      </div>
                     )}
-                  </div>
-                )}
-
-                {/* 微信表单 */}
-                {paymentMethod === "wechat" && (
-                  <div className="space-y-4 pt-4 border-t border-gray-100">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">上传微信收款码</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleFileChange(e, "wechatQrCode")}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#A80000] file:text-white hover:file:bg-[#800000] transition-all"
-                      />
-                      {paymentForm.wechatQrCode && (
-                        <p className="mt-2 text-xs text-gray-500">已选择: {paymentForm.wechatQrCode.name}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">收款人姓名</label>
-                      <input
-                        type="text"
-                        value={paymentForm.wechatAccountName}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, wechatAccountName: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent transition-all"
-                        placeholder="请输入收款人姓名"
-                      />
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
