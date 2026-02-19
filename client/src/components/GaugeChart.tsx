@@ -9,11 +9,12 @@ interface GaugeChartProps {
 }
 
 export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358' }: GaugeChartProps) {
-  // 计算角度（180度半圆，从-90度到90度）
+  // 计算角度（从9点钟方向180度到3点钟方向，即从180度到0度）
   const range = maxValue - minValue;
   const normalizedValue = (value - minValue) / range;
   const percentage = Math.max(0, Math.min(normalizedValue, 1));
-  const angle = -90 + (percentage * 180);
+  // 从180度（9点钟）到0度（3点钟）
+  const angle = 180 - (percentage * 180);
   
   // SVG尺寸
   const size = 140;
@@ -27,9 +28,9 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   const pointerX = center + pointerLength * Math.cos(pointerAngleRad);
   const pointerY = center + pointerLength * Math.sin(pointerAngleRad);
   
-  // 生成弧形路径
-  const startAngle = -90;
-  const endAngle = 90;
+  // 生成弧形路径（从9点钟到3点钟，顺时针）
+  const startAngle = 180; // 9点钟方向
+  const endAngle = 0;     // 3点钟方向
   const startRad = (startAngle * Math.PI) / 180;
   const endRad = (endAngle * Math.PI) / 180;
   
@@ -38,6 +39,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   const x2 = center + radius * Math.cos(endRad);
   const y2 = center + radius * Math.sin(endRad);
   
+  // 使用大弧标志，从9点钟顺时针到3点钟
   const arcPath = `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
   
   // 生成刻度（更密集的刻度）
@@ -55,7 +57,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size * 0.65} viewBox={`0 0 ${size} ${size * 0.65}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {/* 背景弧线 */}
         <path
           d={arcPath}
@@ -67,7 +69,8 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
         
         {/* 刻度线 */}
         {generateTicks().map((tick, i) => {
-          const tickAngle = -90 + (tick * 180);
+          // 从180度（9点钟）到0度（3点钟）
+          const tickAngle = 180 - (tick * 180);
           const tickRad = (tickAngle * Math.PI) / 180;
           const isMajor = majorTicks.includes(tick);
           const tickLength = isMajor ? 10 : 5;
@@ -94,7 +97,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
         
         {/* 刻度标签 */}
         {majorTicks.map((tick, i) => {
-          const tickAngle = -90 + (tick * 180);
+          const tickAngle = 180 - (tick * 180);
           const tickRad = (tickAngle * Math.PI) / 180;
           const labelRadius = radius - strokeWidth / 2 - 20;
           const labelX = center + labelRadius * Math.cos(tickRad);
@@ -138,7 +141,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
       </svg>
       
       {/* 数值显示 */}
-      <div className="text-center -mt-1">
+      <div className="text-center -mt-8">
         <div className="text-2xl font-bold font-mono" style={{ color }}>
           {value.toFixed(2)}x
         </div>
