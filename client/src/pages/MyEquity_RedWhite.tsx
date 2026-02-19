@@ -475,7 +475,7 @@ export default function MyEquityRedWhite() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="flex items-center space-x-1">
-                    <span ref={leverageTitleRef} className="text-xs text-gray-600 mb-1">资本杠杆系数</span>
+                    <span ref={leverageTitleRef} className="text-xs text-gray-600 mb-1">资本加速（风险补偿）</span>
                     <button
                       ref={leverageHelpRef}
                       onClick={() => setShowLeverageHelp(!showLeverageHelp)}
@@ -558,16 +558,19 @@ export default function MyEquityRedWhite() {
                 triggerRef={leverageTitleRef}
                 content={
                   <div className="space-y-3">
-                    <div className="font-bold text-gray-900 text-base">资本加速机制</div>
+                    <div className="font-bold text-gray-900 text-base">资本加速（风险补偿）机制</div>
                     <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                      <p>入场越早，静态权重越高（从 2.0 依次递减至 1.0）。</p>
+                      <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                        <p className="font-medium text-blue-900">什么是风险补偿？</p>
+                        <p className="text-sm text-blue-800 mt-1">对于一家初创公司，早期投资者承担着更大的风险和不确定性。按照公平原则，他们应该享受到比后期进入者更多的权益。</p>
+                      </div>
                       <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                        <p className="font-medium text-amber-900">什么是资本加速？</p>
-                        <p className="text-sm text-amber-800 mt-1">您的投资额度会乘以资本加速系数，转化为在 30% 天使池中的权重。例如，您投资 10 万，资本加速为 2.0x，则您的权重相当于 20 万。</p>
+                        <p className="font-medium text-amber-900">如何计算权重？</p>
+                        <p className="text-sm text-amber-800 mt-1">您的投资额度会乘以资本加速系数，转化为在 30% 天使池中的权重。<strong>例如：</strong>您投资 10 万，资本加速为 2.0x，则您的权重相当于 20 万。</p>
                       </div>
                       <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                        <p className="font-medium text-green-900">为什么递减？</p>
-                        <p className="text-sm text-green-800 mt-1">越早加入，风险越大，回报也应越高。随着平台逐步成熟，后续投资者的风险降低，因此资本加速也相应递减。这确保了早期投资者的公平回报。</p>
+                        <p className="font-medium text-green-900">为什么依次递减？</p>
+                        <p className="text-sm text-green-800 mt-1">资本加速系数从 2.0 依次递减至 1.0。越早加入，风险越大，回报也应越高。随着公司逐步成熟，后续投资者的风险降低，系数相应递减。<strong>这体现了公平性，而非“先来者占便宜”。</strong></p>
                       </div>
                     </div>
                   </div>
