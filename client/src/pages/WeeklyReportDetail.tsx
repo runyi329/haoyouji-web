@@ -261,24 +261,26 @@ export default function WeeklyReportDetail() {
                   onClose={() => setShowActualAccelerationHelp(false)}
                   triggerRef={actualAccelerationTitleRef}
                   content={
-                    <div className="space-y-1.5">
+                      <div className="space-y-1.5">
                       <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">实际加速说明</div>
                       <div className="text-sm text-gray-800 leading-snug space-y-1">
                         <div className="py-1.5 border-b border-gray-100">
                           <span className="font-semibold text-[#A80000]">计算公式</span>
-                          <span className="text-gray-700"> — 倍数 = 1 + (储值金额 / 10) × 2</span>
+                          <span className="text-gray-700"> — 实际加速 = 原始加速 × (投资万数 / 10)</span>
                         </div>
                         <div className="py-1.5 border-b border-gray-100">
-                          <span className="font-semibold text-[#A80000]">示例1</span>
-                          <span className="text-gray-700"> — 1万元：1 + (1/10) × 2 = 1.2倍</span>
+                          <span className="font-semibold text-[#A80000]">关键特性</span>
+                          <span className="text-gray-700"> — 投资10万元时，实际加速 = 原始加速</span>
                         </div>
                         <div className="py-1.5 border-b border-gray-100">
-                          <span className="font-semibold text-[#A80000]">示例2</span>
-                          <span className="text-gray-700"> — 5万元：1 + (5/10) × 2 = 2.0倍</span>
+                          <span className="font-semibold text-[#A80000]">示例（原始加速2.99x）</span>
+                          <span className="text-gray-700"> — 1万元：2.99 × (1/10) = 0.299x</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="text-gray-700"> — 5万元：2.99 × (5/10) = 1.495x</span>
                         </div>
                         <div className="py-1.5">
-                          <span className="font-semibold text-[#A80000]">示例3</span>
-                          <span className="text-gray-700"> — 10万元：1 + (10/10) × 2 = 3.0倍</span>
+                          <span className="text-gray-700"> — 10万元：2.99 × (10/10) = 2.99x</span>
                         </div>
                       </div>
                     </div>

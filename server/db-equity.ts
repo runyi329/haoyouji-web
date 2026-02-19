@@ -418,18 +418,20 @@ export async function calculateUserEquity(userId: number) {
   const leverageInfo = calculateDynamicLeverage(seatNumber, 660);
   const originalAcceleration = leverageInfo.leverage;
   
-  // 计算实际加速：使用固定公式：倍数 = 1 + (储值金额 / 10) × 2
+  // 计算实际加速：基于原始加速的比例计算
+  // 公式：实际加速 = 原始加速 × (投资万数 / 10)
+  // 当投资10万时，实际加速 = 原始加速
   // 投资额单位：元，需要转换为万元
   const investmentInWan = userInvestment / 10000; // 转换为万元
-  let actualAcceleration = 1.0;
+  let actualAcceleration = 0;
   
   if (investmentInWan > 0) {
     if (investmentInWan >= 10) {
-      // 投资额 >= 10万：固定为 3.0倍
-      actualAcceleration = 3.0;
+      // 投资额 >= 10万：实际加速 = 原始加速
+      actualAcceleration = originalAcceleration;
     } else {
-      // 投资额 < 10万：使用线性插值公式
-      actualAcceleration = 1.0 + (investmentInWan / 10) * 2.0;
+      // 投资额 < 10万：实际加速 = 原始加速 × (投资万数 / 10)
+      actualAcceleration = originalAcceleration * (investmentInWan / 10);
     }
   }
   
