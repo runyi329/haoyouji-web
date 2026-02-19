@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { MoreVertical, Share2 } from 'lucide-react';
@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
 // 公式：系数 = 1.0 + 2.0 × √((660 - 排名) / 659)
 // 确保第1名=3.0，第660名=1.0
 function calculateMultiplier(rank: number): number {
-  if (rank < 1) return 3.0;
+  if (rank < 1) return 0.0; // 没有编号时返回0
   if (rank > 660) return 1.0;
   // 使用 (660 - rank) / 659 代替 (1 - rank / 660)
   const multiplier = 1.0 + 2.0 * Math.sqrt((660 - rank) / 659);
@@ -49,12 +49,12 @@ const CapitalMultiplierTable: React.FC = () => {
   });
   
   // 使用编号排名（seatNumber），而不是持股排名
-  const currentSeatNumber = enhanced?.dynamicLeverage?.seatNumber || null;
-  const isInvestor = currentSeatNumber !== null && currentSeatNumber > 0;
+  const currentSeatNumber = enhanced?.dynamicLeverage?.seatNumber || 0;
+  const isInvestor = currentSeatNumber > 0;
   
-  // 如果是股东，使用实际编号；如果不是，显示"当前加入"位置（假设为下一个编号）
-  const displayRank = isInvestor ? currentSeatNumber : (enhanced?.ranking?.totalInvestors || 0) + 1;
-  const currentMultiplier = calculateMultiplier(displayRank);
+  // 如果是股东，使用实际编号；如果不是，编号显示0000
+  const displaySeatNumber = isInvestor ? currentSeatNumber : 0;
+  const currentMultiplier = calculateMultiplier(displaySeatNumber);
 
   // 分享链接
   const handleShareLink = () => {
@@ -114,254 +114,60 @@ const CapitalMultiplierTable: React.FC = () => {
         </div>
       </div>
 
-      {/* 当前系数提示 */}
+      {/* 当前编号和系数提示 */}
       <div className="px-4 py-4">
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-2">
-              {isInvestor 
-                ? `您的编号：第 ${currentSeatNumber} 位` 
-                : '如果您现在成为股东（当前加入）'}
+              编号 {displaySeatNumber.toString().padStart(4, '0')}
             </p>
             <div className="text-4xl font-bold text-[#C5B358] font-mono">
               {currentMultiplier.toFixed(4)}x
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              {isInvestor ? '已锁定 · 永久有效' : '系数将在投资后锁定'}
-            </p>
           </div>
         </div>
       </div>
 
-      {/* 专业投行风格曲线图 - 去掉内层容器框，Y轴拉长到2倍 */}
+      {/* 系数对照表 */}
       <div className="px-4 pb-4">
         <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-[#A80000] mb-4">系数曲线图</h3>
-          <div className="relative" style={{ height: '340px' }}>
-            <svg width="100%" height="100%" viewBox="0 0 500 340" preserveAspectRatio="xMidYMid meet">
-              <defs>
-                {/* 渐变定义 - 曲线下方阴影 */}
-                <linearGradient id="curveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#A80000" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#A80000" stopOpacity="0.05" />
-                </linearGradient>
-                
-                {/* 网格线图案 */}
-                <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-                  <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#E5E7EB" strokeWidth="0.5" strokeDasharray="2,2" />
-                </pattern>
-              </defs>
-              
-              {/* 背景网格 */}
-              <rect x="50" y="10" width="430" height="300" fill="url(#grid)" />
-              
-              {/* Y轴 */}
-              <line x1="50" y1="10" x2="50" y2="310" stroke="#374151" strokeWidth="2" />
-              {/* X轴 */}
-              <line x1="50" y1="310" x2="480" y2="310" stroke="#374151" strokeWidth="2" />
-              
-              {/* Y轴刻度、标签和网格线 - Y轴拉长到2倍（300px） */}
-              <text x="35" y="15" fontSize="11" fill="#374151" textAnchor="end" fontWeight="600">3.0</text>
-              <line x1="45" y1="10" x2="50" y2="10" stroke="#374151" strokeWidth="2" />
-              <line x1="50" y1="10" x2="480" y2="10" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
-              
-              <text x="35" y="85" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.5</text>
-              <line x1="45" y1="85" x2="50" y2="85" stroke="#6B7280" strokeWidth="1" />
-              <line x1="50" y1="85" x2="480" y2="85" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
-              
-              <text x="35" y="160" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.0</text>
-              <line x1="45" y1="160" x2="50" y2="160" stroke="#6B7280" strokeWidth="1" />
-              <line x1="50" y1="160" x2="480" y2="160" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
-              
-              <text x="35" y="235" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">1.5</text>
-              <line x1="45" y1="235" x2="50" y2="235" stroke="#6B7280" strokeWidth="1" />
-              <line x1="50" y1="235" x2="480" y2="235" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
-              
-              <text x="35" y="310" fontSize="11" fill="#374151" textAnchor="end" fontWeight="600">1.0</text>
-              <line x1="45" y1="310" x2="50" y2="310" stroke="#374151" strokeWidth="2" />
-              
-              {/* X轴刻度和标签 - 更细的颗粒度 */}
-              {[1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 660].map((rank, idx) => {
-                const x = 50 + ((rank - 1) / 659) * 430;
-                const isMainTick = rank === 1 || rank === 660 || rank % 100 === 0;
-                return (
-                  <g key={rank}>
-                    <line 
-                      x1={x} 
-                      y1="310" 
-                      x2={x} 
-                      y2={isMainTick ? "315" : "312"} 
-                      stroke={isMainTick ? "#374151" : "#6B7280"} 
-                      strokeWidth={isMainTick ? "2" : "1"} 
-                    />
-                    {isMainTick && (
-                      <text 
-                        x={x} 
-                        y="330" 
-                        fontSize="11" 
-                        fill="#374151" 
-                        textAnchor="middle" 
-                        fontWeight="600"
-                      >
-                        {rank}
-                      </text>
-                    )}
-                    {!isMainTick && rank % 50 === 0 && (
-                      <text 
-                        x={x} 
-                        y="330" 
-                        fontSize="10" 
-                        fill="#6B7280" 
-                        textAnchor="middle" 
-                        fontWeight="500"
-                      >
-                        {rank}
-                      </text>
-                    )}
-                    {/* 垂直网格线 */}
-                    {isMainTick && (
-                      <line 
-                        x1={x} 
-                        y1="10" 
-                        x2={x} 
-                        y2="310" 
-                        stroke="#E5E7EB" 
-                        strokeWidth="1" 
-                        strokeDasharray="4,4" 
-                      />
-                    )}
-                  </g>
-                );
-              })}
-              
-              {/* 轴标签 */}
-              <text x="265" y="338" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600">编号排名</text>
-              <text x="15" y="160" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600" transform="rotate(-90 15 160)">系数倍数</text>
-              
-              {/* 绘制曲线下方的渐变填充 */}
-              <path
-                d={(() => {
-                  const points: string[] = ['M 50 310']; // 从左下角开始
-                  for (let rank = 1; rank <= 660; rank += 3) {
-                    const x = 50 + ((rank - 1) / 659) * 430;
-                    const multiplier = calculateMultiplier(rank);
-                    const y = 310 - ((multiplier - 1.0) / 2.0) * 300;
-                    points.push(`L ${x} ${y}`);
-                  }
-                  points.push('L 480 310'); // 到右下角
-                  points.push('Z'); // 闭合路径
-                  return points.join(' ');
-                })()}
-                fill="url(#curveGradient)"
-              />
-              
-              {/* 绘制曲线 */}
-              <path
-                d={(() => {
-                  const points: string[] = [];
-                  for (let rank = 1; rank <= 660; rank += 3) {
-                    const x = 50 + ((rank - 1) / 659) * 430;
-                    const multiplier = calculateMultiplier(rank);
-                    const y = 310 - ((multiplier - 1.0) / 2.0) * 300;
-                    points.push(`${rank === 1 ? 'M' : 'L'} ${x} ${y}`);
-                  }
-                  return points.join(' ');
-                })()}
-                fill="none"
-                stroke="#A80000"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              
-              {/* 标注当前用户位置或当前加入位置 */}
-              {displayRank <= 660 && (
-                <>
-                  {/* 垂直虚线 */}
-                  <line
-                    x1={50 + ((displayRank - 1) / 659) * 430}
-                    y1="10"
-                    x2={50 + ((displayRank - 1) / 659) * 430}
-                    y2="310"
-                    stroke="#FF0000"
-                    strokeWidth="1.5"
-                    strokeDasharray="5,3"
-                  />
-                  
-                  {/* 红色圆点 */}
-                  <circle
-                    cx={50 + ((displayRank - 1) / 659) * 430}
-                    cy={310 - ((currentMultiplier - 1.0) / 2.0) * 300}
-                    r="5"
-                    fill="#FF0000"
-                    stroke="#FFF"
-                    strokeWidth="2"
-                  />
-                  
-                  {/* 标签背景 */}
-                  <rect
-                    x={50 + ((displayRank - 1) / 659) * 430 - 35}
-                    y={310 - ((currentMultiplier - 1.0) / 2.0) * 300 - 25}
-                    width={70}
-                    height={18}
-                    fill="#FF0000"
-                    rx="3"
-                  />
-                  
-                  {/* 标签文字 - 改为显示当前系数 */}
-                  <text
-                    x={50 + ((displayRank - 1) / 659) * 430}
-                    y={310 - ((currentMultiplier - 1.0) / 2.0) * 300 - 13}
-                    fontSize="10"
-                    fill="#FFF"
-                    textAnchor="middle"
-                    fontWeight="bold"
-                  >
-                    {currentMultiplier.toFixed(4)}x
-                  </text>
-                </>
-              )}
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 对照表 */}
-      <div className="px-4">
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          {/* 表头 */}
-          <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white px-4 py-3 flex justify-between items-center">
-            <span className="font-semibold text-sm">编号排名</span>
-            <span className="font-semibold text-sm">系数</span>
-          </div>
+          <h3 className="text-sm font-bold text-[#A80000] mb-4">系数对照表</h3>
           
-          {/* 表格内容 */}
-          <div className="divide-y divide-gray-100">
+          {/* 4列网格布局 */}
+          <div className="grid grid-cols-4 gap-3">
             {multiplierData.map((item) => (
-              <div 
-                key={item.rank} 
-                className={`px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors ${
-                  isInvestor && item.rank === currentSeatNumber ? 'bg-red-50' : ''
+              <div
+                key={item.rank}
+                className={`p-3 rounded-lg border transition-all ${
+                  isInvestor && currentSeatNumber === item.rank
+                    ? 'bg-[#FFF8E7] border-[#C5B358] shadow-md'
+                    : 'bg-gray-50 border-gray-200'
                 }`}
               >
-                <span className="text-sm text-gray-700 font-medium">
+                <div className="text-xs text-gray-600 mb-1">
                   第 {item.rank} 名
-                  {isInvestor && item.rank === currentSeatNumber && (
-                    <span className="ml-2 text-xs text-red-600 font-bold">← 您的位置</span>
-                  )}
-                </span>
-                <span className="text-base font-bold text-[#C5B358] font-mono">
+                </div>
+                <div className={`text-sm font-bold font-mono ${
+                  isInvestor && currentSeatNumber === item.rank
+                    ? 'text-[#A80000]'
+                    : 'text-gray-800'
+                }`}>
                   {item.multiplier}x
-                </span>
+                </div>
+                {isInvestor && currentSeatNumber === item.rank && (
+                  <div className="text-xs text-[#A80000] mt-1">← 您的位置</div>
+                )}
               </div>
             ))}
           </div>
+          
+          {/* 底部说明 */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              编号按投资时间先后排序，系数永久锁定
+            </p>
+          </div>
         </div>
-      </div>
-
-      {/* 底部说明 */}
-      <div className="px-4 py-4 text-center text-xs text-gray-500">
-        <p>共 660 个席位 · 系数永久锁定 · 按投资时间先后排序</p>
       </div>
     </div>
   );
