@@ -11,7 +11,12 @@ interface WeeklyReport {
   totalEquity: number; // 累计定格股权
   blockchainHash: string;
   certificateNumber: number; // 第几张确权证书
-  capitalAcceleration: number; // 资本加速
+  capitalAcceleration: number; // 资本加速（实际）
+  capitalAccelerationDetail: {
+    originalAcceleration: number; // 原始加速
+    investmentAmount: number; // 实际投资额（元）
+    actualAcceleration: number; // 实际加速
+  };
   resourceAcceleration: number; // 资源加速
   marketContribution: number; // 市场贡献
   personalContribution: {
@@ -38,6 +43,11 @@ const mockReport: WeeklyReport = {
   blockchainHash: '0x40166ed******',
   certificateNumber: 6, // 第6张确权证书
   capitalAcceleration: 3.00,
+  capitalAccelerationDetail: {
+    originalAcceleration: 2.9909,
+    investmentAmount: 10000,
+    actualAcceleration: 3.00,
+  },
   resourceAcceleration: 1.00,
   marketContribution: 0,
   personalContribution: {
@@ -143,6 +153,37 @@ const WeeklyReportDetailPage: React.FC = () => {
             <div className="bg-white/10 rounded-lg px-3 py-2 text-center">
               <div className="text-white/80 text-[11px] leading-relaxed">
                 ({report.capitalAcceleration.toFixed(2)}x + {report.resourceAcceleration.toFixed(2)}x) × {report.marketContribution} = {report.equityGain} 张
+              </div>
+            </div>
+          </div>
+
+          {/* 资本加速明细 */}
+          <div className="mb-6">
+            <div className="text-sm font-semibold text-gray-900 mb-3">
+              资本加速明细
+            </div>
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">原始加速</span>
+                  <span className="text-base font-bold text-[#A80000]">
+                    {report.capitalAccelerationDetail.originalAcceleration.toFixed(4)}x
+                  </span>
+                </div>
+                <div className="border-t border-gray-100"></div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">实际投资额</span>
+                  <span className="text-base font-bold text-gray-900">
+                    ¥{report.capitalAccelerationDetail.investmentAmount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="border-t border-gray-100"></div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">实际加速</span>
+                  <span className="text-base font-bold text-[#C5B358]">
+                    {report.capitalAccelerationDetail.actualAcceleration.toFixed(4)}x
+                  </span>
+                </div>
               </div>
             </div>
           </div>
