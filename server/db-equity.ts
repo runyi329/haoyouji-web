@@ -608,6 +608,15 @@ export async function getUserPromotionStats(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
+  // 0. 查询用户的投资金额
+  const [investmentResult] = await db
+    .select({ totalInvestment: sql<number>`SUM(${equityInvestments.investmentAmount})` })
+    .from(equityInvestments)
+    .where(eq(equityInvestments.userId, userId));
+  
+  const totalInvestment = Number(investmentResult?.totalInvestment || 0);
+  const hasInvestment = totalInvestment > 0;
+  
   // 1. 统计人脉数（用户自己添加的联系人总数）
   const [contactsResult] = await db
     .select({ count: sql<number>`COUNT(*)` })
@@ -682,24 +691,24 @@ export async function getUserPromotionStats(userId: number) {
   // 节点层判断
   if (contactCount >= 150 && totalTagCount >= 500 && interactionCount >= 210) {
     currentLevel = 'super';
-    levelName = '超级节点';
+    levelName = hasInvestment ? '超级节点' : '准超级节点';
   } else if (contactCount >= 100 && totalTagCount >= 300 && interactionCount >= 180) {
     currentLevel = 'advanced';
-    levelName = '高级节点';
+    levelName = hasInvestment ? '高级节点' : '准高级节点';
   } else if (contactCount >= 50 && totalTagCount >= 100 && interactionCount >= 150) {
     currentLevel = 'standard';
-    levelName = '标准节点';
+    levelName = hasInvestment ? '标准节点' : '准标准节点';
   }
   // 用户层判断（如果不符合节点层）
   else if (contactCount >= 30 && totalTagCount >= 100 && interactionCount >= 120) {
     currentLevel = 'super_user';
-    levelName = '超级用户';
+    levelName = hasInvestment ? '超级用户' : '准超级用户';
   } else if (contactCount >= 20 && totalTagCount >= 50 && interactionCount >= 60) {
     currentLevel = 'advanced_user';
-    levelName = '高级用户';
+    levelName = hasInvestment ? '高级用户' : '准高级用户';
   } else if (contactCount >= 10 && totalTagCount >= 20 && interactionCount >= 30) {
     currentLevel = 'standard_user';
-    levelName = '标准用户';
+    levelName = hasInvestment ? '标准用户' : '准标准用户';
   }
   
   // 5. 计算本周的日期范围（周一到周日）
