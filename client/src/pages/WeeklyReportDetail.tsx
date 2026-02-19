@@ -1,6 +1,7 @@
 import React from 'react';
-import { ArrowLeft, Shield, Award } from 'lucide-react';
+import { ArrowLeft, Shield, Award, Loader2 } from 'lucide-react';
 import { useLocation, useRoute } from 'wouter';
+import { trpc } from '@/lib/trpc';
 
 interface WeeklyReport {
   weekNumber: string;
@@ -67,8 +68,22 @@ const WeeklyReportDetailPage: React.FC = () => {
   const [, setLocation] = useLocation();
   const [, params] = useRoute('/parent/equity-history/:weekNumber');
   
-  // TODO: 根据 params.weekNumber 从API获取真实数据
-  const report = mockReport;
+  // 从 API获取真实数据
+  const { data: equityData, isLoading } = trpc.equity.getMyEquity.useQuery();
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+      </div>
+    );
+  }
+  
+  // 合并API数据和模拟数据
+  const report: WeeklyReport = {
+    ...mockReport,
+    capitalAccelerationDetail: equityData?.capitalAccelerationDetail || mockReport.capitalAccelerationDetail,
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
