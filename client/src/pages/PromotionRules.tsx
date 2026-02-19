@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { MoreVertical, Share2 } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 
 interface Tier {
   levelChar1: string;
@@ -15,6 +16,12 @@ interface Tier {
 const PromotionRules: React.FC = () => {
   const [, setLocation] = useLocation();
   const [showMenu, setShowMenu] = useState(false);
+  
+  // 获取晋升统计数据
+  const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery(undefined, {
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const userTiers: Tier[] = [
     {
@@ -227,8 +234,29 @@ const PromotionRules: React.FC = () => {
             </p>
             <p>
               <span className="font-semibold text-gray-700">联络:</span>
-              过去30天累计登记联络人脉的次数。
+              每周日晚上12点作为统计节点，统计该节点往前推30天的累计联络次数。符合条件则接下来一周保持该级别，下周日再次统计。
             </p>
+            {promotionStats?.assessmentPeriod && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">本考核周期联络：</span>
+                    <span className="font-bold text-[#A80000] text-sm">
+                      {promotionStats.assessmentPeriod.currentInteractionCount}次
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-gray-500">
+                    <span>考核期进度：</span>
+                    <span>
+                      已过{promotionStats.assessmentPeriod.daysPassed}天，剩{promotionStats.assessmentPeriod.daysRemaining}天
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-200">
+                    考核期：{promotionStats.assessmentPeriod.startDate} 至 {promotionStats.assessmentPeriod.endDate}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
