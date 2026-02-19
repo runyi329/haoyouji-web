@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
 import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
-import Tooltip from "@/components/Tooltip";
+import { Tooltip } from '../components/Tooltip';
+import { GaugeChart } from '../components/GaugeChart';
 import CompanyEquityPieChart from "@/components/CompanyEquityPieChart";
 
 export default function MyEquityRedWhite() {
@@ -339,45 +340,42 @@ export default function MyEquityRedWhite() {
                   </div>
                 </div>
                 
-                {/* 一行布局：总倍数 = 资本杠杆 + 贡献加速 */}
-                <div className="flex items-center gap-2">
-                  {/* 左侧：金色卡片显示总倍数 */}
-                  <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-3 py-2.5 shadow-lg flex-shrink-0">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}x</div>
-                      <div className="text-[10px] text-white/80 mt-0.5">总加速</div>
+                {/* 动力仪表盘布局 */}
+                <div className="space-y-4">
+                  {/* 上方：左右两个仪表盘 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* 左侧：资本动力 */}
+                    <div className="bg-white rounded-lg py-3 px-2">
+                      <GaugeChart
+                        value={capitalLeverage}
+                        maxValue={3.0}
+                        label="资本动力"
+                        color="#A80000"
+                      />
+                    </div>
+                    
+                    {/* 右侧：劳动推进力 */}
+                    <div className="bg-white rounded-lg py-3 px-2">
+                      <GaugeChart
+                        value={1 + contributionAcceleration}
+                        maxValue={2.0}
+                        label="劳动推进力"
+                        color="#C5B358"
+                      />
+                      <div className="text-[9px] text-gray-400 mt-1 text-center">
+                        {promotionStats?.levelName || '准合伙人'}
+                      </div>
                     </div>
                   </div>
                   
-                  {/* 等号 */}
-                  <div className="text-gray-400 text-lg font-light flex-shrink-0">=</div>
-                  
-                  {/* 右侧：拆解公式 */}
-                  <div className="flex items-center gap-1.5 flex-1">
-                    {/* 资本加速 */}
-                    <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                      <div className="text-[10px] text-gray-500 mb-0.5">资本加速</div>
-                      <div className="flex items-baseline justify-center">
-                        <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                          {capitalLeverage.toFixed(4)}x
-                        </div>
-                      </div>
+                  {/* 下方：总推力 */}
+                  <div className="bg-gradient-to-r from-[#A80000] to-[#C5B358] rounded-lg py-3 px-4 text-center">
+                    <div className="text-sm text-white/80 mb-1">总推力</div>
+                    <div className="text-3xl font-bold text-white font-mono">
+                      {totalMultiplier.toFixed(2)}x
                     </div>
-                    
-                    {/* 加号 */}
-                    <div className="text-[#C5B358] text-base font-bold flex-shrink-0">+</div>
-                    
-                    {/* 资源加速 */}
-                    <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
-                      <div className="text-[10px] text-gray-500 mb-0.5">资源加速</div>
-                      <div className="flex items-baseline justify-center">
-                        <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                          {(1 + contributionAcceleration).toFixed(2)}x
-                        </div>
-                      </div>
-                      <div className="text-[9px] text-gray-400 mt-0.5 text-center">
-                        {promotionStats?.levelName || '准合伙人'}
-                      </div>
+                    <div className="text-xs text-white/70 mt-1">
+                      {capitalLeverage.toFixed(2)}x + {(1 + contributionAcceleration).toFixed(2)}x
                     </div>
                   </div>
                 </div>
