@@ -9,6 +9,7 @@ interface WeeklyReport {
   weightGain: number;
   equityGain: number;
   blockchainHash: string;
+  certificateNumber: number; // 第几张确权证书
   personalContribution: {
     networkSize: number;
     tagCompleteness: number;
@@ -30,6 +31,7 @@ const mockReport: WeeklyReport = {
   weightGain: 0.0000,
   equityGain: 0,
   blockchainHash: '0x40166ed******',
+  certificateNumber: 6, // 第6张确权证书
   personalContribution: {
     networkSize: 2109,
     tagCompleteness: 1.7,
@@ -85,8 +87,11 @@ const WeeklyReportDetailPage: React.FC = () => {
               <div className="text-2xl font-bold text-gray-900 mb-1">
                 {report.weekNumber}
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-500 mb-1">
                 {report.dateRange}
+              </div>
+              <div className="text-xs text-[#C5B358] font-medium">
+                第 {report.certificateNumber} 张确权证书
               </div>
             </div>
           </div>
