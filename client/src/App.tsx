@@ -115,6 +115,7 @@ const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
 const MyEquity = lazy(() => import("./pages/MyEquity"));
 const MyEquityRedWhite = lazy(() => import("./pages/MyEquity_RedWhite"));
 const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
+const WeeklyReportDetail = lazy(() => import("./pages/WeeklyReportDetail"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
@@ -178,6 +179,7 @@ function Router() {
         <Route path="/parent/my-equity" component={MyEquityRedWhite} />
         <Route path="/parent/my-equity-old" component={MyEquity} />
         <Route path="/parent/equity-history" component={EquityHistoryArchive} />
+        <Route path="/parent/equity-history/:weekNumber" component={WeeklyReportDetail} />
         <Route path="/parent/asset-report" component={AssetReport} />
         <Route path="/article/:id" component={ArticleDetail} />
         <Route path="/parent/promotion-rules" component={PromotionRules} />
