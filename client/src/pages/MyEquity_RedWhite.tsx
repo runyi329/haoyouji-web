@@ -108,9 +108,9 @@ export default function MyEquityRedWhite() {
     return 1.0 + 2.0 * Math.sqrt(1 - rank / 660);
   };
 
-  // 获取当前用户的实际系数
-  const actualMultiplier = equity.ranking?.rank 
-    ? calculateMultiplier(equity.ranking.rank)
+  // 获取当前用户的实际系数（使用编号排名seatNumber，而非持股排名）
+  const actualMultiplier = equity.dynamicLeverage?.seatNumber 
+    ? calculateMultiplier(equity.dynamicLeverage.seatNumber)
     : (equity.dynamicLeverage?.leverage || 1.0);
 
   // 确保所有必需字段都有默认值
