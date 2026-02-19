@@ -189,10 +189,10 @@ export default function MyEquityRedWhite() {
   // 计算当前股权加速的数据
   const getIdentityMultiplier = () => {
     const level = promotionStats?.currentLevel;
-    if (level === 'standard' || level === 'standard_user') return 0.25;
-    if (level === 'advanced' || level === 'advanced_user') return 0.50;
-    if (level === 'super' || level === 'super_user') return 1.00;
-    return 0.0; // 准合伙人
+    if (level === 'standard' || level === 'standard_user') return 0.0; // 标准节点：1.0x
+    if (level === 'advanced' || level === 'advanced_user') return 1.0; // 高级节点：2.0x
+    if (level === 'super' || level === 'super_user') return 2.0; // 超级节点：3.0x
+    return 0.0; // 准合伙人：1.0x
   };
   
   const capitalLeverage = equity.dynamicLeverage?.leverage || 1.0;
@@ -360,13 +360,23 @@ export default function MyEquityRedWhite() {
                       <GaugeChart
                         value={1 + contributionAcceleration}
                         minValue={1.0}
-                        maxValue={1.25}
+                        maxValue={3.0}
                         label="资源加速"
                         color="#C5B358"
                       />
                       <div className="text-[9px] text-gray-400 mt-1 text-center">
                         {promotionStats?.levelName || '准合伙人'}
                       </div>
+                      {promotionStats?.assessmentPeriod && (
+                        <div className="mt-2 text-[10px] text-gray-500 text-center space-y-0.5">
+                          <div className="font-medium text-gray-700">
+                            联络：{promotionStats.assessmentPeriod.currentInteractionCount}次
+                          </div>
+                          <div className="text-gray-400">
+                            考核期：已过{promotionStats.assessmentPeriod.daysPassed}天，剩{promotionStats.assessmentPeriod.daysRemaining}天
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

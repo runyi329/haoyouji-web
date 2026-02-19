@@ -631,10 +631,25 @@ export async function getUserPromotionStats(userId: number) {
   const personalTagCount = Number(personalTagsResult?.count || 0);
   const totalTagCount = globalTagCount + personalTagCount;
   
-  // 3. 统计联络数（过去30天，包括今天）
-  // 获取30天前的日期
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+  // 3. 统计联络数（本周日往前30天）
+  // 计算本周日的日期（晚上12点）
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=周日, 1=周一, ..., 6=周六
+  const thisSunday = new Date(now);
+  
+  if (dayOfWeek === 0) {
+    // 如果今天是周日，就是今天
+    thisSunday.setHours(23, 59, 59, 999);
+  } else {
+    // 否则计算本周的周日
+    thisSunday.setDate(now.getDate() + (7 - dayOfWeek));
+    thisSunday.setHours(23, 59, 59, 999);
+  }
+  
+  // 从本周日往前推30天
+  const thirtyDaysAgo = new Date(thisSunday);
+  thirtyDaysAgo.setDate(thisSunday.getDate() - 29); // 包括周日当天，所以是-29
+  thirtyDaysAgo.setHours(0, 0, 0, 0);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
   
   // 先获取用户的所有联系人ID
@@ -688,8 +703,7 @@ export async function getUserPromotionStats(userId: number) {
   }
   
   // 5. 计算本周的日期范围（周一到周日）
-  const now = new Date();
-  const dayOfWeek = now.getDay();
+  // 重用上面已经声明的 now 和 dayOfWeek
   const monday = new Date(now);
   monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
   monday.setHours(0, 0, 0, 0);
@@ -733,6 +747,13 @@ export async function getUserPromotionStats(userId: number) {
       .where(eq(users.id, userId));
   }
   
+  // 计算考核期信息
+  const assessmentPeriodStart = thirtyDaysAgo;
+  const assessmentPeriodEnd = thisSunday;
+  const daysInPeriod = 30;
+  const daysPassed = Math.floor((now.getTime() - assessmentPeriodStart.getTime()) / (1000 * 60 * 60 * 24));
+  const daysRemaining = daysInPeriod - daysPassed;
+  
   return {
     contactCount,
     tagCount: totalTagCount,
@@ -740,6 +761,15 @@ export async function getUserPromotionStats(userId: number) {
     currentLevel,
     levelName,
     qualifiedPeriod,
+    // 考核期信息
+    assessmentPeriod: {
+      startDate: assessmentPeriodStart.toISOString().split('T')[0],
+      endDate: assessmentPeriodEnd.toISOString().split('T')[0],
+      totalDays: daysInPeriod,
+      daysPassed,
+      daysRemaining,
+      currentInteractionCount: interactionCount,
+    },
   };
 }
 
