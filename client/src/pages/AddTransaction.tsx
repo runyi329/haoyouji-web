@@ -59,6 +59,22 @@ const AddTransaction = () => {
     utils.ledger.getCategories.invalidate({ ledgerId });
   }, [ledgerId, utils]);
   
+  // 监听页面可见性变化，当页面重新可见时刷新分类数据
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // 页面重新可见时，刷新分类数据
+        utils.ledger.getCategories.invalidate({ ledgerId });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [ledgerId, utils]);
+  
   // 编辑模式：从 URL 参数获取要编辑的账目 ID
   const urlParams = new URLSearchParams(window.location.search);
   const editId = urlParams.get('edit');
@@ -480,12 +496,12 @@ const AddTransaction = () => {
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   // 主题颜色数组
-  const themeColors = ["bg-blue-500", "bg-orange-500", "bg-green-500", "bg-[#A80000]"];
+  const themeColors = ["bg-[#A80000]", "bg-orange-500", "bg-green-500", "bg-blue-500"];
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* 顶部导航 */}
-      <div className="bg-blue-500 text-white p-3 flex items-center justify-between flex-shrink-0">
+      <div className="bg-[#A80000] text-white p-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setLocation(`/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -499,7 +515,7 @@ const AddTransaction = () => {
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "expense"
-                ? "bg-blue-500 text-white font-semibold"
+                ? "bg-[#A80000] text-white font-semibold"
                 : "text-gray-600 bg-white"
             }`}
             onClick={() => setTransactionType("expense")}
@@ -509,7 +525,7 @@ const AddTransaction = () => {
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "income"
-                ? "bg-blue-500 text-white font-semibold"
+                ? "bg-[#A80000] text-white font-semibold"
                 : "text-gray-600 bg-white"
             }`}
             onClick={() => setTransactionType("income")}
@@ -563,7 +579,7 @@ const AddTransaction = () => {
                     {/* 只在第一级显示"+"按钮 */}
                     {level === 0 && (
                       <button
-                        className="px-4 py-2 rounded text-sm bg-white border border-dashed border-blue-500 text-blue-500 flex items-center gap-1 hover:bg-blue-50"
+                        className="px-4 py-2 rounded text-sm bg-white border border-dashed border-[#A80000] text-[#A80000] flex items-center gap-1 hover:bg-red-50"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
                       >
                         <Plus className="w-4 h-4" />
@@ -596,7 +612,7 @@ const AddTransaction = () => {
                 key={account}
                 className={`px-3 py-1.5 rounded text-xs ${
                   selectedAccounts.includes(account)
-                    ? "bg-blue-500 text-white"
+                    ? "bg-[#A80000] text-white"
                     : "bg-gray-100 text-gray-700"
                 }`}
                 onClick={() => {
@@ -681,7 +697,7 @@ const AddTransaction = () => {
             }}
           />
           <button 
-            className="px-6 bg-blue-500 text-white flex items-center gap-2"
+            className="px-6 bg-[#A80000] text-white flex items-center gap-2"
             onClick={() => fileInputRef.current?.click()}
           >
             <ImageIcon className="w-5 h-5" />
@@ -773,7 +789,7 @@ const AddTransaction = () => {
           </button>
         ))}
         <button
-          className="bg-blue-500 text-white p-3 text-base font-semibold row-span-2 active:bg-blue-600"
+          className="bg-[#A80000] text-white p-3 text-base font-semibold row-span-2 active:bg-[#8B0000]"
           onClick={handleSave}
         >
           保存
@@ -811,7 +827,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={prevMonth} className="p-1.5">
-                <ChevronLeft className="w-5 h-5 text-blue-500" />
+                <ChevronLeft className="w-5 h-5 text-[#A80000]" />
               </button>
               
               {/* 年月显示 */}
@@ -821,7 +837,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={nextMonth} className="p-1.5">
-                <ChevronRight className="w-5 h-5 text-blue-500" />
+                <ChevronRight className="w-5 h-5 text-[#A80000]" />
               </button>
               
               {/* 外层箭头 - 控制年份 */}
@@ -832,7 +848,7 @@ const AddTransaction = () => {
               {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="ml-auto px-3 py-1 text-sm text-blue-500 border-2 border-blue-500 rounded-full"
+                className="ml-auto px-3 py-1 text-sm text-[#A80000] border-2 border-[#A80000] rounded-full"
               >
                 今天
               </button>
@@ -841,7 +857,7 @@ const AddTransaction = () => {
             {/* 星期标题 */}
             <div className="grid grid-cols-7 gap-1 mb-1">
               {weekDays.map((day) => (
-                <div key={day} className="text-center text-xs text-blue-500 py-0.5">
+                <div key={day} className="text-center text-xs text-[#A80000] py-0.5">
                   {day}
                 </div>
               ))}
@@ -861,8 +877,8 @@ const AddTransaction = () => {
                     className={`
                       h-9 sm:h-10 flex items-center justify-center text-sm rounded
                       ${!isCurrentMonth ? "text-gray-300" : "text-gray-800"}
-                      ${isSelected ? "bg-blue-500 text-white font-semibold" : ""}
-                      ${isTodayDate && !isSelected ? "border border-blue-500" : ""}
+                      ${isSelected ? "bg-[#A80000] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected ? "border border-[#A80000]" : ""}
                       ${isCurrentMonth && !isSelected ? "hover:bg-gray-100" : ""}
                     `}
                   >
@@ -909,7 +925,7 @@ const AddTransaction = () => {
               <span className="text-sm">请选择支出人：</span>
               <button
                 onClick={() => setIsPayerSheetOpen(false)}
-                className="text-blue-500 text-sm"
+                className="text-[#A80000] text-sm"
               >
                 完成
               </button>
