@@ -89,7 +89,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
     if (level === 'standard' || level === 'standard_user') return 0.25;
     if (level === 'advanced' || level === 'advanced_user') return 0.50;
     if (level === 'super' || level === 'super_user') return 1.00;
-    return 0.0; // 准合伙人
+    return 0.0; // 用户
   };
   
   const actualIdentityMultiplier = getIdentityMultiplier();
@@ -99,7 +99,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   
   // 节点配置
   const nodeConfig: Record<string, { name: string; badge: string }> = {
-    none: { name: '准合伙人', badge: 'L0' },
+    none: { name: '用户', badge: 'L0' },
     standard: { name: '标准节点', badge: 'L1' },
     advanced: { name: '高级节点', badge: 'L2' },
     super: { name: '超级节点', badge: 'L3' },
@@ -189,7 +189,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center space-x-1">
             <span ref={nodeLevelTitleRef} className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-              {config.name}
+              {props.promotionStats?.levelName || config.name}
             </span>
             <button
               ref={nodeLevelHelpRef}
