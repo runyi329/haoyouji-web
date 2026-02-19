@@ -264,19 +264,20 @@ export default function MyEquityRedWhite() {
               onClose={() => setShowEquityHelp(false)}
               triggerRef={equityTitleRef}
               content={
-                <div className="space-y-3">
-                  <div className="font-bold text-gray-900 text-base">综合股权是怎么来的？</div>
-                  <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                    <p>您的综合股权由两部分组成：</p>
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                      <p className="font-medium text-amber-900">1. 天使股东池（30%）的静态权重</p>
-                      <p className="text-sm text-amber-800 mt-1">根据您的投资额度和入场早晚计算，一旦锁定终身受益，不与劳动挂钩。</p>
+                <div className="space-y-1.5">
+                  <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">综合股权构成</div>
+                  <div className="text-sm text-gray-800 leading-snug space-y-1">
+                    <div className="py-1.5 border-b border-gray-100">
+                      <span className="font-semibold text-[#A80000]">天使股东池（30%）</span>
+                      <span className="text-gray-700"> — 投资额度×入场系数，锁定终身，不与劳动挂钩</span>
                     </div>
-                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                      <p className="font-medium text-green-900">2. 市场贡献池（12.5%）的动态收益</p>
-                      <p className="text-sm text-green-800 mt-1">根据您每周的真实行为贡献（邀约、标签、分享）结算，多劳多得，上不封顶。</p>
+                    <div className="py-1.5 border-b border-gray-100">
+                      <span className="font-semibold text-[#A80000]">市场贡献池（12.5%）</span>
+                      <span className="text-gray-700"> — 每周行为贡献结算，多劳多得，上不封顶</span>
                     </div>
-                    <p className="text-gray-600 mt-2">这两个池子总计占公司 <strong>42.5%</strong> 的股权，通过算法确保公平分配。如果您既投资又参与经营，将同时横跨两个池子，获得"双重复利"。</p>
+                    <div className="py-1.5 text-gray-700">
+                      两池共占<span className="font-bold text-[#A80000]">42.5%</span>股权。既投资又经营可获双重复利。
+                    </div>
                   </div>
                 </div>
               }
@@ -317,16 +318,20 @@ export default function MyEquityRedWhite() {
                       onClose={() => setShowMultiplierHelp(false)}
                       triggerRef={multiplierTitleRef}
                       content={
-                        <div className="space-y-2">
-                          <div className="font-bold text-gray-900">收益加速计算规则</div>
-                          <div>
-                            <span className="font-medium">● 资本杠杆：</span>根据您的投资金额和入场顺序一次性锁定，体现资本贡献。
-                          </div>
-                          <div>
-                            <span className="font-medium">● 贡献加速：</span>根据您当前达成的节点等级（标准/高级/超级）计算，体现人脉贡献。
-                          </div>
-                          <div>
-                            <span className="font-medium">● 总收益公式：</span>市场贡献收益 × (资本杠杆 + 贡献加速) = 最终结算收益。
+                        <div className="space-y-1.5">
+                          <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">收益加速规则</div>
+                          <div className="text-sm text-gray-800 leading-snug space-y-1">
+                            <div className="py-1.5 border-b border-gray-100">
+                              <span className="font-semibold text-[#A80000]">资本杠杆</span>
+                              <span className="text-gray-700"> — 投资金额×入场顺序，一次性锁定</span>
+                            </div>
+                            <div className="py-1.5 border-b border-gray-100">
+                              <span className="font-semibold text-[#A80000]">贡献加速</span>
+                              <span className="text-gray-700"> — 节点等级（标准/高级/超级）决定</span>
+                            </div>
+                            <div className="py-1.5 text-gray-700">
+                              <span className="font-semibold text-[#A80000]">总收益</span> = 市场贡献 × (资本杠杆 + 贡献加速)
+                            </div>
                           </div>
                         </div>
                       }
@@ -432,17 +437,15 @@ export default function MyEquityRedWhite() {
               onClose={() => setShowCapitalStockHelp(false)}
               triggerRef={capitalStockTitleRef}
               content={
-                <div className="space-y-3">
-                  <div className="font-bold text-gray-900 text-base">天使股东池（30%）：给“眼光”以终身尊严</div>
-                  <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                    <p>这是为早期投入资金的天使合伙人设立的专属池。</p>
-                    <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                      <p className="font-medium text-amber-900">分配逻辑：</p>
-                      <p className="text-sm text-amber-800 mt-1">根据“入场早晚”与“投资额度”双重加权。入场越早，静态权重越高（从 2.0 依次递减至 1.0）。</p>
+                <div className="space-y-1.5">
+                  <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">天使股东池（30%）</div>
+                  <div className="text-sm text-gray-800 leading-snug space-y-1">
+                    <div className="py-1.5 border-b border-gray-100">
+                      <span className="font-semibold text-[#A80000]">分配逻辑</span>
+                      <span className="text-gray-700"> — 入场早晚×投资额度双重加权，系数从2.0递减至1.0</span>
                     </div>
-                    <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                      <p className="font-medium text-green-900">核心好处：一旦锁定，终身受益。</p>
-                      <p className="text-sm text-green-800 mt-1">只要您进入了天使池，无论您后期是否参与经营，您持有的这部分静态权重都将永久锁定在 30% 的总额内。这不仅是投资，更是您在脉动生态中的底气。</p>
+                    <div className="py-1.5 text-gray-700">
+                      <span className="font-semibold text-[#A80000]">核心优势</span> — 一旦锁定终身受益，不与劳动挂钩，是生态底气
                     </div>
                   </div>
                 </div>
@@ -557,24 +560,23 @@ export default function MyEquityRedWhite() {
                 onClose={() => setShowLeverageHelp(false)}
                 triggerRef={leverageTitleRef}
                 content={
-                  <div className="space-y-2.5">
-                    <div className="font-bold text-gray-900 text-base">资本加速（风险补偿）</div>
-                    <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                      <div className="bg-blue-50 border-l-4 border-blue-400 p-2.5 rounded">
-                        <p className="font-medium text-blue-900">风险补偿</p>
-                        <p className="text-sm text-blue-800 mt-0.5">早期投资者承担更大风险，按公平原则享受更多权益。</p>
+                  <div className="space-y-1.5">
+                    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">资本加速（风险补偿）</div>
+                    <div className="text-sm text-gray-800 leading-snug space-y-1">
+                      <div className="py-1.5 border-b border-gray-100">
+                        <span className="font-semibold text-[#A80000]">风险补偿</span>
+                        <span className="text-gray-700"> — 早期投资者承担更大风险，按公平原则享受更多权益</span>
                       </div>
-                      <div className="bg-amber-50 border-l-4 border-amber-400 p-2.5 rounded">
-                        <p className="font-medium text-amber-900">初始投资放大</p>
-                        <p className="text-sm text-amber-800 mt-0.5">投资额×加速系数=天使池权重。例：10万×2.0x=20万权重。</p>
+                      <div className="py-1.5 border-b border-gray-100">
+                        <span className="font-semibold text-[#A80000]">初始投资放大</span>
+                        <span className="text-gray-700"> — 投资额×系数=天使池权重。例：10万×2.0x=20万权重</span>
                       </div>
-                      <div className="bg-purple-50 border-l-4 border-purple-400 p-2.5 rounded">
-                        <p className="font-medium text-purple-900">市场贡献放大</p>
-                        <p className="text-sm text-purple-800 mt-0.5">每周市场贡献也乘以该系数。例：系数1.5x，贡献权益也×1.5。</p>
+                      <div className="py-1.5 border-b border-gray-100">
+                        <span className="font-semibold text-[#A80000]">市场贡献放大</span>
+                        <span className="text-gray-700"> — 每周贡献也乘以该系数。例：系数1.5x，贡献权益×1.5</span>
                       </div>
-                      <div className="bg-green-50 border-l-4 border-green-400 p-2.5 rounded">
-                        <p className="font-medium text-green-900">为何递减</p>
-                        <p className="text-sm text-green-800 mt-0.5">系数从2.0递减至1.0。越早加入风险越大，回报越高，体现公平性。</p>
+                      <div className="py-1.5 text-gray-700">
+                        <span className="font-semibold text-[#A80000]">递减原理</span> — 系数从2.0递减至1.0，越早加入风险越大回报越高
                       </div>
                     </div>
                   </div>
@@ -668,20 +670,19 @@ export default function MyEquityRedWhite() {
                 onClose={() => setShowCompanyEquityHelp(false)}
                 triggerRef={companyEquityTitleRef}
                 content={
-                  <div className="space-y-3">
-                    <div className="font-bold text-gray-900 text-base">为什么要设置 30% 天使池和 12.5% 市场池？</div>
-                    <div className="text-sm text-gray-700 leading-relaxed space-y-3">
-                      <div>
-                        <p className="font-medium text-gray-800">1. 资产安全性（保底）：</p>
-                        <p className="ml-4 text-gray-600 mt-1">传统的股权模式中，如果你不干活，股份可能会被收回或强制稀释。在脉动，30% 的天使池是您的资产避风港，不与劳动挂钩。这保证了您的投资安全，即使您只做一名纯粹的财务投资者。</p>
+                  <div className="space-y-1.5">
+                    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">双池设计原理</div>
+                    <div className="text-sm text-gray-800 leading-snug space-y-1">
+                      <div className="py-1.5 border-b border-gray-100">
+                        <span className="font-semibold text-[#A80000]">资产安全性</span>
+                        <span className="text-gray-700"> — 30%天使池不与劳动挂钩，投资安全有保障</span>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800">2. 收益爆发力（增益）：</p>
-                        <p className="ml-4 text-gray-600 mt-1">12.5% 的市场池是核动力引擎。它保证了平台永远有新鲜血液，永远在产出社交数据。当平台因为这 12.5% 的激励而估值翻倍时，您手里那 30% 的静态资产价值也会同步翻倍。</p>
+                      <div className="py-1.5 border-b border-gray-100">
+                        <span className="font-semibold text-[#A80000]">收益爆发力</span>
+                        <span className="text-gray-700"> — 12.5%市场池激励扩张，平台估值翻倍时静态资产同步增值</span>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800">3. 防止“大户吸血”：</p>
-                        <p className="ml-4 text-gray-600 mt-1">如果 42.5% 混在一起，不干活的大户会分走绝大部分劳动者的奖励，导致平台死亡。现在，劳动者在 12.5% 的池子里享有绝对的统治权，这确保了平台能够持续良性扩张。</p>
+                      <div className="py-1.5 text-gray-700">
+                        <span className="font-semibold text-[#A80000]">防大户吸血</span> — 分池设计确保劳动者在12.5%池中享有统治权
                       </div>
                     </div>
                   </div>
