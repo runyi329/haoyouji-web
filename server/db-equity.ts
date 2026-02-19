@@ -413,7 +413,8 @@ export async function calculateUserEquity(userId: number) {
   // 如果用户没有投资记录，inviteEquity 和 referralNetworkEquity 保持为 0
   
   // 5. 计算资本加速明细
-  const seatNumber = await getUserSeatNumber(userId);
+  const seatInfo = await getUserSeatNumber(userId);
+  const seatNumber = seatInfo.seatNumber;
   const leverageInfo = calculateDynamicLeverage(seatNumber, 660);
   const originalAcceleration = leverageInfo.leverage;
   
