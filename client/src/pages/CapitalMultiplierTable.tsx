@@ -15,11 +15,18 @@ function calculateMultiplier(rank: number): number {
   return multiplier;
 }
 
-// 生成全部660名的系数数据
+// 生成每10名的系数数据（共66个）
 function generateMultiplierData(): Array<{ rank: number; multiplier: string }> {
   const data: Array<{ rank: number; multiplier: string }> = [];
   
-  for (let rank = 1; rank <= 660; rank++) {
+  // 第1名
+  data.push({
+    rank: 1,
+    multiplier: calculateMultiplier(1).toFixed(4)
+  });
+  
+  // 第10, 20, 30...660名
+  for (let rank = 10; rank <= 660; rank += 10) {
     const multiplier = calculateMultiplier(rank);
     data.push({
       rank,
@@ -66,7 +73,7 @@ const CapitalMultiplierTable: React.FC = () => {
   };
 
   // 将数据分成2列，每行2个
-  const rows: Array<[typeof multiplierData[0], typeof multiplierData[0]]> = [];
+  const rows: Array<[typeof multiplierData[0], typeof multiplierData[0] | undefined]> = [];
   for (let i = 0; i < multiplierData.length; i += 2) {
     rows.push([multiplierData[i], multiplierData[i + 1]]);
   }
@@ -127,49 +134,37 @@ const CapitalMultiplierTable: React.FC = () => {
         </div>
       </div>
 
-      {/* 系数对照表 - 参考晋升准则的表格风格 */}
+      {/* 系数对照表 - 极简风格，高信息密度 */}
       <div className="px-4 pb-4">
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <table className="w-full">
             <tbody>
               {rows.map((row, rowIndex) => {
                 const [item1, item2] = row;
-                const isItem1Current = isInvestor && currentSeatNumber === item1.rank;
-                const isItem2Current = item2 && isInvestor && currentSeatNumber === item2.rank;
                 
                 return (
                   <tr 
                     key={rowIndex} 
                     className={rowIndex > 0 ? 'border-t border-gray-200' : ''}
                   >
-                    {/* 第1列 */}
-                    <td className={`text-center py-1.5 px-2 border-r border-gray-200 ${isItem1Current ? 'bg-[#FFF8E7]' : ''}`}>
-                      <div className="text-xs text-gray-600">
-                        第<span className="font-bold text-gray-800">{item1.rank}</span>名
+                    {/* 第1列 - 左右排列：排名 系数 */}
+                    <td className="py-0.5 px-2 border-r border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-600">第{item1.rank}名</span>
+                        <span className="text-xs text-gray-700 font-mono ml-2">{item1.multiplier}x</span>
                       </div>
-                      <div className={`text-xs font-mono font-bold ${isItem1Current ? 'text-[#A80000]' : 'text-gray-700'}`}>
-                        {item1.multiplier}x
-                      </div>
-                      {isItem1Current && (
-                        <div className="text-xs text-[#A80000] mt-0.5">← 您</div>
-                      )}
                     </td>
                     
-                    {/* 第2列 */}
+                    {/* 第2列 - 左右排列：排名 系数 */}
                     {item2 ? (
-                      <td className={`text-center py-1.5 px-2 ${isItem2Current ? 'bg-[#FFF8E7]' : ''}`}>
-                        <div className="text-xs text-gray-600">
-                          第<span className="font-bold text-gray-800">{item2.rank}</span>名
+                      <td className="py-0.5 px-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600">第{item2.rank}名</span>
+                          <span className="text-xs text-gray-700 font-mono ml-2">{item2.multiplier}x</span>
                         </div>
-                        <div className={`text-xs font-mono font-bold ${isItem2Current ? 'text-[#A80000]' : 'text-gray-700'}`}>
-                          {item2.multiplier}x
-                        </div>
-                        {isItem2Current && (
-                          <div className="text-xs text-[#A80000] mt-0.5">← 您</div>
-                        )}
                       </td>
                     ) : (
-                      <td className="text-center py-1.5 px-2"></td>
+                      <td className="py-0.5 px-2"></td>
                     )}
                   </tr>
                 );
@@ -178,7 +173,7 @@ const CapitalMultiplierTable: React.FC = () => {
           </table>
           
           {/* 底部说明 */}
-          <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-200">
+          <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
               编号按投资时间先后排序，系数永久锁定
             </p>
