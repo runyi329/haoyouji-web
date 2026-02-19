@@ -65,7 +65,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size * 0.75} viewBox={`0 0 ${size} ${size * 0.75}`}>
+      <svg width={size} height={size * 0.65} viewBox={`0 ${size * 0.15} ${size} ${size * 0.65}`}>
         <defs>
           {/* 玻璃质感渐变 */}
           <linearGradient id="glassGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -175,12 +175,28 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
           const labelY = center + labelRadius * Math.sin(tickRad);
           const tickValue = minValue + tick * range;
           
+          // 调整边缘标签位置避免重叠
+          let adjustedX = labelX;
+          let adjustedY = labelY;
+          let textAnchor: 'start' | 'middle' | 'end' = 'middle';
+          
+          // 左边缘标签 (1.0) - 向左偏移
+          if (tick === 0) {
+            adjustedX = labelX - 8;
+            textAnchor = 'end';
+          }
+          // 右边缘标签 (3.0) - 向右偏移
+          else if (tick === 1) {
+            adjustedX = labelX + 8;
+            textAnchor = 'start';
+          }
+          
           return (
             <text
               key={i}
-              x={labelX}
-              y={labelY}
-              textAnchor="middle"
+              x={adjustedX}
+              y={adjustedY}
+              textAnchor={textAnchor}
               dominantBaseline="middle"
               fontSize="11"
               fill="#374151"
