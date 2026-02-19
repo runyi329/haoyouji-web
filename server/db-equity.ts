@@ -412,7 +412,24 @@ export async function calculateUserEquity(userId: number) {
   }
   // 如果用户没有投资记录，inviteEquity 和 referralNetworkEquity 保持为 0
   
-  // 5. 计算总股份
+  // 5. 计算资本加速明细
+  const seatNumber = await getUserSeatNumber(userId);
+  const leverageInfo = calculateDynamicLeverage(seatNumber, 660);
+  const originalAcceleration = leverageInfo.leverage;
+  
+  // 计算实际加速：根据投资额调整
+  let actualAcceleration = originalAcceleration;
+  const baseInvestment = 100000; // 10万基准
+  
+  if (userInvestment > 0 && userInvestment < baseInvestment) {
+    // 投资额 < 10万：实际加速 = 原始加速 ÷ (投资额/10万) + 1
+    actualAcceleration = originalAcceleration / (userInvestment / baseInvestment) + 1;
+  } else if (userInvestment >= baseInvestment) {
+    // 投资额 >= 10万：实际加速 = 原始加速
+    actualAcceleration = originalAcceleration;
+  }
+  
+  // 6. 计算总股份
   const totalEquity = investmentEquity + inviteEquity + referralNetworkEquity;
   
   return {
@@ -420,6 +437,12 @@ export async function calculateUserEquity(userId: number) {
     investmentEquity: Number(investmentEquity.toFixed(4)),
     inviteEquity: Number(inviteEquity.toFixed(4)),
     referralNetworkEquity: Number(referralNetworkEquity.toFixed(4)),
+    capitalAccelerationDetail: {
+      originalAcceleration: Number(originalAcceleration.toFixed(4)),
+      investmentAmount: userInvestment,
+      actualAcceleration: Number(actualAcceleration.toFixed(4)),
+      seatNumber,
+    },
     details: {
       userInvestment,
       totalInvestment,
