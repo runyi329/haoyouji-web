@@ -521,9 +521,9 @@ export default function MyEquityRedWhite() {
                 系数对照表
               </button>
             </div>
-              
-              {/* 资本杠杆系数帮助弹窗 */}
-              <Tooltip
+            
+            {/* 资本杠杆系数帮助弹窗 */}
+            <Tooltip
                 isOpen={showLeverageHelp}
                 onClose={() => setShowLeverageHelp(false)}
                 triggerRef={leverageTitleRef}
@@ -550,8 +550,6 @@ export default function MyEquityRedWhite() {
                   </div>
                 }
               />
-            </div>
-
           </div>
         </div>
         {/* 第二部分结束 */}
