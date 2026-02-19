@@ -11,7 +11,7 @@ interface GaugeChartProps {
 export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358' }: GaugeChartProps) {
   // ========== 核心配置 ==========
   const W = 150;                    // SVG 宽度（紧凑，两个并排不超出手机屏幕）
-  const H = 100;                    // SVG 高度
+  const H = 105;                    // SVG 高度（容纳下方标签）
   const cx = W / 2;                 // 圆心 X
   const cy = 78;                    // 圆心 Y（偏下，给上方刻度留空间）
   const R = 52;                     // 主弧半径
@@ -183,20 +183,34 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
           const rad = deg2rad(d);
           const outerR = R + arcWidth / 2 + 2;
           const innerR = outerR - 7;
-          const labelR = R + arcWidth / 2 + 15;
-          const lx = cx + labelR * Math.cos(rad);
-          const ly = cy + labelR * Math.sin(rad);
 
-          // 根据角度智能对齐
-          let anchor: 'start' | 'middle' | 'end' = 'middle';
-          let dx = 0;
-          if (d < 230) { anchor = 'end'; dx = 2; }
-          else if (d > 310) { anchor = 'start'; dx = -2; }
+          // 两端标签（1.0和3.0）特殊处理：放在弧线端点正下方
+          const isLeftEnd = v === minValue;   // 1.0 在最左端
+          const isRightEnd = v === maxValue;  // 3.0 在最右端
 
-          // 两端标签（1.0和3.0）特殊处理：稍微内移避免超出
-          let adjustedLx = lx + dx;
-          if (v === minValue) adjustedLx = Math.max(adjustedLx, 8);
-          if (v === maxValue) adjustedLx = Math.min(adjustedLx, W - 8);
+          let labelX: number;
+          let labelY: number;
+          let anchor: 'start' | 'middle' | 'end';
+
+          if (isLeftEnd) {
+            // 1.0：放在左端弧线端点的下方偏内
+            labelX = cx - R + 2;
+            labelY = cy + 10;
+            anchor = 'start';
+          } else if (isRightEnd) {
+            // 3.0：放在右端弧线端点的下方偏内
+            labelX = cx + R - 2;
+            labelY = cy + 10;
+            anchor = 'end';
+          } else {
+            // 中间标签：放在弧线外侧
+            const labelR = R + arcWidth / 2 + 15;
+            labelX = cx + labelR * Math.cos(rad);
+            labelY = cy + labelR * Math.sin(rad);
+            anchor = 'middle';
+            if (d < 250) { anchor = 'end'; labelX += 2; }
+            else if (d > 290) { anchor = 'start'; labelX -= 2; }
+          }
 
           return (
             <g key={`M-${i}`}>
@@ -210,11 +224,11 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
                 strokeLinecap="round"
               />
               <text
-                x={adjustedLx}
-                y={ly}
+                x={labelX}
+                y={labelY}
                 textAnchor={anchor}
                 dominantBaseline="central"
-                fontSize="8.5"
+                fontSize="8"
                 fill="#999"
                 fontWeight="500"
                 fontFamily="system-ui, -apple-system, sans-serif"
