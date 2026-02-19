@@ -166,21 +166,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           onClose={() => setShowMultiplierHelp(false)}
           triggerRef={multiplierTitleRef}
           content={
-            <div className="space-y-3">
-              <div className="font-bold text-gray-900 text-base">市场贡献池（12.5%）：给“劳动”以超额回报</div>
-              <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                <p>这是为活跃的、不断让“人脉动起来”的合伙人设立的周奖金池。</p>
-                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                  <p className="font-medium text-amber-900">分配逻辑：</p>
-                  <p className="text-sm text-amber-800 mt-1">根据每周的真实行为贡献（邀约、标签、分享）进行结算。</p>
+            <div className="space-y-1.5">
+              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">市场贡献池（12.5%）</div>
+              <div className="text-sm text-gray-800 leading-snug space-y-1">
+                <div className="py-1.5 border-b border-gray-100">
+                  <span className="font-semibold text-[#A80000]">分配逻辑</span>
+                  <span className="text-gray-700"> — 根据每周真实行为贡献（邀约、标签、分享）结算</span>
                 </div>
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                  <p className="font-medium text-blue-900">杠杆效应：</p>
-                  <p className="text-sm text-blue-800 mt-1">如果您是持有 2.0 的资本加速，您在 12.5% 市场池里的劳动产出，将是相同节点的 2 倍。</p>
+                <div className="py-1.5 border-b border-gray-100">
+                  <span className="font-semibold text-[#A80000]">杠杆效应</span>
+                  <span className="text-gray-700"> — 资本加速2.0x，市场池劳动产出也×2</span>
                 </div>
-                <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                  <p className="font-medium text-green-900">核心好处：多劳多得，上不封顶。</p>
-                  <p className="text-sm text-green-800 mt-1">这是一个流动的、爆发性的池子。如果您既有资本加速，又有资源加速（自己符合标准节点 25%、高级节点 50%、超级节点 100%），又积极参与经营，您将同时横跨两个池子，获得超越阶层的“三重复利”。</p>
+                <div className="py-1.5 text-gray-700">
+                  <span className="font-semibold text-[#A80000]">核心好处</span> — 多劳多得，上不封顶。资本加速+资源加速+积极经营=三重复利
                 </div>
               </div>
             </div>
@@ -267,23 +265,24 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           onClose={() => setShowNodeLevelHelp(false)}
           triggerRef={nodeLevelTitleRef}
           content={
-            <div className="space-y-3">
-              <div className="font-bold text-gray-900 text-base">资源加速机制</div>
-              <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                <p>不同节点级别在 12.5% 市场贡献池中享有不同的资源加速：</p>
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                  <p className="font-medium text-blue-900">标准节点：+25% 资源加速</p>
-                  <p className="text-sm text-blue-800 mt-1">您的市场贡献权重将增加 25%，即每周结算时您的贡献会乘以 1.25 倍。</p>
+            <div className="space-y-1.5">
+              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">资源加速机制</div>
+              <div className="text-sm text-gray-800 leading-snug space-y-1">
+                <div className="py-1.5 border-b border-gray-100">
+                  <span className="font-semibold text-[#A80000]">标准节点</span>
+                  <span className="text-gray-700"> — +25%资源加速，市场贡献×1.25</span>
                 </div>
-                <div className="bg-purple-50 border-l-4 border-purple-400 p-3 rounded">
-                  <p className="font-medium text-purple-900">高级节点：+50% 资源加速</p>
-                  <p className="text-sm text-purple-800 mt-1">您的市场贡献权重将增加 50%，即每周结算时您的贡献会乘以 1.50 倍。</p>
+                <div className="py-1.5 border-b border-gray-100">
+                  <span className="font-semibold text-[#A80000]">高级节点</span>
+                  <span className="text-gray-700"> — +50%资源加速，市场贡献×1.50</span>
                 </div>
-                <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                  <p className="font-medium text-amber-900">超级节点：+100% 资源加速</p>
-                  <p className="text-sm text-amber-800 mt-1">您的市场贡献权重将翻倍，即每周结算时您的贡献会乘以 2.00 倍。</p>
+                <div className="py-1.5 border-b border-gray-100">
+                  <span className="font-semibold text-[#A80000]">超级节点</span>
+                  <span className="text-gray-700"> — +100%资源加速，市场贡献×2.00</span>
                 </div>
-                <p className="text-gray-600 mt-2">资源加速与资本加速可以叠加，形成“三重复利”效应。</p>
+                <div className="py-1.5 text-gray-700">
+                  资源加速与资本加速叠加，形成三重复利
+                </div>
               </div>
             </div>
           }
@@ -445,21 +444,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   onClose={() => setShowAchievedHelp(false)}
                   triggerRef={achievedTitleRef}
                   content={
-                    <div className="space-y-2">
-                      <div className="font-bold text-gray-900">统计规则</div>
-                      <div className="space-y-1.5">
-                        <div className="font-medium text-gray-700">用户层面（使用行为）：</div>
-                        <div>● <span className="font-medium">标准用户：</span>曾经达到过标准用户或更高的累计人数。</div>
-                        <div>● <span className="font-medium">高级用户：</span>曾经达到过高级用户或更高的累计人数。</div>
-                        <div>● <span className="font-medium">超级用户：</span>曾经达到过超级用户的累计人数。</div>
-                        
-                        <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
-                        <div>● <span className="font-medium">标准节点：</span>曾经达到过标准用户或更高的累计人数。</div>
-                        <div>● <span className="font-medium">高级节点：</span>曾经达到过高级用户或更高的累计人数。</div>
-                        <div>● <span className="font-medium">超级节点：</span>曾经达到过超级用户的累计人数。</div>
-                        
-                        <div className="mt-2 text-xs text-gray-500 bg-amber-50 p-2 rounded">
-                          <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。即使掉级了，也会计入累计，体现您的历史贡献。
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">统计规则</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">用户层面</span>
+                          <span className="text-gray-700"> — 标准/高级/超级用户，统计历史最高等级的累计人数</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">节点层面</span>
+                          <span className="text-gray-700"> — 标准/高级/超级节点，统计规则与用户层面相同</span>
+                        </div>
+                        <div className="py-1.5 text-gray-700">
+                          <span className="font-semibold text-[#A80000]">理解要点</span> — 即使掉级，也计入累计，体现历史贡献
                         </div>
                       </div>
                     </div>
@@ -541,21 +538,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   onClose={() => setShowCultivatingHelp(false)}
                   triggerRef={cultivatingTitleRef}
                   content={
-                    <div className="space-y-2">
-                      <div className="font-bold text-gray-900">统计规则</div>
-                      <div className="space-y-1.5">
-                        <div className="font-medium text-gray-700">用户层面（使用行为）：</div>
-                        <div>● <span className="font-medium">潜在标准用户：</span>所有邀请的人（只要注册就算）。</div>
-                        <div>● <span className="font-medium">潜在高级用户：</span>当前达到标准用户或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级用户：</span>当前达到高级用户或更高的人数。</div>
-                        
-                        <div className="font-medium text-gray-700 mt-2">节点层面（经营行为）：</div>
-                        <div>● <span className="font-medium">潜在标准节点：</span>所有邀请的人（只要注册就算）。</div>
-                        <div>● <span className="font-medium">潜在高级节点：</span>当前达到标准用户或更高的人数。</div>
-                        <div>● <span className="font-medium">潜在超级节点：</span>当前达到高级用户或更高的人数。</div>
-                        
-                        <div className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
-                          <span className="font-medium">理解要点：</span>用户层面和节点层面的统计规则相同，都是基于用户等级判定。每个人同时拥有两重身份，体现您的当前业务拓展潜力。
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">统计规则</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">用户层面</span>
+                          <span className="text-gray-700"> — 潜在标准（所有邀请），潜在高级（当前≥标准），潜在超级（当前≥高级）</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">节点层面</span>
+                          <span className="text-gray-700"> — 统计规则与用户层面相同</span>
+                        </div>
+                        <div className="py-1.5 text-gray-700">
+                          <span className="font-semibold text-[#A80000]">理解要点</span> — 体现当前业务拓展潜力
                         </div>
                       </div>
                     </div>
