@@ -20,6 +20,15 @@ interface WeeklyReport {
     actualAcceleration: number; // 实际加速
   };
   resourceAcceleration: number; // 资源加速
+  resourceAccelerationDetail?: {
+    contactCount: number; // 人脉累计
+    tagCount: number; // 标签累计
+    interactionCount: number; // 30日联络数
+    currentLevel: string; // 当前等级
+    levelName: string; // 等级名称
+    hasInvestment: boolean; // 是否有投资
+    resourceAcceleration: number; // 资源加速倍数
+  };
   marketContribution: number; // 市场贡献
   personalContribution: {
     networkSize: number;
@@ -77,7 +86,24 @@ export default function WeeklyReportDetail() {
   // 实际加速的帮助提示状态
   const [showActualAccelerationHelp, setShowActualAccelerationHelp] = useState(false);
   const actualAccelerationHelpRef = useRef<HTMLButtonElement>(null);
-  const actualAccelerationTitleRef = useRef<HTMLSpanElement>(null);;
+  const actualAccelerationTitleRef = useRef<HTMLSpanElement>(null);
+  
+  // 资源加速明细的帮助提示状态
+  const [showContactCountHelp, setShowContactCountHelp] = useState(false);
+  const contactCountHelpRef = useRef<HTMLButtonElement>(null);
+  const contactCountTitleRef = useRef<HTMLSpanElement>(null);
+  
+  const [showTagCountHelp, setShowTagCountHelp] = useState(false);
+  const tagCountHelpRef = useRef<HTMLButtonElement>(null);
+  const tagCountTitleRef = useRef<HTMLSpanElement>(null);
+  
+  const [showInteractionCountHelp, setShowInteractionCountHelp] = useState(false);
+  const interactionCountHelpRef = useRef<HTMLButtonElement>(null);
+  const interactionCountTitleRef = useRef<HTMLSpanElement>(null);
+  
+  const [showLevelNameHelp, setShowLevelNameHelp] = useState(false);
+  const levelNameHelpRef = useRef<HTMLButtonElement>(null);
+  const levelNameTitleRef = useRef<HTMLSpanElement>(null);
   
   // 从 API获取真实数据
   const { data: equityData, isLoading } = trpc.equity.getMyEquity.useQuery();
@@ -96,6 +122,9 @@ export default function WeeklyReportDetail() {
     capitalAccelerationDetail: equityData?.capitalAccelerationDetail || mockReport.capitalAccelerationDetail,
     // 红色区域的资本加速应该显示实际加速，而不是原始加速
     capitalAcceleration: equityData?.capitalAccelerationDetail?.actualAcceleration || mockReport.capitalAcceleration,
+    // 资源加速明细使用API返回的数据
+    resourceAccelerationDetail: equityData?.resourceAccelerationDetail,
+    resourceAcceleration: equityData?.resourceAccelerationDetail?.resourceAcceleration || mockReport.resourceAcceleration,
   };
 
   return (
@@ -288,6 +317,212 @@ export default function WeeklyReportDetail() {
                     </div>
                   }
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* 资源加速明细 */}
+          <div className="mb-6">
+            <div className="text-sm font-semibold text-gray-900 mb-3">
+              资源加速明细
+            </div>
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100">
+              <div className="space-y-3">
+                {/* 人脉累计 */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={contactCountTitleRef} className="text-sm text-gray-600">人脉累计</span>
+                    <button
+                      ref={contactCountHelpRef}
+                      onClick={() => setShowContactCountHelp(!showContactCountHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-base font-bold text-gray-900">
+                    {report.resourceAccelerationDetail?.contactCount || report.personalContribution.networkSize} 人
+                  </span>
+                </div>
+                
+                {/* 人脉累计帮助弹窗 */}
+                <Tooltip
+                  isOpen={showContactCountHelp}
+                  onClose={() => setShowContactCountHelp(false)}
+                  triggerRef={contactCountTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">人脉累计说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">计算依据</span>
+                          <span className="text-gray-700"> — 账户内添加的联系人数量</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">统计范围</span>
+                          <span className="text-gray-700"> — 使用至今的累计数据</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">说明</span>
+                          <span className="text-gray-700"> — 不考虑信息完整度，只统计数量</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                
+                <div className="border-t border-gray-100"></div>
+                
+                {/* 标签累计 */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={tagCountTitleRef} className="text-sm text-gray-600">标签累计</span>
+                    <button
+                      ref={tagCountHelpRef}
+                      onClick={() => setShowTagCountHelp(!showTagCountHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-base font-bold text-gray-900">
+                    {report.resourceAccelerationDetail?.tagCount || Math.round(report.personalContribution.tagCompleteness * report.personalContribution.networkSize)} 个
+                  </span>
+                </div>
+                
+                {/* 标签累计帮助弹窗 */}
+                <Tooltip
+                  isOpen={showTagCountHelp}
+                  onClose={() => setShowTagCountHelp(false)}
+                  triggerRef={tagCountTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">标签累计说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">计算依据</span>
+                          <span className="text-gray-700"> — 所有好友的标签总和</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">统计范围</span>
+                          <span className="text-gray-700"> — 包含全局标签和个人标签</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">说明</span>
+                          <span className="text-gray-700"> — 标签越多，说明人脉信息越完整</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                
+                <div className="border-t border-gray-100"></div>
+                
+                {/* 30日联络数 */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={interactionCountTitleRef} className="text-sm text-gray-600">30日联络数</span>
+                    <button
+                      ref={interactionCountHelpRef}
+                      onClick={() => setShowInteractionCountHelp(!showInteractionCountHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-base font-bold text-gray-900">
+                    {report.resourceAccelerationDetail?.interactionCount || report.personalContribution.contactFrequency} 次
+                  </span>
+                </div>
+                
+                {/* 30日联络数帮助弹窗 */}
+                <Tooltip
+                  isOpen={showInteractionCountHelp}
+                  onClose={() => setShowInteractionCountHelp(false)}
+                  triggerRef={interactionCountTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">30日联络数说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">统计节点</span>
+                          <span className="text-gray-700"> — 每周日晚上12点</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">统计范围</span>
+                          <span className="text-gray-700"> — 从统计节点往前推30天</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">计算方式</span>
+                          <span className="text-gray-700"> — 累计联络次数（同一人可多次计算）</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">等级保持</span>
+                          <span className="text-gray-700"> — 符合条件则接下来一周保持该级别，下周日再次统计</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                
+                <div className="border-t border-gray-100"></div>
+                
+                {/* 本周等级 */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={levelNameTitleRef} className="text-sm text-gray-600">本周等级</span>
+                    <button
+                      ref={levelNameHelpRef}
+                      onClick={() => setShowLevelNameHelp(!showLevelNameHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <span className="text-base font-bold text-gray-900">
+                    {report.resourceAccelerationDetail?.levelName || '用户'}
+                  </span>
+                </div>
+                
+                {/* 本周等级帮助弹窗 */}
+                <Tooltip
+                  isOpen={showLevelNameHelp}
+                  onClose={() => setShowLevelNameHelp(false)}
+                  triggerRef={levelNameTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">准节点说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">准节点定义</span>
+                          <span className="text-gray-700"> — 尚未进行投资储值的用户</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">晋升要求</span>
+                          <span className="text-gray-700"> — 与正式节点完全相同</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">资源加速</span>
+                          <span className="text-gray-700"> — 与正式节点完全相同</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">转正条件</span>
+                          <span className="text-gray-700"> — 完成投资储值后自动转为正式节点</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                
+                <div className="border-t border-gray-100"></div>
+                
+                {/* 资源加速 */}
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm text-gray-600">资源加速</span>
+                  <span className="text-base font-bold text-[#C5B358]">
+                    {report.resourceAcceleration.toFixed(4)}x
+                  </span>
+                </div>
               </div>
             </div>
           </div>
