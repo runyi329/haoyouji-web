@@ -260,7 +260,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
       {/* ===== 数值 + 标签 ===== */}
       <div className="text-center -mt-1">
         <div className="text-lg font-bold font-mono tracking-tight" style={{ color }}>
-          {value.toFixed(2)}x
+          ×{value.toFixed(2)}
         </div>
         <div className="text-[10px] text-gray-500 mt-0.5">{label}</div>
       </div>

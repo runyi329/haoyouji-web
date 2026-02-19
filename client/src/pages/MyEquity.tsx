@@ -538,7 +538,7 @@ export default function MyEquity() {
                   <div>
                     <div className="text-xs opacity-70 mb-1">资本加速（风险补偿）</div>
                     <div className="text-2xl font-bold text-yellow-300 font-mono">
-                      {equity.dynamicLeverage ? `${equity.dynamicLeverage.leverage.toFixed(4)}x` : '1.0000x'}
+                      {equity.dynamicLeverage ? `×${equity.dynamicLeverage.leverage.toFixed(4)}` : '×1.0000'}
                     </div>
                     <div className="text-[10px] opacity-50 mt-0.5">已锁定 · 永久有效</div>
                   </div>

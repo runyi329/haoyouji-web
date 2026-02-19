@@ -377,10 +377,10 @@ export default function MyEquityRedWhite() {
                   <div className="bg-[#A80000] rounded-lg py-3 px-4 text-center">
                     <div className="text-sm text-white/80 mb-1">总推力</div>
                     <div className="text-3xl font-bold text-white font-mono">
-                      {totalMultiplier.toFixed(2)}x
+                      ×{totalMultiplier.toFixed(2)}
                     </div>
                     <div className="text-xs text-white/70 mt-1">
-                      {capitalLeverage.toFixed(2)}x + {(1 + contributionAcceleration).toFixed(2)}x
+                      ×{capitalLeverage.toFixed(2)} + ×{(1 + contributionAcceleration).toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -488,7 +488,7 @@ export default function MyEquityRedWhite() {
               {/* 系数显示 - 超大号，最突出 */}
               <div className="mb-4">
                 <div className="text-5xl font-bold text-[#C5B358] font-mono">
-                  {capitalLeverage.toFixed(4)}x
+                  ×{capitalLeverage.toFixed(4)}
                 </div>
               </div>
 

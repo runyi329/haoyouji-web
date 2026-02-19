@@ -97,7 +97,7 @@ export default function MultiDimensionSimulator({
         {showLeverageEffect && (
           <div className="flex items-center space-x-1 text-xs text-orange-600 animate-pulse">
             <Zap className="w-3 h-3" />
-            <span>杠杆放大中 {leverageMultiplier.toFixed(2)}x</span>
+            <span>杠杆放大中 ×{leverageMultiplier.toFixed(2)}</span>
           </div>
         )}
       </div>

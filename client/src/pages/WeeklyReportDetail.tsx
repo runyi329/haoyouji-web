@@ -189,13 +189,13 @@ export default function WeeklyReportDetail() {
               <div className="text-center">
                 <div className="text-white/60 text-[10px] mb-1">资本加速</div>
                 <div className="text-white text-sm font-bold">
-                  {report.capitalAcceleration.toFixed(4)}x
+                  ×{report.capitalAcceleration.toFixed(4)}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-white/60 text-[10px] mb-1">资源加速</div>
                 <div className="text-white text-sm font-bold">
-                  {report.resourceAcceleration.toFixed(2)}x
+                  ×{report.resourceAcceleration.toFixed(2)}
                 </div>
               </div>
               <div className="text-center">
@@ -209,7 +209,7 @@ export default function WeeklyReportDetail() {
             {/* 计算公式 */}
             <div className="bg-white/10 rounded-lg px-3 py-2 text-center">
               <div className="text-white/80 text-[11px] leading-relaxed">
-                ({report.capitalAcceleration.toFixed(4)}x + {report.resourceAcceleration.toFixed(2)}x) × {report.marketContribution} = {report.equityGain} 张
+                (×{report.capitalAcceleration.toFixed(4)} + ×{report.resourceAcceleration.toFixed(2)}) × {report.marketContribution} = {report.equityGain} 张
               </div>
             </div>
           </div>
@@ -233,7 +233,7 @@ export default function WeeklyReportDetail() {
                     </button>
                   </div>
                   <span className="text-base font-bold text-[#A80000]">
-                    {report.capitalAccelerationDetail.originalAcceleration.toFixed(4)}x
+                    ×{report.capitalAccelerationDetail.originalAcceleration.toFixed(4)}
                   </span>
                 </div>
                 
@@ -282,7 +282,7 @@ export default function WeeklyReportDetail() {
                     </button>
                   </div>
                   <span className="text-base font-bold text-[#C5B358]">
-                    {report.capitalAccelerationDetail.actualAcceleration.toFixed(4)}x
+                    ×{report.capitalAccelerationDetail.actualAcceleration.toFixed(4)}
                   </span>
                 </div>
                 
@@ -520,7 +520,7 @@ export default function WeeklyReportDetail() {
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-gray-600">资源加速</span>
                   <span className="text-base font-bold text-[#C5B358]">
-                    {report.resourceAcceleration.toFixed(4)}x
+                    ×{report.resourceAcceleration.toFixed(4)}
                   </span>
                 </div>
               </div>
