@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { ArrowLeft, Shield, TrendingUp } from 'lucide-react';
 import { useLocation } from 'wouter';
 import AssetGrowthChart from '../components/equity/AssetGrowthChart';
-import WeeklyReportDetail from '../components/equity/WeeklyReportDetail';
 import { trpc } from '../lib/trpc';
 
 // 类型定义
@@ -140,12 +139,13 @@ const mockReports: WeeklyReport[] = [
 ];
 
 // 周报卡片组件
-const WeeklyReportCard: React.FC<{ report: WeeklyReport; onClick: () => void }> = ({ report, onClick }) => {
+const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> = ({ report, weekNumber }) => {
+  const [, setLocation] = useLocation();
   const isIdle = report.status === 'idle';
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => setLocation(`/parent/equity-history/${weekNumber}`)}
       className={`
         rounded-xl p-5 cursor-pointer transition-all duration-200
         ${isIdle
@@ -213,7 +213,6 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; onClick: () => void }> 
 // 主页面组件
 const EquityHistoryArchive: React.FC = () => {
   const [, setLocation] = useLocation();
-  const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
   const [displayCount, setDisplayCount] = useState(10); // 每次显示10条
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
@@ -400,7 +399,7 @@ const EquityHistoryArchive: React.FC = () => {
           <WeeklyReportCard
             key={report.weekNumber}
             report={report}
-            onClick={() => setSelectedReport(report)}
+            weekNumber={report.weekNumber}
           />
         ))}
 
@@ -425,13 +424,7 @@ const EquityHistoryArchive: React.FC = () => {
         )}
       </div>
 
-      {/* 详情弹窗 */}
-      {selectedReport && (
-        <WeeklyReportDetail
-          report={selectedReport}
-          onClose={() => setSelectedReport(null)}
-        />
-      )}
+
     </div>
   );
 };
