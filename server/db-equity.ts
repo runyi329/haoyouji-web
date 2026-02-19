@@ -309,54 +309,33 @@ export async function getAllSeatNumbers(): Promise<Map<number, number>> {
 }
 
 /**
- * 计算动态杠杆系数
- * 基于席位编号，越早进入杠杆越高
- * 波次管理：T1创始波次 2.0x→1.8x，T2加速波次 1.8x→1.5x，T3标准波次 1.5x→1.2x
- * 每位微减 0.0001
+ * 计算动态杠杆系数（资本加速系数）
+ * 基于席位编号，越早进入系数越高
+ * 新公式：1.0 + 2.0 × √((660 - seatNumber) / 659)
+ * 第1名：3.0x，第660名：1.0x
  */
 export function calculateDynamicLeverage(seatNumber: number, totalSeats: number) {
-  // 波次配置（后续可改为从数据库读取）
-  const rounds = [
-    { name: 'T1 创始波次', maxLeverage: 2.0, minLeverage: 1.8, label: '创始轮' },
-    { name: 'T2 加速波次', maxLeverage: 1.8, minLeverage: 1.5, label: '加速轮' },
-    { name: 'T3 标准波次', maxLeverage: 1.5, minLeverage: 1.2, label: '标准轮' },
-  ];
+  // 新公式：曲线衰减，从 3.0 到 1.0
+  let leverage: number;
   
-  // 当前波次进度（模拟数据：85%，后续可从数据库读取）
-  const currentRoundIndex = 0; // T1创始波次
-  const currentRoundProgress = 0.85; // 85%已消耗
-  
-  const currentRound = rounds[currentRoundIndex];
-  const nextRound = rounds[currentRoundIndex + 1];
-  
-  // 基于席位编号计算精确杠杆
-  // 在当前波次范围内线性递减：每位减少 0.0001
-  const decayPerSeat = 0.0001;
-  const baseLeverage = currentRound.maxLeverage - (seatNumber - 1) * decayPerSeat;
-  // 确保不低于当前波次最小值
-  const leverage = Math.max(currentRound.minLeverage, baseLeverage);
-  
-  // 犹豫成本：下一波次的杠杆预估
-  const nextRoundLeverage = nextRound ? nextRound.maxLeverage : 1.0;
+  if (seatNumber < 1) {
+    leverage = 0.0; // 没有编号
+  } else if (seatNumber > 660) {
+    leverage = 1.0; // 超过660名
+  } else {
+    // 公式：1.0 + 2.0 × √((660 - seatNumber) / 659)
+    leverage = 1.0 + 2.0 * Math.sqrt((660 - seatNumber) / 659);
+  }
   
   return {
     leverage: Number(leverage.toFixed(4)),
     seatNumber,
     totalSeats,
-    currentRound: {
-      name: currentRound.name,
-      label: currentRound.label,
-      maxLeverage: currentRound.maxLeverage,
-      minLeverage: currentRound.minLeverage,
-      progress: currentRoundProgress,
-    },
-    nextRound: nextRound ? {
-      name: nextRound.name,
-      label: nextRound.label,
-      maxLeverage: nextRound.maxLeverage,
-    } : null,
-    nextRoundLeverage,
-    hesitationCost: Number((leverage - nextRoundLeverage).toFixed(4)),
+    // 保留这些字段以保持API兼容性，但不再使用波次逻辑
+    currentRound: null,
+    nextRound: null,
+    nextRoundLeverage: null,
+    hesitationCost: null,
   };
 }
 
