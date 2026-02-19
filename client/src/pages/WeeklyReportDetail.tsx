@@ -553,32 +553,6 @@ export default function WeeklyReportDetail() {
             </div>
           </div>
 
-          {/* 个人贡献明细 */}
-          <div className="mb-6">
-            <div className="text-sm font-semibold text-gray-900 mb-3">
-              个人贡献明细
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">人脉网络规模</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {report.personalContribution.networkSize} 人
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">标签完整度</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {report.personalContribution.tagCompleteness.toFixed(1)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">联络频次</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {report.personalContribution.contactFrequency} 次
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* 共享贡献明细 */}
           <div className="mb-6">
