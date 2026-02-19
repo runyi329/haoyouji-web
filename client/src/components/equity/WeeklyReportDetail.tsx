@@ -1,5 +1,6 @@
-import React from 'react';
-import { X, Shield, Award, Download } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Shield, Award, Share2 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 interface WeeklyReport {
   weekNumber: string;
@@ -27,14 +28,51 @@ interface WeeklyReportDetailProps {
 }
 
 const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose }) => {
-  const handleDownloadPDF = () => {
-    // TODO: 实现PDF导出功能
-    alert('PDF导出功能开发中...');
-  };
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleShare = () => {
-    // TODO: 实现分享功能
-    alert('分享功能开发中...');
+  const handleGenerateShareImage = async () => {
+    if (!contentRef.current) return;
+    
+    setIsGenerating(true);
+    
+    try {
+      // 使用 html2canvas 生成图片
+      const canvas = await html2canvas(contentRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // 提高清晰度
+        logging: false,
+        useCORS: true,
+      });
+
+      // 将 canvas 转换为 blob
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          alert('生成图片失败，请重试');
+          setIsGenerating(false);
+          return;
+        }
+
+        // 创建下载链接
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `确权证书-${report.weekNumber}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        setIsGenerating(false);
+        
+        // 提示用户
+        alert('分享图已保存到本地！');
+      }, 'image/png');
+    } catch (error) {
+      console.error('生成分享图失败:', error);
+      alert('生成分享图失败，请重试');
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -47,7 +85,7 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部：关闭按钮 */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
           <div className="text-lg font-bold text-gray-900">确权证书</div>
           <button
             onClick={onClose}
@@ -57,8 +95,8 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
           </button>
         </div>
 
-        {/* 内容区域 */}
-        <div className="p-6">
+        {/* 内容区域（需要截图的部分） */}
+        <div ref={contentRef} className="p-6 bg-white">
           {/* 证书头部 */}
           <div className="text-center mb-6 relative">
             {/* 背景水印 */}
@@ -168,33 +206,28 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
                   {report.blockchainHash.slice(0, -6)}******
                 </div>
                 <div className="text-xs text-gray-400 mt-2">
-                  ✓ 数据已加密保护，实时同步至 2026/02/15 17:25
+                  ✓ 数据已加密保护，实时同步至 2026/02/19
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 底部按钮 */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={handleDownloadPDF}
-              className="flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              <span>导出PDF</span>
-            </button>
-            <button
-              onClick={handleShare}
-              className="flex items-center justify-center px-4 py-3 bg-gradient-to-r from-[#A80000] to-[#8a0000] rounded-xl text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            >
-              生成分享图
-            </button>
-          </div>
-
-          {/* 底部说明 */}
-          <div className="mt-4 text-center text-xs text-gray-400">
+          {/* 底部说明（在截图内） */}
+          <div className="text-center text-xs text-gray-400 mb-4">
             本证书由系统自动生成，具有法律效力
           </div>
+        </div>
+
+        {/* 底部按钮（在截图外） */}
+        <div className="px-6 pb-6">
+          <button
+            onClick={handleGenerateShareImage}
+            disabled={isGenerating}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-[#A80000] to-[#8a0000] rounded-xl text-sm font-medium text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            <Share2 className="w-4 h-4" />
+            <span>{isGenerating ? '生成中...' : '生成分享图'}</span>
+          </button>
         </div>
       </div>
     </div>
