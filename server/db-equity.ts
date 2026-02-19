@@ -680,10 +680,10 @@ export async function getUserPromotionStats(userId: number) {
   let levelName = '准合伙人';
   
   // 节点层判断
-  if (contactCount >= 150 && totalTagCount >= 500 && interactionCount >= 250) {
+  if (contactCount >= 150 && totalTagCount >= 500 && interactionCount >= 210) {
     currentLevel = 'super';
     levelName = '超级节点';
-  } else if (contactCount >= 100 && totalTagCount >= 300 && interactionCount >= 200) {
+  } else if (contactCount >= 100 && totalTagCount >= 300 && interactionCount >= 180) {
     currentLevel = 'advanced';
     levelName = '高级节点';
   } else if (contactCount >= 50 && totalTagCount >= 100 && interactionCount >= 150) {
