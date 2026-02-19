@@ -486,8 +486,8 @@ export default function MyEquityRedWhite() {
           <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-4 mx-4">
             {/* 1. 资本杠杆系数 */}
             <div className="p-4">
-              {/* 标题行：资本加速（风险补偿）+ 编号 + 级别 */}
-              <div className="flex items-center justify-between mb-3">
+              {/* 标题行：资本加速（风险补偿）+ 编号 */}
+              <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-1">
                   <span ref={leverageTitleRef} className="text-xs text-gray-600">资本加速（风险补偿）</span>
                   <button
@@ -502,9 +502,12 @@ export default function MyEquityRedWhite() {
                   <div className="text-xs text-gray-600">
                     编号 {equity.dynamicLeverage ? String(equity.dynamicLeverage.seatNumber).padStart(4, '0') : '0000'}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {equity.details?.userInvestment ? `${(equity.details.userInvestment / 10000).toFixed(0)}万级别` : '未投资'}
-                  </div>
+                  <button
+                    onClick={() => setLocation('/parent/capital-multiplier-table')}
+                    className="text-[10px] text-[#A80000] hover:underline mt-1 block"
+                  >
+                    系数对照表
+                  </button>
                 </div>
               </div>
 
@@ -514,19 +517,6 @@ export default function MyEquityRedWhite() {
                   {actualMultiplier.toFixed(4)}x
                 </div>
                 <div className="text-[10px] text-gray-500 mt-0.5">已锁定 · 永久有效</div>
-              </div>
-
-              {/* 查看对照表链接 */}
-              <div className="mt-3">
-                <button
-                  onClick={() => setLocation('/parent/capital-multiplier-table')}
-                  className="text-xs text-[#A80000] hover:underline flex items-center space-x-1"
-                >
-                  <span>查看资本加速系数对照表</span>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
               </div>
 
               {/* 犹豫成本计费器 */}
