@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import EquityEnergyRing from "@/components/EquityEnergyRing";
 import DualEngineAccelerator from "@/components/DualEngineAccelerator";
 import FAQAccordion from "@/components/FAQAccordion";
-import { Tooltip } from '../components/Tooltip';
+import Tooltip from '../components/Tooltip';
 import { GaugeChart } from '../components/GaugeChart';
 import CompanyEquityPieChart from "@/components/CompanyEquityPieChart";
 
