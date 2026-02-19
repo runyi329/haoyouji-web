@@ -961,7 +961,9 @@ export async function getUserWeeklyReports(userId: number) {
     const d = new Date(date);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 调整到周一
-    return new Date(d.setDate(diff));
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0); // 重置时间为00:00:00
+    return d;
   };
   
   const getWeekEnd = (weekStart: Date) => {
