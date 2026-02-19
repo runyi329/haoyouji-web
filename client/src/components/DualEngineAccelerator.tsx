@@ -109,7 +109,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
   // 顶部卡片样式
   const getTopCardStyle = () => {
     switch (props.nodeLevel) {
-      case 'none': return 'bg-[#F5F5F5] text-gray-600';
+      case 'none': return 'bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white';
       case 'standard': return 'bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white';
       case 'advanced': return 'bg-gradient-to-br from-[#0a1628] to-[#1a2744] text-white';
       case 'super': return 'bg-gradient-to-br from-[#1a1a2e] via-[#2d2d44] to-[#1a1a2e] text-white';
