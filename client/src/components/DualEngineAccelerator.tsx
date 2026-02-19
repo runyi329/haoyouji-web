@@ -145,7 +145,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         {/* 标题行 */}
         <div className="flex items-center justify-between mb-3">
           <div>
-            <span ref={multiplierTitleRef} className={`text-sm font-medium ${props.nodeLevel === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
+            <span ref={multiplierTitleRef} className="text-sm font-medium opacity-90">
               资源股
             </span>
             <div className="text-xs opacity-60 mt-0.5">贡献加速驱动</div>
