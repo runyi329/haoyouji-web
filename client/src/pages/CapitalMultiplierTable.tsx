@@ -128,7 +128,7 @@ const CapitalMultiplierTable: React.FC = () => {
               编号 {displaySeatNumber.toString().padStart(4, '0')}
             </p>
             <div className="text-4xl font-bold text-[#C5B358] font-mono">
-              {currentMultiplier.toFixed(4)}x
+              ×{currentMultiplier.toFixed(4)}
             </div>
           </div>
         </div>
@@ -151,7 +151,7 @@ const CapitalMultiplierTable: React.FC = () => {
                     <td className="py-0.5 px-2 border-r border-gray-200">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-600">第{item1.rank}名</span>
-                        <span className="text-xs text-gray-700 font-mono ml-2">{item1.multiplier}x</span>
+                        <span className="text-xs text-gray-700 font-mono ml-2">×{item1.multiplier}</span>
                       </div>
                     </td>
                     
@@ -160,7 +160,7 @@ const CapitalMultiplierTable: React.FC = () => {
                       <td className="py-0.5 px-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-600">第{item2.rank}名</span>
-                          <span className="text-xs text-gray-700 font-mono ml-2">{item2.multiplier}x</span>
+                          <span className="text-xs text-gray-700 font-mono ml-2">×{item2.multiplier}</span>
                         </div>
                       </td>
                     ) : (

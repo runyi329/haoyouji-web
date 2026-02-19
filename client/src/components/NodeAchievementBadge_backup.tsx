@@ -425,7 +425,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             // 等级系数
             // 动态杠杆系数（优先使用动态值，回退到等级固定值）
             const levelMultiplier = dynamicLeverage ? dynamicLeverage.leverage : (level === 'super' ? 5.0 : level === 'advanced' ? 2.0 : level === 'standard' ? 1.0 : 0);
-            const levelLabel = dynamicLeverage ? `${dynamicLeverage.leverage.toFixed(4)}x` : (level === 'super' ? '5.0x' : level === 'advanced' ? '2.0x' : level === 'standard' ? '1.0x' : '0x');
+            const levelLabel = dynamicLeverage ? `×${dynamicLeverage.leverage.toFixed(4)}` : (level === 'super' ? '×5.0' : level === 'advanced' ? '×2.0' : level === 'standard' ? '×1.0' : '×0');
             
             // 四维活跃度计算（A系数）
             const targetTier = level === 'none' ? TIER_RULES.standard 
@@ -531,7 +531,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       <span className="text-[10px] font-medium text-blue-600">🚀 {levelLabel}</span>
                     </div>
                     <div className="text-2xl font-bold text-[#A80000] font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {dynamicLeverage ? `${dynamicLeverage.leverage.toFixed(4)}x` : config.name}
+                      {dynamicLeverage ? `×${dynamicLeverage.leverage.toFixed(4)}` : config.name}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-1">
                       {dynamicLeverage ? `编号 ${String(dynamicLeverage.seatNumber).padStart(4, '0')} · ${config.name}` : `节点等级: ${config.badge}`}
