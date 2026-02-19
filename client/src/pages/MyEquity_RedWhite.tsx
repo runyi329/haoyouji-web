@@ -358,8 +358,8 @@ export default function MyEquityRedWhite() {
                   {/* 左侧：金色卡片显示总倍数 */}
                   <div className="bg-gradient-to-r from-[#C5B358] to-[#D4AF37] rounded-lg px-3 py-2.5 shadow-lg flex-shrink-0">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}</div>
-                      <div className="text-[10px] text-white/80 mt-0.5">倍</div>
+                      <div className="text-2xl font-bold text-white leading-tight">{totalMultiplier.toFixed(2)}x</div>
+                      <div className="text-[10px] text-white/80 mt-0.5">总加速</div>
                     </div>
                   </div>
                   
@@ -371,14 +371,10 @@ export default function MyEquityRedWhite() {
                     {/* 资本加速 */}
                     <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
                       <div className="text-[10px] text-gray-500 mb-0.5">资本加速</div>
-                      <div className="flex items-baseline">
+                      <div className="flex items-baseline justify-center">
                         <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                          +{((capitalLeverage - 1) * 100).toFixed(0)}%
+                          {capitalLeverage.toFixed(4)}x
                         </div>
-                        <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
-                      </div>
-                      <div className="text-[9px] text-gray-400 mt-0.5">
-                        {capitalLeverage.toFixed(4)}x
                       </div>
                     </div>
                     
@@ -388,13 +384,12 @@ export default function MyEquityRedWhite() {
                     {/* 资源加速 */}
                     <div className="bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex-1">
                       <div className="text-[10px] text-gray-500 mb-0.5">资源加速</div>
-                      <div className="flex items-baseline">
+                      <div className="flex items-baseline justify-center">
                         <div className="text-lg font-bold text-[#C5B358] leading-tight">
-                          +{(contributionAcceleration * 100).toFixed(0)}%
+                          {(1 + contributionAcceleration).toFixed(2)}x
                         </div>
-                        <div className="text-[#C5B358] text-sm ml-0.5">↑</div>
                       </div>
-                      <div className="text-[9px] text-gray-400 mt-0.5">
+                      <div className="text-[9px] text-gray-400 mt-0.5 text-center">
                         {promotionStats?.levelName || '准合伙人'}
                       </div>
                     </div>
