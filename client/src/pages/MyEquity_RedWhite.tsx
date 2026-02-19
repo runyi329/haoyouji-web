@@ -102,20 +102,6 @@ export default function MyEquityRedWhite() {
 
   const equity = enhanced;
 
-  // 根据排名计算资本加速系数（曲线衰减公式）
-  // 修正公式：确保第1名=3.0，第660名=1.0
-  const calculateMultiplier = (rank: number): number => {
-    if (rank < 1) return 3.0;
-    if (rank > 660) return 1.0;
-    // 使用 (660 - rank) / 659 代替 (1 - rank / 660)
-    return 1.0 + 2.0 * Math.sqrt((660 - rank) / 659);
-  };
-
-  // 获取当前用户的实际系数（使用编号排名seatNumber，而非持股排名）
-  const actualMultiplier = equity.dynamicLeverage?.seatNumber 
-    ? calculateMultiplier(equity.dynamicLeverage.seatNumber)
-    : (equity.dynamicLeverage?.leverage || 1.0);
-
   // 确保所有必需字段都有默认值
   if (!equity.details) {
     equity.details = {
@@ -499,7 +485,7 @@ export default function MyEquityRedWhite() {
               {/* 系数显示 - 超大号，最突出 */}
               <div className="mb-4">
                 <div className="text-5xl font-bold text-[#C5B358] font-mono">
-                  {actualMultiplier.toFixed(4)}x
+                  {capitalLeverage.toFixed(4)}x
                 </div>
               </div>
 
