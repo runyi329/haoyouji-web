@@ -1,27 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { MoreVertical, Share2 } from 'lucide-react';
+import { trpc } from "@/lib/trpc";
 
-// 计算资本加速系数的函数
-// 公式：系数 = 1.0 + (3.0 - 1.0) × √(1 - 排名/660)
+// 计算资本加速系数的函数（修正版）
+// 公式：系数 = 1.0 + 2.0 × √(1 - 排名/660)
+// 确保第1名=3.0，第660名=1.0
 function calculateMultiplier(rank: number): number {
-  if (rank < 1 || rank > 666) return 1.0;
+  if (rank < 1) return 3.0;
+  if (rank > 660) return 1.0;
   const normalized = 1 - rank / 660;
-  const multiplier = 1.0 + (3.0 - 1.0) * Math.sqrt(normalized);
+  const multiplier = 1.0 + 2.0 * Math.sqrt(normalized);
   return multiplier;
 }
 
-// 生成所有排名的系数数据
+// 生成每10名的系数数据（共66个）
 function generateMultiplierData(): Array<{ rank: number; multiplier: string }> {
   const data: Array<{ rank: number; multiplier: string }> = [];
-  for (let rank = 1; rank <= 666; rank++) {
+  
+  // 第1名
+  data.push({
+    rank: 1,
+    multiplier: calculateMultiplier(1).toFixed(4)
+  });
+  
+  // 第10, 20, 30...660名
+  for (let rank = 10; rank <= 660; rank += 10) {
     const multiplier = calculateMultiplier(rank);
     data.push({
       rank,
       multiplier: multiplier.toFixed(4)
     });
   }
+  
   return data;
 }
 
@@ -29,6 +41,16 @@ const CapitalMultiplierTable: React.FC = () => {
   const [, setLocation] = useLocation();
   const [showMenu, setShowMenu] = useState(false);
   const multiplierData = generateMultiplierData();
+  
+  // 获取当前用户的股权信息
+  const { data: enhanced } = trpc.equity.getMyEquityEnhanced.useQuery(undefined, {
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+  });
+  
+  // 计算当前用户的排名和系数
+  const currentRank = enhanced?.ranking?.rank || 661; // 如果没有排名，默认为661（未投资）
+  const currentMultiplier = calculateMultiplier(currentRank);
 
   // 分享链接
   const handleShareLink = () => {
@@ -88,19 +110,95 @@ const CapitalMultiplierTable: React.FC = () => {
         </div>
       </div>
 
-      {/* 说明文字 */}
+      {/* 当前系数提示 */}
       <div className="px-4 py-4">
         <div className="bg-white rounded-xl p-4 shadow-sm">
-          <h2 className="text-base font-bold text-[#A80000] mb-2">系数计算说明</h2>
-          <div className="text-sm text-gray-700 space-y-1.5 leading-relaxed">
-            <p>资本加速系数采用<span className="font-semibold text-[#A80000]">曲线衰减</span>算法，范围从 <span className="font-semibold">3.0x</span> 递减至 <span className="font-semibold">1.0x</span>。</p>
-            <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
-              系数 = 1.0 + (3.0 - 1.0) × √(1 - 排名/660)
+          <div className="text-center">
+            <p className="text-sm text-gray-600 mb-2">
+              {currentRank <= 660 ? `您当前排名第 ${currentRank} 位` : '如果您现在成为股东'}
             </p>
-            <p className="text-xs text-gray-600">
-              • 前100名系数均在 <span className="font-semibold text-[#A80000]">2.8x</span> 以上，形成"核心圈"<br/>
-              • 500名开外系数快速向 <span className="font-semibold">1.0x</span> 靠拢，体现公平性
+            <div className="text-4xl font-bold text-[#C5B358] font-mono">
+              {currentMultiplier.toFixed(4)}x
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {currentRank <= 660 ? '已锁定 · 永久有效' : '系数将在投资后锁定'}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 曲线图 */}
+      <div className="px-4 pb-4">
+        <div className="bg-white rounded-xl p-4 shadow-sm">
+          <h3 className="text-sm font-bold text-[#A80000] mb-3">系数曲线图</h3>
+          <div className="relative" style={{ height: '200px' }}>
+            <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
+              {/* Y轴 */}
+              <line x1="40" y1="20" x2="40" y2="170" stroke="#666" strokeWidth="1" />
+              {/* X轴 */}
+              <line x1="40" y1="170" x2="380" y2="170" stroke="#666" strokeWidth="1" />
+              
+              {/* Y轴刻度和标签 */}
+              <text x="25" y="25" fontSize="10" fill="#666" textAnchor="end">3.0</text>
+              <line x1="35" y1="20" x2="40" y2="20" stroke="#666" strokeWidth="1" />
+              
+              <text x="25" y="95" fontSize="10" fill="#666" textAnchor="end">2.0</text>
+              <line x1="35" y1="95" x2="40" y2="95" stroke="#666" strokeWidth="1" />
+              
+              <text x="25" y="170" fontSize="10" fill="#666" textAnchor="end">1.0</text>
+              <line x1="35" y1="170" x2="40" y2="170" stroke="#666" strokeWidth="1" />
+              
+              {/* X轴刻度和标签 */}
+              <text x="40" y="185" fontSize="10" fill="#666" textAnchor="middle">1</text>
+              <line x1="40" y1="170" x2="40" y2="175" stroke="#666" strokeWidth="1" />
+              
+              <text x="210" y="185" fontSize="10" fill="#666" textAnchor="middle">330</text>
+              <line x1="210" y1="170" x2="210" y2="175" stroke="#666" strokeWidth="1" />
+              
+              <text x="380" y="185" fontSize="10" fill="#666" textAnchor="middle">660</text>
+              <line x1="380" y1="170" x2="380" y2="175" stroke="#666" strokeWidth="1" />
+              
+              {/* 绘制曲线 */}
+              <path
+                d={(() => {
+                  const points: string[] = [];
+                  for (let rank = 1; rank <= 660; rank += 5) {
+                    const x = 40 + (rank - 1) * (340 / 659);
+                    const multiplier = calculateMultiplier(rank);
+                    const y = 170 - ((multiplier - 1.0) / 2.0) * 150;
+                    points.push(`${rank === 1 ? 'M' : 'L'} ${x} ${y}`);
+                  }
+                  return points.join(' ');
+                })()}
+                fill="none"
+                stroke="#A80000"
+                strokeWidth="2"
+              />
+              
+              {/* 标注当前用户位置 */}
+              {currentRank <= 660 && (
+                <>
+                  <circle
+                    cx={40 + (currentRank - 1) * (340 / 659)}
+                    cy={170 - ((currentMultiplier - 1.0) / 2.0) * 150}
+                    r="4"
+                    fill="#FF0000"
+                    stroke="#FFF"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={40 + (currentRank - 1) * (340 / 659)}
+                    y={170 - ((currentMultiplier - 1.0) / 2.0) * 150 - 10}
+                    fontSize="10"
+                    fill="#FF0000"
+                    textAnchor="middle"
+                    fontWeight="bold"
+                  >
+                    您
+                  </text>
+                </>
+              )}
+            </svg>
           </div>
         </div>
       </div>
@@ -109,40 +207,38 @@ const CapitalMultiplierTable: React.FC = () => {
       <div className="px-4">
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           {/* 表头 */}
-          <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white px-4 py-3 grid grid-cols-3 gap-2 text-center font-semibold text-sm">
-            <div>排名</div>
-            <div>系数</div>
-            <div>排名</div>
+          <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white px-4 py-3 flex justify-between items-center">
+            <span className="font-semibold text-sm">排名</span>
+            <span className="font-semibold text-sm">系数</span>
           </div>
           
-          {/* 表格内容 - 三列布局 */}
+          {/* 表格内容 */}
           <div className="divide-y divide-gray-100">
-            {Array.from({ length: Math.ceil(multiplierData.length / 3) }, (_, rowIndex) => {
-              const startIndex = rowIndex * 3;
-              const rowData = multiplierData.slice(startIndex, startIndex + 3);
-              
-              return (
-                <div key={rowIndex} className="grid grid-cols-3 gap-2 px-4 py-2.5 hover:bg-gray-50 transition-colors">
-                  {rowData.map((item, colIndex) => (
-                    <div key={colIndex} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-600 font-medium">No.{item.rank}</span>
-                      <span className="font-bold text-[#C5B358] font-mono">{item.multiplier}x</span>
-                    </div>
-                  ))}
-                  {/* 填充空白列 */}
-                  {rowData.length < 3 && Array.from({ length: 3 - rowData.length }, (_, i) => (
-                    <div key={`empty-${i}`} />
-                  ))}
-                </div>
-              );
-            })}
+            {multiplierData.map((item) => (
+              <div 
+                key={item.rank} 
+                className={`px-4 py-3 flex justify-between items-center hover:bg-gray-50 transition-colors ${
+                  item.rank === currentRank ? 'bg-red-50' : ''
+                }`}
+              >
+                <span className="text-sm text-gray-700 font-medium">
+                  第 {item.rank} 名
+                  {item.rank === currentRank && (
+                    <span className="ml-2 text-xs text-red-600 font-bold">← 您的位置</span>
+                  )}
+                </span>
+                <span className="text-base font-bold text-[#C5B358] font-mono">
+                  {item.multiplier}x
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* 底部说明 */}
       <div className="px-4 py-4 text-center text-xs text-gray-500">
-        <p>共 666 个席位 · 系数永久锁定</p>
+        <p>共 660 个席位 · 系数永久锁定</p>
       </div>
     </div>
   );
