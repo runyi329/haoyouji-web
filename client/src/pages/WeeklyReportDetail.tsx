@@ -10,6 +10,9 @@ interface WeeklyReport {
   equityGain: number;
   blockchainHash: string;
   certificateNumber: number; // 第几张确权证书
+  capitalAcceleration: number; // 资本加速
+  resourceAcceleration: number; // 资源加速
+  marketContribution: number; // 市场贡献
   personalContribution: {
     networkSize: number;
     tagCompleteness: number;
@@ -32,6 +35,9 @@ const mockReport: WeeklyReport = {
   equityGain: 0,
   blockchainHash: '0x40166ed******',
   certificateNumber: 6, // 第6张确权证书
+  capitalAcceleration: 3.00,
+  resourceAcceleration: 1.00,
+  marketContribution: 0,
   personalContribution: {
     networkSize: 2109,
     tagCompleteness: 1.7,
@@ -98,24 +104,43 @@ const WeeklyReportDetailPage: React.FC = () => {
 
           {/* 核心数据 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] rounded-xl p-5 mb-6">
-            <div className="grid grid-cols-2 gap-4">
+            {/* 上层：本周定格股权 */}
+            <div className="text-center mb-4">
+              <div className="text-white/70 text-xs mb-1">本周定格股权</div>
+              <div className="text-[#C5B358] text-3xl font-bold">
+                {report.equityGain} 张
+              </div>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="border-t border-white/20 my-4"></div>
+
+            {/* 下层：三个基数 */}
+            <div className="grid grid-cols-3 gap-3 mb-3">
               <div className="text-center">
-                <div className="text-white/70 text-xs mb-1">定格权重</div>
-                <div className="text-[#C5B358] text-2xl font-bold">
-                  +{report.weightGain.toFixed(4)}%
+                <div className="text-white/60 text-[10px] mb-1">资本加速</div>
+                <div className="text-white text-sm font-bold">
+                  {report.capitalAcceleration.toFixed(2)}x
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-white/70 text-xs mb-1">定格股权</div>
-                <div className="text-white text-2xl font-bold">
-                  +{report.equityGain} 张
+                <div className="text-white/60 text-[10px] mb-1">资源加速</div>
+                <div className="text-white text-sm font-bold">
+                  {report.resourceAcceleration.toFixed(2)}x
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-white/60 text-[10px] mb-1">市场贡献</div>
+                <div className="text-white text-sm font-bold">
+                  {report.marketContribution}
                 </div>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-white/20 text-center">
-              <div className="text-white/70 text-xs mb-1">全国排名</div>
-              <div className="text-white text-xl font-bold">
-                No.{report.nationalRank}
+
+            {/* 计算公式 */}
+            <div className="bg-white/10 rounded-lg px-3 py-2 text-center">
+              <div className="text-white/80 text-[11px] leading-relaxed">
+                ({report.capitalAcceleration.toFixed(2)}x + {report.resourceAcceleration.toFixed(2)}x) × {report.marketContribution} = {report.equityGain} 张
               </div>
             </div>
           </div>
