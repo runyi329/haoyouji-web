@@ -435,7 +435,21 @@ export async function calculateUserEquity(userId: number) {
     }
   }
   
-  // 6. 计算总股份
+  // 6. 计算资源加速明细
+  const promotionStats = await getUserPromotionStats(userId);
+  const hasInvestment = userInvestment > 0;
+  
+  // 计算资源加速倍数
+  let resourceAcceleration = 1.0;
+  if (promotionStats.currentLevel === 'standard' || promotionStats.currentLevel === 'standard_user') {
+    resourceAcceleration = 1.0;
+  } else if (promotionStats.currentLevel === 'advanced' || promotionStats.currentLevel === 'advanced_user') {
+    resourceAcceleration = 2.0;
+  } else if (promotionStats.currentLevel === 'super' || promotionStats.currentLevel === 'super_user') {
+    resourceAcceleration = 3.0;
+  }
+  
+  // 7. 计算总股份
   const totalEquity = investmentEquity + inviteEquity + referralNetworkEquity;
   
   return {
@@ -448,6 +462,15 @@ export async function calculateUserEquity(userId: number) {
       investmentAmount: userInvestment,
       actualAcceleration: Number(actualAcceleration.toFixed(4)),
       seatNumber,
+    },
+    resourceAccelerationDetail: {
+      contactCount: promotionStats.contactCount,
+      tagCount: promotionStats.tagCount,
+      interactionCount: promotionStats.interactionCount,
+      currentLevel: promotionStats.currentLevel,
+      levelName: promotionStats.levelName,
+      hasInvestment,
+      resourceAcceleration: Number(resourceAcceleration.toFixed(4)),
     },
     details: {
       userInvestment,
