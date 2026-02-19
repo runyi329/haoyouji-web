@@ -557,24 +557,24 @@ export default function MyEquityRedWhite() {
                 onClose={() => setShowLeverageHelp(false)}
                 triggerRef={leverageTitleRef}
                 content={
-                  <div className="space-y-3">
-                    <div className="font-bold text-gray-900 text-base">资本加速（风险补偿）机制</div>
+                  <div className="space-y-2.5">
+                    <div className="font-bold text-gray-900 text-base">资本加速（风险补偿）</div>
                     <div className="text-sm text-gray-700 leading-relaxed space-y-2">
-                      <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                        <p className="font-medium text-blue-900">什么是风险补偿？</p>
-                        <p className="text-sm text-blue-800 mt-1">对于一家初创公司，早期投资者承担着更大的风险和不确定性。按照公平原则，他们应该享受到比后期进入者更多的权益。</p>
+                      <div className="bg-blue-50 border-l-4 border-blue-400 p-2.5 rounded">
+                        <p className="font-medium text-blue-900">风险补偿</p>
+                        <p className="text-sm text-blue-800 mt-0.5">早期投资者承担更大风险，按公平原则享受更多权益。</p>
                       </div>
-                      <div className="bg-amber-50 border-l-4 border-amber-400 p-3 rounded">
-                        <p className="font-medium text-amber-900">初始投资权重放大</p>
-                        <p className="text-sm text-amber-800 mt-1">您的投资额度会乘以资本加速系数，转化为在 30% 天使池中的权重。<strong>例如：</strong>您投资 10 万，资本加速为 2.0x，则您的权重相当于 20 万。</p>
+                      <div className="bg-amber-50 border-l-4 border-amber-400 p-2.5 rounded">
+                        <p className="font-medium text-amber-900">初始投资放大</p>
+                        <p className="text-sm text-amber-800 mt-0.5">投资额×加速系数=天使池权重。例：10万×2.0x=20万权重。</p>
                       </div>
-                      <div className="bg-purple-50 border-l-4 border-purple-400 p-3 rounded">
-                        <p className="font-medium text-purple-900">持续市场贡献放大</p>
-                        <p className="text-sm text-purple-800 mt-1">资本加速系数不仅影响初始投资，还会持续影响您每周的市场贡献确权。<strong>例如：</strong>您的资本加速为 1.5x，那么您每周的市场贡献（培育市场、邀请用户等）产生的权益也会乘以 1.5x。同样的努力，更高的回报。</p>
+                      <div className="bg-purple-50 border-l-4 border-purple-400 p-2.5 rounded">
+                        <p className="font-medium text-purple-900">市场贡献放大</p>
+                        <p className="text-sm text-purple-800 mt-0.5">每周市场贡献也乘以该系数。例：系数1.5x，贡献权益也×1.5。</p>
                       </div>
-                      <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
-                        <p className="font-medium text-green-900">为什么依次递减？</p>
-                        <p className="text-sm text-green-800 mt-1">资本加速系数从 2.0 依次递减至 1.0。越早加入，风险越大，回报也应越高。随着公司逐步成熟，后续投资者的风险降低，系数相应递减。<strong>这体现了公平性，而非“先来者占便宜”。</strong></p>
+                      <div className="bg-green-50 border-l-4 border-green-400 p-2.5 rounded">
+                        <p className="font-medium text-green-900">为何递减</p>
+                        <p className="text-sm text-green-800 mt-0.5">系数从2.0递减至1.0。越早加入风险越大，回报越高，体现公平性。</p>
                       </div>
                     </div>
                   </div>
