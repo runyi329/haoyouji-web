@@ -490,27 +490,53 @@ export default function WeeklyReportDetail() {
                   onClose={() => setShowLevelNameHelp(false)}
                   triggerRef={levelNameTitleRef}
                   content={
-                    <div className="space-y-1.5">
-                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">准节点说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
-                          <span className="font-semibold text-[#A80000]">准节点定义</span>
-                          <span className="text-gray-700"> — 尚未进行投资储值的用户</span>
-                        </div>
-                        <div className="py-1.5 border-b border-gray-100">
-                          <span className="font-semibold text-[#A80000]">晋升要求</span>
-                          <span className="text-gray-700"> — 与正式节点完全相同</span>
-                        </div>
-                        <div className="py-1.5 border-b border-gray-100">
-                          <span className="font-semibold text-[#A80000]">资源加速</span>
-                          <span className="text-gray-700"> — 与正式节点完全相同</span>
-                        </div>
-                        <div className="py-1.5">
-                          <span className="font-semibold text-[#A80000]">转正条件</span>
-                          <span className="text-gray-700"> — 完成投资储值后自动转为正式节点</span>
+                    report.resourceAccelerationDetail?.hasInvestment ? (
+                      // 有投资：显示正式节点说明
+                      <div className="space-y-1.5">
+                        <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">正式节点说明</div>
+                        <div className="text-sm text-gray-800 leading-snug space-y-1">
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">节点定义</span>
+                            <span className="text-gray-700"> — 已完成投资储值的正式合伙人</span>
+                          </div>
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">核心权益</span>
+                            <span className="text-gray-700"> — 享有资本加速和资源加速双重权益</span>
+                          </div>
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">资源加速</span>
+                            <span className="text-gray-700"> — 根据人脉、标签、联络数计算加速倍数</span>
+                          </div>
+                          <div className="py-1.5">
+                            <span className="font-semibold text-[#A80000]">等级体系</span>
+                            <span className="text-gray-700"> — 标准节点、高级节点、超级节点</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      // 无投资：显示准节点说明
+                      <div className="space-y-1.5">
+                        <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">准节点说明</div>
+                        <div className="text-sm text-gray-800 leading-snug space-y-1">
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">准节点定义</span>
+                            <span className="text-gray-700"> — 尚未进行投资储值的用户</span>
+                          </div>
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">晋升要求</span>
+                            <span className="text-gray-700"> — 与正式节点完全相同</span>
+                          </div>
+                          <div className="py-1.5 border-b border-gray-100">
+                            <span className="font-semibold text-[#A80000]">资源加速</span>
+                            <span className="text-gray-700"> — 与正式节点完全相同</span>
+                          </div>
+                          <div className="py-1.5">
+                            <span className="font-semibold text-[#A80000]">转正条件</span>
+                            <span className="text-gray-700"> — 完成投资储值后自动转为正式节点</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
                   }
                 />
                 
