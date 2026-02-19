@@ -1,7 +1,8 @@
-import React from 'react';
-import { ArrowLeft, Shield, Award, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, Shield, Award, Loader2, HelpCircle } from 'lucide-react';
 import { useLocation, useRoute } from 'wouter';
 import { trpc } from '@/lib/trpc';
+import Tooltip from '../components/Tooltip';
 
 interface WeeklyReport {
   weekNumber: string;
@@ -64,9 +65,19 @@ const mockReport: WeeklyReport = {
   nationalRank: 2,
 };
 
-const WeeklyReportDetailPage: React.FC = () => {
+export default function WeeklyReportDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute('/parent/equity-history/:weekNumber');
+  
+  // 原始加速的帮助提示状态
+  const [showOriginalAccelerationHelp, setShowOriginalAccelerationHelp] = useState(false);
+  const originalAccelerationHelpRef = useRef<HTMLButtonElement>(null);
+  const originalAccelerationTitleRef = useRef<HTMLSpanElement>(null);
+  
+  // 实际加速的帮助提示状态
+  const [showActualAccelerationHelp, setShowActualAccelerationHelp] = useState(false);
+  const actualAccelerationHelpRef = useRef<HTMLButtonElement>(null);
+  const actualAccelerationTitleRef = useRef<HTMLSpanElement>(null);;
   
   // 从 API获取真实数据
   const { data: equityData, isLoading } = trpc.equity.getMyEquity.useQuery();
@@ -180,11 +191,46 @@ const WeeklyReportDetailPage: React.FC = () => {
             <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100">
               <div className="space-y-3">
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600">原始加速</span>
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={originalAccelerationTitleRef} className="text-sm text-gray-600">原始加速</span>
+                    <button
+                      ref={originalAccelerationHelpRef}
+                      onClick={() => setShowOriginalAccelerationHelp(!showOriginalAccelerationHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <span className="text-base font-bold text-[#A80000]">
                     {report.capitalAccelerationDetail.originalAcceleration.toFixed(4)}x
                   </span>
                 </div>
+                
+                {/* 原始加速帮助弹窗 */}
+                <Tooltip
+                  isOpen={showOriginalAccelerationHelp}
+                  onClose={() => setShowOriginalAccelerationHelp(false)}
+                  triggerRef={originalAccelerationTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">原始加速说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">计算依据</span>
+                          <span className="text-gray-700"> — 根据您的席位编号（投资时机）确定</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">风险补偿</span>
+                          <span className="text-gray-700"> — 早期投资者承担更大风险，享受更高加速倍数</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">示例</span>
+                          <span className="text-gray-700"> — 第7名投资者的原始加速为2.9909x</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
                 <div className="border-t border-gray-100"></div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm text-gray-600">实际投资额</span>
@@ -194,11 +240,50 @@ const WeeklyReportDetailPage: React.FC = () => {
                 </div>
                 <div className="border-t border-gray-100"></div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600">实际加速</span>
+                  <div className="flex items-center space-x-1.5">
+                    <span ref={actualAccelerationTitleRef} className="text-sm text-gray-600">实际加速</span>
+                    <button
+                      ref={actualAccelerationHelpRef}
+                      onClick={() => setShowActualAccelerationHelp(!showActualAccelerationHelp)}
+                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <span className="text-base font-bold text-[#C5B358]">
                     {report.capitalAccelerationDetail.actualAcceleration.toFixed(4)}x
                   </span>
                 </div>
+                
+                {/* 实际加速帮助弹窗 */}
+                <Tooltip
+                  isOpen={showActualAccelerationHelp}
+                  onClose={() => setShowActualAccelerationHelp(false)}
+                  triggerRef={actualAccelerationTitleRef}
+                  content={
+                    <div className="space-y-1.5">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">实际加速说明</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">计算公式</span>
+                          <span className="text-gray-700"> — 倍数 = 1 + (储值金额 / 10) × 2</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">示例1</span>
+                          <span className="text-gray-700"> — 1万元：1 + (1/10) × 2 = 1.2倍</span>
+                        </div>
+                        <div className="py-1.5 border-b border-gray-100">
+                          <span className="font-semibold text-[#A80000]">示例2</span>
+                          <span className="text-gray-700"> — 5万元：1 + (5/10) × 2 = 2.0倍</span>
+                        </div>
+                        <div className="py-1.5">
+                          <span className="font-semibold text-[#A80000]">示例3</span>
+                          <span className="text-gray-700"> — 10万元：1 + (10/10) × 2 = 3.0倍</span>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
               </div>
             </div>
           </div>
@@ -281,6 +366,4 @@ const WeeklyReportDetailPage: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default WeeklyReportDetailPage;
+}
