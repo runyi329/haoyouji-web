@@ -350,7 +350,7 @@ export default function MyEquityRedWhite() {
                         value={capitalLeverage}
                         minValue={1.0}
                         maxValue={3.0}
-                        label="资本动力"
+                        label="资本加速"
                         color="#A80000"
                       />
                     </div>
@@ -361,7 +361,7 @@ export default function MyEquityRedWhite() {
                         value={1 + contributionAcceleration}
                         minValue={1.0}
                         maxValue={1.25}
-                        label="劳动推进力"
+                        label="资源加速"
                         color="#C5B358"
                       />
                       <div className="text-[9px] text-gray-400 mt-1 text-center">
