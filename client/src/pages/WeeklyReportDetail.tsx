@@ -94,6 +94,8 @@ export default function WeeklyReportDetail() {
   const report: WeeklyReport = {
     ...mockReport,
     capitalAccelerationDetail: equityData?.capitalAccelerationDetail || mockReport.capitalAccelerationDetail,
+    // 红色区域的资本加速应该显示实际加速，而不是原始加速
+    capitalAcceleration: equityData?.capitalAccelerationDetail?.actualAcceleration || mockReport.capitalAcceleration,
   };
 
   return (
