@@ -102,6 +102,17 @@ export default function MyEquityRedWhite() {
 
   const equity = enhanced;
 
+  // 根据排名计算资本加速系数（曲线衰减公式）
+  const calculateMultiplier = (rank: number): number => {
+    if (rank < 1 || rank > 666) return 1.0;
+    return 1.0 + 2.0 * Math.sqrt(1 - rank / 660);
+  };
+
+  // 获取当前用户的实际系数
+  const actualMultiplier = equity.ranking?.rank 
+    ? calculateMultiplier(equity.ranking.rank)
+    : (equity.dynamicLeverage?.leverage || 1.0);
+
   // 确保所有必需字段都有默认值
   if (!equity.details) {
     equity.details = {
@@ -475,61 +486,48 @@ export default function MyEquityRedWhite() {
           <div className="bg-[#F9F9F9] px-4 py-4 rounded-b-3xl space-y-4 mx-4">
             {/* 1. 资本杠杆系数 */}
             <div className="p-4">
+              {/* 标题行：资本加速（风险补偿）+ 编号 + 级别 */}
               <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="flex items-center space-x-1">
-                    <span ref={leverageTitleRef} className="text-xs text-gray-600 mb-1">资本加速（风险补偿）</span>
-                    <button
-                      ref={leverageHelpRef}
-                      onClick={() => setShowLeverageHelp(!showLeverageHelp)}
-                      className="text-gray-400 hover:text-[#C5B358] transition-colors"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="text-3xl font-bold text-[#C5B358] font-mono">
-                    {equity.dynamicLeverage ? `${equity.dynamicLeverage.leverage.toFixed(4)}x` : '1.0000x'}
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">已锁定 · 永久有效</div>
+                <div className="flex items-center space-x-1">
+                  <span ref={leverageTitleRef} className="text-xs text-gray-600">资本加速（风险补偿）</span>
+                  <button
+                    ref={leverageHelpRef}
+                    onClick={() => setShowLeverageHelp(!showLeverageHelp)}
+                    className="text-gray-400 hover:text-[#C5B358] transition-colors"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-600">
                     编号 {equity.dynamicLeverage ? String(equity.dynamicLeverage.seatNumber).padStart(4, '0') : '0000'}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 mt-0.5">
                     {equity.details?.userInvestment ? `${(equity.details.userInvestment / 10000).toFixed(0)}万级别` : '未投资'}
                   </div>
                 </div>
               </div>
 
-              {/* 红利余量进度条 */}
-              {equity.dynamicLeverage?.currentRound && (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] text-gray-600">
-                      {equity.dynamicLeverage.currentRound.name}（{equity.dynamicLeverage.currentRound.maxLeverage}x → {equity.dynamicLeverage.currentRound.minLeverage}x）
-                    </span>
-                    <span className="text-[10px] text-[#C5B358] font-bold">
-                      剩余 {Math.round((1 - equity.dynamicLeverage.currentRound.progress) * 100)}%
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden bg-gray-200">
-                    <div
-                      className="h-full rounded-full transition-all duration-1000"
-                      style={{
-                        width: `${equity.dynamicLeverage.currentRound.progress * 100}%`,
-                        background: '#800000',
-                      }}
-                    />
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-1.5">
-                    本轮高倍红利席位即将收官
-                    {equity.dynamicLeverage.nextRound && (
-                      <span>，下一轮杠杆将下调至 {equity.dynamicLeverage.nextRound.maxLeverage}x</span>
-                    )}
-                  </div>
+              {/* 系数显示 */}
+              <div className="mb-3">
+                <div className="text-3xl font-bold text-[#C5B358] font-mono">
+                  {actualMultiplier.toFixed(4)}x
                 </div>
-              )}
+                <div className="text-[10px] text-gray-500 mt-0.5">已锁定 · 永久有效</div>
+              </div>
+
+              {/* 查看对照表链接 */}
+              <div className="mt-3">
+                <button
+                  onClick={() => setLocation('/parent/capital-multiplier-table')}
+                  className="text-xs text-[#A80000] hover:underline flex items-center space-x-1"
+                >
+                  <span>查看资本加速系数对照表</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
 
               {/* 犹豫成本计费器 */}
               {equity.dynamicLeverage && equity.details?.userInvestment ? (
