@@ -192,7 +192,7 @@ export default function MyEquityRedWhite() {
     if (level === 'standard' || level === 'standard_user') return 0.0; // 标准节点：1.0x
     if (level === 'advanced' || level === 'advanced_user') return 1.0; // 高级节点：2.0x
     if (level === 'super' || level === 'super_user') return 2.0; // 超级节点：3.0x
-    return 0.0; // 准合伙人：1.0x
+    return 0.0; // 用户：1.0x
   };
   
   const capitalLeverage = equity.dynamicLeverage?.leverage || 1.0;
@@ -368,7 +368,7 @@ export default function MyEquityRedWhite() {
                         color="#C5B358"
                       />
                       <div className="text-[9px] text-gray-400 mt-1 text-center">
-                        {promotionStats?.levelName || '准合伙人'}
+                        {promotionStats?.levelName || '用户'}
                       </div>
                     </div>
                   </div>
@@ -470,7 +470,7 @@ export default function MyEquityRedWhite() {
           </div>
 
           {/* 白色区域 - 优化排版，居中布局，突出系数 */}
-          <div className="bg-[#F9F9F9] px-4 py-6 rounded-b-3xl mx-4">
+          <div className="bg-white px-4 py-6 rounded-b-3xl mx-4">
             {/* 1. 资本加速系数 - 居中布局 */}
             <div className="text-center">
               {/* 标题：资本加速（风险补偿） */}
