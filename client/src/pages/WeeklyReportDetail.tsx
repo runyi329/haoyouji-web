@@ -106,19 +106,11 @@ const WeeklyReportDetailPage: React.FC = () => {
 
           {/* 核心数据 */}
           <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] rounded-xl p-5 mb-6">
-            {/* 上层：本周定格股权 + 累计定格股权 */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="text-center">
-                <div className="text-white/70 text-xs mb-1">本周定格股权</div>
-                <div className="text-[#C5B358] text-2xl font-bold">
-                  {report.equityGain} 张
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-white/70 text-xs mb-1">累计定格股权</div>
-                <div className="text-white text-2xl font-bold">
-                  {report.totalEquity} 张
-                </div>
+            {/* 上层：本周定格股权 */}
+            <div className="text-center mb-4">
+              <div className="text-white/70 text-xs mb-1">本周定格股权</div>
+              <div className="text-[#C5B358] text-3xl font-bold">
+                {report.equityGain} 张
               </div>
             </div>
 

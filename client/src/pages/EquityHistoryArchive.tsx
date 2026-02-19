@@ -296,11 +296,19 @@ const EquityHistoryArchive: React.FC = () => {
             </div>
           </div>
 
-          {/* 第一行：累计确权 */}
-          <div className="mb-3">
-            <div className="text-white/70 text-xs mb-1">累计确权</div>
-            <div className="text-white text-3xl font-bold">
-              {overview.totalWeeks} <span className="text-lg font-normal">周</span>
+          {/* 第一行：累计确权 + 累计定格股权 */}
+          <div className="grid grid-cols-2 gap-6 mb-3">
+            <div>
+              <div className="text-white/70 text-xs mb-1">累计确权</div>
+              <div className="text-white text-3xl font-bold">
+                {overview.totalWeeks} <span className="text-lg font-normal">周</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-white/70 text-xs mb-1">累计定格股权</div>
+              <div className="text-[#C5B358] text-3xl font-bold">
+                {allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)} <span className="text-lg font-normal">张</span>
+              </div>
             </div>
           </div>
 
