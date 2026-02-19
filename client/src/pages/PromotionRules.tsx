@@ -64,7 +64,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '节点',
       contacts: 100,
       tagsPerPerson: 300,
-      frequency: 200,
+      frequency: 180,
       benefit: '标准权限全覆盖+业务端资源扶持'
     },
     {
@@ -72,7 +72,7 @@ const PromotionRules: React.FC = () => {
       levelChar2: '节点',
       contacts: 150,
       tagsPerPerson: 500,
-      frequency: 250,
+      frequency: 210,
       benefit: '高级权限全覆盖+受邀联合创始人'
     }
   ];
