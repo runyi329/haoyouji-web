@@ -223,21 +223,46 @@ const PromotionRules: React.FC = () => {
       <div className="p-4 pb-6">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <h3 className="text-xs font-bold text-gray-700 mb-3">晋升攻略</h3>
-          <div className="space-y-2 text-xs text-gray-600 leading-relaxed">
-            <p>
-              <span className="font-semibold text-gray-700">人脉:</span>
-              账户内添加的联系人数量,不考虑信息完整度。
-            </p>
-            <p>
-              <span className="font-semibold text-gray-700">标签:</span>
-              所有好友的标签总和（包含全局标签和个人标签）。
-            </p>
-            <p>
-              <span className="font-semibold text-gray-700">联络:</span>
-              每周日晚上12点作为统计节点，统计该节点往前推30天的累计联络次数。符合条件则接下来一周保持该级别，下周日再次统计。
-            </p>
-            {promotionStats?.assessmentPeriod && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
+            <div>
+              <p className="mb-2">
+                <span className="font-semibold text-gray-700">人脉:</span>
+                账户内添加的联系人数量,不考虑信息完整度。
+              </p>
+              {promotionStats && (
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">使用至今已添加：</span>
+                    <span className="font-bold text-[#A80000] text-sm">
+                      {promotionStats.contactCount}人
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="mb-2">
+                <span className="font-semibold text-gray-700">标签:</span>
+                所有好友的标签总和（包含全局标签和个人标签）。
+              </p>
+              {promotionStats && (
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">使用至今已添加：</span>
+                    <span className="font-bold text-[#A80000] text-sm">
+                      {promotionStats.tagCount}个
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="mb-2">
+                <span className="font-semibold text-gray-700">联络:</span>
+                每周日晚上12点作为统计节点，统计该节点往前推30天的累计联络次数。符合条件则接下来一周保持该级别，下周日再次统计。
+              </p>
+              {promotionStats?.assessmentPeriod && (
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="text-xs space-y-1.5">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">本考核周期联络：</span>
@@ -255,8 +280,9 @@ const PromotionRules: React.FC = () => {
                     考核期：{promotionStats.assessmentPeriod.startDate} 至 {promotionStats.assessmentPeriod.endDate}
                   </div>
                 </div>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
