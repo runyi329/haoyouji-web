@@ -685,10 +685,10 @@ export async function getUserPromotionStats(userId: number) {
   }
   
   // 4. 判断当前等级（基于晋升攻略的要求）
-  let currentLevel = 'partner';  // 默认准合伙人
-  let levelName = '准合伙人';
+  let currentLevel = 'user';  // 默认用户
+  let levelName = '用户';
   
-  // 节点层判断
+  // 节点层判断（根据投资判断是否加“准”）
   if (contactCount >= 150 && totalTagCount >= 500 && interactionCount >= 210) {
     currentLevel = 'super';
     levelName = hasInvestment ? '超级节点' : '准超级节点';
@@ -699,16 +699,16 @@ export async function getUserPromotionStats(userId: number) {
     currentLevel = 'standard';
     levelName = hasInvestment ? '标准节点' : '准标准节点';
   }
-  // 用户层判断（如果不符合节点层）
+  // 用户层判断（不加“准”字）
   else if (contactCount >= 30 && totalTagCount >= 100 && interactionCount >= 120) {
     currentLevel = 'super_user';
-    levelName = hasInvestment ? '超级用户' : '准超级用户';
+    levelName = '超级用户';
   } else if (contactCount >= 20 && totalTagCount >= 50 && interactionCount >= 60) {
     currentLevel = 'advanced_user';
-    levelName = hasInvestment ? '高级用户' : '准高级用户';
+    levelName = '高级用户';
   } else if (contactCount >= 10 && totalTagCount >= 20 && interactionCount >= 30) {
     currentLevel = 'standard_user';
-    levelName = hasInvestment ? '标准用户' : '准标准用户';
+    levelName = '标准用户';
   }
   
   // 5. 计算本周的日期范围（周一到周日）
