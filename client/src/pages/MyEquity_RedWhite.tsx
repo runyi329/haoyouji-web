@@ -344,7 +344,7 @@ export default function MyEquityRedWhite() {
                 <div className="space-y-4">
                   {/* 上方：左右两个仪表盘 */}
                   <div className="grid grid-cols-2 gap-4">
-                    {/* 左侧：资本动力 */}
+                    {/* 左侧：资本加速 */}
                     <div className="bg-white rounded-lg py-3 px-2">
                       <GaugeChart
                         value={capitalLeverage}
@@ -353,9 +353,12 @@ export default function MyEquityRedWhite() {
                         label="资本加速"
                         color="#A80000"
                       />
+                      <div className="text-[9px] text-gray-400 mt-1 text-center">
+                        投资{(equity.capitalContribution || 0).toFixed(0)}万
+                      </div>
                     </div>
                     
-                    {/* 右侧：劳动推进力 */}
+                    {/* 右侧：资源加速 */}
                     <div className="bg-white rounded-lg py-3 px-2">
                       <GaugeChart
                         value={1 + contributionAcceleration}
@@ -367,16 +370,6 @@ export default function MyEquityRedWhite() {
                       <div className="text-[9px] text-gray-400 mt-1 text-center">
                         {promotionStats?.levelName || '准合伙人'}
                       </div>
-                      {promotionStats?.assessmentPeriod && (
-                        <div className="mt-2 text-[10px] text-gray-500 text-center space-y-0.5">
-                          <div className="font-medium text-gray-700">
-                            联络：{promotionStats.assessmentPeriod.currentInteractionCount}次
-                          </div>
-                          <div className="text-gray-400">
-                            考核期：已过{promotionStats.assessmentPeriod.daysPassed}天，剩{promotionStats.assessmentPeriod.daysRemaining}天
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                   
