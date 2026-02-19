@@ -15,18 +15,11 @@ function calculateMultiplier(rank: number): number {
   return multiplier;
 }
 
-// 生成每10名的系数数据（共66个）
+// 生成全部660名的系数数据
 function generateMultiplierData(): Array<{ rank: number; multiplier: string }> {
   const data: Array<{ rank: number; multiplier: string }> = [];
   
-  // 第1名
-  data.push({
-    rank: 1,
-    multiplier: calculateMultiplier(1).toFixed(4)
-  });
-  
-  // 第10, 20, 30...660名
-  for (let rank = 10; rank <= 660; rank += 10) {
+  for (let rank = 1; rank <= 660; rank++) {
     const multiplier = calculateMultiplier(rank);
     data.push({
       rank,
@@ -71,6 +64,12 @@ const CapitalMultiplierTable: React.FC = () => {
       toast.error('您的浏览器不支持自动复制');
     }
   };
+
+  // 将数据分成2列，每行2个
+  const rows: Array<[typeof multiplierData[0], typeof multiplierData[0]]> = [];
+  for (let i = 0; i < multiplierData.length; i += 2) {
+    rows.push([multiplierData[i], multiplierData[i + 1]]);
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
@@ -128,41 +127,58 @@ const CapitalMultiplierTable: React.FC = () => {
         </div>
       </div>
 
-      {/* 系数对照表 */}
+      {/* 系数对照表 - 参考晋升准则的表格风格 */}
       <div className="px-4 pb-4">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <h3 className="text-sm font-bold text-[#A80000] mb-4">系数对照表</h3>
-          
-          {/* 4列网格布局 */}
-          <div className="grid grid-cols-4 gap-3">
-            {multiplierData.map((item) => (
-              <div
-                key={item.rank}
-                className={`p-3 rounded-lg border transition-all ${
-                  isInvestor && currentSeatNumber === item.rank
-                    ? 'bg-[#FFF8E7] border-[#C5B358] shadow-md'
-                    : 'bg-gray-50 border-gray-200'
-                }`}
-              >
-                <div className="text-xs text-gray-600 mb-1">
-                  第 {item.rank} 名
-                </div>
-                <div className={`text-sm font-bold font-mono ${
-                  isInvestor && currentSeatNumber === item.rank
-                    ? 'text-[#A80000]'
-                    : 'text-gray-800'
-                }`}>
-                  {item.multiplier}x
-                </div>
-                {isInvestor && currentSeatNumber === item.rank && (
-                  <div className="text-xs text-[#A80000] mt-1">← 您的位置</div>
-                )}
-              </div>
-            ))}
-          </div>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <table className="w-full">
+            <tbody>
+              {rows.map((row, rowIndex) => {
+                const [item1, item2] = row;
+                const isItem1Current = isInvestor && currentSeatNumber === item1.rank;
+                const isItem2Current = item2 && isInvestor && currentSeatNumber === item2.rank;
+                
+                return (
+                  <tr 
+                    key={rowIndex} 
+                    className={rowIndex > 0 ? 'border-t border-gray-200' : ''}
+                  >
+                    {/* 第1列 */}
+                    <td className={`text-center py-1.5 px-2 border-r border-gray-200 ${isItem1Current ? 'bg-[#FFF8E7]' : ''}`}>
+                      <div className="text-xs text-gray-600">
+                        第<span className="font-bold text-gray-800">{item1.rank}</span>名
+                      </div>
+                      <div className={`text-xs font-mono font-bold ${isItem1Current ? 'text-[#A80000]' : 'text-gray-700'}`}>
+                        {item1.multiplier}x
+                      </div>
+                      {isItem1Current && (
+                        <div className="text-xs text-[#A80000] mt-0.5">← 您</div>
+                      )}
+                    </td>
+                    
+                    {/* 第2列 */}
+                    {item2 ? (
+                      <td className={`text-center py-1.5 px-2 ${isItem2Current ? 'bg-[#FFF8E7]' : ''}`}>
+                        <div className="text-xs text-gray-600">
+                          第<span className="font-bold text-gray-800">{item2.rank}</span>名
+                        </div>
+                        <div className={`text-xs font-mono font-bold ${isItem2Current ? 'text-[#A80000]' : 'text-gray-700'}`}>
+                          {item2.multiplier}x
+                        </div>
+                        {isItem2Current && (
+                          <div className="text-xs text-[#A80000] mt-0.5">← 您</div>
+                        )}
+                      </td>
+                    ) : (
+                      <td className="text-center py-1.5 px-2"></td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
           
           {/* 底部说明 */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
+          <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-200">
             <p className="text-xs text-gray-500 text-center">
               编号按投资时间先后排序，系数永久锁定
             </p>
