@@ -133,12 +133,12 @@ const CapitalMultiplierTable: React.FC = () => {
         </div>
       </div>
 
-      {/* 专业投行风格曲线图 */}
+      {/* 专业投行风格曲线图 - 去掉内层容器框，Y轴拉长到2倍 */}
       <div className="px-4 pb-4">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <h3 className="text-sm font-bold text-[#A80000] mb-3">系数曲线图</h3>
-          <div className="relative bg-gradient-to-br from-gray-50 to-white p-4 rounded-lg border border-gray-200" style={{ height: '240px' }}>
-            <svg width="100%" height="100%" viewBox="0 0 500 220" preserveAspectRatio="xMidYMid meet">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-[#A80000] mb-4">系数曲线图</h3>
+          <div className="relative" style={{ height: '400px' }}>
+            <svg width="100%" height="100%" viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
               <defs>
                 {/* 渐变定义 - 曲线下方阴影 */}
                 <linearGradient id="curveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -147,38 +147,38 @@ const CapitalMultiplierTable: React.FC = () => {
                 </linearGradient>
                 
                 {/* 网格线图案 */}
-                <pattern id="grid" width="50" height="37.5" patternUnits="userSpaceOnUse">
-                  <path d="M 50 0 L 0 0 0 37.5" fill="none" stroke="#E5E7EB" strokeWidth="0.5" strokeDasharray="2,2" />
+                <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                  <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#E5E7EB" strokeWidth="0.5" strokeDasharray="2,2" />
                 </pattern>
               </defs>
               
               {/* 背景网格 */}
-              <rect x="50" y="20" width="430" height="150" fill="url(#grid)" />
+              <rect x="50" y="20" width="430" height="300" fill="url(#grid)" />
               
               {/* Y轴 */}
-              <line x1="50" y1="20" x2="50" y2="170" stroke="#374151" strokeWidth="2" />
+              <line x1="50" y1="20" x2="50" y2="320" stroke="#374151" strokeWidth="2" />
               {/* X轴 */}
-              <line x1="50" y1="170" x2="480" y2="170" stroke="#374151" strokeWidth="2" />
+              <line x1="50" y1="320" x2="480" y2="320" stroke="#374151" strokeWidth="2" />
               
-              {/* Y轴刻度、标签和网格线 */}
+              {/* Y轴刻度、标签和网格线 - Y轴拉长到2倍（300px） */}
               <text x="35" y="25" fontSize="11" fill="#374151" textAnchor="end" fontWeight="600">3.0</text>
               <line x1="45" y1="20" x2="50" y2="20" stroke="#374151" strokeWidth="2" />
               <line x1="50" y1="20" x2="480" y2="20" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
               
-              <text x="35" y="58" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.5</text>
-              <line x1="45" y1="57.5" x2="50" y2="57.5" stroke="#6B7280" strokeWidth="1" />
-              <line x1="50" y1="57.5" x2="480" y2="57.5" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
-              
-              <text x="35" y="95" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.0</text>
+              <text x="35" y="95" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.5</text>
               <line x1="45" y1="95" x2="50" y2="95" stroke="#6B7280" strokeWidth="1" />
               <line x1="50" y1="95" x2="480" y2="95" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
               
-              <text x="35" y="132" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">1.5</text>
-              <line x1="45" y1="132.5" x2="50" y2="132.5" stroke="#6B7280" strokeWidth="1" />
-              <line x1="50" y1="132.5" x2="480" y2="132.5" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
+              <text x="35" y="170" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">2.0</text>
+              <line x1="45" y1="170" x2="50" y2="170" stroke="#6B7280" strokeWidth="1" />
+              <line x1="50" y1="170" x2="480" y2="170" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
               
-              <text x="35" y="170" fontSize="11" fill="#374151" textAnchor="end" fontWeight="600">1.0</text>
-              <line x1="45" y1="170" x2="50" y2="170" stroke="#374151" strokeWidth="2" />
+              <text x="35" y="245" fontSize="11" fill="#6B7280" textAnchor="end" fontWeight="500">1.5</text>
+              <line x1="45" y1="245" x2="50" y2="245" stroke="#6B7280" strokeWidth="1" />
+              <line x1="50" y1="245" x2="480" y2="245" stroke="#E5E7EB" strokeWidth="1" strokeDasharray="4,4" />
+              
+              <text x="35" y="320" fontSize="11" fill="#374151" textAnchor="end" fontWeight="600">1.0</text>
+              <line x1="45" y1="320" x2="50" y2="320" stroke="#374151" strokeWidth="2" />
               
               {/* X轴刻度和标签 - 更细的颗粒度 */}
               {[1, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 660].map((rank, idx) => {
@@ -188,16 +188,16 @@ const CapitalMultiplierTable: React.FC = () => {
                   <g key={rank}>
                     <line 
                       x1={x} 
-                      y1="170" 
+                      y1="320" 
                       x2={x} 
-                      y2={isMainTick ? "175" : "172"} 
+                      y2={isMainTick ? "325" : "322"} 
                       stroke={isMainTick ? "#374151" : "#6B7280"} 
                       strokeWidth={isMainTick ? "2" : "1"} 
                     />
                     {isMainTick && (
                       <text 
                         x={x} 
-                        y="190" 
+                        y="340" 
                         fontSize="11" 
                         fill="#374151" 
                         textAnchor="middle" 
@@ -209,7 +209,7 @@ const CapitalMultiplierTable: React.FC = () => {
                     {!isMainTick && rank % 50 === 0 && (
                       <text 
                         x={x} 
-                        y="190" 
+                        y="340" 
                         fontSize="10" 
                         fill="#6B7280" 
                         textAnchor="middle" 
@@ -224,7 +224,7 @@ const CapitalMultiplierTable: React.FC = () => {
                         x1={x} 
                         y1="20" 
                         x2={x} 
-                        y2="170" 
+                        y2="320" 
                         stroke="#E5E7EB" 
                         strokeWidth="1" 
                         strokeDasharray="4,4" 
@@ -235,20 +235,20 @@ const CapitalMultiplierTable: React.FC = () => {
               })}
               
               {/* 轴标签 */}
-              <text x="265" y="210" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600">编号排名</text>
-              <text x="15" y="95" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600" transform="rotate(-90 15 95)">系数倍数</text>
+              <text x="265" y="365" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600">编号排名</text>
+              <text x="15" y="170" fontSize="12" fill="#374151" textAnchor="middle" fontWeight="600" transform="rotate(-90 15 170)">系数倍数</text>
               
               {/* 绘制曲线下方的渐变填充 */}
               <path
                 d={(() => {
-                  const points: string[] = ['M 50 170']; // 从左下角开始
+                  const points: string[] = ['M 50 320']; // 从左下角开始
                   for (let rank = 1; rank <= 660; rank += 3) {
                     const x = 50 + ((rank - 1) / 659) * 430;
                     const multiplier = calculateMultiplier(rank);
-                    const y = 170 - ((multiplier - 1.0) / 2.0) * 150;
+                    const y = 320 - ((multiplier - 1.0) / 2.0) * 300;
                     points.push(`L ${x} ${y}`);
                   }
-                  points.push('L 480 170'); // 到右下角
+                  points.push('L 480 320'); // 到右下角
                   points.push('Z'); // 闭合路径
                   return points.join(' ');
                 })()}
@@ -262,7 +262,7 @@ const CapitalMultiplierTable: React.FC = () => {
                   for (let rank = 1; rank <= 660; rank += 3) {
                     const x = 50 + ((rank - 1) / 659) * 430;
                     const multiplier = calculateMultiplier(rank);
-                    const y = 170 - ((multiplier - 1.0) / 2.0) * 150;
+                    const y = 320 - ((multiplier - 1.0) / 2.0) * 300;
                     points.push(`${rank === 1 ? 'M' : 'L'} ${x} ${y}`);
                   }
                   return points.join(' ');
@@ -282,7 +282,7 @@ const CapitalMultiplierTable: React.FC = () => {
                     x1={50 + ((displayRank - 1) / 659) * 430}
                     y1="20"
                     x2={50 + ((displayRank - 1) / 659) * 430}
-                    y2="170"
+                    y2="320"
                     stroke="#FF0000"
                     strokeWidth="1.5"
                     strokeDasharray="5,3"
@@ -291,7 +291,7 @@ const CapitalMultiplierTable: React.FC = () => {
                   {/* 红色圆点 */}
                   <circle
                     cx={50 + ((displayRank - 1) / 659) * 430}
-                    cy={170 - ((currentMultiplier - 1.0) / 2.0) * 150}
+                    cy={320 - ((currentMultiplier - 1.0) / 2.0) * 300}
                     r="5"
                     fill="#FF0000"
                     stroke="#FFF"
@@ -300,24 +300,24 @@ const CapitalMultiplierTable: React.FC = () => {
                   
                   {/* 标签背景 */}
                   <rect
-                    x={50 + ((displayRank - 1) / 659) * 430 - 30}
-                    y={170 - ((currentMultiplier - 1.0) / 2.0) * 150 - 25}
-                    width={60}
+                    x={50 + ((displayRank - 1) / 659) * 430 - 35}
+                    y={320 - ((currentMultiplier - 1.0) / 2.0) * 300 - 25}
+                    width={70}
                     height={18}
                     fill="#FF0000"
                     rx="3"
                   />
                   
-                  {/* 标签文字 */}
+                  {/* 标签文字 - 改为显示当前系数 */}
                   <text
                     x={50 + ((displayRank - 1) / 659) * 430}
-                    y={170 - ((currentMultiplier - 1.0) / 2.0) * 150 - 13}
-                    fontSize="11"
+                    y={320 - ((currentMultiplier - 1.0) / 2.0) * 300 - 13}
+                    fontSize="10"
                     fill="#FFF"
                     textAnchor="middle"
                     fontWeight="bold"
                   >
-                    {isInvestor ? '您的位置' : '当前加入'}
+                    {currentMultiplier.toFixed(4)}x
                   </text>
                 </>
               )}
