@@ -1,0 +1,125 @@
+新的帮助弹窗设计方案（酒红色系+高信息密度）
+
+## 设计原则
+1. 只使用酒红色系 (#A80000) + 黑白灰
+2. 用细灰线分隔代替彩色背景块
+3. 关键术语用酒红色高亮
+4. 紧凑的间距，高信息密度
+
+## 1. 综合股权帮助弹窗
+```tsx
+content={
+  <div className="space-y-1.5">
+    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">综合股权构成</div>
+    <div className="text-sm text-gray-800 leading-snug space-y-1">
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">天使股东池（30%）</span>
+        <span className="text-gray-700"> — 投资额度×入场系数，锁定终身，不与劳动挂钩</span>
+      </div>
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">市场贡献池（12.5%）</span>
+        <span className="text-gray-700"> — 每周行为贡献结算，多劳多得，上不封顶</span>
+      </div>
+      <div className="py-1.5 text-gray-700">
+        两池共占<span className="font-bold text-[#A80000]">42.5%</span>股权。既投资又经营可获双重复利。
+      </div>
+    </div>
+  </div>
+}
+```
+
+## 2. 当前股权加速帮助弹窗
+```tsx
+content={
+  <div className="space-y-1.5">
+    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">收益加速规则</div>
+    <div className="text-sm text-gray-800 leading-snug space-y-1">
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">资本杠杆</span>
+        <span className="text-gray-700"> — 投资金额×入场顺序，一次性锁定</span>
+      </div>
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">贡献加速</span>
+        <span className="text-gray-700"> — 节点等级（标准/高级/超级）决定</span>
+      </div>
+      <div className="py-1.5 text-gray-700">
+        <span className="font-semibold text-[#A80000]">总收益</span> = 市场贡献 × (资本杠杆 + 贡献加速)
+      </div>
+    </div>
+  </div>
+}
+```
+
+## 3. 资金股帮助弹窗
+```tsx
+content={
+  <div className="space-y-1.5">
+    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">天使股东池（30%）</div>
+    <div className="text-sm text-gray-800 leading-snug space-y-1">
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">分配逻辑</span>
+        <span className="text-gray-700"> — 入场早晚×投资额度双重加权，系数从2.0递减至1.0</span>
+      </div>
+      <div className="py-1.5 text-gray-700">
+        <span className="font-semibold text-[#A80000]">核心优势</span> — 一旦锁定终身受益，不与劳动挂钩，是生态底气
+      </div>
+    </div>
+  </div>
+}
+```
+
+## 4. 资本加速（风险补偿）帮助弹窗
+```tsx
+content={
+  <div className="space-y-1.5">
+    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">资本加速（风险补偿）</div>
+    <div className="text-sm text-gray-800 leading-snug space-y-1">
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">风险补偿</span>
+        <span className="text-gray-700"> — 早期投资者承担更大风险，按公平原则享受更多权益</span>
+      </div>
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">初始投资放大</span>
+        <span className="text-gray-700"> — 投资额×系数=天使池权重。例：10万×2.0x=20万权重</span>
+      </div>
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">市场贡献放大</span>
+        <span className="text-gray-700"> — 每周贡献也乘以该系数。例：系数1.5x，贡献权益×1.5</span>
+      </div>
+      <div className="py-1.5 text-gray-700">
+        <span className="font-semibold text-[#A80000]">递减原理</span> — 系数从2.0递减至1.0，越早加入风险越大回报越高
+      </div>
+    </div>
+  </div>
+}
+```
+
+## 5. 公司股权分配帮助弹窗
+```tsx
+content={
+  <div className="space-y-1.5">
+    <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">双池设计原理</div>
+    <div className="text-sm text-gray-800 leading-snug space-y-1">
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">资产安全性</span>
+        <span className="text-gray-700"> — 30%天使池不与劳动挂钩，投资安全有保障</span>
+      </div>
+      <div className="py-1.5 border-b border-gray-100">
+        <span className="font-semibold text-[#A80000]">收益爆发力</span>
+        <span className="text-gray-700"> — 12.5%市场池激励扩张，平台估值翻倍时静态资产同步增值</span>
+      </div>
+      <div className="py-1.5 text-gray-700">
+        <span className="font-semibold text-[#A80000]">防大户吸血</span> — 分池设计确保劳动者在12.5%池中享有统治权
+      </div>
+    </div>
+  </div>
+}
+```
+
+## CSS调整
+- 标题：`text-[#A80000]` 酒红色粗体
+- 关键术语：`text-[#A80000] font-semibold`
+- 正文：`text-gray-700` 或 `text-gray-800`
+- 分隔线：`border-gray-100` 或 `border-gray-200`
+- 间距：`space-y-1` 或 `space-y-1.5`，`py-1.5`
+- 行高：`leading-snug`（1.375）
