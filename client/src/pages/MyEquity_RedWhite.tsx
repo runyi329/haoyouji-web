@@ -348,6 +348,7 @@ export default function MyEquityRedWhite() {
                     <div className="bg-white rounded-lg py-3 px-2">
                       <GaugeChart
                         value={capitalLeverage}
+                        minValue={1.0}
                         maxValue={3.0}
                         label="资本动力"
                         color="#A80000"
@@ -358,7 +359,8 @@ export default function MyEquityRedWhite() {
                     <div className="bg-white rounded-lg py-3 px-2">
                       <GaugeChart
                         value={1 + contributionAcceleration}
-                        maxValue={2.0}
+                        minValue={1.0}
+                        maxValue={1.25}
                         label="劳动推进力"
                         color="#C5B358"
                       />
@@ -369,7 +371,7 @@ export default function MyEquityRedWhite() {
                   </div>
                   
                   {/* 下方：总推力 */}
-                  <div className="bg-gradient-to-r from-[#A80000] to-[#C5B358] rounded-lg py-3 px-4 text-center">
+                  <div className="bg-[#A80000] rounded-lg py-3 px-4 text-center">
                     <div className="text-sm text-white/80 mb-1">总推力</div>
                     <div className="text-3xl font-bold text-white font-mono">
                       {totalMultiplier.toFixed(2)}x
