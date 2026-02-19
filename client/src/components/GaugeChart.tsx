@@ -16,10 +16,10 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   // 从180度（9点钟）到0度（3点钟）
   const angle = 180 - (percentage * 180);
   
-  // SVG尺寸
-  const size = 140;
+  // SVG尺寸 - 增加尺寸以容纳标签
+  const size = 160;
   const center = size / 2;
-  const radius = 50;
+  const radius = 55;
   const strokeWidth = 10;
   
   // 计算指针终点坐标
@@ -57,7 +57,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
   
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={size} height={size * 0.75} viewBox={`0 0 ${size} ${size * 0.75}`}>
         {/* 背景弧线 */}
         <path
           d={arcPath}
@@ -95,11 +95,12 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
           );
         })}
         
-        {/* 刻度标签 */}
+        {/* 刻度标签 - 沿着圆弧外侧分布 */}
         {majorTicks.map((tick, i) => {
           const tickAngle = 180 - (tick * 180);
           const tickRad = (tickAngle * Math.PI) / 180;
-          const labelRadius = radius - strokeWidth / 2 - 20;
+          // 标签放在刻度线外侧，距离圆心更远
+          const labelRadius = radius + 15;
           const labelX = center + labelRadius * Math.cos(tickRad);
           const labelY = center + labelRadius * Math.sin(tickRad);
           const tickValue = minValue + tick * range;
@@ -111,9 +112,10 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
               y={labelY}
               textAnchor="middle"
               dominantBaseline="middle"
-              fontSize="9"
+              fontSize="10"
               fill="#6B7280"
               fontFamily="monospace"
+              fontWeight="500"
             >
               {tickValue.toFixed(1)}
             </text>
@@ -141,7 +143,7 @@ export function GaugeChart({ value, minValue, maxValue, label, color = '#C5B358'
       </svg>
       
       {/* 数值显示 */}
-      <div className="text-center -mt-8">
+      <div className="text-center -mt-6">
         <div className="text-2xl font-bold font-mono" style={{ color }}>
           {value.toFixed(2)}x
         </div>
