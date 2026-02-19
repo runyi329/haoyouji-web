@@ -536,7 +536,7 @@ export default function MyEquity() {
                 {/* 杠杆主数值 + 席位信息 */}
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <div className="text-xs opacity-70 mb-1">资本杠杆系数</div>
+                    <div className="text-xs opacity-70 mb-1">资本加速（风险补偿）</div>
                     <div className="text-2xl font-bold text-yellow-300 font-mono">
                       {equity.dynamicLeverage ? `${equity.dynamicLeverage.leverage.toFixed(4)}x` : '1.0000x'}
                     </div>
