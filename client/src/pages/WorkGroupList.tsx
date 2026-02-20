@@ -58,24 +58,24 @@ export default function WorkGroupList() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-cream">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-brand-red border-b border-brand-red-dark sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setLocation("/profile")}
-              className="text-gray-600"
+              className="text-white"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-xl font-bold text-gray-900">脉动节点工作平台</h1>
+            <h1 className="text-xl font-bold text-white">脉动节点工作平台</h1>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+            className="btn-primary-gold"
           >
             <Plus className="h-4 w-4 mr-1" />
             创建工作群
@@ -96,7 +96,7 @@ export default function WorkGroupList() {
             <p className="text-gray-500 mb-6">创建第一个工作群，开始管理您的团队</p>
             <Button
               onClick={() => setShowCreateDialog(true)}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="btn-primary-gold"
             >
               <Plus className="h-4 w-4 mr-2" />
               创建工作群
@@ -107,24 +107,24 @@ export default function WorkGroupList() {
             {groups.map((group) => (
               <Card
                 key={group.id}
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white-pure"
                 onClick={() => setLocation(`/work-groups/${group.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    <h3 className="text-lg font-semibold text-core-black mb-1">
                       {group.name}
                     </h3>
                     {group.description && (
-                      <p className="text-sm text-gray-500 line-clamp-2">
+                      <p className="text-sm text-stable-gray line-clamp-2">
                         {group.description}
                       </p>
                     )}
-                    <p className="text-xs text-gray-400 mt-2">
+                    <p className="text-xs text-stable-gray mt-2">
                       创建时间: {new Date(group.createdAt).toLocaleDateString('zh-CN')}
                     </p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 ml-4" />
+                  <ChevronRight className="h-5 w-5 text-stable-gray flex-shrink-0 ml-4" />
                 </div>
               </Card>
             ))}
@@ -169,7 +169,7 @@ export default function WorkGroupList() {
             <Button
               onClick={handleCreate}
               disabled={!newGroupName.trim() || createMutation.isPending}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="w-full btn-primary-gold"
             >
               {createMutation.isPending ? '创建中...' : '创建'}
             </Button>
