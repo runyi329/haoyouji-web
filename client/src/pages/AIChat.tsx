@@ -7,10 +7,8 @@ import { toast } from "sonner";
 export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<number | undefined>();
-  const [pointsBalance, setPointsBalance] = useState<number>(0);
-
-  // 获取用户信息（积分余额）
-  const { data: userInfo } = trpc.user.getProfile.useQuery();
+  // 获取用户信息
+  // const { data: userInfo } = trpc.user.getProfile.useQuery();
 
   // 获取会话列表
   const { data: sessionsData, refetch: refetchSessions } = trpc.aiAssistant.getSessions.useQuery({
@@ -63,10 +61,10 @@ export default function AIChat() {
         cost: response.cost,
       }]);
 
-      // 更新积分余额
-      if (response.balanceAfter !== undefined) {
-        setPointsBalance(response.balanceAfter);
-      }
+      // 积分功能已暂时禁用
+      // if (response.balanceAfter !== undefined) {
+      //   setPointsBalance(response.balanceAfter);
+      // }
 
       // 更新当前会话ID
       if (response.sessionId) {
@@ -86,12 +84,12 @@ export default function AIChat() {
     }
   });
 
-  // 更新积分余额
-  useEffect(() => {
-    if (userInfo?.points !== undefined) {
-      setPointsBalance(userInfo.points);
-    }
-  }, [userInfo]);
+  // 积分功能已暂时禁用
+  // useEffect(() => {
+  //   if (userInfo?.points !== undefined) {
+  //     setPointsBalance(userInfo.points);
+  //   }
+  // }, [userInfo]);
 
   // 加载会话详情
   useEffect(() => {
@@ -153,7 +151,7 @@ export default function AIChat() {
         placeholder="输入消息，例如：帮我查一下腾讯的企业信息"
         emptyStateMessage="👋 你好！我是脉动AI助手"
         suggestedPrompts={suggestedPrompts}
-        pointsBalance={pointsBalance}
+        // pointsBalance={pointsBalance} // 积分功能已暂时禁用
         sessions={sessions}
         currentSessionId={currentSessionId}
         onSelectSession={handleSelectSession}
