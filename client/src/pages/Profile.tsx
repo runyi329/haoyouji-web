@@ -456,7 +456,15 @@ export default function Profile() {
   return (
     <div className="bg-gray-50 pb-24 max-w-md mx-auto relative shadow-2xl">
       {/* 顶部用户信息卡片 */}
-      <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6">
+      <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6 relative">
+        {/* 返回首页箭头 */}
+        <button
+          onClick={() => navigate("/parent")}
+          className="absolute top-4 left-4 p-2 rounded-full hover:bg-white/10 transition-colors"
+          title="返回首页"
+        >
+          <ArrowLeft className="w-5 h-5 text-white" />
+        </button>
         <div className="flex items-center gap-4">
           {/* 头像 */}
           <div className="relative group flex-shrink-0">
