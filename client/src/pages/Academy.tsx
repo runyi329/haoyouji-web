@@ -16,10 +16,6 @@ import {
   Phone,
   Wallet,
   Heart,
-  HelpCircle,
-  BookOpen,
-  Video,
-  MessageCircle,
   ArrowLeft
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -46,13 +42,13 @@ interface AcademyModule {
 }
 
 const academyModules: AcademyModule[] = [
-  // 核心功能
+  // 核心功能 - 使用红色系
   {
     id: "homepage",
     icon: Home,
     title: "首页统计",
-    color: "text-blue-600",
-    bgColor: "bg-blue-500",
+    color: "text-red-600",
+    bgColor: "bg-red-600",
     category: "core",
     content: {
       introduction: "首页提供了19个可自定义排序的统计容器，帮助您快速了解人脉管理的整体情况。",
@@ -73,8 +69,8 @@ const academyModules: AcademyModule[] = [
     id: "contacts",
     icon: Users,
     title: "人脉管理",
-    color: "text-green-600",
-    bgColor: "bg-green-500",
+    color: "text-red-500",
+    bgColor: "bg-red-500",
     category: "core",
     content: {
       introduction: "全方位管理您的人脉关系，记录每一次联络，维护每一份关系。",
@@ -94,8 +90,8 @@ const academyModules: AcademyModule[] = [
     id: "tags",
     icon: Tags,
     title: "标签系统",
-    color: "text-red-600",
-    bgColor: "bg-red-500",
+    color: "text-rose-600",
+    bgColor: "bg-rose-600",
     category: "core",
     content: {
       introduction: "采用两层标签系统，灵活分类管理您的人脉。",
@@ -114,8 +110,8 @@ const academyModules: AcademyModule[] = [
     id: "contact-record",
     icon: Phone,
     title: "联络记录",
-    color: "text-purple-600",
-    bgColor: "bg-purple-500",
+    color: "text-red-400",
+    bgColor: "bg-red-400",
     category: "core",
     content: {
       introduction: "记录每一次联络，让人脉关系维护更有迹可循。",
@@ -131,13 +127,13 @@ const academyModules: AcademyModule[] = [
       ]
     }
   },
-  // 高级功能
+  // 高级功能 - 使用红色系
   {
     id: "region",
     icon: MapPin,
     title: "区域筛选",
-    color: "text-orange-600",
-    bgColor: "bg-orange-500",
+    color: "text-rose-500",
+    bgColor: "bg-rose-500",
     category: "advanced",
     content: {
       introduction: "按地区筛选人脉，方便管理不同地区的人脉关系。",
@@ -155,8 +151,8 @@ const academyModules: AcademyModule[] = [
     id: "share",
     icon: Share2,
     title: "人脉共享",
-    color: "text-teal-600",
-    bgColor: "bg-teal-500",
+    color: "text-red-700",
+    bgColor: "bg-red-700",
     category: "advanced",
     content: {
       introduction: "与团队成员共享人脉资源，实现人脉网络的协同管理。",
@@ -174,8 +170,8 @@ const academyModules: AcademyModule[] = [
     id: "stats",
     icon: BarChart3,
     title: "数据统计",
-    color: "text-indigo-600",
-    bgColor: "bg-indigo-500",
+    color: "text-rose-700",
+    bgColor: "bg-rose-700",
     category: "advanced",
     content: {
       introduction: "全方位的数据统计，让您更了解自己的人脉网络。",
@@ -193,8 +189,8 @@ const academyModules: AcademyModule[] = [
     id: "reminders",
     icon: Bell,
     title: "提醒功能",
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-500",
+    color: "text-red-300",
+    bgColor: "bg-red-300",
     category: "advanced",
     content: {
       introduction: "智能提醒系统，让您不错过任何重要的日子。",
@@ -208,13 +204,13 @@ const academyModules: AcademyModule[] = [
       ]
     }
   },
-  // 系统功能
+  // 系统功能 - 使用红色系
   {
     id: "admin",
     icon: TrendingUp,
     title: "后台管理",
-    color: "text-red-600",
-    bgColor: "bg-red-500",
+    color: "text-red-800",
+    bgColor: "bg-red-800",
     category: "system",
     content: {
       introduction: "超级管理员专属功能，管理整个系统。",
@@ -233,8 +229,8 @@ const academyModules: AcademyModule[] = [
     id: "pwa",
     icon: Smartphone,
     title: "PWA应用",
-    color: "text-pink-600",
-    bgColor: "bg-pink-500",
+    color: "text-rose-400",
+    bgColor: "bg-rose-400",
     category: "system",
     content: {
       introduction: "将脉动安装到手机桌面，像使用普通App一样打开和使用。",
@@ -254,8 +250,8 @@ const academyModules: AcademyModule[] = [
     id: "ledger",
     icon: Wallet,
     title: "账本管理",
-    color: "text-green-600",
-    bgColor: "bg-green-500",
+    color: "text-rose-800",
+    bgColor: "bg-rose-800",
     category: "system",
     content: {
       introduction: "管理您的财务账本，记录每一笔收支。",
@@ -274,8 +270,8 @@ const academyModules: AcademyModule[] = [
     id: "equity",
     icon: Heart,
     title: "权益中心",
-    color: "text-rose-600",
-    bgColor: "bg-rose-500",
+    color: "text-red-500",
+    bgColor: "bg-red-500",
     category: "system",
     content: {
       introduction: "查看和管理您的会员权益。",
@@ -363,7 +359,7 @@ export default function Academy() {
         </div>
       </div>
 
-      {/* 搜索区域 */}
+      {/* 搜索区域 - 修改为白色背景 */}
       <div className="px-4 -mt-16 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="relative">
@@ -373,7 +369,7 @@ export default function Academy() {
               placeholder="搜索功能说明..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10 border-gray-200"
+              className="pl-10 pr-10 border-gray-200 bg-white"
             />
             {searchQuery && (
               <button
@@ -392,140 +388,108 @@ export default function Academy() {
         </div>
       </div>
 
-      {/* 核心功能 */}
-      {coreModules.length > 0 && (
-        <div className="px-4 mb-4">
+      <div className="px-4 pb-6 space-y-4">
+        {/* 核心功能 */}
+        {coreModules.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">核心功能</h3>
+            <h2 className="text-base font-semibold text-gray-800 mb-4">核心功能</h2>
             <div className="grid grid-cols-4 gap-4">
-              {coreModules.map((module) => (
+              {coreModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 高级功能 */}
-      {advancedModules.length > 0 && (
-        <div className="px-4 mb-4">
+        {/* 高级功能 */}
+        {advancedModules.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">高级功能</h3>
+            <h2 className="text-base font-semibold text-gray-800 mb-4">高级功能</h2>
             <div className="grid grid-cols-4 gap-4">
-              {advancedModules.map((module) => (
+              {advancedModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 系统功能 */}
-      {systemModules.length > 0 && (
-        <div className="px-4 mb-4">
+        {/* 系统功能 */}
+        {systemModules.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">系统功能</h3>
+            <h2 className="text-base font-semibold text-gray-800 mb-4">系统功能</h2>
             <div className="grid grid-cols-4 gap-4">
-              {systemModules.map((module) => (
+              {systemModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 快速入口 */}
-      <div className="px-4 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">快速入口</h3>
-          <div className="space-y-2">
-            <button className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <HelpCircle className="w-5 h-5 text-blue-600" />
-                </div>
-                <span className="text-sm text-gray-700">常见问题</span>
-              </div>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <Video className="w-5 h-5 text-green-600" />
-                </div>
-                <span className="text-sm text-gray-700">视频教程</span>
-              </div>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-purple-600" />
-                </div>
-                <span className="text-sm text-gray-700">更新日志</span>
-              </div>
-            </button>
-            <button className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                  <MessageCircle className="w-5 h-5 text-orange-600" />
-                </div>
-                <span className="text-sm text-gray-700">意见反馈</span>
-              </div>
-            </button>
+        {/* 无搜索结果提示 */}
+        {searchQuery && filteredModules.length === 0 && (
+          <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+            <p className="text-gray-500">未找到相关功能</p>
+            <p className="text-sm text-gray-400 mt-2">请尝试其他关键词</p>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* 底部提示 */}
-      <div className="px-4 pb-6">
-        <div className="bg-red-50 rounded-2xl p-4">
-          <p className="text-sm text-center text-gray-600">
-            💡 <strong>小贴士：</strong>如果您在使用过程中遇到问题，可以随时返回脉动学院查看相关功能说明。
+        {/* 底部提示 */}
+        <div className="bg-amber-50 rounded-2xl p-4 shadow-sm">
+          <p className="text-sm text-amber-800 text-center">
+            💡 小贴士：如需在使用过程中遇到问题，可以随时返回这里查看相关功能说明。
           </p>
         </div>
       </div>
 
       {/* 功能详情弹窗 */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          {selectedModule && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-12 h-12 ${selectedModule.bgColor} rounded-full flex items-center justify-center`}>
-                    <selectedModule.icon className="w-6 h-6 text-white" />
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedModule && (
+                <>
+                  <div className={`w-10 h-10 ${selectedModule.bgColor} rounded-full flex items-center justify-center`}>
+                    <selectedModule.icon className="w-5 h-5 text-white" />
                   </div>
-                  <DialogTitle className="text-xl">{selectedModule.title}</DialogTitle>
-                </div>
-                <DialogDescription className="text-left">
-                  {selectedModule.content.introduction}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 pt-4">
-                <div>
-                  <h4 className="font-semibold text-sm text-gray-900 mb-2">主要功能</h4>
-                  <ul className="space-y-2">
-                    {selectedModule.content.features.map((feature, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex gap-2">
-                        <span className="text-red-500 flex-shrink-0">•</span>
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm text-gray-900 mb-2">使用技巧</h4>
-                  <ul className="space-y-2">
-                    {selectedModule.content.tips.map((tip, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex gap-2">
-                        <span className="text-blue-500 flex-shrink-0">💡</span>
-                        <span>{tip}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </>
-          )}
+                  <span>{selectedModule.title}</span>
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-left space-y-4 pt-4">
+              {selectedModule && (
+                <>
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">功能介绍</h4>
+                    <p className="text-sm text-gray-600">{selectedModule.content.introduction}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">主要功能</h4>
+                    <ul className="space-y-2">
+                      {selectedModule.content.features.map((feature, index) => (
+                        <li key={index} className="text-sm text-gray-600 flex items-start gap-2">
+                          <span className="text-red-500 mt-0.5">•</span>
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">使用技巧</h4>
+                    <ul className="space-y-2">
+                      {selectedModule.content.tips.map((tip, index) => (
+                        <li key={index} className="text-sm text-gray-600 flex items-start gap-2">
+                          <span className="text-amber-500 mt-0.5">💡</span>
+                          <span>{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
         </DialogContent>
       </Dialog>
     </div>
