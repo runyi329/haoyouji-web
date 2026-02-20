@@ -11,6 +11,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/BIdmlhaAMFmWlZUX.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/BIdmlhaAMFmWlZUX.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   },
   {
@@ -20,6 +21,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/DoomGMXoSjZsKEqJ.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/DoomGMXoSjZsKEqJ.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   },
   {
@@ -29,6 +31,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/QSPiOfWTShXrGIVA.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/QSPiOfWTShXrGIVA.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   },
   {
@@ -38,6 +41,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/PLMlWEvujJloqzez.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/PLMlWEvujJloqzez.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   },
   {
@@ -47,6 +51,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/NKpRvVPDdxJHWlqe.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/NKpRvVPDdxJHWlqe.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   },
   {
@@ -56,6 +61,7 @@ const POSTERS = [
     category: 'marketing',
     series: '脉动网宣传系列',
     url: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hJkCQwvjpIMuwwlz.png',
+    thumbnailUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hJkCQwvjpIMuwwlz.png?x-oss-process=image/resize,w_400',
     tags: ['营销', '宣传', '脉动网']
   }
 ];
@@ -138,9 +144,10 @@ export default function PosterFavorites() {
               >
                 <div className="aspect-[9/16] bg-gray-100 relative">
                   <img
-                    src={poster.url}
+                    src={poster.thumbnailUrl}
                     alt={poster.title}
                     className="w-full h-full object-contain"
+                    loading="lazy"
                   />
                 </div>
                 <div className="p-3">
