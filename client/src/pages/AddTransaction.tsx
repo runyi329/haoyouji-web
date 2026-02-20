@@ -572,7 +572,7 @@ const AddTransaction = () => {
                       return (
                         <button
                           key={category.id}
-                          className={`px-4 py-2 rounded text-sm transition-colors ${
+                          className={`px-3 py-1.5 rounded text-xs transition-colors ${
                             isSelected
                               ? `${colorClass} text-white font-medium`
                               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -587,7 +587,7 @@ const AddTransaction = () => {
                     {/* 只在第一级显示"+"按钮 */}
                     {level === 0 && (
                       <button
-                        className="px-4 py-2 rounded text-sm bg-white border border-dashed border-[#A80000] text-[#A80000] flex items-center gap-1 hover:bg-red-50"
+                        className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#A80000] text-[#A80000] flex items-center gap-1 hover:bg-red-50"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
                       >
                         <Plus className="w-4 h-4" />
