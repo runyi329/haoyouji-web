@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
-import { Link } from 'wouter';
+import { useLocation } from 'wouter';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -14,6 +14,7 @@ interface ValuationWeight {
 }
 
 export default function ValuationManagement() {
+  const [, navigate] = useLocation();
   const [weights, setWeights] = useState<ValuationWeight[]>([]);
   const [currentValuation, setCurrentValuation] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,12 +90,13 @@ export default function ValuationManagement() {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
       <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-8">
-        <Link href={`${BASE_URL}/admin`}>
-          <a className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="font-medium">返回</span>
-          </a>
-        </Link>
+        <button
+          onClick={() => navigate('/admin')}
+          className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">返回</span>
+        </button>
         
         <h1 className="text-2xl font-bold mb-2">市值管理</h1>
         <p className="text-white/90 text-sm">调整用户行为对平台估值的影响权重</p>

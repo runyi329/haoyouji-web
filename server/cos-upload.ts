@@ -18,7 +18,7 @@ const REGION = process.env.COS_REGION!;
  */
 export async function uploadImageToCOS(
   imageData: string | Buffer,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' = 'avatars',
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' = 'avatars',
   filename?: string
 ): Promise<string> {
   try {
@@ -99,7 +99,7 @@ export async function deleteImageFromCOS(url: string): Promise<void> {
  */
 export async function batchUploadImagesToCOS(
   images: Array<{ data: string | Buffer; filename?: string }>,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' = 'avatars'
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' = 'avatars'
 ): Promise<string[]> {
   const results = await Promise.all(
     images.map(img => uploadImageToCOS(img.data, folder, img.filename))

@@ -122,6 +122,7 @@ const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
 const BusinessPlan = lazy(() => import("./pages/BusinessPlan"));
 const CapitalMultiplierTable = lazy(() => import("./pages/CapitalMultiplierTable"));
+const PosterFavorites = lazy(() => import("./pages/PosterFavorites"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
@@ -186,6 +187,7 @@ function Router() {
         <Route path="/parent/business-plan" component={BusinessPlan} />
         <Route path="/parent/capital-multiplier-table" component={CapitalMultiplierTable} />
         <Route path="/parent/profile/invite" component={InviteCode} />
+        <Route path="/parent/poster-favorites" component={PosterFavorites} />
         <Route path="/invited-friends" component={InvitedFriendsList} />
 
         <Route path="/parent/contacts/:id" component={ContactDetail} />
