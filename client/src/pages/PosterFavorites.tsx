@@ -80,6 +80,9 @@ export default function PosterFavorites() {
   const [, navigate] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [previewPoster, setPreviewPoster] = useState<typeof POSTERS[0] | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
 
   // 筛选海报
   const filteredPosters = selectedCategory === 'all' 
@@ -136,11 +139,14 @@ export default function PosterFavorites() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
-            {filteredPosters.map(poster => (
+            {filteredPosters.map((poster, index) => (
               <div
                 key={poster.id}
                 className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => setPreviewPoster(poster)}
+                onClick={() => {
+                  setCurrentIndex(index);
+                  setPreviewPoster(poster);
+                }}
               >
                 <div className="aspect-[9/16] bg-gray-100 relative">
                   <img
@@ -163,52 +169,91 @@ export default function PosterFavorites() {
         )}
       </div>
 
-      {/* 预览弹窗 */}
+      {/* 预览弹窗 - 支持左右滑动切换 */}
       {previewPoster && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black z-50 flex items-center justify-center"
           onClick={() => setPreviewPoster(null)}
         >
-          <div className="relative max-w-md max-h-[90vh] w-full">
-            <button
-              onClick={() => setPreviewPoster(null)}
-              className="absolute -top-12 right-0 p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <div className="bg-white rounded-lg overflow-hidden">
-              <img
-                src={previewPoster.url}
-                alt={previewPoster.title}
-                className="w-full h-auto object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div className="p-4">
-                <h3 className="font-semibold text-lg mb-1">{previewPoster.title}</h3>
-                <p className="text-gray-600 text-sm mb-3">{previewPoster.description}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {previewPoster.tags.map(tag => (
-                    <span
-                      key={tag}
-                      className="px-2 py-1 bg-red-50 text-red-600 text-xs rounded"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownload(previewPoster);
-                  }}
-                  className="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download className="w-5 h-5" />
-                  下载海报
-                </button>
-              </div>
-            </div>
+          {/* 关闭按钮 */}
+          <button
+            onClick={() => setPreviewPoster(null)}
+            className="absolute top-4 right-4 z-10 p-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+
+          {/* 页码显示 */}
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 px-4 py-2 bg-white bg-opacity-20 rounded-full text-white text-sm">
+            {currentIndex + 1} / {filteredPosters.length}
           </div>
+
+          {/* 图片容器 - 支持触摸滑动 */}
+          <div
+            className="w-full h-full flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              setTouchStart(e.targetTouches[0].clientX);
+            }}
+            onTouchMove={(e) => {
+              setTouchEnd(e.targetTouches[0].clientX);
+            }}
+            onTouchEnd={() => {
+              if (touchStart - touchEnd > 75) {
+                // 向左滑，下一张
+                if (currentIndex < filteredPosters.length - 1) {
+                  setCurrentIndex(currentIndex + 1);
+                  setPreviewPoster(filteredPosters[currentIndex + 1]);
+                }
+              }
+              if (touchStart - touchEnd < -75) {
+                // 向右滑，上一张
+                if (currentIndex > 0) {
+                  setCurrentIndex(currentIndex - 1);
+                  setPreviewPoster(filteredPosters[currentIndex - 1]);
+                }
+              }
+            }}
+          >
+            <img
+              src={previewPoster.url}
+              alt={previewPoster.title}
+              className="max-w-full max-h-full object-contain"
+              onContextMenu={(e) => {
+                // 允许长按保存，不阻止默认行为
+              }}
+            />
+          </div>
+
+          {/* 左右箭头按钮 */}
+          {currentIndex > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex(currentIndex - 1);
+                setPreviewPoster(filteredPosters[currentIndex - 1]);
+              }}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          {currentIndex < filteredPosters.length - 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex(currentIndex + 1);
+                setPreviewPoster(filteredPosters[currentIndex + 1]);
+              }}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+            >
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
     </div>
