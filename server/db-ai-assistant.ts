@@ -15,12 +15,13 @@ import {
   setContactReferrer,
   queryCompanyInfo,
 } from "./ai-tools";
-import {
-  createSession,
-  saveMessage,
-  autoGenerateSessionTitle,
-  getSessionHistory,
-} from "./db-ai-sessions";
+// 数据库会话功能已禁用
+// import {
+//   createSession,
+//   saveMessage,
+//   autoGenerateSessionTitle,
+//   getSessionHistory,
+// } from "./db-ai-sessions";
 import {
   // getUserPoints, // 积分功能已暂时禁用
   // deductPoints, // 积分功能已暂时禁用
@@ -58,17 +59,20 @@ export async function queryWithAI(
   //   throw new Error("积分余额不足，请充值后继续使用AI助手");
   // }
 
-  // 如果没有提供sessionId，创建新会话
-  let currentSessionId = sessionId;
-  let isNewSession = false;
-  if (!currentSessionId) {
-    currentSessionId = await createSession(userId, "新对话");
-    isNewSession = true;
-    console.log(`[AI] Created new session ${currentSessionId} for user ${userId}`);
-  }
+  // 数据库会话功能已禁用，改为纯前端内存存储
+  // let currentSessionId = sessionId;
+  // let isNewSession = false;
+  // if (!currentSessionId) {
+  //   currentSessionId = await createSession(userId, "新对话");
+  //   isNewSession = true;
+  //   console.log(`[AI] Created new session ${currentSessionId} for user ${userId}`);
+  // }
 
-  // 保存用户消息
-  await saveMessage(currentSessionId, "user", query, 0, 0);
+  // // 保存用户消息
+  // await saveMessage(currentSessionId, "user", query, 0, 0);
+  
+  // 使用临时sessionId（不保存到数据库）
+  const currentSessionId = sessionId || Date.now();
 
   // 从数据库获取提示词
   const systemPrompt = await buildSystemPrompt();
@@ -424,13 +428,13 @@ export async function queryWithAI(
         // );
         const balanceAfter = 0; // 积分功能禁用后，返回0
         
-        // 保存AI回复
-        await saveMessage(currentSessionId, "assistant", result, totalTokens, cost);
+        // 数据库会话功能已禁用，不保存AI回复
+        // await saveMessage(currentSessionId, "assistant", result, totalTokens, cost);
         
-        // 如果是新会话，自动生成标题
-        if (isNewSession) {
-          await autoGenerateSessionTitle(currentSessionId, userId, query);
-        }
+        // // 如果是新会话，自动生成标题
+        // if (isNewSession) {
+        //   await autoGenerateSessionTitle(currentSessionId, userId, query);
+        // }
         
         return {
           result,
