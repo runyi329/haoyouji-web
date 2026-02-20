@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +17,7 @@ export default function WorkGroupList() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
+  const [dialogBottom, setDialogBottom] = useState<number | null>(null);
 
   // 获取工作群列表
   const { data: groupsData, isLoading, refetch } = trpc.workGroups.list.useQuery();
@@ -36,6 +37,48 @@ export default function WorkGroupList() {
     },
   });
 
+  // 监听键盘弹出和收起
+  useEffect(() => {
+    if (!showCreateDialog) return;
+
+    const handleResize = () => {
+      // 获取视口高度
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const windowHeight = window.innerHeight;
+      
+      // 如果视口高度小于窗口高度，说明键盘弹出了
+      if (viewportHeight < windowHeight) {
+        // 键盘高度 = 窗口高度 - 视口高度
+        const keyboardHeight = windowHeight - viewportHeight;
+        // 设置对话框底部距离为键盘高度 + 一点间距
+        setDialogBottom(keyboardHeight + 16);
+      } else {
+        // 键盘收起，居中显示
+        setDialogBottom(null);
+      }
+    };
+
+    // 监听visualViewport的resize事件（更准确地检测键盘）
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+    }
+    
+    // 也监听window的resize事件作为备用
+    window.addEventListener('resize', handleResize);
+
+    // 初始化时检查一次
+    handleResize();
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [showCreateDialog]);
+
   // 处理创建工作群
   const handleCreate = () => {
     if (!newGroupName.trim()) {
@@ -48,6 +91,18 @@ export default function WorkGroupList() {
       description: newGroupDescription.trim() || undefined,
     });
   };
+
+  // 动态计算对话框样式
+  const dialogStyle = dialogBottom !== null
+    ? {
+        position: 'fixed' as const,
+        bottom: `${dialogBottom}px`,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        top: 'auto',
+        maxHeight: '60vh',
+      }
+    : {};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -126,7 +181,10 @@ export default function WorkGroupList() {
 
       {/* 创建工作群对话框 */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md fixed top-4 left-1/2 -translate-x-1/2 max-h-[80vh] overflow-y-auto">
+        <DialogContent 
+          className="sm:max-w-md overflow-y-auto"
+          style={dialogStyle}
+        >
           <DialogTitle>创建工作群</DialogTitle>
           <DialogDescription>
             创建一个新的工作群来管理您的团队成员和工作节点
