@@ -251,8 +251,8 @@ export default function Ledger() {
                   {/* 成员信息区 */}
                   <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">
                     <div className="flex -space-x-2">
-                      {ledger.members.slice(0, 4).map((member, index) => (
-                        <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: ledger.members.length - index }}>
+                      {(ledger.members || []).slice(0, 4).map((member, index) => (
+                        <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: (ledger.members || []).length - index }}>
                           <UserAvatar
                             username={member.username}
                             avatar={member.avatar}
