@@ -44,7 +44,7 @@ export default function LegalAgreementZone({
             key={agreement.id}
             className={`rounded-xl border-2 overflow-hidden transition-all ${
               agreement.status === 'signed'
-                ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-400 shadow-lg'
+                ? 'bg-gradient-to-br from-white to-white border-green-400 shadow-lg'
                 : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-400 shadow-md hover:shadow-lg'
             }`}
           >

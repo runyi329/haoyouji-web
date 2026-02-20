@@ -262,7 +262,7 @@ export default function ProfileSettings() {
         {activeTab === "security" && (
           <div className="space-y-4">
             {/* 安全等级 */}
-            <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800">
+            <Card className="bg-gradient-to-br from-white to-white dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>

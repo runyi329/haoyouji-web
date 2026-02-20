@@ -258,7 +258,7 @@ export default function MemoryGame() {
             <h2 className="text-2xl font-bold mb-2">太棒了！</h2>
             <p className="text-muted-foreground mb-3">你完成了游戏！</p>
             
-            <Card className="p-6 mb-4 bg-gradient-to-br from-red-50 to-pink-50 border-0 max-w-sm mx-auto">
+            <Card className="p-6 mb-4 bg-gradient-to-br from-white to-white border-0 max-w-sm mx-auto">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
                   <div className="text-2xl font-bold text-[#D32F2F]">{score}</div>
