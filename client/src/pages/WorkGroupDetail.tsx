@@ -177,7 +177,7 @@ export default function WorkGroupDetail() {
 
       {/* 添加人员对话框 */}
       <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md fixed top-4 left-1/2 -translate-x-1/2 max-h-[80vh] overflow-y-auto">
           <DialogTitle>添加人员</DialogTitle>
           <DialogDescription>
             添加一个新人员到工作群，系统将为其创建独立的工作节点记录账本
