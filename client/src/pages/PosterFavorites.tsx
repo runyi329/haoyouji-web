@@ -178,9 +178,9 @@ export default function PosterFavorites() {
           {/* 关闭按钮 */}
           <button
             onClick={() => setPreviewPoster(null)}
-            className="absolute top-4 right-4 z-10 p-2 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
+            className="absolute top-4 right-4 z-10 p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
           >
-            <X className="w-6 h-6 text-white" />
+            <X className="w-8 h-8 text-white" strokeWidth={3} />
           </button>
 
           {/* 页码显示 - 屏幕正中间 */}
