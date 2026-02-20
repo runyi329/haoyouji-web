@@ -98,7 +98,7 @@ export default function Admin() {
     if (!searchKeyword) return true;
     const keyword = searchKeyword.toLowerCase();
     return (
-      u.username.toLowerCase().includes(keyword) ||
+      (u.username && u.username.toLowerCase().includes(keyword)) ||
       (u.name && u.name.toLowerCase().includes(keyword))
     );
   });
