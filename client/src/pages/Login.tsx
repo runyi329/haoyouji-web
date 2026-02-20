@@ -178,7 +178,7 @@ export default function Login() {
 
             {/* 登录表单 */}
             {activeTab === "login" && (
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} className="space-y-4">
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -258,7 +258,7 @@ export default function Login() {
 
             {/* 注册表单 */}
             {activeTab === "register" && (
-              <form onSubmit={handleRegister} className="space-y-4">
+              <form onSubmit={handleRegister} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} className="space-y-4">
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
