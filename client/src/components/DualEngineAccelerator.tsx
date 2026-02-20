@@ -167,17 +167,17 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           triggerRef={multiplierTitleRef}
           content={
             <div className="space-y-1.5">
-              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-[#E0E0E0]">市场贡献池（12.5%）</div>
-              <div className="text-sm text-[#424242] leading-snug space-y-1">
-                <div className="py-1.5 border-b border-[#E0E0E0]">
+              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">市场贡献池（12.5%）</div>
+              <div className="text-sm text-gray-800 leading-snug space-y-1">
+                <div className="py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-[#A80000]">分配逻辑</span>
-                  <span className="text-[#424242]"> — 根据每周真实行为贡献（邀约、标签、分享）结算</span>
+                  <span className="text-gray-700"> — 根据每周真实行为贡献（邀约、标签、分享）结算</span>
                 </div>
-                <div className="py-1.5 border-b border-[#E0E0E0]">
+                <div className="py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-[#A80000]">杠杆效应</span>
-                  <span className="text-[#424242]"> — 资本加速2.0x，市场池劳动产出也×2</span>
+                  <span className="text-gray-700"> — 资本加速2.0x，市场池劳动产出也×2</span>
                 </div>
-                <div className="py-1.5 text-[#424242]">
+                <div className="py-1.5 text-gray-700">
                   <span className="font-semibold text-[#A80000]">核心好处</span> — 多劳多得，上不封顶。资本加速+资源加速+积极经营=三重复利
                 </div>
               </div>
@@ -223,7 +223,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const contactAchieved = currentContact >= targetContact;
                 return <span className={contactAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{contactAchieved ? '✓' : '✗'}</span>;
               })()}
-              <span className={props.nodeLevel === 'none' ? 'text-[#757575]' : 'opacity-80'}>人脉数</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>人脉数</span>
             </div>
             <div 
               ref={tagIndicatorRef}
@@ -236,7 +236,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const tagAchieved = currentTag >= targetTag;
                 return <span className={tagAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{tagAchieved ? '✓' : '✗'}</span>;
               })()}
-              <span className={props.nodeLevel === 'none' ? 'text-[#757575]' : 'opacity-80'}>标签数</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签数</span>
             </div>
             <div 
               ref={interactionIndicatorRef}
@@ -249,11 +249,11 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const interactionAchieved = currentInteraction >= targetInteraction;
                 return <span className={interactionAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{interactionAchieved ? '✓' : '✗'}</span>;
               })()}
-              <span className={props.nodeLevel === 'none' ? 'text-[#757575]' : 'opacity-80'}>联络数</span>
+              <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联络数</span>
             </div>
           </div>
           {props.promotionStats?.qualifiedPeriod && (
-            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-[#757575]' : 'opacity-60'}`}>
+            <div className={`text-[10px] ${props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
               达成时间：{props.promotionStats.qualifiedPeriod.split('-')[0]}
             </div>
           )}
@@ -266,21 +266,21 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           triggerRef={nodeLevelTitleRef}
           content={
             <div className="space-y-1.5">
-              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-[#E0E0E0]">资源加速机制</div>
-              <div className="text-sm text-[#424242] leading-snug space-y-1">
-                <div className="py-1.5 border-b border-[#E0E0E0]">
+              <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">资源加速机制</div>
+              <div className="text-sm text-gray-800 leading-snug space-y-1">
+                <div className="py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-[#A80000]">标准节点</span>
-                  <span className="text-[#424242]"> — +25%资源加速，市场贡献×1.25</span>
+                  <span className="text-gray-700"> — +25%资源加速，市场贡献×1.25</span>
                 </div>
-                <div className="py-1.5 border-b border-[#E0E0E0]">
+                <div className="py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-[#A80000]">高级节点</span>
-                  <span className="text-[#424242]"> — +50%资源加速，市场贡献×1.50</span>
+                  <span className="text-gray-700"> — +50%资源加速，市场贡献×1.50</span>
                 </div>
-                <div className="py-1.5 border-b border-[#E0E0E0]">
+                <div className="py-1.5 border-b border-gray-100">
                   <span className="font-semibold text-[#A80000]">超级节点</span>
-                  <span className="text-[#424242]"> — +100%资源加速，市场贡献×2.00</span>
+                  <span className="text-gray-700"> — +100%资源加速，市场贡献×2.00</span>
                 </div>
-                <div className="py-1.5 text-[#424242]">
+                <div className="py-1.5 text-gray-700">
                   资源加速与资本加速叠加，形成三重复利
                 </div>
               </div>
@@ -295,19 +295,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           triggerRef={contactIndicatorRef}
           content={
             <div className="space-y-3">
-              <div className="font-bold text-[#424242]">人脉数进度</div>
+              <div className="font-bold text-gray-900">人脉数进度</div>
               
               {/* 本轮晋升周期 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">本轮晋升周期</div>
-                <div className="text-sm font-medium text-[#424242]">
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
                   {props.promotionStats?.qualifiedPeriod || '计算中...'}
                 </div>
               </div>
               
               {/* 进度详情 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
                 {(() => {
                   const currentContact = props.promotionStats?.contactCount || props.contactCount;
                   const targetContact = props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50;
@@ -320,8 +320,8 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <span className="text-[#C5B358] font-bold">✓ 已达标</span>
                       ) : (
                         <>
-                          <span className="font-bold text-[#424242]">{contactPct}%</span>
-                          <span className="ml-2 text-[#757575]">({currentContact}/{targetContact})</span>
+                          <span className="font-bold text-gray-900">{contactPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentContact}/{targetContact})</span>
                         </>
                       )}
                     </div>
@@ -339,19 +339,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           triggerRef={tagIndicatorRef}
           content={
             <div className="space-y-3">
-              <div className="font-bold text-[#424242]">标签数进度</div>
+              <div className="font-bold text-gray-900">标签数进度</div>
               
               {/* 本轮晋升周期 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">本轮晋升周期</div>
-                <div className="text-sm font-medium text-[#424242]">
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
                   {props.promotionStats?.qualifiedPeriod || '计算中...'}
                 </div>
               </div>
               
               {/* 进度详情 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
                 {(() => {
                   const currentTag = props.promotionStats?.tagCount || 0;
                   const targetTag = props.nodeLevel === 'standard' ? 300 : props.nodeLevel === 'advanced' ? 500 : 100;
@@ -364,8 +364,8 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <span className="text-[#C5B358] font-bold">✓ 已达标</span>
                       ) : (
                         <>
-                          <span className="font-bold text-[#424242]">{tagPct}%</span>
-                          <span className="ml-2 text-[#757575]">({currentTag}/{targetTag})</span>
+                          <span className="font-bold text-gray-900">{tagPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentTag}/{targetTag})</span>
                         </>
                       )}
                     </div>
@@ -383,19 +383,19 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           triggerRef={interactionIndicatorRef}
           content={
             <div className="space-y-3">
-              <div className="font-bold text-[#424242]">联络数进度</div>
+              <div className="font-bold text-gray-900">联络数进度</div>
               
               {/* 本轮晋升周期 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">本轮晋升周期</div>
-                <div className="text-sm font-medium text-[#424242]">
+                <div className="text-xs text-gray-500 mb-2">本轮晋升周期</div>
+                <div className="text-sm font-medium text-gray-900">
                   {props.promotionStats?.qualifiedPeriod || '计算中...'}
                 </div>
               </div>
               
               {/* 进度详情 */}
               <div>
-                <div className="text-xs text-[#757575] mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
+                <div className="text-xs text-gray-500 mb-2">距离{props.nodeLevel === 'standard' ? '高级节点' : props.nodeLevel === 'advanced' ? '超级节点' : '标准节点'}进度</div>
                 {(() => {
                   const currentInteraction = props.promotionStats?.interactionCount || 0;
                   const targetInteraction = props.nodeLevel === 'standard' ? 200 : props.nodeLevel === 'advanced' ? 250 : 150;
@@ -408,8 +408,8 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                         <span className="text-[#C5B358] font-bold">✓ 已达标</span>
                       ) : (
                         <>
-                          <span className="font-bold text-[#424242]">{interactionPct}%</span>
-                          <span className="ml-2 text-[#757575]">({currentInteraction}/{targetInteraction})</span>
+                          <span className="font-bold text-gray-900">{interactionPct}%</span>
+                          <span className="ml-2 text-gray-600">({currentInteraction}/{targetInteraction})</span>
                         </>
                       )}
                     </div>
@@ -430,12 +430,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 左翼：已达成资产（金黄色成就感） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span ref={achievedTitleRef} className="text-xs text-[#757575] font-medium">累计业务资产</span>
+              <span ref={achievedTitleRef} className="text-xs text-gray-600 font-medium">累计业务资产</span>
               <div className="relative">
                 <button
                   ref={achievedHelpRef}
                   onClick={() => setShowAchievedHelp(!showAchievedHelp)}
-                  className="text-[#757575] hover:text-[#C5B358] transition-colors"
+                  className="text-gray-400 hover:text-[#C5B358] transition-colors"
                 >
                   <HelpCircle className="w-3 h-3" />
                 </button>
@@ -445,17 +445,17 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   triggerRef={achievedTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-[#E0E0E0]">统计规则</div>
-                      <div className="text-sm text-[#424242] leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-[#E0E0E0]">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">统计规则</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
                           <span className="font-semibold text-[#A80000]">用户层面</span>
-                          <span className="text-[#424242]"> — 标准/高级/超级用户，统计历史最高等级的累计人数</span>
+                          <span className="text-gray-700"> — 标准/高级/超级用户，统计历史最高等级的累计人数</span>
                         </div>
-                        <div className="py-1.5 border-b border-[#E0E0E0]">
+                        <div className="py-1.5 border-b border-gray-100">
                           <span className="font-semibold text-[#A80000]">节点层面</span>
-                          <span className="text-[#424242]"> — 标准/高级/超级节点，统计规则与用户层面相同</span>
+                          <span className="text-gray-700"> — 标准/高级/超级节点，统计规则与用户层面相同</span>
                         </div>
-                        <div className="py-1.5 text-[#424242]">
+                        <div className="py-1.5 text-gray-700">
                           <span className="font-semibold text-[#A80000]">理解要点</span> — 即使掉级，也计入累计，体现历史贡献
                         </div>
                       </div>
@@ -469,21 +469,21 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             <div className="space-y-1">
               {/* 用户层面 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">标准用户</span>
+                <span className="text-gray-600">标准用户</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.standardUser || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">高级用户</span>
+                <span className="text-gray-600">高级用户</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.advancedUser || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">超级用户</span>
+                <span className="text-gray-600">超级用户</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.superUser || 0}
                 </span>
@@ -494,21 +494,21 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               
               {/* 节点层面 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">标准节点</span>
+                <span className="text-gray-600">标准节点</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.standardNode || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">高级节点</span>
+                <span className="text-gray-600">高级节点</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.advancedNode || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">超级节点</span>
+                <span className="text-gray-600">超级节点</span>
                 <span className="font-medium text-[#C5B358]">
                   {props.invitedUsersStats?.achieved?.superNode || 0}
                 </span>
@@ -524,12 +524,12 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 右翼：资产培育中心（红白配色） */}
           <div className="flex-1 bg-transparent rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span ref={cultivatingTitleRef} className="text-xs text-[#757575] font-medium">本周业务拓展</span>
+              <span ref={cultivatingTitleRef} className="text-xs text-gray-600 font-medium">本周业务拓展</span>
               <div className="relative">
                 <button
                   ref={cultivatingHelpRef}
                   onClick={() => setShowCultivatingHelp(!showCultivatingHelp)}
-                  className="text-[#757575] hover:text-[#A80000] transition-colors"
+                  className="text-gray-400 hover:text-[#A80000] transition-colors"
                 >
                   <HelpCircle className="w-3 h-3" />
                 </button>
@@ -539,17 +539,17 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                   triggerRef={cultivatingTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-[#E0E0E0]">统计规则</div>
-                      <div className="text-sm text-[#424242] leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-[#E0E0E0]">
+                      <div className="font-bold text-[#A80000] text-base pb-1.5 border-b border-gray-200">统计规则</div>
+                      <div className="text-sm text-gray-800 leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-gray-100">
                           <span className="font-semibold text-[#A80000]">用户层面</span>
-                          <span className="text-[#424242]"> — 潜在标准（所有邀请），潜在高级（当前≥标准），潜在超级（当前≥高级）</span>
+                          <span className="text-gray-700"> — 潜在标准（所有邀请），潜在高级（当前≥标准），潜在超级（当前≥高级）</span>
                         </div>
-                        <div className="py-1.5 border-b border-[#E0E0E0]">
+                        <div className="py-1.5 border-b border-gray-100">
                           <span className="font-semibold text-[#A80000]">节点层面</span>
-                          <span className="text-[#424242]"> — 统计规则与用户层面相同</span>
+                          <span className="text-gray-700"> — 统计规则与用户层面相同</span>
                         </div>
-                        <div className="py-1.5 text-[#424242]">
+                        <div className="py-1.5 text-gray-700">
                           <span className="font-semibold text-[#A80000]">理解要点</span> — 体现当前业务拓展潜力
                         </div>
                       </div>
@@ -563,21 +563,21 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             <div className="space-y-1">
               {/* 用户层面 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在标准用户</span>
+                <span className="text-gray-600">潜在标准用户</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.standardUser || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在高级用户</span>
+                <span className="text-gray-600">潜在高级用户</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.advancedUser || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在超级用户</span>
+                <span className="text-gray-600">潜在超级用户</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.superUser || 0}
                 </span>
@@ -588,21 +588,21 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
               
               {/* 节点层面 */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在标准节点</span>
+                <span className="text-gray-600">潜在标准节点</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.standardNode || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在高级节点</span>
+                <span className="text-gray-600">潜在高级节点</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.advancedNode || 0}
                 </span>
               </div>
               
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[#757575]">潜在超级节点</span>
+                <span className="text-gray-600">潜在超级节点</span>
                 <span className="font-medium text-[#A80000]">
                   {props.invitedUsersStats?.potential?.superNode || 0}
                 </span>
@@ -619,27 +619,27 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           {/* 查阅晋升准则 - 跳转到晋升规则页面 */}
           <button 
             onClick={() => setLocation('/parent/promotion-rules')}
-            className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-[#1976D2]/30">
+            className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
             <div className="flex items-center space-x-2">
               <svg className="w-4 h-4 text-[#1976D2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
-              <span className="text-xs font-medium text-[#424242]">查阅晋升准则</span>
+              <span className="text-xs font-medium text-gray-700">查阅晋升准则</span>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-[#1976D2]" />
+            <ChevronRight className="w-3.5 h-3.5 text-blue-400" />
           </button>
           
           {/* 查阅历史周报 */}
           <button 
             onClick={() => setLocation('/parent/equity-history')}
-            className="flex items-center justify-between bg-gradient-to-br from-amber-50/30 to-amber-100/20 hover:from-amber-50/50 hover:to-amber-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-[#FFA726]/30">
+            className="flex items-center justify-between bg-gradient-to-br from-amber-50/30 to-amber-100/20 hover:from-amber-50/50 hover:to-amber-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-amber-100/30">
             <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-[#FFA726]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-xs font-medium text-[#424242]">查阅历史周报</span>
+              <span className="text-xs font-medium text-gray-700">查阅历史周报</span>
             </div>
-            <ChevronRight className="w-3.5 h-3.5 text-[#FFA726]" />
+            <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
           </button>
         </div>
       </div>

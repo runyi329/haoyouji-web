@@ -166,14 +166,14 @@ export default function ProfileEdit() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center">
           <Link href="/">
-            <a className="text-[#757575] hover:text-[#424242]">
+            <a className="text-gray-600 hover:text-gray-900">
               <ArrowLeft className="w-6 h-6" />
             </a>
           </Link>
-          <h1 className="text-lg font-bold text-[#424242] flex-1 text-center">编辑资料</h1>
+          <h1 className="text-lg font-bold text-gray-900 flex-1 text-center">编辑资料</h1>
           <div className="w-6"></div>
         </div>
       </div>
@@ -190,14 +190,14 @@ export default function ProfileEdit() {
       )}
 
       {/* 标签页导航 */}
-      <div className="bg-white border-b border-[#E0E0E0]">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 flex space-x-6">
           <button
             onClick={() => setActiveTab("basic")}
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "basic"
                 ? "border-[#D32F2F] text-[#D32F2F] font-medium"
-                : "border-transparent text-[#757575] hover:text-[#424242]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
             基本信息
@@ -207,7 +207,7 @@ export default function ProfileEdit() {
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "verification"
                 ? "border-[#D32F2F] text-[#D32F2F] font-medium"
-                : "border-transparent text-[#757575] hover:text-[#424242]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
             实名认证
@@ -217,7 +217,7 @@ export default function ProfileEdit() {
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "address"
                 ? "border-[#D32F2F] text-[#D32F2F] font-medium"
-                : "border-transparent text-[#757575] hover:text-[#424242]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
             收件地址
@@ -230,51 +230,51 @@ export default function ProfileEdit() {
         {/* 基本信息标签页 */}
         {activeTab === "basic" && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-bold text-[#424242] mb-4">基本信息</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">基本信息</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   用户名
                 </label>
                 <input
                   type="text"
                   value={basicForm.name}
                   disabled
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg bg-gray-50 text-[#757575]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   昵称
                 </label>
                 <input
                   type="text"
                   value={basicForm.nickname}
                   onChange={(e) => setBasicForm({ ...basicForm, nickname: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                   placeholder="请输入昵称"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   邮箱
                 </label>
                 <input
                   type="email"
                   value={basicForm.email}
                   disabled
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg bg-gray-50 text-[#757575]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   手机号
                 </label>
                 <input
                   type="tel"
                   value={basicForm.phone}
                   onChange={(e) => setBasicForm({ ...basicForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                   placeholder="请输入手机号"
                 />
               </div>
@@ -292,10 +292,10 @@ export default function ProfileEdit() {
         {/* 实名认证标签页 */}
         {activeTab === "verification" && (
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-bold text-[#424242] mb-4">实名认证</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">实名认证</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   真实姓名
                 </label>
                 <input
@@ -304,12 +304,12 @@ export default function ProfileEdit() {
                   onChange={(e) =>
                     setVerificationForm({ ...verificationForm, realName: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                   placeholder="请输入真实姓名"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   身份证号
                 </label>
                 <input
@@ -318,19 +318,19 @@ export default function ProfileEdit() {
                   onChange={(e) =>
                     setVerificationForm({ ...verificationForm, idCardNumber: e.target.value })
                   }
-                  className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                   placeholder="请输入身份证号"
                   maxLength={18}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#424242] mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   认证状态
                 </label>
                 <div
                   className={`px-3 py-2 rounded-lg ${
                     verificationForm.verificationStatus === "verified"
-                      ? "bg-[#E8F5E9] text-[#4CAF50]"
+                      ? "bg-[#E8F5E9] text-green-700"
                       : verificationForm.verificationStatus === "rejected"
                       ? "bg-[#FFEBEE] text-[#D32F2F]"
                       : "bg-[#FAF3ED] text-[#CBA471]"
@@ -363,25 +363,25 @@ export default function ProfileEdit() {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-medium text-[#424242]">{address.recipientName}</span>
-                      <span className="text-[#757575]">{address.recipientPhone}</span>
+                      <span className="font-medium text-gray-900">{address.recipientName}</span>
+                      <span className="text-gray-600">{address.recipientPhone}</span>
                       {address.isDefault === 1 && (
                         <span className="px-2 py-0.5 text-xs bg-[#D32F2F] text-white rounded">
                           默认
                         </span>
                       )}
                       {address.label && (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-[#757575] rounded">
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
                           {address.label}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-[#757575]">
+                    <p className="text-sm text-gray-600">
                       {address.province} {address.city} {address.district}
                     </p>
-                    <p className="text-sm text-[#757575]">{address.detailedAddress}</p>
+                    <p className="text-sm text-gray-600">{address.detailedAddress}</p>
                     {address.postalCode && (
-                      <p className="text-sm text-[#757575]">邮编: {address.postalCode}</p>
+                      <p className="text-sm text-gray-500">邮编: {address.postalCode}</p>
                     )}
                   </div>
                   <div className="flex space-x-2 ml-4">
@@ -406,7 +406,7 @@ export default function ProfileEdit() {
             {!editingAddress && (
               <button
                 onClick={handleAddAddress}
-                className="w-full bg-white border-2 border-dashed border-[#E0E0E0] rounded-lg py-4 text-[#757575] hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors"
+                className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-4 text-gray-600 hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors"
               >
                 + 添加新地址
               </button>
@@ -416,12 +416,12 @@ export default function ProfileEdit() {
             {editingAddress && (
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-[#424242]">
+                  <h3 className="text-lg font-bold text-gray-900">
                     {editingAddress.id ? "编辑地址" : "添加地址"}
                   </h3>
                   <button
                     onClick={() => setEditingAddress(null)}
-                    className="text-[#757575] hover:text-[#757575]"
+                    className="text-gray-400 hover:text-gray-600"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -429,7 +429,7 @@ export default function ProfileEdit() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         收件人 <span className="text-[#D32F2F]">*</span>
                       </label>
                       <input
@@ -438,12 +438,12 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, recipientName: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="请输入收件人姓名"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         手机号 <span className="text-[#D32F2F]">*</span>
                       </label>
                       <input
@@ -452,14 +452,14 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, recipientPhone: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="请输入手机号"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         省份
                       </label>
                       <input
@@ -468,12 +468,12 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, province: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="省份"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         城市
                       </label>
                       <input
@@ -482,12 +482,12 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, city: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="城市"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         区县
                       </label>
                       <input
@@ -496,13 +496,13 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, district: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="区县"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#424242] mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       详细地址 <span className="text-[#D32F2F]">*</span>
                     </label>
                     <textarea
@@ -510,14 +510,14 @@ export default function ProfileEdit() {
                       onChange={(e) =>
                         setAddressForm({ ...addressForm, detailedAddress: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                       placeholder="请输入详细地址"
                       rows={3}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         邮政编码
                       </label>
                       <input
@@ -526,12 +526,12 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, postalCode: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="邮政编码"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#424242] mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         地址标签
                       </label>
                       <input
@@ -540,7 +540,7 @@ export default function ProfileEdit() {
                         onChange={(e) =>
                           setAddressForm({ ...addressForm, label: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
                         placeholder="如：家、公司"
                       />
                     </div>
@@ -553,9 +553,9 @@ export default function ProfileEdit() {
                       onChange={(e) =>
                         setAddressForm({ ...addressForm, isDefault: e.target.checked })
                       }
-                      className="w-4 h-4 text-[#D32F2F] border-[#E0E0E0] rounded focus:ring-[#A80000]"
+                      className="w-4 h-4 text-[#D32F2F] border-gray-300 rounded focus:ring-[#A80000]"
                     />
-                    <label htmlFor="isDefault" className="ml-2 text-sm text-[#424242]">
+                    <label htmlFor="isDefault" className="ml-2 text-sm text-gray-700">
                       设为默认地址
                     </label>
                   </div>
@@ -563,7 +563,7 @@ export default function ProfileEdit() {
                 <div className="flex space-x-3 mt-6">
                   <button
                     onClick={() => setEditingAddress(null)}
-                    className="flex-1 bg-gray-200 text-[#424242] py-2 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
                   >
                     取消
                   </button>

@@ -87,13 +87,13 @@ function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenP
       <Card className="w-full max-w-md p-8 space-y-6 shadow-xl">
         {/* 标题 */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-[#424242]">翻牌记字</h1>
-          <p className="text-[#757575]">选择难度开始游戏</p>
+          <h1 className="text-3xl font-bold text-gray-800">翻牌记字</h1>
+          <p className="text-gray-600">选择难度开始游戏</p>
         </div>
 
         {/* 难度选择 */}
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#424242]">游戏难度</label>
+          <label className="text-sm font-medium text-gray-700">游戏难度</label>
           <div className="grid grid-cols-1 gap-3">
             {difficultyButtons.map((btn) => (
               <button
@@ -117,7 +117,7 @@ function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenP
                   </div>
                   <div className="flex items-center gap-1">
                     {Array.from({ length: btn.stars }).map((_, i) => (
-                      <span key={i} className="text-[#FFA726] text-xl">★</span>
+                      <span key={i} className="text-yellow-300 text-xl">★</span>
                     ))}
                   </div>
                 </div>
@@ -356,11 +356,11 @@ export default function CharacterMemoryGame() {
                 <span className="font-mono font-bold">{formatTime(elapsedTime)}</span>
               </Card>
               <Card className="px-6 py-3 flex items-center gap-2">
-                <Trophy size={20} className="text-[#FFA726]" />
+                <Trophy size={20} className="text-yellow-500" />
                 <span className="font-bold">{matches} / {pairCount}</span>
               </Card>
               <Card className="px-6 py-3 flex items-center gap-2">
-                <span className="text-[#757575]">步数:</span>
+                <span className="text-gray-600">步数:</span>
                 <span className="font-bold">{moves}</span>
               </Card>
             </div>
@@ -385,7 +385,7 @@ export default function CharacterMemoryGame() {
                   }`}
                 >
                   {(card.isFlipped || card.isMatched) && (
-                    <div className="w-full h-full flex items-center justify-center text-4xl md:text-5xl font-bold text-[#424242]">
+                    <div className="w-full h-full flex items-center justify-center text-4xl md:text-5xl font-bold text-gray-800">
                       {card.character}
                     </div>
                   )}
@@ -419,16 +419,16 @@ export default function CharacterMemoryGame() {
           <Card className="p-8 text-center space-y-6">
             <div className="space-y-2">
               <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-3xl font-bold text-[#424242]">恭喜完成！</h2>
+              <h2 className="text-3xl font-bold text-gray-800">恭喜完成！</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
               <div className="p-4 bg-[#F5F5F5] rounded-lg">
-                <div className="text-sm text-[#757575]">用时</div>
+                <div className="text-sm text-gray-600">用时</div>
                 <div className="text-2xl font-bold text-[#1976D2]">{formatTime(elapsedTime)}</div>
               </div>
               <div className="p-4 bg-[#FFEBEE] rounded-lg">
-                <div className="text-sm text-[#757575]">步数</div>
+                <div className="text-sm text-gray-600">步数</div>
                 <div className="text-2xl font-bold text-[#D32F2F]">{moves}</div>
               </div>
             </div>

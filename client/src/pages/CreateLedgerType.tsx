@@ -45,7 +45,7 @@ const ledgerTypes = [
     name: "报销账本",
     description: "公司出差采购支出报销给So easy",
     icon: Receipt,
-    color: "bg-white text-[#1976D2]",
+    color: "bg-cyan-100 text-cyan-600",
   },
   {
     id: "custom",
@@ -80,8 +80,8 @@ export default function CreateLedgerType() {
       </div>
 
       {/* 提示文字 */}
-      <div className="flex items-center justify-center gap-2 py-4 text-[#757575] text-sm">
-        <div className="w-5 h-5 rounded-full border-2 border-[#E0E0E0] flex items-center justify-center">
+      <div className="flex items-center justify-center gap-2 py-4 text-gray-500 text-sm">
+        <div className="w-5 h-5 rounded-full border-2 border-gray-400 flex items-center justify-center">
           <div className="w-2 h-2 bg-gray-400 rounded-full" />
         </div>
         <span>请选择账本类型</span>
@@ -104,15 +104,15 @@ export default function CreateLedgerType() {
 
               {/* 文字内容 */}
               <div className="flex-1 text-left">
-                <div className="text-base font-medium text-[#424242]">{type.name}</div>
-                <div className="text-xs text-[#757575] mt-0.5">{type.description}</div>
+                <div className="text-base font-medium text-gray-900">{type.name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{type.description}</div>
               </div>
 
               {/* 选择圆圈 */}
               <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 ${
                 selectedType === type.id
                   ? "border-[#1976D2] bg-[#1976D2]"
-                  : "border-[#E0E0E0]"
+                  : "border-gray-300"
               }`}>
                 {selectedType === type.id && (
                   <div className="w-full h-full flex items-center justify-center">

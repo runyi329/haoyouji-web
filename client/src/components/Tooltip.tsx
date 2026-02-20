@@ -79,7 +79,7 @@ export default function Tooltip({ content, isOpen, onClose, triggerRef }: Toolti
   return (
     <div
       ref={tooltipRef}
-      className={`fixed z-50 left-1/2 transform -translate-x-1/2 w-11/12 bg-white border border-[#E0E0E0] rounded-lg shadow-xl p-3 text-xs text-[#424242]`}
+      className={`fixed z-50 left-1/2 transform -translate-x-1/2 w-11/12 bg-white border border-gray-200 rounded-lg shadow-xl p-3 text-xs text-gray-700`}
       style={{
         maxWidth: 'calc(100vw - 40px)',
         [position === 'top' ? 'bottom' : 'top']: 

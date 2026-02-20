@@ -126,14 +126,14 @@ export default function CreateLedger() {
             <Icon className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xs text-[#757575]">账本类型</div>
+            <div className="text-xs text-gray-500">账本类型</div>
             <div className="text-sm font-medium text-[#222222]">{typeConfig.name}</div>
           </div>
         </div>
 
         {/* 账本名称 */}
         <div className="bg-white rounded-lg p-3 space-y-2">
-          <Label htmlFor="ledgerName" className="text-sm text-[#424242]">
+          <Label htmlFor="ledgerName" className="text-sm text-gray-700">
             账本名称
           </Label>
           <Input
@@ -147,9 +147,9 @@ export default function CreateLedger() {
 
         {/* 我在账本内的昵称 */}
         <div className="bg-white rounded-lg p-3 space-y-2">
-          <Label htmlFor="nickname" className="text-sm text-[#424242]">
+          <Label htmlFor="nickname" className="text-sm text-gray-700">
             我在账本内的昵称
-            <span className="text-xs text-[#757575] ml-2">（共享者可见，每个账本昵称可以不同）</span>
+            <span className="text-xs text-gray-500 ml-2">（共享者可见，每个账本昵称可以不同）</span>
           </Label>
           <Input
             id="nickname"
@@ -162,7 +162,7 @@ export default function CreateLedger() {
 
         {/* 账本结算货币 */}
         <div className="bg-white rounded-lg p-3 space-y-2">
-          <Label htmlFor="currency" className="text-sm text-[#424242]">
+          <Label htmlFor="currency" className="text-sm text-gray-700">
             账本结算货币
           </Label>
           <Select value={currency} onValueChange={setCurrency}>

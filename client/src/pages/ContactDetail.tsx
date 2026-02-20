@@ -53,7 +53,7 @@ function HighlightText({ text, keyword }: { text: string; keyword: string }) {
     <>
       {parts.map((part, index) => 
         part.toLowerCase() === keyword.toLowerCase() ? (
-          <span key={index} className="bg-[#FFF3E0] dark:bg-white rounded px-0.5">
+          <span key={index} className="bg-[#FFF3E0] dark:bg-yellow-800 rounded px-0.5">
             {part}
           </span>
         ) : (
@@ -128,7 +128,7 @@ function CopyableItem({
           <div className="space-y-0.5">
             {compositeLines.map((line, idx) => (
               <div key={idx} className="text-sm">
-                <span className="text-[#757575]">{line.label}：</span>
+                <span className="text-gray-500">{line.label}：</span>
                 <span>{showFullInfo ? line.value : maskSensitiveInfo(label, line.value)}</span>
               </div>
             ))}
@@ -430,7 +430,7 @@ function FieldItem({
           <span className="font-semibold">{score}分</span>
           <span className="text-muted-foreground"> (芝麻信用)</span>
           {displayDate && (
-            <span className="text-xs text-[#757575] ml-2">{displayDate}</span>
+            <span className="text-xs text-gray-400 ml-2">{displayDate}</span>
           )}
         </span>
       );
@@ -525,7 +525,7 @@ function FieldItem({
         className="p-1.5 hover:bg-gray-200 transition-colors flex-shrink-0"
         title="复制"
       >
-        <Copy className="w-4 h-4 text-[#757575]" />
+        <Copy className="w-4 h-4 text-gray-500" />
       </button>
     </div>
   );
@@ -1546,7 +1546,7 @@ export default function ContactDetail() {
                       contact.hasReferrer ? (
                         <UserCheck className="h-5 w-5 text-[#1976D2] flex-shrink-0" title="有推荐人" />
                       ) : (
-                        <UserX className="h-5 w-5 text-[#757575] flex-shrink-0" title="无推荐人" />
+                        <UserX className="h-5 w-5 text-gray-400 flex-shrink-0" title="无推荐人" />
                       )
                     )}
                   </div>
@@ -1566,7 +1566,7 @@ export default function ContactDetail() {
                           {contact.gender === '男' ? (
                             <Mars className="h-4 w-4 mr-1.5 text-[#1976D2]" />
                           ) : (
-                            <Venus className="h-4 w-4 mr-1.5 text-[#D32F2F]" />
+                            <Venus className="h-4 w-4 mr-1.5 text-pink-500" />
                           )}
                           <span title="性别">{contact.gender}</span>
                         </div>
@@ -1600,7 +1600,7 @@ export default function ContactDetail() {
                     <MessageCircle 
                       className={`h-5 w-5 ${
                         contact.hasTodayInteraction 
-                          ? 'text-[#757575]' 
+                          ? 'text-gray-400' 
                           : 'text-[#1976D2]'
                       }`} 
                     />
@@ -1966,21 +1966,21 @@ export default function ContactDetail() {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center p-4 bg-[#F5F5F5] dark:bg-[#212121]/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">直接推荐</div>
-                    <div className="text-2xl font-bold text-[#1976D2] dark:text-[#1976D2]">
+                    <div className="text-2xl font-bold text-[#1976D2] dark:text-blue-400">
                       {contact.referrerContribution.directReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
-                  <div className="text-center p-4 bg-[#D32F2F]-light dark:bg-[#D32F2F]/30 rounded-lg">
+                  <div className="text-center p-4 bg-[#D32F2F]-light dark:bg-red-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">间接推荐</div>
-                    <div className="text-2xl font-bold text-[#D32F2F] dark:text-[#D32F2F]">
+                    <div className="text-2xl font-bold text-[#D32F2F] dark:text-red-400">
                       {contact.referrerContribution.indirectReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
                   <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">贡献值</div>
-                    <div className="text-2xl font-bold text-[#CBA471] dark:text-[#FFA726]">
+                    <div className="text-2xl font-bold text-[#CBA471] dark:text-orange-400">
                       {contact.referrerContribution.totalScore}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">分</div>
@@ -2237,7 +2237,7 @@ export default function ContactDetail() {
               <>
                 {/* 联络方式选择（可选） */}
                 <div className="w-full">
-                  <Label className="text-sm text-[#757575] mb-2 block">联络方式（可选）</Label>
+                  <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -2267,7 +2267,7 @@ export default function ContactDetail() {
                 </div>
                 {/* 互动重要性评分（可选） */}
                 <div className="w-full">
-                  <Label className="text-sm text-[#757575] mb-2 block">互动重要性评分（可选）</Label>
+                  <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((score) => (
                       <Button
@@ -2544,7 +2544,7 @@ export default function ContactDetail() {
                   <button
                     key={color}
                     type="button"
-                    className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${newPersonalTagColor === color ? 'border-[#E0E0E0] ring-2 ring-offset-2 ring-gray-400' : 'border-transparent'}`}
+                    className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${newPersonalTagColor === color ? 'border-gray-900 ring-2 ring-offset-2 ring-gray-400' : 'border-transparent'}`}
                     style={{ backgroundColor: color }}
                     onClick={() => setNewPersonalTagColor(color)}
                   />
@@ -2633,7 +2633,7 @@ export default function ContactDetail() {
                     <button
                       key={color}
                       type="button"
-                      className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${editingPersonalTag.color === color ? 'border-[#E0E0E0] ring-2 ring-offset-2 ring-gray-400' : 'border-transparent'}`}
+                      className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${editingPersonalTag.color === color ? 'border-gray-900 ring-2 ring-offset-2 ring-gray-400' : 'border-transparent'}`}
                       style={{ backgroundColor: color }}
                       onClick={() => setEditingPersonalTag({ ...editingPersonalTag, color })}
                     />
@@ -2711,7 +2711,7 @@ export default function ContactDetail() {
             <div className="text-center mb-6">
               <h3 className="text-lg font-semibold text-[#222222]">{toastMessage}</h3>
               {toastType === 'success' && (
-                <p className="text-sm text-[#757575] mt-2">内容已复制到剪贴板</p>
+                <p className="text-sm text-gray-500 mt-2">内容已复制到剪贴板</p>
               )}
             </div>
             

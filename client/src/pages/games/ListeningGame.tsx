@@ -230,12 +230,12 @@ export default function ListeningGame(props: any) {
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">🎧</div>
               <h2 className="text-2xl font-bold text-[#1976D2] mb-2">练习+测试模式</h2>
-              <p className="text-[#757575]">先练习，再测试，全部答对进入下一张卡</p>
+              <p className="text-gray-600">先练习，再测试，全部答对进入下一张卡</p>
             </div>
             
             {/* 卡片数量选择 */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-[#424242] mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
                 选择卡片数量：<span className="text-[#1976D2] font-bold">{cardCount}张</span>
               </label>
               <div className="px-2">
@@ -246,9 +246,9 @@ export default function ListeningGame(props: any) {
                   step="1"
                   value={cardCount}
                   onChange={(e) => setCardCount(parseInt(e.target.value))}
-                  className="w-full h-2 bg-[#1976D2] rounded-lg appearance-none cursor-pointer slider"
+                  className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer slider"
                 />
-                <div className="flex justify-between text-xs text-[#757575] mt-1">
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
                   <span>1张</span>
                   <span>2张</span>
                   <span>3张</span>
@@ -260,7 +260,7 @@ export default function ListeningGame(props: any) {
             
             {/* 每张卡字数选择 */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-[#424242] mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
                 每张卡字数：<span className="text-[#1976D2] font-bold">{charsPerCard}个字</span>
               </label>
               <div className="grid grid-cols-2 gap-4">
@@ -315,15 +315,15 @@ export default function ListeningGame(props: any) {
             <div className="grid grid-cols-3 gap-6 my-8">
               <div className="bg-[#F5F5F5] p-6 rounded-xl">
                 <div className="text-3xl font-bold text-[#1976D2]">{totalScore}</div>
-                <div className="text-[#757575] mt-2">答对次数</div>
+                <div className="text-gray-600 mt-2">答对次数</div>
               </div>
-              <div className="bg-white p-6 rounded-xl">
-                <div className="text-3xl font-bold text-[#1976D2]">{accuracy}%</div>
-                <div className="text-[#757575] mt-2">正确率</div>
+              <div className="bg-cyan-50 p-6 rounded-xl">
+                <div className="text-3xl font-bold text-cyan-600">{accuracy}%</div>
+                <div className="text-gray-600 mt-2">正确率</div>
               </div>
-              <div className="bg-white p-6 rounded-xl">
-                <div className="text-3xl font-bold text-[#4CAF50]">{formatTime(timer)}</div>
-                <div className="text-[#757575] mt-2">用时</div>
+              <div className="bg-teal-50 p-6 rounded-xl">
+                <div className="text-3xl font-bold text-teal-600">{formatTime(timer)}</div>
+                <div className="text-gray-600 mt-2">用时</div>
               </div>
             </div>
             
@@ -363,7 +363,7 @@ export default function ListeningGame(props: any) {
         <div className="flex justify-between items-center mb-2 text-sm" style={{ fontFamily: "'KaiTi', 'STKaiti', 'BiauKai', serif" }}>
           <div className="flex items-center gap-2">
             <span className="text-[#1976D2] font-semibold">第{currentCardIndex + 1}/{cardCount}张</span>
-            <span className="text-[#757575]">⏱️{formatTime(timer)}</span>
+            <span className="text-gray-600">⏱️{formatTime(timer)}</span>
             <span className="text-[#4CAF50]">✅{correctChars.size}/{charsPerCard}</span>
           </div>
           <Button
@@ -384,14 +384,14 @@ export default function ListeningGame(props: any) {
               <>
                 <div className="text-3xl mb-1">✋</div>
                 <h2 className="text-lg font-bold text-[#1976D2] mb-1">练习模式</h2>
-                <p className="text-sm text-[#757575]">点击任意汉字，听听它的读音</p>
+                <p className="text-sm text-gray-600">点击任意汉字，听听它的读音</p>
               </>
             )}
             {isTestMode && (
               <>
                 <div className="text-3xl mb-1">🎧</div>
                 <h2 className="text-lg font-bold text-[#1976D2] mb-1">测试模式</h2>
-                <p className="text-sm text-[#757575]">请听语音，点击正确的汉字</p>
+                <p className="text-sm text-gray-600">请听语音，点击正确的汉字</p>
               </>
             )}
           </div>
@@ -415,9 +415,9 @@ export default function ListeningGame(props: any) {
                   className={`
                     relative p-3 rounded-xl border-2 transition-all 
                     text-5xl font-bold aspect-square flex items-center justify-center
-                    ${isCorrect ? 'bg-[#E8F5E9] border-[#4CAF50]' : 'bg-white border-[#E0E0E0]'}
-                    ${!isCorrect && 'hover:border-[#1976D2] hover:scale-105 cursor-pointer'}
-                    ${isWrong && 'animate-shake border-[#D32F2F]'}
+                    ${isCorrect ? 'bg-[#E8F5E9] border-[#4CAF50]' : 'bg-white border-gray-200'}
+                    ${!isCorrect && 'hover:border-blue-400 hover:scale-105 cursor-pointer'}
+                    ${isWrong && 'animate-shake border-red-400'}
                   `}
                   style={{ fontFamily: "'KaiTi', 'STKaiti', 'BiauKai', serif" }}
                 >

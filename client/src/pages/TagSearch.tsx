@@ -36,7 +36,7 @@ export default function TagSearch() {
       {/* 搜索框 */}
       <div className="container py-6">
         <div className="relative max-w-2xl mx-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[#757575]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <Input
             type="text"
             placeholder="搜索标签名称..."
@@ -50,11 +50,11 @@ export default function TagSearch() {
       {/* 标签列表 */}
       <div className="container pb-8">
         {isLoading ? (
-          <div className="text-center py-12 text-[#757575]">加载中...</div>
+          <div className="text-center py-12 text-gray-500">加载中...</div>
         ) : tags.length === 0 ? (
           <div className="text-center py-12">
             <Tag className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-            <p className="text-[#757575]">
+            <p className="text-gray-500">
               {keyword ? "未找到匹配的标签" : "暂无标签"}
             </p>
           </div>
@@ -77,7 +77,7 @@ export default function TagSearch() {
                     </h3>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-[#757575]">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Tag className="h-4 w-4" />
                   <span>{tag.contactCount} 位人脉</span>
                 </div>

@@ -41,9 +41,9 @@ export default function ThemeSettings() {
             <div className="flex gap-1 items-center justify-center">
               {/* 配色名称按钮 */}
               <div
-                className="w-16 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center border-[#E0E0E0] bg-white"
+                className="w-16 h-10 rounded-lg border-2 shadow-sm flex items-center justify-center border-gray-300 bg-white"
               >
-                <span className="text-[9px] font-bold leading-tight text-center whitespace-pre-line text-[#424242]">
+                <span className="text-[9px] font-bold leading-tight text-center whitespace-pre-line text-gray-700">
                   {template.name.replace(/(.{2})/, '$1\n')}
                 </span>
               </div>
@@ -135,7 +135,7 @@ export default function ThemeSettings() {
                   }}
                 >
                   <div
-                    className="w-10 h-10 rounded-lg border-2 shadow-sm transition-all cursor-pointer flex items-center justify-center border-[#E0E0E0] hover:scale-110 bg-gray-400"
+                    className="w-10 h-10 rounded-lg border-2 shadow-sm transition-all cursor-pointer flex items-center justify-center border-gray-300 hover:scale-110 bg-gray-400"
                   >
                     <span className="text-[8px] font-bold leading-[10px] text-center whitespace-pre-line text-white">
                       {'点击\n应用'}

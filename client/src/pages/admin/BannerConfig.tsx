@@ -77,7 +77,7 @@ export default function BannerConfig() {
         <div className="container flex items-center justify-between h-14">
           <button
             onClick={() => navigate("/admin")}
-            className="flex items-center gap-2 text-[#757575] hover:text-[#424242]"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>返回管理后台</span>
@@ -150,7 +150,7 @@ export default function BannerConfig() {
                       >
                         <span>
                           {uploading ? (
-                            <div className="w-4 h-4 border-2 border-[#E0E0E0] border-t-transparent rounded-full animate-spin mr-2"></div>
+                            <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin mr-2"></div>
                           ) : (
                             <Upload className="w-4 h-4 mr-2" />
                           )}
@@ -219,8 +219,8 @@ export default function BannerConfig() {
           </Card>
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-[#1976D2]">
-            <p className="text-sm text-[#1976D2]">
+          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-blue-200">
+            <p className="text-sm text-blue-800">
               <strong>提示：</strong>首页横幅会显示在所有用户的首页顶部。您可以设置标题、描述和图片，也可以全部留空来隐藏横幅。
             </p>
           </div>

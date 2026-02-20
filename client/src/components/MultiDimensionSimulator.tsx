@@ -93,9 +93,9 @@ export default function MultiDimensionSimulator({
     <div className="space-y-4">
       {/* 标题 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#424242]">合伙人资产增值引擎</h3>
+        <h3 className="text-sm font-semibold text-gray-700">合伙人资产增值引擎</h3>
         {showLeverageEffect && (
-          <div className="flex items-center space-x-1 text-xs text-[#FFA726] animate-pulse">
+          <div className="flex items-center space-x-1 text-xs text-orange-600 animate-pulse">
             <Zap className="w-3 h-3" />
             <span>杠杆放大中 ×{leverageMultiplier.toFixed(2)}</span>
           </div>
@@ -108,13 +108,13 @@ export default function MultiDimensionSimulator({
         <div className="bg-gradient-to-r from-white to-white rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Users className="w-4 h-4 text-[#D32F2F]" />
-            <span className="text-sm font-semibold text-[#424242]">邀请裂变</span>
+            <span className="text-sm font-semibold text-gray-900">邀请裂变</span>
           </div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-[#757575]">预期邀请新股东</label>
+            <label className="text-xs text-gray-600">预期邀请新股东</label>
             <div className="text-right">
               <span className="text-lg font-bold text-[#D32F2F]">{simInvites}</span>
-              <span className="text-xs text-[#757575] ml-1">人</span>
+              <span className="text-xs text-gray-500 ml-1">人</span>
             </div>
           </div>
           <input
@@ -123,9 +123,9 @@ export default function MultiDimensionSimulator({
             max="50"
             value={simInvites}
             onChange={(e) => setSimInvites(Number(e.target.value))}
-            className="w-full h-2 bg-[#D32F2F] rounded-lg appearance-none cursor-pointer slider-red"
+            className="w-full h-2 bg-red-200 rounded-lg appearance-none cursor-pointer slider-red"
           />
-          <div className="flex justify-between text-xs text-[#757575] mt-1">
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0人</span>
             <span className="text-[#D32F2F] font-semibold">+{simInvites * 100} PU</span>
             <span>50人</span>
@@ -136,13 +136,13 @@ export default function MultiDimensionSimulator({
         <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Network className="w-4 h-4 text-[#1976D2]" />
-            <span className="text-sm font-semibold text-[#424242]">人脉连接</span>
+            <span className="text-sm font-semibold text-gray-900">人脉连接</span>
           </div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-[#757575]">预期新增人脉</label>
+            <label className="text-xs text-gray-600">预期新增人脉</label>
             <div className="text-right">
               <span className="text-lg font-bold text-[#1976D2]">{simNetworkConnections}</span>
-              <span className="text-xs text-[#757575] ml-1">人</span>
+              <span className="text-xs text-gray-500 ml-1">人</span>
             </div>
           </div>
           <input
@@ -151,9 +151,9 @@ export default function MultiDimensionSimulator({
             max="100"
             value={simNetworkConnections}
             onChange={(e) => setSimNetworkConnections(Number(e.target.value))}
-            className="w-full h-2 bg-[#1976D2] rounded-lg appearance-none cursor-pointer slider-blue"
+            className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer slider-blue"
           />
-          <div className="flex justify-between text-xs text-[#757575] mt-1">
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0人</span>
             <span className="text-[#1976D2] font-semibold">+{Math.min(simNetworkConnections * 5, 500)} PU</span>
             <span>100人 (上限500 PU)</span>
@@ -164,13 +164,13 @@ export default function MultiDimensionSimulator({
         <div className="bg-gradient-to-r from-white to-white rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
             <TrendingUp className="w-4 h-4 text-[#4CAF50]" />
-            <span className="text-sm font-semibold text-[#424242]">平台参与</span>
+            <span className="text-sm font-semibold text-gray-900">平台参与</span>
           </div>
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-[#757575]">预期活跃天数</label>
+            <label className="text-xs text-gray-600">预期活跃天数</label>
             <div className="text-right">
               <span className="text-lg font-bold text-[#4CAF50]">{simActiveDays}</span>
-              <span className="text-xs text-[#757575] ml-1">天</span>
+              <span className="text-xs text-gray-500 ml-1">天</span>
             </div>
           </div>
           <input
@@ -180,9 +180,9 @@ export default function MultiDimensionSimulator({
             step="7"
             value={simActiveDays}
             onChange={(e) => setSimActiveDays(Number(e.target.value))}
-            className="w-full h-2 bg-[#4CAF50] rounded-lg appearance-none cursor-pointer slider-green"
+            className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer slider-green"
           />
-          <div className="flex justify-between text-xs text-[#757575] mt-1">
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0天</span>
             <span className="text-[#4CAF50] font-semibold">
               +{Math.floor(simActiveDays / 7) * 50 + Math.floor(simActiveDays / 30) * 200} PU
@@ -198,7 +198,7 @@ export default function MultiDimensionSimulator({
           <span className="text-xs opacity-80">预期市场贡献规模</span>
           <div className="flex items-center space-x-1">
             <span className="text-xs opacity-60">总积分</span>
-            <span className="text-2xl font-bold text-[#FFA726]">{simulation.totalPU}</span>
+            <span className="text-2xl font-bold text-yellow-400">{simulation.totalPU}</span>
             <span className="text-xs opacity-80">PU</span>
           </div>
         </div>
@@ -212,10 +212,10 @@ export default function MultiDimensionSimulator({
           {showLeverageEffect && (
             <div className="flex items-center justify-between border-t border-white/20 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="flex items-center space-x-1">
-                <Zap className="w-3 h-3 text-[#FFA726]" />
+                <Zap className="w-3 h-3 text-yellow-400" />
                 <span className="opacity-80">杠杆放大后</span>
               </div>
-              <span className="text-xl font-bold text-[#FFA726]">
+              <span className="text-xl font-bold text-yellow-400">
                 +{simulation.leveragedEquityIncrease.toFixed(4)}%
               </span>
             </div>

@@ -158,10 +158,10 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> =
       {/* 顶部：周数 + 确权印章 */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="text-base font-semibold text-[#424242]">
+          <div className="text-base font-semibold text-gray-900">
             {report.weekNumber}
           </div>
-          <div className="text-xs text-[#757575] mt-0.5">
+          <div className="text-xs text-gray-500 mt-0.5">
             {report.dateRange}
           </div>
         </div>
@@ -169,27 +169,27 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> =
           w-12 h-12 rounded-full flex items-center justify-center
           ${isIdle ? 'bg-gray-300' : 'bg-[#CBA471]/10'}
         `}>
-          <Shield className={`w-6 h-6 ${isIdle ? 'text-[#757575]' : 'text-[#CBA471]'}`} />
+          <Shield className={`w-6 h-6 ${isIdle ? 'text-gray-400' : 'text-[#CBA471]'}`} />
         </div>
       </div>
 
       {/* 中间：定格数据 */}
       {isIdle ? (
         <div className="text-center py-4">
-          <div className="text-sm text-[#757575]">本周未进行确权</div>
-          <div className="text-xs text-[#757575] mt-1">资产静止状态</div>
+          <div className="text-sm text-gray-500">本周未进行确权</div>
+          <div className="text-xs text-gray-400 mt-1">资产静止状态</div>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <div className="text-xs text-[#757575] mb-1">定格权重</div>
+            <div className="text-xs text-gray-500 mb-1">定格权重</div>
             <div className="text-2xl font-bold text-[#CBA471]">
               +{report.weightGain.toFixed(4)}%
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-[#757575] mb-1">定格股权</div>
-            <div className="text-lg font-medium text-[#424242]">
+            <div className="text-xs text-gray-500 mb-1">定格股权</div>
+            <div className="text-lg font-medium text-gray-900">
               +{report.equityGain} 张
             </div>
           </div>
@@ -199,8 +199,8 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> =
       {/* 底部：区块链哈希 */}
       {!isIdle && (
         <>
-          <div className="border-t border-[#E0E0E0] pt-3">
-            <div className="text-[10px] text-[#757575] truncate">
+          <div className="border-t border-gray-200 pt-3">
+            <div className="text-[10px] text-gray-400 truncate">
               区块链存证哈希：{report.blockchainHash.slice(0, -6)}******
             </div>
           </div>
@@ -242,7 +242,7 @@ const EquityHistoryArchive: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
-        <div className="text-[#757575]">加载中...</div>
+        <div className="text-gray-500">加载中...</div>
       </div>
     );
   }
@@ -251,7 +251,7 @@ const EquityHistoryArchive: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#757575] mb-4">加载失败，请稍后重试</p>
+          <p className="text-gray-500 mb-4">加载失败，请稍后重试</p>
           <button
             onClick={() => refetch()}
             className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:opacity-90"
@@ -266,15 +266,15 @@ const EquityHistoryArchive: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航 */}
-      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
           <button
             onClick={() => setLocation('/parent/my-equity')}
             className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-[#424242]" />
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-lg font-semibold text-[#424242] ml-2">
+          <h1 className="text-lg font-semibold text-gray-900 ml-2">
             历史确权周报
           </h1>
         </div>
@@ -333,7 +333,7 @@ const EquityHistoryArchive: React.FC = () => {
       {/* 中间：资产增长曲线图 */}
       <div className="bg-white m-4 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-[#424242]">资产增长趋势</div>
+          <div className="text-sm font-semibold text-gray-900">资产增长趋势</div>
           <TrendingUp className="w-4 h-4 text-[#CBA471]" />
         </div>
         <AssetGrowthChart
@@ -350,29 +350,29 @@ const EquityHistoryArchive: React.FC = () => {
       {/* 股权统计区域 */}
       <div className="bg-white mx-4 mb-4 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-[#424242]">股权统计</div>
+          <div className="text-sm font-semibold text-gray-900">股权统计</div>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
-            <div className="text-xs text-[#757575] mb-1">累计股权</div>
+            <div className="text-xs text-gray-500 mb-1">累计股权</div>
             <div className="text-2xl font-bold text-[#CBA471]">
               {allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
-            <div className="text-xs text-[#757575] mt-0.5">张</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-[#757575] mb-1">本月股权</div>
-            <div className="text-2xl font-bold text-[#424242]">
+            <div className="text-xs text-gray-500 mb-1">本月股权</div>
+            <div className="text-2xl font-bold text-gray-900">
               {allReports.filter(r => r.status === 'confirmed' && r.weekNumber.includes('W07')).reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
-            <div className="text-xs text-[#757575] mt-0.5">张</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-[#757575] mb-1">平均周股权</div>
-            <div className="text-2xl font-bold text-[#424242]">
+            <div className="text-xs text-gray-500 mb-1">平均周股权</div>
+            <div className="text-2xl font-bold text-gray-900">
               {Math.round(allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0) / allReports.filter(r => r.status === 'confirmed').length)}
             </div>
-            <div className="text-xs text-[#757575] mt-0.5">张</div>
+            <div className="text-xs text-gray-400 mt-0.5">张</div>
           </div>
         </div>
       </div>
@@ -383,19 +383,19 @@ const EquityHistoryArchive: React.FC = () => {
           <button className="px-4 py-2 rounded-lg bg-[#D32F2F] text-white text-sm font-medium whitespace-nowrap">
             全部
           </button>
-          <button className="px-4 py-2 rounded-lg bg-white text-[#424242] text-sm font-medium whitespace-nowrap border border-[#E0E0E0]">
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
             2026年
           </button>
-          <button className="px-4 py-2 rounded-lg bg-white text-[#424242] text-sm font-medium whitespace-nowrap border border-[#E0E0E0]">
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
             Q1
           </button>
-          <button className="px-4 py-2 rounded-lg bg-white text-[#424242] text-sm font-medium whitespace-nowrap border border-[#E0E0E0]">
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
             Q2
           </button>
-          <button className="px-4 py-2 rounded-lg bg-white text-[#424242] text-sm font-medium whitespace-nowrap border border-[#E0E0E0]">
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
             已确权
           </button>
-          <button className="px-4 py-2 rounded-lg bg-white text-[#424242] text-sm font-medium whitespace-nowrap border border-[#E0E0E0]">
+          <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">
             未确权
           </button>
         </div>
@@ -417,7 +417,7 @@ const EquityHistoryArchive: React.FC = () => {
             <button
               onClick={handleLoadMore}
               disabled={isLoadingMore}
-              className="px-6 py-3 bg-white text-[#424242] text-sm font-medium rounded-lg border border-[#E0E0E0] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoadingMore ? '加载中...' : `加载更多（还有 ${allReports.length - displayCount} 周）`}
             </button>
@@ -426,7 +426,7 @@ const EquityHistoryArchive: React.FC = () => {
 
         {/* 已加载全部提示 */}
         {!hasMore && allReports.length > 10 && (
-          <div className="text-center text-sm text-[#757575] pt-4">
+          <div className="text-center text-sm text-gray-400 pt-4">
             已加载全部 {allReports.length} 周的确权记录
           </div>
         )}

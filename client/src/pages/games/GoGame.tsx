@@ -482,7 +482,7 @@ export default function GoGame() {
                     className={`rounded-full z-20 shadow-md transition-transform
                       ${cell === "black" 
                         ? "bg-gradient-to-br from-gray-700 to-black" 
-                        : "bg-gradient-to-br from-white to-gray-200 border border-[#E0E0E0]"
+                        : "bg-gradient-to-br from-white to-gray-200 border border-gray-300"
                       }
                       ${isLastMove ? "ring-2 ring-red-500" : ""}
                     `}
@@ -524,9 +524,9 @@ export default function GoGame() {
             
             {/* 当前选择的孩子 */}
             {currentKid && (
-              <Card className="p-4 max-w-sm w-full bg-gradient-to-r from-amber-50 to-amber-100 border-[#FFA726]">
+              <Card className="p-4 max-w-sm w-full bg-gradient-to-r from-amber-50 to-amber-100 border-amber-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#FFA726]">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-amber-300">
                     {currentKid.avatar ? (
                       <img src={currentKid.avatar} alt={currentKid.name} className="w-full h-full object-cover" />
                     ) : (
@@ -609,8 +609,8 @@ export default function GoGame() {
           <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
             <div className="text-center">
               <Trophy className={`w-20 h-20 mx-auto mb-4 ${
-                gameState.winner === "black" ? "text-[#424242]" : 
-                gameState.winner === "white" ? "text-[#757575]" : "text-[#FFA726]"
+                gameState.winner === "black" ? "text-gray-800" : 
+                gameState.winner === "white" ? "text-gray-400" : "text-amber-500"
               }`} />
               <h2 className="text-2xl font-bold mb-2">
                 {gameState.winner === "black" ? "🎉 黑棋获胜！" : 
@@ -633,7 +633,7 @@ export default function GoGame() {
                   <div className={`w-6 h-6 rounded-full ${
                     gameState?.currentPlayer === "black" 
                       ? "bg-gradient-to-br from-gray-700 to-black" 
-                      : "bg-gradient-to-br from-white to-gray-200 border border-[#E0E0E0]"
+                      : "bg-gradient-to-br from-white to-gray-200 border border-gray-300"
                   }`} />
                   <div>
                     <p className="font-semibold">
@@ -676,7 +676,7 @@ export default function GoGame() {
                 <span>吃子: {gameState?.blackCaptures || 0}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Circle className="w-4 h-4 fill-white text-[#757575]" />
+                <Circle className="w-4 h-4 fill-white text-gray-400" />
                 <span>吃子: {gameState?.whiteCaptures || 0}</span>
               </div>
             </div>

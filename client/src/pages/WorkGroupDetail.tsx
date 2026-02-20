@@ -134,7 +134,7 @@ export default function WorkGroupDetail() {
         ) : members.length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <UserPlus className="h-8 w-8 text-[#757575]" />
+              <UserPlus className="h-8 w-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-[#222222] mb-2">暂无人员</h3>
             <p className="text-[#757575] mb-6">添加第一个人员，开始跟进工作节点</p>

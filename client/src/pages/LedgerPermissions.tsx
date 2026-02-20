@@ -157,18 +157,18 @@ const LedgerPermissions = () => {
       {/* 权限表格 */}
       <div className="bg-white">
         {/* 表头 */}
-        <div className="grid grid-cols-5 border-b border-[#E0E0E0] text-sm text-[#424242] font-medium">
+        <div className="grid grid-cols-5 border-b border-gray-200 text-sm text-gray-700 font-medium">
           <div className="py-3 px-2 text-center flex items-center justify-center">成员</div>
-          <div className="py-3 px-2 text-center border-l border-[#E0E0E0] flex items-center justify-center">
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
             <span className="leading-tight">查看<br />账目</span>
           </div>
-          <div className="py-3 px-2 text-center border-l border-[#E0E0E0] flex items-center justify-center">
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
             <span className="leading-tight">添加<br />账目</span>
           </div>
-          <div className="py-3 px-2 text-center border-l border-[#E0E0E0] flex items-center justify-center">
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
             <span className="leading-tight">修改<br />账目</span>
           </div>
-          <div className="py-3 px-2 text-center border-l border-[#E0E0E0] flex items-center justify-center">
+          <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
             <span className="leading-tight">删除<br />账目</span>
           </div>
         </div>
@@ -177,7 +177,7 @@ const LedgerPermissions = () => {
         {members.map((member) => (
           <div
             key={member.id}
-            className="grid grid-cols-5 border-b border-[#E0E0E0]"
+            className="grid grid-cols-5 border-b border-gray-100"
           >
             {/* 成员信息 */}
             <div className="py-4 px-2 flex flex-col items-center justify-center gap-1">
@@ -186,13 +186,13 @@ const LedgerPermissions = () => {
                 avatar={member.userAvatar}
                 size="sm"
               />
-              <span className="text-xs text-[#757575] truncate max-w-[60px]">
+              <span className="text-xs text-gray-600 truncate max-w-[60px]">
                 {member.userName}
               </span>
             </div>
 
             {/* 查看账目权限 */}
-            <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
@@ -207,7 +207,7 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 添加账目权限 */}
-            <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
@@ -222,7 +222,7 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 修改账目权限 */}
-            <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
@@ -237,7 +237,7 @@ const LedgerPermissions = () => {
             </div>
 
             {/* 删除账目权限 */}
-            <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
@@ -254,11 +254,11 @@ const LedgerPermissions = () => {
         ))}
 
         {/* 新加入成员 */}
-        <div className="grid grid-cols-5 border-b border-[#E0E0E0] bg-gray-50">
-          <div className="py-4 px-2 flex items-center justify-center text-[#757575] text-sm">
+        <div className="grid grid-cols-5 border-b border-gray-100 bg-gray-50">
+          <div className="py-4 px-2 flex items-center justify-center text-gray-500 text-sm">
             <span className="leading-tight">新加入<br />成员</span>
           </div>
-          <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
             <button
               onClick={(e) => showPermissionMenu(e, 'default', "view")}
               className={getPermissionButtonClass(defaultPermissions.view)}
@@ -267,7 +267,7 @@ const LedgerPermissions = () => {
               {getPermissionText(defaultPermissions.view)}
             </button>
           </div>
-          <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
             <button
               onClick={(e) => showPermissionMenu(e, 'default', "add")}
               className={getPermissionButtonClass(defaultPermissions.add)}
@@ -276,7 +276,7 @@ const LedgerPermissions = () => {
               {getPermissionText(defaultPermissions.add)}
             </button>
           </div>
-          <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
             <button
               onClick={(e) => showPermissionMenu(e, 'default', "edit")}
               className={getPermissionButtonClass(defaultPermissions.edit)}
@@ -285,7 +285,7 @@ const LedgerPermissions = () => {
               {getPermissionText(defaultPermissions.edit)}
             </button>
           </div>
-          <div className="py-4 px-2 flex items-center justify-center border-l border-[#E0E0E0]">
+          <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
             <button
               onClick={(e) => showPermissionMenu(e, 'default', "delete")}
               className={getPermissionButtonClass(defaultPermissions.delete)}
@@ -298,7 +298,7 @@ const LedgerPermissions = () => {
       </div>
 
       {/* 说明文字 */}
-      <div className="p-4 text-xs text-[#757575]">
+      <div className="p-4 text-xs text-gray-500">
         <p className="mb-2">
           <span className="text-[#4CAF50] font-medium">全部</span>：可以查看/操作账本中的所有账目
         </p>
@@ -318,7 +318,7 @@ const LedgerPermissions = () => {
           
           {/* 菜单 */}
           <div
-            className="fixed z-50 bg-white rounded-lg shadow-lg border border-[#E0E0E0] overflow-hidden"
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden"
             style={{
               top: `${permissionMenu.position.top}px`,
               left: `${permissionMenu.position.left}px`,
@@ -328,19 +328,19 @@ const LedgerPermissions = () => {
           >
             <button
               onClick={() => selectPermission("all")}
-              className="w-full px-4 py-3 text-sm text-[#4CAF50] font-medium text-center border-b border-[#E0E0E0] last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-[#4CAF50] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               全部
             </button>
             <button
               onClick={() => selectPermission("own")}
-              className="w-full px-4 py-3 text-sm text-[#CBA471] font-medium text-center border-b border-[#E0E0E0] last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-[#CBA471] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               仅自己
             </button>
             <button
               onClick={() => selectPermission("none")}
-              className="w-full px-4 py-3 text-sm text-[#D32F2F] font-medium text-center border-b border-[#E0E0E0] last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-[#D32F2F] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               不允许
             </button>

@@ -62,7 +62,7 @@ export default function EditLedgerName() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-[#757575]">加载中...</div>
+        <div className="text-gray-500">加载中...</div>
       </div>
     );
   }
@@ -70,15 +70,15 @@ export default function EditLedgerName() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             className="p-2 -ml-2"
           >
-            <ChevronLeft className="w-6 h-6 text-[#424242]" />
+            <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
-          <h1 className="text-lg font-medium text-[#424242]">修改账本名称</h1>
+          <h1 className="text-lg font-medium text-gray-900">修改账本名称</h1>
           <div className="w-10"></div>
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function EditLedgerName() {
       <div className="bg-white mt-3 p-4">
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm text-[#757575]">账本名称</label>
+            <label className="text-sm text-gray-600">账本名称</label>
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -95,7 +95,7 @@ export default function EditLedgerName() {
               className="text-base"
               maxLength={20}
             />
-            <div className="text-xs text-[#757575] text-right">
+            <div className="text-xs text-gray-400 text-right">
               {newName.length}/20
             </div>
           </div>

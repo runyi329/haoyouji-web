@@ -119,8 +119,8 @@ const PromotionRules: React.FC = () => {
       <div>
       {/* 用户层 */}
       <div className="p-4">
-        <h2 className="text-lg font-bold text-[#424242] mb-2">用户层(使用型)</h2>
-        <p className="text-sm text-[#757575] mb-4">
+        <h2 className="text-lg font-bold text-gray-800 mb-2">用户层(使用型)</h2>
+        <p className="text-sm text-gray-600 mb-4">
           适合专注于个人人脉整理与日常社交的用户,我们为您准备了丰富的礼品与活动。
         </p>
         
@@ -130,33 +130,33 @@ const PromotionRules: React.FC = () => {
               {userTiers.map((tier, index) => (
                 <>
                   {/* 第1行:等级名称 + 3个指标 */}
-                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-[#E0E0E0]' : ''}>
-                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-[#E0E0E0] text-center align-middle py-3">
+                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
+                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
                       <div className="flex flex-col items-center justify-center">
                         <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar1}</div>
                         <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar2}</div>
                       </div>
                     </td>
-                    <td className="text-center py-3 px-2 border-r border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575]">
-                        人脉×<span className="font-bold text-[#424242]">{tier.contacts}</span>
+                    <td className="text-center py-3 px-2 border-r border-gray-200">
+                      <div className="text-xs text-gray-600">
+                        人脉×<span className="font-bold text-gray-800">{tier.contacts}</span>
                       </div>
                     </td>
-                    <td className="text-center py-3 px-2 border-r border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575]">
-                        标签×<span className="font-bold text-[#424242]">{tier.tagsPerPerson}</span>
+                    <td className="text-center py-3 px-2 border-r border-gray-200">
+                      <div className="text-xs text-gray-600">
+                        标签×<span className="font-bold text-gray-800">{tier.tagsPerPerson}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2">
-                      <div className="text-xs text-[#757575]">
-                        联络×<span className="font-bold text-[#424242]">{tier.frequency}</span>
+                      <div className="text-xs text-gray-600">
+                        联络×<span className="font-bold text-gray-800">{tier.frequency}</span>
                       </div>
                     </td>
                   </tr>
                   {/* 第2行:权益(合并3列,添加上边框) */}
                   <tr key={`${index}-row2`}>
-                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50 border-t border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575] leading-relaxed">
+                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50 border-t border-gray-200">
+                      <div className="text-xs text-gray-600 leading-relaxed">
                         {tier.benefit}
                       </div>
                     </td>
@@ -170,8 +170,8 @@ const PromotionRules: React.FC = () => {
 
       {/* 节点层 */}
       <div className="p-4">
-        <h2 className="text-lg font-bold text-[#424242] mb-2">节点层(经营型)</h2>
-        <p className="text-sm text-[#757575] mb-4">
+        <h2 className="text-lg font-bold text-gray-800 mb-2">节点层(经营型)</h2>
+        <p className="text-sm text-gray-600 mb-4">
           适合致力于人脉资产经营与价值创造的合作伙伴,您将深度参与公司的成长和利润分享。
         </p>
         
@@ -181,33 +181,33 @@ const PromotionRules: React.FC = () => {
               {nodeTiers.map((tier, index) => (
                 <>
                   {/* 第1行:等级名称 + 3个指标 */}
-                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-[#E0E0E0]' : ''}>
-                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-[#E0E0E0] text-center align-middle py-3">
+                  <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
+                    <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
                       <div className="flex flex-col items-center justify-center">
                         <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar1}</div>
                         <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar2}</div>
                       </div>
                     </td>
-                    <td className="text-center py-3 px-2 border-r border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575]">
-                        人脉×<span className="font-bold text-[#424242]">{tier.contacts}</span>
+                    <td className="text-center py-3 px-2 border-r border-gray-200">
+                      <div className="text-xs text-gray-600">
+                        人脉×<span className="font-bold text-gray-800">{tier.contacts}</span>
                       </div>
                     </td>
-                    <td className="text-center py-3 px-2 border-r border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575]">
-                        标签×<span className="font-bold text-[#424242]">{tier.tagsPerPerson}</span>
+                    <td className="text-center py-3 px-2 border-r border-gray-200">
+                      <div className="text-xs text-gray-600">
+                        标签×<span className="font-bold text-gray-800">{tier.tagsPerPerson}</span>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2">
-                      <div className="text-xs text-[#757575]">
-                        联络×<span className="font-bold text-[#424242]">{tier.frequency}</span>
+                      <div className="text-xs text-gray-600">
+                        联络×<span className="font-bold text-gray-800">{tier.frequency}</span>
                       </div>
                     </td>
                   </tr>
                   {/* 第2行:权益(合并3列,添加上边框) */}
                   <tr key={`${index}-row2`}>
-                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50 border-t border-[#E0E0E0]">
-                      <div className="text-xs text-[#757575] leading-relaxed">
+                    <td colSpan={3} className="px-3 py-2.5 bg-gray-50/50 border-t border-gray-200">
+                      <div className="text-xs text-gray-600 leading-relaxed">
                         {tier.benefit}
                       </div>
                     </td>
@@ -222,17 +222,17 @@ const PromotionRules: React.FC = () => {
       {/* 考核指标说明 */}
       <div className="p-4 pb-6">
         <div className="bg-white rounded-lg shadow-sm p-4">
-          <h3 className="text-xs font-bold text-[#424242] mb-3">晋升攻略</h3>
-          <div className="space-y-3 text-xs text-[#757575] leading-relaxed">
+          <h3 className="text-xs font-bold text-gray-700 mb-3">晋升攻略</h3>
+          <div className="space-y-3 text-xs text-gray-600 leading-relaxed">
             <div>
               <p className="mb-2">
-                <span className="font-semibold text-[#424242]">人脉:</span>
+                <span className="font-semibold text-gray-700">人脉:</span>
                 账户内添加的联系人数量,不考虑信息完整度。
               </p>
               {promotionStats && (
-                <div className="p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-center">
-                    <span className="text-[#757575]">使用至今已添加：</span>
+                    <span className="text-gray-600">使用至今已添加：</span>
                     <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.contactCount}人
                     </span>
@@ -242,13 +242,13 @@ const PromotionRules: React.FC = () => {
             </div>
             <div>
               <p className="mb-2">
-                <span className="font-semibold text-[#424242]">标签:</span>
+                <span className="font-semibold text-gray-700">标签:</span>
                 所有好友的标签总和（包含全局标签和个人标签）。
               </p>
               {promotionStats && (
-                <div className="p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-center">
-                    <span className="text-[#757575]">使用至今已添加：</span>
+                    <span className="text-gray-600">使用至今已添加：</span>
                     <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.tagCount}个
                     </span>
@@ -258,25 +258,25 @@ const PromotionRules: React.FC = () => {
             </div>
             <div>
               <p className="mb-2">
-                <span className="font-semibold text-[#424242]">联络:</span>
+                <span className="font-semibold text-gray-700">联络:</span>
                 每周日晚上12点作为统计节点，统计该节点往前推30天的累计联络次数。符合条件则接下来一周保持该级别，下周日再次统计。
               </p>
               {promotionStats?.assessmentPeriod && (
-                <div className="p-3 bg-gray-50 rounded-lg border border-[#E0E0E0]">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="text-xs space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <span className="text-[#757575]">本考核周期联络：</span>
+                    <span className="text-gray-600">本考核周期联络：</span>
                     <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.assessmentPeriod.currentInteractionCount}次
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[#757575]">
+                  <div className="flex justify-between items-center text-gray-500">
                     <span>考核期进度：</span>
                     <span>
                       已过{promotionStats.assessmentPeriod.daysPassed}天，剩{promotionStats.assessmentPeriod.daysRemaining}天
                     </span>
                   </div>
-                  <div className="text-[10px] text-[#757575] mt-2 pt-2 border-t border-[#E0E0E0]">
+                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-200">
                     考核期：{promotionStats.assessmentPeriod.startDate} 至 {promotionStats.assessmentPeriod.endDate}
                   </div>
                 </div>

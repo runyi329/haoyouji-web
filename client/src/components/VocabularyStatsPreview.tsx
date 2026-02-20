@@ -21,14 +21,14 @@ export function VocabularyStatsPreview({ stats, onViewDetails }: VocabularyStats
   ];
 
   return (
-    <Card className="p-4 bg-gradient-to-br from-white to-white border-[#4CAF50]">
+    <Card className="p-4 bg-gradient-to-br from-white to-white border-green-200">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-base font-semibold text-[#4CAF50]">私人定制词库概览</h3>
+        <h3 className="text-base font-semibold text-green-800">私人定制词库概览</h3>
         <Button
           variant="ghost"
           size="sm"
           onClick={onViewDetails}
-          className="text-[#4CAF50] hover:text-[#4CAF50] hover:bg-[#E8F5E9] gap-1 h-8 px-2"
+          className="text-green-700 hover:text-green-900 hover:bg-[#E8F5E9] gap-1 h-8 px-2"
         >
           <span className="text-sm">详情</span>
           <ChevronRight className="w-4 h-4" />
@@ -40,7 +40,7 @@ export function VocabularyStatsPreview({ stats, onViewDetails }: VocabularyStats
             key={index}
             className="flex flex-col items-center justify-center p-3 bg-white/60 rounded-lg"
           >
-            <span className="text-xs text-[#757575] mb-1">{item.label}</span>
+            <span className="text-xs text-gray-600 mb-1">{item.label}</span>
             <span className="text-2xl font-bold text-[#4CAF50]">{item.count}</span>
           </div>
         ))}

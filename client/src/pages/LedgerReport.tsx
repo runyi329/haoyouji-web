@@ -169,19 +169,19 @@ function ListViewContent({
       <div className="bg-[#FFEBEE] rounded-lg p-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-xs text-[#757575] mb-1">{selectedYear}年收入</div>
+            <div className="text-xs text-gray-500 mb-1">{selectedYear}年收入</div>
             <div className="text-lg font-semibold text-[#4CAF50]">
               {formatAmount(yearIncome)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-[#757575] mb-1">{selectedYear}年结余</div>
-            <div className={`text-lg font-semibold ${yearBalance >= 0 ? 'text-[#757575]' : 'text-[#757575]'}`}>
+            <div className="text-xs text-gray-500 mb-1">{selectedYear}年结余</div>
+            <div className={`text-lg font-semibold ${yearBalance >= 0 ? 'text-gray-600' : 'text-gray-600'}`}>
               {formatAmount(yearBalance)}
             </div>
           </div>
           <div>
-            <div className="text-xs text-[#757575] mb-1">{selectedYear}年支出</div>
+            <div className="text-xs text-gray-500 mb-1">{selectedYear}年支出</div>
             <div className="text-lg font-semibold text-[#D32F2F]">
               {formatAmount(yearExpense)}
             </div>
@@ -197,7 +197,7 @@ function ListViewContent({
         </div>
         <table className="w-full">
           <thead>
-            <tr className="text-sm text-[#757575]">
+            <tr className="text-sm text-gray-500">
               <th className="text-left py-2">昵称</th>
               <th className="text-right py-2">收入</th>
               <th className="text-right py-2">支出</th>
@@ -207,7 +207,7 @@ function ListViewContent({
           <tbody>
             {reportData?.memberStats?.length > 0 ? (
               reportData.memberStats.map((member: any, index: number) => (
-                <tr key={index} className="border-t border-[#E0E0E0]">
+                <tr key={index} className="border-t border-gray-100">
                   <td className="py-3 flex items-center">
                     <div className="mr-2">
                       <UserAvatar
@@ -235,8 +235,8 @@ function ListViewContent({
                 </tr>
               ))
             ) : (
-              <tr className="border-t border-[#E0E0E0]">
-                <td colSpan={4} className="py-3 text-center text-[#757575]">
+              <tr className="border-t border-gray-100">
+                <td colSpan={4} className="py-3 text-center text-gray-400">
                   暂无数据
                 </td>
               </tr>
@@ -253,7 +253,7 @@ function ListViewContent({
         </div>
         <table className="w-full">
           <thead>
-            <tr className="text-sm text-[#757575]">
+            <tr className="text-sm text-gray-500">
               <th className="text-left py-2">月份</th>
               <th className="text-right py-2">收入</th>
               <th className="text-right py-2">支出</th>
@@ -262,7 +262,7 @@ function ListViewContent({
           </thead>
           <tbody>
             {monthlyData.map((month) => (
-              <tr key={month.month} className="border-t border-[#E0E0E0]">
+              <tr key={month.month} className="border-t border-gray-100">
                 <td className="py-3">{month.month}月</td>
                 <td className="py-3 text-right text-[#4CAF50]">
                   {formatAmount(month.income)}
@@ -506,7 +506,7 @@ function ChartViewContent({
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'month' 
                     ? 'bg-[#1976D2] text-white' 
-                    : 'bg-gray-100 text-[#757575]'
+                    : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 自然月
@@ -516,7 +516,7 @@ function ChartViewContent({
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'year' 
                     ? 'bg-[#1976D2] text-white' 
-                    : 'bg-gray-100 text-[#757575]'
+                    : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 自然年
@@ -526,7 +526,7 @@ function ChartViewContent({
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'custom' 
                     ? 'bg-[#1976D2] text-white' 
-                    : 'bg-gray-100 text-[#757575]'
+                    : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 自定义
@@ -537,11 +537,11 @@ function ChartViewContent({
             <div className="mb-4">
               {timeDimension === 'year' && (
                 <div>
-                  <label className="block text-sm text-[#757575] mb-1">选择年份</label>
+                  <label className="block text-sm text-gray-600 mb-1">选择年份</label>
                   <select
                     value={chartYear}
                     onChange={(e) => setChartYear(Number(e.target.value))}
-                    className="w-full p-2 border border-[#E0E0E0] rounded"
+                    className="w-full p-2 border border-gray-200 rounded"
                   >
                     {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
                       <option key={year} value={year}>{year}年</option>
@@ -552,11 +552,11 @@ function ChartViewContent({
               {timeDimension === 'month' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm text-[#757575] mb-1">选择年份</label>
+                    <label className="block text-sm text-gray-600 mb-1">选择年份</label>
                     <select
                       value={chartYear}
                       onChange={(e) => setChartYear(Number(e.target.value))}
-                      className="w-full p-2 border border-[#E0E0E0] rounded"
+                      className="w-full p-2 border border-gray-200 rounded"
                     >
                       {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
                         <option key={year} value={year}>{year}年</option>
@@ -564,11 +564,11 @@ function ChartViewContent({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-[#757575] mb-1">选择月份</label>
+                    <label className="block text-sm text-gray-600 mb-1">选择月份</label>
                     <select
                       value={chartMonth}
                       onChange={(e) => setChartMonth(Number(e.target.value))}
-                      className="w-full p-2 border border-[#E0E0E0] rounded"
+                      className="w-full p-2 border border-gray-200 rounded"
                     >
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                         <option key={month} value={month}>{month}月</option>
@@ -583,14 +583,14 @@ function ChartViewContent({
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="w-full max-w-full p-2 border border-[#E0E0E0] rounded text-sm"
+                    className="w-full max-w-full p-2 border border-gray-200 rounded text-sm"
                     placeholder="开始日期"
                   />
                   <input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="w-full max-w-full p-2 border border-[#E0E0E0] rounded text-sm"
+                    className="w-full max-w-full p-2 border border-gray-200 rounded text-sm"
                     placeholder="结束日期"
                   />
                 </div>
@@ -601,7 +601,7 @@ function ChartViewContent({
             <div className="flex gap-2">
               <button 
                 onClick={() => setShowTimePicker(false)}
-                className="flex-1 bg-gray-100 text-[#757575] py-2 rounded"
+                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded"
               >
                 取消
               </button>
@@ -625,9 +625,9 @@ function ChartViewContent({
         </div>
         
         {/* 最近30天每日收支折线图 */}
-        <div className="h-48 flex items-end justify-around border-b border-l border-[#E0E0E0] relative">
+        <div className="h-48 flex items-end justify-around border-b border-l border-gray-200 relative">
           {/* Y轴标签 */}
-          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-[#757575]">
+          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
             <span>{Math.max(...dailyData.map((d: any) => Math.max(d.income, d.expense)), 0).toFixed(0)}</span>
             <span>0</span>
           </div>
@@ -648,7 +648,7 @@ function ChartViewContent({
               <div key={index} className="flex flex-col items-center" style={{ width: '3%' }}>
                 <div className="flex items-end space-x-0.5 h-40 w-full justify-center">
                   <div 
-                    className="bg-[#FFA726] rounded-t"
+                    className="bg-orange-400 rounded-t"
                     style={{ 
                       width: '40%',
                       height: `${incomeHeight}%`, 
@@ -665,7 +665,7 @@ function ChartViewContent({
                   />
                 </div>
                 {/* X轴标签 - 每5天显示一次 */}
-                <span className="text-[10px] text-[#757575] mt-1">
+                <span className="text-[10px] text-gray-500 mt-1">
                   {showLabel ? dateLabel : ''}
                 </span>
               </div>
@@ -680,7 +680,7 @@ function ChartViewContent({
             <span>支出</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-[#FFA726] rounded-full mr-1"></div>
+            <div className="w-3 h-3 bg-orange-400 rounded-full mr-1"></div>
             <span>收入</span>
           </div>
         </div>
@@ -688,11 +688,11 @@ function ChartViewContent({
         {/* 平均值 */}
         <div className="mt-4 space-y-2">
           <div className="flex justify-between">
-            <span className="text-[#757575]">{daysPassed}天平均收入</span>
+            <span className="text-gray-600">{daysPassed}天平均收入</span>
             <span className="text-[#4CAF50]">{formatAmount(avgIncome)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[#757575]">{daysPassed}天平均支出</span>
+            <span className="text-gray-600">{daysPassed}天平均支出</span>
             <span className="text-[#D32F2F]">{formatAmount(avgExpense)}</span>
           </div>
         </div>
@@ -717,7 +717,7 @@ function ChartViewContent({
         {/* 分类列表 */}
         <table className="w-full">
           <thead>
-            <tr className="text-sm text-[#757575]">
+            <tr className="text-sm text-gray-500">
               <th className="text-left py-2">支出类型</th>
               <th className="text-center py-2">占比</th>
               <th className="text-right py-2">金额</th>
@@ -730,7 +730,7 @@ function ChartViewContent({
                   ? ((cat.amount / recentExpense) * 100).toFixed(0)
                   : 0;
                 return (
-                  <tr key={index} className="border-t border-[#E0E0E0]">
+                  <tr key={index} className="border-t border-gray-100">
                     <td className="py-3">{cat.category || "未分类"}</td>
                     <td className="py-3">
                       <div className="flex items-center justify-center">
@@ -750,8 +750,8 @@ function ChartViewContent({
                 );
               })
             ) : (
-              <tr className="border-t border-[#E0E0E0]">
-                <td colSpan={3} className="py-3 text-center text-[#757575]">
+              <tr className="border-t border-gray-100">
+                <td colSpan={3} className="py-3 text-center text-gray-400">
                   暂无数据
                 </td>
               </tr>
@@ -780,7 +780,7 @@ function ChartViewContent({
         {/* 分类列表 */}
         <table className="w-full">
           <thead>
-            <tr className="text-sm text-[#757575]">
+            <tr className="text-sm text-gray-500">
               <th className="text-left py-2">收入类型</th>
               <th className="text-center py-2">占比</th>
               <th className="text-right py-2">金额</th>
@@ -793,7 +793,7 @@ function ChartViewContent({
                   ? ((cat.amount / recentIncome) * 100).toFixed(0)
                   : 0;
                 return (
-                  <tr key={index} className="border-t border-[#E0E0E0]">
+                  <tr key={index} className="border-t border-gray-100">
                     <td className="py-3">{cat.category || "未分类"}</td>
                     <td className="py-3">
                       <div className="flex items-center justify-center">
@@ -813,8 +813,8 @@ function ChartViewContent({
                 );
               })
             ) : (
-              <tr className="border-t border-[#E0E0E0]">
-                <td colSpan={3} className="py-3 text-center text-[#757575]">
+              <tr className="border-t border-gray-100">
+                <td colSpan={3} className="py-3 text-center text-gray-400">
                   暂无数据
                 </td>
               </tr>
@@ -1138,7 +1138,7 @@ function CalendarViewContent({
           />
           <div className="absolute top-20 left-4 right-4 bg-white rounded-lg shadow-lg max-h-80 overflow-auto">
             <div className="p-3 border-b">
-              <span className="font-medium text-[#424242]">选择成员</span>
+              <span className="font-medium text-gray-800">选择成员</span>
             </div>
             {/* 全部成员选项 */}
             <div 
@@ -1148,7 +1148,7 @@ function CalendarViewContent({
               <div className="w-10 h-10 rounded-full bg-[#1976D2] flex items-center justify-center text-white mr-3">
                 <span>全</span>
               </div>
-              <span className="flex-1 text-[#424242]">全部成员</span>
+              <span className="flex-1 text-gray-800">全部成员</span>
               {selectedMemberIds.length === 0 && (
                 <span className="text-[#1976D2]">✓</span>
               )}
@@ -1168,7 +1168,7 @@ function CalendarViewContent({
                     size="md"
                   />
                 </div>
-                <span className="flex-1 text-[#424242]">{member.nickname || '未命名'}</span>
+                <span className="flex-1 text-gray-800">{member.nickname || '未命名'}</span>
                 {selectedMemberIds.includes(member.id) && (
                   <span className="text-[#1976D2]">✓</span>
                 )}
@@ -1244,7 +1244,7 @@ function CalendarViewContent({
         </div>
 
         {/* 月度统计 */}
-        <div className="px-4 py-2 bg-[#1976D2]/30 mx-4 rounded grid grid-cols-3 gap-2">
+        <div className="px-4 py-2 bg-blue-400/30 mx-4 rounded grid grid-cols-3 gap-2">
           <div className="text-center">
             <div className="text-xs opacity-80">{currentMonth}月收入</div>
             <div className="text-lg font-semibold">{formatAmount(monthlyStats.income)}</div>
@@ -1265,7 +1265,7 @@ function CalendarViewContent({
             <thead>
               <tr>
                 {weekDays.map((day) => (
-                  <th key={day} className="text-center text-xs py-2 text-white/80 font-normal border-b border-[#1976D2]/30">
+                  <th key={day} className="text-center text-xs py-2 text-white/80 font-normal border-b border-blue-400/30">
                     {day}
                   </th>
                 ))}
@@ -1277,7 +1277,7 @@ function CalendarViewContent({
                   {row.map((day, colIndex) => {
                     if (day === null) {
                       return (
-                        <td key={`empty-${rowIndex}-${colIndex}`} className="h-12 border-b border-r border-[#1976D2]/20" />
+                        <td key={`empty-${rowIndex}-${colIndex}`} className="h-12 border-b border-r border-blue-400/20" />
                       );
                     }
                     
@@ -1288,7 +1288,7 @@ function CalendarViewContent({
                     return (
                       <td 
                         key={`day-${day}`}
-                        className={`h-12 text-center border-b border-r border-[#1976D2]/20 cursor-pointer ${
+                        className={`h-12 text-center border-b border-r border-blue-400/20 cursor-pointer ${
                           isSelected ? "bg-[#FAF3ED]" : ""
                         }`}
                         onClick={() => setSelectedDate(day)}
@@ -1318,10 +1318,10 @@ function CalendarViewContent({
       {/* 当日明细区域 */}
       <div className="flex-1 bg-gray-100 overflow-auto">
         <div className="bg-white px-4 py-3 border-b flex items-center justify-between">
-          <span className="text-[#424242]">
+          <span className="text-gray-800">
             {currentYear}年{currentMonth}月{selectedDate}日
           </span>
-          <span className="text-sm text-[#757575]">
+          <span className="text-sm text-gray-500">
             收:{formatAmount(selectedDayStats.income)} 支:{formatAmount(selectedDayStats.expense)} 余:{formatAmount(selectedDayStats.balance)}
           </span>
         </div>
@@ -1331,7 +1331,7 @@ function CalendarViewContent({
             dayRecords.map((record: any) => (
               <div 
                 key={record.id} 
-                className="px-4 py-3 border-b border-[#E0E0E0] cursor-pointer flex items-center"
+                className="px-4 py-3 border-b border-gray-100 cursor-pointer flex items-center"
                 onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
               >
                 <div className="mr-3">
@@ -1347,19 +1347,19 @@ function CalendarViewContent({
                     <span className={`w-2 h-2 rounded-full mr-2 ${
                       record.type === "income" ? "bg-[#4CAF50]" : "bg-[#D32F2F]"
                     }`} />
-                    <span className="text-[#424242]">{record.categoryName || "未分类"}</span>
+                    <span className="text-gray-800">{record.categoryName || "未分类"}</span>
                   </div>
                 </div>
                 
                 <span className={`font-medium ${
-                  record.type === "income" ? "text-[#4CAF50]" : "text-[#424242]"
+                  record.type === "income" ? "text-[#4CAF50]" : "text-gray-800"
                 }`}>
                   {record.type === "income" ? "+" : "-"}{formatAmount(record.amount)}
                 </span>
               </div>
             ))
           ) : (
-            <div className="py-8 text-center text-[#757575]">
+            <div className="py-8 text-center text-gray-400">
               暂无记录
             </div>
           )}

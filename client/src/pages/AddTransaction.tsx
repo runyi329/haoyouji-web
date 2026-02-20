@@ -170,7 +170,7 @@ const AddTransaction = () => {
 
   // 预设子分类（包括三级分类）
   const defaultSubCategories: Record<number, any[]> = {
-    "2": [{ id: 25, name: "淘宝", icon: "🛍️", color: "bg-[#D32F2F]", parentId: 2 }],
+    "2": [{ id: 25, name: "淘宝", icon: "🛍️", color: "bg-red-400", parentId: 2 }],
     "25": [
       { id: 251, name: "服饰", icon: "👔", color: "bg-[#D32F2F]", parentId: 25 },
       { id: 252, name: "数码", icon: "📱", color: "bg-[#D32F2F]", parentId: 25 },
@@ -555,14 +555,14 @@ const AddTransaction = () => {
         {/* 多级分类选择 */}
         <div className="bg-white mt-1">
           {/* 一级分类标题 */}
-          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-[#757575]">选择分类</div>
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 - 每级单独一行 */}
           {categoryLevels.map((categories, level) => {
             if (categories.length === 0) return null;
             
             return (
-              <div key={level} className="border-t border-[#E0E0E0]">
+              <div key={level} className="border-t border-gray-100">
                 <div className="p-3">
                   <div className="flex flex-wrap gap-2">
                     {categories.map((category, index) => {
@@ -575,7 +575,7 @@ const AddTransaction = () => {
                           className={`px-3 py-1.5 rounded text-xs transition-colors ${
                             isSelected
                               ? `${colorClass} text-white font-medium`
-                              : "bg-gray-100 text-[#424242] hover:bg-gray-200"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                           }`}
                           onClick={() => handleCategorySelect(category.id, level)}
                         >
@@ -600,7 +600,7 @@ const AddTransaction = () => {
           })}
           
           {isLoadingTop && (
-            <div className="text-xs text-[#757575] p-3">加载分类中...</div>
+            <div className="text-xs text-gray-400 p-3">加载分类中...</div>
           )}
           
 
@@ -610,7 +610,7 @@ const AddTransaction = () => {
 
         {/* 账户选择 */}
         <div className="bg-white mt-1">
-          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-[#757575]">
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
             {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
           <div className="p-3">
@@ -621,7 +621,7 @@ const AddTransaction = () => {
                 className={`px-3 py-1.5 rounded text-xs ${
                   selectedAccounts.includes(account)
                     ? "bg-[#D32F2F] text-white"
-                    : "bg-gray-100 text-[#424242]"
+                    : "bg-gray-100 text-gray-700"
                 }`}
                 onClick={() => {
                   if (selectedAccounts.includes(account)) {
@@ -642,7 +642,7 @@ const AddTransaction = () => {
 
         {/* 报销状态选择 */}
         <div className="bg-white mt-1">
-          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-[#757575]">
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
             报销状态
           </div>
           <div className="p-3">
@@ -650,7 +650,7 @@ const AddTransaction = () => {
               className={`px-3 py-1.5 rounded text-xs ${
                 reimbursementStatus === 'pending'
                   ? "bg-[#1976D2] text-white"
-                  : "bg-gray-100 text-[#424242]"
+                  : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
             >
@@ -666,7 +666,7 @@ const AddTransaction = () => {
             placeholder="备注"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="flex-1 px-3 py-3 border-none outline-none text-sm text-[#424242]"
+            className="flex-1 px-3 py-3 border-none outline-none text-sm text-gray-700"
           />
           <input
             ref={fileInputRef}
@@ -830,7 +830,7 @@ const AddTransaction = () => {
             <div className="flex items-center mb-3 relative">
               {/* 外层箭头 - 控制年份 */}
               <button onClick={prevYear} className="p-1.5">
-                <ChevronLeft className="w-5 h-5 text-[#757575]" />
+                <ChevronLeft className="w-5 h-5 text-gray-400" />
               </button>
               
               {/* 内层箭头 - 控制月份 */}
@@ -850,7 +850,7 @@ const AddTransaction = () => {
               
               {/* 外层箭头 - 控制年份 */}
               <button onClick={nextYear} className="p-1.5">
-                <ChevronRight className="w-5 h-5 text-[#757575]" />
+                <ChevronRight className="w-5 h-5 text-gray-400" />
               </button>
               
               {/* 今天按钮 */}

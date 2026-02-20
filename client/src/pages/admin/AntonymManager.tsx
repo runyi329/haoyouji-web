@@ -210,14 +210,14 @@ export default function AntonymManagement() {
                 <div className="flex-1">
                   <div className="flex items-center gap-4">
                     <span className="text-lg font-semibold">{pair.word}</span>
-                    <span className="text-[#757575]">←→</span>
+                    <span className="text-gray-400">←→</span>
                     <span className="text-lg font-semibold">{pair.antonym}</span>
                   </div>
                   <div className="flex gap-2 mt-2 text-sm text-muted-foreground">
-                    <span className="px-2 py-1 bg-[#F5F5F5] text-[#1976D2] rounded">
+                    <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                       {pair.category}
                     </span>
-                    <span className="px-2 py-1 bg-[#E8F5E9] text-[#4CAF50] rounded">
+                    <span className="px-2 py-1 bg-[#E8F5E9] text-green-700 rounded">
                       {difficultyMap[pair.difficulty]}
                     </span>
                   </div>

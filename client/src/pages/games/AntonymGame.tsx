@@ -445,7 +445,7 @@ export default function AntonymGame() {
             
             {/* 难度选择 */}
             <div className="space-y-3">
-              <h2 className="text-xl font-bold text-center text-[#424242]">
+              <h2 className="text-xl font-bold text-center text-gray-700">
                 选择难度
               </h2>
               <div className="flex gap-3 justify-center">
@@ -457,7 +457,7 @@ export default function AntonymGame() {
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.difficulty === 'beginner'
                       ? 'bg-[#4CAF50] text-white shadow-lg scale-105'
-                      : 'bg-white text-[#757575] hover:bg-gray-100'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   初级 (1字)
@@ -470,7 +470,7 @@ export default function AntonymGame() {
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.difficulty === 'advanced'
                       ? 'bg-[#CBA471] text-white shadow-lg scale-105'
-                      : 'bg-white text-[#757575] hover:bg-gray-100'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   高级 (2字)
@@ -480,7 +480,7 @@ export default function AntonymGame() {
             
             {/* 模式选择 */}
             <div className="space-y-3">
-              <h2 className="text-xl font-bold text-center text-[#424242]">
+              <h2 className="text-xl font-bold text-center text-gray-700">
                 选择模式
               </h2>
               <div className="flex gap-3 justify-center">
@@ -492,7 +492,7 @@ export default function AntonymGame() {
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.gameMode === 'choice'
                       ? 'bg-[#1976D2] text-white shadow-lg scale-105'
-                      : 'bg-white text-[#757575] hover:bg-gray-100'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   📝 选择题
@@ -505,7 +505,7 @@ export default function AntonymGame() {
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.gameMode === 'voice'
                       ? 'bg-[#D32F2F] text-white shadow-lg scale-105'
-                      : 'bg-white text-[#757575] hover:bg-gray-100'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   🎤 语音回答
@@ -513,7 +513,7 @@ export default function AntonymGame() {
               </div>
             </div>
             
-            <h2 className="text-2xl font-bold text-center text-[#424242]">
+            <h2 className="text-2xl font-bold text-center text-gray-800">
               选择题目数量
             </h2>
             
@@ -570,7 +570,7 @@ export default function AntonymGame() {
       return (
         <div className="min-h-screen bg-gradient-to-b from-blue-100 to-rose-100 p-4 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-lg text-[#757575]">加载中...</p>
+            <p className="text-lg text-gray-600">加载中...</p>
           </div>
         </div>
       );
@@ -593,7 +593,7 @@ export default function AntonymGame() {
             </div>
 
             <div>
-              <p className="text-sm text-[#757575] mb-2">
+              <p className="text-sm text-gray-600 mb-2">
                 第 {gameState.currentQuestion + 1} / {gameState.selectedQuestionCount} 题
               </p>
               <Progress 
@@ -602,8 +602,8 @@ export default function AntonymGame() {
               />
             </div>
 
-            <Card className="p-4 bg-[#F5F5F5] border-2 border-[#1976D2]">
-              <p className="text-center text-[#757575] mb-2">
+            <Card className="p-4 bg-[#F5F5F5] border-2 border-blue-200">
+              <p className="text-center text-gray-600 mb-2">
                 {gameState.gameMode === 'choice' ? `请选择“${currentPair.word}”的反义词` : `请说出“${currentPair.word}”的反义词`}
               </p>
               <p className="text-center text-3xl font-bold text-[#1976D2]">{currentPair.word}</p>
@@ -619,12 +619,12 @@ export default function AntonymGame() {
                     disabled={isAnswered}
                     className={`py-6 text-lg font-bold transition-all ${
                       !isAnswered
-                        ? "bg-white hover:bg-[#CBA471] text-[#424242]"
+                        ? "bg-yellow-400 hover:bg-[#CBA471] text-gray-800"
                         : option === currentPair.antonym
                         ? "bg-[#4CAF50] text-white"
                         : option === gameState.selectedAnswer
                         ? "bg-[#D32F2F] text-white"
-                        : "bg-gray-300 text-[#757575]"
+                        : "bg-gray-300 text-gray-600"
                     }`}
                   >
                     {option}
@@ -637,7 +637,7 @@ export default function AntonymGame() {
             {gameState.gameMode === 'voice' && (
               <div className="space-y-4">
                 {!isSupported && (
-                  <div className="bg-[#FFEBEE] border border-[#D32F2F] text-[#D32F2F] px-4 py-3 rounded">
+                  <div className="bg-[#FFEBEE] border border-red-400 text-[#D32F2F] px-4 py-3 rounded">
                     您的浏览器不支持语音识别功能，请使用 Chrome 或 Edge 浏览器。
                   </div>
                 )}
@@ -690,17 +690,17 @@ export default function AntonymGame() {
                   {isListening && (
                     <div className="text-center animate-pulse">
                       <p className="text-[#D32F2F] font-bold text-lg">🎤 请说出反义词...</p>
-                      <p className="text-[#757575] text-sm mt-1">系统正在认真听哦！</p>
+                      <p className="text-gray-500 text-sm mt-1">系统正在认真听哦！</p>
                     </div>
                   )}
                   
                   {!isListening && !voiceAnswer && (
-                    <p className="text-[#757575] text-sm">✨ 稍等，马上开始录音...</p>
+                    <p className="text-gray-500 text-sm">✨ 稍等，马上开始录音...</p>
                   )}
                   
                   {voiceAnswer && (
                     <div className="bg-gradient-to-r from-blue-100 to-rose-100 px-6 py-3 rounded-lg shadow-md">
-                      <p className="text-[#757575] text-sm">你说的是：</p>
+                      <p className="text-gray-600 text-sm">你说的是：</p>
                       <p className="text-[#1976D2] font-bold text-2xl">{voiceAnswer}</p>
                     </div>
                   )}
@@ -715,7 +715,7 @@ export default function AntonymGame() {
                 ) : (
                   <div>
                     <p className="text-[#D32F2F] font-bold text-lg">❌ 错误!</p>
-                    <p className="text-[#757575] text-sm mt-1">正确答案是: {currentPair.antonym}</p>
+                    <p className="text-gray-600 text-sm mt-1">正确答案是: {currentPair.antonym}</p>
                   </div>
                 )}
               </div>

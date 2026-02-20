@@ -85,13 +85,13 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
         onClick={(e) => e.stopPropagation()}
       >
         {/* 顶部：关闭按钮 */}
-        <div className="sticky top-0 bg-white border-b border-[#E0E0E0] px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-          <div className="text-lg font-bold text-[#424242]">确权证书</div>
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+          <div className="text-lg font-bold text-gray-900">确权证书</div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-[#757575]" />
+            <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
@@ -109,10 +109,10 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#C5B358]/10 mb-3">
                 <Award className="w-8 h-8 text-[#C5B358]" />
               </div>
-              <div className="text-2xl font-bold text-[#424242] mb-1">
+              <div className="text-2xl font-bold text-gray-900 mb-1">
                 {report.weekNumber}
               </div>
-              <div className="text-sm text-[#757575]">
+              <div className="text-sm text-gray-500">
                 {report.dateRange}
               </div>
             </div>
@@ -144,25 +144,25 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
 
           {/* 个人贡献明细 */}
           <div className="mb-6">
-            <div className="text-sm font-semibold text-[#424242] mb-3">
+            <div className="text-sm font-semibold text-gray-900 mb-3">
               个人贡献明细
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">人脉网络规模</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">人脉网络规模</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.personalContribution.networkSize} 人
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">标签完整度</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">标签完整度</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.personalContribution.tagCompleteness.toFixed(1)}
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">联络频次</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">联络频次</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.personalContribution.contactFrequency} 次
                 </span>
               </div>
@@ -171,25 +171,25 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
 
           {/* 共享贡献明细 */}
           <div className="mb-6">
-            <div className="text-sm font-semibold text-[#424242] mb-3">
+            <div className="text-sm font-semibold text-gray-900 mb-3">
               共享贡献明细
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">已培育高级节点</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">已培育高级节点</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.sharedContribution.seniorNodes} 名
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">已培育高端节点</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">已培育高端节点</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.sharedContribution.advancedNodes} 名
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
-                <span className="text-sm text-[#757575]">已培育超端节点</span>
-                <span className="text-sm font-medium text-[#424242]">
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">已培育超端节点</span>
+                <span className="text-sm font-medium text-gray-900">
                   {report.sharedContribution.superNodes} 名
                 </span>
               </div>
@@ -201,11 +201,11 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
             <div className="flex items-start space-x-2">
               <Shield className="w-4 h-4 text-[#C5B358] mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-[#757575] mb-1">区块链存证哈希</div>
-                <div className="text-[10px] text-[#757575] break-all font-mono">
+                <div className="text-xs text-gray-600 mb-1">区块链存证哈希</div>
+                <div className="text-[10px] text-gray-500 break-all font-mono">
                   {report.blockchainHash.slice(0, -6)}******
                 </div>
-                <div className="text-xs text-[#757575] mt-2">
+                <div className="text-xs text-gray-400 mt-2">
                   ✓ 数据已加密保护，实时同步至 2026/02/19
                 </div>
               </div>
@@ -213,7 +213,7 @@ const WeeklyReportDetail: React.FC<WeeklyReportDetailProps> = ({ report, onClose
           </div>
 
           {/* 底部说明（在截图内） */}
-          <div className="text-center text-xs text-[#757575] mb-4">
+          <div className="text-center text-xs text-gray-400 mb-4">
             本证书由系统自动生成，具有法律效力
           </div>
         </div>

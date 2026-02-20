@@ -51,7 +51,7 @@ export default function InvestorFAQ() {
       id: 'exit-mechanism',
       question: '如果我中途退出，股份如何处置？',
       icon: LogOut,
-      iconColor: 'text-[#FFA726]',
+      iconColor: 'text-orange-600',
       answer: `
 **退出权利与限制**
 
@@ -148,8 +148,8 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
     <div className="space-y-3">
       {/* 标题 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#424242]">投资人常见问题</h3>
-        <span className="text-xs text-[#757575]">解决90%的心理顾虑</span>
+        <h3 className="text-sm font-semibold text-gray-700">投资人常见问题</h3>
+        <span className="text-xs text-gray-400">解决90%的心理顾虑</span>
       </div>
 
       {/* FAQ列表 */}
@@ -163,8 +163,8 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
               key={faq.id}
               className={`rounded-xl border-2 overflow-hidden transition-all ${
                 isOpen
-                  ? 'bg-white border-[#1976D2] shadow-lg'
-                  : 'bg-white border-[#E0E0E0] hover:border-[#E0E0E0]'
+                  ? 'bg-white border-blue-400 shadow-lg'
+                  : 'bg-white border-gray-200 hover:border-gray-300'
               }`}
             >
               {/* 问题标题（可点击） */}
@@ -179,13 +179,13 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                     <Icon className={`w-4 h-4 ${isOpen ? 'text-white' : faq.iconColor}`} />
                   </div>
                   <span className={`text-sm font-semibold ${
-                    isOpen ? 'text-[#424242]' : 'text-[#424242]'
+                    isOpen ? 'text-[#424242]' : 'text-gray-900'
                   }`}>
                     {faq.question}
                   </span>
                 </div>
                 <ChevronDown
-                  className={`w-5 h-5 text-[#757575] transition-transform ${
+                  className={`w-5 h-5 text-gray-400 transition-transform ${
                     isOpen ? 'transform rotate-180' : ''
                   }`}
                 />
@@ -193,13 +193,13 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
 
               {/* 答案内容（展开时显示） */}
               {isOpen && (
-                <div className="px-4 pb-4 border-t border-[#E0E0E0] animate-in slide-in-from-top-2 duration-300">
+                <div className="px-4 pb-4 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
                   <div className="pt-4 prose prose-sm max-w-none">
                     {faq.answer.split('\n\n').map((paragraph, i) => {
                       // 处理标题（**文字**）
                       if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
                         return (
-                          <h4 key={i} className="text-sm font-bold text-[#424242] mt-3 mb-2">
+                          <h4 key={i} className="text-sm font-bold text-gray-900 mt-3 mb-2">
                             {paragraph.replace(/\*\*/g, '')}
                           </h4>
                         );
@@ -209,12 +209,12 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                       if (paragraph.startsWith('*') || paragraph.startsWith('-')) {
                         const items = paragraph.split('\n').filter(line => line.trim());
                         return (
-                          <ul key={i} className="space-y-1 text-xs text-[#424242] mb-3">
+                          <ul key={i} className="space-y-1 text-xs text-gray-700 mb-3">
                             {items.map((item, j) => (
                               <li key={j} className="flex items-start space-x-2">
                                 <span className="text-[#1976D2] mt-1">•</span>
                                 <span dangerouslySetInnerHTML={{ 
-                                  __html: item.replace(/^[*-]\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#424242]">$1</strong>')
+                                  __html: item.replace(/^[*-]\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
                                 }} />
                               </li>
                             ))}
@@ -226,9 +226,9 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                       return (
                         <p 
                           key={i} 
-                          className="text-xs text-[#424242] leading-relaxed mb-2"
+                          className="text-xs text-gray-700 leading-relaxed mb-2"
                           dangerouslySetInnerHTML={{ 
-                            __html: paragraph.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#424242]">$1</strong>')
+                            __html: paragraph.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
                           }}
                         />
                       );
@@ -236,8 +236,8 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                   </div>
 
                   {/* 底部操作 */}
-                  <div className="mt-4 pt-3 border-t border-[#E0E0E0]">
-                    <button className="text-xs text-[#1976D2] hover:text-[#1976D2] font-semibold flex items-center space-x-1">
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <button className="text-xs text-[#1976D2] hover:text-blue-700 font-semibold flex items-center space-x-1">
                       <span>查看完整《股权管理手册》</span>
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -252,9 +252,9 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
       </div>
 
       {/* 底部提示 */}
-      <div className="bg-gray-100 rounded-lg p-3 border border-[#E0E0E0]">
-        <p className="text-xs text-[#757575] leading-relaxed">
-          <span className="font-semibold text-[#424242]">更多问题？</span>
+      <div className="bg-gray-100 rounded-lg p-3 border border-gray-200">
+        <p className="text-xs text-gray-600 leading-relaxed">
+          <span className="font-semibold text-gray-900">更多问题？</span>
           如您有其他疑问，可随时联系合伙人服务团队，我们将在24小时内为您解答。
         </p>
       </div>

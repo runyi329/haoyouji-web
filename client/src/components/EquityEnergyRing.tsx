@@ -185,7 +185,7 @@ export default function EquityEnergyRing({ parts, othersValue, totalEquity }: Eq
                   />
                   
                   {/* 资产名称 */}
-                  <span className="text-xs font-semibold text-[#424242]">
+                  <span className="text-xs font-semibold text-gray-700">
                     {part.upgradeLabel}：
                   </span>
                   
@@ -202,7 +202,7 @@ export default function EquityEnergyRing({ parts, othersValue, totalEquity }: Eq
                 </div>
                 
                 {/* 备注信息 */}
-                <div className="text-[10px] text-[#757575] mt-0.5 ml-4">
+                <div className="text-[10px] text-gray-400 mt-0.5 ml-4">
                   {part.description}
                 </div>
               </div>

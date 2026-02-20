@@ -94,15 +94,15 @@ export default function Register() {
         <CardContent className="space-y-4">
           {/* 邀请码区域 */}
           {inviteCode && inviteValidation?.valid && (
-            <div className="p-4 bg-[#E8F5E9] dark:bg-[#4CAF50]/20 rounded-lg border border-[#4CAF50] dark:border-[#4CAF50]">
-              <div className="flex items-center gap-2 text-[#4CAF50] dark:text-[#4CAF50] mb-2">
+            <div className="p-4 bg-[#E8F5E9] dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 text-[#4CAF50] dark:text-green-400 mb-2">
                 <Gift className="w-5 h-5" />
                 <span className="font-semibold">使用邀请码注册</span>
               </div>
-              <p className="text-sm text-[#757575] dark:text-[#757575]">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 邀请码: <span className="font-mono font-bold">{inviteCode}</span>
               </p>
-              <p className="text-xs text-[#757575] dark:text-[#757575] mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                 注册成功后将自动关联邀请人
               </p>
             </div>
@@ -116,7 +116,7 @@ export default function Register() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowInviteInput(true)}
-                  className="w-full text-[#1976D2] border-[#1976D2] hover:bg-white"
+                  className="w-full text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                 >
                   <Gift className="w-4 h-4 mr-2" />
                   我有邀请码
@@ -125,7 +125,7 @@ export default function Register() {
                 <div className="space-y-2">
                   <Label htmlFor="inviteCode">
                     邀请码(可选)
-                    <span className="text-xs text-[#757575] ml-2">6位字母数字组合</span>
+                    <span className="text-xs text-gray-500 ml-2">6位字母数字组合</span>
                   </Label>
                   <div className="flex gap-2">
                     <Input
@@ -231,10 +231,10 @@ export default function Register() {
           </Button>
 
           {/* 登录链接 */}
-          <div className="text-center text-sm text-[#757575] dark:text-[#757575]">
+          <div className="text-center text-sm text-gray-600 dark:text-gray-400">
             已有账号？
             <Link href="/login">
-              <Button variant="link" className="p-0 h-auto ml-1 text-[#1976D2]">
+              <Button variant="link" className="p-0 h-auto ml-1 text-indigo-600">
                 立即登录
               </Button>
             </Link>

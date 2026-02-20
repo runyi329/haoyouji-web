@@ -140,7 +140,7 @@ export default function LedgerApprovalSettings() {
   const renderApproverSelector = (rule: ApprovalRule, ruleIndex: number) => {
     if (rule.approverType === 'all') {
       return (
-        <div className="text-center text-[#757575] py-4">
+        <div className="text-center text-gray-600 py-4">
           需全部成员审批
         </div>
       );
@@ -187,11 +187,11 @@ export default function LedgerApprovalSettings() {
       {/* 内容区域 */}
       <div className="p-4">
         {/* 说明文字 */}
-        <Card className="bg-[#FAF3ED] border-[#FFA726] p-4 mb-4">
+        <Card className="bg-[#FAF3ED] border-orange-200 p-4 mb-4">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-5 w-5 text-[#CBA471] flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-[#FFA726] leading-relaxed">
+              <p className="text-sm text-orange-800 leading-relaxed">
                 开启审批人之后，记账人添加新的账目需要所属全部审批人审批之后才会入账。账目在未审批之前不会统计到系统
                 {showMoreInfo && (
                   <>
@@ -213,8 +213,8 @@ export default function LedgerApprovalSettings() {
         <Card className="bg-white p-4 mb-4">
           {/* 表头 */}
           <div className="grid grid-cols-2 gap-4 mb-4 pb-3 border-b">
-            <div className="text-center font-medium text-[#424242]">记账人</div>
-            <div className="text-center font-medium text-[#424242]">审批人</div>
+            <div className="text-center font-medium text-gray-700">记账人</div>
+            <div className="text-center font-medium text-gray-700">审批人</div>
           </div>
 
           {/* 规则行 */}
@@ -225,8 +225,8 @@ export default function LedgerApprovalSettings() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   {rule.recorderId === null ? (
                     <div className="text-center">
-                      <div className="text-sm text-[#757575]">全部&新加入成员</div>
-                      <div className="text-xs text-[#757575] mt-1">(除特殊设置外)</div>
+                      <div className="text-sm text-gray-600">全部&新加入成员</div>
+                      <div className="text-xs text-gray-400 mt-1">(除特殊设置外)</div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ export default function LedgerApprovalSettings() {
           {/* 添加特殊设置按钮 */}
           <button
             onClick={addSpecialRule}
-            className="w-full mt-4 py-3 text-[#757575] text-sm flex items-center justify-center gap-2 hover:bg-gray-50 rounded-lg transition-colors"
+            className="w-full mt-4 py-3 text-gray-600 text-sm flex items-center justify-center gap-2 hover:bg-gray-50 rounded-lg transition-colors"
           >
             <Plus className="h-4 w-4" />
             添加特殊设置
