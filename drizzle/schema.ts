@@ -535,6 +535,7 @@ export const ledgers = mysqlTable("ledgers", {
 	icon: text(),
 	createdBy: int().default(0).notNull(),
 	ownerId: int().notNull(),
+	groupId: int("group_id"), // 所属工作群ID，为null表示普通账本
 	isVip: tinyint().default(0).notNull(),
 	isArchived: tinyint().default(0).notNull(),
 	defaultPermissionView: mysqlEnum("default_permission_view", ['all','own','none']).default('own').notNull(),
@@ -543,7 +544,10 @@ export const ledgers = mysqlTable("ledgers", {
 	defaultPermissionDelete: mysqlEnum("default_permission_delete", ['all','own','none']).default('own').notNull(),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-});
+},
+(table) => [
+	index("idx_group_id").on(table.groupId),
+]);
 
 export const loginAttempts = mysqlTable("login_attempts", {
 	id: int().autoincrement().notNull(),
@@ -1120,8 +1124,27 @@ export const shippingAddresses = mysqlTable("shipping_addresses", {
 	index("idx_is_default").on(table.isDefault),
 ]);
 
+// 工作群表（脉动节点工作平台）
+export const workGroups = mysqlTable("work_groups", {
+	id: int().autoincrement().notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	description: text(),
+	icon: text(),
+	createdBy: int("created_by").notNull(),
+	ownerId: int("owner_id").notNull(),
+	isArchived: tinyint("is_archived").default(0).notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("idx_owner_id").on(table.ownerId),
+	index("idx_created_by").on(table.createdBy),
+]);
+
 // TypeScript类型定义
 export type UserProfile = typeof userProfiles.$inferSelect;
 export type InsertUserProfile = typeof userProfiles.$inferInsert;
 export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type InsertShippingAddress = typeof shippingAddresses.$inferInsert;
+export type WorkGroup = typeof workGroups.$inferSelect;
+export type InsertWorkGroup = typeof workGroups.$inferInsert;

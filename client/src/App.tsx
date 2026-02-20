@@ -124,6 +124,8 @@ const PromotionRules = lazy(() => import("./pages/PromotionRules"));
 const BusinessPlan = lazy(() => import("./pages/BusinessPlan"));
 const CapitalMultiplierTable = lazy(() => import("./pages/CapitalMultiplierTable"));
 const PosterFavorites = lazy(() => import("./pages/PosterFavorites"));
+const WorkGroupList = lazy(() => import("./pages/WorkGroupList"));
+const WorkGroupDetail = lazy(() => import("./pages/WorkGroupDetail"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
@@ -221,6 +223,10 @@ function Router() {
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />
+        
+        {/* 脉动节点工作平台 */}
+        <Route path="/work-groups" component={WorkGroupList} />
+        <Route path="/work-groups/:id" component={WorkGroupDetail} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />
