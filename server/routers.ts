@@ -25,11 +25,13 @@ import { eq } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
+import { posterFavoritesRouter } from "./poster-favorites-router";
 import ExcelJS from "exceljs";
 
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
+  posterFavorites: posterFavoritesRouter,
   
   auth: router({
     me: publicProcedure.query(opts => {
