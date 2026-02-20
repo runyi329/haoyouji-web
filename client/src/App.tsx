@@ -62,7 +62,7 @@ if (import.meta.hot) {
 import Login from "./pages/Login";
 
 // 首页Dashboard改为懒加载，避免在其他页面执行不必要的查询
-const ContactsManagement = lazy(() => import("./pages/ContactsManagement"));
+// const ContactsManagement = lazy(() => import("./pages/ContactsManagement")); - 已废弃
 
 // 其他页面懒加载
 const Admin = lazy(() => import("./pages/Admin"));
@@ -149,7 +149,7 @@ function Router() {
         {/* 首页 - 根据用户账本访问记录跳转 */}
         <Route path="/" component={lazy(() => import("./pages/Home"))} />
         {/* 脉动Dashboard */}
-        <Route path="/contacts" component={ContactsManagement} />
+        {/* <Route path="/contacts" component={ContactsManagement} /> - 已废弃 */
         <Route path="/login" component={Login} />
         <Route path="/privacy-policy" component={PrivacyPolicy} />
         <Route path="/user-agreement" component={UserAgreement} />
@@ -163,7 +163,7 @@ function Router() {
         <Route path="/admin/valuation-management" component={ValuationManagement} />
 
         {/* 好友记相关页面 */}
-        <Route path="/parent/contacts" component={ContactsManagement} />
+        {/* <Route path="/parent/contacts" component={ContactsManagement} /> - 已废弃 */
         <Route path="/parent/contacts/list" component={ContactsList} />
         <Route path="/parent/contacts/map" component={RegionMap} />
         <Route path="/parent/contacts/tag-search" component={TagSearch} />
