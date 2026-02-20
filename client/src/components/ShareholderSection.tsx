@@ -41,12 +41,12 @@ export default function ShareholderSection({
             <Icon className="w-4 h-4 text-white" />
           </div>
           <div className="text-left">
-            <div className="text-sm font-semibold text-gray-900">{title}</div>
-            <div className="text-xs text-gray-500">{subtitle}</div>
+            <div className="text-sm font-semibold text-[#424242]">{title}</div>
+            <div className="text-xs text-[#757575]">{subtitle}</div>
           </div>
         </div>
         <ChevronDown
-          className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+          className={`w-5 h-5 text-[#757575] transition-transform duration-300 ${
             isOpen ? 'rotate-180' : ''
           }`}
         />

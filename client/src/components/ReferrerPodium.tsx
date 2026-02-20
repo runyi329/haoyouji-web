@@ -41,7 +41,7 @@ export function ReferrerPodium({ topThree }: ReferrerPodiumProps) {
         <h2 className="text-xl font-bold">🏆 介绍人贡献榜</h2>
         <button
           onClick={() => setLocation("/parent/contacts/referrer-leaderboard")}
-          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          className="text-sm text-[#1976D2] hover:text-[#1976D2] font-medium"
         >
           查看完整排行榜 →
         </button>
@@ -57,7 +57,7 @@ export function ReferrerPodium({ topThree }: ReferrerPodiumProps) {
               >
                 <Card className="h-full flex flex-col items-center justify-center bg-gray-100">
                   <div className="text-4xl mb-2">{medals[index]}</div>
-                  <div className="text-sm text-gray-400">暂无数据</div>
+                  <div className="text-sm text-[#757575]">暂无数据</div>
                 </Card>
               </div>
             );

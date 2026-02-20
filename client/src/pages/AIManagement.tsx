@@ -492,11 +492,11 @@ export default function AIManagement() {
               </div>
 
               {/* 提示 */}
-              <div className="rounded-lg bg-[#FAF3ED] dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4">
-                <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+              <div className="rounded-lg bg-[#FAF3ED] dark:bg-white/20 border border-yellow-200 dark:border-yellow-800 p-4">
+                <p className="text-sm font-medium text-[#FFA726] dark:text-[#FFA726]">
                   ⚠️ 重要提示
                 </p>
-                <p className="text-xs text-yellow-800 dark:text-yellow-300 mt-2">
+                <p className="text-xs text-[#FFA726] dark:text-[#FFA726] mt-2">
                   以上限制是在<strong>代码层面</strong>强制执行的，无法通过修改提示词绕过。如需调整，必须修改代码并重新部署。
                 </p>
               </div>

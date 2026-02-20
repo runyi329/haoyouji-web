@@ -110,8 +110,8 @@ export default function DataSecurityPanel() {
     return (
       <div className="bg-white rounded-2xl p-6 shadow-sm">
         <div className="flex items-center justify-center py-12">
-          <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500">加载中...</span>
+          <RefreshCw className="w-6 h-6 animate-spin text-[#757575]" />
+          <span className="ml-2 text-[#757575]">加载中...</span>
         </div>
       </div>
     );
@@ -126,17 +126,17 @@ export default function DataSecurityPanel() {
             <Shield className="w-5 h-5 text-[#D32F2F]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900">数据安全管理</h2>
-            <p className="text-sm text-gray-500">管理敏感数据的字段级AES-256加密</p>
+            <h2 className="text-lg font-bold text-[#424242]">数据安全管理</h2>
+            <p className="text-sm text-[#757575]">管理敏感数据的字段级AES-256加密</p>
           </div>
         </div>
 
         {/* 密钥状态 */}
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${keyConfigured ? "bg-[#E8F5E9] border border-green-200" : "bg-[#FFEBEE] border border-red-200"}`}>
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${keyConfigured ? "bg-[#E8F5E9] border border-[#4CAF50]" : "bg-[#FFEBEE] border border-[#D32F2F]"}`}>
           {keyConfigured ? (
             <>
               <CheckCircle2 className="w-5 h-5 text-[#4CAF50]" />
-              <span className="text-sm font-medium text-green-700">加密密钥已配置</span>
+              <span className="text-sm font-medium text-[#4CAF50]">加密密钥已配置</span>
             </>
           ) : (
             <>
@@ -152,7 +152,7 @@ export default function DataSecurityPanel() {
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Info className="w-5 h-5 text-[#1976D2]" />
-            <span className="text-sm font-medium text-gray-700">首次使用需要初始化加密配置</span>
+            <span className="text-sm font-medium text-[#424242]">首次使用需要初始化加密配置</span>
           </div>
           <button
             onClick={() => initMutation.mutate()}
@@ -167,7 +167,7 @@ export default function DataSecurityPanel() {
       {/* 加密开关列表 */}
       {initialized && Object.entries(groupedConfigs).map(([group, items]) => (
         <div key={group} className="bg-white rounded-2xl p-5 shadow-sm">
-          <h3 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <h3 className="text-base font-bold text-[#424242] mb-4 flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-[#D32F2F]" />
             {group}
           </h3>
@@ -182,7 +182,7 @@ export default function DataSecurityPanel() {
                 <div
                   key={config.id}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
-                    isEnabled ? "bg-[#E8F5E9] border-green-200" : "bg-gray-50 border-gray-200"
+                    isEnabled ? "bg-[#E8F5E9] border-[#4CAF50]" : "bg-gray-50 border-[#E0E0E0]"
                   }`}
                 >
                   <div className="flex-1">
@@ -190,13 +190,13 @@ export default function DataSecurityPanel() {
                       {isEnabled ? (
                         <Lock className="w-4 h-4 text-[#4CAF50]" />
                       ) : (
-                        <Unlock className="w-4 h-4 text-gray-400" />
+                        <Unlock className="w-4 h-4 text-[#757575]" />
                       )}
-                      <span className="text-sm font-medium text-gray-800">{config.fieldLabel}</span>
-                      <span className="text-xs text-gray-400">({config.tableName}.{config.fieldName})</span>
+                      <span className="text-sm font-medium text-[#424242]">{config.fieldLabel}</span>
+                      <span className="text-xs text-[#757575]">({config.tableName}.{config.fieldName})</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1 ml-6">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[#757575]">
                         共 {stat.total} 条数据
                       </span>
                       {stat.encrypted > 0 && (
@@ -205,7 +205,7 @@ export default function DataSecurityPanel() {
                         </span>
                       )}
                       {isEnabled && config.encryptedAt && (
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-[#757575]">
                           启用于 {new Date(config.encryptedAt).toLocaleString('zh-CN')}
                         </span>
                       )}
@@ -239,11 +239,11 @@ export default function DataSecurityPanel() {
       {/* 安全说明 */}
       {initialized && (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h3 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-amber-500" />
+          <h3 className="text-base font-bold text-[#424242] mb-3 flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-[#FFA726]" />
             安全说明
           </h3>
-          <div className="space-y-2 text-sm text-gray-600">
+          <div className="space-y-2 text-sm text-[#757575]">
             <p>• 加密算法：AES-256-GCM，业界最高安全标准</p>
             <p>• 加密密钥仅存储在服务器环境变量中，其他管理员无法查看</p>
             <p>• 开启加密后，数据库中存储的是密文，直接查看数据库无法获取明文</p>

@@ -41,7 +41,7 @@ export default function HighValueActions() {
       puReward: 500,
       equityEstimate: '0.005%',
       icon: Lightbulb,
-      iconColor: 'text-yellow-600',
+      iconColor: 'text-[#FFA726]',
       bgColor: 'from-white to-white',
       actionText: '提交建议',
       actionUrl: '/feedback/suggestion',
@@ -67,7 +67,7 @@ export default function HighValueActions() {
       puReward: 1000,
       equityEstimate: '0.010%',
       icon: FileText,
-      iconColor: 'text-purple-600',
+      iconColor: 'text-[#D32F2F]',
       bgColor: 'from-white to-white',
       actionText: '签署协议',
       actionUrl: '/agreements/sign',
@@ -88,8 +88,8 @@ export default function HighValueActions() {
     <div className="space-y-3">
       {/* 标题 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">高价值市场贡献建议</h3>
-        <span className="text-xs text-gray-400">基于您的L{1.04}杠杆</span>
+        <h3 className="text-sm font-semibold text-[#424242]">高价值市场贡献建议</h3>
+        <span className="text-xs text-[#757575]">基于您的L{1.04}杠杆</span>
       </div>
 
       {/* 任务卡片列表 */}
@@ -97,7 +97,7 @@ export default function HighValueActions() {
         {actions.map((action) => (
           <div
             key={action.id}
-            className={`relative bg-gradient-to-r ${action.bgColor} rounded-xl p-4 border border-gray-200/50 hover:shadow-md transition-all cursor-pointer group`}
+            className={`relative bg-gradient-to-r ${action.bgColor} rounded-xl p-4 border border-[#E0E0E0]/50 hover:shadow-md transition-all cursor-pointer group`}
             onClick={() => handleAction(action)}
           >
             {/* 里程碑标记 */}
@@ -120,8 +120,8 @@ export default function HighValueActions() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between mb-1">
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-900">{action.title}</h4>
-                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{action.description}</p>
+                    <h4 className="text-sm font-semibold text-[#424242]">{action.title}</h4>
+                    <p className="text-xs text-[#757575] mt-0.5 line-clamp-2">{action.description}</p>
                   </div>
                 </div>
 
@@ -129,17 +129,17 @@ export default function HighValueActions() {
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center space-x-1">
-                      <span className="text-xs text-gray-500">奖励</span>
+                      <span className="text-xs text-[#757575]">奖励</span>
                       <span className={`text-sm font-bold ${action.iconColor}`}>+{action.puReward} PU</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <span className="text-xs text-gray-500">预计增值</span>
-                      <span className="text-sm font-semibold text-gray-900">{action.equityEstimate}</span>
+                      <span className="text-xs text-[#757575]">预计增值</span>
+                      <span className="text-sm font-semibold text-[#424242]">{action.equityEstimate}</span>
                     </div>
                   </div>
 
                   {/* 频率标签 */}
-                  <span className="text-[10px] text-gray-400 bg-white/60 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] text-[#757575] bg-white/60 px-2 py-0.5 rounded-full">
                     {action.frequency}
                   </span>
                 </div>
@@ -155,8 +155,8 @@ export default function HighValueActions() {
 
             {/* 进度条（仅用于连续登录） */}
             {action.id === 'continuous_login' && (
-              <div className="mt-3 pt-3 border-t border-gray-200/50">
-                <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+              <div className="mt-3 pt-3 border-t border-[#E0E0E0]/50">
+                <div className="flex items-center justify-between text-xs text-[#757575] mb-1">
                   <span>当前进度</span>
                   <span className="font-semibold">7/30 天</span>
                 </div>
@@ -173,12 +173,12 @@ export default function HighValueActions() {
       </div>
 
       {/* 底部提示 */}
-      <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-3 border border-gray-200">
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-3 border border-[#E0E0E0]">
         <div className="flex items-start space-x-2">
           <div className="w-1 h-1 rounded-full bg-gray-400 mt-1.5 flex-shrink-0" />
-          <p className="text-xs text-gray-600 leading-relaxed">
-            完成以上任务可累积<span className="font-semibold text-gray-900">1,800+ PU</span>，
-            经杠杆放大后预计增值<span className="font-semibold text-orange-600">0.018%+</span>股权。
+          <p className="text-xs text-[#757575] leading-relaxed">
+            完成以上任务可累积<span className="font-semibold text-[#424242]">1,800+ PU</span>，
+            经杠杆放大后预计增值<span className="font-semibold text-[#FFA726]">0.018%+</span>股权。
             任务完成度越高，您的股东排名将显著提升。
           </p>
         </div>

@@ -38,9 +38,9 @@ export function StarRewardPopup({ open, onClose, stars, activityName, kidName }:
             {/* 装饰星星 */}
             {showStars && (
               <>
-                <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-amber-400 animate-pulse" />
-                <Sparkles className="absolute -bottom-2 -left-2 w-5 h-5 text-amber-400 animate-pulse delay-100" />
-                <Sparkles className="absolute top-0 -left-4 w-4 h-4 text-amber-400 animate-pulse delay-200" />
+                <Sparkles className="absolute -top-2 -right-2 w-6 h-6 text-[#FFA726] animate-pulse" />
+                <Sparkles className="absolute -bottom-2 -left-2 w-5 h-5 text-[#FFA726] animate-pulse delay-100" />
+                <Sparkles className="absolute top-0 -left-4 w-4 h-4 text-[#FFA726] animate-pulse delay-200" />
               </>
             )}
           </div>
@@ -56,8 +56,8 @@ export function StarRewardPopup({ open, onClose, stars, activityName, kidName }:
 
           {/* 星星数量 */}
           <div className="flex items-center justify-center gap-2 mb-6">
-            <span className="text-3xl font-bold text-amber-500">+{stars}</span>
-            <Star className="w-8 h-8 text-amber-400 fill-amber-400" />
+            <span className="text-3xl font-bold text-[#FFA726]">+{stars}</span>
+            <Star className="w-8 h-8 text-[#FFA726] fill-amber-400" />
           </div>
 
           <Button onClick={onClose} className="btn-gradient w-full">

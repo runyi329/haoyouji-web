@@ -205,7 +205,7 @@ export default function RegionMap() {
                   contact.hasReferrer ? (
                     <UserCheck className="h-4 w-4" style={{ color: contact.isShared ? '#9ca3af' : '#A80000' }} />
                   ) : (
-                    <UserX className="h-4 w-4 text-gray-400" />
+                    <UserX className="h-4 w-4 text-[#757575]" />
                   )
                 )}
                 {/* 累计沟通次数 */}
@@ -245,7 +245,7 @@ export default function RegionMap() {
               
               {/* 联络状态 */}
               <div 
-                className="text-xs pt-2 border-t border-gray-100 dark:border-gray-700 mb-2"
+                className="text-xs pt-2 border-t border-[#E0E0E0] dark:border-[#E0E0E0] mb-2"
                 style={{ color: getInteractionStatusColor(contact.daysSinceLastInteraction) }}
               >
                 {contact.daysSinceLastInteraction !== null ? (
@@ -322,7 +322,7 @@ export default function RegionMap() {
         {/* Map Area */}
         <div className={`
           relative bg-white w-full transition-all duration-300 ease-in-out
-          ${isMobile ? 'h-[38vh] shrink-0 border-b border-gray-100' : 'flex-1 h-full'}
+          ${isMobile ? 'h-[38vh] shrink-0 border-b border-[#E0E0E0]' : 'flex-1 h-full'}
         `}>
           <ChinaMap
             data={provinceStats}
@@ -334,9 +334,9 @@ export default function RegionMap() {
         {/* Mobile Stats List */}
         {isMobile && (
           <div className="flex-1 bg-gray-50/30 overflow-y-auto relative">
-            <div className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">省份统计</h2>
-              <span className="text-xs text-gray-500">{activeProvinces} 个省份</span>
+            <div className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm border-b border-[#E0E0E0] px-4 py-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[#424242]">省份统计</h2>
+              <span className="text-xs text-[#757575]">{activeProvinces} 个省份</span>
             </div>
 
             <div className="p-2 pt-2">
@@ -352,8 +352,8 @@ export default function RegionMap() {
                         ${selectedProvince === stat.name
                           ? 'shadow-md scale-105'
                           : stat.value > 0
-                          ? 'bg-white border-gray-200 hover:shadow-sm active:scale-95'
-                          : 'bg-gray-50 border-gray-100 text-gray-400'
+                          ? 'bg-white border-[#E0E0E0] hover:shadow-sm active:scale-95'
+                          : 'bg-gray-50 border-[#E0E0E0] text-[#757575]'
                         }
                       `}
                       style={selectedProvince === stat.name ? { backgroundColor: '#A80000', color: '#FFFFFF', borderColor: '#A80000' } : {}}

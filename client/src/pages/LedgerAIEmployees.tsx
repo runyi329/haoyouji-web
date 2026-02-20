@@ -77,13 +77,13 @@ const LedgerAIEmployees = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-10">
         <div className="container flex items-center h-14 px-4">
           <button
             onClick={() => setLocation(`/ledger/${id}/settings`)}
             className="p-2 -ml-2"
           >
-            <ArrowLeft className="w-6 h-6 text-gray-700" />
+            <ArrowLeft className="w-6 h-6 text-[#424242]" />
           </button>
           <div className="flex-1" />
         </div>
@@ -91,17 +91,17 @@ const LedgerAIEmployees = () => {
 
       {/* AI雇员图标 */}
       <div className="flex justify-center py-8">
-        <div className="w-24 h-24 rounded-full border-2 border-gray-300 flex items-center justify-center bg-white">
+        <div className="w-24 h-24 rounded-full border-2 border-[#E0E0E0] flex items-center justify-center bg-white">
           <span className="text-5xl">🤖</span>
         </div>
       </div>
 
       {/* AI雇员功能说明 */}
       <div className="px-4 pb-6">
-        <h2 className="text-base font-medium text-gray-900 mb-2">
+        <h2 className="text-base font-medium text-[#424242] mb-2">
           AI雇员功能说明：
         </h2>
-        <p className="text-sm text-gray-600 leading-relaxed">
+        <p className="text-sm text-[#757575] leading-relaxed">
           AI雇员是一个智能助手，记账时可以选择AI雇员作为收支人，方便统计其花费情况。
           更重要的是，AI雇员能够通过人工智能全面分析账本、按照您的要求监督账本，
           帮助您更好地管理财务。
@@ -110,7 +110,7 @@ const LedgerAIEmployees = () => {
 
       {/* 可选虚拟成员 */}
       <div className="bg-white px-4 py-3">
-        <h3 className="text-sm text-gray-500 mb-3">可选虚拟成员</h3>
+        <h3 className="text-sm text-[#757575] mb-3">可选虚拟成员</h3>
         <div className="grid grid-cols-5 gap-4">
           {AVATAR_PRESETS.map((avatar) => (
             <button
@@ -122,7 +122,7 @@ const LedgerAIEmployees = () => {
               <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center text-3xl">
                 {avatar.emoji}
               </div>
-              <span className="text-xs text-gray-600">{avatar.name}</span>
+              <span className="text-xs text-[#757575]">{avatar.name}</span>
             </button>
           ))}
         </div>
@@ -130,9 +130,9 @@ const LedgerAIEmployees = () => {
 
       {/* 已加入虚拟成员 */}
       <div className="bg-white mt-3 px-4 py-3">
-        <h3 className="text-sm text-gray-500 mb-3">已加入虚拟成员</h3>
+        <h3 className="text-sm text-[#757575] mb-3">已加入虚拟成员</h3>
         {aiEmployees.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">
+          <div className="text-center py-12 text-[#757575] text-sm">
             还没有加入虚拟成员呢
           </div>
         ) : (
@@ -150,7 +150,7 @@ const LedgerAIEmployees = () => {
                     <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-2xl">
                       {avatarInfo?.emoji || "🤖"}
                     </div>
-                    <span className="text-sm text-gray-900">
+                    <span className="text-sm text-[#424242]">
                       {employee.nickname || avatarInfo?.name || "AI雇员"}
                     </span>
                   </div>

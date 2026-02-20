@@ -217,7 +217,7 @@ const AssetGrowthChart: React.FC<AssetGrowthChartProps> = ({ data }) => {
       </svg>
 
       {/* 图例 */}
-      <div className="flex items-center justify-center mt-2 text-xs text-gray-500">
+      <div className="flex items-center justify-center mt-2 text-xs text-[#757575]">
         <div className="flex items-center space-x-1">
           <div className="w-3 h-0.5 bg-[#C5B358]"></div>
           <span>权重增长趋势</span>

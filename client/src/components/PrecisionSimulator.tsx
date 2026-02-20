@@ -106,9 +106,9 @@ export default function PrecisionSimulator({
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-sm font-semibold text-white/90">市场贡献模拟中控台</h3>
         {showLeverageEffect && (
-          <div className="flex items-center space-x-1 px-2 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/30 animate-pulse">
-            <Zap className="w-3 h-3 text-yellow-400" />
-            <span className="text-xs font-medium text-yellow-400">×{leverageMultiplier.toFixed(2)}</span>
+          <div className="flex items-center space-x-1 px-2 py-1 rounded-full bg-white/10 border border-yellow-500/30 animate-pulse">
+            <Zap className="w-3 h-3 text-[#FFA726]" />
+            <span className="text-xs font-medium text-[#FFA726]">×{leverageMultiplier.toFixed(2)}</span>
           </div>
         )}
       </div>
@@ -120,7 +120,7 @@ export default function PrecisionSimulator({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 rounded-lg bg-[#D32F2F]/10 flex items-center justify-center">
-                <Users className="w-3.5 h-3.5 text-red-400" />
+                <Users className="w-3.5 h-3.5 text-[#D32F2F]" />
               </div>
               <span className="text-xs font-medium text-white/70">邀请裂变</span>
             </div>
@@ -147,7 +147,7 @@ export default function PrecisionSimulator({
           
           <div className="flex justify-between items-center text-xs">
             <span className="text-white/40">0</span>
-            <span className="text-red-400 font-semibold tabular-nums">+{simInvites * 100} PU</span>
+            <span className="text-[#D32F2F] font-semibold tabular-nums">+{simInvites * 100} PU</span>
             <span className="text-white/40">50</span>
           </div>
         </div>
@@ -157,7 +157,7 @@ export default function PrecisionSimulator({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 rounded-lg bg-[#1976D2]/10 flex items-center justify-center">
-                <Network className="w-3.5 h-3.5 text-blue-400" />
+                <Network className="w-3.5 h-3.5 text-[#1976D2]" />
               </div>
               <span className="text-xs font-medium text-white/70">人脉连接</span>
             </div>
@@ -184,7 +184,7 @@ export default function PrecisionSimulator({
           
           <div className="flex justify-between items-center text-xs">
             <span className="text-white/40">0</span>
-            <span className="text-blue-400 font-semibold tabular-nums">+{Math.min(simNetworkConnections * 5, 500)} PU</span>
+            <span className="text-[#1976D2] font-semibold tabular-nums">+{Math.min(simNetworkConnections * 5, 500)} PU</span>
             <span className="text-white/40">100</span>
           </div>
         </div>
@@ -194,7 +194,7 @@ export default function PrecisionSimulator({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="w-6 h-6 rounded-lg bg-[#4CAF50]/10 flex items-center justify-center">
-                <TrendingUp className="w-3.5 h-3.5 text-green-400" />
+                <TrendingUp className="w-3.5 h-3.5 text-[#4CAF50]" />
               </div>
               <span className="text-xs font-medium text-white/70">平台参与</span>
             </div>
@@ -222,7 +222,7 @@ export default function PrecisionSimulator({
           
           <div className="flex justify-between items-center text-xs">
             <span className="text-white/40">0</span>
-            <span className="text-green-400 font-semibold tabular-nums">
+            <span className="text-[#4CAF50] font-semibold tabular-nums">
               +{Math.floor(simActiveDays / 7) * 50 + Math.floor(simActiveDays / 30) * 200} PU
             </span>
             <span className="text-white/40">90</span>
@@ -240,7 +240,7 @@ export default function PrecisionSimulator({
           <span className="text-xs text-white/60">预期增值</span>
           <div className="flex items-center space-x-2">
             <span className="text-xs text-white/50">总积分</span>
-            <span className="text-2xl font-bold text-yellow-400 tabular-nums">{simulation.totalPU}</span>
+            <span className="text-2xl font-bold text-[#FFA726] tabular-nums">{simulation.totalPU}</span>
             <span className="text-xs text-white/60">PU</span>
           </div>
         </div>
@@ -254,12 +254,12 @@ export default function PrecisionSimulator({
           {showLeverageEffect && (
             <div className="flex items-center justify-between border-t border-white/10 pt-2.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
               <div className="flex items-center space-x-1.5">
-                <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center animate-pulse">
-                  <Zap className="w-3 h-3 text-yellow-400" />
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
+                  <Zap className="w-3 h-3 text-[#FFA726]" />
                 </div>
                 <span className="text-white/80 text-xs font-medium">杠杆放大后</span>
               </div>
-              <span className="text-2xl font-bold text-yellow-400 tabular-nums">
+              <span className="text-2xl font-bold text-[#FFA726] tabular-nums">
                 +{simulation.leveragedEquityIncrease.toFixed(4)}%
               </span>
             </div>

@@ -130,15 +130,15 @@ export default function WeeklyReportDetail() {
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
           <button
             onClick={() => setLocation('/parent/equity-history')}
             className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
+            <ArrowLeft className="w-5 h-5 text-[#424242]" />
           </button>
-          <h1 className="text-lg font-semibold text-gray-900 ml-2">
+          <h1 className="text-lg font-semibold text-[#424242] ml-2">
             历史确权周报
           </h1>
         </div>
@@ -159,10 +159,10 @@ export default function WeeklyReportDetail() {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#CBA471]/10 mb-3">
                 <Award className="w-8 h-8 text-[#CBA471]" />
               </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">
+              <div className="text-2xl font-bold text-[#424242] mb-1">
                 {report.weekNumber}
               </div>
-              <div className="text-sm text-gray-500 mb-1">
+              <div className="text-sm text-[#757575] mb-1">
                 {report.dateRange}
               </div>
               <div className="text-xs text-[#CBA471] font-medium">
@@ -216,18 +216,18 @@ export default function WeeklyReportDetail() {
 
           {/* 资本加速明细 */}
           <div className="mb-6">
-            <div className="text-sm font-semibold text-gray-900 mb-3">
+            <div className="text-sm font-semibold text-[#424242] mb-3">
               资本加速明细
             </div>
-            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100">
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-[#E0E0E0]">
               <div className="space-y-3">
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={originalAccelerationTitleRef} className="text-sm text-gray-600">原始加速</span>
+                    <span ref={originalAccelerationTitleRef} className="text-sm text-[#757575]">原始加速</span>
                     <button
                       ref={originalAccelerationHelpRef}
                       onClick={() => setShowOriginalAccelerationHelp(!showOriginalAccelerationHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
@@ -244,39 +244,39 @@ export default function WeeklyReportDetail() {
                   triggerRef={originalAccelerationTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">原始加速说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
+                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">原始加速说明</div>
+                      <div className="text-sm text-[#424242] leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">计算依据</span>
-                          <span className="text-gray-700"> — 根据您的席位编号（投资时机）确定</span>
+                          <span className="text-[#424242]"> — 根据您的席位编号（投资时机）确定</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">风险补偿</span>
-                          <span className="text-gray-700"> — 早期投资者承担更大风险，享受更高加速倍数</span>
+                          <span className="text-[#424242]"> — 早期投资者承担更大风险，享受更高加速倍数</span>
                         </div>
                         <div className="py-1.5">
                           <span className="font-semibold text-[#D32F2F]">示例</span>
-                          <span className="text-gray-700"> — 第7名投资者的原始加速为2.9909x</span>
+                          <span className="text-[#424242]"> — 第7名投资者的原始加速为2.9909x</span>
                         </div>
                       </div>
                     </div>
                   }
                 />
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600">实际投资额</span>
-                  <span className="text-base font-bold text-gray-900">
+                  <span className="text-sm text-[#757575]">实际投资额</span>
+                  <span className="text-base font-bold text-[#424242]">
                     ¥{report.capitalAccelerationDetail.investmentAmount.toLocaleString()}
                   </span>
                 </div>
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={actualAccelerationTitleRef} className="text-sm text-gray-600">实际加速</span>
+                    <span ref={actualAccelerationTitleRef} className="text-sm text-[#757575]">实际加速</span>
                     <button
                       ref={actualAccelerationHelpRef}
                       onClick={() => setShowActualAccelerationHelp(!showActualAccelerationHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
@@ -293,25 +293,25 @@ export default function WeeklyReportDetail() {
                   triggerRef={actualAccelerationTitleRef}
                   content={
                       <div className="space-y-1.5">
-                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">实际加速说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
+                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">实际加速说明</div>
+                      <div className="text-sm text-[#424242] leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">计算公式</span>
-                          <span className="text-gray-700"> — 实际加速 = 原始加速 × (投资万数 / 10)</span>
+                          <span className="text-[#424242]"> — 实际加速 = 原始加速 × (投资万数 / 10)</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">关键特性</span>
-                          <span className="text-gray-700"> — 投资10万元时，实际加速 = 原始加速</span>
+                          <span className="text-[#424242]"> — 投资10万元时，实际加速 = 原始加速</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">示例（原始加速2.99x）</span>
-                          <span className="text-gray-700"> — 1万元：2.99 × (1/10) = 0.299x</span>
+                          <span className="text-[#424242]"> — 1万元：2.99 × (1/10) = 0.299x</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
-                          <span className="text-gray-700"> — 5万元：2.99 × (5/10) = 1.495x</span>
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
+                          <span className="text-[#424242]"> — 5万元：2.99 × (5/10) = 1.495x</span>
                         </div>
                         <div className="py-1.5">
-                          <span className="text-gray-700"> — 10万元：2.99 × (10/10) = 2.99x</span>
+                          <span className="text-[#424242]"> — 10万元：2.99 × (10/10) = 2.99x</span>
                         </div>
                       </div>
                     </div>
@@ -323,24 +323,24 @@ export default function WeeklyReportDetail() {
 
           {/* 资源加速明细 */}
           <div className="mb-6">
-            <div className="text-sm font-semibold text-gray-900 mb-3">
+            <div className="text-sm font-semibold text-[#424242] mb-3">
               资源加速明细
             </div>
-            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-gray-100">
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 border border-[#E0E0E0]">
               <div className="space-y-3">
                 {/* 人脉累计 */}
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={contactCountTitleRef} className="text-sm text-gray-600">人脉累计</span>
+                    <span ref={contactCountTitleRef} className="text-sm text-[#757575]">人脉累计</span>
                     <button
                       ref={contactCountHelpRef}
                       onClick={() => setShowContactCountHelp(!showContactCountHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <span className="text-base font-bold text-gray-900">
+                  <span className="text-base font-bold text-[#424242]">
                     {report.resourceAccelerationDetail?.contactCount || report.personalContribution.networkSize} 人
                   </span>
                 </div>
@@ -352,40 +352,40 @@ export default function WeeklyReportDetail() {
                   triggerRef={contactCountTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">人脉累计说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
+                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">人脉累计说明</div>
+                      <div className="text-sm text-[#424242] leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">计算依据</span>
-                          <span className="text-gray-700"> — 账户内添加的联系人数量</span>
+                          <span className="text-[#424242]"> — 账户内添加的联系人数量</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">统计范围</span>
-                          <span className="text-gray-700"> — 使用至今的累计数据</span>
+                          <span className="text-[#424242]"> — 使用至今的累计数据</span>
                         </div>
                         <div className="py-1.5">
                           <span className="font-semibold text-[#D32F2F]">说明</span>
-                          <span className="text-gray-700"> — 不考虑信息完整度，只统计数量</span>
+                          <span className="text-[#424242]"> — 不考虑信息完整度，只统计数量</span>
                         </div>
                       </div>
                     </div>
                   }
                 />
                 
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 
                 {/* 标签累计 */}
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={tagCountTitleRef} className="text-sm text-gray-600">标签累计</span>
+                    <span ref={tagCountTitleRef} className="text-sm text-[#757575]">标签累计</span>
                     <button
                       ref={tagCountHelpRef}
                       onClick={() => setShowTagCountHelp(!showTagCountHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <span className="text-base font-bold text-gray-900">
+                  <span className="text-base font-bold text-[#424242]">
                     {report.resourceAccelerationDetail?.tagCount || Math.round(report.personalContribution.tagCompleteness * report.personalContribution.networkSize)} 个
                   </span>
                 </div>
@@ -397,40 +397,40 @@ export default function WeeklyReportDetail() {
                   triggerRef={tagCountTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">标签累计说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
+                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">标签累计说明</div>
+                      <div className="text-sm text-[#424242] leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">计算依据</span>
-                          <span className="text-gray-700"> — 所有好友的标签总和</span>
+                          <span className="text-[#424242]"> — 所有好友的标签总和</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">统计范围</span>
-                          <span className="text-gray-700"> — 包含全局标签和个人标签</span>
+                          <span className="text-[#424242]"> — 包含全局标签和个人标签</span>
                         </div>
                         <div className="py-1.5">
                           <span className="font-semibold text-[#D32F2F]">说明</span>
-                          <span className="text-gray-700"> — 标签越多，说明人脉信息越完整</span>
+                          <span className="text-[#424242]"> — 标签越多，说明人脉信息越完整</span>
                         </div>
                       </div>
                     </div>
                   }
                 />
                 
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 
                 {/* 30日联络数 */}
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={interactionCountTitleRef} className="text-sm text-gray-600">30日联络数</span>
+                    <span ref={interactionCountTitleRef} className="text-sm text-[#757575]">30日联络数</span>
                     <button
                       ref={interactionCountHelpRef}
                       onClick={() => setShowInteractionCountHelp(!showInteractionCountHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <span className="text-base font-bold text-gray-900">
+                  <span className="text-base font-bold text-[#424242]">
                     {report.resourceAccelerationDetail?.interactionCount || report.personalContribution.contactFrequency} 次
                   </span>
                 </div>
@@ -442,44 +442,44 @@ export default function WeeklyReportDetail() {
                   triggerRef={interactionCountTitleRef}
                   content={
                     <div className="space-y-1.5">
-                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">30日联络数说明</div>
-                      <div className="text-sm text-gray-800 leading-snug space-y-1">
-                        <div className="py-1.5 border-b border-gray-100">
+                      <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">30日联络数说明</div>
+                      <div className="text-sm text-[#424242] leading-snug space-y-1">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">统计节点</span>
-                          <span className="text-gray-700"> — 每周日晚上12点</span>
+                          <span className="text-[#424242]"> — 每周日晚上12点</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">统计范围</span>
-                          <span className="text-gray-700"> — 从统计节点往前推30天</span>
+                          <span className="text-[#424242]"> — 从统计节点往前推30天</span>
                         </div>
-                        <div className="py-1.5 border-b border-gray-100">
+                        <div className="py-1.5 border-b border-[#E0E0E0]">
                           <span className="font-semibold text-[#D32F2F]">计算方式</span>
-                          <span className="text-gray-700"> — 累计联络次数（同一人可多次计算）</span>
+                          <span className="text-[#424242]"> — 累计联络次数（同一人可多次计算）</span>
                         </div>
                         <div className="py-1.5">
                           <span className="font-semibold text-[#D32F2F]">等级保持</span>
-                          <span className="text-gray-700"> — 符合条件则接下来一周保持该级别，下周日再次统计</span>
+                          <span className="text-[#424242]"> — 符合条件则接下来一周保持该级别，下周日再次统计</span>
                         </div>
                       </div>
                     </div>
                   }
                 />
                 
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 
                 {/* 本周等级 */}
                 <div className="flex items-center justify-between py-2">
                   <div className="flex items-center space-x-1.5">
-                    <span ref={levelNameTitleRef} className="text-sm text-gray-600">本周等级</span>
+                    <span ref={levelNameTitleRef} className="text-sm text-[#757575]">本周等级</span>
                     <button
                       ref={levelNameHelpRef}
                       onClick={() => setShowLevelNameHelp(!showLevelNameHelp)}
-                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
+                      className="text-[#757575] hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <span className="text-base font-bold text-gray-900">
+                  <span className="text-base font-bold text-[#424242]">
                     {report.resourceAccelerationDetail?.levelName || '用户'}
                   </span>
                 </div>
@@ -493,46 +493,46 @@ export default function WeeklyReportDetail() {
                     report.resourceAccelerationDetail?.hasInvestment ? (
                       // 有投资：显示正式节点说明
                       <div className="space-y-1.5">
-                        <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">正式节点说明</div>
-                        <div className="text-sm text-gray-800 leading-snug space-y-1">
-                          <div className="py-1.5 border-b border-gray-100">
+                        <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">正式节点说明</div>
+                        <div className="text-sm text-[#424242] leading-snug space-y-1">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">节点定义</span>
-                            <span className="text-gray-700"> — 已完成投资储值的正式合伙人</span>
+                            <span className="text-[#424242]"> — 已完成投资储值的正式合伙人</span>
                           </div>
-                          <div className="py-1.5 border-b border-gray-100">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">核心权益</span>
-                            <span className="text-gray-700"> — 享有资本加速和资源加速双重权益</span>
+                            <span className="text-[#424242]"> — 享有资本加速和资源加速双重权益</span>
                           </div>
-                          <div className="py-1.5 border-b border-gray-100">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">资源加速</span>
-                            <span className="text-gray-700"> — 根据人脉、标签、联络数计算加速倍数</span>
+                            <span className="text-[#424242]"> — 根据人脉、标签、联络数计算加速倍数</span>
                           </div>
                           <div className="py-1.5">
                             <span className="font-semibold text-[#D32F2F]">等级体系</span>
-                            <span className="text-gray-700"> — 标准节点、高级节点、超级节点</span>
+                            <span className="text-[#424242]"> — 标准节点、高级节点、超级节点</span>
                           </div>
                         </div>
                       </div>
                     ) : (
                       // 无投资：显示准节点说明
                       <div className="space-y-1.5">
-                        <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">准节点说明</div>
-                        <div className="text-sm text-gray-800 leading-snug space-y-1">
-                          <div className="py-1.5 border-b border-gray-100">
+                        <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-[#E0E0E0]">准节点说明</div>
+                        <div className="text-sm text-[#424242] leading-snug space-y-1">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">准节点定义</span>
-                            <span className="text-gray-700"> — 尚未进行投资储值的用户</span>
+                            <span className="text-[#424242]"> — 尚未进行投资储值的用户</span>
                           </div>
-                          <div className="py-1.5 border-b border-gray-100">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">晋升要求</span>
-                            <span className="text-gray-700"> — 与正式节点完全相同</span>
+                            <span className="text-[#424242]"> — 与正式节点完全相同</span>
                           </div>
-                          <div className="py-1.5 border-b border-gray-100">
+                          <div className="py-1.5 border-b border-[#E0E0E0]">
                             <span className="font-semibold text-[#D32F2F]">资源加速</span>
-                            <span className="text-gray-700"> — 与正式节点完全相同</span>
+                            <span className="text-[#424242]"> — 与正式节点完全相同</span>
                           </div>
                           <div className="py-1.5">
                             <span className="font-semibold text-[#D32F2F]">转正条件</span>
-                            <span className="text-gray-700"> — 完成投资储值后自动转为正式节点</span>
+                            <span className="text-[#424242]"> — 完成投资储值后自动转为正式节点</span>
                           </div>
                         </div>
                       </div>
@@ -540,11 +540,11 @@ export default function WeeklyReportDetail() {
                   }
                 />
                 
-                <div className="border-t border-gray-100"></div>
+                <div className="border-t border-[#E0E0E0]"></div>
                 
                 {/* 资源加速 */}
                 <div className="flex items-center justify-between py-2">
-                  <span className="text-sm text-gray-600">资源加速</span>
+                  <span className="text-sm text-[#757575]">资源加速</span>
                   <span className="text-base font-bold text-[#CBA471]">
                     ×{report.resourceAcceleration.toFixed(4)}
                   </span>
@@ -556,25 +556,25 @@ export default function WeeklyReportDetail() {
 
           {/* 共享贡献明细 */}
           <div className="mb-6">
-            <div className="text-sm font-semibold text-gray-900 mb-3">
+            <div className="text-sm font-semibold text-[#424242] mb-3">
               共享贡献明细
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">已培育高级节点</span>
-                <span className="text-sm font-medium text-gray-900">
+              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
+                <span className="text-sm text-[#757575]">已培育高级节点</span>
+                <span className="text-sm font-medium text-[#424242]">
                   {report.sharedContribution.seniorNodes} 名
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">已培育高端节点</span>
-                <span className="text-sm font-medium text-gray-900">
+              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
+                <span className="text-sm text-[#757575]">已培育高端节点</span>
+                <span className="text-sm font-medium text-[#424242]">
                   {report.sharedContribution.advancedNodes} 名
                 </span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">已培育超端节点</span>
-                <span className="text-sm font-medium text-gray-900">
+              <div className="flex items-center justify-between py-2 border-b border-[#E0E0E0]">
+                <span className="text-sm text-[#757575]">已培育超端节点</span>
+                <span className="text-sm font-medium text-[#424242]">
                   {report.sharedContribution.superNodes} 名
                 </span>
               </div>
@@ -586,11 +586,11 @@ export default function WeeklyReportDetail() {
             <div className="flex items-start space-x-2">
               <Shield className="w-4 h-4 text-[#CBA471] mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-600 mb-1">区块链存证哈希</div>
-                <div className="text-[10px] text-gray-500 break-all font-mono">
+                <div className="text-xs text-[#757575] mb-1">区块链存证哈希</div>
+                <div className="text-[10px] text-[#757575] break-all font-mono">
                   {report.blockchainHash}
                 </div>
-                <div className="text-xs text-gray-400 mt-2">
+                <div className="text-xs text-[#757575] mt-2">
                   ✓ 数据已加密保护，实时同步至 2026/02/19
                 </div>
               </div>
@@ -598,7 +598,7 @@ export default function WeeklyReportDetail() {
           </div>
 
           {/* 底部说明 */}
-          <div className="mt-6 text-center text-xs text-gray-400">
+          <div className="mt-6 text-center text-xs text-[#757575]">
             本证书由系统自动生成，具有法律效力
           </div>
         </div>

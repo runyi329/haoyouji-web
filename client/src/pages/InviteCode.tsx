@@ -110,7 +110,7 @@ export default function InviteCode() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
+        <div className="text-[#757575]">加载中...</div>
       </div>
     );
   }
@@ -144,7 +144,7 @@ export default function InviteCode() {
                   <Users className="w-5 h-5 text-[#D32F2F]" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">已邀请好友</p>
+                  <p className="text-xs text-[#757575] dark:text-[#757575]">已邀请好友</p>
                   <p className="text-2xl font-bold text-[#D32F2F]">
                     {inviteInfo?.inviteCount || 0}<span className="text-sm font-normal ml-1">人</span>
                   </p>
@@ -201,10 +201,10 @@ export default function InviteCode() {
                   <img 
                     src={qrCodeData.qrCodeDataUrl} 
                     alt="邀请二维码" 
-                    className="w-48 h-48 border-2 border-gray-200 rounded-lg"
+                    className="w-48 h-48 border-2 border-[#E0E0E0] rounded-lg"
                   />
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-[#757575]">
                   扫描二维码即可使用您的邀请码注册
                 </p>
                 <Button
@@ -240,7 +240,7 @@ export default function InviteCode() {
                 <Button
                   variant="default"
                   onClick={shareToWechat}
-                  className="w-full bg-[#4CAF50] hover:bg-green-700"
+                  className="w-full bg-[#4CAF50] hover:bg-[#4CAF50]"
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   分享微信
@@ -249,12 +249,12 @@ export default function InviteCode() {
               <Button
                 variant="outline"
                 onClick={copyFullInviteText}
-                className="w-full border-indigo-200 hover:bg-indigo-50"
+                className="w-full border-[#1976D2] hover:bg-white"
               >
                 <Copy className="w-4 h-4 mr-2" />
                 复制完整邀请文案
               </Button>
-              <p className="text-xs text-gray-500 text-center pt-1">
+              <p className="text-xs text-[#757575] text-center pt-1">
                 💡 提示: 点击“分享微信”后,打开微信粘贴发送给好友
               </p>
             </div>

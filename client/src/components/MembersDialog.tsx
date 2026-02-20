@@ -47,10 +47,10 @@ export default function MembersDialog({
               
               {/* 成员信息 */}
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">
+                <div className="font-medium text-[#424242] truncate">
                   {member.nickname || member.username}
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-[#757575]">
                   @{member.username} · {member.role === "owner" ? "账本所有者" : "成员"}
                 </div>
               </div>

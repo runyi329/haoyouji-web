@@ -70,7 +70,7 @@ export default function InvitedFriendsList() {
             </button>
             <h1 className="text-xl font-bold">我邀请的好友</h1>
           </div>
-          <div className="text-center py-8 text-gray-500">加载中...</div>
+          <div className="text-center py-8 text-[#757575]">加载中...</div>
         </div>
       </div>
     );
@@ -126,11 +126,11 @@ export default function InvitedFriendsList() {
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#FFEBEE] dark:bg-[#B71C1C]/50">
-                <UserPlus className="w-4 h-4 text-[#D32F2F] dark:text-red-400" />
+                <UserPlus className="w-4 h-4 text-[#D32F2F] dark:text-[#D32F2F]" />
               </div>
               <div>
-                <p className="text-xs text-[#757575] dark:text-gray-400">已邀请好友</p>
-                <p className="text-xl font-bold text-[#D32F2F] dark:text-red-400">
+                <p className="text-xs text-[#757575] dark:text-[#757575]">已邀请好友</p>
+                <p className="text-xl font-bold text-[#D32F2F] dark:text-[#D32F2F]">
                   {friends?.length || 0}<span className="text-xs font-normal ml-1">人</span>
                 </p>
               </div>
@@ -142,13 +142,13 @@ export default function InvitedFriendsList() {
         <div className="flex gap-2">
           {/* 搜索框 */}
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#757575]" />
             <input
               type="text"
               placeholder="搜索用户名或昵称..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-divider dark:border-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000]"
+              className="w-full pl-9 pr-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-divider dark:border-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000]"
             />
           </div>
 
@@ -156,7 +156,7 @@ export default function InvitedFriendsList() {
           <div className="relative">
             <button
               onClick={() => setShowSortMenu(!showSortMenu)}
-              className="flex items-center gap-1 px-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-divider dark:border-gray-700 text-sm hover:bg-white dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
+              className="flex items-center gap-1 px-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg border border-divider dark:border-[#E0E0E0] text-sm hover:bg-white dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
             >
               <ArrowUpDown className="w-4 h-4" />
               <span>{currentSortLabel}</span>
@@ -171,7 +171,7 @@ export default function InvitedFriendsList() {
                   onClick={() => setShowSortMenu(false)}
                 />
                 {/* 菜单 */}
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-divider dark:border-gray-700 overflow-hidden z-20">
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-divider dark:border-[#E0E0E0] overflow-hidden z-20">
                   {sortOptions.map((option) => (
                     <button
                       key={option.value}
@@ -181,7 +181,7 @@ export default function InvitedFriendsList() {
                       }}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
                         sortType === option.value
-                          ? "bg-[#D32F2F]-light dark:bg-[#B71C1C]/20 text-[#D32F2F] dark:text-red-400 font-medium"
+                          ? "bg-[#D32F2F]-light dark:bg-[#B71C1C]/20 text-[#D32F2F] dark:text-[#D32F2F] font-medium"
                           : ""
                       }`}
                     >
@@ -198,17 +198,17 @@ export default function InvitedFriendsList() {
         {!friends || friends.length === 0 ? (
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
             <CardContent className="p-6 text-center">
-              <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-              <p className="text-gray-500 text-sm">还没有邀请好友</p>
-              <p className="text-xs text-gray-400 mt-1">分享你的邀请码给好友吧</p>
+              <Users className="w-10 h-10 mx-auto mb-2 text-[#757575]" />
+              <p className="text-[#757575] text-sm">还没有邀请好友</p>
+              <p className="text-xs text-[#757575] mt-1">分享你的邀请码给好友吧</p>
             </CardContent>
           </Card>
         ) : filteredAndSortedFriends.length === 0 ? (
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
             <CardContent className="p-6 text-center">
-              <Search className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-              <p className="text-gray-500 text-sm">未找到匹配的好友</p>
-              <p className="text-xs text-gray-400 mt-1">试试其他关键词</p>
+              <Search className="w-10 h-10 mx-auto mb-2 text-[#757575]" />
+              <p className="text-[#757575] text-sm">未找到匹配的好友</p>
+              <p className="text-xs text-[#757575] mt-1">试试其他关键词</p>
             </CardContent>
           </Card>
         ) : (
@@ -240,11 +240,11 @@ export default function InvitedFriendsList() {
                           {friend.name || friend.username || "未命名用户"}
                         </h3>
                         {friend.username && friend.name && (
-                          <span className="text-sm text-gray-400 truncate">@{friend.username}</span>
+                          <span className="text-sm text-[#757575] truncate">@{friend.username}</span>
                         )}
                       </div>
                       {(friend.invitedAt || friend.createdAt) && (
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-[#757575] mt-0.5">
                           注册于 {new Date(friend.invitedAt || friend.createdAt).toLocaleDateString('zh-CN', {
                             year: 'numeric',
                             month: 'numeric',
@@ -259,49 +259,49 @@ export default function InvitedFriendsList() {
                   <div className="flex gap-2 flex-wrap">
                     {/* 我的 */}
                     <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F5F5F5] dark:bg-[#424242]/20">
-                      <Users className="w-4 h-4 text-[#1976D2] dark:text-blue-400" />
-                      <span className="text-xs text-[#757575] dark:text-gray-400">我的</span>
-                      <span className="text-sm text-[#1976D2] dark:text-blue-400 font-semibold">
+                      <Users className="w-4 h-4 text-[#1976D2] dark:text-[#1976D2]" />
+                      <span className="text-xs text-[#757575] dark:text-[#757575]">我的</span>
+                      <span className="text-sm text-[#1976D2] dark:text-[#1976D2] font-semibold">
                         {friend.ownContactsCount}
                       </span>
                     </div>
 
                     {/* 共享 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#E8F5E9] dark:bg-green-900/20">
-                      <Share className="w-4 h-4 text-[#4CAF50] dark:text-green-400" />
-                      <span className="text-xs text-[#757575] dark:text-gray-400">共享</span>
-                      <span className="text-sm text-[#4CAF50] dark:text-green-400 font-semibold">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#E8F5E9] dark:bg-[#4CAF50]/20">
+                      <Share className="w-4 h-4 text-[#4CAF50] dark:text-[#4CAF50]" />
+                      <span className="text-xs text-[#757575] dark:text-[#757575]">共享</span>
+                      <span className="text-sm text-[#4CAF50] dark:text-[#4CAF50] font-semibold">
                         {friend.sharedContactsCount}
                       </span>
                     </div>
 
                     {/* 全部 */}
                     <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#D32F2F]-light dark:bg-[#B71C1C]/20">
-                      <Users className="w-4 h-4 text-[#D32F2F] dark:text-red-400" />
-                      <span className="text-xs text-[#757575] dark:text-gray-400">全部</span>
-                      <span className="text-sm text-[#D32F2F] dark:text-red-400 font-semibold">
+                      <Users className="w-4 h-4 text-[#D32F2F] dark:text-[#D32F2F]" />
+                      <span className="text-xs text-[#757575] dark:text-[#757575]">全部</span>
+                      <span className="text-sm text-[#D32F2F] dark:text-[#D32F2F] font-semibold">
                         {friend.totalContactsCount}
                       </span>
                     </div>
                     
                     {/* 标签数 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F3E5F5] dark:bg-purple-900/20">
-                      <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F3E5F5] dark:bg-[#D32F2F]/20">
+                      <svg className="w-4 h-4 text-[#D32F2F] dark:text-[#D32F2F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      <span className="text-xs text-[#757575] dark:text-gray-400">标签</span>
-                      <span className="text-sm text-purple-600 dark:text-purple-400 font-semibold">
+                      <span className="text-xs text-[#757575] dark:text-[#757575]">标签</span>
+                      <span className="text-sm text-[#D32F2F] dark:text-[#D32F2F] font-semibold">
                         {friend.tagsCount || 0}
                       </span>
                     </div>
                     
                     {/* 联络数 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#FAF3ED] dark:bg-orange-900/20">
-                      <svg className="w-4 h-4 text-[#CBA471] dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#FAF3ED] dark:bg-[#FFA726]/20">
+                      <svg className="w-4 h-4 text-[#CBA471] dark:text-[#FFA726]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      <span className="text-xs text-[#757575] dark:text-gray-400">联络</span>
-                      <span className="text-sm text-[#CBA471] dark:text-orange-400 font-semibold">
+                      <span className="text-xs text-[#757575] dark:text-[#757575]">联络</span>
+                      <span className="text-sm text-[#CBA471] dark:text-[#FFA726] font-semibold">
                         {friend.interactionsCount || 0}
                       </span>
                     </div>

@@ -29,16 +29,16 @@ const GAMES: GameConfig[] = [
   { id: "ludo", name: "飞行棋", icon: "🎲", color: "bg-[#F5F5F5]", activityPrefix: ["ludo_"] },
   
   // 识字游戏 - 4个独立入口
-  { id: "character_picture", name: "看图识字", icon: "🖼️", color: "bg-cyan-100", activityPrefix: ["character_picture_"], hasDifficulty: true },
+  { id: "character_picture", name: "看图识字", icon: "🖼️", color: "bg-white", activityPrefix: ["character_picture_"], hasDifficulty: true },
   { id: "character_flashcard", name: "快闪识字", icon: "⚡", color: "bg-[#FAF3ED]", activityPrefix: ["character_flashcard_"], hasDifficulty: true },
   { id: "character_listening", name: "听音识字", icon: "🎧", color: "bg-[#E8F5E9]", activityPrefix: ["character_listening_"], hasDifficulty: true },
-  { id: "character_memory", name: "翻牌记字", icon: "🃏", color: "bg-pink-100", activityPrefix: ["character_memory_"], hasDifficulty: true },
+  { id: "character_memory", name: "翻牌记字", icon: "🃏", color: "bg-white", activityPrefix: ["character_memory_"], hasDifficulty: true },
   
   // 其他游戏
-  { id: "memory", name: "记忆翻牌", icon: "🎴", color: "bg-indigo-100", activityPrefix: ["memory_"] },
-  { id: "puzzle", name: "拼图游戏", icon: "🧩", color: "bg-teal-100", activityPrefix: ["puzzle_"] },
+  { id: "memory", name: "记忆翻牌", icon: "🎴", color: "bg-white", activityPrefix: ["memory_"] },
+  { id: "puzzle", name: "拼图游戏", icon: "🧩", color: "bg-white", activityPrefix: ["puzzle_"] },
   { id: "math", name: "数学问答", icon: "🔢", color: "bg-[#FAF3ED]", activityPrefix: ["math_"] },
-  { id: "antonym", name: "反义词", icon: "🔄", color: "bg-emerald-100", activityPrefix: ["antonym_"] },
+  { id: "antonym", name: "反义词", icon: "🔄", color: "bg-white", activityPrefix: ["antonym_"] },
   { id: "addition20", name: "20加法", icon: "➕", color: "bg-[#FAF3ED]", activityPrefix: ["addition20_"], hasDifficulty: true },
   
   // 日常任务
@@ -48,27 +48,27 @@ const GAMES: GameConfig[] = [
 
 // 难度等级配置
 const DIFFICULTY_CONFIG = {
-  easy: { name: "简单", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
+  easy: { name: "简单", color: "bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]" },
   medium: { name: "中等", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
-  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
+  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-[#D32F2F]" },
 };
 
 // 20加法难度配置
 const ADDITION20_DIFFICULTY_CONFIG = {
-  easy: { name: "简单", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
-  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
+  easy: { name: "简单", color: "bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]" },
+  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-[#D32F2F]" },
 };
 
 // 五子棋段位配置
 const DAN_CONFIG: Record<number, { name: string; color: string }> = {
-  1: { name: "1段·入门", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
-  2: { name: "2段·初学", color: "bg-[#E8F5E9] text-[#4CAF50] border-green-300" },
-  3: { name: "3段·业余", color: "bg-[#F5F5F5] text-blue-700 border-blue-300" },
-  4: { name: "4段·进阶", color: "bg-[#F5F5F5] text-[#1976D2] border-blue-300" },
-  5: { name: "5段·熟练", color: "bg-[#FFEBEE] text-[#D32F2F]-dark border-red-300" },
-  6: { name: "6段·高手", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
-  7: { name: "7段·专家", color: "bg-[#FAF3ED] text-orange-700 border-orange-300" },
-  8: { name: "8段·大师", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
+  1: { name: "1段·入门", color: "bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]" },
+  2: { name: "2段·初学", color: "bg-[#E8F5E9] text-[#4CAF50] border-[#4CAF50]" },
+  3: { name: "3段·业余", color: "bg-[#F5F5F5] text-[#1976D2] border-[#1976D2]" },
+  4: { name: "4段·进阶", color: "bg-[#F5F5F5] text-[#1976D2] border-[#1976D2]" },
+  5: { name: "5段·熟练", color: "bg-[#FFEBEE] text-[#D32F2F]-dark border-[#D32F2F]" },
+  6: { name: "6段·高手", color: "bg-[#FFEBEE] text-[#D32F2F] border-[#D32F2F]" },
+  7: { name: "7段·专家", color: "bg-[#FAF3ED] text-[#FFA726] border-[#FFA726]" },
+  8: { name: "8段·大师", color: "bg-[#FFEBEE] text-[#D32F2F] border-[#D32F2F]" },
   9: { name: "9段·棋圣", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
 };
 
@@ -213,7 +213,7 @@ export default function GameRewardManager() {
       <div
         key={rule.id}
         className={`flex items-center justify-between p-3 rounded-lg border ${
-          rule.isActive ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100 opacity-60"
+          rule.isActive ? "bg-white border-[#E0E0E0]" : "bg-gray-50 border-[#E0E0E0] opacity-60"
         }`}
       >
         <div className="flex items-center gap-3">
@@ -228,10 +228,10 @@ export default function GameRewardManager() {
                 {label}
               </span>
             ) : (
-              <span className="font-medium text-gray-700">{label}</span>
+              <span className="font-medium text-[#424242]">{label}</span>
             )}
             {rule.description && !game.hasDifficulty && !game.hasDan && (
-              <div className="text-xs text-gray-500 mt-1">{rule.description}</div>
+              <div className="text-xs text-[#757575] mt-1">{rule.description}</div>
             )}
           </div>
         </div>
@@ -248,14 +248,14 @@ export default function GameRewardManager() {
                   onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
                   className="w-16 h-8 text-center"
                 />
-                <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                <Star className="w-5 h-5 text-[#FFA726] fill-yellow-500" />
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => handleSave(rule.id)}
                 disabled={updateMutation.isPending}
-                className="text-[#4CAF50] hover:text-green-700"
+                className="text-[#4CAF50] hover:text-[#4CAF50]"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -267,7 +267,7 @@ export default function GameRewardManager() {
                 size="sm"
                 variant="ghost"
                 onClick={handleCancel}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-[#757575] hover:text-[#757575]"
               >
                 取消
               </Button>
@@ -276,14 +276,14 @@ export default function GameRewardManager() {
             <>
               <div className="flex items-center gap-1 px-3 py-1 bg-[#FAF3ED] rounded-full border border-yellow-200">
                 <span className="font-bold text-[#CBA471]">{rule.starsReward}</span>
-                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <Star className="w-4 h-4 text-[#FFA726] fill-yellow-500" />
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => handleEdit(rule)}
                 disabled={!rule.isActive}
-                className="text-[#D32F2F] border-red-200 hover:bg-[#FFEBEE]"
+                className="text-[#D32F2F] border-[#D32F2F] hover:bg-[#FFEBEE]"
               >
                 编辑
               </Button>
@@ -297,8 +297,8 @@ export default function GameRewardManager() {
   return (
     <div className="space-y-4">
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-gray-800">游戏奖励配置</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-bold text-[#424242]">游戏奖励配置</h2>
+        <p className="text-sm text-[#757575] mt-1">
           点击每个游戏的编辑按钮，配置奖励星星数和难度设置
         </p>
       </div>
@@ -324,8 +324,8 @@ export default function GameRewardManager() {
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{game.icon}</span>
                   <div>
-                    <h3 className="font-semibold text-gray-800">{game.name}</h3>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <h3 className="font-semibold text-[#424242]">{game.name}</h3>
+                    <div className="flex items-center gap-2 text-xs text-[#757575]">
                       {game.hasDifficulty && <span className="px-2 py-0.5 bg-white/50 rounded">3个难度</span>}
                       {game.hasDan && <span className="px-2 py-0.5 bg-white/50 rounded">9个段位</span>}
                       {!game.hasDifficulty && !game.hasDan && hasRules && (
@@ -338,8 +338,8 @@ export default function GameRewardManager() {
                 <div className="flex items-center gap-3">
                   {hasRules && (
                     <div className="flex items-center gap-1 px-3 py-1 bg-white rounded-full shadow-sm">
-                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                      <span className="font-medium text-gray-700">{starsDisplay}</span>
+                      <Star className="w-4 h-4 text-[#FFA726] fill-yellow-500" />
+                      <span className="font-medium text-[#424242]">{starsDisplay}</span>
                     </div>
                   )}
                   <Button
@@ -366,7 +366,7 @@ export default function GameRewardManager() {
                       {gameRules.map((rule) => renderRuleRow(rule, game))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-gray-500">
+                    <div className="text-center py-6 text-[#757575]">
                       <Star className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                       <p>暂无奖励配置</p>
                       <p className="text-xs mt-1">该游戏还没有设置奖励规则</p>

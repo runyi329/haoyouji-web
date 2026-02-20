@@ -10,15 +10,15 @@ interface MasteryLevelBadgeProps {
 const MASTERY_CONFIG = {
   not_started: {
     label: "未学习",
-    className: "bg-gray-100 text-gray-700 hover:bg-gray-200 cursor-pointer",
+    className: "bg-gray-100 text-[#424242] hover:bg-gray-200 cursor-pointer",
   },
   learning: {
     label: "学习中",
-    className: "bg-yellow-100 text-yellow-700 hover:bg-[#FFF3E0] cursor-pointer",
+    className: "bg-white text-[#FFA726] hover:bg-[#FFF3E0] cursor-pointer",
   },
   mastered: {
     label: "已掌握",
-    className: "bg-[#E8F5E9] text-green-700 hover:bg-green-200 cursor-pointer",
+    className: "bg-[#E8F5E9] text-[#4CAF50] hover:bg-[#4CAF50] cursor-pointer",
   },
 };
 

@@ -203,7 +203,7 @@ export default function BrushingGame() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-blue-100 flex items-center justify-center p-4">
         <Card className="p-6">
-          <p className="text-center text-gray-600">未找到孩子信息</p>
+          <p className="text-center text-[#757575]">未找到孩子信息</p>
           <Button onClick={() => setLocation("/")} className="mt-4 w-full">
             返回首页
           </Button>
@@ -223,7 +223,7 @@ export default function BrushingGame() {
         <div className="flex items-center gap-2">
           <img src={selectedKid.avatar || ""} alt={selectedKid.name} className="w-8 h-8 rounded-full" />
           <span className="font-bold text-lg">{selectedKid.name}</span>
-          <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+          <Star className="w-5 h-5 text-[#FFA726] fill-yellow-500" />
           <span className="font-bold text-lg">{selectedKid.stars}</span>
         </div>
       </div>
@@ -235,7 +235,7 @@ export default function BrushingGame() {
           <Card className="p-8">
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold text-[#1976D2] mb-2">🦷 牙齿保卫战</h1>
-              <p className="text-gray-600">让我们一起保护牙齿健康！</p>
+              <p className="text-[#757575]">让我们一起保护牙齿健康！</p>
             </div>
 
             <div className="mb-8">
@@ -250,7 +250,7 @@ export default function BrushingGame() {
                 step={30}
                 className="w-full"
               />
-              <div className="flex justify-between text-sm text-gray-500 mt-2">
+              <div className="flex justify-between text-sm text-[#757575] mt-2">
                 <span>2分钟</span>
                 <span>3分钟</span>
                 <span>4分钟</span>
@@ -271,8 +271,8 @@ export default function BrushingGame() {
             <div className="mb-8">
               <div className="text-6xl mb-4">🪥</div>
               <h2 className="text-3xl font-bold mb-4">准备好了吗？</h2>
-              <p className="text-xl text-gray-600 mb-2">挤好牙膏后，点击下面的按钮开始刷牙</p>
-              <p className="text-lg text-gray-500">刷牙时间：{Math.floor(duration / 60)} 分钟</p>
+              <p className="text-xl text-[#757575] mb-2">挤好牙膏后，点击下面的按钮开始刷牙</p>
+              <p className="text-lg text-[#757575]">刷牙时间：{Math.floor(duration / 60)} 分钟</p>
             </div>
 
             <Button onClick={handleBeginBrushing} size="lg" className="w-full text-2xl py-8 bg-[#4CAF50] hover:bg-[#4CAF50]">
@@ -349,14 +349,14 @@ export default function BrushingGame() {
             <div className="mb-8">
               {/* 星星动画 */}
               <div className="mb-6">
-                <Star className="w-32 h-32 text-yellow-500 fill-yellow-500 mx-auto animate-bounce" />
+                <Star className="w-32 h-32 text-[#FFA726] fill-yellow-500 mx-auto animate-bounce" />
               </div>
               
               <h2 className="text-4xl font-bold text-[#4CAF50] mb-4">太棒啦！</h2>
-              <p className="text-2xl text-gray-700 mb-6">你获得了 {starsEarned} 颗星星！</p>
+              <p className="text-2xl text-[#424242] mb-6">你获得了 {starsEarned} 颗星星！</p>
               
               <div className="bg-[#E8F5E9] rounded-lg p-6 mb-6">
-                <p className="text-xl text-gray-700">
+                <p className="text-xl text-[#424242]">
                   我们今天又顺利完成了刷牙任务！<br />
                   继续保持，牙齿会越来越健康哦！
                 </p>

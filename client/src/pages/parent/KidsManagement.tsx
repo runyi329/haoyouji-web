@@ -136,7 +136,7 @@ export default function KidsManagement() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/parent")}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center gap-2 text-[#757575] hover:text-[#424242]"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>返回家长中心</span>
@@ -163,7 +163,7 @@ export default function KidsManagement() {
 
           {/* 添加宝贝表单 */}
           {showAddForm && (
-            <div className="mb-6 p-4 bg-[#F5F5F5] border border-blue-200 rounded-lg">
+            <div className="mb-6 p-4 bg-[#F5F5F5] border border-[#1976D2] rounded-lg">
               <h3 className="font-semibold mb-3">添加新宝贝</h3>
               <div className="flex gap-2">
                 <Input
@@ -237,7 +237,7 @@ export default function KidsManagement() {
                         {uploadingAvatar === kid.id ? (
                           <div className="w-4 h-4 border-2 border-[#1976D2] border-t-transparent rounded-full animate-spin"></div>
                         ) : (
-                          <Camera className="w-4 h-4 text-gray-600" />
+                          <Camera className="w-4 h-4 text-[#757575]" />
                         )}
                       </label>
                       <input
@@ -316,7 +316,7 @@ export default function KidsManagement() {
                     )}
 
                     {/* 五角星数量 */}
-                    <div className="flex items-center gap-2 text-amber-500 mb-4">
+                    <div className="flex items-center gap-2 text-[#FFA726] mb-4">
                       <Star className="w-6 h-6 fill-current" />
                       <span className="text-2xl font-bold">{kid.stars}</span>
                       <span className="text-sm text-muted-foreground">颗星星</span>
@@ -326,7 +326,7 @@ export default function KidsManagement() {
                     {kid.userId && (
                       <div className="w-full text-left bg-gray-50 p-3 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">登录账号：</p>
-                        <p className="text-sm font-mono text-gray-700 break-all">{(kid as any).username || "暂无"}</p>
+                        <p className="text-sm font-mono text-[#424242] break-all">{(kid as any).username || "暂无"}</p>
                       </div>
                     )}
                   </div>
@@ -336,8 +336,8 @@ export default function KidsManagement() {
           )}
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-blue-200">
-            <p className="text-sm text-blue-800">
+          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-[#1976D2]">
+            <p className="text-sm text-[#1976D2]">
               <strong>提示：</strong>点击头像右下角的相机图标可以上传照片，点击名称旁边的编辑图标可以修改名称。
               点击垃圾桶图标可以删除宝贝（删除后将同时删除该宝贝的登录账户）。
               星星可以通过游戏获胜自动获得。

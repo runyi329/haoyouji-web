@@ -473,11 +473,11 @@ export default function Addition20Game() {
 
             {/* 有奖挑战提示 */}
             {activeChallenge && (
-              <Card className="p-4 mb-6 max-w-md mx-auto bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
+              <Card className="p-4 mb-6 max-w-md mx-auto bg-gradient-to-br from-amber-50 to-orange-50 border-[#FFA726]">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Trophy className="w-5 h-5 text-[#CBA471]" />
-                    <h3 className="font-semibold text-amber-900">继续挑战</h3>
+                    <h3 className="font-semibold text-[#FFA726]">继续挑战</h3>
                   </div>
                   <Button 
                     variant="ghost" 
@@ -493,18 +493,18 @@ export default function Addition20Game() {
                     <img 
                       src={activeChallenge.rewardImageUrl} 
                       alt="奖品" 
-                      className="w-20 h-20 mx-auto rounded-lg object-cover border-2 border-amber-400"
+                      className="w-20 h-20 mx-auto rounded-lg object-cover border-2 border-[#FFA726]"
                     />
                   </div>
                 )}
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-[#CBA471]">奖品：</span>
-                    <span className="font-medium text-amber-900">{activeChallenge.rewardTitle}</span>
+                    <span className="font-medium text-[#FFA726]">{activeChallenge.rewardTitle}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#CBA471]">当前进度：</span>
-                    <span className="font-medium text-amber-900">
+                    <span className="font-medium text-[#FFA726]">
                       {activeChallenge.currentCorrectCount} / {activeChallenge.targetCorrectCount} 题
                     </span>
                   </div>
@@ -608,8 +608,8 @@ export default function Addition20Game() {
                   )}
                 </div>
                 <h2 className="text-3xl font-bold mb-4 text-[#CBA471]">🎉 挑战完成！</h2>
-                <Card className="max-w-md mx-auto p-6 mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
-                  <h3 className="text-2xl font-bold text-amber-900 mb-4">
+                <Card className="max-w-md mx-auto p-6 mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-[#FFA726]">
+                  <h3 className="text-2xl font-bold text-[#FFA726] mb-4">
                     你赢得了：{activeChallenge.rewardTitle}
                   </h3>
                   <div className="space-y-2 text-sm text-[#CBA471]">
@@ -664,11 +664,11 @@ export default function Addition20Game() {
           <div>
             {/* 有奖挑战模式提示 */}
             {activeChallenge && (
-              <Card className="p-4 mb-4 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
+              <Card className="p-4 mb-4 bg-gradient-to-br from-amber-50 to-orange-50 border-[#FFA726]">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Trophy className="w-5 h-5 text-[#CBA471]" />
-                    <span className="font-semibold text-amber-900">有奖挑战进行中</span>
+                    <span className="font-semibold text-[#FFA726]">有奖挑战进行中</span>
                   </div>
                   <Button
                     variant="outline"
@@ -678,7 +678,7 @@ export default function Addition20Game() {
                       toast.success("已保存进度，下次继续！");
                       window.location.href = `/games?kidId=${selectedKidId}`;
                     }}
-                    className="border-amber-400 text-[#CBA471] hover:bg-[#FAF3ED]"
+                    className="border-[#FFA726] text-[#CBA471] hover:bg-[#FAF3ED]"
                   >
                     休息保存
                   </Button>
@@ -686,7 +686,7 @@ export default function Addition20Game() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#CBA471]">奖品：{activeChallenge.rewardTitle}</span>
-                    <span className="font-semibold text-amber-900">
+                    <span className="font-semibold text-[#FFA726]">
                       {activeChallenge.currentCorrectCount} / {activeChallenge.targetCorrectCount} 题
                     </span>
                   </div>
@@ -816,7 +816,7 @@ export default function Addition20Game() {
                         </Button>
                       </div>
                       {selectedAnswer !== null && (
-                        <div className={`mt-4 p-3 rounded-lg ${isCorrect ? "bg-[#E8F5E9] text-green-700" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
+                        <div className={`mt-4 p-3 rounded-lg ${isCorrect ? "bg-[#E8F5E9] text-[#4CAF50]" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
                           {isCorrect ? (
                             <div className="flex items-center justify-center gap-2">
                               <Check className="w-5 h-5" />

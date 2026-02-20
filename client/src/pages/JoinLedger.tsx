@@ -62,7 +62,7 @@ export default function JoinLedger() {
         <Card className="p-8 bg-white max-w-md w-full text-center">
           <AlertCircle className="w-16 h-16 mx-auto mb-4" style={{ color: themeColors.primary }} />
           <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>需要登录</h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-[#757575] mb-6">
             您需要先登录脉动账号才能加入账本
           </p>
           <Button
@@ -84,13 +84,13 @@ export default function JoinLedger() {
         <Card className="p-8 bg-white max-w-md w-full text-center">
           <CheckCircle2 className="w-16 h-16 text-[#4CAF50] mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入成功！</h2>
-          <p className="text-gray-600 mb-2">
+          <p className="text-[#757575] mb-2">
             您已成功加入账本
           </p>
           <p className="text-lg font-semibold mb-6" style={{ color: themeColors.text }}>
             {ledgerInfo.name}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-[#757575]">
             即将跳转到账本页面...
           </p>
         </Card>
@@ -105,13 +105,13 @@ export default function JoinLedger() {
         <Card className="p-8 bg-white max-w-md w-full text-center">
           <AlertCircle className="w-16 h-16 text-[#D32F2F] mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入失败</h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-[#757575] mb-6">
             {errorMessage}
           </p>
           <div className="flex gap-3">
             <Button
               onClick={() => setLocation("/ledger")}
-              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800"
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-[#424242]"
             >
               返回账本列表
             </Button>
@@ -139,7 +139,7 @@ export default function JoinLedger() {
           <span className="text-3xl">📒</span>
         </div>
         <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入账本</h2>
-        <p className="text-gray-600 mb-6">
+        <p className="text-[#757575] mb-6">
           您收到了一个账本邀请，点击下方按钮即可加入
         </p>
         <Button
@@ -159,7 +159,7 @@ export default function JoinLedger() {
         </Button>
         <Button
           onClick={() => setLocation("/ledger")}
-          className="w-full mt-3 bg-gray-200 hover:bg-gray-300 text-gray-800"
+          className="w-full mt-3 bg-gray-200 hover:bg-gray-300 text-[#424242]"
         >
           取消
         </Button>

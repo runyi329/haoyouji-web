@@ -155,7 +155,7 @@ export default function Login() {
               <button
                 onClick={() => setActiveTab("login")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
-                  activeTab === "login" ? "text-gray-800" : "text-gray-400"
+                  activeTab === "login" ? "text-[#424242]" : "text-[#757575]"
                 }`}
               >
                 登录
@@ -166,7 +166,7 @@ export default function Login() {
               <button
                 onClick={() => setActiveTab("register")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
-                  activeTab === "register" ? "text-gray-800" : "text-gray-400"
+                  activeTab === "register" ? "text-[#424242]" : "text-[#757575]"
                 }`}
               >
                 注册
@@ -182,33 +182,33 @@ export default function Login() {
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <User className="w-5 h-5 text-gray-400" />
+                    <User className="w-5 h-5 text-[#757575]" />
                   </div>
                   <input
                     type="text"
                     placeholder="请输入用户名"
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full pl-12 pr-4 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                 </div>
 
                 {/* 密码输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <Lock className="w-5 h-5 text-gray-400" />
+                    <Lock className="w-5 h-5 text-[#757575]" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="请输入密码"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full pl-12 pr-12 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#757575] hover:text-[#757575]"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -221,7 +221,7 @@ export default function Login() {
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     loginUsername && loginPassword && agreedToTerms
                       ? 'bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-gray-200 text-[#424242] hover:bg-gray-300'
                   }`}
                 >
                   {loginMutation.isPending ? "登录中..." : "登录"}
@@ -233,7 +233,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
+                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-[#E0E0E0]"
                     }`}
                   >
                     {agreedToTerms && (
@@ -242,14 +242,14 @@ export default function Login() {
                       </svg>
                     )}
                   </button>
-                  <p className="text-xs text-gray-600 leading-relaxed">
+                  <p className="text-xs text-[#757575] leading-relaxed">
                     我已阅读、理解并同意
                     <Link href="/privacy-policy">
-                      <a className="text-gray-800 underline mx-1">《隐私条款》</a>
+                      <a className="text-[#424242] underline mx-1">《隐私条款》</a>
                     </Link>
                     、
                     <Link href="/user-agreement">
-                      <a className="text-gray-800 underline mx-1">《用户协议》</a>
+                      <a className="text-[#424242] underline mx-1">《用户协议》</a>
                     </Link>
                   </p>
                 </div>
@@ -262,14 +262,14 @@ export default function Login() {
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <User className="w-5 h-5 text-gray-400" />
+                    <User className="w-5 h-5 text-[#757575]" />
                   </div>
                   <input
                     type="text"
                     placeholder="请输入用户名"
                     value={regUsername}
                     onChange={(e) => setRegUsername(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full pl-12 pr-4 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                 </div>
 
@@ -280,7 +280,7 @@ export default function Login() {
                     placeholder="昵称（可选）"
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                 </div>
 
@@ -292,26 +292,26 @@ export default function Login() {
                     value={regInviteCode}
                     onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
                     maxLength={6}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors font-mono"
+                    className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors font-mono"
                   />
                 </div>
 
                 {/* 密码输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <Lock className="w-5 h-5 text-gray-400" />
+                    <Lock className="w-5 h-5 text-[#757575]" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="请输入密码"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full pl-12 pr-12 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#757575] hover:text-[#757575]"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -320,14 +320,14 @@ export default function Login() {
                 {/* 确认密码输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <Lock className="w-5 h-5 text-gray-400" />
+                    <Lock className="w-5 h-5 text-[#757575]" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="确认密码"
                     value={regConfirmPassword}
                     onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
+                    className="w-full pl-12 pr-4 py-3 border border-[#E0E0E0] rounded-xl text-sm focus:outline-none focus:border-[#E0E0E0] transition-colors"
                   />
                 </div>
 
@@ -338,7 +338,7 @@ export default function Login() {
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     regUsername && regPassword && regConfirmPassword && regName && agreedToTerms
                       ? 'bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-gray-200 text-[#424242] hover:bg-gray-300'
                   }`}
                 >
                   {registerMutation.isPending ? "注册中..." : "注册"}
@@ -350,7 +350,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
+                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-[#E0E0E0]"
                     }`}
                   >
                     {agreedToTerms && (
@@ -359,14 +359,14 @@ export default function Login() {
                       </svg>
                     )}
                   </button>
-                  <p className="text-xs text-gray-600 leading-relaxed">
+                  <p className="text-xs text-[#757575] leading-relaxed">
                     我已阅读、理解并同意
                     <Link href="/privacy-policy">
-                      <a className="text-gray-800 underline mx-1">《隐私条款》</a>
+                      <a className="text-[#424242] underline mx-1">《隐私条款》</a>
                     </Link>
                     、
                     <Link href="/user-agreement">
-                      <a className="text-gray-800 underline mx-1">《用户协议》</a>
+                      <a className="text-[#424242] underline mx-1">《用户协议》</a>
                     </Link>
                   </p>
                 </div>

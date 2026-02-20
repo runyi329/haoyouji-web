@@ -95,7 +95,7 @@ function SortableTagItem({
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-[#757575] flex-shrink-0"
+            className="cursor-grab active:cursor-grabbing text-[#757575] hover:text-[#757575] flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
@@ -1116,7 +1116,7 @@ export default function ContactsList() {
                   aria-expanded={sharerPopoverOpen}
                   disabled={shareFilter !== 'shared'}
                   className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm font-medium transition-all ${
-                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#D32F2F] hover:bg-[#D32F2F]-light'
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-[#757575]' : 'text-[#D32F2F] hover:bg-[#D32F2F]-light'
                   }`}
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
@@ -1299,7 +1299,7 @@ export default function ContactsList() {
             
             {/* 搜索下拉列表 */}
             {showDropdown && dropdownContacts.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-[#E0E0E0] rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
                 {dropdownContacts.map((contact: any) => {
                   const company = getFieldValue(contact, "公司名称");
                   const position = getFieldValue(contact, "职位");
@@ -1308,7 +1308,7 @@ export default function ContactsList() {
                     <div
                       key={contact.id}
                       onClick={(e) => handleContactClick(contact.id, contact, e)}
-                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-[#E0E0E0] dark:border-[#E0E0E0] last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
@@ -1335,8 +1335,8 @@ export default function ContactsList() {
             
             {/* 搜索历史记录 */}
             {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-[#E0E0E0] rounded-lg shadow-lg z-50">
+                <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-[#E0E0E0] dark:border-[#E0E0E0]">
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
@@ -1349,7 +1349,7 @@ export default function ContactsList() {
                   <div
                     key={index}
                     onClick={() => handleHistoryClick(query)}
-                    className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-[#E0E0E0] dark:border-[#E0E0E0] last:border-b-0"
                   >
                     <span className="text-sm truncate flex-1">{query}</span>
                     <button
@@ -1850,7 +1850,7 @@ export default function ContactsList() {
                           setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
                         }
                       }}
-                      className="w-5 h-5 rounded border-gray-300"
+                      className="w-5 h-5 rounded border-[#E0E0E0]"
                       style={{ 
                         accentColor: '#A80000'
                       }}
@@ -1873,11 +1873,11 @@ export default function ContactsList() {
                         {(contact as any).hasReferrer !== undefined && (
                           (contact as any).hasReferrer ? (
                             <UserCheck className={`h-4 w-4 ${
-                              contact._isShared ? 'text-gray-400' : ''
+                              contact._isShared ? 'text-[#757575]' : ''
                             }`}
                             style={!contact._isShared ? { color: '#A80000' } : {}} />
                           ) : (
-                            <UserX className="h-4 w-4 text-gray-400" />
+                            <UserX className="h-4 w-4 text-[#757575]" />
                           )
                         )}
                         {/* 笑脸图标×累计沟通次数 - 可点击查看详情 */}
@@ -1894,7 +1894,7 @@ export default function ContactsList() {
                             }}
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
-                                ? 'text-gray-400 cursor-default' 
+                                ? 'text-[#757575] cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
                             style={!contact._isShared ? { color: '#A80000' } : {}}
@@ -1918,7 +1918,7 @@ export default function ContactsList() {
                             }}
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
-                                ? 'text-gray-400 cursor-default' 
+                                ? 'text-[#757575] cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
                             style={!contact._isShared ? { color: '#A80000' } : {}}
@@ -1942,7 +1942,7 @@ export default function ContactsList() {
                             }}
                             className={`flex items-center gap-0.5 transition-opacity ${
                               contact._isShared 
-                                ? 'text-gray-400 cursor-default' 
+                                ? 'text-[#757575] cursor-default' 
                                 : 'hover:opacity-70 cursor-pointer'
                             }`}
                             style={!contact._isShared ? { color: '#A80000' } : {}}
@@ -1972,7 +1972,7 @@ export default function ContactsList() {
                               }}
                               className={`flex items-center gap-0.5 transition-opacity ${
                                 contact._isShared 
-                                  ? 'text-gray-400 cursor-default' 
+                                  ? 'text-[#757575] cursor-default' 
                                   : 'text-[#D32F2F] hover:opacity-70 cursor-pointer'
                               }`}
                               title={contact._isShared ? '' : '点击查看公司列表'}
@@ -2005,7 +2005,7 @@ export default function ContactsList() {
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {companies.map((companyField: any, index: number) => (
                               <div key={index} className="flex items-center gap-1">
-                                <span className="text-xs sm:text-sm text-[#757575] dark:text-gray-400 font-medium">
+                                <span className="text-xs sm:text-sm text-[#757575] dark:text-[#757575] font-medium">
                                   {companyField.value}
                                 </span>
                                 <CompanyReportIcon 
@@ -2046,7 +2046,7 @@ export default function ContactsList() {
                         <MessageCircle 
                           className={`h-4 w-4 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
-                              ? 'text-gray-400 opacity-50'
+                              ? 'text-[#757575] opacity-50'
                               : 'text-[#D32F2F] hover:text-[#D32F2F]-dark'
                           }`}
                         />
@@ -2092,7 +2092,7 @@ export default function ContactsList() {
                   </div>
                   {/* 联络状态显示 */}
                   <div 
-                    className="text-xs mt-2 pt-2 border-t border-gray-100 dark:border-gray-700"
+                    className="text-xs mt-2 pt-2 border-t border-[#E0E0E0] dark:border-[#E0E0E0]"
                     style={{ color: getInteractionStatusColor((contact as any).daysSinceLastInteraction) }}
                   >
                     {(contact as any).daysSinceLastInteraction !== null ? (
@@ -2377,7 +2377,7 @@ export default function ContactsList() {
               <>
                 {/* 联络方式选择（可选） */}
                 <div className="w-full">
-                  <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
+                  <Label className="text-sm text-[#757575] mb-2 block">联络方式（可选）</Label>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -2407,7 +2407,7 @@ export default function ContactsList() {
                 </div>
                 {/* 互动重要性评分（可选） */}
                 <div className="w-full">
-                  <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
+                  <Label className="text-sm text-[#757575] mb-2 block">互动重要性评分（可选）</Label>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((score) => (
                       <Button

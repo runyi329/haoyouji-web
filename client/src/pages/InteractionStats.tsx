@@ -127,12 +127,12 @@ export default function InteractionStats() {
         {/* 洞察卡片 */}
         {overview.insights.length > 0 && (
           <Card className="p-4 rounded-xl shadow-sm bg-gradient-to-br from-red-50 to-rose-50">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[#424242] mb-3 flex items-center gap-2">
               <span className="text-lg">💡</span> 数据洞察
             </h3>
             <div className="space-y-2">
               {overview.insights.map((insight, index) => (
-                <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                <div key={index} className="flex items-start gap-2 text-sm text-[#424242]">
                   <span className="text-[#1976D2] mt-0.5">•</span>
                   <span>{insight.text}</span>
                 </div>
@@ -143,26 +143,26 @@ export default function InteractionStats() {
 
         {/* 月度趋势 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">月度趋势对比</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">月度趋势对比</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg">
               <div>
-                <p className="text-xs text-gray-600">本月互动</p>
+                <p className="text-xs text-[#757575]">本月互动</p>
                 <p className="text-xl font-bold text-[#1976D2]">{overview.trends.thisMonth.interactions}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-600">活跃人脉</p>
+                <p className="text-xs text-[#757575]">活跃人脉</p>
                 <p className="text-xl font-bold text-[#1976D2]">{overview.trends.thisMonth.contacts}</p>
               </div>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div>
-                <p className="text-xs text-gray-600">上月互动</p>
-                <p className="text-xl font-bold text-gray-600">{overview.trends.lastMonth.interactions}</p>
+                <p className="text-xs text-[#757575]">上月互动</p>
+                <p className="text-xl font-bold text-[#757575]">{overview.trends.lastMonth.interactions}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-600">活跃人脉</p>
-                <p className="text-xl font-bold text-gray-600">{overview.trends.lastMonth.contacts}</p>
+                <p className="text-xs text-[#757575]">活跃人脉</p>
+                <p className="text-xl font-bold text-[#757575]">{overview.trends.lastMonth.contacts}</p>
               </div>
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function InteractionStats() {
       <div className="space-y-4">
         {/* 直方图 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">联络频次分布</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">联络频次分布</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={histogramData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -219,7 +219,7 @@ export default function InteractionStats() {
 
         {/* 帕累托图 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">圈层分析(帕累托)</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">圈层分析(帕累托)</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={paretoData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -236,19 +236,19 @@ export default function InteractionStats() {
 
         {/* 圈层表格 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">圈层分类统计</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">圈层分类统计</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-2 font-semibold text-gray-700">圈层</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">人数</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-700">占比</th>
+                <tr className="border-b border-[#E0E0E0]">
+                  <th className="text-left py-2 px-2 font-semibold text-[#424242]">圈层</th>
+                  <th className="text-right py-2 px-2 font-semibold text-[#424242]">人数</th>
+                  <th className="text-right py-2 px-2 font-semibold text-[#424242]">占比</th>
                 </tr>
               </thead>
               <tbody>
                 {distribution.pareto.map((p, index) => (
-                  <tr key={index} className="border-b border-gray-100">
+                  <tr key={index} className="border-b border-[#E0E0E0]">
                     <td className="py-2 px-2 flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${
                         p.tier === '核心圈' ? 'bg-[#4CAF50]' :
@@ -258,7 +258,7 @@ export default function InteractionStats() {
                       {p.tier}
                     </td>
                     <td className="text-right py-2 px-2 font-medium">{p.contacts}</td>
-                    <td className="text-right py-2 px-2 text-gray-600">{Math.round(p.cumulative * 100)}%</td>
+                    <td className="text-right py-2 px-2 text-[#757575]">{Math.round(p.cumulative * 100)}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -300,7 +300,7 @@ export default function InteractionStats() {
       <div className="space-y-4">
         {/* 趋势折线图 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">近30天互动趋势</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">近30天互动趋势</h3>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={trendData}>
               <defs>
@@ -342,7 +342,7 @@ export default function InteractionStats() {
 
         {/* 周模式分析 - 双轴分组柱状图 */}
         <Card className="p-4 rounded-xl shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">周模式分析（双轴）</h3>
+          <h3 className="text-sm font-semibold text-[#424242] mb-3">周模式分析（双轴）</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={weekData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -358,7 +358,7 @@ export default function InteractionStats() {
               <Bar yAxisId="right" dataKey="联络人数" fill={colors.success} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          <p className="text-xs text-gray-500 mt-2 text-center">
+          <p className="text-xs text-[#757575] mt-2 text-center">
             左轴：联络次数 | 右轴：联络人数
           </p>
         </Card>
@@ -366,12 +366,12 @@ export default function InteractionStats() {
         {/* 日历热力图 */}
         {timeSeries.heatmap.length > 0 && (
           <Card className="p-4 rounded-xl shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">日历热力图（近四周）</h3>
+            <h3 className="text-sm font-semibold text-[#424242] mb-3">日历热力图（近四周）</h3>
             <div className="space-y-2">
               {/* 星期标签 */}
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map((day, i) => (
-                  <div key={i} className="text-xs text-gray-500 text-center font-medium">{day}</div>
+                  <div key={i} className="text-xs text-[#757575] text-center font-medium">{day}</div>
                 ))}
               </div>
               {/* 热力图网格 */}
@@ -389,7 +389,7 @@ export default function InteractionStats() {
                     return (
                       <div
                         key={index}
-                        className="aspect-square rounded-lg flex items-center justify-center text-xs font-medium border border-gray-200 cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
+                        className="aspect-square rounded-lg flex items-center justify-center text-xs font-medium border border-[#E0E0E0] cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all"
                         style={{
                           backgroundColor: bgColor,
                           color: opacity > 0.5 ? 'white' : '#374151'
@@ -403,7 +403,7 @@ export default function InteractionStats() {
                 })()}
               </div>
               {/* 图例 */}
-              <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-600">
+              <div className="flex items-center justify-center gap-4 mt-3 text-xs text-[#757575]">
                 <div className="flex items-center gap-1">
                   <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}></div>
                   <span>低</span>

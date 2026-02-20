@@ -84,16 +84,16 @@ export default function CompanyEquityStructureCard() {
       {/* 股权池 2x2 网格 */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         {pools.map((pool, i) => (
-          <div key={i} className="bg-white rounded-xl p-3 border border-gray-100">
+          <div key={i} className="bg-white rounded-xl p-3 border border-[#E0E0E0]">
             <div className="flex items-center gap-2 mb-1">
               <div 
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: pool.color }}
               />
-              <div className="text-xs text-gray-500">{pool.name}</div>
+              <div className="text-xs text-[#757575]">{pool.name}</div>
             </div>
-            <div className="text-xl font-bold text-gray-900">{pool.percentage}%</div>
-            <div className="text-xs text-gray-400 mt-0.5">{pool.description}</div>
+            <div className="text-xl font-bold text-[#424242]">{pool.percentage}%</div>
+            <div className="text-xs text-[#757575] mt-0.5">{pool.description}</div>
           </div>
         ))}
       </div>
@@ -162,24 +162,24 @@ export default function CompanyEquityStructureCard() {
       </div>
 
       {/* 虚线分割 */}
-      <div className="border-t border-dashed border-gray-200 my-3"></div>
+      <div className="border-t border-dashed border-[#E0E0E0] my-3"></div>
 
       {/* 底部数据 */}
       <div className="grid grid-cols-3 gap-3 text-xs">
         <div>
-          <div className="text-gray-500 mb-1">创始股东</div>
-          <div className="text-lg font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <div className="text-[#757575] mb-1">创始股东</div>
+          <div className="text-lg font-bold text-[#424242]" style={{ fontVariantNumeric: 'tabular-nums' }}>
             660人
           </div>
         </div>
         <div className="text-center">
-          <div className="text-gray-500 mb-1">当前估值</div>
-          <div className="text-lg font-bold text-orange-600" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <div className="text-[#757575] mb-1">当前估值</div>
+          <div className="text-lg font-bold text-[#FFA726]" style={{ fontVariantNumeric: 'tabular-nums' }}>
             6600万
           </div>
         </div>
         <div className="text-right">
-          <div className="text-gray-500 mb-1">期权池余额</div>
+          <div className="text-[#757575] mb-1">期权池余额</div>
           <div className="text-lg font-bold text-[#4CAF50]" style={{ fontVariantNumeric: 'tabular-nums' }}>
             25%
           </div>
