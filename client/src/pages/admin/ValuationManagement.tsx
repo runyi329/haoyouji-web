@@ -30,7 +30,7 @@ export default function ValuationManagement() {
     try {
       const response = await fetch(`${BASE_URL}/api/admin/valuation/weights`);
       const data = await response.json();
-      setWeights(data);
+      setWeights(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('加载配置失败:', error);
     } finally {
@@ -42,7 +42,7 @@ export default function ValuationManagement() {
     try {
       const response = await fetch(`${BASE_URL}/api/valuation/current`);
       const data = await response.json();
-      setCurrentValuation(data.total_valuation);
+      setCurrentValuation(data?.total_valuation || 0);
     } catch (error) {
       console.error('加载估值失败:', error);
     }
