@@ -85,9 +85,22 @@ export default function Admin() {
   // 查看用户支付信息
   const [showUserPayment, setShowUserPayment] = useState<number | null>(null);
   const [userPaymentData, setUserPaymentData] = useState<any>(null);
+  
+  // 用户搜索
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   const { data: users, refetch: refetchUsers } = trpc.admin.getUsers.useQuery(undefined, {
     enabled: user?.role === "super_admin",
+  });
+  
+  // 搜索过滤用户
+  const filteredUsers = users?.filter((u) => {
+    if (!searchKeyword) return true;
+    const keyword = searchKeyword.toLowerCase();
+    return (
+      u.username.toLowerCase().includes(keyword) ||
+      (u.name && u.name.toLowerCase().includes(keyword))
+    );
   });
 
   const createUserMutation = trpc.admin.createUser.useMutation({
@@ -394,26 +407,20 @@ export default function Admin() {
                   </DialogContent>
                 </Dialog>
               </div>
-
-              {/* 首页横幅配置 */}
-              <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-amber-900">首页横幅配置</h3>
-                    <p className="text-sm text-amber-700 mt-1">设置首页顶部显示的横幅内容（标题、描述、图片）</p>
-                  </div>
-                  <Link href="/admin/banner">
-                    <Button variant="outline" className="bg-white">
-                      <Camera className="w-4 h-4 mr-2" />
-                      配置横幅
-                    </Button>
-                  </Link>
-                </div>
+              
+              {/* 用户搜索框 */}
+              <div className="mb-4">
+                <Input
+                  placeholder="搜索用户名、昵称..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  className="max-w-md"
+                />
               </div>
 
               {/* 用户列表 */}
               <div className="space-y-3">
-                {users?.map((u) => (
+                {filteredUsers?.map((u) => (
                   <div
                     key={u.id}
                     className="p-3 rounded-lg bg-muted/50 space-y-3"
@@ -446,6 +453,17 @@ export default function Admin() {
                       <p className="text-xs text-muted-foreground mt-1">
                         @{u.username} · {u.points} 积分
                       </p>
+                      {u.createdAt && (
+                        <p className="text-xs text-muted-foreground">
+                          注册时间：{new Date(u.createdAt).toLocaleString('zh-CN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
                     </div>
                     
                     {/* 操作按钮区 - 移动端优化布局 */}
