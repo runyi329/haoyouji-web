@@ -120,7 +120,7 @@ export default function LedgerFilter() {
   const accountTypes = [
     { value: "all", label: "全部", color: "bg-[#1976D2]" },
     { value: "wechat", label: "微信", color: "bg-[#4CAF50]" },
-    { value: "alipay", label: "支付宝", color: "bg-[#1976D2]" },
+    { value: "alipay", label: "支付宝", color: "bg-blue-400" },
     { value: "bank", label: "银行卡", color: "bg-[#CBA471]" },
     { value: "digital", label: "数字钱包", color: "bg-[#D32F2F]" },
     { value: "cash", label: "现金", color: "bg-gray-500" },
@@ -245,7 +245,7 @@ export default function LedgerFilter() {
         {/* 记账人 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-[#424242]">记账人</label>
+            <label className="text-sm font-medium text-gray-700">记账人</label>
             <button
               onClick={() => setShowMemberPicker(true)}
               className="w-8 h-8 rounded-full bg-[#D32F2F] flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
@@ -264,9 +264,9 @@ export default function LedgerFilter() {
         {/* 账目时间 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-[#424242]">账目时间</label>
+            <label className="text-sm font-medium text-gray-700">账目时间</label>
             {dateStart && dateEnd && (
-              <span className="text-xs text-[#757575]">
+              <span className="text-xs text-gray-400">
                 {dateStart} 至 {dateEnd}
               </span>
             )}
@@ -286,7 +286,7 @@ export default function LedgerFilter() {
                 className={`text-xs h-7 rounded ${
                   selectedDateRange === range.value
                     ? "bg-[#1976D2] text-white hover:bg-[#1976D2]"
-                    : "bg-white text-[#424242] hover:bg-gray-50"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
                 }`}
                 onClick={() => {
                   setSelectedDateRange(range.value);
@@ -331,15 +331,15 @@ export default function LedgerFilter() {
                 placeholder="开始日期"
                 value={dateStart}
                 onChange={(e) => setDateStart(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-[#E0E0E0] rounded-lg text-xs outline-none focus:border-[#1976D2]"
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
               />
-              <span className="text-[#757575] text-xs flex-shrink-0">至</span>
+              <span className="text-gray-400 text-xs flex-shrink-0">至</span>
               <input
                 type="text"
                 placeholder="结束日期"
                 value={dateEnd}
                 onChange={(e) => setDateEnd(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-[#E0E0E0] rounded-lg text-xs outline-none focus:border-[#1976D2]"
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
               />
             </div>
           )}
@@ -351,13 +351,13 @@ export default function LedgerFilter() {
             onClick={() => setShowAmountRange(!showAmountRange)}
             className="w-full flex items-center justify-between mb-2"
           >
-            <label className="text-sm font-medium text-[#424242] cursor-pointer">金额范围</label>
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">金额范围</label>
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[#757575]">
+              <span className="text-xs text-gray-400">
                 {showAmountRange ? "点击收起" : "点击展开"}
               </span>
               <ChevronDown
-                className={`w-3.5 h-3.5 text-[#757575] transition-transform ${
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
                   showAmountRange ? "rotate-180" : ""
                 }`}
               />
@@ -371,15 +371,15 @@ export default function LedgerFilter() {
                   placeholder="最小金额"
                   value={amountMin}
                   onChange={(e) => setAmountMin(e.target.value)}
-                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-[#E0E0E0] rounded-lg text-xs outline-none focus:border-[#1976D2]"
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
                 />
-                <span className="text-[#757575] text-xs flex-shrink-0">至</span>
+                <span className="text-gray-400 text-xs flex-shrink-0">至</span>
                 <input
                   type="number"
                   placeholder="最大金额"
                   value={amountMax}
                   onChange={(e) => setAmountMax(e.target.value)}
-                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-[#E0E0E0] rounded-lg text-xs outline-none focus:border-[#1976D2]"
+                  className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
                 />
               </div>
               <div className="px-1">
@@ -401,7 +401,7 @@ export default function LedgerFilter() {
 
         {/* 账目类型 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-[#424242] mb-2">账目类型</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">账目类型</label>
           <div className="flex flex-wrap gap-2">
             {transactionTypes.map((type) => (
               <Button
@@ -411,7 +411,7 @@ export default function LedgerFilter() {
                 className={`h-7 px-3 text-xs rounded ${
                   selectedType === type.value
                     ? `${type.color} text-white hover:opacity-90`
-                    : "border-[#E0E0E0]"
+                    : "border-gray-200"
                 }`}
                 onClick={() => setSelectedType(type.value)}
               >
@@ -427,13 +427,13 @@ export default function LedgerFilter() {
             onClick={() => setShowCategories(!showCategories)}
             className="w-full flex items-center justify-between mb-2"
           >
-            <label className="text-sm font-medium text-[#424242] cursor-pointer">账目分类</label>
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">账目分类</label>
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[#757575]">
+              <span className="text-xs text-gray-400">
                 {showCategories ? "点击收起" : "点击展开"}
               </span>
               <ChevronDown
-                className={`w-3.5 h-3.5 text-[#757575] transition-transform ${
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
                   showCategories ? "rotate-180" : ""
                 }`}
               />
@@ -444,7 +444,7 @@ export default function LedgerFilter() {
               {categoryTree.map((category: any) => (
                 <div key={category.id}>
                   {/* 一级分类标题 */}
-                  <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">一级分类</div>
+                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">一级分类</div>
                   
                   {/* 一级分类 */}
                   <div className="bg-white p-1">
@@ -453,7 +453,7 @@ export default function LedgerFilter() {
                       className={`h-7 px-3 text-xs rounded border ${
                         selectedCategories.includes(category.id)
                           ? "bg-[#1976D2] text-white border-[#1976D2]"
-                          : "bg-gray-50 border-[#E0E0E0] hover:bg-gray-100"
+                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                       }`}
                     >
                       {category.name}
@@ -463,7 +463,7 @@ export default function LedgerFilter() {
                   {/* 二级分类 */}
                   {expandedCategories.has(category.id) && category.children && category.children.length > 0 && (
                     <div>
-                      <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">二级分类</div>
+                      <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
                       <div className="bg-white p-1">
                         <div className="flex flex-wrap gap-2">
                           {category.children.map((subCategory: any) => (
@@ -473,7 +473,7 @@ export default function LedgerFilter() {
                               className={`h-7 px-3 text-xs rounded border ${
                                 selectedCategories.includes(subCategory.id)
                                   ? "bg-[#1976D2] text-white border-[#1976D2]"
-                                  : "bg-gray-50 border-[#E0E0E0] hover:bg-gray-100"
+                                  : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                               }`}
                             >
                               {subCategory.name}
@@ -485,7 +485,7 @@ export default function LedgerFilter() {
                       {/* 三级分类 */}
                       {category.children.some((sub: any) => expandedSubCategories.has(sub.id) && sub.children && sub.children.length > 0) && (
                         <div>
-                          <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">三级分类</div>
+                          <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
                           <div className="bg-white p-1">
                             <div className="flex flex-wrap gap-2">
                               {category.children.map((subCategory: any) => 
@@ -503,7 +503,7 @@ export default function LedgerFilter() {
                                       className={`h-7 px-3 text-xs rounded border ${
                                         selectedCategories.includes(thirdCategory.id)
                                           ? "bg-[#1976D2] text-white border-[#1976D2]"
-                                          : "bg-gray-50 border-[#E0E0E0] hover:bg-gray-100"
+                                          : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                                       }`}
                                     >
                                       {thirdCategory.name}
@@ -525,7 +525,7 @@ export default function LedgerFilter() {
 
         {/* 支付方式 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-[#424242] mb-2">{getAccountLabel()}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">{getAccountLabel()}</label>
           <div className="flex flex-wrap gap-2">
             {accountTypes.map((account) => (
               <Button
@@ -535,7 +535,7 @@ export default function LedgerFilter() {
                 className={`h-7 px-3 text-xs rounded ${
                   selectedAccounts.includes(account.value)
                     ? `${account.color} text-white hover:opacity-90`
-                    : "border-[#E0E0E0]"
+                    : "border-gray-200"
                 }`}
                 onClick={() => toggleAccount(account.value)}
               >
@@ -547,13 +547,13 @@ export default function LedgerFilter() {
 
         {/* 备注信息 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <label className="block text-sm font-medium text-[#424242] mb-2">备注信息</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">备注信息</label>
           <input
             type="text"
             placeholder="输入备注关键词"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="w-full px-3 py-1.5 bg-gray-50 border border-[#E0E0E0] rounded-lg text-xs outline-none focus:border-[#1976D2]"
+            className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
           />
         </div>
 
@@ -563,7 +563,7 @@ export default function LedgerFilter() {
       <div className="bg-white border-t px-3 py-2.5 flex gap-2 shadow-lg">
         <Button
           variant="outline"
-          className="flex-1 h-10 text-sm border-[#E0E0E0]"
+          className="flex-1 h-10 text-sm border-gray-300"
           onClick={handleReset}
         >
           重置条件

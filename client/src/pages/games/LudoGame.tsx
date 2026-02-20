@@ -12,7 +12,7 @@ const PLAYER_COLORS = {
   red: { bg: "bg-[#D32F2F]", text: "text-[#D32F2F]", light: "bg-[#FFEBEE]", name: "红方" },
   blue: { bg: "bg-[#1976D2]", text: "text-[#1976D2]", light: "bg-[#F5F5F5]", name: "蓝方" },
   green: { bg: "bg-[#4CAF50]", text: "text-[#4CAF50]", light: "bg-[#E8F5E9]", name: "绿方" },
-  yellow: { bg: "bg-[#CBA471]", text: "text-[#FFA726]", light: "bg-[#FAF3ED]", name: "黄方" },
+  yellow: { bg: "bg-[#CBA471]", text: "text-yellow-500", light: "bg-[#FAF3ED]", name: "黄方" },
 };
 
 type PlayerColor = keyof typeof PLAYER_COLORS;
@@ -397,7 +397,7 @@ export default function LudoGame() {
         cells.push(
           <div
             key={`${row}-${col}`}
-            className={`aspect-square border border-[#E0E0E0] flex items-center justify-center text-xs ${cellType.bg}`}
+            className={`aspect-square border border-gray-200 flex items-center justify-center text-xs ${cellType.bg}`}
           >
             {renderPiecesInCell(row, col)}
           </div>
@@ -411,10 +411,10 @@ export default function LudoGame() {
   // 获取格子类型
   const getCellType = (row: number, col: number) => {
     // 四个角落的基地
-    if (row < 4 && col < 4) return { bg: "bg-[#D32F2F]", type: "base-red" };
-    if (row < 4 && col > 6) return { bg: "bg-[#1976D2]", type: "base-blue" };
+    if (row < 4 && col < 4) return { bg: "bg-red-200", type: "base-red" };
+    if (row < 4 && col > 6) return { bg: "bg-blue-200", type: "base-blue" };
     if (row > 6 && col < 4) return { bg: "bg-[#FFF3E0]", type: "base-yellow" };
-    if (row > 6 && col > 6) return { bg: "bg-[#4CAF50]", type: "base-green" };
+    if (row > 6 && col > 6) return { bg: "bg-green-200", type: "base-green" };
     
     // 中心终点区域
     if (row >= 4 && row <= 6 && col >= 4 && col <= 6) {

@@ -407,15 +407,15 @@ export default function Profile() {
       onClick: () => navigate("/parent/profile/invite")
     },
     { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
-    { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-[#FFEBEE] text-[#D32F2F]", badge: null, onClick: () => navigate("/parent/poster-favorites") },
+    { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-[#FFEBEE] text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
     { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-[#E8F5E9] text-[#4CAF50]", badge: null, onClick: () => navigate("/work-groups") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
-    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-[#D32F2F]", badge: null, onClick: () => navigate("/ai") },
+    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [
-    { id: "change-password", icon: Shield, label: "修改密码", color: "bg-white text-[#1976D2]", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
+    { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
   ];
@@ -423,9 +423,9 @@ export default function Profile() {
   // 帮助与支持功能
   const helpFeatures: FeatureItem[] = [
     { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/parent/theme-settings") },
-    { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-white text-[#1976D2]", badge: null, onClick: () => navigate("/parent/academy") },
-    { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-white text-[#4CAF50]", badge: null, onClick: () => toast("功能开发中") },
-    { id: "about", icon: BookOpen, label: "关于我们", color: "bg-white text-emerald-600", badge: null, onClick: () => navigate("/parent/business-plan") },
+    { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-cyan-50 text-cyan-600", badge: null, onClick: () => navigate("/parent/academy") },
+    { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-teal-50 text-teal-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => navigate("/parent/business-plan") },
   ];
 
   // 根据顺序排序所有功能
@@ -519,8 +519,8 @@ export default function Profile() {
       <div className="px-4 mt-3">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-[#424242]">常用功能</h3>
-            <span className="text-xs text-[#757575]">长按拖拽排序</span>
+            <h3 className="text-sm font-semibold text-gray-700">常用功能</h3>
+            <span className="text-xs text-gray-400">长按拖拽排序</span>
           </div>
           <DndContext
             sensors={sensors}
@@ -544,7 +544,7 @@ export default function Profile() {
       {/* 账户管理 */}
       <div className="px-4 mt-3">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#424242] mb-3">账户管理</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">账户管理</h3>
           <div className="grid grid-cols-4 gap-4">
             {accountFeatures.map((item) => (
               <StaticFeatureItem key={item.id} item={item} />
@@ -556,7 +556,7 @@ export default function Profile() {
       {/* 帮助与支持 */}
       <div className="px-4 mt-3">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-[#424242] mb-3">帮助与支持</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">帮助与支持</h3>
           <div className="grid grid-cols-4 gap-4">
             {helpFeatures.map((item) => (
               <StaticFeatureItem key={item.id} item={item} />

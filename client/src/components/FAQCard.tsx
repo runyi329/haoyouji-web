@@ -89,7 +89,7 @@ export default function FAQCard() {
       {/* 手风琴问答列表 */}
       <div className="space-y-2 mb-4">
         {faqs.map((faq, index) => (
-          <div key={faq.id} className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
+          <div key={faq.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             {/* 问题标题 */}
             <button
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
@@ -97,11 +97,11 @@ export default function FAQCard() {
             >
               <div className="flex items-center gap-2 flex-1">
                 <ChevronDown
-                  className={`w-4 h-4 text-[#757575] transition-transform flex-shrink-0 ${
+                  className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${
                     openIndex === index ? 'rotate-180' : ''
                   }`}
                 />
-                <span className="text-sm font-semibold text-[#424242] text-left">
+                <span className="text-sm font-semibold text-gray-900 text-left">
                   {index + 1}. {faq.question}
                 </span>
               </div>
@@ -109,13 +109,13 @@ export default function FAQCard() {
 
             {/* 答案内容 */}
             {openIndex === index && (
-              <div className="px-3 pb-3 border-t border-[#E0E0E0]">
-                <div className="text-sm text-[#424242] leading-relaxed whitespace-pre-line mt-3 mb-3">
+              <div className="px-3 pb-3 border-t border-gray-100">
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mt-3 mb-3">
                   {faq.answer}
                 </div>
                 <button
                   onClick={() => copyText(faq.answer, index)}
-                  className="flex items-center gap-1 text-xs text-[#1976D2] hover:text-[#1976D2] transition-colors"
+                  className="flex items-center gap-1 text-xs text-[#1976D2] hover:text-blue-700 transition-colors"
                 >
                   {copiedIndex === index ? (
                     <>
@@ -138,7 +138,7 @@ export default function FAQCard() {
       {/* 底部总复制按钮 */}
       <button
         onClick={copyAllFAQs}
-        className="w-full py-2.5 bg-white border border-[#E0E0E0] rounded-xl text-sm font-semibold text-[#757575] hover:bg-gray-50 hover:border-[#E0E0E0] transition-all flex items-center justify-center gap-2"
+        className="w-full py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2"
       >
         {copiedAll ? (
           <>

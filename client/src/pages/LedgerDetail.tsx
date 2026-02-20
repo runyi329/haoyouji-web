@@ -210,7 +210,7 @@ export default function LedgerDetail() {
             {/* 显示更多按钮 */}
             {membersData && Array.isArray(membersData) && membersData.length > 0 && (
               <div
-                className="w-10 h-10 rounded-full bg-white border-2 border-[#E0E0E0] flex items-center justify-center text-[#757575] text-lg font-medium cursor-pointer hover:bg-[#FAF3ED]"
+                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-[#757575] text-lg font-medium cursor-pointer hover:bg-[#FAF3ED]"
                 style={{ marginLeft: membersData.length > 0 ? '-12px' : 0, zIndex: 0 }}
                 onClick={() => setShowMembersDialog(true)}
               >
@@ -276,7 +276,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('day');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-[#E0E0E0] last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按天
                   </button>
@@ -285,7 +285,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('week');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-[#E0E0E0] last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然周
                   </button>
@@ -294,7 +294,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('month');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-[#E0E0E0] last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然月
                   </button>
@@ -303,7 +303,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('year');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-[#E0E0E0] last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然年
                   </button>
@@ -339,11 +339,11 @@ export default function LedgerDetail() {
       {/* 待审批提示 */}
       {pendingApprovals.length > 0 && (
         <div 
-          className="mx-4 mt-3 mb-2 bg-[#FAF3ED] border border-[#FFA726] rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
+          className="mx-4 mt-3 mb-2 bg-[#FAF3ED] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
         >
           <Search className="w-4 h-4 text-[#CBA471] flex-shrink-0" />
-          <span className="text-sm text-[#FFA726]">
+          <span className="text-sm text-orange-800">
             你有 <span className="font-semibold">{pendingApprovals.length}</span> 个待审批账目
           </span>
           <ChevronRight className="w-4 h-4 text-[#CBA471] ml-auto" />
@@ -354,8 +354,8 @@ export default function LedgerDetail() {
       <div className="flex-1 px-4 pb-20 space-y-2">
         {!hasRecords ? (
           <div className="text-center py-12">
-            <div className="text-[#757575] text-base mb-1">还没有记账记录</div>
-            <div className="text-[#757575] text-sm">点击下方"+"按钮开始记账</div>
+            <div className="text-gray-400 text-base mb-1">还没有记账记录</div>
+            <div className="text-gray-400 text-sm">点击下方"+"按钮开始记账</div>
           </div>
         ) : (
           transactionsData.map((dayRecord: any) => {
@@ -367,7 +367,7 @@ export default function LedgerDetail() {
             return (
               <div key={dayRecord.date}>
                 {/* 日期标题 */}
-                <div className="flex items-center justify-between py-1 text-xs text-[#757575]">
+                <div className="flex items-center justify-between py-1 text-xs text-gray-500">
                   <span>
                     {dayRecord.date} {dayOfWeek}
                   </span>
@@ -426,7 +426,7 @@ export default function LedgerDetail() {
                           )}
                         </div>
                         {record.description && (
-                          <div className="text-xs text-[#757575] mt-0.5 ml-2.5 font-light">{record.description}</div>
+                          <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
                         )}
                       </div>
 

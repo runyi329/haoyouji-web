@@ -362,10 +362,10 @@ export default function LedgerCalendar() {
             borderBottom: `2px solid ${themeColors.primary}`
           }}
         >
-          <span className="text-[#424242]">
+          <span className="text-gray-800">
             {currentYear}年{currentMonth}月{selectedDate}日
           </span>
-          <span className="text-sm text-[#757575]">
+          <span className="text-sm text-gray-500">
             收:{formatAmount(selectedDayStats.income)} 支:{formatAmount(selectedDayStats.expense)} 余:{formatAmount(selectedDayStats.balance)}
           </span>
         </div>
@@ -375,7 +375,7 @@ export default function LedgerCalendar() {
             dayRecords.map((record: any) => (
               <div 
                 key={record.id} 
-                className="px-4 py-3 border-b border-[#E0E0E0] cursor-pointer"
+                className="px-4 py-3 border-b border-gray-100 cursor-pointer"
                 style={{ display: 'flex', alignItems: 'center' }}
                 onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
               >
@@ -396,19 +396,19 @@ export default function LedgerCalendar() {
                     <span className={`w-2 h-2 rounded-full mr-2 ${
                       record.type === "income" ? "bg-[#4CAF50]" : "bg-[#D32F2F]"
                     }`} />
-                    <span className="text-[#424242]">{record.categoryName || "未分类"}</span>
+                    <span className="text-gray-800">{record.categoryName || "未分类"}</span>
                   </div>
                 </div>
                 
                 <span className={`font-medium ${
-                  record.type === "income" ? "text-[#4CAF50]" : "text-[#424242]"
+                  record.type === "income" ? "text-[#4CAF50]" : "text-gray-800"
                 }`}>
                   {record.type === "income" ? "+" : "-"}{formatAmount(record.amount)}
                 </span>
               </div>
             ))
           ) : (
-            <div className="py-8 text-center text-[#757575]">
+            <div className="py-8 text-center text-gray-400">
               暂无记录
             </div>
           )}

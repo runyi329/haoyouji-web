@@ -75,8 +75,8 @@ export default function AchievementWall({
     <div className="space-y-3">
       {/* 标题 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#424242]">成就勋章墙</h3>
-        <span className="text-xs text-[#757575]">荣耀即权益</span>
+        <h3 className="text-sm font-semibold text-gray-700">成就勋章墙</h3>
+        <span className="text-xs text-gray-400">荣耀即权益</span>
       </div>
 
       {/* 勋章列表 */}
@@ -100,7 +100,7 @@ export default function AchievementWall({
               className={`rounded-xl p-4 transition-all ${
                 isHighLevel 
                   ? 'bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-2 border-yellow-400 shadow-lg' 
-                  : 'bg-white border border-[#E0E0E0]'
+                  : 'bg-white border border-gray-200'
               }`}
             >
               {/* 顶部：类别 + 当前勋章 */}
@@ -109,11 +109,11 @@ export default function AchievementWall({
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                     isHighLevel ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-gray-100'
                   }`}>
-                    <Icon className={`w-4 h-4 ${isHighLevel ? 'text-white' : 'text-[#757575]'}`} />
+                    <Icon className={`w-4 h-4 ${isHighLevel ? 'text-white' : 'text-gray-600'}`} />
                   </div>
                   <div>
-                    <span className="text-sm font-semibold text-[#424242]">{achievement.category}</span>
-                    <p className="text-xs text-[#757575]">{achievement.description}</p>
+                    <span className="text-sm font-semibold text-gray-900">{achievement.category}</span>
+                    <p className="text-xs text-gray-500">{achievement.description}</p>
                   </div>
                 </div>
                 
@@ -144,15 +144,15 @@ export default function AchievementWall({
                 <div className={`mb-3 p-2.5 rounded-lg ${
                   isHighLevel 
                     ? 'bg-gradient-to-r from-yellow-100 to-amber-100 border border-yellow-300' 
-                    : 'bg-gray-50 border border-[#E0E0E0]'
+                    : 'bg-gray-50 border border-gray-200'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#757575]">该成就已为你解锁</span>
+                    <span className="text-xs text-gray-600">该成就已为你解锁</span>
                     <div className="flex items-center space-x-1">
-                      <span className="text-sm font-bold text-[#FFA726]">
+                      <span className="text-sm font-bold text-orange-600">
                         +{(currentLevel.equityBonus * 100).toFixed(3)}%
                       </span>
-                      <span className="text-xs text-[#757575]">分红权重</span>
+                      <span className="text-xs text-gray-500">分红权重</span>
                     </div>
                   </div>
                 </div>
@@ -161,7 +161,7 @@ export default function AchievementWall({
               {/* 底部：下一级进度 */}
               {nextLevel ? (
                 <div>
-                  <div className="flex items-center justify-between text-xs text-[#757575] mb-1.5">
+                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
                     <div className="flex items-center space-x-1">
                       <span>下一级：</span>
                       <span className="font-semibold" style={{ color: nextLevel.color }}>
@@ -186,17 +186,17 @@ export default function AchievementWall({
                   </div>
                   
                   {/* 下一级权益预告 */}
-                  <div className="mt-2 text-xs text-[#757575] flex items-center justify-between">
+                  <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
                     <span>升级后可额外获得</span>
-                    <span className="font-semibold text-[#FFA726]">
+                    <span className="font-semibold text-orange-600">
                       +{(nextLevel.equityBonus * 100).toFixed(3)}% 分红权重
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-2 bg-gradient-to-r from-yellow-100 to-amber-100 rounded-lg">
-                  <Crown className="w-4 h-4 text-[#FFA726] mr-1.5" />
-                  <span className="text-xs font-semibold text-[#FFA726]">已达最高等级</span>
+                  <Crown className="w-4 h-4 text-yellow-600 mr-1.5" />
+                  <span className="text-xs font-semibold text-yellow-700">已达最高等级</span>
                 </div>
               )}
             </div>
@@ -208,10 +208,10 @@ export default function AchievementWall({
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-4 text-white">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs opacity-80">当前成就累计解锁</span>
-          <Trophy className="w-4 h-4 text-[#FFA726]" />
+          <Trophy className="w-4 h-4 text-yellow-400" />
         </div>
         <div className="flex items-baseline space-x-2">
-          <span className="text-3xl font-bold text-[#FFA726]">
+          <span className="text-3xl font-bold text-yellow-400">
             {(achievements.reduce((sum, a) => {
               const currentLevel = a.levels.filter(l => a.current >= l.threshold).pop();
               return sum + (currentLevel?.equityBonus || 0);

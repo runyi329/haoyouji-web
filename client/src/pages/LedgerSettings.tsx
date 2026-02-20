@@ -101,7 +101,7 @@ export default function LedgerSettings() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
-        <div className="text-[#757575]">加载中...</div>
+        <div className="text-gray-500">加载中...</div>
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default function LedgerSettings() {
   if (!ledgerData) {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
-        <div className="text-[#757575]">账本不存在</div>
+        <div className="text-gray-500">账本不存在</div>
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}`)}
             className="p-2 -ml-2"
           >
-            <ChevronLeft className="w-6 h-6 text-[#424242]" />
+            <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="text-lg font-medium text-[#222222]">
             {ledgerData.name}
@@ -134,7 +134,7 @@ export default function LedgerSettings() {
 
       {/* 成员管理区域 */}
       <div className="bg-white mt-3">
-        <div className="px-4 py-3 text-sm text-[#757575]">
+        <div className="px-4 py-3 text-sm text-gray-500">
           {members?.length || 0}个共享成员
         </div>
         
@@ -185,7 +185,7 @@ export default function LedgerSettings() {
               onClick={() => setShowRemovePicker(true)}
               className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
             >
-              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center border-[#D32F2F]">
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center border-red-400">
                 <span className="text-3xl text-[#D32F2F]">−</span>
               </div>
               <div className="text-sm mt-1 text-[#D32F2F]">移除成员</div>
@@ -308,7 +308,7 @@ export default function LedgerSettings() {
           <div className="space-y-4">
             {/* 搜索输入框 */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#757575]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="搜索用户名"
                 value={searchUsername}
@@ -321,8 +321,8 @@ export default function LedgerSettings() {
             {inviteMessage && (
               <div className={`p-3 rounded-lg text-sm ${
                 inviteMessage.type === 'success' 
-                  ? 'bg-[#E8F5E9] text-[#4CAF50] border border-[#4CAF50]' 
-                  : 'bg-[#D32F2F]-light text-[#D32F2F] border border-[#D32F2F]'
+                  ? 'bg-[#E8F5E9] text-green-700 border border-green-200' 
+                  : 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200'
               }`}>
                 {inviteMessage.text}
               </div>
@@ -346,7 +346,7 @@ export default function LedgerSettings() {
                         <div>
                           <div className="font-medium text-[#222222]">{user.username}</div>
                           {user.name && (
-                            <div className="text-sm text-[#757575]">{user.name}</div>
+                            <div className="text-sm text-gray-500">{user.name}</div>
                           )}
                         </div>
                       </div>
@@ -360,7 +360,7 @@ export default function LedgerSettings() {
                             onClick={() => !isMember && handleInviteUser(user.username)}
                             disabled={isMember || inviteMutation.isPending}
                             className={isMember 
-                              ? "bg-gray-300 text-[#757575] cursor-not-allowed"
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                               : "text-white hover:opacity-90"
                             }
                             style={!isMember ? { backgroundColor: themeColors.primary } : {}}
@@ -373,7 +373,7 @@ export default function LedgerSettings() {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center text-[#757575] py-4">
+                  <div className="text-center text-gray-500 py-4">
                     未找到用户
                   </div>
                 )}
@@ -415,7 +415,7 @@ export default function LedgerSettings() {
                   />
                   <div>
                     <div className="font-medium text-[#222222]">{member.nickname || member.username}</div>
-                    <div className="text-xs text-[#757575]">
+                    <div className="text-xs text-gray-400">
                       {member.role === 'admin' ? '管理员' : '普通成员'}
                     </div>
                   </div>
@@ -482,7 +482,7 @@ interface SettingItemProps {
 function SettingItem({
   label,
   value,
-  valueColor = "text-[#757575]",
+  valueColor = "text-gray-500",
   showIcon = false,
   isVip = false,
   hasHelp = false,
@@ -491,7 +491,7 @@ function SettingItem({
 }: SettingItemProps) {
   return (
     <div 
-      className="flex items-center justify-between px-4 py-3 border-b border-[#E0E0E0] last:border-b-0 cursor-pointer active:bg-[#FAF3ED]"
+      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-[#FAF3ED]"
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
@@ -502,7 +502,7 @@ function SettingItem({
           </span>
         )}
         {hasHelp && (
-          <span className="w-4 h-4 rounded-full border border-[#E0E0E0] flex items-center justify-center text-xs text-[#757575]">
+          <span className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-xs text-gray-400">
             ?
           </span>
         )}
@@ -514,7 +514,7 @@ function SettingItem({
         )}
         {rightContent}
         {showIcon && (
-          <ChevronRight className="w-5 h-5 text-[#757575]" />
+          <ChevronRight className="w-5 h-5 text-gray-400" />
         )}
       </div>
     </div>

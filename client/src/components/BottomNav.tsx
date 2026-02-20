@@ -58,12 +58,12 @@ export default function BottomNav() {
                 >
                   <Icon
                     className={`w-5 h-5 transition-colors duration-300 ${
-                      isActive ? "text-white" : "text-[#757575]"
+                      isActive ? "text-white" : "text-gray-600"
                     }`}
                   />
                   <span
                     className={`text-sm font-semibold transition-colors duration-300 ${
-                      isActive ? "text-white" : "text-[#757575]"
+                      isActive ? "text-white" : "text-gray-600"
                     }`}
                   >
                     {item.label}

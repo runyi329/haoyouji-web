@@ -243,7 +243,7 @@ export default function TransactionDetail() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-[#757575]">加载中...</div>
+        <div className="text-gray-600">加载中...</div>
       </div>
     );
   }
@@ -261,7 +261,7 @@ export default function TransactionDetail() {
     }
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-[#757575]">账目不存在 {errorMsg ? `(错误: ${errorMsg})` : ''}</div>
+        <div className="text-gray-600">账目不存在 {errorMsg ? `(错误: ${errorMsg})` : ''}</div>
       </div>
     );
   }
@@ -298,30 +298,30 @@ export default function TransactionDetail() {
       </div>
 
       {/* 第一行信息 */}
-      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-[#E0E0E0]">
-        <div className="flex items-center gap-2 text-sm text-[#757575]">
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-200">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>日志</span>
           <span>成员 {transaction.member?.nickname || transaction.member?.username || '未知'}</span>
           <span>添加</span>
           <span>账目</span>
         </div>
-        <ChevronRight className="w-5 h-5 text-[#757575]" />
+        <ChevronRight className="w-5 h-5 text-gray-400" />
       </div>
 
       {/* 分类信息卡片 */}
       <div className="bg-white px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={`w-3 h-3 rounded-full ${transaction.type === 'expense' ? 'bg-[#D32F2F]' : 'bg-[#4CAF50]'}`}></span>
-          <span className="text-lg text-[#424242]">
+          <span className="text-lg text-gray-900">
             {transaction.category}
             {transaction.subcategory && `–${transaction.subcategory}`}
           </span>
         </div>
         <div className="text-right">
-          <div className="text-xs text-[#757575] mb-1">
+          <div className="text-xs text-gray-500 mb-1">
             {transaction.type === "expense" ? "支出" : "收入"}
           </div>
-          <div className="text-3xl font-medium text-[#424242]">
+          <div className="text-3xl font-medium text-gray-900">
             {transaction.amount}
           </div>
         </div>
@@ -337,11 +337,11 @@ export default function TransactionDetail() {
               {transaction.member?.avatar ? (
                 <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[#1976D2] flex items-center justify-center text-white text-sm">
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
                   {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
                 </div>
               )}
-              <span className="text-[#424242]">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
             </div>
           }
         />
@@ -352,10 +352,10 @@ export default function TransactionDetail() {
         {displayStatus !== 'none' && (
           isAdminOrOwner ? (
             <div 
-              className="flex items-center justify-between py-3 px-4 border-b border-[#E0E0E0] cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+              className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100"
               onClick={openRbDialog}
             >
-              <span className="text-sm text-[#757575]">报销状态</span>
+              <span className="text-sm text-gray-600">报销状态</span>
               {displayStatus === 'completed' ? (
                 <span className="text-sm font-medium text-[#4CAF50]">已经处理</span>
               ) : (
@@ -372,15 +372,15 @@ export default function TransactionDetail() {
         {/* ========== 报销状态显示结束 ========== */}
 
         {transaction.images && transaction.images.length > 0 ? (
-          <div className="flex items-start justify-between py-3 px-4 border-b border-[#E0E0E0]">
-            <span className="text-xs text-[#757575]">凭证图片</span>
+          <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
+            <span className="text-xs text-gray-500">凭证图片</span>
             <div className="flex-1 flex flex-wrap justify-end gap-2">
               {transaction.images.map((imageUrl: string, index: number) => (
                 <img
                   key={index}
                   src={imageUrl}
                   alt={`凭证图片${index + 1}`}
-                  className="w-16 h-16 object-cover rounded cursor-pointer border border-[#E0E0E0]"
+                  className="w-16 h-16 object-cover rounded cursor-pointer border border-gray-200"
                   onClick={() => {
                     const dialog = document.createElement('div');
                     dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
@@ -409,11 +409,11 @@ export default function TransactionDetail() {
               {transaction.member?.avatar ? (
                 <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[#1976D2] flex items-center justify-center text-white text-sm">
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
                   {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
                 </div>
               )}
-              <span className="text-[#424242]">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
             </div>
           }
         />
@@ -429,12 +429,12 @@ export default function TransactionDetail() {
       {/* 审批信息（待审批状态显示） */}
       {transaction.approvalStatus === 'pending' && isApprover() && (
         <div className="bg-white mt-3 px-4 py-3">
-          <div className="text-sm font-medium text-[#424242] mb-3">审批信息</div>
+          <div className="text-sm font-medium text-gray-900 mb-3">审批信息</div>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white text-sm">
               {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
             </div>
-            <span className="text-[#424242]">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+            <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
           </div>
         </div>
       )}
@@ -466,7 +466,7 @@ export default function TransactionDetail() {
           )}
           <button 
             onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
-            className="w-full py-3 bg-white border border-[#E0E0E0] rounded-lg text-[#424242] font-medium text-base"
+            className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
           >
             修改账目
           </button>
@@ -496,7 +496,7 @@ export default function TransactionDetail() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <label className="text-sm text-[#757575] mb-2 block">审批意见（可选）</label>
+            <label className="text-sm text-gray-600 mb-2 block">审批意见（可选）</label>
             <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="输入审批意见..." className="min-h-[100px]" />
           </div>
           <DialogFooter className="gap-2">
@@ -504,7 +504,7 @@ export default function TransactionDetail() {
             <Button 
               onClick={confirmApproval}
               disabled={approveMutation.isPending}
-              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-[#4CAF50]' : 'bg-[#D32F2F] hover:bg-[#D32F2F]'}
+              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : 'bg-[#D32F2F] hover:bg-[#D32F2F]'}
             >
               {approveMutation.isPending ? '处理中...' : '确认'}
             </Button>
@@ -528,27 +528,27 @@ export default function TransactionDetail() {
             {/* ===== 历史处理记录 ===== */}
             {rbHistory && rbHistory.length > 0 && (
               <div>
-                <label className="text-sm font-medium text-[#424242] mb-2 block">处理记录</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">处理记录</label>
                 <div className="space-y-3">
                   {rbHistory.map((record: any, idx: number) => (
-                    <div key={record.id || idx} className="bg-gray-50 rounded-lg p-3 border border-[#E0E0E0]">
+                    <div key={record.id || idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-[#424242]">{record.operatedBy}</span>
-                        <span className="text-xs text-[#757575]">{formatTime(record.createdAt)}</span>
+                        <span className="text-sm font-medium text-gray-800">{record.operatedBy}</span>
+                        <span className="text-xs text-gray-400">{formatTime(record.createdAt)}</span>
                       </div>
                       {record.notes && (
-                        <p className="text-sm text-[#757575] mt-1">{record.notes}</p>
+                        <p className="text-sm text-gray-600 mt-1">{record.notes}</p>
                       )}
                       {record.voucherUrl && (
                         <img 
                           src={record.voucherUrl} 
                           alt="凭证" 
-                          className="mt-2 w-16 h-16 object-cover rounded border border-[#E0E0E0] cursor-pointer"
+                          className="mt-2 w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
                           onClick={() => { setRbPreviewUrl(record.voucherUrl); setRbPreviewOpen(true); }}
                         />
                       )}
                       {!record.notes && !record.voucherUrl && (
-                        <p className="text-xs text-[#757575] mt-1">标记为已处理（无备注）</p>
+                        <p className="text-xs text-gray-400 mt-1">标记为已处理（无备注）</p>
                       )}
                     </div>
                   ))}
@@ -558,15 +558,15 @@ export default function TransactionDetail() {
 
             {/* ===== 分割线 ===== */}
             {rbHistory && rbHistory.length > 0 && (
-              <div className="border-t border-[#E0E0E0] pt-3">
-                <label className="text-sm font-medium text-[#424242] mb-2 block">新增处理记录</label>
+              <div className="border-t border-gray-200 pt-3">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">新增处理记录</label>
               </div>
             )}
 
             {/* ===== 新增处理记录输入区 ===== */}
             <div>
               {!(rbHistory && rbHistory.length > 0) && (
-                <label className="text-sm text-[#757575] mb-2 block">报销备注</label>
+                <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
               )}
               <Textarea
                 value={rbNote}
@@ -589,7 +589,7 @@ export default function TransactionDetail() {
                 {rbVoucher ? (
                   <>
                     <div 
-                      className="relative w-16 h-16 bg-gray-100 rounded overflow-hidden cursor-pointer border border-[#E0E0E0] flex-shrink-0"
+                      className="relative w-16 h-16 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
                       onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }}
                     >
                       <img src={rbVoucher} alt="报销凭证" className="w-full h-full object-cover" />
@@ -616,7 +616,7 @@ export default function TransactionDetail() {
             <Button 
               onClick={handleRbSave}
               disabled={rbMutation.isPending}
-              className="flex-1 bg-[#1976D2] hover:bg-[#1976D2]"
+              className="flex-1 bg-[#1976D2] hover:bg-blue-700"
             >
               {rbMutation.isPending ? '保存中...' : '保存'}
             </Button>
@@ -663,12 +663,12 @@ interface DetailItemProps {
 
 function DetailItem({ label, value, rightContent, highlight }: DetailItemProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-[#E0E0E0] last:border-b-0">
-      <span className="text-sm text-[#757575]">{label}</span>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0">
+      <span className="text-sm text-gray-600">{label}</span>
       {rightContent ? (
         rightContent
       ) : (
-        <span className={`text-sm ${highlight ? 'text-[#CBA471] font-medium' : 'text-[#424242]'}`}>
+        <span className={`text-sm ${highlight ? 'text-[#CBA471] font-medium' : 'text-gray-900'}`}>
           {value}
         </span>
       )}

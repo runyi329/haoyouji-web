@@ -97,7 +97,7 @@ VC看到的是什么
           >
             <span className="text-sm font-semibold text-[#222222] pr-3">{faq.question}</span>
             <svg
-              className={`w-4 h-4 text-[#757575] flex-shrink-0 transition-transform ${
+              className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform ${
                 openIndex === index ? 'rotate-180' : ''
               }`}
               fill="none"
@@ -109,7 +109,7 @@ VC看到的是什么
           </button>
           
           {openIndex === index && (
-            <div className="px-3 pb-3 pt-2 border-t border-[#E0E0E0]">
+            <div className="px-3 pb-3 pt-2 border-t border-gray-100">
               <div className="space-y-2.5">
                 {faq.answerBlocks.map((block, i) => {
                   const blockId = `${index}-${i}`;
@@ -122,14 +122,14 @@ VC看到的是什么
                       {block.title && (
                         <div className="font-bold text-[#222222] mb-1">{block.title}</div>
                       )}
-                      <div className="text-[#424242] leading-relaxed flex items-start justify-between">
+                      <div className="text-gray-700 leading-relaxed flex items-start justify-between">
                         <span className="flex-1 pr-2">{block.text}</span>
                         <button
                           onClick={() => handleCopy(blockText, blockId)}
                           className="flex-shrink-0 ml-1 mt-0.5 p-1 hover:bg-gray-100 rounded transition-colors relative"
                           title="复制这段"
                         >
-                          <svg className="w-3.5 h-3.5 text-[#757575] hover:text-[#757575]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#757575]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                           {isCopied && (
@@ -151,7 +151,7 @@ VC看到的是什么
               
               <button
                 onClick={() => handleCopy(faq.answerText, `all-${index}`)}
-                className="mt-3 w-full bg-gray-100 hover:bg-gray-200 text-[#424242] py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1 relative"
+                className="mt-3 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center space-x-1 relative"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -322,7 +322,7 @@ export default function MyEquity() {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#757575]">暂无股权数据</p>
+          <p className="text-gray-500">暂无股权数据</p>
         </div>
       </div>
     );
@@ -504,9 +504,9 @@ export default function MyEquity() {
                     <span className="font-bold">{baseEquity.toFixed(4)}%</span>
                   </div>
                   <div className="flex items-center space-x-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
                     <span className="opacity-70">贡献加成</span>
-                    <span className="font-bold text-[#FFA726]">+{contribEquity.toFixed(4)}%</span>
+                    <span className="font-bold text-yellow-300">+{contribEquity.toFixed(4)}%</span>
                   </div>
                 </div>
                 {/* 横向比例条 */}
@@ -537,7 +537,7 @@ export default function MyEquity() {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <div className="text-xs opacity-70 mb-1">资本加速（风险补偿）</div>
-                    <div className="text-2xl font-bold text-[#FFA726] font-mono">
+                    <div className="text-2xl font-bold text-yellow-300 font-mono">
                       {equity.dynamicLeverage ? `×${equity.dynamicLeverage.leverage.toFixed(4)}` : '×1.0000'}
                     </div>
                     <div className="text-[10px] opacity-50 mt-0.5">已锁定 · 永久有效</div>
@@ -557,7 +557,7 @@ export default function MyEquity() {
                       <span className="text-[10px] opacity-60">
                         {equity.dynamicLeverage.currentRound.name}（{equity.dynamicLeverage.currentRound.maxLeverage}x → {equity.dynamicLeverage.currentRound.minLeverage}x）
                       </span>
-                      <span className="text-[10px] text-[#FFA726] font-bold">
+                      <span className="text-[10px] text-yellow-300 font-bold">
                         剩余 {Math.round((1 - equity.dynamicLeverage.currentRound.progress) * 100)}%
                       </span>
                     </div>
@@ -570,7 +570,7 @@ export default function MyEquity() {
                         }}
                       />
                     </div>
-                    <div className="text-[10px] text-[#FFA726]/70 mt-1">
+                    <div className="text-[10px] text-yellow-200/70 mt-1">
                       本轮高倍红利席位即将收官
                       {equity.dynamicLeverage.nextRound && (
                         <span>，下一轮杠杆将下调至 {equity.dynamicLeverage.nextRound.maxLeverage}x</span>
@@ -585,13 +585,13 @@ export default function MyEquity() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <div className="text-[10px] opacity-50 mb-0.5">当前价值</div>
-                        <div className="text-sm font-bold text-[#4CAF50]">
+                        <div className="text-sm font-bold text-green-400">
                           {(equity.details.userInvestment / 10000).toFixed(0)}万 → {((equity.details.userInvestment * equity.dynamicLeverage.leverage) / 10000).toFixed(2)}万
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] opacity-50 mb-0.5">犹豫成本</div>
-                        <div className="text-sm font-bold text-[#D32F2F]">
+                        <div className="text-sm font-bold text-red-400">
                           -{((equity.details.userInvestment * equity.dynamicLeverage.hesitationCost) / 10000).toFixed(2)}万
                         </div>
                       </div>
@@ -624,11 +624,11 @@ export default function MyEquity() {
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="opacity-70">电子股权协议</span>
-                    <span className="font-bold text-[#FFA726]">待签署</span>
+                    <span className="font-bold text-yellow-300">待签署</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="opacity-70">权证下发状态</span>
-                    <span className="font-bold text-[#4CAF50]">已确权</span>
+                    <span className="font-bold text-green-400">已确权</span>
                   </div>
                 </div>
               </div>
@@ -645,7 +645,7 @@ export default function MyEquity() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs opacity-70 mb-0.5">贡献加成</div>
-                    <div className="text-lg font-bold text-[#FFA726]">
+                    <div className="text-lg font-bold text-yellow-300">
                       +{((equity.inviteEquity || 0) + (equity.referralNetworkEquity || 0)).toFixed(4)}%
                     </div>
                   </div>
@@ -667,7 +667,7 @@ export default function MyEquity() {
           <div className="grid grid-cols-2 gap-6 mb-5 relative">
             {/* 左侧：我的股权估值 */}
             <div>
-              <div className="text-xs text-[#757575] mb-1 flex items-center">
+              <div className="text-xs text-gray-500 mb-1 flex items-center">
                 <Sparkles className="w-3 h-3 mr-1" />
                 我的股权估值
               </div>
@@ -675,7 +675,7 @@ export default function MyEquity() {
                 <span className="text-2xl font-bold text-[#CBA471]">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
                 <span className="text-sm text-[#757575]">万</span>
               </div>
-              <div className="mt-1 text-xs text-[#757575]">
+              <div className="mt-1 text-xs text-gray-400">
                 基于估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
               </div>
             </div>
@@ -685,25 +685,25 @@ export default function MyEquity() {
             
             {/* 右侧：当前持股排名 */}
             <div className="text-right">
-              <div className="text-xs text-[#757575] mb-1 flex items-center justify-end">
+              <div className="text-xs text-gray-500 mb-1 flex items-center justify-end">
                 <Trophy className="w-3 h-3 mr-1" />
                 当前持股排名
               </div>
               {equity.ranking ? (
                 <>
                   <div className="text-2xl font-bold text-[#222222]">No.{equity.ranking.rank}</div>
-                  <div className="mt-1 text-xs text-[#757575]">
+                  <div className="mt-1 text-xs text-gray-400">
                     共{equity.ranking.total}位股东
                   </div>
                 </>
               ) : (
-                <div className="text-2xl font-bold text-[#757575]">--</div>
+                <div className="text-2xl font-bold text-gray-400">--</div>
               )}
             </div>
           </div>
           
           {/* 虚线分割 */}
-          <div className="border-t border-dashed border-[#E0E0E0] my-4"></div>
+          <div className="border-t border-dashed border-gray-300 my-4"></div>
           
           {/* 3D能量环区域 */}
           <div>
@@ -785,7 +785,7 @@ export default function MyEquity() {
               <CompanyEquityStructureCard />
             </ShareholderSection>
 
-            <div className="border-t border-dashed border-[#E0E0E0] my-4"></div>
+            <div className="border-t border-dashed border-gray-300 my-4"></div>
 
             {/* 模块二：在线签署 - 内嵌手风琴 */}
             <ShareholderSection
@@ -814,7 +814,7 @@ export default function MyEquity() {
               />
             </ShareholderSection>
 
-            <div className="border-t border-dashed border-[#E0E0E0] my-4"></div>
+            <div className="border-t border-dashed border-gray-300 my-4"></div>
 
             {/* 模块三：常见问题 - 内嵌手风琴 */}
             <ShareholderSection

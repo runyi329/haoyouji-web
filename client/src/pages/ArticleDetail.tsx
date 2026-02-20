@@ -22,7 +22,7 @@ const articles: Article[] = [
       content: (
         <div className="space-y-4">
           {/* 引言 */}
-          <div className="text-sm text-[#424242] leading-relaxed">
+          <div className="text-sm text-gray-700 leading-relaxed">
             <p className="mb-3">
               在数字时代，我们每天使用各种App服务，却不知不觉中成了平台的"商品"。你付费消费的同时，你的每一次点击、购买和社交互动，都在暗中被标价——但这份数据价值，你一分钱也没拿到。
             </p>
@@ -33,16 +33,16 @@ const articles: Article[] = [
 
           {/* 案例1：买菜App */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">1. 买菜App：每个用户价值约700元</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">1. 买菜App：每个用户价值约700元</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 以叮咚买菜和美团的并购案为例（50多亿人民币，最高活跃用户700万），美团收购这类社区电商时，看重的不是送货车队，而是用户背后的家庭消费数据——你买的每一颗白菜、每份食材，都记录了你的生活习惯和消费偏好。（<a href="https://finance.sina.cn/stock/jdts/2026-02-16/detail-inhmyzkh2857813.d.html" target="_blank" rel="noopener noreferrer" className="text-[#D32F2F] text-xs">来源：新浪财经</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">算账：</span>
-                  <span className="text-[#424242]">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你付费买菜的同时，还为平台贡献了宝贵数据，而平台转手就把这份数据变现了。你只拿到了白菜，平台却增加了身价。</span>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">根据收购总价和日活跃用户量折算，单个用户的"数据所有权"约值700元。你付费买菜的同时，还为平台贡献了宝贵数据，而平台转手就把这份数据变现了。你只拿到了白菜，平台却增加了身价。</span>
                 </div>
               </div>
             </div>
@@ -50,16 +50,16 @@ const articles: Article[] = [
 
           {/* 案例2：共享出行 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">2. 共享出行：180亿被平台独享</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">2. 共享出行：180亿被平台独享</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 摩拜单车被美团180亿人民币收购时，核心资产是用户的出行轨迹——你住在哪个小区、上班去哪里、日常路径如何。这些数据能生成"城市交通热力图"，用于广告精准投放或城市规划。（<a href="http://tech.sina.cn/zt_d/mobikemeituan" target="_blank" rel="noopener noreferrer" className="text-[#D32F2F] text-xs">来源：新浪科技</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">算账：</span>
-                  <span className="text-[#424242]">你每天顶着太阳骑车，其实是在用体力为平台采集数据，平台却独享180亿收益，而你什么也拿不到。</span>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">你每天顶着太阳骑车，其实是在用体力为平台采集数据，平台却独享180亿收益，而你什么也拿不到。</span>
                 </div>
               </div>
             </div>
@@ -67,16 +67,16 @@ const articles: Article[] = [
 
           {/* 案例3：社交通讯 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">3. 社交/通讯工具：每个用户价值约280元</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">3. 社交/通讯工具：每个用户价值约280元</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 参考Facebook（现Meta）以190亿美元收购WhatsApp的案例。这是一个纯通讯软件，没有广告收入，为什么值这么多钱？因为里面藏着数亿用户的社交关系网——你的联系人、聊天频率，都能被用于算法优化和广告。（<a href="http://tech.sina.com.cn/i/2014-02-20/06389176473.shtml" target="_blank" rel="noopener noreferrer" className="text-[#D32F2F] text-xs">来源：新浪科技</a>）
               </p>
               <div className="flex items-start space-x-2 bg-white p-3 rounded">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">算账：</span>
-                  <span className="text-[#424242]">折算下来，每个用户只需"呆在里面"，就值约40美元（折合人民币280元）。你的社交数据被平台垄断，你却一无所获。</span>
+                  <span className="font-bold text-gray-900">算账：</span>
+                  <span className="text-gray-700">折算下来，每个用户只需"呆在里面"，就值约40美元（折合人民币280元）。你的社交数据被平台垄断，你却一无所获。</span>
                 </div>
               </div>
             </div>
@@ -113,7 +113,7 @@ const articles: Article[] = [
 
           {/* 海报展示 */}
           <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <div className="font-bold text-[#424242] mb-3 text-center">分享海报</div>
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/yNdunTloulJArwlY.jpg" 
@@ -134,8 +134,8 @@ const articles: Article[] = [
         <div className="space-y-4">
           {/* 你的人脉正在"沉睡" */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">你的人脉正在"沉睡"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">你的人脉正在"沉睡"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 很多人热衷于扩展人脉，微信好友动辄上千。但科学研究告诉我们一个残酷的事实：
               </p>
@@ -143,15 +143,15 @@ const articles: Article[] = [
                 <div className="flex items-start space-x-2">
                   <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                   <div>
-                    <span className="font-bold text-[#424242]">邓巴数限制：</span>
-                    <span className="text-[#424242]">人类大脑只能有效维护约150个深度关系。</span>
+                    <span className="font-bold text-gray-900">邓巴数限制：</span>
+                    <span className="text-gray-700">人类大脑只能有效维护约150个深度关系。</span>
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                   <div>
-                    <span className="font-bold text-[#424242]">现实困境：</span>
-                    <span className="text-[#424242]">你有几千个微信好友，但95%的人常年不维护。他们躺在你的微信里既不产生价值，还在随时间贬值。</span>
+                    <span className="font-bold text-gray-900">现实困境：</span>
+                    <span className="text-gray-700">你有几千个微信好友，但95%的人常年不维护。他们躺在你的微信里既不产生价值，还在随时间贬值。</span>
                   </div>
                 </div>
               </div>
@@ -163,8 +163,8 @@ const articles: Article[] = [
 
           {/* 一个真实的案例 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">一个真实的案例</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">一个真实的案例</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 抖音英语老师雪梨，曾在线下教育机构工作8年。线下小班教学，每天最多触达20-30个学生。2020年转型线上平台后，通过微信视频号和抖音发布教学内容，如今拥有<span className="font-bold text-[#D32F2F]-dark">560万粉丝</span>，单场直播触达<span className="font-bold text-[#D32F2F]-dark">2.3万人</span>。即使每个课程只卖99元，一个晚上也能轻松收入过百万。
               </p>
@@ -196,7 +196,7 @@ const articles: Article[] = [
 
           {/* 海报展示 */}
           <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <div className="font-bold text-[#424242] mb-3 text-center">分享海报</div>
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hzwbYkVZJnEjisDu.jpg" 
@@ -216,7 +216,7 @@ const articles: Article[] = [
       content: (
         <div className="space-y-4">
           {/* 引言 */}
-          <div className="text-sm text-[#424242] leading-relaxed">
+          <div className="text-sm text-gray-700 leading-relaxed">
             <p className="mb-3">
               在资本市场，一个项目的估值核心，并非仅仅是用户数量，而是其数据资产的"商业厚度"与"网络密度"。相较于传统互联网项目，我们正在构建的商业关系网络，在单用户价值上实现了指数级的提升。
             </p>
@@ -224,8 +224,8 @@ const articles: Article[] = [
 
           {/* 维度差异 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">一、维度的差异：从"物理点位"到"商业图谱"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">一、维度的差异：从"物理点位"到"商业图谱"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 传统流量型产品，如共享单车或充电宝，其数据本质是低频、浅层的物理轨迹。每个用户只是一个孤立的数据点，商业挖掘潜力有限。
               </p>
@@ -265,8 +265,8 @@ const articles: Article[] = [
 
           {/* 密度革命 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">二、密度的革命：百倍杠杆的估值逻辑</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">二、密度的革命：百倍杠杆的估值逻辑</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 网络效应理论告诉我们，网络的价值与其节点的连接密度密切相关。高密度的网络能创造更强大的网络效应和防御壁垒。
               </p>
@@ -274,15 +274,15 @@ const articles: Article[] = [
                 <div className="flex items-start space-x-2">
                   <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                   <div>
-                    <span className="font-bold text-[#424242]">低密度数据：</span>
-                    <span className="text-[#424242]">在传统模型中，1个用户只产生1个数据点，价值增长是线性的。</span>
+                    <span className="font-bold text-gray-900">低密度数据：</span>
+                    <span className="text-gray-700">在传统模型中，1个用户只产生1个数据点，价值增长是线性的。</span>
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                   <div>
-                    <span className="font-bold text-[#424242]">高密度资产：</span>
-                    <span className="text-[#424242]">在我们这里，资产价值由"用户数"与"商业关系节点数"的乘积决定，实现了指数级增长。</span>
+                    <span className="font-bold text-gray-900">高密度资产：</span>
+                    <span className="text-gray-700">在我们这里，资产价值由"用户数"与"商业关系节点数"的乘积决定，实现了指数级增长。</span>
                   </div>
                 </div>
               </div>
@@ -294,13 +294,13 @@ const articles: Article[] = [
 
           {/* 竞争壁垒 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">三、竞争壁垒：从"流量红利"到"信用底座"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">三、竞争壁垒：从"流量红利"到"信用底座"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 缺乏数据深度的项目，竞争门槛极低，往往陷入"烧钱换规模"的恶性循环。而我们从第一天起，就在构建一个无法被轻易复制的<span className="font-bold text-[#D32F2F]-dark">高质量商业关系数据库</span>。
               </p>
               <div className="bg-white p-3 rounded">
-                <p className="text-[#424242] italic">
+                <p className="text-gray-700 italic">
                   这种壁垒的核心在于"真实性"与"排他性"。每一条人脉标签都由用户基于真实的社交链条手动维护，其背后是真实验证的商业信用。
                 </p>
               </div>
@@ -325,7 +325,7 @@ const articles: Article[] = [
 
           {/* 海报展示 */}
           <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <div className="font-bold text-[#424242] mb-3 text-center">分享海报</div>
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oECpcLjZmbRuIuuO.jpg" 
@@ -346,8 +346,8 @@ const articles: Article[] = [
         <div className="space-y-4">
           {/* 引言 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">我们如何定义“价值”？</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">我们如何定义“价值”？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 比起那些靠财务报表和讲PPT决定估值的公司而言，脉动网是一家真正具有生命力的网络。其价值应该由全网用户的实时行为共同铸就，如同一个生生不息的“数字生命体”。
               </p>
@@ -359,39 +359,39 @@ const articles: Article[] = [
 
           {/* 价值的源泉 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">价值的源泉——用户行为即价值创造</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">价值的源泉——用户行为即价值创造</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 不要小看你的每一次行为！每一次打标签、每一次共享、每一个新好友，都在为整个网络注入价值。网络效应会将你的贡献放大百倍、千倍，直接推高公司估值，而你也将从中获得相应的回报。您的每一次贡献，都在提升整个网络的“商业厚度”与“网络密度”。
               </p>
               <p className="text-xs">
-                <span className="text-[#757575]">相关阅读：</span>
+                <span className="text-gray-500">相关阅读：</span>
                 <a href="#" className="text-[#D32F2F]-dark underline ml-1" onClick={(e) => { e.preventDefault(); /* 后续添加跳转逻辑 */ }}>生日悖论</a>
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="p-2 border border-[#E0E0E0]">用户行为</th>
-                      <th className="p-2 border border-[#E0E0E0]">对应的价值贡献</th>
+                      <th className="p-2 border border-gray-200">用户行为</th>
+                      <th className="p-2 border border-gray-200">对应的价值贡献</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="p-2 border border-[#E0E0E0] font-bold">完善人脉标签</td>
-                      <td className="p-2 border border-[#E0E0E0]">注入“高纯度数据资产”，提升网络信息密度</td>
+                      <td className="p-2 border border-gray-200 font-bold">完善人脉标签</td>
+                      <td className="p-2 border border-gray-200">注入“高纯度数据资产”，提升网络信息密度</td>
                     </tr>
                     <tr>
-                      <td className="p-2 border border-[#E0E0E0] font-bold">共享人脉网络</td>
-                      <td className="p-2 border border-[#E0E0E0]">注入“网络流动性资本”，激活潜在商业机会</td>
+                      <td className="p-2 border border-gray-200 font-bold">共享人脉网络</td>
+                      <td className="p-2 border border-gray-200">注入“网络流动性资本”，激活潜在商业机会</td>
                     </tr>
                     <tr>
-                      <td className="p-2 border border-[#E0E0E0] font-bold">邀请新朋友</td>
-                      <td className="p-2 border border-[#E0E0E0]">注入“原始增量红利”，扩张网络价值边界</td>
+                      <td className="p-2 border border-gray-200 font-bold">邀请新朋友</td>
+                      <td className="p-2 border border-gray-200">注入“原始增量红利”，扩张网络价值边界</td>
                     </tr>
                     <tr>
-                      <td className="p-2 border border-[#E0E0E0] font-bold">培养活跃节点</td>
-                      <td className="p-2 border border-[#E0E0E0]">注入“生态繁育能量”，创造价值的二阶增长</td>
+                      <td className="p-2 border border-gray-200 font-bold">培养活跃节点</td>
+                      <td className="p-2 border border-gray-200">注入“生态繁育能量”，创造价值的二阶增长</td>
                     </tr>
                   </tbody>
                 </table>
@@ -404,16 +404,16 @@ const articles: Article[] = [
 
           {/* 估值算法 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">先进的估值算法——AI驱动的实时价值计算</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">先进的估值算法——AI驱动的实时价值计算</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 我们与全球顶尖的数据公司合作，独创了一套基于Web3理念的动态估值引擎。该引擎融合了人工智能、拓扑数据分析与实时折现模型，确保每一份贡献都能被精准量化。
               </p>
-              <p className="font-bold text-[#424242]">1. 从“线性加法”到“拓扑指数”的跃迁</p>
+              <p className="font-bold text-gray-900">1. 从“线性加法”到“拓扑指数”的跃迁</p>
               <p>
                 我们的AI引擎识别的是全网节点的“拓扑结构”，关心的不只是“有多少人”，更是“这些人如何连接”，这使得估值模型更接近梅特卡夫定律所描述的指数级增长曲线。
               </p>
-              <p className="font-bold text-[#424242]">2. AI驱动的实时行为价值折现</p>
+              <p className="font-bold text-gray-900">2. AI驱动的实时行为价值折现</p>
               <p>
                 系统通过AI实时扫描并分析全网节点的行为数据（如信息熵增益α、网络流动性β、价值握手γ），并将其对网络未来可能产生的现金流，通过算法瞬间折现到当下的总估值中。
               </p>
@@ -422,16 +422,16 @@ const articles: Article[] = [
 
           {/* 核心估值公式 */}
           <div className="bg-gray-50 p-4 rounded-lg border-2 border-[#D32F2F]-dark">
-            <div className="font-bold text-[#424242] mb-3 text-center">拓扑信息密度与实时网络折现引擎</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-3">
-              <div className="bg-white p-3 rounded border border-[#E0E0E0] overflow-x-auto">
+            <div className="font-bold text-gray-900 mb-3 text-center">拓扑信息密度与实时网络折现引擎</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-3">
+              <div className="bg-white p-3 rounded border border-gray-300 overflow-x-auto">
                 <div className="text-center font-mono text-xs">
                   <div className="mb-2">V(t) = ∫₀ᵗ [α·H(τ) + β·F(τ) + γ·T(τ)] · e<sup>-r(t-τ)</sup> · N<sub>eff</sub><sup>2</sup>(τ) dτ + λ·C(t)</div>
                 </div>
               </div>
               
               <div className="space-y-2">
-                <p className="font-bold text-[#424242]">公式参数详解：</p>
+                <p className="font-bold text-gray-900">公式参数详解：</p>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-start space-x-2">
                     <span className="font-bold text-[#D32F2F]-dark flex-shrink-0">V(t)</span>
@@ -486,26 +486,26 @@ const articles: Article[] = [
 
           {/* 算法优势 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-2">为什么这套算法更科学？</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-2">为什么这套算法更科学？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <div className="flex items-start space-x-2">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">多维度衡量：</span>
+                  <span className="font-bold text-gray-900">多维度衡量：</span>
                   <span>不同于传统估值只看用户数，我们同时考虑信息质量、网络活跃度、实际交易等多个维度。</span>
                 </div>
               </div>
               <div className="flex items-start space-x-2">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">实时动态：</span>
+                  <span className="font-bold text-gray-900">实时动态：</span>
                   <span>AI引擎每毫秒扫描全网行为，动态调整参数，确保估值始终反映最新状态。</span>
                 </div>
               </div>
               <div className="flex items-start space-x-2">
                 <span className="text-[#D32F2F] font-bold flex-shrink-0">●</span>
                 <div>
-                  <span className="font-bold text-[#424242]">科学严谨：</span>
+                  <span className="font-bold text-gray-900">科学严谨：</span>
                   <span>公式融合了信息论、图论、金融工程等多个学科的经典理论，经过严格数学验证。</span>
                 </div>
               </div>
@@ -524,7 +524,7 @@ const articles: Article[] = [
 
           {/* 海报展示 */}
           <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <div className="font-bold text-[#424242] mb-3 text-center">分享海报</div>
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oHGzHPCONtyApGMj.jpg" 
@@ -544,7 +544,7 @@ const articles: Article[] = [
       content: (
         <div className="space-y-4">
           {/* 引言 */}
-          <div className="text-sm text-[#424242] leading-relaxed">
+          <div className="text-sm text-gray-700 leading-relaxed">
             <p className="mb-3">
               您可能会觉得，自己手里那点人脉标签、几个行业联络人，就像路边的碎石子一样普通，并不值钱。
             </p>
@@ -555,13 +555,13 @@ const articles: Article[] = [
 
           {/* 生日悖论 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">一、 一个颇覆常识的金融模型：生日悖论</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">一、 一个颇覆常识的金融模型：生日悖论</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 为了让您理解这种价值爆发的逻辑，我们先来看一个著名的金融模型——"生日悖论"。
               </p>
               <div className="bg-white p-3 rounded border-l-4 border-[#FF4500]">
-                <p className="font-bold text-[#424242] mb-2">如果一个班级有50名学生，您觉得其中"至少有两个人生日相同"的概率有多大？</p>
+                <p className="font-bold text-gray-900 mb-2">如果一个班级有50名学生，您觉得其中"至少有两个人生日相同"的概率有多大？</p>
                 <p>直觉会告诉您：一年有365天，只有50个人的样本，占比都不到15%。概率是？15%、20%还是25%？</p>
                 <p className="mt-2 text-[#D32F2F] font-bold">
                   可能和你想的不一样，这个概率竟然高达 97%！（是不是有点出乎意料？可以打开百度或豆包求证一下。）
@@ -578,31 +578,31 @@ const articles: Article[] = [
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="border border-[#E0E0E0] px-3 py-2 text-left">人数</th>
-                  <th className="border border-[#E0E0E0] px-3 py-2 text-left">可能的连接数</th>
-                  <th className="border border-[#E0E0E0] px-3 py-2 text-left">生日相同的概率</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left">人数</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left">可能的连接数</th>
+                  <th className="border border-gray-300 px-3 py-2 text-left">生日相同的概率</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="border border-[#E0E0E0] px-3 py-2">10人</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">45</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">12%</td>
+                  <td className="border border-gray-300 px-3 py-2">10人</td>
+                  <td className="border border-gray-300 px-3 py-2">45</td>
+                  <td className="border border-gray-300 px-3 py-2">12%</td>
                 </tr>
                 <tr>
-                  <td className="border border-[#E0E0E0] px-3 py-2">23人</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">253</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">50% (临界点)</td>
+                  <td className="border border-gray-300 px-3 py-2">23人</td>
+                  <td className="border border-gray-300 px-3 py-2">253</td>
+                  <td className="border border-gray-300 px-3 py-2">50% (临界点)</td>
                 </tr>
                 <tr className="bg-[#FAF3ED]">
-                  <td className="border border-[#E0E0E0] px-3 py-2 font-bold">50人</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2 font-bold">1,225</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2 font-bold">97%</td>
+                  <td className="border border-gray-300 px-3 py-2 font-bold">50人</td>
+                  <td className="border border-gray-300 px-3 py-2 font-bold">1,225</td>
+                  <td className="border border-gray-300 px-3 py-2 font-bold">97%</td>
                 </tr>
                 <tr>
-                  <td className="border border-[#E0E0E0] px-3 py-2">70人</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">2,415</td>
-                  <td className="border border-[#E0E0E0] px-3 py-2">99.9%</td>
+                  <td className="border border-gray-300 px-3 py-2">70人</td>
+                  <td className="border border-gray-300 px-3 py-2">2,415</td>
+                  <td className="border border-gray-300 px-3 py-2">99.9%</td>
                 </tr>
               </tbody>
             </table>
@@ -610,8 +610,8 @@ const articles: Article[] = [
 
           {/* 脉动网的逻辑 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">二、 资本的眼里：单一数据是"碎石"，连接数据是"钻石"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">二、 资本的眼里：单一数据是"碎石"，连接数据是"钻石"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 同样的道理，您手里的一条人脉数据（比如：某好友的擅长领域），对您个人来说，能匹配成功、产生价值的概率极低。
               </p>
@@ -647,8 +647,8 @@ const articles: Article[] = [
 
           {/* 为什么要现在加入 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">四、 为什么要现在加入？</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">四、 为什么要现在加入？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 生日悖论告诉我们：人数从23个增加到50个，概率不是翻倍，而是从50%暴涨到97%！
               </p>
@@ -666,7 +666,7 @@ const articles: Article[] = [
 
           {/* 海报展示 */}
           <div className="bg-gray-50 p-4 rounded-lg mt-4">
-            <div className="font-bold text-[#424242] mb-3 text-center">分享海报</div>
+            <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hAoSbkXclaLpcFbw.jpg" 
@@ -686,7 +686,7 @@ const articles: Article[] = [
       content: (
         <div className="space-y-4">
           {/* 引言 */}
-          <div className="text-sm text-[#424242] leading-relaxed">
+          <div className="text-sm text-gray-700 leading-relaxed">
             <p className="mb-3">
               大多数人以为，人脉越多越好。但真相是：您的社交网络可能正在被99%的"水分"稀释。
             </p>
@@ -697,15 +697,15 @@ const articles: Article[] = [
 
           {/* 牛奶提纯实验 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">一、 一个挑战直觉的数学实验：牛奶提纯</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">一、 一个挑战直觉的数学实验：牛奶提纯</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 假设您手头有 100 斤普通牛奶，经检测，其中的核心营养成分（蛋白质）占比为 1%，其余 99 斤全是水分。
               </p>
               <p>
                 现在，您想通过蒸发水分的方式进行"提纯"，让蛋白质的含量占比提升到 2%。
               </p>
-              <p className="font-semibold text-[#424242] mt-3">
+              <p className="font-semibold text-gray-900 mt-3">
                 请问：您需要蒸发掉多少水分？
               </p>
               <ul className="list-disc list-inside space-y-1 mt-2">
@@ -713,7 +713,7 @@ const articles: Article[] = [
                 <li><strong>数学事实：</strong> 为了让浓度翻倍，您必须蒸发掉 <span className="text-[#D32F2F] font-bold">50 斤</span> 水！整整一半！</li>
               </ul>
               <div className="bg-[#FAF3ED] border-l-4 border-yellow-400 p-3 mt-3">
-                <p className="text-sm text-[#424242]">
+                <p className="text-sm text-gray-700">
                   <strong>逻辑真相：</strong> 当蛋白质占比从 1% 提升到 2% 时，意味着干物质与水分的比例从 1:99 变成了 1:49。为了维持这个比例，总重量必须从 100 斤减半到 50 斤。
                 </p>
               </div>
@@ -722,8 +722,8 @@ const articles: Article[] = [
 
           {/* 社交真相 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">二、 社交真相：您的人脉系统里有多少"水分"？</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">二、 社交真相：您的人脉系统里有多少"水分"？</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 大多数人的朋友圈，就像那 100 斤还没提纯的淡奶：
               </p>
@@ -740,8 +740,8 @@ const articles: Article[] = [
 
           {/* 脉动网的提纯 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">三、 脉动网：您社交资产的"高温离心机"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">三、 脉动网：您社交资产的"高温离心机"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <p>
                 脉动网不要求您每天去拼命社交，我们只要求您做一个 1% 的小行动：
               </p>
@@ -758,8 +758,8 @@ const articles: Article[] = [
 
           {/* 结论 */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="font-bold text-[#424242] mb-3">四、 结论：身价提升的秘密，是"提纯"而非"扩张"</div>
-            <div className="text-sm text-[#424242] leading-relaxed space-y-2">
+            <div className="font-bold text-gray-900 mb-3">四、 结论：身价提升的秘密，是"提纯"而非"扩张"</div>
+            <div className="text-sm text-gray-700 leading-relaxed space-y-2">
               <ul className="list-disc list-inside space-y-2">
                 <li>
                   <strong>脉动逻辑：</strong> 我们提供一套共享协议。您录入的那 1% 高浓度标签，就像提纯后的"精乳"，在平台的放大作用下，其触达价值和资产分红，远超那 100 斤兑水的平庸流量。
@@ -773,7 +773,7 @@ const articles: Article[] = [
 
           {/* 配套海报 */}
           <div className="mt-4">
-            <div className="text-xs text-[#757575] mb-2">点击查看大图</div>
+            <div className="text-xs text-gray-500 mb-2">点击查看大图</div>
             <div className="relative">
               <img 
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/LCDRnxTTlZoqtsgY.jpg" 
@@ -811,7 +811,7 @@ export default function ArticleDetail() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-[#757575] mb-4">文章不存在</p>
+          <p className="text-gray-600 mb-4">文章不存在</p>
           <Link href={BASE_URL}>
             <a className="text-[#D32F2F] hover:underline">返回首页</a>
           </Link>
@@ -823,9 +823,9 @@ export default function ArticleDetail() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 - 删除了返回按钮 */}
-      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-50">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-[#424242] flex-1 text-center px-4 truncate">
+          <h1 className="text-lg font-bold text-gray-900 flex-1 text-center px-4 truncate">
             {article.title}
           </h1>
           <button
@@ -852,7 +852,7 @@ export default function ArticleDetail() {
         {/* 标题和标签 */}
         <div className="mb-6">
           <div className="flex items-center space-x-2 mb-3">
-            <h2 className="text-2xl font-bold text-[#424242]">{article.title}</h2>
+            <h2 className="text-2xl font-bold text-gray-900">{article.title}</h2>
             {article.tag && (
               <span className="px-2 py-0.5 text-xs font-bold text-white bg-[#D32F2F] rounded">
                 {article.tag}

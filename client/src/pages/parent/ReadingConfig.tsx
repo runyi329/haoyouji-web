@@ -127,7 +127,7 @@ export default function ReadingConfig() {
       {/* 页面标题 */}
       <div className="max-w-6xl mx-auto mb-8 text-center">
         <h1 className="text-5xl font-bold text-[#D32F2F] mb-4">📚 阅读识字设置</h1>
-        <p className="text-xl text-[#757575]">
+        <p className="text-xl text-gray-600">
           管理故事内容，为孩子创建个性化的阅读材料
         </p>
       </div>
@@ -167,7 +167,7 @@ export default function ReadingConfig() {
                   maxLength={5000}
                   className="resize-none"
                 />
-                <div className="text-sm text-[#757575] mt-1 text-right">
+                <div className="text-sm text-gray-500 mt-1 text-right">
                   {newStoryContent.length} / 5000 字
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default function ReadingConfig() {
                   placeholder="例如：勇敢的小狗、友谊、分享..."
                   disabled={isAIGenerating}
                 />
-                <p className="text-sm text-[#757575] mt-2">
+                <p className="text-sm text-gray-500 mt-2">
                   留空则由AI随机选择适合孩子的主题
                 </p>
               </div>
@@ -228,10 +228,10 @@ export default function ReadingConfig() {
                     value={wordCount}
                     onChange={(e) => setWordCount(Number(e.target.value))}
                     disabled={isAIGenerating}
-                    className="flex-1 h-2 bg-[#D32F2F] rounded-lg appearance-none cursor-pointer"
+                    className="flex-1 h-2 bg-red-200 rounded-lg appearance-none cursor-pointer"
                   />
                 </div>
-                <div className="flex justify-between text-xs text-[#757575] mt-1">
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
                   <span>50字</span>
                   <span>100字</span>
                   <span>200字</span>
@@ -268,19 +268,19 @@ export default function ReadingConfig() {
         {/* 模板故事 */}
         {templateStories.length > 0 && (
           <div>
-            <h2 className="text-2xl font-bold text-[#424242] mb-4">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
               📖 预设故事模板 ({templateStories.length})
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {templateStories.map((story) => (
-                <Card key={story.id} className="p-4 border-2 border-[#1976D2]">
-                  <h3 className="text-lg font-bold text-[#424242] mb-2">
+                <Card key={story.id} className="p-4 border-2 border-blue-200">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">
                     {story.title}
                   </h3>
-                  <p className="text-sm text-[#757575] line-clamp-2 mb-2">
+                  <p className="text-sm text-gray-600 line-clamp-2 mb-2">
                     {story.content}
                   </p>
-                  <div className="text-xs text-[#757575]">
+                  <div className="text-xs text-gray-500">
                     {story.wordCount} 字
                   </div>
                 </Card>
@@ -292,14 +292,14 @@ export default function ReadingConfig() {
         {/* 自定义故事 */}
         {customStories.length > 0 && (
           <div>
-            <h2 className="text-2xl font-bold text-[#424242] mb-4">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
               ✨ 我的故事 ({customStories.length})
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {customStories.map((story) => (
-                <Card key={story.id} className="p-4 border-2 border-[#D32F2F]">
+                <Card key={story.id} className="p-4 border-2 border-red-200">
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-bold text-[#424242] flex-1">
+                    <h3 className="text-lg font-bold text-gray-800 flex-1">
                       {story.title}
                       {story.type === "ai_generated" && (
                         <span className="ml-2 text-xs bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-2 py-1 rounded">
@@ -316,10 +316,10 @@ export default function ReadingConfig() {
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
-                  <p className="text-sm text-[#757575] line-clamp-3 mb-2">
+                  <p className="text-sm text-gray-600 line-clamp-3 mb-2">
                     {story.content}
                   </p>
-                  <div className="text-xs text-[#757575]">
+                  <div className="text-xs text-gray-500">
                     {story.wordCount} 字
                   </div>
                 </Card>

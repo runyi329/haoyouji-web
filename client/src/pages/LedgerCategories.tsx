@@ -170,7 +170,7 @@ const LedgerCategories = () => {
           <div key={category.id}>
             <div>
               {/* 一级分类标题 */}
-              <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">一级分类</div>
+              <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">一级分类</div>
               
               {/* 一级分类 */}
               <div className="bg-white p-1">
@@ -184,7 +184,7 @@ const LedgerCategories = () => {
                         toggleCategory(category.id);
                       }
                     }}
-                    className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-[#E0E0E0] hover:bg-gray-100"
+                    className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                   >
                     {isDeleteMode && (
                       <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
@@ -224,7 +224,7 @@ const LedgerCategories = () => {
               <div>
                 <div>
                   {/* 二级分类标题 */}
-                  <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">二级分类</div>
+                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
                 </div>
                 
                 {category.children.map((child) => (
@@ -241,7 +241,7 @@ const LedgerCategories = () => {
                               toggleSubCategory(child.id);
                             }
                           }}
-                          className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-[#E0E0E0] hover:bg-gray-100"
+                          className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                         >
                           {isDeleteMode && (
                             <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
@@ -258,7 +258,7 @@ const LedgerCategories = () => {
                       <div>
                         <div>
                           {/* 三级分类标题 */}
-                          <div className="bg-gray-100 px-3 py-1 text-xs text-[#757575]">三级分类</div>
+                          <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
                           
                           {/* 三级分类容器 */}
                           <div className="bg-white p-1">
@@ -272,7 +272,7 @@ const LedgerCategories = () => {
                                     setShowDeleteConfirm(true);
                                   }
                                 }}
-                                className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-[#E0E0E0] hover:bg-gray-100"
+                                className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                               >
                                 {isDeleteMode && (
                                   <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
@@ -319,14 +319,14 @@ const LedgerCategories = () => {
               >
                 增加一级分类
               </button>
-              <div className="border-t border-[#E0E0E0]"></div>
+              <div className="border-t border-gray-200"></div>
               <button
                 onClick={() => setSelectedAction('level2')}
                 className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
               >
                 增加二级分类
               </button>
-              <div className="border-t border-[#E0E0E0]"></div>
+              <div className="border-t border-gray-200"></div>
               <button
                 onClick={() => setSelectedAction('level3')}
                 className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
@@ -428,9 +428,9 @@ const LedgerCategories = () => {
                   >
                     {subCat.name}
                   </button>
-                  <div className="border-t border-[#E0E0E0]"></div>
+                  <div className="border-t border-gray-200"></div>
                 </div>
-              )) || <div className="text-center text-[#757575] py-4">暂无二级分类</div>}
+              )) || <div className="text-center text-gray-400 py-4">暂无二级分类</div>}
             </div>
           )}
           
@@ -500,7 +500,7 @@ const LedgerCategories = () => {
           </DialogHeader>
           
           <div className="py-4 space-y-4">
-            <p className="text-[#424242]">
+            <p className="text-gray-700">
               确认要删除分类 "{categoryToDelete?.name}" 吗？
             </p>
             
@@ -510,7 +510,7 @@ const LedgerCategories = () => {
                (categoryToDelete.children && categoryToDelete.children.length > 0))
             ) && (
               <div className="bg-[#FAF3ED] border border-yellow-200 rounded p-3">
-                <p className="text-sm text-[#FFA726]">
+                <p className="text-sm text-yellow-800">
                   ⚠️ 一旦删除，下面的子分类将全部被删除
                 </p>
               </div>

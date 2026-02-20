@@ -94,7 +94,7 @@ export function InteractionHistoryDialog({
                     )}
                     {interaction.type && (
                       <div className="mt-2">
-                        <span className="inline-block px-2 py-1 text-xs rounded bg-[#F5F5F5] text-[#1976D2]">
+                        <span className="inline-block px-2 py-1 text-xs rounded bg-[#F5F5F5] text-blue-700">
                           {interaction.type}
                         </span>
                       </div>

@@ -110,7 +110,7 @@ export default function Ledger() {
   const handleExport = async (ledgerId: number) => {
     const loadingToast = toast.loading(
       <div className="flex items-center gap-2">
-        <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#E0E0E0] border-t-blue-500"></div>
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-500"></div>
         <span>正在生成Excel文件...</span>
       </div>
     );
@@ -155,7 +155,7 @@ export default function Ledger() {
         <div className="flex flex-col gap-1">
           <div className="font-semibold">导出成功！</div>
           <div className="text-xs text-[#757575]">{filename}</div>
-          <div className="text-xs text-[#757575]">文件已保存到下载文件夹</div>
+          <div className="text-xs text-gray-500">文件已保存到下载文件夹</div>
         </div>,
         { duration: 4000 }
       );
@@ -209,11 +209,11 @@ export default function Ledger() {
       <div className="px-4 pb-4 space-y-3">
         {isLoading ? (
           <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
-            <p className="text-[#757575]">加载中...</p>
+            <p className="text-gray-500">加载中...</p>
           </div>
         ) : filteredLedgers.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
-            <p className="text-[#757575]">暂无{activeTab === "active" ? "使用中" : "已封存"}的账本</p>
+            <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已封存"}的账本</p>
           </div>
         ) : (
           filteredLedgers.map((ledger) => (
@@ -235,7 +235,7 @@ export default function Ledger() {
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-[#757575] font-medium">
+                    <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
                         开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
@@ -249,7 +249,7 @@ export default function Ledger() {
                   </div>
 
                   {/* 成员信息区 */}
-                  <div className="flex items-center gap-3 mb-3 pb-3 border-b border-[#E0E0E0]">
+                  <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">
                     <div className="flex -space-x-2">
                       {(ledger.members || []).slice(0, 4).map((member, index) => (
                         <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: (ledger.members || []).length - index }}>
@@ -362,7 +362,7 @@ export default function Ledger() {
 
       {/* 底部按钮 */}
       <div className="fixed bottom-0 left-0 right-0 z-50">
-        <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white border-t border-[#E0E0E0] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="flex gap-3">
             <button
               className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
@@ -420,7 +420,7 @@ export default function Ledger() {
           <div className="p-6 text-center">
             <div className="text-2xl mb-4">⚠️</div>
             <p className="text-[#222222] mb-2 font-medium">一旦封存将不可以再修改</p>
-            <p className="text-sm text-[#757575]">封存后的账本只能查看和导出，无法继续编辑</p>
+            <p className="text-sm text-gray-500">封存后的账本只能查看和导出，无法继续编辑</p>
           </div>
           <button
             onClick={handleArchiveConfirm}
@@ -448,7 +448,7 @@ export default function Ledger() {
           <DialogTitle className="text-lg font-semibold mb-4">邀请成员</DialogTitle>
           <div className="space-y-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#757575]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 type="text"
                 placeholder="输入用户名搜索..."
@@ -460,7 +460,7 @@ export default function Ledger() {
 
             <div className="max-h-[300px] overflow-y-auto space-y-2">
               {searchUsername.length === 0 ? (
-                <div className="text-center py-8 text-[#757575] text-sm">
+                <div className="text-center py-8 text-gray-500 text-sm">
                   请输入用户名进行搜索
                 </div>
               ) : searchResults && searchResults.length > 0 ? (
@@ -477,7 +477,7 @@ export default function Ledger() {
                       />
                       <div>
                         <p className="font-medium text-[#222222]">{user.name || user.username}</p>
-                        <p className="text-sm text-[#757575]">@{user.username}</p>
+                        <p className="text-sm text-gray-500">@{user.username}</p>
                       </div>
                     </div>
                     <Button
@@ -492,7 +492,7 @@ export default function Ledger() {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-[#757575] text-sm">
+                <div className="text-center py-8 text-gray-500 text-sm">
                   未找到用户
                 </div>
               )}
@@ -520,7 +520,7 @@ export default function Ledger() {
           <div className="p-6 text-center">
             <div className="text-2xl mb-4">⚠️</div>
             <p className="text-[#222222] mb-2 font-medium">一旦销毁将永远消失</p>
-            <p className="text-sm text-[#757575]">销毁后无法恢复，请谨慎操作</p>
+            <p className="text-sm text-gray-500">销毁后无法恢复，请谨慎操作</p>
           </div>
           <button
             onClick={handleDestroyConfirm}

@@ -60,7 +60,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
   return (
     <div className="relative" ref={dropdownRef}>
       <div
-        className="flex items-center border rounded-md px-3 py-2 cursor-pointer hover:border-[#E0E0E0] transition-colors"
+        className="flex items-center border rounded-md px-3 py-2 cursor-pointer hover:border-gray-400 transition-colors"
         onClick={() => {
           setIsOpen(!isOpen);
           setTimeout(() => inputRef.current?.focus(), 50);
@@ -69,9 +69,9 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
         {value ? (
           <span className="flex-1 text-sm">{selectedUserName} (ID: {value})</span>
         ) : (
-          <span className="flex-1 text-sm text-[#757575]">点击选择用户...</span>
+          <span className="flex-1 text-sm text-gray-400">点击选择用户...</span>
         )}
-        <ChevronDown className="w-4 h-4 text-[#757575] ml-2" />
+        <ChevronDown className="w-4 h-4 text-gray-400 ml-2" />
       </div>
 
       {isOpen && (
@@ -79,7 +79,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
           {/* 搜索框 */}
           <div className="p-2 border-b sticky top-0 bg-white">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#757575]" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 ref={inputRef}
                 type="text"
@@ -110,8 +110,8 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#424242] truncate">{u.name || u.username || `用户${u.id}`}</p>
-                    <p className="text-xs text-[#757575]">@{u.username} · ID: {u.id}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">{u.name || u.username || `用户${u.id}`}</p>
+                    <p className="text-xs text-gray-500">@{u.username} · ID: {u.id}</p>
                   </div>
                   {value === u.id.toString() && (
                     <Check className="w-4 h-4 text-[#D32F2F] flex-shrink-0 ml-2" />
@@ -119,7 +119,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
                 </div>
               ))
             ) : (
-              <div className="px-3 py-6 text-center text-sm text-[#757575]">
+              <div className="px-3 py-6 text-center text-sm text-gray-500">
                 {users ? "未找到匹配的用户" : "加载中..."}
               </div>
             )}
@@ -134,7 +134,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
 const POOL_COLORS: Record<string, { bg: string; text: string }> = {
   investment_pool_percentage: { bg: "bg-[#FFEBEE]", text: "text-[#D32F2F]" },
   contribution_pool_percentage: { bg: "bg-[#F5F5F5]", text: "text-[#1976D2]" },
-  option_pool_percentage: { bg: "bg-[#F3E5F5]", text: "text-[#D32F2F]" },
+  option_pool_percentage: { bg: "bg-[#F3E5F5]", text: "text-purple-600" },
   reserve_pool_percentage: { bg: "bg-[#E8F5E9]", text: "text-[#4CAF50]" },
   founder_pool_percentage: { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
 };
@@ -151,11 +151,11 @@ const POOL_LABELS: Record<string, string> = {
 function getPoolColor(key: string, index: number) {
   if (POOL_COLORS[key]) return POOL_COLORS[key];
   const colors = [
-    { bg: "bg-white", text: "text-[#4CAF50]" },
+    { bg: "bg-teal-50", text: "text-teal-600" },
     { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
-    { bg: "bg-[#FFEBEE]", text: "text-[#D32F2F]" },
-    { bg: "bg-white", text: "text-[#1976D2]" },
-    { bg: "bg-white", text: "text-[#1976D2]" },
+    { bg: "bg-[#FFEBEE]", text: "text-pink-600" },
+    { bg: "bg-cyan-50", text: "text-cyan-600" },
+    { bg: "bg-indigo-50", text: "text-indigo-600" },
   ];
   return colors[index % colors.length];
 }
@@ -414,13 +414,13 @@ export default function EquityManagement() {
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center">
           <Link href="/admin">
-            <button className="text-[#757575] hover:text-[#424242]">
+            <button className="text-gray-600 hover:text-gray-900">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
           </Link>
-          <h1 className="flex-1 text-center text-lg font-bold text-[#424242]">股权激励管理</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-gray-900">股权激励管理</h1>
           <div className="w-6"></div>
         </div>
       </div>
@@ -429,13 +429,13 @@ export default function EquityManagement() {
         {/* 股份池配置 */}
         <Card className="p-6 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-[#424242]">股份池配置</h2>
+            <h2 className="text-lg font-bold text-gray-900">股份池配置</h2>
             {!isEditingPools ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={startEditPools}
-                className="text-[#757575] hover:text-[#D32F2F] hover:border-[#D32F2F]"
+                className="text-gray-600 hover:text-[#D32F2F] hover:border-[#D32F2F]"
               >
                 <Settings className="w-4 h-4 mr-1" />
                 编辑配置
@@ -471,7 +471,7 @@ export default function EquityManagement() {
                 const label = pool.ruleDescription || POOL_LABELS[pool.ruleKey] || pool.ruleKey;
                 return (
                   <div key={pool.ruleKey} className={`p-4 ${color.bg} rounded-xl`}>
-                    <p className="text-sm text-[#757575] mb-1">{label}</p>
+                    <p className="text-sm text-gray-600 mb-1">{label}</p>
                     <p className={`text-2xl font-bold ${color.text}`}>
                       {pool.ruleValue.toFixed(2)}%
                     </p>
@@ -503,7 +503,7 @@ export default function EquityManagement() {
                       </div>
                       <button
                         onClick={() => handleRemovePool(index)}
-                        className="text-[#D32F2F] hover:text-[#D32F2F] transition-colors flex-shrink-0"
+                        className="text-red-400 hover:text-[#D32F2F] transition-colors flex-shrink-0"
                         title="删除此池"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -532,7 +532,7 @@ export default function EquityManagement() {
               {/* 添加新池按钮 */}
               <button
                 onClick={() => setIsAddPoolDialogOpen(true)}
-                className="w-full p-4 border-2 border-dashed border-[#E0E0E0] rounded-xl text-[#757575] hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors flex items-center justify-center space-x-2"
+                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors flex items-center justify-center space-x-2"
               >
                 <Plus className="w-5 h-5" />
                 <span>添加新的股份池</span>
@@ -542,7 +542,7 @@ export default function EquityManagement() {
               <div className={`p-3 rounded-lg flex items-center justify-between ${
                 Math.abs(poolTotal - 100) < 0.01 ? "bg-[#E8F5E9]" : "bg-[#FFEBEE]"
               }`}>
-                <span className="text-sm font-medium text-[#424242]">所有池总和</span>
+                <span className="text-sm font-medium text-gray-700">所有池总和</span>
                 <span className={`text-lg font-bold ${
                   Math.abs(poolTotal - 100) < 0.01 ? "text-[#4CAF50]" : "text-[#D32F2F]"
                 }`}>
@@ -557,13 +557,13 @@ export default function EquityManagement() {
         {/* 贡献规则 */}
         <Card className="p-6 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-[#424242]">贡献股份规则</h2>
+            <h2 className="text-lg font-bold text-gray-900">贡献股份规则</h2>
             {!isEditingRules ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={startEditRules}
-                className="text-[#757575] hover:text-[#D32F2F] hover:border-[#D32F2F]"
+                className="text-gray-600 hover:text-[#D32F2F] hover:border-[#D32F2F]"
               >
                 <Settings className="w-4 h-4 mr-1" />
                 编辑规则
@@ -595,13 +595,13 @@ export default function EquityManagement() {
             /* 展示模式 */
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-[#424242]">邀请新用户</span>
+                <span className="text-gray-700">邀请新用户</span>
                 <span className="font-bold text-[#D32F2F]">
                   {rules?.invite_per_user_percentage?.toFixed(2) || "0.05"}% / 人
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-[#424242]">被邀请人每100人脉</span>
+                <span className="text-gray-700">被邀请人每100人脉</span>
                 <span className="font-bold text-[#D32F2F]">
                   {rules?.referral_network_per_100_percentage?.toFixed(2) || "0.02"}%
                 </span>
@@ -617,7 +617,7 @@ export default function EquityManagement() {
                 };
                 return (
                   <div key={rule.key} className="p-3 bg-gray-50 rounded-lg">
-                    <Label className="text-sm text-[#424242] mb-2 block">
+                    <Label className="text-sm text-gray-700 mb-2 block">
                       {labels[rule.key] || rule.key}
                     </Label>
                     <div className="flex items-center space-x-2">
@@ -645,17 +645,17 @@ export default function EquityManagement() {
         {/* 股东股权总览 */}
         {shareholders && shareholders.length > 0 && (
           <Card className="p-6 rounded-2xl shadow-sm">
-            <h2 className="text-lg font-bold text-[#424242] mb-4">股东股权总览</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">股东股权总览</h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
-                    <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">编号</th>
-                    <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">股东</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">总股份</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">投资股份</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">邀请贡献</th>
-                    <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">人脉贡献</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">编号</th>
+                    <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">股东</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">总股份</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">投资股份</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">邀请贡献</th>
+                    <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">人脉贡献</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -688,7 +688,7 @@ export default function EquityManagement() {
         {/* 投资记录管理 */}
         <Card className="p-6 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-[#424242]">投资记录管理</h2>
+            <h2 className="text-lg font-bold text-gray-900">投资记录管理</h2>
             <Button
               onClick={() => {
                 setFormData({ userId: "", investorName: "", investorIdCard: "", amount: "", investmentDate: new Date().toISOString().split('T')[0], notes: "" });
@@ -706,12 +706,12 @@ export default function EquityManagement() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">编号</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">股东</th>
-                  <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">投资金额</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">投资日期</th>
-                  <th className="text-left py-3 px-2 text-sm font-semibold text-[#424242]">备注</th>
-                  <th className="text-right py-3 px-2 text-sm font-semibold text-[#424242]">操作</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">编号</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">股东</th>
+                  <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">投资金额</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">投资日期</th>
+                  <th className="text-left py-3 px-2 text-sm font-semibold text-gray-700">备注</th>
+                  <th className="text-right py-3 px-2 text-sm font-semibold text-gray-700">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -728,18 +728,18 @@ export default function EquityManagement() {
                       <td className="py-3 px-2 text-sm">
                         {new Date(investment.investmentDate).toLocaleDateString('zh-CN')}
                       </td>
-                      <td className="py-3 px-2 text-sm text-[#757575]">{investment.notes || '-'}</td>
+                      <td className="py-3 px-2 text-sm text-gray-600">{investment.notes || '-'}</td>
                       <td className="py-3 px-2 text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => openEditDialog(investment)}
-                            className="text-[#1976D2] hover:text-[#1976D2]"
+                            className="text-[#1976D2] hover:text-blue-800"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(investment.id)}
-                            className="text-[#D32F2F] hover:text-[#D32F2F]"
+                            className="text-[#D32F2F] hover:text-red-800"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -749,7 +749,7 @@ export default function EquityManagement() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-[#757575]">
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
                       暂无投资记录
                     </td>
                   </tr>
@@ -960,7 +960,7 @@ export default function EquityManagement() {
                 placeholder="例如：10"
               />
             </div>
-            <p className="text-xs text-[#757575]">
+            <p className="text-xs text-gray-500">
               提示：添加后请确保所有池的总和等于100%，可以调整其他池的比例来平衡。
             </p>
           </div>

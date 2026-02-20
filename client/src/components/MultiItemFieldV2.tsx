@@ -110,12 +110,12 @@ export function MultiItemFieldV2({
   
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#424242]">{label}</label>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
       {/* 已保存的条目列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={item.id || `temp_${index}`} className={`flex items-center gap-2 p-2 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-[#1976D2]' : 'bg-gray-50 border-transparent'}`}>
+            <div key={item.id || `temp_${index}`} className={`flex items-center gap-2 p-2 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <span className="flex-1 text-sm">{item.value}</span>
               <button
                 type="button"
@@ -284,19 +284,19 @@ export function MultiAddressFieldV2({
   
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#424242]">{label}</label>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
       {/* 已保存的地址列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
             const parsed = parseAddress(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-[#1976D2]' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
-                    <div><span className="text-[#757575]">收件人：</span>{parsed.name}</div>
-                    <div><span className="text-[#757575]">电话：</span>{parsed.phone}</div>
-                    <div><span className="text-[#757575]">地址：</span>{parsed.address}</div>
+                    <div><span className="text-gray-500">收件人：</span>{parsed.name}</div>
+                    <div><span className="text-gray-500">电话：</span>{parsed.phone}</div>
+                    <div><span className="text-gray-500">地址：</span>{parsed.address}</div>
                   </div>
                   <div className="flex gap-1">
                     <button
@@ -456,19 +456,19 @@ export function MultiBankFieldV2({
   
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#424242]">{label}</label>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
       {/* 已保存的银行账号列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
             const parsed = parseBank(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-[#1976D2]' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
-                    <div><span className="text-[#757575]">账户名：</span>{parsed.accountName}</div>
-                    <div><span className="text-[#757575]">开户行：</span>{parsed.bankName}</div>
-                    <div><span className="text-[#757575]">账号：</span>{parsed.accountNumber}</div>
+                    <div><span className="text-gray-500">账户名：</span>{parsed.accountName}</div>
+                    <div><span className="text-gray-500">开户行：</span>{parsed.bankName}</div>
+                    <div><span className="text-gray-500">账号：</span>{parsed.accountNumber}</div>
                   </div>
                   <div className="flex gap-1">
                     <button
@@ -624,18 +624,18 @@ export function MultiInvoiceFieldV2({
   
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#424242]">{label}</label>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
       {/* 已保存的开票信息列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
             const parsed = parseInvoice(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-[#1976D2]' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
-                    <div><span className="text-[#757575]">公司名称：</span>{parsed.companyName}</div>
-                    <div><span className="text-[#757575]">税号：</span>{parsed.taxNumber}</div>
+                    <div><span className="text-gray-500">公司名称：</span>{parsed.companyName}</div>
+                    <div><span className="text-gray-500">税号：</span>{parsed.taxNumber}</div>
                   </div>
                   <div className="flex gap-1">
                     <button

@@ -134,7 +134,7 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
                   {report.formattedContent.companyTags.map((tag, index) => (
                     <span
                       key={index}
-                      className="px-2 py-0.5 bg-[#F5F5F5] text-[#1976D2] rounded-full text-xs"
+                      className="px-2 py-0.5 bg-[#F5F5F5] text-blue-700 rounded-full text-xs"
                     >
                       {tag}
                     </span>

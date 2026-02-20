@@ -250,7 +250,7 @@ export default function SharingSettings() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border-b border-[#E0E0E0] dark:border-[#E0E0E0]">
+      <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Button
@@ -284,7 +284,7 @@ export default function SharingSettings() {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'my'
                 ? 'bg-white dark:bg-gray-700 text-[#D32F2F] shadow-sm'
-                : 'text-[#757575] dark:text-[#757575] hover:text-[#424242]'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
             }`}
           >
             <ArrowUpRight className="h-4 w-4" />
@@ -293,7 +293,7 @@ export default function SharingSettings() {
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${
                 activeTab === 'my'
                   ? 'bg-[#D32F2F] text-white'
-                  : 'bg-gray-200 dark:bg-gray-600 text-[#757575] dark:text-gray-300'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
               }`}>
                 {myCount}
               </span>
@@ -304,7 +304,7 @@ export default function SharingSettings() {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'shared'
                 ? 'bg-white dark:bg-gray-700 text-[#D32F2F] shadow-sm'
-                : 'text-[#757575] dark:text-[#757575] hover:text-[#424242]'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
             }`}
           >
             <ArrowDownLeft className="h-4 w-4" />
@@ -313,7 +313,7 @@ export default function SharingSettings() {
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${
                 activeTab === 'shared'
                   ? 'bg-[#D32F2F] text-white'
-                  : 'bg-gray-200 dark:bg-gray-600 text-[#757575] dark:text-gray-300'
+                  : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
               }`}>
                 {sharedCount}
               </span>
@@ -324,17 +324,17 @@ export default function SharingSettings() {
         {/* 搜索和排序栏 */}
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#757575]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder={activeTab === 'my' ? "搜索共享对象..." : "搜索共享来源..."}
               value={activeTab === 'my' ? mySearchQuery : sharedSearchQuery}
               onChange={(e) => activeTab === 'my' ? setMySearchQuery(e.target.value) : setSharedSearchQuery(e.target.value)}
-              className="pl-10 h-9 text-sm bg-white dark:bg-gray-800 border-[#E0E0E0] dark:border-[#E0E0E0] rounded-lg"
+              className="pl-10 h-9 text-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-lg"
             />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 px-2.5 text-xs border-[#E0E0E0] dark:border-[#E0E0E0]">
+              <Button variant="outline" size="sm" className="h-9 px-2.5 text-xs border-gray-200 dark:border-gray-700">
                 <ArrowUpDown className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -359,27 +359,27 @@ export default function SharingSettings() {
             loadingConnections ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-[#757575] mt-3">加载中...</p>
+                <p className="text-sm text-gray-400 mt-3">加载中...</p>
               </div>
             ) : !myConnections || myConnections.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
                   <ArrowUpRight className="h-8 w-8 text-gray-300" />
                 </div>
-                <p className="text-sm font-medium text-[#757575]">暂无共享连接</p>
-                <p className="text-xs text-[#757575] mt-1">点击右上角"添加"开始共享您的人脉</p>
+                <p className="text-sm font-medium text-gray-500">暂无共享连接</p>
+                <p className="text-xs text-gray-400 mt-1">点击右上角"添加"开始共享您的人脉</p>
               </div>
             ) : filteredAndSortedMyConnections.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Search className="h-10 w-10 text-gray-300 mb-3" />
-                <p className="text-sm text-[#757575]">未找到匹配的连接</p>
+                <p className="text-sm text-gray-500">未找到匹配的连接</p>
               </div>
             ) : (
               <>
                 {visibleMyConnections.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[#E0E0E0] dark:border-[#E0E0E0] hover:shadow-sm transition-all"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
                   >
                     {/* 头像 */}
                     <div
@@ -404,15 +404,15 @@ export default function SharingSettings() {
                     {/* 信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm truncate text-[#424242] dark:text-gray-100">
+                        <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
                           {conn.receiverName}
                         </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] dark:bg-[#424242]/30 text-[#1976D2] dark:text-[#1976D2] text-[10px] font-medium flex-shrink-0">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] dark:bg-[#424242]/30 text-[#1976D2] dark:text-blue-400 text-[10px] font-medium flex-shrink-0">
                           <Users className="h-2.5 w-2.5" />
                           {conn.sharedContactCount || 0}人
                         </span>
                       </div>
-                      <p className="text-xs text-[#757575] mt-0.5 truncate">
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">
                         @{conn.receiverUsername}
                         {conn.note && <span className="ml-2 text-gray-300">· {conn.note}</span>}
                       </p>
@@ -423,7 +423,7 @@ export default function SharingSettings() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-[#757575] hover:text-[#D32F2F] hover:bg-gray-100"
+                        className="h-8 w-8 text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
                         onClick={() => openPermissionDialog(conn)}
                         title="权限设置"
                       >
@@ -445,12 +445,12 @@ export default function SharingSettings() {
                 {/* 无限加载触发器 */}
                 {hasMoreMy && (
                   <div ref={listEndRef} className="flex justify-center py-4">
-                    <div className="w-5 h-5 border-2 border-[#E0E0E0] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
                 
                 {!hasMoreMy && filteredAndSortedMyConnections.length > BATCH_SIZE && (
-                  <p className="text-center text-xs text-[#757575] py-3">已显示全部 {filteredAndSortedMyConnections.length} 个连接</p>
+                  <p className="text-center text-xs text-gray-400 py-3">已显示全部 {filteredAndSortedMyConnections.length} 个连接</p>
                 )}
               </>
             )
@@ -459,27 +459,27 @@ export default function SharingSettings() {
             loadingSharedToMe ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-[#757575] mt-3">加载中...</p>
+                <p className="text-sm text-gray-400 mt-3">加载中...</p>
               </div>
             ) : !sharedToMe || sharedToMe.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
                   <ArrowDownLeft className="h-8 w-8 text-gray-300" />
                 </div>
-                <p className="text-sm font-medium text-[#757575]">暂无共享给您的数据</p>
-                <p className="text-xs text-[#757575] mt-1">当其他用户共享给您时，会显示在这里</p>
+                <p className="text-sm font-medium text-gray-500">暂无共享给您的数据</p>
+                <p className="text-xs text-gray-400 mt-1">当其他用户共享给您时，会显示在这里</p>
               </div>
             ) : filteredAndSortedSharedToMe.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Search className="h-10 w-10 text-gray-300 mb-3" />
-                <p className="text-sm text-[#757575]">未找到匹配的连接</p>
+                <p className="text-sm text-gray-500">未找到匹配的连接</p>
               </div>
             ) : (
               <>
                 {visibleSharedToMe.map((conn: any) => (
                   <div
                     key={conn.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[#E0E0E0] dark:border-[#E0E0E0] hover:shadow-sm transition-all cursor-pointer active:scale-[0.99]"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all cursor-pointer active:scale-[0.99]"
                   >
                     {/* 头像 */}
                     <div
@@ -504,15 +504,15 @@ export default function SharingSettings() {
                     {/* 信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm truncate text-[#424242] dark:text-gray-100">
+                        <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
                           {conn.sharerName}
                         </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] dark:bg-[#4CAF50]/30 text-[#4CAF50] dark:text-[#4CAF50] text-[10px] font-medium flex-shrink-0">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] dark:bg-green-900/30 text-[#4CAF50] dark:text-green-400 text-[10px] font-medium flex-shrink-0">
                           <Users className="h-2.5 w-2.5" />
                           {conn.sharedContactCount || 0}人
                         </span>
                       </div>
-                      <p className="text-xs text-[#757575] mt-0.5 truncate">
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">
                         @{conn.sharerUsername}
                       </p>
                     </div>
@@ -524,12 +524,12 @@ export default function SharingSettings() {
                 {/* 无限加载触发器 */}
                 {hasMoreShared && (
                   <div ref={listEndRef} className="flex justify-center py-4">
-                    <div className="w-5 h-5 border-2 border-[#E0E0E0] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
                 
                 {!hasMoreShared && filteredAndSortedSharedToMe.length > BATCH_SIZE && (
-                  <p className="text-center text-xs text-[#757575] py-3">已显示全部 {filteredAndSortedSharedToMe.length} 个连接</p>
+                  <p className="text-center text-xs text-gray-400 py-3">已显示全部 {filteredAndSortedSharedToMe.length} 个连接</p>
                 )}
               </>
             )
@@ -625,7 +625,7 @@ export default function SharingSettings() {
               权限配置
             </DialogTitle>
             <DialogDescription>
-              设置 <span className="font-medium text-[#424242]">{selectedConnection?.receiverName}</span> 可以查看的字段
+              设置 <span className="font-medium text-gray-700">{selectedConnection?.receiverName}</span> 可以查看的字段
             </DialogDescription>
           </DialogHeader>
           
@@ -640,7 +640,7 @@ export default function SharingSettings() {
                   <Label className="flex items-center gap-2 text-sm">
                     {field.label}
                     {field.required && (
-                      <span className="text-[10px] text-[#757575] bg-gray-100 px-1.5 py-0.5 rounded">必选</span>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">必选</span>
                     )}
                   </Label>
                   <Checkbox

@@ -191,7 +191,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                           <p className="text-sm text-muted-foreground mb-1">{vocab.pinyin}</p>
                         )}
                         {vocab.translation && (
-                          <p className="text-sm text-[#757575] mb-2">{vocab.translation}</p>
+                          <p className="text-sm text-gray-600 mb-2">{vocab.translation}</p>
                         )}
                       </div>
                       <div className="flex gap-1">
@@ -213,7 +213,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-1 bg-[#F5F5F5] text-[#1976D2] rounded">
+                      <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                         {vocab.category}
                       </span>
                       <span className="px-2 py-1 bg-[#FFEBEE] text-[#D32F2F]-dark rounded">
@@ -221,7 +221,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       </span>
                     </div>
                     {vocab.example && (
-                      <p className="mt-2 text-sm text-[#757575] italic">例句：{vocab.example}</p>
+                      <p className="mt-2 text-sm text-gray-600 italic">例句：{vocab.example}</p>
                     )}
                   </Card>
                 ))}
@@ -246,7 +246,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                           <p className="text-sm text-muted-foreground mb-1">[{vocab.pronunciation}]</p>
                         )}
                         {vocab.translation && (
-                          <p className="text-sm text-[#757575] mb-2">{vocab.translation}</p>
+                          <p className="text-sm text-gray-600 mb-2">{vocab.translation}</p>
                         )}
                       </div>
                       <div className="flex gap-1">
@@ -268,7 +268,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-1 bg-[#F5F5F5] text-[#1976D2] rounded">
+                      <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                         {vocab.category}
                       </span>
                       <span className="px-2 py-1 bg-[#FFEBEE] text-[#D32F2F]-dark rounded">
@@ -276,7 +276,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       </span>
                     </div>
                     {vocab.example && (
-                      <p className="mt-2 text-sm text-[#757575] italic">例句：{vocab.example}</p>
+                      <p className="mt-2 text-sm text-gray-600 italic">例句：{vocab.example}</p>
                     )}
                   </Card>
                 ))}

@@ -96,16 +96,16 @@ export function VocabularyStatsCard({ stats }: VocabularyStatsCardProps) {
   ];
 
   return (
-    <Card className="p-4 sm:p-6 bg-gradient-to-br from-white to-white border-[#4CAF50]">
-      <h3 className="text-base sm:text-lg font-semibold text-[#4CAF50] mb-3 sm:mb-4">词库概览</h3>
+    <Card className="p-4 sm:p-6 bg-gradient-to-br from-white to-white border-green-200">
+      <h3 className="text-base sm:text-lg font-semibold text-green-800 mb-3 sm:mb-4">词库概览</h3>
       <div className="space-y-2 sm:space-y-3">
         {items.map((item, index) => (
           <div
             key={index}
-            className="flex items-center justify-between py-2 border-b border-[#4CAF50] last:border-b-0"
+            className="flex items-center justify-between py-2 border-b border-green-100 last:border-b-0"
           >
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <span className="text-sm sm:text-base text-[#424242] font-medium whitespace-nowrap">{item.label}</span>
+              <span className="text-sm sm:text-base text-gray-700 font-medium whitespace-nowrap">{item.label}</span>
               <span className="text-xl sm:text-2xl font-bold text-[#4CAF50]">{item.count}</span>
             </div>
             <div className="flex-shrink-0 ml-2">

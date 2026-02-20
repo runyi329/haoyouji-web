@@ -52,8 +52,8 @@ export default function ReadingGame() {
             onClick={() => !isAutoReading && handleCharClick(char)}
             className={`inline-block cursor-pointer transition-all rounded px-0.5 ${
               isCurrentReading 
-                ? 'bg-[#FFA726] scale-125 shadow-lg' 
-                : 'hover:bg-[#FFF3E0] active:bg-white'
+                ? 'bg-orange-400 scale-125 shadow-lg' 
+                : 'hover:bg-[#FFF3E0] active:bg-yellow-300'
             }`}
             style={{
               userSelect: 'none',
@@ -273,7 +273,7 @@ export default function ReadingGame() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 flex items-center justify-center">
         <Card className="p-8 text-center">
-          <p className="text-xl text-[#757575] mb-4">故事不存在</p>
+          <p className="text-xl text-gray-600 mb-4">故事不存在</p>
           <Link href="/games/reading">
             <Button>返回故事列表</Button>
           </Link>
@@ -306,7 +306,7 @@ export default function ReadingGame() {
             onClick={isAutoReading ? stopAutoReading : startAutoReading}
             variant={isAutoReading ? "default" : "outline"}
             size="lg"
-            className={isAutoReading ? "bg-[#CBA471] hover:bg-[#FFA726]" : ""}
+            className={isAutoReading ? "bg-[#CBA471] hover:bg-orange-600" : ""}
           >
             {isAutoReading ? (
               <>
@@ -352,16 +352,16 @@ export default function ReadingGame() {
           </h1>
         
         {/* 提示信息 */}
-        <div className="bg-[#F5F5F5] border-2 border-[#1976D2] rounded-lg p-4 mb-6 flex items-center gap-3">
+        <div className="bg-[#F5F5F5] border-2 border-blue-200 rounded-lg p-4 mb-6 flex items-center gap-3">
           <Volume2 className="w-6 h-6 text-[#1976D2] flex-shrink-0" />
-          <p className="text-[#1976D2] text-lg">
+          <p className="text-blue-800 text-lg">
             点击文字，就能听到读音哦！
           </p>
         </div>
         
         {/* 故事内容 */}
         <div
-          className="story-content text-3xl md:text-2xl leading-relaxed text-[#424242]"
+          className="story-content text-3xl md:text-2xl leading-relaxed text-gray-800"
           style={{
             lineHeight: showPinyin ? "3.5" : "2.5",
             letterSpacing: "0.1em",
@@ -384,7 +384,7 @@ export default function ReadingGame() {
         
         {/* 点击的文字显示 */}
         {clickedChar && (
-          <div className="mt-8 p-6 bg-gradient-to-r from-red-100 to-pink-100 rounded-lg border-2 border-[#D32F2F]">
+          <div className="mt-8 p-6 bg-gradient-to-r from-red-100 to-pink-100 rounded-lg border-2 border-red-300">
             <div className="flex items-center gap-3 mb-2">
               <Volume2 className={`w-8 h-8 text-[#D32F2F] ${isPlaying ? "animate-pulse" : ""}`} />
               <span className="text-xl text-[#D32F2F]-dark font-semibold">
@@ -398,14 +398,14 @@ export default function ReadingGame() {
         )}
         
         {/* 统计信息 */}
-        <div className="mt-8 pt-6 border-t-2 border-[#E0E0E0] flex justify-center gap-8">
+        <div className="mt-8 pt-6 border-t-2 border-gray-200 flex justify-center gap-8">
           <div className="text-center">
             <div className="text-3xl font-bold text-[#CBA471]">{clickCount}</div>
-            <div className="text-sm text-[#757575] mt-1">点读次数</div>
+            <div className="text-sm text-gray-600 mt-1">点读次数</div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-[#1976D2]">{story.wordCount}</div>
-            <div className="text-sm text-[#757575] mt-1">总字数</div>
+            <div className="text-sm text-gray-600 mt-1">总字数</div>
           </div>
         </div>
         </div>

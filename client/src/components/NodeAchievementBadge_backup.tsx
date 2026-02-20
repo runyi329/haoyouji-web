@@ -65,9 +65,9 @@ const CapsuleIndicator: React.FC<{
     <div className="flex items-center space-x-3">
       {/* 左侧标签 */}
       <div className="w-[72px] flex-shrink-0">
-        <div className="text-[11px] text-[#757575] font-medium leading-tight">{label}</div>
+        <div className="text-[11px] text-gray-600 font-medium leading-tight">{label}</div>
         {isDynamic && (
-          <div className="text-[9px] text-[#757575] mt-0.5">7日均值</div>
+          <div className="text-[9px] text-gray-400 mt-0.5">7日均值</div>
         )}
       </div>
 
@@ -82,7 +82,7 @@ const CapsuleIndicator: React.FC<{
           />
           {/* 进度条内文字 */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className={`text-[10px] font-bold ${pct > 50 ? 'text-white' : 'text-[#757575]'}`}>
+            <span className={`text-[10px] font-bold ${pct > 50 ? 'text-white' : 'text-gray-500'}`}>
               {current}{unit} / {target}{unit}
             </span>
           </div>
@@ -96,7 +96,7 @@ const CapsuleIndicator: React.FC<{
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
         ) : (
-          <div className="w-4 h-4 rounded-full border-2 border-[#E0E0E0]" />
+          <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
         )}
       </div>
     </div>
@@ -190,7 +190,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   // 顶部卡片样式
   const getTopCardStyle = () => {
     switch (level) {
-      case 'none': return 'bg-[#F5F5F5] text-[#757575]';
+      case 'none': return 'bg-[#F5F5F5] text-gray-600';
       case 'standard': return 'bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white';
       case 'advanced': return 'bg-gradient-to-br from-[#0a1628] to-[#1a2744] text-white';
       case 'super': return 'bg-gradient-to-br from-[#1a1a2e] via-[#2d2d44] to-[#1a1a2e] text-white';
@@ -198,10 +198,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
   };
   const getBonusColor = () => {
     switch (level) {
-      case 'none': return 'text-[#757575]';
+      case 'none': return 'text-gray-400';
       case 'standard': return 'text-white';
-      case 'advanced': return 'text-[#FFA726]';
-      case 'super': return 'text-[#FFA726]';
+      case 'advanced': return 'text-amber-400';
+      case 'super': return 'text-amber-300';
     }
   };
   const getStatusDotColor = () => {
@@ -240,7 +240,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {level === 'advanced' && (
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="absolute w-1 h-1 rounded-full bg-[#1976D2]/30" style={{
+                <div key={i} className="absolute w-1 h-1 rounded-full bg-blue-400/30" style={{
                   left: `${15 + i * 15}%`, top: `${20 + (i % 3) * 25}%`,
                   animation: `floatParticle ${3 + i * 0.5}s ease-in-out infinite`,
                   animationDelay: `${i * 0.3}s`,
@@ -260,18 +260,18 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           <div className="relative z-10">
             {/* 标题行 */}
             <div className="flex items-center justify-between mb-3">
-              <span className={`text-sm ${level === 'none' ? 'text-[#757575]' : 'opacity-90'}`}>
+              <span className={`text-sm ${level === 'none' ? 'text-gray-500' : 'opacity-90'}`}>
                 市场贡献激励
               </span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowRules(true); }}
                   className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                    level === 'none' ? 'bg-gray-300 text-[#757575] hover:bg-gray-400' : 'bg-white/20 text-white/80 hover:bg-white/30'
+                    level === 'none' ? 'bg-gray-300 text-gray-600 hover:bg-gray-400' : 'bg-white/20 text-white/80 hover:bg-white/30'
                   }`}
                 >?</button>
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getStatusDotColor() }} />
-                <svg className={`w-5 h-5 transition-transform ${level === 'none' ? 'text-[#757575]' : 'opacity-90'} ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-5 h-5 transition-transform ${level === 'none' ? 'text-gray-400' : 'opacity-90'} ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
@@ -279,23 +279,23 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
             {/* 核心数值：与第一层相同的总权重 */}
             <div className="flex items-baseline space-x-2">
-              <span className={`text-5xl font-bold ${level === 'none' ? 'text-[#424242]' : 'text-white'}`} style={{
+              <span className={`text-5xl font-bold ${level === 'none' ? 'text-gray-800' : 'text-white'}`} style={{
                 fontVariantNumeric: 'tabular-nums',
               }}>
                 {totalEquity.toFixed(4)}
               </span>
-              <span className={`text-2xl ${level === 'none' ? 'text-[#757575]' : 'opacity-90'}`}>%</span>
+              <span className={`text-2xl ${level === 'none' ? 'text-gray-400' : 'opacity-90'}`}>%</span>
             </div>
 
             {/* 副标题 */}
             <div className="mt-2 flex items-center justify-between">
-              <span className={`text-xs ${level === 'none' ? 'text-[#757575]' : 'opacity-60'}`}>
+              <span className={`text-xs ${level === 'none' ? 'text-gray-400' : 'opacity-60'}`}>
                 当前综合权重
               </span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                level === 'none' ? 'bg-gray-300 text-[#757575]'
-                  : level === 'advanced' ? 'bg-[#1976D2]/20 text-[#1976D2]'
-                    : level === 'super' ? 'bg-white0/20 text-[#FFA726]'
+                level === 'none' ? 'bg-gray-300 text-gray-600'
+                  : level === 'advanced' ? 'bg-[#1976D2]/20 text-blue-300'
+                    : level === 'super' ? 'bg-amber-500/20 text-amber-300'
                       : 'bg-white/10 text-white/80'
               }`}>
                 {config.name}
@@ -319,9 +319,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       <span className="text-sm font-bold">{baseEq.toFixed(4)}%</span>
                     </div>
                     <div className="flex items-center space-x-1.5">
-                      <div className="w-2 h-2 rounded-full bg-white" />
+                      <div className="w-2 h-2 rounded-full bg-yellow-400" />
                       <span className="text-xs opacity-70">贡献加成</span>
-                      <span className="text-sm font-bold text-[#FFA726]">+{contribEq.toFixed(4)}%</span>
+                      <span className="text-sm font-bold text-yellow-300">+{contribEq.toFixed(4)}%</span>
                     </div>
                   </div>
                   {/* 横向比例条 */}
@@ -345,23 +345,23 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
             {/* 未达成状态：激活条件预览 */}
             {level === 'none' && (
-              <div className="mt-4 pt-4 border-t border-[#E0E0E0]/50 space-y-2">
-                <div className="text-xs text-[#757575] font-semibold">激活条件预览</div>
+              <div className="mt-4 pt-4 border-t border-gray-300/50 space-y-2">
+                <div className="text-xs text-gray-500 font-semibold">激活条件预览</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactCount >= 50 ? 'bg-[#E8F5E9] text-[#4CAF50]' : 'bg-gray-200 text-[#757575]'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactCount >= 50 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     人脉 {contactCount}/50 {contactCount >= 50 ? '✓' : ''}
                   </div>
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${tagAverage >= 1 ? 'bg-[#E8F5E9] text-[#4CAF50]' : 'bg-gray-200 text-[#757575]'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${tagAverage >= 1 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     标签 {tagAverage}/1 {tagAverage >= 1 ? '✓' : ''}
                   </div>
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactFrequency >= 3 ? 'bg-[#E8F5E9] text-[#4CAF50]' : 'bg-gray-200 text-[#757575]'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactFrequency >= 3 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     频率 {contactFrequency}/3 {contactFrequency >= 3 ? '✓' : ''}
                   </div>
-                  <div className="text-xs px-2 py-1.5 rounded-lg bg-gray-100 text-[#757575]">
+                  <div className="text-xs px-2 py-1.5 rounded-lg bg-gray-100 text-gray-400">
                     共享 —
                   </div>
                 </div>
-                <div className="text-xs text-[#757575] italic">
+                <div className="text-xs text-gray-400 italic">
                   补齐资料即可激活贡献加成收益
                 </div>
               </div>
@@ -373,7 +373,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 顶部主数据：左右布局 */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* 左侧：累计确权筹码 */}
-                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-[#FFA726]/20' : 'bg-white/10'}`}>
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">累计确权筹码</div>
                     <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {contributionScore.toLocaleString()}
@@ -381,9 +381,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     <div className="text-[10px] opacity-50 mt-0.5">点</div>
                   </div>
                   {/* 右侧：实时市场权重 */}
-                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-[#FFA726]/20' : 'bg-white/10'}`}>
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">实时市场权重</div>
-                    <div className="text-2xl font-bold text-[#FFA726]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-2xl font-bold text-yellow-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{contribEquity.toFixed(4)}%
                     </div>
                     <div className="text-[10px] opacity-50 mt-0.5">全场占比</div>
@@ -393,9 +393,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 中部方块：组织培育收益 + 社会化资产溢价 */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* 左侧：组织培育收益 */}
-                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-[#FFA726]/10 border-[#FFA726]/20' : 'bg-white/5 border-white/10'}`}>
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">组织培育收益</div>
-                    <div className="text-xl font-bold text-[#4CAF50]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-xl font-bold text-green-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{(inviteEquity * 100).toFixed(4)}%
                     </div>
                     <div className="text-[10px] opacity-50 mt-1">
@@ -403,9 +403,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     </div>
                   </div>
                   {/* 右侧：社会化资产溢价 */}
-                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-[#FFA726]/10 border-[#FFA726]/20' : 'bg-white/5 border-white/10'}`}>
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">社会化资产溢价</div>
-                    <div className="text-xl font-bold text-[#1976D2]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-xl font-bold text-blue-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{(referralNetworkEquity * 100).toFixed(4)}%
                     </div>
                     <div className="text-[10px] opacity-50 mt-1">
@@ -447,7 +447,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             // 状态标签
             const getStatusLabel = (pct: number) => {
               if (pct >= 1) return { text: '✅ 已达标', color: 'text-[#4CAF50]' };
-              if (pct >= 0.5) return { text: '🏃 进行中', color: 'text-[#FFA726]' };
+              if (pct >= 0.5) return { text: '🏃 进行中', color: 'text-yellow-600' };
               return { text: '⚠️ 待提升', color: 'text-[#FFA000]' };
             };
             
@@ -461,9 +461,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <div className="w-1 h-4 bg-[#A80000] rounded-full" />
-                    <span className="text-sm font-bold text-[#424242]">市场经营仪表盘</span>
+                    <span className="text-sm font-bold text-gray-900">市场经营仪表盘</span>
                   </div>
-                  <span className="text-[10px] text-[#757575] bg-gray-100 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                     {daysLeft > 0 ? `本周剩余 ${daysLeft} 天` : '本周已结算'}
                   </span>
                 </div>
@@ -471,75 +471,75 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 2x2 矩阵方块 */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* 左上 A：资源基石 */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E0E0E0]">
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-[#424242]">资源基石</span>
+                      <span className="text-xs font-bold text-gray-800">资源基石</span>
                       <span className={`text-[10px] font-medium ${contactStatus.color}`}>{contactStatus.text}</span>
                     </div>
-                    <div className="text-2xl font-bold text-[#424242]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {contactCount.toLocaleString()}
                     </div>
-                    <div className="text-[10px] text-[#757575] mt-1">
+                    <div className="text-[10px] text-gray-400 mt-1">
                       规模: {contactCount} / {targetTier.contactMin}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${contactPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, contactPct * 100)}%` }} />
                     </div>
-                    <div className="text-[9px] text-[#757575] mt-1">支撑社会化资产的人脉底座</div>
+                    <div className="text-[9px] text-gray-400 mt-1">支撑社会化资产的人脉底座</div>
                   </div>
 
                   {/* 右上 B：资产质量 */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E0E0E0]">
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-[#424242]">资产质量</span>
+                      <span className="text-xs font-bold text-gray-800">资产质量</span>
                       <span className={`text-[10px] font-medium ${tagStatus.color}`}>{tagStatus.text}</span>
                     </div>
-                    <div className="text-2xl font-bold text-[#424242]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {tagAverage.toFixed(1)}
                     </div>
-                    <div className="text-[10px] text-[#757575] mt-1">
+                    <div className="text-[10px] text-gray-400 mt-1">
                       标签完善度: {tagAverage.toFixed(1)} / {targetTier.tagMin}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${tagPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, tagPct * 100)}%` }} />
                     </div>
-                    <div className="text-[9px] text-[#757575] mt-1">决定人脉产出效率与权重释放</div>
+                    <div className="text-[9px] text-gray-400 mt-1">决定人脉产出效率与权重释放</div>
                   </div>
 
                   {/* 左下 C：经营活跃 */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E0E0E0]">
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-[#424242]">经营活跃</span>
+                      <span className="text-xs font-bold text-gray-800">经营活跃</span>
                       <span className={`text-[10px] font-medium ${freqStatus.color}`}>{freqStatus.text}</span>
                     </div>
-                    <div className="text-2xl font-bold text-[#424242]" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-2xl font-bold text-gray-900" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {contactFrequency}
                     </div>
-                    <div className="text-[10px] text-[#757575] mt-1">
+                    <div className="text-[10px] text-gray-400 mt-1">
                       本周活跃: {contactFrequency} / {targetTier.frequencyMin} 人/日
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${freqPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, freqPct * 100)}%` }} />
                     </div>
-                    <div className="text-[9px] text-[#757575] mt-1">决定每周权证点入账速度</div>
+                    <div className="text-[9px] text-gray-400 mt-1">决定每周权证点入账速度</div>
                   </div>
 
                   {/* 右下 D：组织溢价（动态杠杆） */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#E0E0E0]">
+                  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-[#424242]">组织溢价</span>
+                      <span className="text-xs font-bold text-gray-800">组织溢价</span>
                       <span className="text-[10px] font-medium text-[#1976D2]">🚀 {levelLabel}</span>
                     </div>
                     <div className="text-2xl font-bold text-[#A80000] font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {dynamicLeverage ? `×${dynamicLeverage.leverage.toFixed(4)}` : config.name}
                     </div>
-                    <div className="text-[10px] text-[#757575] mt-1">
+                    <div className="text-[10px] text-gray-400 mt-1">
                       {dynamicLeverage ? `编号 ${String(dynamicLeverage.seatNumber).padStart(4, '0')} · ${config.name}` : `节点等级: ${config.badge}`}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-gradient-to-r from-[#A80000] to-yellow-500 transition-all duration-500" style={{ width: `${dynamicLeverage ? Math.min(100, (dynamicLeverage.leverage / 2.0) * 100) : (level === 'super' ? 100 : level === 'advanced' ? 66 : level === 'standard' ? 33 : 10)}%` }} />
                     </div>
-                    <div className="text-[9px] text-[#757575] mt-1">放大所有产出的核心杠杆</div>
+                    <div className="text-[9px] text-gray-400 mt-1">放大所有产出的核心杠杆</div>
                   </div>
                 </div>
               </div>
@@ -549,11 +549,11 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {/* ====== 四维胶囊指标矩阵 ====== */}
           {nextTier && (
             <>
-              <div className="border-t border-dashed border-[#E0E0E0] my-4" />
+              <div className="border-t border-dashed border-gray-300 my-4" />
 
               {/* 木桶效应引导语 */}
               <div className="flex items-center justify-between mb-4">
-                <div className="text-xs font-semibold text-[#424242]">
+                <div className="text-xs font-semibold text-gray-700">
                   晋升条件 → {nextTier.label}
                 </div>
                 <div className="flex items-center space-x-1.5">
@@ -561,7 +561,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     {doneCount}/{totalDims} 项达成
                   </span>
                   {doneCount < totalDims && (
-                    <span className="text-[10px] text-[#757575]">补齐短板，收益翻倍</span>
+                    <span className="text-[10px] text-gray-400">补齐短板，收益翻倍</span>
                   )}
                 </div>
               </div>
@@ -582,10 +582,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
               {/* 联络活跃度微缩提示 */}
               <div className="mt-3 flex items-center space-x-2 px-1">
-                <svg className="w-3 h-3 text-[#757575] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="text-[10px] text-[#757575]">
+                <span className="text-[10px] text-gray-400">
                   联络活跃度：本周日均 {contactFrequency}人/日 | 目标 {nextTier.frequencyMin}人/日
                 </span>
               </div>
@@ -595,10 +595,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {/* 已达最高等级 */}
           {!nextTier && level === 'super' && (
             <>
-              <div className="border-t border-dashed border-[#E0E0E0] my-4" />
+              <div className="border-t border-dashed border-gray-300 my-4" />
               <div className="text-center py-4">
-                <div className="text-[#FFA726] text-sm font-bold mb-1">🏆 已达最高等级</div>
-                <div className="text-xs text-[#757575]">超级节点 · 5× 权重加成 · 钛金流光特效</div>
+                <div className="text-amber-600 text-sm font-bold mb-1">🏆 已达最高等级</div>
+                <div className="text-xs text-gray-400">超级节点 · 5× 权重加成 · 钛金流光特效</div>
               </div>
             </>
           )}
@@ -606,15 +606,15 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           {/* 通往下一等级的悬浮微缩卡片 */}
           {level === 'standard' && (
             <>
-              <div className="border-t border-dashed border-[#E0E0E0] my-4" />
+              <div className="border-t border-dashed border-gray-300 my-4" />
               <div className="bg-gradient-to-r from-[#0a1628] to-[#1a2744] rounded-xl p-3 cursor-pointer hover:shadow-md transition-all"
                 onClick={() => setShowRules(true)}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-[#1976D2] font-semibold">通往高级节点</div>
-                    <div className="text-[10px] text-[#1976D2]/60 mt-0.5">解锁 2× 权重加成</div>
+                    <div className="text-xs text-blue-300 font-semibold">通往高级节点</div>
+                    <div className="text-[10px] text-blue-400/60 mt-0.5">解锁 2× 权重加成</div>
                   </div>
-                  <svg className="w-4 h-4 text-[#1976D2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -623,15 +623,15 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           )}
           {level === 'advanced' && (
             <>
-              <div className="border-t border-dashed border-[#E0E0E0] my-4" />
+              <div className="border-t border-dashed border-gray-300 my-4" />
               <div className="bg-gradient-to-r from-[#1a1a2e] to-[#2d2d44] rounded-xl p-3 cursor-pointer hover:shadow-md transition-all"
                 onClick={() => setShowRules(true)}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-[#FFA726] font-semibold">通往超级节点</div>
-                    <div className="text-[10px] text-[#FFA726]/60 mt-0.5">解锁 5× 权重加成 + 钛金流光特效</div>
+                    <div className="text-xs text-amber-300 font-semibold">通往超级节点</div>
+                    <div className="text-[10px] text-amber-400/60 mt-0.5">解锁 5× 权重加成 + 钛金流光特效</div>
                   </div>
-                  <svg className="w-4 h-4 text-[#FFA726]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -640,8 +640,8 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           )}
 
           {/* 底部总结文案 */}
-          <div className="mt-4 pt-3 border-t border-[#E0E0E0]">
-            <div className="text-center text-[10px] text-[#757575] italic">
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <div className="text-center text-[10px] text-gray-400 italic">
               “您的每一份市场经营行为，均已转化为不可篡改的权证资产。”
             </div>
           </div>
@@ -650,7 +650,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
           <div className="mt-3 text-center">
             <button
               onClick={() => setShowRules(true)}
-              className="text-xs text-[#757575] hover:text-[#A80000] transition-colors underline underline-offset-2"
+              className="text-xs text-gray-400 hover:text-[#A80000] transition-colors underline underline-offset-2"
             >
               查阅合伙人晋升准则
             </button>
@@ -668,9 +668,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             </div>
             <div className="px-5 pb-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-[#424242]">合伙人晋升准则</h3>
+                <h3 className="text-lg font-bold text-gray-900">合伙人晋升准则</h3>
                 <button onClick={() => setShowRules(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
-                  <svg className="w-4 h-4 text-[#757575]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -680,55 +680,55 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               <div className="overflow-x-auto -mx-1">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <th className="text-left py-2.5 px-1.5 text-[#757575] font-medium">维度</th>
-                      <th className="text-center py-2.5 px-1.5 text-[#424242] font-bold">
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2.5 px-1.5 text-gray-500 font-medium">维度</th>
+                      <th className="text-center py-2.5 px-1.5 text-gray-700 font-bold">
                         <div className="flex flex-col items-center">
                           <span className={`${level === 'standard' ? 'text-[#A80000] underline' : 'text-[#A80000]'}`}>L1</span>
                           <span className="text-[10px]">标准节点</span>
                         </div>
                       </th>
-                      <th className="text-center py-2.5 px-1.5 text-[#424242] font-bold">
+                      <th className="text-center py-2.5 px-1.5 text-gray-700 font-bold">
                         <div className="flex flex-col items-center">
                           <span className={`${level === 'advanced' ? 'text-[#1976D2] underline' : 'text-[#1976D2]'}`}>L2</span>
                           <span className="text-[10px]">高级节点</span>
                         </div>
                       </th>
-                      <th className="text-center py-2.5 px-1.5 text-[#424242] font-bold">
+                      <th className="text-center py-2.5 px-1.5 text-gray-700 font-bold">
                         <div className="flex flex-col items-center">
-                          <span className={`${level === 'super' ? 'text-[#FFA726] underline' : 'text-[#FFA726]'}`}>L3</span>
+                          <span className={`${level === 'super' ? 'text-amber-600 underline' : 'text-amber-600'}`}>L3</span>
                           <span className="text-[10px]">超级节点</span>
                         </div>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <td className="py-2.5 px-1.5 text-[#757575]">人脉基数</td>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-2.5 px-1.5 text-gray-600">人脉基数</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 50</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 100</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 150</td>
                     </tr>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <td className="py-2.5 px-1.5 text-[#757575]">人均标签</td>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-2.5 px-1.5 text-gray-600">人均标签</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 1</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 3</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 5</td>
                     </tr>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <td className="py-2.5 px-1.5 text-[#757575]">联络频率</td>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-2.5 px-1.5 text-gray-600">联络频率</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 3人/日</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 6人/日</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold">≥ 9人/日</td>
                     </tr>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <td className="py-2.5 px-1.5 text-[#757575]">节点共享</td>
-                      <td className="py-2.5 px-1.5 text-center text-[#757575]">—</td>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-2.5 px-1.5 text-gray-600">节点共享</td>
+                      <td className="py-2.5 px-1.5 text-center text-gray-400">—</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold text-[11px]">5名标准节点</td>
                       <td className="py-2.5 px-1.5 text-center font-semibold text-[11px]">5名高级节点</td>
                     </tr>
-                    <tr className="border-b border-[#E0E0E0]">
-                      <td className="py-2.5 px-1.5 text-[#757575]">收益权重</td>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-2.5 px-1.5 text-gray-600">收益权重</td>
                       <td className="py-2.5 px-1.5 text-center">
                         <span className="px-1.5 py-0.5 bg-[#FFEBEE] text-[#A80000] rounded-full font-semibold text-[10px]">基础</span>
                       </td>
@@ -736,7 +736,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                         <span className="px-1.5 py-0.5 bg-[#F5F5F5] text-[#1976D2] rounded-full font-semibold text-[10px]">2× 权重</span>
                       </td>
                       <td className="py-2.5 px-1.5 text-center">
-                        <span className="px-1.5 py-0.5 bg-white text-[#FFA726] rounded-full font-semibold text-[10px]">5× 权重</span>
+                        <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full font-semibold text-[10px]">5× 权重</span>
                       </td>
                     </tr>
                   </tbody>
@@ -745,10 +745,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
 
               {/* 当前状态指示 */}
               <div className="mt-5 p-3 bg-gray-50 rounded-xl">
-                <div className="text-xs text-[#757575] mb-1">您当前的等级</div>
+                <div className="text-xs text-gray-500 mb-1">您当前的等级</div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#424242]">{config.name}</span>
-                  {nextTier && <span className="text-xs text-[#757575]">下一目标：{nextTier.label}</span>}
+                  <span className="text-sm font-bold text-gray-900">{config.name}</span>
+                  {nextTier && <span className="text-xs text-gray-400">下一目标：{nextTier.label}</span>}
                 </div>
                 {nextTier && (
                   <div className="mt-2 flex items-center space-x-2">
@@ -758,27 +758,27 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                         style={{ width: `${totalDims > 0 ? (doneCount / totalDims) * 100 : 0}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-[#757575] flex-shrink-0">{doneCount}/{totalDims}</span>
+                    <span className="text-[10px] text-gray-500 flex-shrink-0">{doneCount}/{totalDims}</span>
                   </div>
                 )}
               </div>
 
               {/* 说明文案 */}
-              <div className="mt-4 space-y-3 text-xs text-[#757575] leading-relaxed">
+              <div className="mt-4 space-y-3 text-xs text-gray-500 leading-relaxed">
                 <p>
-                  <strong className="text-[#424242]">关于联络频率：</strong>
+                  <strong className="text-gray-700">关于联络频率：</strong>
                   系统按自然周（周一到周日）统计您每天联络的不同联系人数量，取日均值。每周日 24:00 定格结算，周一重新计算。联络频率越高，说明您的人脉网络越活跃。
                 </p>
                 <p>
-                  <strong className="text-[#424242]">关于节点共享：</strong>
+                  <strong className="text-gray-700">关于节点共享：</strong>
                   当您帮助其他股东达到标准节点/高级节点等级时，即视为完成一次"节点共享"。这不仅提升您的等级，也壮大了整个合伙人网络。
                 </p>
                 <p>
-                  <strong className="text-[#424242]">关于权重加成：</strong>
+                  <strong className="text-gray-700">关于权重加成：</strong>
                   权重直接影响您在贡献池中的分配比例。高级节点享受 2 倍权重，意味着同等贡献分下，您的股权加成是标准节点的 2 倍。
                 </p>
                 <p>
-                  <strong className="text-[#424242]">等级保持：</strong>
+                  <strong className="text-gray-700">等级保持：</strong>
                   一旦达成某等级，只要持续满足基础条件（人脉基数和标签），等级不会降低。联络频率低于阈值时，会收到提醒但不会立即降级。
                 </p>
               </div>

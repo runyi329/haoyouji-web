@@ -86,14 +86,14 @@ export default function WorkGroupList() {
       {/* 主内容区域 */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         {isLoading ? (
-          <div className="text-center py-12 text-[#757575]">加载中...</div>
+          <div className="text-center py-12 text-gray-500">加载中...</div>
         ) : groups.length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <Users className="h-8 w-8 text-[#757575]" />
+              <Users className="h-8 w-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-[#424242] mb-2">暂无工作群</h3>
-            <p className="text-[#757575] mb-6">创建第一个工作群，开始管理您的团队</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">暂无工作群</h3>
+            <p className="text-gray-500 mb-6">创建第一个工作群，开始管理您的团队</p>
             <Button
               onClick={() => setShowCreateDialog(true)}
               className="btn-primary-gold"

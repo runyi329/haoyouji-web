@@ -54,7 +54,7 @@ export default function TagAnalytics() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 flex items-center justify-center p-4">
         <Card className="p-6 text-center">
-          <p className="text-[#757575]">暂无数据</p>
+          <p className="text-gray-500">暂无数据</p>
         </Card>
       </div>
     );
@@ -177,7 +177,7 @@ export default function TagAnalytics() {
           <TabsContent value="global" className="mt-3 space-y-3">
             <Card className="p-3 shadow-md">
               <h3 className="text-sm font-semibold mb-2">全部标签使用排行</h3>
-              <p className="text-xs text-[#757575] mb-3">按使用人数排序</p>
+              <p className="text-xs text-gray-500 mb-3">按使用人数排序</p>
               
               {globalTagsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={Math.min(globalTagsData.length * 28 + 40, 400)}>
@@ -201,7 +201,7 @@ export default function TagAnalytics() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-center text-[#757575] text-xs py-8">暂无数据</p>
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
               )}
             </Card>
           </TabsContent>
@@ -210,7 +210,7 @@ export default function TagAnalytics() {
           <TabsContent value="personal" className="mt-3 space-y-3">
             <Card className="p-3 shadow-md">
               <h3 className="text-sm font-semibold mb-2">个人标签排行</h3>
-              <p className="text-xs text-[#757575] mb-3">按标签数量排序</p>
+              <p className="text-xs text-gray-500 mb-3">按标签数量排序</p>
               
               {personalTagsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={Math.min(personalTagsData.length * 28 + 40, 400)}>
@@ -234,7 +234,7 @@ export default function TagAnalytics() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <p className="text-center text-[#757575] text-xs py-8">暂无数据</p>
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
               )}
             </Card>
 
@@ -270,17 +270,17 @@ export default function TagAnalytics() {
           <TabsContent value="users" className="mt-3 space-y-3">
             <Card className="p-3 shadow-md">
               <h3 className="text-sm font-semibold mb-2">用户标签使用分布</h3>
-              <p className="text-xs text-[#757575] mb-3">每个用户使用标签的情况</p>
+              <p className="text-xs text-gray-500 mb-3">每个用户使用标签的情况</p>
               
               {userDistribution.length > 0 ? (
                 <div className="space-y-2">
                   {userDistribution.slice(0, 10).map((user, index) => (
                     <div key={index} className="flex items-center gap-2">
-                      <div className="w-8 text-xs text-[#757575] font-medium">#{index + 1}</div>
+                      <div className="w-8 text-xs text-gray-500 font-medium">#{index + 1}</div>
                       <div className="flex-1">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-xs font-medium truncate">{user.userName}</span>
-                          <span className="text-xs text-[#757575] ml-2">{user.totalTags} 个</span>
+                          <span className="text-xs text-gray-600 ml-2">{user.totalTags} 个</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-1.5">
                           <div
@@ -295,7 +295,7 @@ export default function TagAnalytics() {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-[#757575] text-xs py-8">暂无数据</p>
+                <p className="text-center text-gray-400 text-xs py-8">暂无数据</p>
               )}
             </Card>
           </TabsContent>

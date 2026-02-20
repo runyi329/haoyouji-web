@@ -121,7 +121,7 @@ export default function PosterFavorites() {
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="w-full px-4 py-2 border border-[#E0E0E0] rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           {CATEGORIES.map(cat => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -133,9 +133,9 @@ export default function PosterFavorites() {
       <div className="p-4">
         {filteredPosters.length === 0 ? (
           <div className="text-center py-16">
-            <div className="text-[#757575] text-6xl mb-4">📷</div>
-            <p className="text-[#757575] text-lg">暂无收藏的海报</p>
-            <p className="text-[#757575] text-sm mt-2">快去创建你的第一张海报吧！</p>
+            <div className="text-gray-400 text-6xl mb-4">📷</div>
+            <p className="text-gray-500 text-lg">暂无收藏的海报</p>
+            <p className="text-gray-400 text-sm mt-2">快去创建你的第一张海报吧！</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
@@ -158,8 +158,8 @@ export default function PosterFavorites() {
                 </div>
                 <div className="p-3">
                   <h3 className="font-medium text-sm truncate">{poster.title}</h3>
-                  <p className="text-xs text-[#757575] truncate mt-1">{poster.series}</p>
-                  <p className="text-xs text-[#757575] mt-1">
+                  <p className="text-xs text-gray-500 truncate mt-1">{poster.series}</p>
+                  <p className="text-xs text-gray-400 mt-1">
                     {CATEGORIES.find(c => c.value === poster.category)?.label || '其他'}
                   </p>
                 </div>

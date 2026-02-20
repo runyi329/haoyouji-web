@@ -61,7 +61,7 @@ export default function CharacterGamesHub() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-amber-100 pb-20">
       {/* 顶部导航 */}
-      <header className="z-50 bg-white/80 backdrop-blur-sm border-b border-[#E0E0E0]">
+      <header className="z-50 bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="container flex items-center justify-between h-14">
           <Link href={`/games?kidId=${kidId}`} className="flex items-center gap-2 text-[#CBA471] hover:text-[#CBA471]">
             <ArrowLeft size={20} />
@@ -76,8 +76,8 @@ export default function CharacterGamesHub() {
 
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-[#424242] mb-2">快乐学汉字</h2>
-          <p className="text-[#757575]">选择一个游戏开始学习吧！</p>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">快乐学汉字</h2>
+          <p className="text-gray-600">选择一个游戏开始学习吧！</p>
         </div>
 
         {/* 2×2 游戏网格 */}
@@ -92,8 +92,8 @@ export default function CharacterGamesHub() {
 
                 {/* 游戏信息 */}
                 <div className="text-center space-y-2">
-                  <h3 className="text-xl font-bold text-[#424242]">{game.title}</h3>
-                  <p className="text-sm text-[#757575]">{game.description}</p>
+                  <h3 className="text-xl font-bold text-gray-800">{game.title}</h3>
+                  <p className="text-sm text-gray-600">{game.description}</p>
                 </div>
 
                 {/* 开始按钮 */}
