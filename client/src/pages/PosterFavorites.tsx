@@ -183,8 +183,8 @@ export default function PosterFavorites() {
             <X className="w-6 h-6 text-white" />
           </button>
 
-          {/* 页码显示 */}
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 px-4 py-2 bg-white bg-opacity-20 rounded-full text-white text-sm">
+          {/* 页码显示 - 屏幕正中间 */}
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 px-4 py-2 bg-black bg-opacity-50 rounded-full text-white text-sm pointer-events-none">
             {currentIndex + 1} / {filteredPosters.length}
           </div>
 
@@ -225,35 +225,7 @@ export default function PosterFavorites() {
             />
           </div>
 
-          {/* 左右箭头按钮 */}
-          {currentIndex > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(currentIndex - 1);
-                setPreviewPoster(filteredPosters[currentIndex - 1]);
-              }}
-              className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-          {currentIndex < filteredPosters.length - 1 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setCurrentIndex(currentIndex + 1);
-                setPreviewPoster(filteredPosters[currentIndex + 1]);
-              }}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white bg-opacity-20 rounded-full hover:bg-opacity-30 transition-colors"
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
+
         </div>
       )}
     </div>
