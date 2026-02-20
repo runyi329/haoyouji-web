@@ -21,7 +21,7 @@ export default function InvestorFAQ() {
       id: 'dilution-protection',
       question: '比例动态在变，如何保证我的权益不被稀释？',
       icon: Shield,
-      iconColor: 'text-blue-600',
+      iconColor: 'text-[#1976D2]',
       answer: `
 **核心保护机制**
 
@@ -95,7 +95,7 @@ export default function InvestorFAQ() {
       id: 'leverage-continuity',
       question: '下一轮融资时，我的杠杆系数L依然有效吗？',
       icon: TrendingUp,
-      iconColor: 'text-green-600',
+      iconColor: 'text-[#4CAF50]',
       answer: `
 **L杠杆系数的本质**
 
@@ -179,7 +179,7 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                     <Icon className={`w-4 h-4 ${isOpen ? 'text-white' : faq.iconColor}`} />
                   </div>
                   <span className={`text-sm font-semibold ${
-                    isOpen ? 'text-blue-900' : 'text-gray-900'
+                    isOpen ? 'text-[#424242]' : 'text-gray-900'
                   }`}>
                     {faq.question}
                   </span>
@@ -212,7 +212,7 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
                           <ul key={i} className="space-y-1 text-xs text-gray-700 mb-3">
                             {items.map((item, j) => (
                               <li key={j} className="flex items-start space-x-2">
-                                <span className="text-blue-600 mt-1">•</span>
+                                <span className="text-[#1976D2] mt-1">•</span>
                                 <span dangerouslySetInnerHTML={{ 
                                   __html: item.replace(/^[*-]\s*/, '').replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
                                 }} />
@@ -237,7 +237,7 @@ L系数的设计哲学：**"让早期信任者，享受长期红利"**。
 
                   {/* 底部操作 */}
                   <div className="mt-4 pt-3 border-t border-gray-100">
-                    <button className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center space-x-1">
+                    <button className="text-xs text-[#1976D2] hover:text-blue-700 font-semibold flex items-center space-x-1">
                       <span>查看完整《股权管理手册》</span>
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

@@ -136,7 +136,7 @@ export default function ReadingConfig() {
       <div className="max-w-6xl mx-auto mb-8 flex gap-4 justify-center">
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="lg" className="bg-blue-500 hover:bg-blue-600">
+            <Button size="lg" className="bg-[#1976D2] hover:bg-[#1976D2]">
               <Plus className="w-5 h-5 mr-2" />
               添加自定义故事
             </Button>
@@ -311,7 +311,7 @@ export default function ReadingConfig() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteStory(story.id, story.title)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="text-[#D32F2F] hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>

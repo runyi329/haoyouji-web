@@ -125,7 +125,7 @@ function SortableTagItem({
               size="sm"
               onClick={onDelete}
             >
-              <Trash2 className="h-4 w-4 text-red-500" />
+              <Trash2 className="h-4 w-4 text-[#D32F2F]" />
             </Button>
           </div>
         )}
@@ -1483,7 +1483,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg"
                   >
                     周关注
                   </Button>
@@ -1523,7 +1523,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg"
                   >
                     月关注
                   </Button>
@@ -1563,7 +1563,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg"
                   >
                     季关注
                   </Button>
@@ -1581,7 +1581,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
@@ -1649,7 +1649,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-[#FFEBEE] rounded-lg"
                 >
                   <X className="h-3 w-3 mr-1" />
                   选择标签

@@ -47,7 +47,7 @@ const academyModules: AcademyModule[] = [
     id: "homepage",
     icon: Home,
     title: "首页统计",
-    color: "text-red-600",
+    color: "text-[#D32F2F]",
     bgColor: "bg-[#D32F2F]",
     category: "core",
     content: {
@@ -69,7 +69,7 @@ const academyModules: AcademyModule[] = [
     id: "contacts",
     icon: Users,
     title: "人脉管理",
-    color: "text-red-500",
+    color: "text-[#D32F2F]",
     bgColor: "bg-[#D32F2F]-light0",
     category: "core",
     content: {
@@ -151,8 +151,8 @@ const academyModules: AcademyModule[] = [
     id: "share",
     icon: Share2,
     title: "人脉共享",
-    color: "text-red-700",
-    bgColor: "bg-red-700",
+    color: "text-[#D32F2F]",
+    bgColor: "bg-[#D32F2F]",
     category: "advanced",
     content: {
       introduction: "与团队成员共享人脉资源，实现人脉网络的协同管理。",
@@ -189,8 +189,8 @@ const academyModules: AcademyModule[] = [
     id: "reminders",
     icon: Bell,
     title: "提醒功能",
-    color: "text-red-300",
-    bgColor: "bg-red-300",
+    color: "text-[#D32F2F]",
+    bgColor: "bg-[#D32F2F]",
     category: "advanced",
     content: {
       introduction: "智能提醒系统，让您不错过任何重要的日子。",
@@ -270,7 +270,7 @@ const academyModules: AcademyModule[] = [
     id: "equity",
     icon: Heart,
     title: "权益中心",
-    color: "text-red-500",
+    color: "text-[#D32F2F]",
     bgColor: "bg-[#D32F2F]-light0",
     category: "system",
     content: {
@@ -468,7 +468,7 @@ export default function Academy() {
                     <ul className="space-y-2">
                       {selectedModule.content.features.map((feature, index) => (
                         <li key={index} className="text-sm text-[#757575] flex items-start gap-2">
-                          <span className="text-red-500 mt-0.5">•</span>
+                          <span className="text-[#D32F2F] mt-0.5">•</span>
                           <span>{feature}</span>
                         </li>
                       ))}

@@ -234,7 +234,7 @@ export default function BrushingGame() {
         {phase === "setup" && (
           <Card className="p-8">
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-blue-600 mb-2">🦷 牙齿保卫战</h1>
+              <h1 className="text-4xl font-bold text-[#1976D2] mb-2">🦷 牙齿保卫战</h1>
               <p className="text-gray-600">让我们一起保护牙齿健康！</p>
             </div>
 
@@ -275,7 +275,7 @@ export default function BrushingGame() {
               <p className="text-lg text-gray-500">刷牙时间：{Math.floor(duration / 60)} 分钟</p>
             </div>
 
-            <Button onClick={handleBeginBrushing} size="lg" className="w-full text-2xl py-8 bg-green-500 hover:bg-green-600">
+            <Button onClick={handleBeginBrushing} size="lg" className="w-full text-2xl py-8 bg-[#4CAF50] hover:bg-[#4CAF50]">
               <Play className="w-8 h-8 mr-2" />
               开始刷牙
             </Button>
@@ -352,10 +352,10 @@ export default function BrushingGame() {
                 <Star className="w-32 h-32 text-yellow-500 fill-yellow-500 mx-auto animate-bounce" />
               </div>
               
-              <h2 className="text-4xl font-bold text-green-600 mb-4">太棒啦！</h2>
+              <h2 className="text-4xl font-bold text-[#4CAF50] mb-4">太棒啦！</h2>
               <p className="text-2xl text-gray-700 mb-6">你获得了 {starsEarned} 颗星星！</p>
               
-              <div className="bg-green-50 rounded-lg p-6 mb-6">
+              <div className="bg-[#E8F5E9] rounded-lg p-6 mb-6">
                 <p className="text-xl text-gray-700">
                   我们今天又顺利完成了刷牙任务！<br />
                   继续保持，牙齿会越来越健康哦！

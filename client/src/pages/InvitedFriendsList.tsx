@@ -91,7 +91,7 @@ export default function InvitedFriendsList() {
           </div>
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
             <CardContent className="p-8 text-center">
-              <p className="text-red-500">加载失败: {error.message}</p>
+              <p className="text-[#D32F2F]">加载失败: {error.message}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="mt-3 px-4 py-2 bg-[#D32F2F] text-white rounded-lg text-sm"
@@ -125,7 +125,7 @@ export default function InvitedFriendsList() {
         <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
-              <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50">
+              <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#FFEBEE] dark:bg-[#B71C1C]/50">
                 <UserPlus className="w-4 h-4 text-[#D32F2F] dark:text-red-400" />
               </div>
               <div>
@@ -181,7 +181,7 @@ export default function InvitedFriendsList() {
                       }}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
                         sortType === option.value
-                          ? "bg-[#D32F2F]-light dark:bg-red-900/20 text-[#D32F2F] dark:text-red-400 font-medium"
+                          ? "bg-[#D32F2F]-light dark:bg-[#B71C1C]/20 text-[#D32F2F] dark:text-red-400 font-medium"
                           : ""
                       }`}
                     >
@@ -258,25 +258,25 @@ export default function InvitedFriendsList() {
                   {/* 第二排：人脉统计 */}
                   <div className="flex gap-2 flex-wrap">
                     {/* 我的 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-50 dark:bg-blue-900/20">
-                      <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F5F5F5] dark:bg-[#424242]/20">
+                      <Users className="w-4 h-4 text-[#1976D2] dark:text-blue-400" />
                       <span className="text-xs text-[#757575] dark:text-gray-400">我的</span>
-                      <span className="text-sm text-blue-600 dark:text-blue-400 font-semibold">
+                      <span className="text-sm text-[#1976D2] dark:text-blue-400 font-semibold">
                         {friend.ownContactsCount}
                       </span>
                     </div>
 
                     {/* 共享 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-green-50 dark:bg-green-900/20">
-                      <Share className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#E8F5E9] dark:bg-green-900/20">
+                      <Share className="w-4 h-4 text-[#4CAF50] dark:text-green-400" />
                       <span className="text-xs text-[#757575] dark:text-gray-400">共享</span>
-                      <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
+                      <span className="text-sm text-[#4CAF50] dark:text-green-400 font-semibold">
                         {friend.sharedContactsCount}
                       </span>
                     </div>
 
                     {/* 全部 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#D32F2F]-light dark:bg-red-900/20">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#D32F2F]-light dark:bg-[#B71C1C]/20">
                       <Users className="w-4 h-4 text-[#D32F2F] dark:text-red-400" />
                       <span className="text-xs text-[#757575] dark:text-gray-400">全部</span>
                       <span className="text-sm text-[#D32F2F] dark:text-red-400 font-semibold">
@@ -285,7 +285,7 @@ export default function InvitedFriendsList() {
                     </div>
                     
                     {/* 标签数 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-purple-50 dark:bg-purple-900/20">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F3E5F5] dark:bg-purple-900/20">
                       <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>

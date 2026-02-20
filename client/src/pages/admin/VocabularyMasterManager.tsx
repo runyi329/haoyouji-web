@@ -206,17 +206,17 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(vocab.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          className="text-[#D32F2F] hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                         {vocab.category}
                       </span>
-                      <span className="px-2 py-1 bg-red-100 text-[#D32F2F]-dark rounded">
+                      <span className="px-2 py-1 bg-[#FFEBEE] text-[#D32F2F]-dark rounded">
                         {vocab.difficulty === "easy" ? "简单" : vocab.difficulty === "medium" ? "中等" : "困难"}
                       </span>
                     </div>
@@ -261,17 +261,17 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDelete(vocab.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          className="text-[#D32F2F] hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                         {vocab.category}
                       </span>
-                      <span className="px-2 py-1 bg-red-100 text-[#D32F2F]-dark rounded">
+                      <span className="px-2 py-1 bg-[#FFEBEE] text-[#D32F2F]-dark rounded">
                         {vocab.difficulty === "easy" ? "简单" : vocab.difficulty === "medium" ? "中等" : "困难"}
                       </span>
                     </div>

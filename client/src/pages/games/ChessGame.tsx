@@ -493,7 +493,7 @@ export default function ChessGame() {
             </div>
             
             {gameOver && (
-              <div className={`text-center p-3 rounded-lg ${winner === "white" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              <div className={`text-center p-3 rounded-lg ${winner === "white" ? "bg-[#E8F5E9] text-green-700" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
                 <div className="flex items-center justify-center gap-2">
                   <Trophy className="w-5 h-5" />
                   <span className="font-bold">
@@ -553,9 +553,9 @@ export default function ChessGame() {
           </div>
 
           {/* 提示信息 */}
-          <Card className="mt-2 p-3 bg-blue-50 border-blue-200">
+          <Card className="mt-2 p-3 bg-[#F5F5F5] border-blue-200">
             <div className="flex gap-2">
-              <Lightbulb className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <Lightbulb className="w-5 h-5 text-[#1976D2] flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-700">
                 <p className="font-semibold mb-1">游戏规则：</p>
                 <p>点击棋子选择，再点击目标位置移动。吃掉对方国王即可获胜。</p>

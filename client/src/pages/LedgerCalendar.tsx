@@ -394,14 +394,14 @@ export default function LedgerCalendar() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span className={`w-2 h-2 rounded-full mr-2 ${
-                      record.type === "income" ? "bg-green-500" : "bg-red-500"
+                      record.type === "income" ? "bg-[#4CAF50]" : "bg-[#D32F2F]"
                     }`} />
                     <span className="text-gray-800">{record.categoryName || "未分类"}</span>
                   </div>
                 </div>
                 
                 <span className={`font-medium ${
-                  record.type === "income" ? "text-green-600" : "text-gray-800"
+                  record.type === "income" ? "text-[#4CAF50]" : "text-gray-800"
                 }`}>
                   {record.type === "income" ? "+" : "-"}{formatAmount(record.amount)}
                 </span>

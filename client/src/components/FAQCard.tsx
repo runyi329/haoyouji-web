@@ -115,7 +115,7 @@ export default function FAQCard() {
                 </div>
                 <button
                   onClick={() => copyText(faq.answer, index)}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                  className="flex items-center gap-1 text-xs text-[#1976D2] hover:text-blue-700 transition-colors"
                 >
                   {copiedIndex === index ? (
                     <>
@@ -142,8 +142,8 @@ export default function FAQCard() {
       >
         {copiedAll ? (
           <>
-            <Check className="w-4 h-4 text-green-600" />
-            <span className="text-green-600">已复制全部</span>
+            <Check className="w-4 h-4 text-[#4CAF50]" />
+            <span className="text-[#4CAF50]">已复制全部</span>
           </>
         ) : (
           <>

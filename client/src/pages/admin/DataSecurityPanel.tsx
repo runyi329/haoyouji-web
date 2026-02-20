@@ -122,7 +122,7 @@ export default function DataSecurityPanel() {
       {/* 标题和状态 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-[#FFEBEE] flex items-center justify-center">
             <Shield className="w-5 h-5 text-[#D32F2F]" />
           </div>
           <div>
@@ -132,16 +132,16 @@ export default function DataSecurityPanel() {
         </div>
 
         {/* 密钥状态 */}
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${keyConfigured ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${keyConfigured ? "bg-[#E8F5E9] border border-green-200" : "bg-[#FFEBEE] border border-red-200"}`}>
           {keyConfigured ? (
             <>
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <CheckCircle2 className="w-5 h-5 text-[#4CAF50]" />
               <span className="text-sm font-medium text-green-700">加密密钥已配置</span>
             </>
           ) : (
             <>
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              <span className="text-sm font-medium text-red-700">加密密钥未配置 — 请在服务器设置 ENCRYPTION_KEY 环境变量</span>
+              <AlertTriangle className="w-5 h-5 text-[#D32F2F]" />
+              <span className="text-sm font-medium text-[#D32F2F]">加密密钥未配置 — 请在服务器设置 ENCRYPTION_KEY 环境变量</span>
             </>
           )}
         </div>
@@ -151,7 +151,7 @@ export default function DataSecurityPanel() {
       {!initialized && (
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
-            <Info className="w-5 h-5 text-blue-500" />
+            <Info className="w-5 h-5 text-[#1976D2]" />
             <span className="text-sm font-medium text-gray-700">首次使用需要初始化加密配置</span>
           </div>
           <button
@@ -182,13 +182,13 @@ export default function DataSecurityPanel() {
                 <div
                   key={config.id}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
-                    isEnabled ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"
+                    isEnabled ? "bg-[#E8F5E9] border-green-200" : "bg-gray-50 border-gray-200"
                   }`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       {isEnabled ? (
-                        <Lock className="w-4 h-4 text-green-600" />
+                        <Lock className="w-4 h-4 text-[#4CAF50]" />
                       ) : (
                         <Unlock className="w-4 h-4 text-gray-400" />
                       )}
@@ -200,7 +200,7 @@ export default function DataSecurityPanel() {
                         共 {stat.total} 条数据
                       </span>
                       {stat.encrypted > 0 && (
-                        <span className="text-xs text-green-600 font-medium">
+                        <span className="text-xs text-[#4CAF50] font-medium">
                           已加密 {stat.encrypted} 条
                         </span>
                       )}
@@ -216,7 +216,7 @@ export default function DataSecurityPanel() {
                     onClick={() => handleToggle(config.id, isEnabled)}
                     disabled={isProcessing || !keyConfigured}
                     className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
-                      isEnabled ? "bg-green-500" : "bg-gray-300"
+                      isEnabled ? "bg-[#4CAF50]" : "bg-gray-300"
                     }`}
                   >
                     {isProcessing ? (
@@ -248,7 +248,7 @@ export default function DataSecurityPanel() {
             <p>• 加密密钥仅存储在服务器环境变量中，其他管理员无法查看</p>
             <p>• 开启加密后，数据库中存储的是密文，直接查看数据库无法获取明文</p>
             <p>• 关闭加密会将所有密文还原为明文，请谨慎操作</p>
-            <p>• <strong className="text-red-600">重要：请务必备份加密密钥，密钥丢失将导致加密数据无法恢复</strong></p>
+            <p>• <strong className="text-[#D32F2F]">重要：请务必备份加密密钥，密钥丢失将导致加密数据无法恢复</strong></p>
           </div>
         </div>
       )}

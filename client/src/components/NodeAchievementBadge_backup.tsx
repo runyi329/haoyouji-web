@@ -92,7 +92,7 @@ const CapsuleIndicator: React.FC<{
       {/* 右侧状态 */}
       <div className="w-5 flex-shrink-0 flex justify-center">
         {done ? (
-          <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-4 h-4 text-[#4CAF50]" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
         ) : (
@@ -294,7 +294,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               </span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${
                 level === 'none' ? 'bg-gray-300 text-gray-600'
-                  : level === 'advanced' ? 'bg-blue-500/20 text-blue-300'
+                  : level === 'advanced' ? 'bg-[#1976D2]/20 text-blue-300'
                     : level === 'super' ? 'bg-amber-500/20 text-amber-300'
                       : 'bg-white/10 text-white/80'
               }`}>
@@ -348,13 +348,13 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
               <div className="mt-4 pt-4 border-t border-gray-300/50 space-y-2">
                 <div className="text-xs text-gray-500 font-semibold">激活条件预览</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactCount >= 50 ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactCount >= 50 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     人脉 {contactCount}/50 {contactCount >= 50 ? '✓' : ''}
                   </div>
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${tagAverage >= 1 ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${tagAverage >= 1 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     标签 {tagAverage}/1 {tagAverage >= 1 ? '✓' : ''}
                   </div>
-                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactFrequency >= 3 ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+                  <div className={`text-xs px-2 py-1.5 rounded-lg ${contactFrequency >= 3 ? 'bg-[#E8F5E9] text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                     频率 {contactFrequency}/3 {contactFrequency >= 3 ? '✓' : ''}
                   </div>
                   <div className="text-xs px-2 py-1.5 rounded-lg bg-gray-100 text-gray-400">
@@ -373,7 +373,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 顶部主数据：左右布局 */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* 左侧：累计确权筹码 */}
-                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">累计确权筹码</div>
                     <div className="text-2xl font-bold" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {contributionScore.toLocaleString()}
@@ -381,7 +381,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     <div className="text-[10px] opacity-50 mt-0.5">点</div>
                   </div>
                   {/* 右侧：实时市场权重 */}
-                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-blue-900/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
+                  <div className={`rounded-xl p-3 ${level === 'advanced' ? 'bg-[#424242]/30' : level === 'super' ? 'bg-amber-900/20' : 'bg-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">实时市场权重</div>
                     <div className="text-2xl font-bold text-yellow-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{contribEquity.toFixed(4)}%
@@ -393,7 +393,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                 {/* 中部方块：组织培育收益 + 社会化资产溢价 */}
                 <div className="grid grid-cols-2 gap-3">
                   {/* 左侧：组织培育收益 */}
-                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-blue-900/20 border-blue-500/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">组织培育收益</div>
                     <div className="text-xl font-bold text-green-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{(inviteEquity * 100).toFixed(4)}%
@@ -403,7 +403,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     </div>
                   </div>
                   {/* 右侧：社会化资产溢价 */}
-                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-blue-900/20 border-blue-500/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
+                  <div className={`rounded-xl p-3 border ${level === 'advanced' ? 'bg-[#424242]/20 border-[#1976D2]/20' : level === 'super' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-white/5 border-white/10'}`}>
                     <div className="text-[10px] opacity-60 mb-1">社会化资产溢价</div>
                     <div className="text-xl font-bold text-blue-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       +{(referralNetworkEquity * 100).toFixed(4)}%
@@ -446,9 +446,9 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
             
             // 状态标签
             const getStatusLabel = (pct: number) => {
-              if (pct >= 1) return { text: '✅ 已达标', color: 'text-green-600' };
+              if (pct >= 1) return { text: '✅ 已达标', color: 'text-[#4CAF50]' };
               if (pct >= 0.5) return { text: '🏃 进行中', color: 'text-yellow-600' };
-              return { text: '⚠️ 待提升', color: 'text-orange-500' };
+              return { text: '⚠️ 待提升', color: 'text-[#FFA000]' };
             };
             
             const contactStatus = getStatusLabel(contactPct);
@@ -483,7 +483,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       规模: {contactCount} / {targetTier.contactMin}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-500 ${contactPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, contactPct * 100)}%` }} />
+                      <div className={`h-full rounded-full transition-all duration-500 ${contactPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, contactPct * 100)}%` }} />
                     </div>
                     <div className="text-[9px] text-gray-400 mt-1">支撑社会化资产的人脉底座</div>
                   </div>
@@ -501,7 +501,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       标签完善度: {tagAverage.toFixed(1)} / {targetTier.tagMin}
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-500 ${tagPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, tagPct * 100)}%` }} />
+                      <div className={`h-full rounded-full transition-all duration-500 ${tagPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, tagPct * 100)}%` }} />
                     </div>
                     <div className="text-[9px] text-gray-400 mt-1">决定人脉产出效率与权重释放</div>
                   </div>
@@ -519,7 +519,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       本周活跃: {contactFrequency} / {targetTier.frequencyMin} 人/日
                     </div>
                     <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-500 ${freqPct >= 1 ? 'bg-green-500' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, freqPct * 100)}%` }} />
+                      <div className={`h-full rounded-full transition-all duration-500 ${freqPct >= 1 ? 'bg-[#4CAF50]' : 'bg-[#A80000]'}`} style={{ width: `${Math.min(100, freqPct * 100)}%` }} />
                     </div>
                     <div className="text-[9px] text-gray-400 mt-1">决定每周权证点入账速度</div>
                   </div>
@@ -528,7 +528,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                   <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-bold text-gray-800">组织溢价</span>
-                      <span className="text-[10px] font-medium text-blue-600">🚀 {levelLabel}</span>
+                      <span className="text-[10px] font-medium text-[#1976D2]">🚀 {levelLabel}</span>
                     </div>
                     <div className="text-2xl font-bold text-[#A80000] font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {dynamicLeverage ? `×${dynamicLeverage.leverage.toFixed(4)}` : config.name}
@@ -557,7 +557,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                   晋升条件 → {nextTier.label}
                 </div>
                 <div className="flex items-center space-x-1.5">
-                  <span className={`text-xs font-bold ${doneCount === totalDims ? 'text-green-600' : 'text-[#A80000]'}`}>
+                  <span className={`text-xs font-bold ${doneCount === totalDims ? 'text-[#4CAF50]' : 'text-[#A80000]'}`}>
                     {doneCount}/{totalDims} 项达成
                   </span>
                   {doneCount < totalDims && (
@@ -690,7 +690,7 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                       </th>
                       <th className="text-center py-2.5 px-1.5 text-gray-700 font-bold">
                         <div className="flex flex-col items-center">
-                          <span className={`${level === 'advanced' ? 'text-blue-600 underline' : 'text-blue-600'}`}>L2</span>
+                          <span className={`${level === 'advanced' ? 'text-[#1976D2] underline' : 'text-[#1976D2]'}`}>L2</span>
                           <span className="text-[10px]">高级节点</span>
                         </div>
                       </th>
@@ -730,10 +730,10 @@ const NodeAchievementBadge: React.FC<NodeAchievementBadgeProps> = ({
                     <tr className="border-b border-gray-100">
                       <td className="py-2.5 px-1.5 text-gray-600">收益权重</td>
                       <td className="py-2.5 px-1.5 text-center">
-                        <span className="px-1.5 py-0.5 bg-red-50 text-[#A80000] rounded-full font-semibold text-[10px]">基础</span>
+                        <span className="px-1.5 py-0.5 bg-[#FFEBEE] text-[#A80000] rounded-full font-semibold text-[10px]">基础</span>
                       </td>
                       <td className="py-2.5 px-1.5 text-center">
-                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full font-semibold text-[10px]">2× 权重</span>
+                        <span className="px-1.5 py-0.5 bg-[#F5F5F5] text-[#1976D2] rounded-full font-semibold text-[10px]">2× 权重</span>
                       </td>
                       <td className="py-2.5 px-1.5 text-center">
                         <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full font-semibold text-[10px]">5× 权重</span>

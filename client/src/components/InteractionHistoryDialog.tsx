@@ -73,7 +73,7 @@ export function InteractionHistoryDialog({
                 >
                   {/* 时间线指示器 */}
                   <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-blue-500 mt-1.5" />
+                    <div className="w-3 h-3 rounded-full bg-[#1976D2] mt-1.5" />
                     {index < interactions.length - 1 && (
                       <div className="w-0.5 h-12 bg-gray-200 mt-2" />
                     )}
@@ -94,7 +94,7 @@ export function InteractionHistoryDialog({
                     )}
                     {interaction.type && (
                       <div className="mt-2">
-                        <span className="inline-block px-2 py-1 text-xs rounded bg-blue-100 text-blue-700">
+                        <span className="inline-block px-2 py-1 text-xs rounded bg-[#F5F5F5] text-blue-700">
                           {interaction.type}
                         </span>
                       </div>

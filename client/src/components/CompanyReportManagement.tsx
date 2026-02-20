@@ -572,7 +572,7 @@ export default function CompanyReportManagement() {
                       <TableCell>{company.userName}</TableCell>
                       <TableCell>
                         {company.reportId ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[#E8F5E9] text-green-800">
                             ✓ 已上传
                           </span>
                         ) : (
@@ -607,7 +607,7 @@ export default function CompanyReportManagement() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-red-600 hover:text-red-700"
+                                className="text-[#D32F2F] hover:text-[#D32F2F]"
                                 onClick={() => handleDeleteReport(company.reportId!, company.companyName)}
                               >
                                 <Trash2 className="w-4 h-4 mr-1" />
@@ -662,7 +662,7 @@ export default function CompanyReportManagement() {
                         联系人：{company.contactName} · 填写人：{company.userName}
                       </p>
                       {company.reportId ? (
-                        <p className="text-xs text-green-600 mt-1">
+                        <p className="text-xs text-[#4CAF50] mt-1">
                           ✓ 已上传报告
                         </p>
                       ) : (
@@ -698,7 +698,7 @@ export default function CompanyReportManagement() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-600"
+                            className="text-[#D32F2F]"
                             onClick={() => handleDeleteReport(company.reportId!, company.companyName)}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -831,14 +831,14 @@ export default function CompanyReportManagement() {
 
             {/* 上传进度显示 */}
             {uploadingCompany === uploadingCompanyData?.companyName && (
-              <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="space-y-2 p-3 bg-[#F5F5F5] rounded-lg border border-blue-200">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-blue-900">{getUploadStatusText()}</span>
+                  <span className="font-medium text-[#424242]">{getUploadStatusText()}</span>
                   <span className="text-blue-700">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
                 {uploadStatus === 'analyzing' && (
-                  <p className="text-xs text-blue-600">
+                  <p className="text-xs text-[#1976D2]">
                     正在提取 PDF 文本并调用 DeepSeek AI 进行分析...
                   </p>
                 )}

@@ -140,7 +140,7 @@ export default function InviteCode() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50">
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[#FFEBEE]">
                   <Users className="w-5 h-5 text-[#D32F2F]" />
                 </div>
                 <div>
@@ -154,7 +154,7 @@ export default function InviteCode() {
               {(inviteInfo?.inviteCount || 0) > 0 && (
                 <button
                   onClick={() => setLocation("/invited-friends")}
-                  className="p-2 hover:bg-red-50 rounded-full transition-colors"
+                  className="p-2 hover:bg-[#FFEBEE] rounded-full transition-colors"
                 >
                   <ChevronRight className="w-5 h-5 text-[#D32F2F]" />
                 </button>
@@ -240,7 +240,7 @@ export default function InviteCode() {
                 <Button
                   variant="default"
                   onClick={shareToWechat}
-                  className="w-full bg-green-600 hover:bg-green-700"
+                  className="w-full bg-[#4CAF50] hover:bg-green-700"
                 >
                   <Share2 className="w-4 h-4 mr-2" />
                   分享微信

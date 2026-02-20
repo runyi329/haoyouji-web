@@ -182,7 +182,7 @@ export default function ProfileEdit() {
       {message && (
         <div
           className={`fixed top-16 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 ${
-            message.type === "success" ? "bg-green-500" : "bg-red-500"
+            message.type === "success" ? "bg-[#4CAF50]" : "bg-[#D32F2F]"
           } text-white`}
         >
           {message.text}
@@ -330,9 +330,9 @@ export default function ProfileEdit() {
                 <div
                   className={`px-3 py-2 rounded-lg ${
                     verificationForm.verificationStatus === "verified"
-                      ? "bg-green-50 text-green-700"
+                      ? "bg-[#E8F5E9] text-green-700"
                       : verificationForm.verificationStatus === "rejected"
-                      ? "bg-red-50 text-red-700"
+                      ? "bg-[#FFEBEE] text-[#D32F2F]"
                       : "bg-[#FAF3ED] text-[#CBA471]"
                   }`}
                 >
@@ -393,7 +393,7 @@ export default function ProfileEdit() {
                     </button>
                     <button
                       onClick={() => handleDeleteAddress(address.id)}
-                      className="text-red-600 hover:text-red-700 text-sm"
+                      className="text-[#D32F2F] hover:text-[#D32F2F] text-sm"
                     >
                       删除
                     </button>
@@ -430,7 +430,7 @@ export default function ProfileEdit() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        收件人 <span className="text-red-500">*</span>
+                        收件人 <span className="text-[#D32F2F]">*</span>
                       </label>
                       <input
                         type="text"
@@ -444,7 +444,7 @@ export default function ProfileEdit() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        手机号 <span className="text-red-500">*</span>
+                        手机号 <span className="text-[#D32F2F]">*</span>
                       </label>
                       <input
                         type="tel"
@@ -503,7 +503,7 @@ export default function ProfileEdit() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      详细地址 <span className="text-red-500">*</span>
+                      详细地址 <span className="text-[#D32F2F]">*</span>
                     </label>
                     <textarea
                       value={addressForm.detailedAddress}

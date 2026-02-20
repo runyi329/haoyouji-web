@@ -119,7 +119,7 @@ export default function PrecisionSimulator({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-lg bg-[#D32F2F]/10 flex items-center justify-center">
                 <Users className="w-3.5 h-3.5 text-red-400" />
               </div>
               <span className="text-xs font-medium text-white/70">邀请裂变</span>
@@ -156,7 +156,7 @@ export default function PrecisionSimulator({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-lg bg-[#1976D2]/10 flex items-center justify-center">
                 <Network className="w-3.5 h-3.5 text-blue-400" />
               </div>
               <span className="text-xs font-medium text-white/70">人脉连接</span>
@@ -193,7 +193,7 @@ export default function PrecisionSimulator({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-lg bg-[#4CAF50]/10 flex items-center justify-center">
                 <TrendingUp className="w-3.5 h-3.5 text-green-400" />
               </div>
               <span className="text-xs font-medium text-white/70">平台参与</span>

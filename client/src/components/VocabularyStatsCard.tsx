@@ -55,7 +55,7 @@ function TrendChart({ data, dataKey }: { data: TrendData[]; dataKey: keyof Trend
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="text-green-500"
+        className="text-[#4CAF50]"
       />
       {points.map((point, index) => (
         <circle
@@ -64,7 +64,7 @@ function TrendChart({ data, dataKey }: { data: TrendData[]; dataKey: keyof Trend
           cy={point.y}
           r="2"
           fill="currentColor"
-          className="text-green-600"
+          className="text-[#4CAF50]"
         />
       ))}
     </svg>
@@ -106,7 +106,7 @@ export function VocabularyStatsCard({ stats }: VocabularyStatsCardProps) {
           >
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <span className="text-sm sm:text-base text-gray-700 font-medium whitespace-nowrap">{item.label}</span>
-              <span className="text-xl sm:text-2xl font-bold text-green-600">{item.count}</span>
+              <span className="text-xl sm:text-2xl font-bold text-[#4CAF50]">{item.count}</span>
             </div>
             <div className="flex-shrink-0 ml-2">
               <TrendChart data={stats.trendData} dataKey={item.dataKey} />

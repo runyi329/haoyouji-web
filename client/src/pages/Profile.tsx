@@ -395,9 +395,9 @@ export default function Profile() {
   // 定义所有可用的功能项（带颜色）
   const allFeatures: FeatureItem[] = [
     ...(user.role === "super_admin" ? [
-      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-red-600", badge: null, onClick: () => navigate("/admin") },
+      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
     ] : []),
-    { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-blue-50 text-blue-600", badge: null, onClick: handleEditProfile },
+    { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-[#F5F5F5] text-[#1976D2]", badge: null, onClick: handleEditProfile },
     { 
       id: "invite-friends",
       icon: UserPlus, 
@@ -407,10 +407,10 @@ export default function Profile() {
       onClick: () => navigate("/parent/profile/invite")
     },
     { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
-    { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-pink-50 text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
-    { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/work-groups") },
+    { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-[#FFEBEE] text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
+    { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-[#E8F5E9] text-[#4CAF50]", badge: null, onClick: () => navigate("/work-groups") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
-    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/ai") },
+    { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
   // 账户管理功能
@@ -595,7 +595,7 @@ export default function Profile() {
                 logoutMutation.mutate();
               }}
               disabled={logoutMutation.isPending}
-              className="bg-[#D32F2F] hover:bg-red-700 text-white"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F] text-white"
             >
               {logoutMutation.isPending ? "退出中..." : "确认退出"}
             </Button>

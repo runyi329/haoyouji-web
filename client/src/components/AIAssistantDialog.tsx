@@ -90,7 +90,7 @@ export function AIAssistantDialog({ open, onOpenChange }: AIAssistantDialogProps
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-blue-500" />
+                <Sparkles className="h-5 w-5 text-[#1976D2]" />
                 AI智能助手
               </DialogTitle>
               <DialogDescription>
@@ -150,14 +150,14 @@ export function AIAssistantDialog({ open, onOpenChange }: AIAssistantDialogProps
               }`}
             >
               {message.role === "assistant" && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Bot className="h-4 w-4 text-blue-600" />
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#F5F5F5] flex items-center justify-center">
+                  <Bot className="h-4 w-4 text-[#1976D2]" />
                 </div>
               )}
               <div
                 className={`rounded-lg p-3 max-w-[80%] ${
                   message.role === "user"
-                    ? "bg-blue-500 text-white"
+                    ? "bg-[#1976D2] text-white"
                     : "bg-muted/50 border"
                 }`}
               >
@@ -176,12 +176,12 @@ export function AIAssistantDialog({ open, onOpenChange }: AIAssistantDialogProps
           {/* 加载状态 */}
           {isLoading && (
             <div className="flex gap-3 justify-start">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-blue-600" />
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#F5F5F5] flex items-center justify-center">
+                <Bot className="h-4 w-4 text-[#1976D2]" />
               </div>
               <div className="rounded-lg p-3 bg-muted/50 border">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <Loader2 className="h-4 w-4 animate-spin text-[#1976D2]" />
                   <span className="text-sm text-muted-foreground">AI正在思考...</span>
                 </div>
               </div>

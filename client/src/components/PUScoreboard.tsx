@@ -43,7 +43,7 @@ export default function PUScoreboard({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700">贡献积分（PU）实时看板</h3>
         <div className="flex items-center space-x-1 text-xs text-gray-400">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4CAF50] animate-pulse" />
           <span>实时同步</span>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function PUScoreboard({
       <div className="bg-white rounded-lg p-3 border border-gray-200">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-gray-700">近7日排名趋势</span>
-          <span className="text-xs text-green-600 font-semibold flex items-center space-x-1">
+          <span className="text-xs text-[#4CAF50] font-semibold flex items-center space-x-1">
             <TrendingUp className="w-3 h-3" />
             <span>↑ 上升3位</span>
           </span>

@@ -46,9 +46,9 @@ export default function PointsDetail() {
   // 获取交易类型的中文名称和颜色
   const getTypeInfo = (type: string) => {
     const typeMap: Record<string, { label: string; color: string }> = {
-      game: { label: "游戏奖励", color: "text-green-600" },
-      task: { label: "任务完成", color: "text-blue-600" },
-      reward: { label: "兑换奖品", color: "text-red-600" },
+      game: { label: "游戏奖励", color: "text-[#4CAF50]" },
+      task: { label: "任务完成", color: "text-[#1976D2]" },
+      reward: { label: "兑换奖品", color: "text-[#D32F2F]" },
       admin: { label: "系统调整", color: "text-[#D32F2F]" },
     };
     return typeMap[type] || { label: "其他", color: "text-gray-600" };
@@ -60,7 +60,7 @@ export default function PointsDetail() {
     { level: 2, name: "白银", minPoints: 1000, maxPoints: 4999, color: "bg-gray-400" },
     { level: 3, name: "黄金", minPoints: 5000, maxPoints: 9999, color: "bg-[#CBA471]" },
     { level: 4, name: "铂金", minPoints: 10000, maxPoints: 49999, color: "bg-cyan-500" },
-    { level: 5, name: "钻石", minPoints: 50000, maxPoints: 99999, color: "bg-blue-600" },
+    { level: 5, name: "钻石", minPoints: 50000, maxPoints: 99999, color: "bg-[#1976D2]" },
     { level: 6, name: "王者", minPoints: 100000, maxPoints: Infinity, color: "bg-[#D32F2F]" },
   ];
 
@@ -151,10 +151,10 @@ export default function PointsDetail() {
             ) : (
               <>
                 <div className="flex items-center gap-1 mb-1">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
+                  <TrendingUp className="w-4 h-4 text-[#4CAF50]" />
                   <span className="text-xs text-gray-600">本月获得</span>
                 </div>
-                <div className="text-xl font-bold text-green-600">
+                <div className="text-xl font-bold text-[#4CAF50]">
                   +{stats?.monthEarned || 0}
                 </div>
               </>
@@ -168,10 +168,10 @@ export default function PointsDetail() {
             ) : (
               <>
                 <div className="flex items-center gap-1 mb-1">
-                  <TrendingDown className="w-4 h-4 text-red-600" />
+                  <TrendingDown className="w-4 h-4 text-[#D32F2F]" />
                   <span className="text-xs text-gray-600">本月使用</span>
                 </div>
-                <div className="text-xl font-bold text-red-600">
+                <div className="text-xl font-bold text-[#D32F2F]">
                   -{stats?.monthSpent || 0}
                 </div>
               </>
@@ -216,7 +216,7 @@ export default function PointsDetail() {
                       </div>
                       <div
                         className={`text-base font-bold ml-3 ${
-                          isPositive ? "text-green-600" : "text-red-600"
+                          isPositive ? "text-[#4CAF50]" : "text-[#D32F2F]"
                         }`}
                       >
                         {isPositive ? "+" : ""}{record.amount}
@@ -291,13 +291,13 @@ export default function PointsDetail() {
                 <h2 className="text-base font-semibold mb-3">累计统计</h2>
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <div className="text-xl font-bold text-green-600">
+                    <div className="text-xl font-bold text-[#4CAF50]">
                       {stats.totalEarned}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">累计获得</div>
                   </div>
                   <div>
-                    <div className="text-xl font-bold text-red-600">
+                    <div className="text-xl font-bold text-[#D32F2F]">
                       {stats.totalSpent}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">累计使用</div>

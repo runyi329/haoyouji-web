@@ -72,7 +72,7 @@ export default function ReferralList() {
       <div className="container max-w-4xl py-6 space-y-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1976D2]" />
             <span className="ml-3 text-muted-foreground">加载中...</span>
           </div>
         ) : !referrals || referrals.length === 0 ? (
@@ -88,20 +88,20 @@ export default function ReferralList() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <TrendingUp className="h-5 w-5 text-blue-500" />
+                    <TrendingUp className="h-5 w-5 text-[#1976D2]" />
                     层级分布统计
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-[#F5F5F5] dark:bg-[#212121]/30 rounded-lg">
                       <div>
                         <p className="text-sm text-muted-foreground">总推荐人数</p>
-                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">
+                        <p className="text-3xl font-bold text-[#1976D2] dark:text-blue-400 mt-1">
                           {stats.total}
                         </p>
                       </div>
-                      <Users className="h-12 w-12 text-blue-500/30" />
+                      <Users className="h-12 w-12 text-[#1976D2]/30" />
                     </div>
 
                     {type === "indirect" && stats.levelDistribution.length > 1 && (

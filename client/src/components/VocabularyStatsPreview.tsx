@@ -28,7 +28,7 @@ export function VocabularyStatsPreview({ stats, onViewDetails }: VocabularyStats
           variant="ghost"
           size="sm"
           onClick={onViewDetails}
-          className="text-green-700 hover:text-green-900 hover:bg-green-100 gap-1 h-8 px-2"
+          className="text-green-700 hover:text-green-900 hover:bg-[#E8F5E9] gap-1 h-8 px-2"
         >
           <span className="text-sm">详情</span>
           <ChevronRight className="w-4 h-4" />
@@ -41,7 +41,7 @@ export function VocabularyStatsPreview({ stats, onViewDetails }: VocabularyStats
             className="flex flex-col items-center justify-center p-3 bg-white/60 rounded-lg"
           >
             <span className="text-xs text-gray-600 mb-1">{item.label}</span>
-            <span className="text-2xl font-bold text-green-600">{item.count}</span>
+            <span className="text-2xl font-bold text-[#4CAF50]">{item.count}</span>
           </div>
         ))}
       </div>

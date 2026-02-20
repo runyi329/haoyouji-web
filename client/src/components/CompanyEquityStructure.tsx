@@ -235,11 +235,11 @@ export default function CompanyEquityStructure() {
       </div>
 
       {/* 架构说明 */}
-      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+      <div className="bg-[#F5F5F5] rounded-lg p-3 border border-blue-200">
         <div className="flex items-start space-x-2">
-          <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+          <div className="w-1 h-1 rounded-full bg-[#1976D2] mt-1.5 flex-shrink-0" />
           <p className="text-xs text-gray-700 leading-relaxed">
-            <span className="font-semibold text-blue-900">架构设计原则：</span>
+            <span className="font-semibold text-[#424242]">架构设计原则：</span>
             创始团队保持控制权（40%），投资股东享有充分权益（20%），
             预留足够空间用于未来发展（25%期权池），引入战略资源（15%机构投资）。
             这是经过专业律师审核的标准化股权结构，确保各方利益平衡。

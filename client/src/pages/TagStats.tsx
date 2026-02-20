@@ -117,11 +117,11 @@ export default function TagStats() {
                       <td className="py-2 px-2 font-medium text-gray-800">{m.tag}</td>
                       <td className="text-right py-2 px-2">{m.contacts}</td>
                       <td className="text-right py-2 px-2">{m.interactions}</td>
-                      <td className="text-right py-2 px-2 text-blue-600 font-medium">{m.avgPerContact}</td>
+                      <td className="text-right py-2 px-2 text-[#1976D2] font-medium">{m.avgPerContact}</td>
                       <td className="text-right py-2 px-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs ${
-                          m.activeRate >= 20 ? 'bg-green-100 text-green-700' :
-                          m.activeRate >= 10 ? 'bg-blue-100 text-blue-700' :
+                          m.activeRate >= 20 ? 'bg-[#E8F5E9] text-green-700' :
+                          m.activeRate >= 10 ? 'bg-[#F5F5F5] text-blue-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
                           {m.activeRate}%
@@ -144,7 +144,7 @@ export default function TagStats() {
                     index === 0 ? 'bg-[#FAF3ED] text-[#CBA471]' :
                     index === 1 ? 'bg-gray-100 text-gray-600' :
                     index === 2 ? 'bg-[#FAF3ED] text-[#CBA471]' :
-                    'bg-blue-100 text-blue-600'
+                    'bg-[#F5F5F5] text-[#1976D2]'
                   }`}>
                     {index + 1}
                   </div>
@@ -159,7 +159,7 @@ export default function TagStats() {
                           index === 0 ? 'bg-[#CBA471]' :
                           index === 1 ? 'bg-gray-400' :
                           index === 2 ? 'bg-[#CBA471]' :
-                          'bg-blue-500'
+                          'bg-[#1976D2]'
                         }`}
                         style={{ width: `${t.percentage}%` }}
                       ></div>

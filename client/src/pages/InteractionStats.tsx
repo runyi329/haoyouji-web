@@ -133,7 +133,7 @@ export default function InteractionStats() {
             <div className="space-y-2">
               {overview.insights.map((insight, index) => (
                 <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className="text-blue-500 mt-0.5">•</span>
+                  <span className="text-[#1976D2] mt-0.5">•</span>
                   <span>{insight.text}</span>
                 </div>
               ))}
@@ -145,14 +145,14 @@ export default function InteractionStats() {
         <Card className="p-4 rounded-xl shadow-sm">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">月度趋势对比</h3>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-[#F5F5F5] rounded-lg">
               <div>
                 <p className="text-xs text-gray-600">本月互动</p>
-                <p className="text-xl font-bold text-blue-600">{overview.trends.thisMonth.interactions}</p>
+                <p className="text-xl font-bold text-[#1976D2]">{overview.trends.thisMonth.interactions}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-600">活跃人脉</p>
-                <p className="text-xl font-bold text-blue-600">{overview.trends.thisMonth.contacts}</p>
+                <p className="text-xl font-bold text-[#1976D2]">{overview.trends.thisMonth.contacts}</p>
               </div>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -174,7 +174,7 @@ export default function InteractionStats() {
   // 渲染频次分布Tab
   const renderFrequency = () => {
     if (isLoadingDist) {
-      return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
+      return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-[#1976D2]" /></div>;
     }
     if (!distribution) return null;
 
@@ -251,8 +251,8 @@ export default function InteractionStats() {
                   <tr key={index} className="border-b border-gray-100">
                     <td className="py-2 px-2 flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${
-                        p.tier === '核心圈' ? 'bg-green-500' :
-                        p.tier === '活跃圈' ? 'bg-blue-500' :
+                        p.tier === '核心圈' ? 'bg-[#4CAF50]' :
+                        p.tier === '活跃圈' ? 'bg-[#1976D2]' :
                         p.tier === '普通圈' ? 'bg-[#CBA471]' : 'bg-gray-500'
                       }`}></span>
                       {p.tier}
@@ -272,7 +272,7 @@ export default function InteractionStats() {
   // 渲染时间分析Tab
   const renderTime = () => {
     if (isLoadingTime) {
-      return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
+      return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-[#1976D2]" /></div>;
     }
     if (!timeSeries) return null;
 
@@ -456,7 +456,7 @@ export default function InteractionStats() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     activeTab === tab.id
-                      ? 'bg-white text-blue-600 shadow-md'
+                      ? 'bg-white text-[#1976D2] shadow-md'
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
@@ -472,7 +472,7 @@ export default function InteractionStats() {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-[#1976D2]" />
         </div>
       ) : (
         <div className="container mx-auto px-4 py-6">

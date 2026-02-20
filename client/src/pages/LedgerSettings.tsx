@@ -186,9 +186,9 @@ export default function LedgerSettings() {
               className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
             >
               <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center border-red-400">
-                <span className="text-3xl text-red-500">−</span>
+                <span className="text-3xl text-[#D32F2F]">−</span>
               </div>
-              <div className="text-sm mt-1 text-red-500">移除成员</div>
+              <div className="text-sm mt-1 text-[#D32F2F]">移除成员</div>
             </button>
           )}
         </div>
@@ -321,8 +321,8 @@ export default function LedgerSettings() {
             {inviteMessage && (
               <div className={`p-3 rounded-lg text-sm ${
                 inviteMessage.type === 'success' 
-                  ? 'bg-green-50 text-green-700 border border-green-200' 
-                  : 'bg-[#D32F2F]-light text-red-700 border border-red-200'
+                  ? 'bg-[#E8F5E9] text-green-700 border border-green-200' 
+                  : 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200'
               }`}>
                 {inviteMessage.text}
               </div>

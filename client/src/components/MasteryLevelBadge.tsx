@@ -14,11 +14,11 @@ const MASTERY_CONFIG = {
   },
   learning: {
     label: "学习中",
-    className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200 cursor-pointer",
+    className: "bg-yellow-100 text-yellow-700 hover:bg-[#FFF3E0] cursor-pointer",
   },
   mastered: {
     label: "已掌握",
-    className: "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer",
+    className: "bg-[#E8F5E9] text-green-700 hover:bg-green-200 cursor-pointer",
   },
 };
 

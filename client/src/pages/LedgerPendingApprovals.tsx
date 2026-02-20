@@ -80,7 +80,7 @@ export default function LedgerPendingApprovals() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 to-blue-600">
       {/* 顶部导航 */}
-      <div className="bg-blue-500 text-white p-4 flex items-center">
+      <div className="bg-[#1976D2] text-white p-4 flex items-center">
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
           className="mr-4"
@@ -108,14 +108,14 @@ export default function LedgerPendingApprovals() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-lg font-semibold ${
-                          transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                          transaction.type === 'income' ? 'text-[#4CAF50]' : 'text-[#D32F2F]'
                         }`}>
                           {transaction.type === 'income' ? '+' : '-'}¥{formatAmount(transaction.amount)}
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded ${
                           transaction.type === 'income' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-red-100 text-red-700'
+                            ? 'bg-[#E8F5E9] text-green-700' 
+                            : 'bg-[#FFEBEE] text-[#D32F2F]'
                         }`}>
                           {transaction.type === 'income' ? '收入' : '支出'}
                         </span>
@@ -133,7 +133,7 @@ export default function LedgerPendingApprovals() {
                   <div className="flex gap-2 mt-3 pt-3 border-t">
                     <Button
                       onClick={() => handleApprove(approval, 'approved')}
-                      className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                      className="flex-1 bg-[#4CAF50] hover:bg-[#4CAF50] text-white"
                       disabled={approveMutation.isPending}
                     >
                       <Check className="h-4 w-4 mr-1" />
@@ -141,7 +141,7 @@ export default function LedgerPendingApprovals() {
                     </Button>
                     <Button
                       onClick={() => handleApprove(approval, 'rejected')}
-                      className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                      className="flex-1 bg-[#D32F2F] hover:bg-[#D32F2F] text-white"
                       disabled={approveMutation.isPending}
                     >
                       <X className="h-4 w-4 mr-1" />
@@ -192,8 +192,8 @@ export default function LedgerPendingApprovals() {
               onClick={confirmApproval}
               disabled={approveMutation.isPending}
               className={approvalAction === 'approved' 
-                ? 'bg-green-500 hover:bg-green-600' 
-                : 'bg-red-500 hover:bg-red-600'}
+                ? 'bg-[#4CAF50] hover:bg-[#4CAF50]' 
+                : 'bg-[#D32F2F] hover:bg-[#D32F2F]'}
             >
               {approveMutation.isPending ? '处理中...' : '确认'}
             </Button>

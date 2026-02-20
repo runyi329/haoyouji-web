@@ -311,7 +311,7 @@ export default function TransactionDetail() {
       {/* 分类信息卡片 */}
       <div className="bg-white px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full ${transaction.type === 'expense' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+          <span className={`w-3 h-3 rounded-full ${transaction.type === 'expense' ? 'bg-[#D32F2F]' : 'bg-[#4CAF50]'}`}></span>
           <span className="text-lg text-gray-900">
             {transaction.category}
             {transaction.subcategory && `–${transaction.subcategory}`}
@@ -357,9 +357,9 @@ export default function TransactionDetail() {
             >
               <span className="text-sm text-gray-600">报销状态</span>
               {displayStatus === 'completed' ? (
-                <span className="text-sm font-medium text-green-600">已经处理</span>
+                <span className="text-sm font-medium text-[#4CAF50]">已经处理</span>
               ) : (
-                <span className="text-sm font-medium text-blue-600">等待报销</span>
+                <span className="text-sm font-medium text-[#1976D2]">等待报销</span>
               )}
             </div>
           ) : (
@@ -504,7 +504,7 @@ export default function TransactionDetail() {
             <Button 
               onClick={confirmApproval}
               disabled={approveMutation.isPending}
-              className={approvalAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : 'bg-[#D32F2F] hover:bg-[#D32F2F]'}
             >
               {approveMutation.isPending ? '处理中...' : '确认'}
             </Button>
@@ -616,7 +616,7 @@ export default function TransactionDetail() {
             <Button 
               onClick={handleRbSave}
               disabled={rbMutation.isPending}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-[#1976D2] hover:bg-blue-700"
             >
               {rbMutation.isPending ? '保存中...' : '保存'}
             </Button>

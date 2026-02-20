@@ -53,7 +53,7 @@ function HighlightText({ text, keyword }: { text: string; keyword: string }) {
     <>
       {parts.map((part, index) => 
         part.toLowerCase() === keyword.toLowerCase() ? (
-          <span key={index} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">
+          <span key={index} className="bg-[#FFF3E0] dark:bg-yellow-800 rounded px-0.5">
             {part}
           </span>
         ) : (
@@ -709,7 +709,7 @@ function ReminderCard({ contactId, contactName }: { contactId: number; contactNa
                     onClick={() => handleToggleComplete(reminder.id, reminder.isCompleted)}
                   >
                     {reminder.isCompleted ? (
-                      <Check className="h-4 w-4 text-green-600" />
+                      <Check className="h-4 w-4 text-[#4CAF50]" />
                     ) : (
                       <div className="h-4 w-4 border-2 border-muted-foreground rounded" />
                     )}
@@ -1055,14 +1055,14 @@ export default function ContactDetail() {
       id: "averageInteractionInterval",
       title: "平均间隔",
       value: "",
-      color: "text-blue-600",
+      color: "text-[#1976D2]",
       getValue: (stats) => `${stats.averageInteractionInterval}天/次`,
     },
     {
       id: "daysSinceAdded",
       title: "添加至今",
       value: "",
-      color: "text-green-600",
+      color: "text-[#4CAF50]",
       getValue: (stats) => `${stats.daysSinceAdded}天`,
     },
     {
@@ -1073,8 +1073,8 @@ export default function ContactDetail() {
       getValue: (stats) => `${stats.maxInteractionInterval}天`,
       getColor: (stats) => 
         stats.maxInteractionInterval > 30 
-          ? "text-red-700 font-bold" 
-          : "text-red-600",
+          ? "text-[#D32F2F] font-bold" 
+          : "text-[#D32F2F]",
     },
     {
       id: "monthlyInteractions",
@@ -1544,7 +1544,7 @@ export default function ContactDetail() {
                     <CardTitle className="text-2xl">{contact.name}</CardTitle>
                     {contact.hasReferrer !== undefined && (
                       contact.hasReferrer ? (
-                        <UserCheck className="h-5 w-5 text-blue-500 flex-shrink-0" title="有推荐人" />
+                        <UserCheck className="h-5 w-5 text-[#1976D2] flex-shrink-0" title="有推荐人" />
                       ) : (
                         <UserX className="h-5 w-5 text-gray-400 flex-shrink-0" title="无推荐人" />
                       )
@@ -1564,7 +1564,7 @@ export default function ContactDetail() {
                       {contact.gender && (
                         <div className="flex items-center">
                           {contact.gender === '男' ? (
-                            <Mars className="h-4 w-4 mr-1.5 text-blue-500" />
+                            <Mars className="h-4 w-4 mr-1.5 text-[#1976D2]" />
                           ) : (
                             <Venus className="h-4 w-4 mr-1.5 text-pink-500" />
                           )}
@@ -1574,7 +1574,7 @@ export default function ContactDetail() {
                       
                       {contact.region && (
                         <div className="flex items-center">
-                          <MapPin className="h-4 w-4 mr-1.5 text-green-600" />
+                          <MapPin className="h-4 w-4 mr-1.5 text-[#4CAF50]" />
                           <span title="所在地区">{contact.region}</span>
                         </div>
                       )}
@@ -1601,7 +1601,7 @@ export default function ContactDetail() {
                       className={`h-5 w-5 ${
                         contact.hasTodayInteraction 
                           ? 'text-gray-400' 
-                          : 'text-blue-500'
+                          : 'text-[#1976D2]'
                       }`} 
                     />
                   </Button>
@@ -1674,7 +1674,7 @@ export default function ContactDetail() {
               )}
                             {contact.address && (
                 <div className="flex items-start text-sm">
-                  <MapPin className="h-4 w-4 mr-2 mt-0.5 text-green-600 flex-shrink-0" />
+                  <MapPin className="h-4 w-4 mr-2 mt-0.5 text-[#4CAF50] flex-shrink-0" />
                   <span>{contact.address}</span>
                 </div>
               )}
@@ -1964,9 +1964,9 @@ export default function ContactDetail() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                  <div className="text-center p-4 bg-[#F5F5F5] dark:bg-[#212121]/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">直接推荐</div>
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    <div className="text-2xl font-bold text-[#1976D2] dark:text-blue-400">
                       {contact.referrerContribution.directReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>

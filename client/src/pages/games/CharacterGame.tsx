@@ -417,7 +417,7 @@ export default function CharacterGame() {
             >
               <div className="text-center">
                 <div className="text-6xl mb-4">🎧</div>
-                <h2 className="text-2xl font-bold text-blue-600 mb-3">听音辨字</h2>
+                <h2 className="text-2xl font-bold text-[#1976D2] mb-3">听音辨字</h2>
                 <p className="text-gray-600 mb-4">听语音选汉字，训练听力，加深记忆！</p>
                 <Button className="w-full bg-gradient-to-r from-blue-400 to-blue-600 text-white">
                   开始游戏
@@ -456,7 +456,7 @@ export default function CharacterGame() {
                   <Button
                     key={option.value}
                     variant={voiceSettings === option.value ? "default" : "outline"}
-                    className={voiceSettings === option.value ? "bg-red-500" : ""}
+                    className={voiceSettings === option.value ? "bg-[#D32F2F]" : ""}
                     onClick={() => setVoiceSettings(option.value)}
                   >
                     {option.label}
@@ -507,7 +507,7 @@ export default function CharacterGame() {
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant={!reviewMode ? "default" : "outline"}
-                  className={!reviewMode ? "bg-green-500 hover:bg-green-600" : ""}
+                  className={!reviewMode ? "bg-[#4CAF50] hover:bg-[#4CAF50]" : ""}
                   onClick={() => setReviewMode(false)}
                 >
                   🎯 正常练习
@@ -547,7 +547,7 @@ export default function CharacterGame() {
                   <Button
                     key={option.label}
                     variant={category === option.value ? "default" : "outline"}
-                    className={category === option.value ? "bg-red-500" : ""}
+                    className={category === option.value ? "bg-[#D32F2F]" : ""}
                     onClick={() => setCategory(option.value)}
                   >
                     {option.label}
@@ -784,12 +784,12 @@ export default function CharacterGame() {
                   </div>
                   
                   {/* 右上角：认识次数 */}
-                  <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  <div className="absolute top-2 right-2 bg-[#4CAF50] text-white px-3 py-1 rounded-full text-sm font-bold">
                     认识: {record.knownCount}
                   </div>
                   
                   {/* 右下角：忘记次数 */}
-                  <div className="absolute bottom-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  <div className="absolute bottom-2 right-2 bg-[#D32F2F] text-white px-3 py-1 rounded-full text-sm font-bold">
                     忘记: {record.forgottenCount}
                   </div>
                 </div>
@@ -842,7 +842,7 @@ export default function CharacterGame() {
             <div className="text-lg font-semibold text-gray-600">
               ⏱️ {formatTime(timer)}
             </div>
-            <div className="text-lg font-semibold text-green-600">
+            <div className="text-lg font-semibold text-[#4CAF50]">
               ⭐ {score} 分
             </div>
           </div>
@@ -876,7 +876,7 @@ export default function CharacterGame() {
               <Button
                 onClick={handleManualPlay}
                 disabled={isPlaying}
-                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-red-500 hover:bg-[#D32F2F]"
+                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-[#D32F2F] hover:bg-[#D32F2F]"
                 size="icon"
               >
                 <Volume2 className="w-6 h-6" />
@@ -891,12 +891,12 @@ export default function CharacterGame() {
               
               if (selectedAnswer === option) {
                 if (isCorrect) {
-                  buttonClass += " bg-green-500 text-white hover:bg-green-500";
+                  buttonClass += " bg-[#4CAF50] text-white hover:bg-[#4CAF50]";
                 } else {
-                  buttonClass += " bg-red-500 text-white hover:bg-red-500";
+                  buttonClass += " bg-[#D32F2F] text-white hover:bg-[#D32F2F]";
                 }
               } else if (selectedAnswer !== null && option === currentQuestion.character) {
-                buttonClass += " bg-green-500 text-white hover:bg-green-500";
+                buttonClass += " bg-[#4CAF50] text-white hover:bg-[#4CAF50]";
               }
               
               return (
@@ -917,11 +917,11 @@ export default function CharacterGame() {
           {selectedAnswer !== null && (
             <div className="text-center mt-6">
               {isCorrect ? (
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-[#4CAF50]">
                   ✓ 回答正确！{currentQuestion.pinyin}
                 </div>
               ) : (
-                <div className="text-2xl font-bold text-red-600">
+                <div className="text-2xl font-bold text-[#D32F2F]">
                   ✗ 回答错误！正确答案是：{currentQuestion.character} ({currentQuestion.pinyin})
                 </div>
               )}

@@ -247,7 +247,7 @@ export default function RewardsManagement() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 text-red-600 hover:text-red-700"
+                        className="flex-1 text-[#D32F2F] hover:text-[#D32F2F]"
                         onClick={() => handleDelete(reward.id, reward.name)}
                       >
                         <Trash2 className="w-4 h-4 mr-1" />

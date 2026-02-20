@@ -107,13 +107,13 @@ export default function MultiDimensionSimulator({
         {/* 维度1：邀请裂变 */}
         <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <Users className="w-4 h-4 text-red-600" />
+            <Users className="w-4 h-4 text-[#D32F2F]" />
             <span className="text-sm font-semibold text-gray-900">邀请裂变</span>
           </div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-gray-600">预期邀请新股东</label>
             <div className="text-right">
-              <span className="text-lg font-bold text-red-600">{simInvites}</span>
+              <span className="text-lg font-bold text-[#D32F2F]">{simInvites}</span>
               <span className="text-xs text-gray-500 ml-1">人</span>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function MultiDimensionSimulator({
           />
           <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0人</span>
-            <span className="text-red-600 font-semibold">+{simInvites * 100} PU</span>
+            <span className="text-[#D32F2F] font-semibold">+{simInvites * 100} PU</span>
             <span>50人</span>
           </div>
         </div>
@@ -135,13 +135,13 @@ export default function MultiDimensionSimulator({
         {/* 维度2：人脉连接 */}
         <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <Network className="w-4 h-4 text-blue-600" />
+            <Network className="w-4 h-4 text-[#1976D2]" />
             <span className="text-sm font-semibold text-gray-900">人脉连接</span>
           </div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-gray-600">预期新增人脉</label>
             <div className="text-right">
-              <span className="text-lg font-bold text-blue-600">{simNetworkConnections}</span>
+              <span className="text-lg font-bold text-[#1976D2]">{simNetworkConnections}</span>
               <span className="text-xs text-gray-500 ml-1">人</span>
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function MultiDimensionSimulator({
           />
           <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0人</span>
-            <span className="text-blue-600 font-semibold">+{Math.min(simNetworkConnections * 5, 500)} PU</span>
+            <span className="text-[#1976D2] font-semibold">+{Math.min(simNetworkConnections * 5, 500)} PU</span>
             <span>100人 (上限500 PU)</span>
           </div>
         </div>
@@ -163,13 +163,13 @@ export default function MultiDimensionSimulator({
         {/* 维度3：平台参与 */}
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-green-600" />
+            <TrendingUp className="w-4 h-4 text-[#4CAF50]" />
             <span className="text-sm font-semibold text-gray-900">平台参与</span>
           </div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs text-gray-600">预期活跃天数</label>
             <div className="text-right">
-              <span className="text-lg font-bold text-green-600">{simActiveDays}</span>
+              <span className="text-lg font-bold text-[#4CAF50]">{simActiveDays}</span>
               <span className="text-xs text-gray-500 ml-1">天</span>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function MultiDimensionSimulator({
           />
           <div className="flex justify-between text-xs text-gray-400 mt-1">
             <span>0天</span>
-            <span className="text-green-600 font-semibold">
+            <span className="text-[#4CAF50] font-semibold">
               +{Math.floor(simActiveDays / 7) * 50 + Math.floor(simActiveDays / 30) * 200} PU
             </span>
             <span>90天</span>

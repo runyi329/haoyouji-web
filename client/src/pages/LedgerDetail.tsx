@@ -397,7 +397,7 @@ export default function LedgerDetail() {
                       {/* 分类信息 */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-green-500'}`}></span>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
                           <span className="text-xs text-[#222222] font-normal">
                             {record.category}
                             {record.subcategory && `–${record.subcategory}`}
@@ -412,7 +412,7 @@ export default function LedgerDetail() {
                           )}
                           {/* 待审批图标 */}
                           {record.approvalStatus === 'pending' && (
-                            <span className="ml-1 text-red-500 text-xs flex items-center gap-0.5">
+                            <span className="ml-1 text-[#D32F2F] text-xs flex items-center gap-0.5">
                               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                                 <circle cx="12" cy="12" r="10" opacity="0.2" />
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
@@ -422,7 +422,7 @@ export default function LedgerDetail() {
                           )}
                           {/* 报销状态图标 */}
                           {record.reimbursementStatus === 'pending' && (
-                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-blue-500 flex-shrink-0" />
+                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" />
                           )}
                         </div>
                         {record.description && (
@@ -431,7 +431,7 @@ export default function LedgerDetail() {
                       </div>
 
                       {/* 金额 */}
-                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-red-600' : 'text-green-600'}`}>
+                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'}`}>
                         {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
                       </div>
                     </div>

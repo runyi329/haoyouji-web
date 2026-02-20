@@ -190,9 +190,9 @@ export function InvitationManager() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">已开启</p>
-                <p className="text-2xl font-bold text-green-600">{stats.enabled}</p>
+                <p className="text-2xl font-bold text-[#4CAF50]">{stats.enabled}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <CheckCircle className="w-8 h-8 text-[#4CAF50]" />
             </div>
           </CardContent>
         </Card>
@@ -214,9 +214,9 @@ export function InvitationManager() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">累计邀请</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.totalInvites}</p>
+                <p className="text-2xl font-bold text-[#1976D2]">{stats.totalInvites}</p>
               </div>
-              <Share className="w-8 h-8 text-blue-600" />
+              <Share className="w-8 h-8 text-[#1976D2]" />
             </div>
           </CardContent>
         </Card>
@@ -287,7 +287,7 @@ export function InvitationManager() {
                         <Badge variant="secondary" className="text-xs">管理员</Badge>
                       )}
                       {user.inviteEnabled ? (
-                        <Badge variant="default" className="text-xs bg-green-500">
+                        <Badge variant="default" className="text-xs bg-[#4CAF50]">
                           <CheckCircle className="w-3 h-3 mr-1" />
                           已开启
                         </Badge>
@@ -375,7 +375,7 @@ export function InvitationManager() {
                   <div className="mt-4 pt-4 border-t space-y-3">
                     {/* 推荐人信息 */}
                     {referrer && (
-                      <div className="p-3 bg-red-50 rounded-lg">
+                      <div className="p-3 bg-[#FFEBEE] rounded-lg">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">推荐人</p>
@@ -499,7 +499,7 @@ export function InvitationManager() {
           <div className="space-y-4">
             {/* 当前推荐人 */}
             {editReferrerDialog.currentReferrerId && (
-              <div className="p-3 bg-red-50 rounded-lg">
+              <div className="p-3 bg-[#FFEBEE] rounded-lg">
                 <p className="text-xs text-muted-foreground mb-2">当前推荐人</p>
                 <div className="flex items-center justify-between">
                   <div>

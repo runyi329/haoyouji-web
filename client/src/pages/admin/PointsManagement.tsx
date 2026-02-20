@@ -356,12 +356,12 @@ export default function PointsManagement() {
                         </TableCell>
                         <TableCell className="font-medium">{log.username}</TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                          <span className="inline-flex items-center rounded-md bg-[#F5F5F5] px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                             {ACTION_TYPE_NAMES[log.actionType] || log.actionType}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className={log.points > 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                          <span className={log.points > 0 ? "text-[#4CAF50] font-semibold" : "text-[#D32F2F] font-semibold"}>
                             {log.points > 0 ? "+" : ""}{log.points}
                           </span>
                         </TableCell>

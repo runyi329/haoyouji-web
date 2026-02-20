@@ -127,7 +127,7 @@ export default function LedgerAdminManagement() {
       </div>
 
       {/* 说明文字 */}
-      <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mt-3 mx-4 rounded-r-lg">
+      <div className="bg-[#F5F5F5] border-l-4 border-blue-400 p-4 mt-3 mx-4 rounded-r-lg">
         <p className="text-sm text-blue-700">
           管理员可以管理报销、审批账目等，但不能删除账本或封存账本。
         </p>
@@ -195,7 +195,7 @@ export default function LedgerAdminManagement() {
                       userId: member.userId,
                       username: member.nickname || member.username,
                     })}
-                    className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                    className="p-2 rounded-full hover:bg-[#FFEBEE] text-gray-400 hover:text-[#D32F2F] transition-colors"
                     title="移除成员"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -264,7 +264,7 @@ export default function LedgerAdminManagement() {
               <button
                 onClick={handleDeleteMember}
                 disabled={removeMemberMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white bg-[#D32F2F] hover:bg-[#D32F2F] transition-colors disabled:opacity-50"
               >
                 {removeMemberMutation.isPending ? '移除中...' : '确认移除'}
               </button>

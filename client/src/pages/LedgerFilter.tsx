@@ -111,15 +111,15 @@ export default function LedgerFilter() {
 
   // 账目类型选项
   const transactionTypes = [
-    { value: "all", label: "不限制", color: "bg-blue-500" },
+    { value: "all", label: "不限制", color: "bg-[#1976D2]" },
     { value: "expense", label: "支出", color: "bg-[#CBA471]" },
-    { value: "income", label: "收入", color: "bg-green-500" },
+    { value: "income", label: "收入", color: "bg-[#4CAF50]" },
   ];
 
   // 支付方式选项（与添加账目页面保持一致）
   const accountTypes = [
-    { value: "all", label: "全部", color: "bg-blue-500" },
-    { value: "wechat", label: "微信", color: "bg-green-500" },
+    { value: "all", label: "全部", color: "bg-[#1976D2]" },
+    { value: "wechat", label: "微信", color: "bg-[#4CAF50]" },
     { value: "alipay", label: "支付宝", color: "bg-blue-400" },
     { value: "bank", label: "银行卡", color: "bg-[#CBA471]" },
     { value: "digital", label: "数字钱包", color: "bg-[#D32F2F]" },
@@ -248,7 +248,7 @@ export default function LedgerFilter() {
             <label className="text-sm font-medium text-gray-700">记账人</label>
             <button
               onClick={() => setShowMemberPicker(true)}
-              className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
+              className="w-8 h-8 rounded-full bg-[#D32F2F] flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
             >
               {selectedMemberIds.length === 0 ? (
                 <span className="text-[8px] leading-tight">全部<br />成员</span>
@@ -285,7 +285,7 @@ export default function LedgerFilter() {
                 size="sm"
                 className={`text-xs h-7 rounded ${
                   selectedDateRange === range.value
-                    ? "bg-blue-500 text-white hover:bg-blue-600"
+                    ? "bg-[#1976D2] text-white hover:bg-[#1976D2]"
                     : "bg-white text-gray-700 hover:bg-gray-50"
                 }`}
                 onClick={() => {
@@ -452,7 +452,7 @@ export default function LedgerFilter() {
                       onClick={() => handleCategoryClick(category.id)}
                       className={`h-7 px-3 text-xs rounded border ${
                         selectedCategories.includes(category.id)
-                          ? "bg-blue-500 text-white border-blue-500"
+                          ? "bg-[#1976D2] text-white border-[#1976D2]"
                           : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                       }`}
                     >
@@ -472,7 +472,7 @@ export default function LedgerFilter() {
                               onClick={() => handleSubCategoryClick(subCategory.id)}
                               className={`h-7 px-3 text-xs rounded border ${
                                 selectedCategories.includes(subCategory.id)
-                                  ? "bg-blue-500 text-white border-blue-500"
+                                  ? "bg-[#1976D2] text-white border-[#1976D2]"
                                   : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                               }`}
                             >
@@ -502,7 +502,7 @@ export default function LedgerFilter() {
                                       }}
                                       className={`h-7 px-3 text-xs rounded border ${
                                         selectedCategories.includes(thirdCategory.id)
-                                          ? "bg-blue-500 text-white border-blue-500"
+                                          ? "bg-[#1976D2] text-white border-[#1976D2]"
                                           : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                                       }`}
                                     >
@@ -585,21 +585,21 @@ export default function LedgerFilter() {
               <div 
                 onClick={() => toggleMember(0)}
                 className={`flex items-center p-2 rounded cursor-pointer ${
-                  selectedMemberIds.length === 0 ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  selectedMemberIds.length === 0 ? 'bg-[#F5F5F5]' : 'hover:bg-gray-50'
                 }`}
               >
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm mr-2">
+                <div className="w-8 h-8 rounded-full bg-[#1976D2] flex items-center justify-center text-white text-sm mr-2">
                   全
                 </div>
                 <span>全部成员</span>
-                {selectedMemberIds.length === 0 && <span className="ml-auto text-blue-600">✓</span>}
+                {selectedMemberIds.length === 0 && <span className="ml-auto text-[#1976D2]">✓</span>}
               </div>
               {membersData?.map((member: any) => (
                 <div 
                   key={member.userId}
                   onClick={() => toggleMember(member.userId)}
                   className={`flex items-center p-2 rounded cursor-pointer ${
-                    selectedMemberIds.includes(member.userId) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    selectedMemberIds.includes(member.userId) ? 'bg-[#F5F5F5]' : 'hover:bg-gray-50'
                   }`}
                 >
                   <UserAvatar 
@@ -610,13 +610,13 @@ export default function LedgerFilter() {
                     className="mr-2"
                   />
                   <span>{member.nickname || member.username}</span>
-                  {selectedMemberIds.includes(member.userId) && <span className="ml-auto text-blue-600">✓</span>}
+                  {selectedMemberIds.includes(member.userId) && <span className="ml-auto text-[#1976D2]">✓</span>}
                 </div>
               ))}
             </div>
             <button 
               onClick={() => setShowMemberPicker(false)}
-              className="w-full mt-4 bg-blue-600 text-white py-2 rounded"
+              className="w-full mt-4 bg-[#1976D2] text-white py-2 rounded"
             >
               确定
             </button>

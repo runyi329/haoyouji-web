@@ -235,9 +235,9 @@ export function AIChatBox({
                         e.stopPropagation();
                         onDeleteSession?.(session.id);
                       }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-opacity"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-[#FFEBEE] rounded transition-opacity"
                     >
-                      <X className="w-3 h-3 text-red-500" />
+                      <X className="w-3 h-3 text-[#D32F2F]" />
                     </button>
                   </div>
                 ))}

@@ -92,7 +92,7 @@ export default function TagAnalytics() {
               </Button>
               <div>
                 <h1 className="text-lg font-bold">标签数据透视</h1>
-                <p className="text-xs text-red-100 mt-0.5">全面分析标签使用情况</p>
+                <p className="text-xs text-[#FFEBEE] mt-0.5">全面分析标签使用情况</p>
               </div>
             </div>
             <div className="flex items-center gap-1">

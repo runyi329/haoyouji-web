@@ -214,10 +214,10 @@ export default function AntonymManagement() {
                     <span className="text-lg font-semibold">{pair.antonym}</span>
                   </div>
                   <div className="flex gap-2 mt-2 text-sm text-muted-foreground">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                    <span className="px-2 py-1 bg-[#F5F5F5] text-blue-700 rounded">
                       {pair.category}
                     </span>
-                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                    <span className="px-2 py-1 bg-[#E8F5E9] text-green-700 rounded">
                       {difficultyMap[pair.difficulty]}
                     </span>
                   </div>

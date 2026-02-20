@@ -134,7 +134,7 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
                   {report.formattedContent.companyTags.map((tag, index) => (
                     <span
                       key={index}
-                      className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs"
+                      className="px-2 py-0.5 bg-[#F5F5F5] text-blue-700 rounded-full text-xs"
                     >
                       {tag}
                     </span>
@@ -172,7 +172,7 @@ export function CompanyReportDialog({ open, onOpenChange, companyName }: Company
                   {report.formattedContent.contactInfo?.website && (
                     <div className="flex">
                       <span className="text-muted-foreground w-12 flex-shrink-0">网站：</span>
-                      <a href={report.formattedContent.contactInfo.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex-1 break-all">
+                      <a href={report.formattedContent.contactInfo.website} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] hover:underline flex-1 break-all">
                         {report.formattedContent.contactInfo.website}
                       </a>
                     </div>
