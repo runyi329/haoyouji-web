@@ -52,19 +52,19 @@
   --color-sidebar-ring: var(--sidebar-ring);
   
   /* 红白金13色系统 - 自定义颜色 */
-  --color-brand-red: var(--brand-red);
-  --color-brand-red-dark: var(--brand-red-dark);
-  --color-brand-red-light: var(--brand-red-light);
-  --color-brand-gold: var(--brand-gold);
-  --color-cream: var(--bg-cream);
-  --color-white-pure: var(--bg-white);
-  --color-core-black: var(--text-black);
-  --color-stable-gray: var(--text-gray);
-  --color-divider-gray: var(--border-gray);
-  --color-status-success: var(--status-success);
-  --color-status-warning: var(--status-warning);
-  --color-status-error: var(--status-error);
-  --color-status-link: var(--status-link);
+  --color-brand-red: #D32F2F;
+  --color-brand-red-dark: #B71C1C;
+  --color-brand-red-light: #FFEBEE;
+  --color-brand-gold: #CBA471;
+  --color-cream: #FAF3ED;
+  --color-white-pure: #FFFFFF;
+  --color-core-black: #222222;
+  --color-stable-gray: #757575;
+  --color-divider-gray: #E0E0E0;
+  --color-status-success: #4CAF50;
+  --color-status-warning: #FFA000;
+  --color-status-error: #F44336;
+  --color-status-link: #1976D2;
 }
 
 :root {
