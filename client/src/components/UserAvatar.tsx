@@ -46,8 +46,8 @@ export function UserAvatar({
       <img
         src={avatar}
         alt={displayName}
-        className={`${sizeClass} rounded-full object-cover ${className}`}
-        style={style}
+        className={`${sizeClass} rounded-full object-cover border-2 border-white ${className}`}
+        style={{ ...style, boxShadow: '0 0 0 1px rgba(0,0,0,0.1)' }}
         onError={() => setImageError(true)}
       />
     );
@@ -56,10 +56,11 @@ export function UserAvatar({
   // 否则显示首字母，使用全局主题色
   return (
     <div
-      className={`${sizeClass} rounded-full text-white flex items-center justify-center font-medium ${className}`}
+      className={`${sizeClass} rounded-full text-white flex items-center justify-center font-medium border-2 border-white ${className}`}
       style={{ 
         backgroundColor: themeColors.primary,
         color: themeColors.accent1,
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
         ...style 
       }}
     >
