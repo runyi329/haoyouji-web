@@ -25,8 +25,14 @@ import { eq } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
+import { initDatabase } from "./db-init";
 
 import ExcelJS from "exceljs";
+
+// 在应用启动时初始化数据库
+initDatabase().catch(err => {
+  console.error("[DB Init] Failed to initialize database:", err);
+});
 
 export const appRouter = router({
   system: systemRouter,
