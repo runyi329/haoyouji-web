@@ -33,6 +33,8 @@ jobs:
             pnpm install
             echo "🔨 构建项目..."
             pnpm run build
+            echo "📊 执行数据库迁移..."
+            bash scripts/post-deploy-migration.sh || true
             echo "🔄 重启服务..."
             pm2 restart haoyouji-web
             echo "✅ 部署完成！"
