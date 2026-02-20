@@ -68,17 +68,17 @@ export default function WorkGroupDetail() {
 
   if (groupLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-stable-gray">加载中...</div>
       </div>
     );
   }
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-cream flex items-center justify-center">
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">工作群不存在</h3>
+          <h3 className="text-lg font-semibold text-core-black mb-2">工作群不存在</h3>
           <Button onClick={() => setLocation("/work-groups")} variant="outline">
             返回列表
           </Button>
@@ -88,9 +88,9 @@ export default function WorkGroupDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-cream">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-brand-red border-b border-brand-red-dark sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -98,22 +98,22 @@ export default function WorkGroupDetail() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setLocation("/work-groups")}
-                className="text-gray-600"
+                className="text-white"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl font-bold text-gray-900">{group.name}</h1>
+              <h1 className="text-xl font-bold text-white">{group.name}</h1>
             </div>
             <Button
               onClick={() => setShowAddMemberDialog(true)}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="btn-primary-gold"
             >
               <Plus className="h-4 w-4 mr-1" />
               添加人员
             </Button>
           </div>
           {group.description && (
-            <p className="text-sm text-gray-500 pl-12">{group.description}</p>
+            <p className="text-sm text-white/90 pl-12">{group.description}</p>
           )}
         </div>
       </div>
@@ -121,8 +121,8 @@ export default function WorkGroupDetail() {
       {/* 主内容区域 */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* 统计信息 */}
-        <div className="bg-white rounded-lg p-4 mb-6 border border-gray-200">
-          <div className="flex items-center gap-2 text-gray-600">
+        <div className="bg-white-pure rounded-lg p-4 mb-6 border border-divider">
+          <div className="flex items-center gap-2 text-stable-gray">
             <Users className="h-5 w-5" />
             <span className="text-sm">共 {members.length} 人</span>
           </div>
@@ -130,17 +130,17 @@ export default function WorkGroupDetail() {
 
         {/* 人员列表 */}
         {membersLoading ? (
-          <div className="text-center py-12 text-gray-500">加载中...</div>
+          <div className="text-center py-12 text-stable-gray">加载中...</div>
         ) : members.length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
               <UserPlus className="h-8 w-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">暂无人员</h3>
-            <p className="text-gray-500 mb-6">添加第一个人员，开始跟进工作节点</p>
+            <h3 className="text-lg font-semibold text-core-black mb-2">暂无人员</h3>
+            <p className="text-stable-gray mb-6">添加第一个人员，开始跟进工作节点</p>
             <Button
               onClick={() => setShowAddMemberDialog(true)}
-              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="btn-primary-gold"
             >
               <Plus className="h-4 w-4 mr-2" />
               添加人员
@@ -151,7 +151,7 @@ export default function WorkGroupDetail() {
             {members.map((member) => (
               <Card
                 key={member.id}
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white-pure"
                 onClick={() => setLocation(`/ledger/${member.id}`)}
               >
                 <div className="flex items-center justify-between">
@@ -162,20 +162,20 @@ export default function WorkGroupDetail() {
                       size="md"
                     />
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      <h3 className="text-lg font-semibold text-core-black mb-1">
                         {member.name}
                       </h3>
                       {member.description && (
-                        <p className="text-sm text-gray-500 line-clamp-1">
+                        <p className="text-sm text-stable-gray line-clamp-1">
                           {member.description}
                         </p>
                       )}
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-stable-gray mt-1">
                         创建时间: {new Date(member.createdAt).toLocaleDateString('zh-CN')}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 ml-4" />
+                  <ChevronRight className="h-5 w-5 text-stable-gray flex-shrink-0 ml-4" />
                 </div>
               </Card>
             ))}
@@ -220,7 +220,7 @@ export default function WorkGroupDetail() {
             <Button
               onClick={handleAddMember}
               disabled={!newMemberName.trim() || addMemberMutation.isPending}
-              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="w-full btn-primary-gold"
             >
               {addMemberMutation.isPending ? '添加中...' : '添加'}
             </Button>

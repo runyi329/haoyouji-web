@@ -53,13 +53,37 @@
 }
 
 :root {
-  /* 主题颜色系统 - 可通过JS动态修改 */
-  --color-primary: #FA734F;
+  /* 红白金13色系统 - 全站统一配色方案 */
+  /* 品牌核心色 */
+  --brand-red: #D32F2F;        /* 1. 脉动红 - 主色 */
+  --brand-red-dark: #B71C1C;   /* 2. 触控红 - 按钮按下 */
+  --brand-red-light: #FFEBEE;  /* 3. 高光红 - 选中背景 */
+  --brand-gold: #CBA471;       /* 4. 至尊金 - 装饰边框 */
+  
+  /* 空间背景色 */
+  --bg-cream: #FAF3ED;         /* 5. 杏白底 - 全站背景 */
+  --bg-white: #FFFFFF;         /* 6. 极净白 - 卡片背景 */
+  
+  /* 文字信息色 */
+  --text-black: #222222;       /* 7. 核心黑 - 主要文字 */
+  --text-gray: #757575;        /* 8. 沉稳灰 - 辅助文字 */
+  
+  /* 边框分割色 */
+  --border-gray: #E0E0E0;      /* 9. 分割灰 - 边框线 */
+  
+  /* 功能反馈色 */
+  --status-success: #4CAF50;   /* 10. 成功绿 */
+  --status-warning: #FFA000;   /* 11. 告警橙 */
+  --status-error: #F44336;     /* 12. 冲突红 - 错误/删除 */
+  --status-link: #1976D2;      /* 13. 极速蓝 - 链接 */
+  
+  /* 旧主题颜色系统 - 保持兼容性 */
+  --color-primary: var(--brand-red);
   --color-secondary: #95DAE7;
-  --color-background: #F6F3E8;
-  --color-text: #7C645E;
-  --color-accent1: #FFFFFF;
-  --color-accent2: #797979;
+  --color-background: var(--bg-cream);
+  --color-text: var(--text-gray);
+  --color-accent1: var(--bg-white);
+  --color-accent2: var(--text-gray);
   
   /* 将蓝色映射到主题色 - 这样所有使用蓝色的地方都会自动变成主题色 */
   --color-blue-50: color-mix(in srgb, var(--color-primary) 5%, var(--color-background));
@@ -73,43 +97,43 @@
   --color-blue-800: color-mix(in srgb, var(--color-primary) 40%, #000000);
   --color-blue-900: color-mix(in srgb, var(--color-primary) 20%, #000000);
   
-  /* 深红色主题 */
-  --primary: #A80000;
+  /* 红白金主题 - 使用13色系统 */
+  --primary: var(--brand-red);
   --primary-foreground: #ffffff;
-  --sidebar-primary: #A80000;
+  --sidebar-primary: var(--brand-red);
   --sidebar-primary-foreground: #ffffff;
-  --chart-1: #A80000;
+  --chart-1: var(--brand-red);
   --chart-2: oklch(0.75 0.15 180);
   --chart-3: oklch(0.7 0.15 330);
   --chart-4: oklch(0.75 0.15 60);
   --chart-5: oklch(0.7 0.15 140);
   --radius: 1rem;
-  --background: #F9FAFB;
-  --foreground: #1F2937;
-  --card: #ffffff;
-  --card-foreground: #1F2937;
-  --popover: #ffffff;
-  --popover-foreground: #1F2937;
-  --secondary: #fef2f2;
-  --secondary-foreground: #7f1d1d;
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --accent: #fef2f2;
-  --accent-foreground: #7f1d1d;
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0.01 25);
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-  --ring: #A80000;
-  --sidebar: #F9FAFB;
-  --sidebar-foreground: #1F2937;
-  --sidebar-accent: #fef2f2;
-  --sidebar-accent-foreground: #1F2937;
-  --sidebar-border: #e5e7eb;
-  --sidebar-ring: #A80000;
+  --background: var(--bg-cream);
+  --foreground: var(--text-black);
+  --card: var(--bg-white);
+  --card-foreground: var(--text-black);
+  --popover: var(--bg-white);
+  --popover-foreground: var(--text-black);
+  --secondary: var(--brand-red-light);
+  --secondary-foreground: var(--brand-red-dark);
+  --muted: var(--bg-cream);
+  --muted-foreground: var(--text-gray);
+  --accent: var(--brand-red-light);
+  --accent-foreground: var(--brand-red-dark);
+  --destructive: var(--status-error);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-gray);
+  --input: var(--border-gray);
+  --ring: var(--brand-red);
+  --sidebar: var(--bg-cream);
+  --sidebar-foreground: var(--text-black);
+  --sidebar-accent: var(--brand-red-light);
+  --sidebar-accent-foreground: var(--text-black);
+  --sidebar-border: var(--border-gray);
+  --sidebar-ring: var(--brand-red);
   
-  /* 儿童友好的渐变色 */
-  --gradient-purple: linear-gradient(135deg, #A80000 0%, #dd4444 100%);
+  /* 红白金渐变色 */
+  --gradient-purple: linear-gradient(135deg, var(--brand-red) 0%, var(--brand-red-dark) 100%);
   --gradient-pink: linear-gradient(135deg, oklch(0.8 0.12 350) 0%, oklch(0.7 0.15 330) 100%);
   --gradient-blue: linear-gradient(135deg, oklch(0.8 0.12 230) 0%, oklch(0.7 0.15 250) 100%);
   --gradient-green: linear-gradient(135deg, oklch(0.8 0.12 150) 0%, oklch(0.7 0.15 170) 100%);
@@ -184,7 +208,7 @@
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #A80000;
+    background: var(--brand-red);
   }
 }
 
@@ -237,7 +261,7 @@
 }
 .card-hover:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px -12px rgba(168, 0, 0, 0.15);
+  box-shadow: 0 20px 40px -12px rgba(211, 47, 47, 0.15);
 }
 
 /* 渐变按钮 */
@@ -247,7 +271,7 @@
 }
 .btn-gradient:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px -5px rgba(168, 0, 0, 0.3);
+  box-shadow: 0 10px 20px -5px rgba(211, 47, 47, 0.3);
 }
 
 /* 玻璃态效果 */
@@ -299,11 +323,11 @@
 
 /* 柔和阴影 */
 .shadow-soft {
-  box-shadow: 0 4px 20px -2px rgba(168, 0, 0, 0.1);
+  box-shadow: 0 4px 20px -2px rgba(211, 47, 47, 0.1);
 }
 
 .shadow-soft-lg {
-  box-shadow: 0 10px 40px -5px rgba(168, 0, 0, 0.15);
+  box-shadow: 0 10px 40px -5px rgba(211, 47, 47, 0.15);
 }
 
 /* 游戏卡片样式 */
@@ -313,7 +337,7 @@
   border: 2px solid #e5e7eb;
 }
 .game-card:hover {
-  border-color: #A80000;
+  border-color: var(--brand-red);
   transform: scale(1.02);
 }
 
@@ -1008,5 +1032,73 @@ input[type="range"].slider::-moz-range-thumb {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
+  }
+}
+
+/* ========================================
+   红白金13色系统 - Tailwind工具类
+   ======================================== */
+@layer utilities {
+  /* 品牌核心色 */
+  .bg-brand-red { background-color: var(--brand-red); }
+  .bg-brand-red-dark { background-color: var(--brand-red-dark); }
+  .bg-brand-red-light { background-color: var(--brand-red-light); }
+  .bg-brand-gold { background-color: var(--brand-gold); }
+  
+  .text-brand-red { color: var(--brand-red); }
+  .text-brand-red-dark { color: var(--brand-red-dark); }
+  .text-brand-gold { color: var(--brand-gold); }
+  
+  .border-brand-red { border-color: var(--brand-red); }
+  .border-brand-gold { border-color: var(--brand-gold); }
+  
+  /* 空间背景色 */
+  .bg-cream { background-color: var(--bg-cream); }
+  .bg-white-pure { background-color: var(--bg-white); }
+  
+  /* 文字信息色 */
+  .text-core-black { color: var(--text-black); }
+  .text-stable-gray { color: var(--text-gray); }
+  
+  /* 边框分割色 */
+  .border-divider { border-color: var(--border-gray); }
+  
+  /* 功能反馈色 */
+  .bg-success { background-color: var(--status-success); }
+  .bg-warning { background-color: var(--status-warning); }
+  .bg-error { background-color: var(--status-error); }
+  .bg-link { background-color: var(--status-link); }
+  
+  .text-success { color: var(--status-success); }
+  .text-warning { color: var(--status-warning); }
+  .text-error { color: var(--status-error); }
+  .text-link { color: var(--status-link); }
+  
+  /* 红白金主按钮样式 - 带金色描边 */
+  .btn-primary-gold {
+    background: var(--brand-red);
+    color: white;
+    border: 1px solid var(--brand-gold);
+    transition: all 0.3s ease;
+  }
+  .btn-primary-gold:hover {
+    background: var(--brand-red-dark);
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
+  }
+  .btn-primary-gold:active {
+    background: var(--brand-red-dark);
+    transform: translateY(1px);
+  }
+  
+  /* 红白金渐变按钮 */
+  .btn-gradient-gold {
+    background: linear-gradient(135deg, var(--brand-red) 0%, var(--brand-red-dark) 100%);
+    color: white;
+    border: 1px solid var(--brand-gold);
+    transition: all 0.3s ease;
+  }
+  .btn-gradient-gold:hover {
+    box-shadow: 0 6px 16px rgba(211, 47, 47, 0.4);
+    transform: translateY(-2px);
   }
 }
