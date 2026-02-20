@@ -137,7 +137,7 @@ export default function AccountRelationshipManager() {
       case "parent":
         return <Badge className="bg-[#1976D2]">家长</Badge>;
       case "baby":
-        return <Badge className="bg-pink-500">宝宝</Badge>;
+        return <Badge className="bg-white0">宝宝</Badge>;
       default:
         return <Badge>{role}</Badge>;
     }
@@ -394,12 +394,12 @@ export default function AccountRelationshipManager() {
           <Users className="w-5 h-5 text-[#D32F2F]" />
           账户体系说明
         </h3>
-        <div className="space-y-2 text-sm text-gray-700">
+        <div className="space-y-2 text-sm text-[#424242]">
           <p><strong>三级权限体系：</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-4">
             <li><Badge className="bg-[#D32F2F] mr-2">超级管理员</Badge>拥有所有权限，可管理所有家庭和用户</li>
             <li><Badge className="bg-[#1976D2] mr-2">家长</Badge>可管理自己家庭的宝宝、词库、奖励等</li>
-            <li><Badge className="bg-pink-500 mr-2">宝宝</Badge>只能使用游戏和学习功能</li>
+            <li><Badge className="bg-white0 mr-2">宝宝</Badge>只能使用游戏和学习功能</li>
           </ul>
           <p className="mt-4"><strong>登录状态判断：</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-4">
@@ -441,7 +441,7 @@ export default function AccountRelationshipManager() {
         <div className="flex flex-col sm:flex-row gap-3 mb-4 p-4 bg-gray-50 rounded-lg">
           {/* 角色筛选器 */}
           <div className="flex items-center gap-2 flex-1">
-            <Filter className="w-4 h-4 text-gray-500" />
+            <Filter className="w-4 h-4 text-[#757575]" />
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="筛选角色" />
@@ -457,13 +457,13 @@ export default function AccountRelationshipManager() {
           
           {/* 关键词搜索 */}
           <div className="flex items-center gap-2 flex-1">
-            <Search className="w-4 h-4 text-gray-500" />
+            <Search className="w-4 h-4 text-[#757575]" />
             <input
               type="text"
               placeholder="搜索用户名或姓名..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#A80000] text-sm"
+              className="flex-1 px-3 py-2 border border-[#E0E0E0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#A80000] text-sm"
             />
           </div>
         </div>
@@ -585,7 +585,7 @@ export default function AccountRelationshipManager() {
                         ) : (
                           <div className="text-sm">
                             {user.role === "super_admin" ? (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-[#757575]">-</span>
                             ) : user.role === "parent" ? (
                               // 家长：显示管理的宝宝列表
                               (() => {
@@ -599,7 +599,7 @@ export default function AccountRelationshipManager() {
                                     ))}
                                   </div>
                                 ) : (
-                                  <span className="text-gray-400">未绑定宝宝</span>
+                                  <span className="text-[#757575]">未绑定宝宝</span>
                                 );
                               })()
                             ) : (
@@ -611,7 +611,7 @@ export default function AccountRelationshipManager() {
                                     家长：{parentName}
                                   </Badge>
                                 ) : (
-                                  <span className="text-gray-400">未绑定家长</span>
+                                  <span className="text-[#757575]">未绑定家长</span>
                                 );
                               })()
                             )}
@@ -630,11 +630,11 @@ export default function AccountRelationshipManager() {
                             )}
                             <div>
                               <div className="text-sm font-medium">{kidInfo.name}</div>
-                              <div className="text-xs text-gray-500">⭐ {kidInfo.stars}</div>
+                              <div className="text-xs text-[#757575]">⭐ {kidInfo.stars}</div>
                             </div>
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-sm">-</span>
+                          <span className="text-[#757575] text-sm">-</span>
                         )}
                       </TableCell>
                       {/* 编辑列 */}
@@ -693,7 +693,7 @@ export default function AccountRelationshipManager() {
                             onClick={() => setViConfigParentId(user.id)}
                             title="VI配置"
                           >
-                            <Palette className="w-4 h-4 text-pink-500" />
+                            <Palette className="w-4 h-4 text-[#D32F2F]" />
                           </Button>
                         )}
                       </TableCell>
@@ -755,7 +755,7 @@ export default function AccountRelationshipManager() {
             </Table>
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-8">暂无用户数据</p>
+          <p className="text-[#757575] text-center py-8">暂无用户数据</p>
         );
         })()}
       </Card>

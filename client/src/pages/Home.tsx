@@ -313,17 +313,17 @@ export default function Home() {
         
         <a href="https://www.jiangyuchen.cn/parent/contacts/tag-stats" className="block">
           <Card className="bg-white text-[#222222] p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
-          <div className="flex items-center space-x-2 text-gray-500">
+          <div className="flex items-center space-x-2 text-[#757575]">
             <Coins className="w-5 h-5" />
             <span className="text-sm font-medium">累计标签</span>
           </div>
           <div className="flex items-baseline space-x-1">
             {isLoading ? (
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+              <Loader2 className="w-8 h-8 animate-spin text-[#757575]" />
             ) : (
               <>
                 <span className="text-2xl font-bold text-[#D32F2F]">{totalTagCount ? formatNumber(totalTagCount) : "—"}</span>
-                <span className="text-sm text-gray-400">个</span>
+                <span className="text-sm text-[#757575]">个</span>
               </>
             )}
           </div>
@@ -338,7 +338,7 @@ export default function Home() {
           <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
             <DropdownMenuTrigger asChild>
               <div className="flex flex-col items-center space-y-2 cursor-pointer">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-[#D32F2F]">
                   {user?.avatar ? (
                     <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
                   ) : (
@@ -422,12 +422,12 @@ export default function Home() {
           {[...metricsLeft, ...metricsRight].map((stat, index) => (
             <a key={index} href={stat.href}>
               <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-[#FAF3ED] transition-colors aspect-square">
-                <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
+                <span className="text-xs text-[#757575] text-center mb-1">{stat.name}</span>
                 <div className="flex items-baseline justify-center space-x-0.5">
                   <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#D32F2F]' : 'text-[#222222]'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
                     {formatNumber(stat.value)}
                   </span>
-                  <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
+                  <span className="text-xs text-[#757575] leading-none">{stat.unit}</span>
                 </div>
               </div>
             </a>
@@ -473,7 +473,7 @@ export default function Home() {
         </a>
         
         <Link href="/ledger">
-          <a className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#D32F2F] transition-colors">
+          <a className="flex flex-col items-center space-y-1 text-[#757575] hover:text-[#D32F2F] transition-colors">
             <Wallet className="w-6 h-6" />
             <span className="text-xs font-medium">钱脉</span>
           </a>

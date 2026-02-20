@@ -185,8 +185,8 @@ export function FieldCategorySelector({
 
               {/* 联系管理员提示 */}
               <div className="mt-4 p-3 bg-[#F5F5F5] dark:bg-[#212121] rounded-lg flex items-start gap-2">
-                <MessageCircle className="h-5 w-5 text-[#1976D2] dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-[#424242] dark:text-blue-100">
+                <MessageCircle className="h-5 w-5 text-[#1976D2] dark:text-[#1976D2] mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-[#424242] dark:text-[#1976D2]">
                   <p className="font-medium mb-1">需要新类目？</p>
                   <p>请联系管理员（微信：tina_u）</p>
                 </div>
@@ -319,10 +319,10 @@ export function FieldCategorySelector({
               )}
 
               <div className="p-3 bg-[#F5F5F5] dark:bg-[#212121] rounded-lg">
-                <p className="text-sm text-[#424242] dark:text-blue-100">
+                <p className="text-sm text-[#424242] dark:text-[#1976D2]">
                   💡 温馨提示
                 </p>
-                <ul className="text-sm text-blue-800 dark:text-blue-200 mt-1 space-y-1">
+                <ul className="text-sm text-[#1976D2] dark:text-[#1976D2] mt-1 space-y-1">
                   <li>• 同一类目可以多次添加（如多个公司、多个电话）</li>
                   <li>• 需要新类目？请联系管理员（微信：tina_u）</li>
                 </ul>

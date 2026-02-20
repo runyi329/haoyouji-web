@@ -289,7 +289,7 @@ export default function Addition20Config() {
             </div>
             
             <div
-              className={`flex flex-col items-center p-6 rounded-lg border transition-colors ${canEdit ? 'cursor-pointer' : ''} border-amber-400 hover:border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50`}
+              className={`flex flex-col items-center p-6 rounded-lg border transition-colors ${canEdit ? 'cursor-pointer' : ''} border-[#FFA726] hover:border-[#FFA726] bg-gradient-to-br from-amber-50 to-orange-50`}
               onClick={() => {
                 if (canEdit) {
                   setShowChallengeDialog(true);
@@ -319,7 +319,7 @@ export default function Addition20Config() {
         )}
         
         {!canEdit && (
-          <Card className="p-4 bg-[#FAF3ED] border-amber-200">
+          <Card className="p-4 bg-[#FAF3ED] border-[#FFA726]">
             <p className="text-sm text-[#CBA471] text-center">
               只有家长可以修改游戏设置
             </p>

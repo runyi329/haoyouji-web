@@ -97,7 +97,7 @@ export default function ReferralList() {
                     <div className="flex items-center justify-between p-4 bg-[#F5F5F5] dark:bg-[#212121]/30 rounded-lg">
                       <div>
                         <p className="text-sm text-muted-foreground">总推荐人数</p>
-                        <p className="text-3xl font-bold text-[#1976D2] dark:text-blue-400 mt-1">
+                        <p className="text-3xl font-bold text-[#1976D2] dark:text-[#1976D2] mt-1">
                           {stats.total}
                         </p>
                       </div>

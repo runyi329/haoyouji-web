@@ -110,8 +110,8 @@ const academyModules: AcademyModule[] = [
     id: "contact-record",
     icon: Phone,
     title: "联络记录",
-    color: "text-red-400",
-    bgColor: "bg-red-400",
+    color: "text-[#D32F2F]",
+    bgColor: "bg-[#D32F2F]",
     category: "core",
     content: {
       introduction: "记录每一次联络，让人脉关系维护更有迹可循。",
@@ -209,8 +209,8 @@ const academyModules: AcademyModule[] = [
     id: "admin",
     icon: TrendingUp,
     title: "后台管理",
-    color: "text-red-800",
-    bgColor: "bg-red-800",
+    color: "text-[#D32F2F]",
+    bgColor: "bg-[#D32F2F]",
     category: "system",
     content: {
       introduction: "超级管理员专属功能，管理整个系统。",
@@ -329,7 +329,7 @@ export default function Academy() {
         <div className={`w-14 h-14 ${module.bgColor} rounded-full flex items-center justify-center shadow-sm`}>
           <Icon className="w-7 h-7 text-white" />
         </div>
-        <span className="text-xs text-gray-700 text-center leading-tight">{module.title}</span>
+        <span className="text-xs text-[#424242] text-center leading-tight">{module.title}</span>
       </button>
     );
   };
@@ -363,7 +363,7 @@ export default function Academy() {
       <div className="px-4 -mt-16 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#757575]" />
             <Input
               type="text"
               placeholder="搜索功能说明..."
@@ -374,14 +374,14 @@ export default function Academy() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#757575]"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#757575] hover:text-[#757575]"
               >
                 <X className="h-5 w-5" />
               </button>
             )}
           </div>
           {searchQuery && (
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-[#757575] mt-2">
               找到 {filteredModules.length} 个相关功能
             </p>
           )}
@@ -428,14 +428,14 @@ export default function Academy() {
         {/* 无搜索结果提示 */}
         {searchQuery && filteredModules.length === 0 && (
           <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
-            <p className="text-gray-500">未找到相关功能</p>
-            <p className="text-sm text-gray-400 mt-2">请尝试其他关键词</p>
+            <p className="text-[#757575]">未找到相关功能</p>
+            <p className="text-sm text-[#757575] mt-2">请尝试其他关键词</p>
           </div>
         )}
 
         {/* 底部提示 */}
         <div className="bg-[#FAF3ED] rounded-2xl p-4 shadow-sm">
-          <p className="text-sm text-amber-800 text-center">
+          <p className="text-sm text-[#FFA726] text-center">
             💡 小贴士：如需在使用过程中遇到问题，可以随时返回这里查看相关功能说明。
           </p>
         </div>
@@ -480,7 +480,7 @@ export default function Academy() {
                     <ul className="space-y-2">
                       {selectedModule.content.tips.map((tip, index) => (
                         <li key={index} className="text-sm text-[#757575] flex items-start gap-2">
-                          <span className="text-amber-500 mt-0.5">💡</span>
+                          <span className="text-[#FFA726] mt-0.5">💡</span>
                           <span>{tip}</span>
                         </li>
                       ))}

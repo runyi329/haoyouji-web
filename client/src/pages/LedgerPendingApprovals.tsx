@@ -94,7 +94,7 @@ export default function LedgerPendingApprovals() {
       <div className="p-4">
         {pendingApprovals.length === 0 ? (
           <Card className="bg-white p-8 text-center">
-            <p className="text-gray-500">暂无待审批的记账</p>
+            <p className="text-[#757575]">暂无待审批的记账</p>
           </Card>
         ) : (
           <div className="space-y-3">
@@ -114,16 +114,16 @@ export default function LedgerPendingApprovals() {
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded ${
                           transaction.type === 'income' 
-                            ? 'bg-[#E8F5E9] text-green-700' 
+                            ? 'bg-[#E8F5E9] text-[#4CAF50]' 
                             : 'bg-[#FFEBEE] text-[#D32F2F]'
                         }`}>
                           {transaction.type === 'income' ? '收入' : '支出'}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-[#757575]">
                         {transaction.description || '无备注'}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-[#757575] mt-1">
                         {formatDate(transaction.date)}
                       </p>
                     </div>
@@ -170,7 +170,7 @@ export default function LedgerPendingApprovals() {
           </DialogHeader>
 
           <div className="py-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">
+            <label className="text-sm font-medium text-[#424242] mb-2 block">
               备注（可选）
             </label>
             <Textarea

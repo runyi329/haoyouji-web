@@ -48,7 +48,7 @@ class ErrorBoundary extends Component<Props, State> {
             />
 
             <h2 className="text-xl mb-4">页面出现错误</h2>
-            <p className="text-sm text-gray-600 mb-4">正在尝试自动恢复，或点击下方按钮刷新页面</p>
+            <p className="text-sm text-[#757575] mb-4">正在尝试自动恢复，或点击下方按钮刷新页面</p>
 
             <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
               <pre className="text-sm text-muted-foreground whitespace-break-spaces">

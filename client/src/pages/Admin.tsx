@@ -440,7 +440,7 @@ export default function Admin() {
                           </span>
                         )}
                         {u.role === "baby" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-pink-100 text-pink-600">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-white text-[#D32F2F]">
                             宝宝
                           </span>
                         )}
@@ -502,8 +502,8 @@ export default function Admin() {
                         variant="ghost"
                         className={`w-8 h-8 ${
                           u.inviteEnabled 
-                            ? 'text-[#4CAF50] hover:text-green-700' 
-                            : 'text-gray-400 hover:text-gray-500'
+                            ? 'text-[#4CAF50] hover:text-[#4CAF50]' 
+                            : 'text-[#757575] hover:text-[#757575]'
                         }`}
                         onClick={() => {
                           toggleInvitePermissionMutation.mutate({
@@ -677,22 +677,22 @@ export default function Admin() {
                     <div className="space-y-4">
                       {/* 基本信息 */}
                       <div className="p-4 bg-gray-50 rounded-lg">
-                        <h3 className="text-sm font-medium text-gray-700 mb-3">基本信息</h3>
+                        <h3 className="text-sm font-medium text-[#424242] mb-3">基本信息</h3>
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div>
-                            <span className="text-gray-500">用户名：</span>
+                            <span className="text-[#757575]">用户名：</span>
                             <span className="ml-2 font-medium">{userPaymentData.user?.username}</span>
                           </div>
                           <div>
-                            <span className="text-gray-500">姓名：</span>
+                            <span className="text-[#757575]">姓名：</span>
                             <span className="ml-2 font-medium">{userPaymentData.user?.name || '-'}</span>
                           </div>
                           <div>
-                            <span className="text-gray-500">邮箱：</span>
+                            <span className="text-[#757575]">邮箱：</span>
                             <span className="ml-2 font-medium">{userPaymentData.user?.email || '-'}</span>
                           </div>
                           <div>
-                            <span className="text-gray-500">积分：</span>
+                            <span className="text-[#757575]">积分：</span>
                             <span className="ml-2 font-medium">{userPaymentData.user?.points || 0}</span>
                           </div>
                         </div>
@@ -700,9 +700,9 @@ export default function Admin() {
                       
                       {/* 支付账号 */}
                       {userPaymentData.profile?.payment_method ? (
-                        <div className="p-4 border border-gray-200 rounded-lg">
+                        <div className="p-4 border border-[#E0E0E0] rounded-lg">
                           <div className="flex items-center gap-2 mb-3">
-                            <h3 className="text-sm font-medium text-gray-700">支付账号</h3>
+                            <h3 className="text-sm font-medium text-[#424242]">支付账号</h3>
                             <span className="px-2.5 py-0.5 bg-[#D32F2F] text-white text-xs font-medium rounded">
                               {userPaymentData.profile.payment_method === 'bank_card' && '银行卡'}
                               {userPaymentData.profile.payment_method === 'digital_wallet' && '数字钱包'}
@@ -715,15 +715,15 @@ export default function Admin() {
                           {userPaymentData.profile.payment_method === 'bank_card' && (
                             <div className="space-y-2 text-sm">
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">银行名称：</span>
+                                <span className="text-[#757575] min-w-[100px]">银行名称：</span>
                                 <span className="font-medium">{userPaymentData.profile.bank_name}</span>
                               </div>
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">银行卡号：</span>
+                                <span className="text-[#757575] min-w-[100px]">银行卡号：</span>
                                 <span className="font-medium font-mono">{userPaymentData.profile.bank_account_number}</span>
                               </div>
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">持卡人：</span>
+                                <span className="text-[#757575] min-w-[100px]">持卡人：</span>
                                 <span className="font-medium">{userPaymentData.profile.bank_account_name}</span>
                               </div>
                             </div>
@@ -733,18 +733,18 @@ export default function Admin() {
                           {userPaymentData.profile.payment_method === 'digital_wallet' && (
                             <div className="space-y-2 text-sm">
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">收款网络：</span>
+                                <span className="text-[#757575] min-w-[100px]">收款网络：</span>
                                 <span className="font-medium">{userPaymentData.profile.wallet_network}</span>
                               </div>
                               {userPaymentData.profile.digital_wallet_address && (
                                 <div className="flex items-start">
-                                  <span className="text-gray-500 min-w-[100px] flex-shrink-0">钱包地址：</span>
+                                  <span className="text-[#757575] min-w-[100px] flex-shrink-0">钱包地址：</span>
                                   <span className="font-medium font-mono text-xs break-all">{userPaymentData.profile.digital_wallet_address}</span>
                                 </div>
                               )}
                               {userPaymentData.profile.wallet_qr_code_url && (
                                 <div className="flex items-center">
-                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <span className="text-[#757575] min-w-[100px]">收款码：</span>
                                   <a href={userPaymentData.profile.wallet_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
@@ -756,18 +756,18 @@ export default function Admin() {
                             <div className="space-y-2 text-sm">
                               {userPaymentData.profile.alipay_account && (
                                 <div className="flex items-center">
-                                  <span className="text-gray-500 min-w-[100px]">支付宝账号：</span>
+                                  <span className="text-[#757575] min-w-[100px]">支付宝账号：</span>
                                   <span className="font-medium">{userPaymentData.profile.alipay_account}</span>
                                 </div>
                               )}
                               {userPaymentData.profile.alipay_qr_code_url && (
                                 <div className="flex items-center">
-                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <span className="text-[#757575] min-w-[100px]">收款码：</span>
                                   <a href={userPaymentData.profile.alipay_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">收款人：</span>
+                                <span className="text-[#757575] min-w-[100px]">收款人：</span>
                                 <span className="font-medium">{userPaymentData.profile.alipay_account_name}</span>
                               </div>
                             </div>
@@ -778,19 +778,19 @@ export default function Admin() {
                             <div className="space-y-2 text-sm">
                               {userPaymentData.profile.wechat_qr_code_url && (
                                 <div className="flex items-center">
-                                  <span className="text-gray-500 min-w-[100px]">收款码：</span>
+                                  <span className="text-[#757575] min-w-[100px]">收款码：</span>
                                   <a href={userPaymentData.profile.wechat_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">收款人：</span>
+                                <span className="text-[#757575] min-w-[100px]">收款人：</span>
                                 <span className="font-medium">{userPaymentData.profile.wechat_account_name}</span>
                               </div>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div className="p-4 text-center text-gray-500 text-sm">
+                        <div className="p-4 text-center text-[#757575] text-sm">
                           该用户尚未绑定支付账号
                         </div>
                       )}
@@ -798,22 +798,22 @@ export default function Admin() {
                       {/* 实名认证 */}
                       {userPaymentData.profile?.real_name && (
                         <div className="p-4 bg-gray-50 rounded-lg">
-                          <h3 className="text-sm font-medium text-gray-700 mb-3">实名认证</h3>
+                          <h3 className="text-sm font-medium text-[#424242] mb-3">实名认证</h3>
                           <div className="space-y-2 text-sm">
                             <div className="flex items-center">
-                              <span className="text-gray-500 min-w-[100px]">真实姓名：</span>
+                              <span className="text-[#757575] min-w-[100px]">真实姓名：</span>
                               <span className="font-medium">{userPaymentData.profile.real_name}</span>
                             </div>
                             {userPaymentData.profile.id_card_number && (
                               <div className="flex items-center">
-                                <span className="text-gray-500 min-w-[100px]">身份证号：</span>
+                                <span className="text-[#757575] min-w-[100px]">身份证号：</span>
                                 <span className="font-medium font-mono">{userPaymentData.profile.id_card_number}</span>
                               </div>
                             )}
                             <div className="flex items-center">
-                              <span className="text-gray-500 min-w-[100px]">认证状态：</span>
+                              <span className="text-[#757575] min-w-[100px]">认证状态：</span>
                               <span className={`px-2 py-0.5 text-xs rounded ${
-                                userPaymentData.profile.verification_status === 'verified' ? 'bg-[#E8F5E9] text-green-700' :
+                                userPaymentData.profile.verification_status === 'verified' ? 'bg-[#E8F5E9] text-[#4CAF50]' :
                                 userPaymentData.profile.verification_status === 'pending' ? 'bg-[#FAF3ED] text-[#CBA471]' :
                                 'bg-[#FFEBEE] text-[#D32F2F]'
                               }`}>
@@ -829,20 +829,20 @@ export default function Admin() {
                       {/* 收件地址 */}
                       {userPaymentData.addresses && userPaymentData.addresses.length > 0 && (
                         <div className="p-4 bg-gray-50 rounded-lg">
-                          <h3 className="text-sm font-medium text-gray-700 mb-3">收件地址</h3>
+                          <h3 className="text-sm font-medium text-[#424242] mb-3">收件地址</h3>
                           <div className="space-y-3">
                             {userPaymentData.addresses.map((addr: any, index: number) => (
-                              <div key={index} className="p-3 bg-white border border-gray-200 rounded text-sm">
+                              <div key={index} className="p-3 bg-white border border-[#E0E0E0] rounded text-sm">
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="font-medium">{addr.recipient_name}</span>
-                                  <span className="text-gray-500">{addr.recipient_phone}</span>
+                                  <span className="text-[#757575]">{addr.recipient_phone}</span>
                                   {addr.is_default && (
                                     <span className="px-2 py-0.5 bg-[#D32F2F] text-white text-xs rounded">默认</span>
                                   )}
                                 </div>
-                                <p className="text-gray-600">{addr.address}</p>
+                                <p className="text-[#757575]">{addr.address}</p>
                                 {addr.postal_code && (
-                                  <p className="text-gray-500 text-xs mt-1">邮编：{addr.postal_code}</p>
+                                  <p className="text-[#757575] text-xs mt-1">邮编：{addr.postal_code}</p>
                                 )}
                               </div>
                             ))}
@@ -949,7 +949,7 @@ export default function Admin() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-bold">股权激励管理</h2>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-[#757575] mb-4">
                 管理投资股东的资金记录、查看股东股权总览、配置股份池规则。
               </p>
               <Link href="/admin/equity">

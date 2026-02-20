@@ -202,9 +202,9 @@ export function InvitationManager() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">已关闭</p>
-                <p className="text-2xl font-bold text-gray-400">{stats.disabled}</p>
+                <p className="text-2xl font-bold text-[#757575]">{stats.disabled}</p>
               </div>
-              <XCircle className="w-8 h-8 text-gray-400" />
+              <XCircle className="w-8 h-8 text-[#757575]" />
             </div>
           </CardContent>
         </Card>

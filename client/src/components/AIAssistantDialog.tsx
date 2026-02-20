@@ -167,7 +167,7 @@ export function AIAssistantDialog({ open, onOpenChange }: AIAssistantDialogProps
               </div>
               {message.role === "user" && (
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                  <User className="h-4 w-4 text-gray-600" />
+                  <User className="h-4 w-4 text-[#757575]" />
                 </div>
               )}
             </div>

@@ -137,7 +137,7 @@ export default function RewardsManagement() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/parent")}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            className="flex items-center gap-2 text-[#757575] hover:text-[#424242]"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>返回家长中心</span>
@@ -231,7 +231,7 @@ export default function RewardsManagement() {
                       {reward.description || "暂无描述"}
                     </p>
                     <div className="flex items-center gap-2 mb-4">
-                      <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                      <Star className="w-5 h-5 text-[#FFA726] fill-amber-500" />
                       <span className="font-bold text-[#CBA471]">{reward.pointsCost} 颗星星</span>
                     </div>
                     <div className="flex gap-2 w-full">
@@ -261,8 +261,8 @@ export default function RewardsManagement() {
           )}
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-[#FAF3ED] border border-amber-200">
-            <p className="text-sm text-amber-800">
+          <div className="mt-6 p-4 rounded-lg bg-[#FAF3ED] border border-[#FFA726]">
+            <p className="text-sm text-[#FFA726]">
               <strong>提示：</strong>在这里添加和管理您为宝贝准备的奖品。宝贝可以用游戏获得的星星在"星星商城"兑换这些奖品。
             </p>
           </div>

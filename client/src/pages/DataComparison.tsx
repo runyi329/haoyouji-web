@@ -379,11 +379,11 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 
         {/* 图表 */}
         {isLoading ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             加载中...
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             暂无数据
           </div>
         ) : (
@@ -567,18 +567,18 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
 
             {layerLoading ? (
 
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
 
             ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
             <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>建议行动</th>
             </tr>
           </thead>
           <tbody>
@@ -593,30 +593,30 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
               
               return (
                 <tr key={index} className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">
                     <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
-                    <div className="text-xs text-gray-500">{config.days}</div>
+                    <div className="text-xs text-[#757575]">{config.days}</div>
                   </td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
-                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
                 </tr>
               );
             })}
             <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
-              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
             </tr>
           </tbody>
         </table>
         </div>
         ) : (
 
-          <div className="text-center py-8 text-gray-400">暂无数据</div>
+          <div className="text-center py-8 text-[#757575]">暂无数据</div>
 
         )}
 
@@ -627,60 +627,60 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
         {tableType === "health" && (
           <>
             {healthLoading ? (
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
             ) : healthData ? (
               <div className="overflow-x-auto -mx-2.5 px-2.5">
                 <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
                   <thead>
                     <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>健康状态</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.thirtyDayInteractionRate.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.averageInteractionFrequency.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.dormantContactsCount.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.needsFollowUpCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.needsFollowUpCount.status === '预警' ? 'text-[#D32F2F]' : 'text-[#D32F2F] font-bold'
                       }`}>{healthData.needsFollowUpCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-[#4CAF50]' : 
                         healthData.highValueInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 'text-[#CBA471]'
                       }`}>{healthData.highValueInteractionRate.status}</td>
@@ -689,7 +689,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
                 </table>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">暂无数据</div>
+              <div className="text-center py-8 text-[#757575]">暂无数据</div>
             )}
           </>
         )}
@@ -699,48 +699,48 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
             <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
               <thead>
                 <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>说明</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">高质量互动</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">高质量互动</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">主要沟通方式</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">轻量维护</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">信息更新</td>
                 </tr>
                 <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
-                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
                 </tr>
               </tbody>
             </table>
@@ -1008,11 +1008,11 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 
         {/* 图表 */}
         {isLoading ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             加载中...
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             暂无数据
           </div>
         ) : (
@@ -1197,18 +1197,18 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
 
             {layerLoading ? (
 
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
 
             ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
             <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>建议行动</th>
             </tr>
           </thead>
           <tbody>
@@ -1223,30 +1223,30 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
               
               return (
                 <tr key={index} className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">
                     <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
-                    <div className="text-xs text-gray-500">{config.days}</div>
+                    <div className="text-xs text-[#757575]">{config.days}</div>
                   </td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
-                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
                 </tr>
               );
             })}
             <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
-              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
             </tr>
           </tbody>
         </table>
         </div>
         ) : (
 
-          <div className="text-center py-8 text-gray-400">暂无数据</div>
+          <div className="text-center py-8 text-[#757575]">暂无数据</div>
 
         )}
 
@@ -1257,60 +1257,60 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
         {tableType === "health" && (
           <>
             {healthLoading ? (
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
             ) : healthData ? (
               <div className="overflow-x-auto -mx-2.5 px-2.5">
                 <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
                   <thead>
                     <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>健康状态</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.thirtyDayInteractionRate.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.averageInteractionFrequency.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.dormantContactsCount.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.needsFollowUpCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.needsFollowUpCount.status === '预警' ? 'text-[#D32F2F]' : 'text-[#D32F2F] font-bold'
                       }`}>{healthData.needsFollowUpCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-[#4CAF50]' : 
                         healthData.highValueInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 'text-[#CBA471]'
                       }`}>{healthData.highValueInteractionRate.status}</td>
@@ -1319,7 +1319,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
                 </table>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">暂无数据</div>
+              <div className="text-center py-8 text-[#757575]">暂无数据</div>
             )}
           </>
         )}
@@ -1329,48 +1329,48 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
             <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
               <thead>
                 <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>说明</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">高质量互动</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">高质量互动</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">主要沟通方式</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">轻量维护</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">信息更新</td>
                 </tr>
                 <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
-                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
                 </tr>
               </tbody>
             </table>
@@ -1638,11 +1638,11 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
 
         {/* 图表 */}
         {isLoading ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             加载中...
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-[250px] flex items-center justify-center text-gray-400">
+          <div className="h-[250px] flex items-center justify-center text-[#757575]">
             暂无数据
           </div>
         ) : (
@@ -1827,18 +1827,18 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
 
             {layerLoading ? (
 
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
 
             ) : layerData ? (
         <div className="overflow-x-auto -mx-2.5 px-2.5">
           <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
           <thead>
             <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>关系层级</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>人数</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>频率</th>
-              <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>建议行动</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>关系层级</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>人数</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>频率</th>
+              <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>建议行动</th>
             </tr>
           </thead>
           <tbody>
@@ -1853,30 +1853,30 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
               
               return (
                 <tr key={index} className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">
                     <div className="font-medium" style={{ color: config.color || themeColors.text }}>{layer.layer}</div>
-                    <div className="text-xs text-gray-500">{config.days}</div>
+                    <div className="text-xs text-[#757575]">{config.days}</div>
                   </td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{layer.count}</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.percentage}%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">{layer.avgDays}天</td>
-                  <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{layer.count}</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.percentage}%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">{layer.avgDays}天</td>
+                  <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${config.actionColor || ''}`}>{config.action || ''}</td>
                 </tr>
               );
             })}
             <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-              <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
-              <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.total}</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+              <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>{layerData.totalAvgDays}天</td>
+              <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
             </tr>
           </tbody>
         </table>
         </div>
         ) : (
 
-          <div className="text-center py-8 text-gray-400">暂无数据</div>
+          <div className="text-center py-8 text-[#757575]">暂无数据</div>
 
         )}
 
@@ -1887,60 +1887,60 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
         {tableType === "health" && (
           <>
             {healthLoading ? (
-              <div className="text-center py-8 text-gray-400">加载中...</div>
+              <div className="text-center py-8 text-[#757575]">加载中...</div>
             ) : healthData ? (
               <div className="overflow-x-auto -mx-2.5 px-2.5">
                 <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
                   <thead>
                     <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>指标</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>数值</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>趋势</th>
-                      <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>健康状态</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>指标</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>数值</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>趋势</th>
+                      <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>健康状态</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">30天互动率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">30天互动率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.thirtyDayInteractionRate.value} {healthData.thirtyDayInteractionRate.detail}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.thirtyDayInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.thirtyDayInteractionRate.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">平均互动频率</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.averageInteractionFrequency.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#CBA471]">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.averageInteractionFrequency.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">失联人脉数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">失联人脉数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.dormantContactsCount.value} {healthData.dormantContactsCount.percentage}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.dormantContactsCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.dormantContactsCount.status === '注意' ? 'text-[#CBA471]' : 'text-[#D32F2F]'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">待跟进承诺数</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.needsFollowUpCount.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">待跟进承诺数</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.needsFollowUpCount.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#D32F2F]">{healthData.needsFollowUpCount.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.needsFollowUpCount.status === '良好' ? 'text-[#4CAF50]' : 
                         healthData.needsFollowUpCount.status === '预警' ? 'text-[#D32F2F]' : 'text-[#D32F2F] font-bold'
                       }`}>{healthData.needsFollowUpCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">高价值互动占比</td>
-                      <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.highValueInteractionRate.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
-                      <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">高价值互动占比</td>
+                      <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">{healthData.highValueInteractionRate.value}</td>
+                      <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">{healthData.highValueInteractionRate.trend}</td>
+                      <td className={`text-center py-2 px-1.5 border border-[#E0E0E0] align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-[#4CAF50]' : 
                         healthData.highValueInteractionRate.status === '良好' ? 'text-[#4CAF50]' : 'text-[#CBA471]'
                       }`}>{healthData.highValueInteractionRate.status}</td>
@@ -1949,7 +1949,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
                 </table>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">暂无数据</div>
+              <div className="text-center py-8 text-[#757575]">暂无数据</div>
             )}
           </>
         )}
@@ -1959,48 +1959,48 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
             <table className="w-full border-collapse" style={{ fontSize: 'clamp(0.7rem, 3.2vw, 0.875rem)', border: '1px solid #e5e7eb' }}>
               <thead>
                 <tr className="border-b-2" style={{ borderColor: themeColors.primary, backgroundColor: '#f3f4f6' }}>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>互动类型</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>次数</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>占比</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>平均重要性</th>
-                  <th className="text-center py-1.5 px-1.5 font-semibold border border-gray-200 align-middle" style={{ color: themeColors.text }}>说明</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>互动类型</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>次数</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>占比</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>平均重要性</th>
+                  <th className="text-center py-1.5 px-1.5 font-semibold border border-[#E0E0E0] align-middle" style={{ color: themeColors.text }}>说明</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">会议/见面</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">85</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">28%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">4.2</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-[#4CAF50]">高质量互动</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">会议/见面</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">85</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">28%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">4.2</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle text-[#4CAF50]">高质量互动</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">电话沟通</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">120</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">40%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.1</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">主要沟通方式</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">电话沟通</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">120</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">40%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.1</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">主要沟通方式</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">消息往来</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">65</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">22%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">2.5</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">轻量维护</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">消息往来</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">65</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">22%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">2.5</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">轻量维护</td>
                 </tr>
                 <tr className="border-b hover:bg-gray-50">
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">添加备注</td>
-                  <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">30</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">10%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">3.8</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">信息更新</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">添加备注</td>
+                  <td className="text-center py-2 px-1.5 font-medium border border-[#E0E0E0] align-middle">30</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">10%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">3.8</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle">信息更新</td>
                 </tr>
                 <tr className="font-bold" style={{ backgroundColor: `${themeColors.primary}10` }}>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>总计</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>300</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>100%</td>
-                  <td className="text-center py-2 px-1.5 border border-gray-200 align-middle" style={{ color: themeColors.primary }}>3.4</td>
-                  <td className="py-2 px-1.5 border border-gray-200 align-middle"></td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>总计</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>300</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>100%</td>
+                  <td className="text-center py-2 px-1.5 border border-[#E0E0E0] align-middle" style={{ color: themeColors.primary }}>3.4</td>
+                  <td className="py-2 px-1.5 border border-[#E0E0E0] align-middle"></td>
                 </tr>
               </tbody>
             </table>

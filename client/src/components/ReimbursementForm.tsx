@@ -168,54 +168,54 @@ export default function ReimbursementForm({
           </div>
 
           {/* 日期行 */}
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-gray-200">
-            <div className="flex items-center gap-1 text-sm text-gray-600">
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-[#E0E0E0]">
+            <div className="flex items-center gap-1 text-sm text-[#757575]">
               <span>发生日期：</span>
-              <span className="font-medium text-gray-900">{date.year}</span>
+              <span className="font-medium text-[#424242]">{date.year}</span>
               <span>年</span>
-              <span className="font-medium text-gray-900">{date.month}</span>
+              <span className="font-medium text-[#424242]">{date.month}</span>
               <span>月</span>
-              <span className="font-medium text-gray-900">{date.day}</span>
+              <span className="font-medium text-[#424242]">{date.day}</span>
               <span>日</span>
             </div>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-[#757575]">
               {transactionType === 'expense' ? '支出' : '收入'}
             </div>
           </div>
 
           {/* 报销内容 */}
-          <div className="px-4 py-3 border-b border-gray-200">
-            <label className="text-xs text-gray-500 mb-1.5 block">报销内容</label>
+          <div className="px-4 py-3 border-b border-[#E0E0E0]">
+            <label className="text-xs text-[#757575] mb-1.5 block">报销内容</label>
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="请填写报销内容..."
-              className="min-h-[60px] text-sm border-gray-300 bg-gray-50 focus:bg-white"
+              className="min-h-[60px] text-sm border-[#E0E0E0] bg-gray-50 focus:bg-white"
             />
           </div>
 
           {/* 金额区域 - 模拟纸质报销单 */}
-          <div className="px-4 py-3 border-b border-gray-200">
+          <div className="px-4 py-3 border-b border-[#E0E0E0]">
             <div className="flex items-center gap-3 mb-2">
               <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1.5 block">金额（元）</label>
+                <label className="text-xs text-[#757575] mb-1.5 block">金额（元）</label>
                 <Input
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="text-lg font-bold text-[#A80000] border-gray-300 bg-gray-50 focus:bg-white"
+                  className="text-lg font-bold text-[#A80000] border-[#E0E0E0] bg-gray-50 focus:bg-white"
                   step="0.01"
                 />
               </div>
               <div className="w-20">
-                <label className="text-xs text-gray-500 mb-1.5 block">单据张数</label>
+                <label className="text-xs text-[#757575] mb-1.5 block">单据张数</label>
                 <Input
                   type="number"
                   value={receiptCount}
                   onChange={(e) => setReceiptCount(e.target.value)}
                   placeholder="1"
-                  className="text-center border-gray-300 bg-gray-50 focus:bg-white"
+                  className="text-center border-[#E0E0E0] bg-gray-50 focus:bg-white"
                   min="0"
                 />
               </div>
@@ -223,26 +223,26 @@ export default function ReimbursementForm({
             {/* 大写金额 */}
             <div className="bg-[#FFF8F0] rounded-md px-3 py-2 mt-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 flex-shrink-0">合计人民币（大写）：</span>
+                <span className="text-xs text-[#757575] flex-shrink-0">合计人民币（大写）：</span>
                 <span className="text-sm font-medium text-[#A80000]">{amountToChinese(amountNum)}</span>
               </div>
             </div>
           </div>
 
           {/* 备注 */}
-          <div className="px-4 py-3 border-b border-gray-200">
-            <label className="text-xs text-gray-500 mb-1.5 block">备注</label>
+          <div className="px-4 py-3 border-b border-[#E0E0E0]">
+            <label className="text-xs text-[#757575] mb-1.5 block">备注</label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="补充说明（选填）..."
-              className="min-h-[40px] text-sm border-gray-300 bg-gray-50 focus:bg-white"
+              className="min-h-[40px] text-sm border-[#E0E0E0] bg-gray-50 focus:bg-white"
             />
           </div>
 
           {/* 附件凭证 */}
-          <div className="px-4 py-3 border-b border-gray-200">
-            <label className="text-xs text-gray-500 mb-1.5 block">记账凭证附件</label>
+          <div className="px-4 py-3 border-b border-[#E0E0E0]">
+            <label className="text-xs text-[#757575] mb-1.5 block">记账凭证附件</label>
             <input
               ref={fileRef}
               type="file"
@@ -255,7 +255,7 @@ export default function ReimbursementForm({
                 <img
                   src={voucherImage}
                   alt="凭证"
-                  className="w-16 h-16 object-cover rounded border border-gray-300"
+                  className="w-16 h-16 object-cover rounded border border-[#E0E0E0]"
                 />
                 <div className="flex flex-col gap-1.5">
                   <button
@@ -275,7 +275,7 @@ export default function ReimbursementForm({
             ) : (
               <button
                 onClick={() => fileRef.current?.click()}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors"
+                className="w-full py-3 border-2 border-dashed border-[#E0E0E0] rounded-lg text-sm text-[#757575] hover:border-[#E0E0E0] hover:text-[#757575] transition-colors"
               >
                 + 点击上传凭证图片（选填）
               </button>
@@ -284,14 +284,14 @@ export default function ReimbursementForm({
 
           {/* 签署区域 */}
           <div className="px-4 py-3 bg-gray-50">
-            <div className="grid grid-cols-2 gap-3 text-xs text-gray-500">
+            <div className="grid grid-cols-2 gap-3 text-xs text-[#757575]">
               <div className="flex items-center gap-1">
                 <span>报销人：</span>
-                <span className="text-gray-900 font-medium">（提交后自动签署）</span>
+                <span className="text-[#424242] font-medium">（提交后自动签署）</span>
               </div>
               <div className="flex items-center gap-1">
                 <span>主管审批：</span>
-                <span className="text-gray-400">待审批</span>
+                <span className="text-[#757575]">待审批</span>
               </div>
             </div>
           </div>

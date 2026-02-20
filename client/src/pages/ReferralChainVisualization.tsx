@@ -141,7 +141,7 @@ export default function ReferralChainVisualization() {
           返回
         </Button>
         <Card className="p-6 text-center">
-          <p className="text-gray-500">暂无推荐链路数据</p>
+          <p className="text-[#757575]">暂无推荐链路数据</p>
         </Card>
       </div>
     );
@@ -150,7 +150,7 @@ export default function ReferralChainVisualization() {
   return (
     <div className="flex flex-col h-screen bg-white">
       {/* 顶部导航 */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-[#E0E0E0]">
         <Button
           variant="ghost"
           size="sm"
@@ -161,7 +161,7 @@ export default function ReferralChainVisualization() {
           返回
         </Button>
         <h1 className="text-xl font-bold">{chainData.name} 的推荐链路</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-[#757575] mt-1">
           直接推荐: {chainData.directReferrals} 人 | 间接推荐: {chainData.indirectReferrals} 人
         </p>
       </div>
@@ -174,8 +174,8 @@ export default function ReferralChainVisualization() {
       />
 
       {/* 图例说明 */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <div className="text-sm text-gray-600">
+      <div className="p-4 border-t border-[#E0E0E0] bg-gray-50">
+        <div className="text-sm text-[#757575]">
           <p className="mb-2">📊 推荐链路说明：</p>
           <ul className="list-disc list-inside space-y-1 text-xs">
             <li>蓝色节点表示推荐关系中的人脉</li>

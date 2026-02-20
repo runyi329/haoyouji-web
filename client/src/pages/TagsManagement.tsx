@@ -73,7 +73,7 @@ function SortableTagItem({
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          className="cursor-grab active:cursor-grabbing text-[#757575] hover:text-[#757575]"
         >
           <GripVertical className="w-5 h-5" />
         </div>
@@ -266,7 +266,7 @@ export default function TagsManagement() {
           <CardContent className="space-y-4">
             {/* 新建标签表单 */}
             {isCreating && (
-              <div className="p-4 bg-cyan-50 rounded-lg space-y-3">
+              <div className="p-4 bg-white rounded-lg space-y-3">
                 <Input
                   placeholder="标签名称"
                   value={newTagName}
@@ -278,7 +278,7 @@ export default function TagsManagement() {
                     <button
                       key={color.value}
                       className={`w-6 h-6 rounded-full border-2 ${
-                        newTagColor === color.value ? "border-gray-800 ring-2 ring-offset-2 ring-gray-400" : "border-transparent"
+                        newTagColor === color.value ? "border-[#E0E0E0] ring-2 ring-offset-2 ring-gray-400" : "border-transparent"
                       }`}
                       style={{ backgroundColor: color.value }}
                       onClick={() => setNewTagColor(color.value)}
@@ -301,7 +301,7 @@ export default function TagsManagement() {
 
             {/* 编辑标签表单 */}
             {editingTag && (
-              <div className="p-4 bg-cyan-50 rounded-lg space-y-3">
+              <div className="p-4 bg-white rounded-lg space-y-3">
                 <Input
                   placeholder="标签名称"
                   value={editingTag.name}
@@ -313,7 +313,7 @@ export default function TagsManagement() {
                     <button
                       key={color.value}
                       className={`w-6 h-6 rounded-full border-2 ${
-                        editingTag.color === color.value ? "border-gray-800 ring-2 ring-offset-2 ring-gray-400" : "border-transparent"
+                        editingTag.color === color.value ? "border-[#E0E0E0] ring-2 ring-offset-2 ring-gray-400" : "border-transparent"
                       }`}
                       style={{ backgroundColor: color.value }}
                       onClick={() => setEditingTag({ ...editingTag, color: color.value })}

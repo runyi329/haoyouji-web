@@ -77,14 +77,14 @@ export default function LedgerInvite() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: `${themeColors.primary}15` }}>
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-[#E0E0E0] sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center">
           <Link href={`/ledger/${id}/settings`}>
             <button className="p-2 -ml-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <ChevronLeft className="w-6 h-6 text-gray-800" />
+              <ChevronLeft className="w-6 h-6 text-[#424242]" />
             </button>
           </Link>
-          <h1 className="flex-1 text-center text-lg font-semibold text-gray-800">
+          <h1 className="flex-1 text-center text-lg font-semibold text-[#424242]">
             邀请伙伴
           </h1>
           <div className="w-10" /> {/* 占位，保持标题居中 */}
@@ -96,20 +96,20 @@ export default function LedgerInvite() {
         {/* 账本信息 */}
         <Card className="p-6 bg-white">
           <h2 className="text-xl font-bold mb-2" style={{ color: themeColors.text }}>{ledger.name}</h2>
-          <p className="text-gray-600">邀请伙伴一起记账</p>
+          <p className="text-[#757575]">邀请伙伴一起记账</p>
         </Card>
 
         {/* 二维码 */}
         <Card className="p-6 bg-white flex flex-col items-center">
           <h3 className="text-lg font-semibold mb-4" style={{ color: themeColors.text }}>扫描二维码加入</h3>
           {qrCodeUrl ? (
-            <img src={qrCodeUrl} alt="邀请二维码" className="w-64 h-64 border-4 border-gray-200 rounded-lg" />
+            <img src={qrCodeUrl} alt="邀请二维码" className="w-64 h-64 border-4 border-[#E0E0E0] rounded-lg" />
           ) : (
             <div className="w-64 h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500">生成二维码中...</p>
+              <p className="text-[#757575]">生成二维码中...</p>
             </div>
           )}
-          <p className="text-sm text-gray-500 mt-4 text-center">
+          <p className="text-sm text-[#757575] mt-4 text-center">
             使用脉动APP扫描二维码即可加入账本
           </p>
         </Card>
@@ -117,7 +117,7 @@ export default function LedgerInvite() {
         {/* 邀请链接 */}
         <Card className="p-6 bg-white">
           <h3 className="text-lg font-semibold mb-4" style={{ color: themeColors.text }}>邀请链接</h3>
-          <div className="bg-gray-50 p-3 rounded-lg mb-4 break-all text-sm text-gray-700">
+          <div className="bg-gray-50 p-3 rounded-lg mb-4 break-all text-sm text-[#424242]">
             {inviteLink || "生成链接中..."}
           </div>
           <div className="flex gap-3">
@@ -154,7 +154,7 @@ export default function LedgerInvite() {
         {/* 提示信息 */}
         <Card className="p-6 bg-white">
           <h3 className="text-lg font-semibold mb-3" style={{ color: themeColors.text }}>温馨提示</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <ul className="space-y-2 text-sm text-[#757575]">
             <li className="flex items-start">
               <span className="mr-2" style={{ color: themeColors.primary }}>•</span>
               <span>被邀请人必须先注册脉动账号才能加入账本</span>

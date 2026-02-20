@@ -172,7 +172,7 @@ export default function CompanyEquityPieChart({ parts }: CompanyEquityPieChartPr
                   />
                   
                   {/* 股东名称 */}
-                  <span className="text-xs font-semibold text-gray-700">
+                  <span className="text-xs font-semibold text-[#424242]">
                     {part.label}：
                   </span>
                   
@@ -189,7 +189,7 @@ export default function CompanyEquityPieChart({ parts }: CompanyEquityPieChartPr
                 </div>
                 
                 {/* 备注信息 */}
-                <div className="text-[10px] text-gray-400 mt-0.5 ml-4">
+                <div className="text-[10px] text-[#757575] mt-0.5 ml-4">
                   {part.description}
                 </div>
               </div>

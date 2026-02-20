@@ -74,44 +74,44 @@ export default function ReferrerLeaderboard() {
         {/* 排行榜卡片 */}
         <Card className="p-6">
           {isLoading ? (
-            <div className="text-center py-12 text-gray-500">加载中...</div>
+            <div className="text-center py-12 text-[#757575]">加载中...</div>
           ) : sortedStats.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-[#757575]">
               暂无介绍人数据
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b-2 border-gray-200">
-                    <th className="py-3 px-4 text-left font-semibold text-gray-700">
+                  <tr className="border-b-2 border-[#E0E0E0]">
+                    <th className="py-3 px-4 text-left font-semibold text-[#424242]">
                       排名
                     </th>
-                    <th className="py-3 px-4 text-left font-semibold text-gray-700">
+                    <th className="py-3 px-4 text-left font-semibold text-[#424242]">
                       姓名
                     </th>
                     <th
-                      className="py-3 px-4 text-center font-semibold text-gray-700 cursor-pointer hover:bg-gray-50"
+                      className="py-3 px-4 text-center font-semibold text-[#424242] cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort("direct")}
                     >
                       直接推荐
                       <SortIcon field="direct" />
                     </th>
                     <th
-                      className="py-3 px-4 text-center font-semibold text-gray-700 cursor-pointer hover:bg-gray-50"
+                      className="py-3 px-4 text-center font-semibold text-[#424242] cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort("indirect")}
                     >
                       间接推荐
                       <SortIcon field="indirect" />
                     </th>
                     <th
-                      className="py-3 px-4 text-center font-semibold text-gray-700 cursor-pointer hover:bg-gray-50"
+                      className="py-3 px-4 text-center font-semibold text-[#424242] cursor-pointer hover:bg-gray-50"
                       onClick={() => handleSort("total")}
                     >
                       总计
                       <SortIcon field="total" />
                     </th>
-                    <th className="py-3 px-4 text-center font-semibold text-gray-700">
+                    <th className="py-3 px-4 text-center font-semibold text-[#424242]">
                       贡献分
                     </th>
                   </tr>
@@ -124,7 +124,7 @@ export default function ReferrerLeaderboard() {
                     return (
                       <tr
                         key={stat.contactId}
-                        className="border-b border-gray-100 hover:bg-indigo-50 cursor-pointer transition-colors"
+                        className="border-b border-[#E0E0E0] hover:bg-white cursor-pointer transition-colors"
                         onClick={() =>
                           setLocation(`/parent/contacts/${stat.contactId}`)
                         }
@@ -133,12 +133,12 @@ export default function ReferrerLeaderboard() {
                           {isTopThree ? (
                             <span className="text-2xl">{medals[index]}</span>
                           ) : (
-                            <span className="text-gray-600 font-medium">
+                            <span className="text-[#757575] font-medium">
                               {index + 1}
                             </span>
                           )}
                         </td>
-                        <td className="py-4 px-4 font-medium text-gray-900">
+                        <td className="py-4 px-4 font-medium text-[#424242]">
                           {stat.contactName}
                         </td>
                         <td className="py-4 px-4 text-center text-[#1976D2] font-semibold">
@@ -147,7 +147,7 @@ export default function ReferrerLeaderboard() {
                         <td className="py-4 px-4 text-center text-[#D32F2F] font-semibold">
                           {stat.indirectCount}人
                         </td>
-                        <td className="py-4 px-4 text-center text-indigo-700 font-bold">
+                        <td className="py-4 px-4 text-center text-[#1976D2] font-bold">
                           {totalCount}人
                         </td>
                         <td className="py-4 px-4 text-center text-[#4CAF50] font-bold">
@@ -163,7 +163,7 @@ export default function ReferrerLeaderboard() {
         </Card>
 
         {/* 说明文字 */}
-        <div className="mt-6 text-sm text-gray-600 space-y-2">
+        <div className="mt-6 text-sm text-[#757575] space-y-2">
           <p>
             <strong>直接推荐：</strong>该介绍人直接推荐的人脉数量（一度人脉）
           </p>
@@ -175,7 +175,7 @@ export default function ReferrerLeaderboard() {
             <strong>贡献分：</strong>
             综合考虑直接和间接推荐的加权得分（权重可配置）
           </p>
-          <p className="text-indigo-600">
+          <p className="text-[#1976D2]">
             💡 点击任意行可查看该介绍人的详细信息
           </p>
         </div>

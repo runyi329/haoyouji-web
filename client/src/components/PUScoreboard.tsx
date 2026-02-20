@@ -41,8 +41,8 @@ export default function PUScoreboard({
     <div className="space-y-3">
       {/* 标题 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-700">贡献积分（PU）实时看板</h3>
-        <div className="flex items-center space-x-1 text-xs text-gray-400">
+        <h3 className="text-sm font-semibold text-[#424242]">贡献积分（PU）实时看板</h3>
+        <div className="flex items-center space-x-1 text-xs text-[#757575]">
           <div className="w-1.5 h-1.5 rounded-full bg-[#4CAF50] animate-pulse" />
           <span>实时同步</span>
         </div>
@@ -54,17 +54,17 @@ export default function PUScoreboard({
           {/* 当前总积分 */}
           <div className="text-center">
             <div className="flex items-center justify-center space-x-1 mb-1">
-              <Sparkles className="w-3 h-3 text-yellow-400" />
+              <Sparkles className="w-3 h-3 text-[#FFA726]" />
               <span className="text-xs opacity-70">总积分</span>
             </div>
-            <div className="text-2xl font-bold text-yellow-400">{currentPU.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-[#FFA726]">{currentPU.toLocaleString()}</div>
             <div className="text-[10px] opacity-60 mt-0.5">PU</div>
           </div>
 
           {/* 当前排名 */}
           <div className="text-center border-l border-r border-white/20">
             <div className="flex items-center justify-center space-x-1 mb-1">
-              <Trophy className="w-3 h-3 text-orange-400" />
+              <Trophy className="w-3 h-3 text-[#FFA726]" />
               <span className="text-xs opacity-70">当前排名</span>
             </div>
             <div className="flex items-center justify-center space-x-1">
@@ -77,10 +77,10 @@ export default function PUScoreboard({
           {/* 距离下一等级 */}
           <div className="text-center">
             <div className="flex items-center justify-center space-x-1 mb-1">
-              <Target className="w-3 h-3 text-green-400" />
+              <Target className="w-3 h-3 text-[#4CAF50]" />
               <span className="text-xs opacity-70">距下一级</span>
             </div>
-            <div className="text-2xl font-bold text-green-400">{remainingPU}</div>
+            <div className="text-2xl font-bold text-[#4CAF50]">{remainingPU}</div>
             <div className="text-[10px] opacity-60 mt-0.5">PU</div>
           </div>
         </div>
@@ -110,22 +110,22 @@ export default function PUScoreboard({
       </div>
 
       {/* 等级权益说明 */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-200">
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-3 border border-[#FFA726]">
         <div className="flex items-start space-x-2">
-          <TrendingUp className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+          <TrendingUp className="w-4 h-4 text-[#FFA726] flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h4 className="text-xs font-semibold text-gray-900 mb-1">升级至"{nextLevelName}"后可获得</h4>
-            <ul className="text-xs text-gray-600 space-y-0.5">
+            <h4 className="text-xs font-semibold text-[#424242] mb-1">升级至"{nextLevelName}"后可获得</h4>
+            <ul className="text-xs text-[#757575] space-y-0.5">
               <li className="flex items-center space-x-1">
-                <span className="text-orange-600">•</span>
+                <span className="text-[#FFA726]">•</span>
                 <span>额外股权加成 +0.05%</span>
               </li>
               <li className="flex items-center space-x-1">
-                <span className="text-orange-600">•</span>
+                <span className="text-[#FFA726]">•</span>
                 <span>专属勋章与身份标识</span>
               </li>
               <li className="flex items-center space-x-1">
-                <span className="text-orange-600">•</span>
+                <span className="text-[#FFA726]">•</span>
                 <span>优先参与公司重大决策</span>
               </li>
             </ul>
@@ -134,9 +134,9 @@ export default function PUScoreboard({
       </div>
 
       {/* 排名变化趋势（模拟数据） */}
-      <div className="bg-white rounded-lg p-3 border border-gray-200">
+      <div className="bg-white rounded-lg p-3 border border-[#E0E0E0]">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-gray-700">近7日排名趋势</span>
+          <span className="text-xs font-semibold text-[#424242]">近7日排名趋势</span>
           <span className="text-xs text-[#4CAF50] font-semibold flex items-center space-x-1">
             <TrendingUp className="w-3 h-3" />
             <span>↑ 上升3位</span>
@@ -153,7 +153,7 @@ export default function PUScoreboard({
                   }`}
                   style={{ height: `${height}%` }}
                 />
-                <span className="text-[9px] text-gray-400 mt-1">
+                <span className="text-[9px] text-[#757575] mt-1">
                   {index === 0 ? '7天前' : index === 6 ? '今天' : ''}
                 </span>
               </div>

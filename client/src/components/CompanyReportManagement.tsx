@@ -562,7 +562,7 @@ export default function CompanyReportManagement() {
                         <div className="flex items-center gap-2">
                           <span>{company.companyName}</span>
                           {company.duplicateCount > 1 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white text-[#FFA726]">
                               重复 {company.duplicateCount}
                             </span>
                           )}
@@ -572,11 +572,11 @@ export default function CompanyReportManagement() {
                       <TableCell>{company.userName}</TableCell>
                       <TableCell>
                         {company.reportId ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[#E8F5E9] text-green-800">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[#E8F5E9] text-[#4CAF50]">
                             ✓ 已上传
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-[#757575]">
                             未上传
                           </span>
                         )}
@@ -645,7 +645,7 @@ export default function CompanyReportManagement() {
           {/* 移动端卡片视图 */}
           <div className="md:hidden space-y-3">
             {paginatedCompanies.map((company, index) => (
-              <Card key={`${company.contactId}-${index}`} className={company.duplicateCount > 1 ? 'border-amber-200 bg-amber-50/30' : ''}>
+              <Card key={`${company.contactId}-${index}`} className={company.duplicateCount > 1 ? 'border-[#FFA726] bg-white/30' : ''}>
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     {/* 公司信息 */}
@@ -653,7 +653,7 @@ export default function CompanyReportManagement() {
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-semibold">{company.companyName}</h4>
                         {company.duplicateCount > 1 && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white text-[#FFA726]">
                             重复 {company.duplicateCount}
                           </span>
                         )}
@@ -666,7 +666,7 @@ export default function CompanyReportManagement() {
                           ✓ 已上传报告
                         </p>
                       ) : (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-[#757575] mt-1">
                           未上传报告
                         </p>
                       )}
@@ -831,10 +831,10 @@ export default function CompanyReportManagement() {
 
             {/* 上传进度显示 */}
             {uploadingCompany === uploadingCompanyData?.companyName && (
-              <div className="space-y-2 p-3 bg-[#F5F5F5] rounded-lg border border-blue-200">
+              <div className="space-y-2 p-3 bg-[#F5F5F5] rounded-lg border border-[#1976D2]">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-[#424242]">{getUploadStatusText()}</span>
-                  <span className="text-blue-700">{uploadProgress}%</span>
+                  <span className="text-[#1976D2]">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
                 {uploadStatus === 'analyzing' && (

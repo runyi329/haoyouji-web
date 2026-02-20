@@ -122,7 +122,7 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-amber-500" />
+            <Trophy className="w-5 h-5 text-[#FFA726]" />
             {step === "setup" ? "设置有奖挑战" : "家长密码验证"}
           </DialogTitle>
           <DialogDescription>
@@ -221,9 +221,9 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
             </div>
 
             {/* 提示信息 */}
-            <div className="bg-[#F5F5F5] border border-blue-200 rounded-lg p-4 flex gap-3">
+            <div className="bg-[#F5F5F5] border border-[#1976D2] rounded-lg p-4 flex gap-3">
               <AlertCircle className="w-5 h-5 text-[#1976D2] flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-700 space-y-1">
+              <div className="text-sm text-[#1976D2] space-y-1">
                 <p>• 挑战开始后，题目数量将变为无限</p>
                 <p>• 孩子可以多次间断进行，随时保存进度</p>
                 <p>• 一次只能有一个进行中的挑战</p>
@@ -253,8 +253,8 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
               />
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-amber-700">
+            <div className="bg-white border border-[#FFA726] rounded-lg p-4">
+              <p className="text-sm text-[#FFA726]">
                 为了确保挑战设置的严肃性，请输入您的账号密码进行验证。
               </p>
             </div>

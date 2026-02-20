@@ -51,15 +51,15 @@ export default function PointsDetail() {
       reward: { label: "兑换奖品", color: "text-[#D32F2F]" },
       admin: { label: "系统调整", color: "text-[#D32F2F]" },
     };
-    return typeMap[type] || { label: "其他", color: "text-gray-600" };
+    return typeMap[type] || { label: "其他", color: "text-[#757575]" };
   };
 
   // 积分等级配置
   const pointLevels = [
-    { level: 1, name: "青铜", minPoints: 0, maxPoints: 999, color: "bg-orange-700" },
+    { level: 1, name: "青铜", minPoints: 0, maxPoints: 999, color: "bg-[#FFA726]" },
     { level: 2, name: "白银", minPoints: 1000, maxPoints: 4999, color: "bg-gray-400" },
     { level: 3, name: "黄金", minPoints: 5000, maxPoints: 9999, color: "bg-[#CBA471]" },
-    { level: 4, name: "铂金", minPoints: 10000, maxPoints: 49999, color: "bg-cyan-500" },
+    { level: 4, name: "铂金", minPoints: 10000, maxPoints: 49999, color: "bg-white0" },
     { level: 5, name: "钻石", minPoints: 50000, maxPoints: 99999, color: "bg-[#1976D2]" },
     { level: 6, name: "王者", minPoints: 100000, maxPoints: Infinity, color: "bg-[#D32F2F]" },
   ];
@@ -94,7 +94,7 @@ export default function PointsDetail() {
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === "rules"
                   ? "text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-gray-100 text-[#757575] hover:bg-gray-200"
               }`}
               style={activeTab === "rules" ? { backgroundColor: "var(--color-primary)" } : {}}
             >
@@ -105,7 +105,7 @@ export default function PointsDetail() {
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === "levels"
                   ? "text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-gray-100 text-[#757575] hover:bg-gray-200"
               }`}
               style={activeTab === "levels" ? { backgroundColor: "var(--color-primary)" } : {}}
             >
@@ -116,7 +116,7 @@ export default function PointsDetail() {
               className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === "history"
                   ? "text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-gray-100 text-[#757575] hover:bg-gray-200"
               }`}
               style={activeTab === "history" ? { backgroundColor: "var(--color-primary)" } : {}}
             >
@@ -152,7 +152,7 @@ export default function PointsDetail() {
               <>
                 <div className="flex items-center gap-1 mb-1">
                   <TrendingUp className="w-4 h-4 text-[#4CAF50]" />
-                  <span className="text-xs text-gray-600">本月获得</span>
+                  <span className="text-xs text-[#757575]">本月获得</span>
                 </div>
                 <div className="text-xl font-bold text-[#4CAF50]">
                   +{stats?.monthEarned || 0}
@@ -169,7 +169,7 @@ export default function PointsDetail() {
               <>
                 <div className="flex items-center gap-1 mb-1">
                   <TrendingDown className="w-4 h-4 text-[#D32F2F]" />
-                  <span className="text-xs text-gray-600">本月使用</span>
+                  <span className="text-xs text-[#757575]">本月使用</span>
                 </div>
                 <div className="text-xl font-bold text-[#D32F2F]">
                   -{stats?.monthSpent || 0}
@@ -206,11 +206,11 @@ export default function PointsDetail() {
                           <span className={`text-xs font-medium ${typeInfo.color}`}>
                             {typeInfo.label}
                           </span>
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-[#757575]">
                             {formatDate(record.createdAt)}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-[#757575] truncate">
                           {record.description || "无描述"}
                         </div>
                       </div>
@@ -226,7 +226,7 @@ export default function PointsDetail() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-[#757575]">
                 <Award className="w-10 h-10 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">暂无积分记录</p>
               </div>
@@ -241,7 +241,7 @@ export default function PointsDetail() {
                 <Info className="w-4 h-4" style={{ color: "var(--color-primary)" }} />
                 积分获取规则
               </h2>
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-[#757575]">
                 <div className="flex gap-2">
                   <span className="font-medium min-w-[70px]">添加联系人:</span>
                   <span>每次添加新联系人可获得积分，等级越高积分越多</span>
@@ -271,10 +271,10 @@ export default function PointsDetail() {
 
             <Card className="p-4">
               <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
-                <Info className="w-4 h-4 text-amber-500" />
+                <Info className="w-4 h-4 text-[#FFA726]" />
                 积分使用说明
               </h2>
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-[#757575]">
                 <div className="flex gap-2">
                   <span className="font-medium min-w-[70px]">兑换奖品:</span>
                   <span>使用积分在奖品商店兑换心仪的奖品</span>
@@ -294,13 +294,13 @@ export default function PointsDetail() {
                     <div className="text-xl font-bold text-[#4CAF50]">
                       {stats.totalEarned}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">累计获得</div>
+                    <div className="text-xs text-[#757575] mt-1">累计获得</div>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-[#D32F2F]">
                       {stats.totalSpent}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">累计使用</div>
+                    <div className="text-xs text-[#757575] mt-1">累计使用</div>
                   </div>
                 </div>
               </Card>
@@ -320,8 +320,8 @@ export default function PointsDetail() {
                 <table className="w-full text-[10px] leading-tight" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                   <thead className="sticky top-0 bg-white">
                     <tr className="border-b-2">
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 sticky left-0 bg-white z-10 border border-gray-200">等级</th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] sticky left-0 bg-white z-10 border border-[#E0E0E0]">等级</th>
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 1 ? null : 1)} className="cursor-pointer">
                           <UserPlus className="w-4 h-4 mx-auto" />
                         </div>
@@ -332,7 +332,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 2 ? null : 2)} className="cursor-pointer">
                           <TagLabelIcon size={16} className="mx-auto" />
                         </div>
@@ -343,7 +343,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 3 ? null : 3)} className="cursor-pointer">
                           <MessageCircle className="w-4 h-4 mx-auto" />
                         </div>
@@ -354,7 +354,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 4 ? null : 4)} className="cursor-pointer">
                           <Calendar className="w-4 h-4 mx-auto" />
                         </div>
@@ -365,7 +365,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 5 ? null : 5)} className="cursor-pointer">
                           <UserCheck className="w-4 h-4 mx-auto" />
                         </div>
@@ -376,7 +376,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 6 ? null : 6)} className="cursor-pointer">
                           <CheckSquare className="w-4 h-4 mx-auto" />
                         </div>
@@ -387,7 +387,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 7 ? null : 7)} className="cursor-pointer">
                           <PartyPopper className="w-4 h-4 mx-auto" />
                         </div>
@@ -398,7 +398,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 8 ? null : 8)} className="cursor-pointer">
                           <Share2 className="w-4 h-4 mx-auto" />
                         </div>
@@ -409,7 +409,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 9 ? null : 9)} className="cursor-pointer">
                           <Heart className="w-4 h-4 mx-auto" />
                         </div>
@@ -420,7 +420,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 10 ? null : 10)} className="cursor-pointer">
                           <MessageSquare className="w-4 h-4 mx-auto" />
                         </div>
@@ -431,7 +431,7 @@ export default function PointsDetail() {
                           </div>
                         )}
                       </th>
-                      <th className="text-center py-0 px-1.5 font-light text-gray-700 min-w-[40px] border border-gray-200 relative">
+                      <th className="text-center py-0 px-1.5 font-light text-[#424242] min-w-[40px] border border-[#E0E0E0] relative">
                         <div onClick={() => setTooltipVisible(tooltipVisible === 11 ? null : 11)} className="cursor-pointer">
                           <CalendarCheck className="w-4 h-4 mx-auto" />
                         </div>
@@ -444,7 +444,7 @@ export default function PointsDetail() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="text-gray-600 leading-tight">
+                  <tbody className="text-[#757575] leading-tight">
                     {Array.from({ length: 75 }, (_, i) => i + 1).map((level) => {
                       // 等差递增：1级=0.01分，75级=1分
                       const addContact = (0.01 + (level - 1) * 0.013378).toFixed(2);
@@ -453,18 +453,18 @@ export default function PointsDetail() {
                       
                       return (
                         <tr key={level} className="hover:bg-gray-50">
-                          <td className="text-center py-0 px-1.5 font-light sticky left-0 bg-white border border-gray-200">
+                          <td className="text-center py-0 px-1.5 font-light sticky left-0 bg-white border border-[#E0E0E0]">
                             <LevelIcon level={level} size={12} />
                           </td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">{addContact}</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">{addTag}</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
-                          <td className="text-center py-0 px-1.5 font-light border border-gray-200">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">{addContact}</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">{addTag}</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
+                          <td className="text-center py-0 px-1.5 font-light border border-[#E0E0E0]">-</td>
                         </tr>
                       );
                     })}

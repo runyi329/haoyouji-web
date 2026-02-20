@@ -109,7 +109,7 @@ const CapitalMultiplierTable: React.FC = () => {
               <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-xl py-2 min-w-[140px] z-50">
                 <button
                   onClick={handleShareLink}
-                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  className="w-full px-4 py-2 text-left text-sm text-[#424242] hover:bg-gray-100 flex items-center space-x-2"
                 >
                   <Share2 className="w-4 h-4" />
                   <span>分享链接</span>
@@ -124,7 +124,7 @@ const CapitalMultiplierTable: React.FC = () => {
       <div className="px-4 py-4">
         <div className="bg-white rounded-xl p-4 shadow-sm">
           <div className="text-center">
-            <p className="text-sm text-gray-600 mb-2">
+            <p className="text-sm text-[#757575] mb-2">
               编号 {displaySeatNumber.toString().padStart(4, '0')}
             </p>
             <div className="text-4xl font-bold text-[#CBA471] font-mono">
@@ -145,13 +145,13 @@ const CapitalMultiplierTable: React.FC = () => {
                 return (
                   <tr 
                     key={rowIndex} 
-                    className={rowIndex > 0 ? 'border-t border-gray-200' : ''}
+                    className={rowIndex > 0 ? 'border-t border-[#E0E0E0]' : ''}
                   >
                     {/* 第1列 - 左右排列：排名 系数 */}
-                    <td className="py-0.5 px-2 border-r border-gray-200">
+                    <td className="py-0.5 px-2 border-r border-[#E0E0E0]">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-600">第{item1.rank}名</span>
-                        <span className="text-xs text-gray-700 font-mono ml-2">×{item1.multiplier}</span>
+                        <span className="text-xs text-[#757575]">第{item1.rank}名</span>
+                        <span className="text-xs text-[#424242] font-mono ml-2">×{item1.multiplier}</span>
                       </div>
                     </td>
                     
@@ -159,8 +159,8 @@ const CapitalMultiplierTable: React.FC = () => {
                     {item2 ? (
                       <td className="py-0.5 px-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-600">第{item2.rank}名</span>
-                          <span className="text-xs text-gray-700 font-mono ml-2">×{item2.multiplier}</span>
+                          <span className="text-xs text-[#757575]">第{item2.rank}名</span>
+                          <span className="text-xs text-[#424242] font-mono ml-2">×{item2.multiplier}</span>
                         </div>
                       </td>
                     ) : (
@@ -173,8 +173,8 @@ const CapitalMultiplierTable: React.FC = () => {
           </table>
           
           {/* 底部说明 */}
-          <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
+          <div className="px-4 py-2 bg-gray-50/50 border-t border-[#E0E0E0]">
+            <p className="text-xs text-[#757575] text-center">
               编号按投资时间先后排序，系数永久锁定
             </p>
           </div>

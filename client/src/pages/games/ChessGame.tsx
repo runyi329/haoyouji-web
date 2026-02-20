@@ -493,7 +493,7 @@ export default function ChessGame() {
             </div>
             
             {gameOver && (
-              <div className={`text-center p-3 rounded-lg ${winner === "white" ? "bg-[#E8F5E9] text-green-700" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
+              <div className={`text-center p-3 rounded-lg ${winner === "white" ? "bg-[#E8F5E9] text-[#4CAF50]" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
                 <div className="flex items-center justify-center gap-2">
                   <Trophy className="w-5 h-5" />
                   <span className="font-bold">
@@ -506,7 +506,7 @@ export default function ChessGame() {
 
           {/* 棋盘 */}
           <Card className="mb-3 p-3 bg-white/80 backdrop-blur">
-            <div className="aspect-square bg-[#FAF3ED] rounded-lg overflow-hidden border-4 border-amber-900">
+            <div className="aspect-square bg-[#FAF3ED] rounded-lg overflow-hidden border-4 border-[#FFA726]">
               <div className="grid grid-cols-8 h-full">
                 {board.map((row, r) =>
                   row.map((piece, c) => {
@@ -553,10 +553,10 @@ export default function ChessGame() {
           </div>
 
           {/* 提示信息 */}
-          <Card className="mt-2 p-3 bg-[#F5F5F5] border-blue-200">
+          <Card className="mt-2 p-3 bg-[#F5F5F5] border-[#1976D2]">
             <div className="flex gap-2">
               <Lightbulb className="w-5 h-5 text-[#1976D2] flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-700">
+              <div className="text-sm text-[#1976D2]">
                 <p className="font-semibold mb-1">游戏规则：</p>
                 <p>点击棋子选择，再点击目标位置移动。吃掉对方国王即可获胜。</p>
               </div>

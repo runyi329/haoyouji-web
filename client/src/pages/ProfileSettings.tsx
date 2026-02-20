@@ -115,7 +115,7 @@ export default function ProfileSettings() {
             
             {/* 编辑按钮 - 只在初始状态显示 */}
             <button
-              className="absolute bottom-0 right-0 bg-white text-indigo-600 rounded-full p-2 shadow-lg hover:bg-gray-100 transition-all"
+              className="absolute bottom-0 right-0 bg-white text-[#1976D2] rounded-full p-2 shadow-lg hover:bg-gray-100 transition-all"
               style={{
                 opacity: secondaryOpacity,
                 transform: `scale(${secondaryOpacity})`,
@@ -151,45 +151,45 @@ export default function ProfileSettings() {
       </div>
 
       {/* 标签页导航 - 固定在顶部 */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-[#E0E0E0] dark:border-[#E0E0E0] shadow-sm">
         <div className="flex">
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex-1 py-4 text-center font-medium transition-colors relative ${
               activeTab === "profile"
-                ? "text-indigo-600 dark:text-indigo-400"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                ? "text-[#1976D2] dark:text-[#1976D2]"
+                : "text-[#757575] dark:text-[#757575] hover:text-[#424242] dark:hover:text-gray-200"
             }`}
           >
             个人资料
             {activeTab === "profile" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1976D2] dark:bg-[#1976D2]" />
             )}
           </button>
           <button
             onClick={() => setActiveTab("security")}
             className={`flex-1 py-4 text-center font-medium transition-colors relative ${
               activeTab === "security"
-                ? "text-indigo-600 dark:text-indigo-400"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                ? "text-[#1976D2] dark:text-[#1976D2]"
+                : "text-[#757575] dark:text-[#757575] hover:text-[#424242] dark:hover:text-gray-200"
             }`}
           >
             安全设置
             {activeTab === "security" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1976D2] dark:bg-[#1976D2]" />
             )}
           </button>
           <button
             onClick={() => setActiveTab("preferences")}
             className={`flex-1 py-4 text-center font-medium transition-colors relative ${
               activeTab === "preferences"
-                ? "text-indigo-600 dark:text-indigo-400"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                ? "text-[#1976D2] dark:text-[#1976D2]"
+                : "text-[#757575] dark:text-[#757575] hover:text-[#424242] dark:hover:text-gray-200"
             }`}
           >
             偏好设置
             {activeTab === "preferences" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 dark:bg-indigo-400" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1976D2] dark:bg-[#1976D2]" />
             )}
           </button>
         </div>
@@ -262,7 +262,7 @@ export default function ProfileSettings() {
         {activeTab === "security" && (
           <div className="space-y-4">
             {/* 安全等级 */}
-            <Card className="bg-gradient-to-br from-white to-white dark:from-orange-950/30 dark:to-amber-950/30 border-orange-200 dark:border-orange-800">
+            <Card className="bg-gradient-to-br from-white to-white dark:from-orange-950/30 dark:to-amber-950/30 border-[#FFA726] dark:border-[#FFA726]">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -278,7 +278,7 @@ export default function ProfileSettings() {
                         stroke="currentColor"
                         strokeWidth="8"
                         fill="none"
-                        className="text-gray-200 dark:text-gray-700"
+                        className="text-gray-200 dark:text-[#424242]"
                       />
                       <circle
                         cx="40"
@@ -293,7 +293,7 @@ export default function ProfileSettings() {
                       />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xl font-bold text-[#CBA471] dark:text-orange-400">4/5</span>
+                      <span className="text-xl font-bold text-[#CBA471] dark:text-[#FFA726]">4/5</span>
                     </div>
                   </div>
                 </div>
@@ -441,7 +441,7 @@ function SettingItem({
   return (
     <div className="flex items-center justify-between py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 -mx-2 transition-colors cursor-pointer">
       <div className="flex items-center gap-3">
-        <div className="text-gray-600 dark:text-gray-400">{icon}</div>
+        <div className="text-[#757575] dark:text-[#757575]">{icon}</div>
         <span className="font-medium">{label}</span>
       </div>
       <div className="flex items-center gap-2">
@@ -464,10 +464,10 @@ function SettingItem({
             }}
             className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
           >
-            <Copy className="w-4 h-4 text-gray-400" />
+            <Copy className="w-4 h-4 text-[#757575]" />
           </button>
         )}
-        {showArrow && <ChevronRight className="w-4 h-4 text-gray-400" />}
+        {showArrow && <ChevronRight className="w-4 h-4 text-[#757575]" />}
       </div>
     </div>
   );
