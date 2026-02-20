@@ -236,18 +236,24 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().optional(),
         email: z.string().email().optional(),
+        phone: z.string().optional(),
+        realName: z.string().optional(),
+        idCardNumber: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        await db.updateUserInfo(ctx.user.id, {
-          name: input.name,
-        });
+        const db_instance = await getDb();
+        if (!db_instance) throw new Error("Database not available");
         
-        // 如果需要更新email,也可以在这里添加
-        if (input.email) {
-          const db_instance = await getDb();
-          if (db_instance) {
-            await db_instance.update(users).set({ email: input.email }).where(eq(users.id, ctx.user.id));
-          }
+        // 更新用户基本信息
+        const updateData: any = {};
+        if (input.name !== undefined) updateData.name = input.name;
+        if (input.email !== undefined) updateData.email = input.email;
+        if (input.phone !== undefined) updateData.phone = input.phone;
+        if (input.realName !== undefined) updateData.realName = input.realName;
+        if (input.idCardNumber !== undefined) updateData.idCardNumber = input.idCardNumber;
+        
+        if (Object.keys(updateData).length > 0) {
+          await db_instance.update(users).set(updateData).where(eq(users.id, ctx.user.id));
         }
         
         return { success: true };

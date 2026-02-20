@@ -63,27 +63,27 @@ export default function ProfileEdit() {
     setTimeout(() => setMessage(null), 3000);
   };
 
+  // 使用tRPC更新用户信息
+  const updateProfileMutation = trpc.auth.updateProfile.useMutation({
+    onSuccess: () => {
+      showMessage("success", "保存成功");
+    },
+    onError: (error) => {
+      console.error("保存失败:", error);
+      showMessage("error", "保存失败");
+    },
+  });
+
   // 保存基本信息和实名认证
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nickname: basicForm.nickname,
-          phone: basicForm.phone,
-          realName: verificationForm.realName,
-          idCardNumber: verificationForm.idCardNumber,
-        }),
+      await updateProfileMutation.mutateAsync({
+        name: basicForm.nickname, // nickname对应后端的name字段
+        phone: basicForm.phone,
+        realName: verificationForm.realName,
+        idCardNumber: verificationForm.idCardNumber,
       });
-
-      if (!res.ok) throw new Error("保存失败");
-      showMessage("success", "保存成功");
-      await loadProfile();
-    } catch (error) {
-      console.error("保存失败:", error);
-      showMessage("error", "保存失败");
     } finally {
       setSaving(false);
     }
