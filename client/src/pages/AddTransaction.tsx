@@ -48,7 +48,7 @@ interface Category {
 }
 
 const AddTransaction = () => {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
   const utils = trpc.useUtils();
@@ -58,6 +58,14 @@ const AddTransaction = () => {
     // 每次组件挂载或ledgerId变化时，使分类缓存失效
     utils.ledger.getCategories.invalidate({ ledgerId });
   }, [ledgerId, utils]);
+  
+  // 监听路由变化，当返回到添加账目页面时刷新分类数据
+  useEffect(() => {
+    // 当路由包含 /add 时，说明在添加账目页面，刷新分类数据
+    if (location.includes('/add')) {
+      utils.ledger.getCategories.invalidate({ ledgerId });
+    }
+  }, [location, ledgerId, utils]);
   
   // 监听页面可见性变化，当页面重新可见时刷新分类数据
   useEffect(() => {
