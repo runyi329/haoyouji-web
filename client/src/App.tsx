@@ -117,6 +117,7 @@ const MyEquityRedWhite = lazy(() => import("./pages/MyEquity_RedWhite"));
 const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
 const WeeklyReportDetail = lazy(() => import("./pages/WeeklyReportDetail"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
+const ValuationManagement = lazy(() => import("./pages/admin/ValuationManagement"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
@@ -157,6 +158,7 @@ function Router() {
         <Route path="/admin/points" component={PointsManagement} />
         <Route path="/admin/point-rules" component={PointRulesManagement} />
         <Route path="/admin/equity" component={EquityManagement} />
+        <Route path="/admin/valuation-management" component={ValuationManagement} />
 
         {/* 好友记相关页面 */}
         <Route path="/parent/contacts" component={ContactsManagement} />
