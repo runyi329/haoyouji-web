@@ -535,7 +535,7 @@ export const ledgers = mysqlTable("ledgers", {
 	icon: text(),
 	createdBy: int().default(0).notNull(),
 	ownerId: int().notNull(),
-	groupId: int("group_id"), // 所属工作群ID，为null表示普通账本
+	// groupId: int("group_id"), // 所属工作群ID，为null表示普通账本 - 临时注释等待数据库迁移
 	isVip: tinyint().default(0).notNull(),
 	isArchived: tinyint().default(0).notNull(),
 	defaultPermissionView: mysqlEnum("default_permission_view", ['all','own','none']).default('own').notNull(),
@@ -546,7 +546,7 @@ export const ledgers = mysqlTable("ledgers", {
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 },
 (table) => [
-	index("idx_group_id").on(table.groupId),
+	// index("idx_group_id").on(table.groupId), // 临时注释等待数据库迁移
 ]);
 
 export const loginAttempts = mysqlTable("login_attempts", {

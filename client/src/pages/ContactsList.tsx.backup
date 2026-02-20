@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Network, Undo, Handshake } from "lucide-react";
+import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown, Check, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
@@ -32,10 +32,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { InteractionHistoryDialog } from "@/components/InteractionHistoryDialog";
 import { ReferralRelationshipDialog } from "@/components/ReferralRelationshipDialog";
+import { CompanyReportIcon } from "@/components/CompanyReportIcon";
+import { CompanyReportDialog } from "@/components/CompanyReportDialog";
+import { CompanyListDialog } from "@/components/CompanyListDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { LogIn, LogOut } from "lucide-react";
@@ -84,7 +89,7 @@ function SortableTagItem({
   };
 
   return (
-    <Card ref={setNodeRef} style={style} className="p-3">
+    <Card ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm border-0 p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1">
           <div
@@ -98,7 +103,7 @@ function SortableTagItem({
           </div>
           <div
             className="w-4 h-4 rounded-full flex-shrink-0"
-            style={{ backgroundColor: tag.color || "#3b82f6" }}
+            style={{ backgroundColor: mapColorToTheme(tag.color || "#3b82f6") }}
           />
           <span className="font-medium truncate">{tag.name}</span>
           <span className="text-xs text-muted-foreground">({tag.contactCount || 0}人)</span>
@@ -129,7 +134,17 @@ function SortableTagItem({
   );
 }
 
-// 预定义的颜色选项
+// 直接返回用户选择的原始颜色，不做主题映射
+function mapColorToTheme(color: string): string {
+  return color;
+}
+
+// 直接返回预定义的颜色选项
+function getThemeBasedColorOptions(): string[] {
+  return COLOR_OPTIONS;
+}
+
+// 预定义的颜色选项（作为默认值）
 const COLOR_OPTIONS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
   "#ec4899", "#06b6d4", "#eab308", "#14b8a6", "#f97316",
@@ -140,12 +155,12 @@ const COLOR_OPTIONS = [
 const SEARCH_HISTORY_KEY = "contactsSearchHistory";
 const MAX_HISTORY_ITEMS = 5;
 
-// 根据距离上次联络的天数返回颜色
+// 根据距离上次联络的天数返回颜色（统一深红色系）
 function getInteractionStatusColor(days: number | null): string {
-  if (days === null) return '#9ca3af'; // 灰色：从未联络
-  if (days <= 30) return '#22c55e'; // 绿色：0-30天
-  if (days <= 90) return '#eab308'; // 黄色：31-90天
-  return '#ef4444'; // 红色：91天以上
+  if (days === null) return '#d4a0a0'; // 从未联络：浅红灰
+  if (days <= 30) return '#A80000'; // 0-30天：深红色
+  if (days <= 90) return '#d44'; // 31-90天：中红色
+  return '#d4a0a0'; // 91天以上：浅红灰
 }
 
 // 格式化日期为"2025年1月10日"
@@ -163,6 +178,7 @@ export default function ContactsList() {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   
   // 标签管理相关状态
   const [showTagManagement, setShowTagManagement] = useState(false);
@@ -173,6 +189,29 @@ export default function ContactsList() {
   const [tagName, setTagName] = useState("");
   const [tagColor, setTagColor] = useState(COLOR_OPTIONS[0]);
   
+  // 使用主题色生成的颜色选项
+  const [themeColorOptions, setThemeColorOptions] = useState<string[]>([]);
+  
+  // 初始化主题颜色选项
+  useEffect(() => {
+    const updateColorOptions = () => {
+      const options = getThemeBasedColorOptions();
+      setThemeColorOptions(options);
+      // 如果当前标签颜色是默认值，更新为主题色
+      if (tagColor === COLOR_OPTIONS[0]) {
+        setTagColor(options[0]);
+      }
+    };
+    updateColorOptions();
+    // 监听主题变化
+    const observer = new MutationObserver(updateColorOptions);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style']
+    });
+    return () => observer.disconnect();
+  }, []);
+  
   // 多选模式状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   
@@ -181,6 +220,12 @@ export default function ContactsList() {
   
   // 共享人脉筛选状态：'all' = 全部、'mine' = 我的、'shared' = 共享
   const [shareFilter, setShareFilter] = useState<'all' | 'mine' | 'shared'>('all');
+  
+  // 共享人筛选状态：按共享人名字筛选
+  const [sharerFilter, setSharerFilter] = useState<string>('all');
+  
+  // 共享人选择器Popover状态
+  const [sharerPopoverOpen, setSharerPopoverOpen] = useState(false);
   
   // 排序状态（从 localStorage 读取）
   const SORT_BY_KEY = 'contacts_list_sort_by';
@@ -201,6 +246,9 @@ export default function ContactsList() {
   // 批量选择人脉状态
   const [selectedContactIds, setSelectedContactIds] = useState<number[]>([]);
   const [isBatchOperating, setIsBatchOperating] = useState(false);
+  
+  // 公司报告存在映射表
+  const [companyReportExistsMap, setCompanyReportExistsMap] = useState<Record<string, boolean>>({});
   
   // 批量操作确认对话框状态
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -229,6 +277,8 @@ export default function ContactsList() {
   const [showQuickContactDialog, setShowQuickContactDialog] = useState(false);
   const [contactToRecord, setContactToRecord] = useState<any>(null);
   const [quickContactNote, setQuickContactNote] = useState("");
+  const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
+  const [importanceScore, setImportanceScore] = useState<number>(0); // 互动重要性评分：1-5分
   
   // 互动记录对话框状态
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
@@ -239,11 +289,24 @@ export default function ContactsList() {
   const [selectedContactForReferral, setSelectedContactForReferral] = useState<any>(null);
   const [referralType, setReferralType] = useState<'direct' | 'indirect'>('direct');
   
+  // 企业报告对话框状态
+  const [showCompanyReportDialog, setShowCompanyReportDialog] = useState(false);
+  const [selectedCompanyForReport, setSelectedCompanyForReport] = useState<string>('');
+  
+  // 公司列表弹窗状态
+  const [showCompanyListDialog, setShowCompanyListDialog] = useState(false);
+  const [selectedContactForCompanyList, setSelectedContactForCompanyList] = useState<any>(null);
+  
   // 获取URL参数中的筛选条件
   const urlParams = new URLSearchParams(searchParams);
   const filterType = urlParams.get('filter'); // thisWeek, thisMonth, thisYear
   const tagIdParam = urlParams.get('tag'); // 标签ID筛选（支持多个，用逗号分隔）
   const viewMode = urlParams.get('view'); // 视图模式：company显示公司信息
+  
+  // 调试日志
+  console.log('[ContactsList] searchParams:', searchParams);
+  console.log('[ContactsList] viewMode:', viewMode);
+  console.log('[ContactsList] viewMode === "company":', viewMode === 'company');
   
   // 解析选中的标签ID列表
   const selectedTagIds = React.useMemo(() => {
@@ -260,14 +323,135 @@ export default function ContactsList() {
     return saved ? JSON.parse(saved) : [];
   });
   
-  // 获取人脉列表（支持搜索）
-  const { data: allContacts, isLoading } = trpc.contacts.list.useQuery({
+  // 分页状态
+  const [page, setPage] = useState(1);
+  const [allLoadedContacts, setAllLoadedContacts] = useState<any[]>([]);
+  
+  // 组件挂载时重置状态,确保后退再进入时数据正常加载
+  React.useEffect(() => {
+    setPage(1);
+    setAllLoadedContacts([]);
+  }, []); // 空依赖数组,只在组件挂载时执行一次
+  
+  // 当URL参数中有filter时,自动重置shareFilter为'all',确保显示所有符合条件的人脉
+  React.useEffect(() => {
+    if (filterType) {
+      console.log('[ContactsList] 检测到filter参数:', filterType, ',重置shareFilter为all,重置分页');
+      setShareFilter('all');
+      setSearchQuery(''); // 同时清空搜索框
+      setPage(1); // 重置到第一页
+      setAllLoadedContacts([]); // 清空已加载的数据
+    }
+  }, [filterType]);
+  
+  // 轻量级获取联系人数量（全部、我的、共享）
+  const { data: contactCounts } = trpc.contacts.counts.useQuery();
+  
+  // 获取统计数据（用于显示新增人数）
+  const { data: stats } = trpc.contacts.stats.useQuery();
+  
+  // 根据筛选类型获取分类统计数量（全部、我的、共享）
+  const { data: filteredCounts } = trpc.contacts.filteredCounts.useQuery(
+    { filterType: filterType || '' },
+    { enabled: !!filterType } // 只有有filterType时才查询
+  );
+  
+  // 获取人脉列表（支持分页）
+  const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
     sortBy: sortBy,
+    page: page,
+    pageSize: 50,
+    filterType: filterType || undefined, // 传递筛选类型给后端
+  }, {
+    enabled: viewMode !== 'company', // 公司视图不使用这个 API
+    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
+    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
   });
   
-  // 获取共享给我的人脉列表
-  const { data: sharedContacts } = trpc.sharing.getSharedContacts.useQuery();
+  // 当数据加载完成时，累加到已加载列表
+  React.useEffect(() => {
+    if (contactsData) {
+      if (page === 1) {
+        // 第一页，直接设置
+        setAllLoadedContacts(contactsData.contacts);
+      } else {
+        // 后续页，追加
+        setAllLoadedContacts(prev => [...prev, ...contactsData.contacts]);
+      }
+    }
+  }, [contactsData, page]);
+  
+  // 当搜索条件、排序或筛选类型变化时，重置分页
+  React.useEffect(() => {
+    setPage(1);
+    setAllLoadedContacts([]);
+  }, [searchQuery, sortBy, filterType]);
+  
+  // 监听location变化，当返回列表页时强制刷新数据
+  React.useEffect(() => {
+    if (location === '/contacts') {
+      // 重置分页、数据和搜索查询，触发重新加载
+      setPage(1);
+      setAllLoadedContacts([]);
+      setSearchQuery(""); // 清空搜索查询
+    }
+  }, [location]);
+  
+  // 无限滚动：当滚动到底部时自动加载下一页
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && contactsData?.hasMore && !isFetching) {
+          setPage(prev => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+    
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [contactsData?.hasMore, isFetching]);
+  
+  // 使用已加载的联系人列表
+  const allContacts = allLoadedContacts;
+
+  // 获取公司列表（当 viewMode 为 company 时）
+  const { data: companyList, isLoading: isLoadingCompanyList, refetch: refetchCompanyList } = trpc.contacts.companyList.useQuery(undefined, {
+    enabled: viewMode === 'company', // 只在公司视图时启用
+    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
+    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
+  });
+  
+  // 当viewMode变化为company时，强制刷新公司列表
+  React.useEffect(() => {
+    if (viewMode === 'company') {
+      console.log('[ContactsList] viewMode changed to company, refetching companyList...');
+      refetchCompanyList();
+    }
+  }, [viewMode, refetchCompanyList]);
+  
+  // 调试日志
+  console.log('[ContactsList] viewMode:', viewMode);
+  console.log('[ContactsList] companyList:', companyList);
+  console.log('[ContactsList] isLoadingCompanyList:', isLoadingCompanyList);
+  
+  // 轻量级获取共享人列表（用于下拉筛选）
+  const { data: sharerListData } = trpc.sharing.getSharerList.useQuery();
+  
+  // 只有当用户点击"共享"筛选时才加载共享联系人列表（懒加载优化）
+  const { data: sharedContacts, isLoading: isLoadingShared } = trpc.sharing.getSharedContacts.useQuery(undefined, {
+    enabled: shareFilter === 'shared', // 只有选中"共享"时才加载
+  });
   
   // 获取所有标签
   const { data: allTags, refetch: refetchTags } = trpc.contacts.tags.list.useQuery();
@@ -339,12 +523,75 @@ export default function ContactsList() {
       toast.error(error.message || "删除失败");
     },
   });
-  
-  // 记录联络mutation
+    // 记录联络 mutation
   const recordInteractionMutation = trpc.contacts.interactions.create.useMutation({
-    onSuccess: () => {
-      toast.success("已记录本次联络");
-      utils.contacts.list.invalidate();
+    onSuccess: async () => {
+      // 播放成功音效
+      const audio = new Audio('/success-sound.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(err => console.log('音效播放失败:', err));
+      
+      // 显示笑脸图标+"+1"动画（从中间出现然后被吸收到上方）
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        animation: absorbToTop 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        pointer-events: none;
+      `;
+      overlay.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+          <line x1="9" y1="9" x2="9.01" y2="9"></line>
+          <line x1="15" y1="9" x2="15.01" y2="9"></line>
+        </svg>
+        <span style="font-size: 4rem; font-weight: bold; color: #22c55e;">+1</span>
+      `;
+      
+      // 添加动画样式（从中间放大出现，然后向上移动并缩小消失）
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes absorbToTop {
+          0% { 
+            transform: translate(-50%, -50%) scale(0); 
+            opacity: 0; 
+          }
+          30% { 
+            transform: translate(-50%, -50%) scale(1.2); 
+            opacity: 1; 
+          }
+          60% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+          }
+          100% { 
+            transform: translate(-50%, calc(-50% - 200px)) scale(0.2); 
+            opacity: 0; 
+          }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(overlay);
+      
+      // 1.2秒后移除
+      setTimeout(() => {
+        if (document.body.contains(overlay)) {
+          document.body.removeChild(overlay);
+        }
+        if (document.head.contains(style)) {
+          document.head.removeChild(style);
+        }
+      }, 1200);
+      
+      // 强制刷新列表数据，确保hasTodayInteraction状态更新
+      await utils.contacts.list.refetch();
       setShowQuickContactDialog(false);
       setContactToRecord(null);
     },
@@ -353,130 +600,80 @@ export default function ContactsList() {
     },
   });
   
+  // 共享人列表（使用轻量级 API）
+  const sharerList = sharerListData || [];
+  
   // 根据筛选条件合并自己的人脉和共享的人脉
   const mergedContacts = React.useMemo(() => {
     if (!allContacts) return [];
     
-    // 为共享的人脉添加标记
-    const markedSharedContacts = sharedContacts?.map((contact: any) => ({
+    // 为共享的人脉添加标记，并根据搜索关键词过滤
+    let markedSharedContacts = sharedContacts?.map((contact: any) => ({
       ...contact,
       _isShared: true,
+      _originalId: contact.id, // 保存原始ID用于后端操作
       // 确保共享人脉有唯一ID（避免与自己的人脉ID冲突）
-      id: `shared_${contact.id}`,
+      id: `shared_${contact.id}_${contact._sharerUserId || 'unknown'}`,
     })) || [];
     
-    // 根据shareFilter返回对应的人脉列表
+    // 如果有搜索关键词,对共享人脉也进行过滤
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.trim();
+      markedSharedContacts = markedSharedContacts.filter((contact: any) => {
+        // 搜索姓名
+        if (contact.name && contact.name.includes(query)) return true;
+        // 搜索称谓
+        if (contact.title && contact.title.includes(query)) return true;
+        // 搜索职业
+        if (contact.occupation && contact.occupation.includes(query)) return true;
+        // 搜索电话 (精确匹配,不转换大小写)
+        if (contact.phone && contact.phone.includes(query)) return true;
+        // 搜索自定义字段值（公司、职位等）
+        if (contact.fieldValues) {
+          for (const fv of contact.fieldValues) {
+            if (fv.value && fv.value.includes(query)) return true;
+          }
+        }
+        // 搜索全局标签
+        if (contact.tags) {
+          for (const tag of contact.tags) {
+            if (tag.name && tag.name.includes(query)) return true;
+          }
+        }
+        // 搜索个人标签
+        if (contact.personalTags) {
+          for (const tag of contact.personalTags) {
+            if (tag.name && tag.name.includes(query)) return true;
+          }
+        }
+        return false;
+      });
+    }
+    
+    // 如果选中了共享模式并且选择了特定共享人，进行过滤
+    if (shareFilter === 'shared' && sharerFilter !== 'all') {
+      markedSharedContacts = markedSharedContacts.filter((contact: any) => 
+        contact._sharerUserId?.toString() === sharerFilter
+      );
+    }
+    
+    // 根据 shareFilter 返回对应的人脉列表
     if (shareFilter === 'mine') {
       // 只显示自己的人脉
-      return allContacts;
+      return allContacts || [];
     } else if (shareFilter === 'shared') {
       // 只显示共享的人脉
-      return markedSharedContacts;
+      return markedSharedContacts || [];
     } else {
       // 显示全部人脉（自己的 + 共享的）
-      return [...allContacts, ...markedSharedContacts];
+      const myContacts = allContacts || [];
+      const sharedList = markedSharedContacts || [];
+      return [...myContacts, ...sharedList];
     }
-  }, [allContacts, sharedContacts, shareFilter]);
+  }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery]);
   
-  // 根据筛选条件过滤人脉
-  const contacts = React.useMemo(() => {
-    if (!mergedContacts || !filterType) return mergedContacts;
-    
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    
-    return mergedContacts.filter(contact => {
-      const createdAt = new Date(contact.createdAt);
-      
-      switch (filterType) {
-        case 'thisWeek':
-          return createdAt >= startOfWeek;
-        case 'thisMonth':
-          return createdAt >= startOfMonth;
-        case 'thisYear':
-          return createdAt >= startOfYear;
-        case 'needsAttention': {
-          // 需要关注：基于标签的分级关注机制
-          // 周关注：7天，月关注：30天，季关注：90天，无标签：180天
-          const tagNames = contact.tags?.map((t: any) => t.name) || [];
-          let thresholdDays: number;
-          if (tagNames.includes('周关注')) {
-            thresholdDays = 7;
-          } else if (tagNames.includes('月关注')) {
-            thresholdDays = 30;
-          } else if (tagNames.includes('季关注')) {
-            thresholdDays = 90;
-          } else {
-            thresholdDays = 180;
-          }
-          
-          if (!contact.lastInteractionDate) return true; // 没有联络记录的也需要关注
-          const lastInteraction = new Date(contact.lastInteractionDate);
-          const daysSinceInteraction = Math.floor((now.getTime() - lastInteraction.getTime()) / (1000 * 60 * 60 * 24));
-          return daysSinceInteraction > thresholdDays;
-        }
-        case 'monthlyActive': {
-          // 本月活跃：本月有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfMonth;
-        }
-        case 'weeklyActive': {
-          // 本周活跃：本周有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfWeek;
-        }
-        case 'todayActive': {
-          // 今日活跃：今天有联络记录
-          if (!contact.lastInteractionDate) return false;
-          
-          // 使用北京时间（UTC+8）来计算"今天"的范围
-          const beijingOffset = 8 * 60 * 60 * 1000;
-          const nowTimestamp = Date.now();
-          const oneDayMs = 24 * 60 * 60 * 1000;
-          
-          // 计算北京时间的今天开始时刻
-          const beijingTimestamp = nowTimestamp + beijingOffset;
-          const beijingStartOfDay = Math.floor(beijingTimestamp / oneDayMs) * oneDayMs;
-          const startOfTodayUTC = beijingStartOfDay - beijingOffset;
-          
-          // lastInteractionDate是时间戳（毫秒），直接比较
-          return contact.lastInteractionDate >= startOfTodayUTC;
-        }
-        case 'yearlyActive': {
-          // 今年活跃：今年有联络记录
-          if (!contact.lastInteractionDate) return false;
-          const lastContact = new Date(contact.lastInteractionDate);
-          return lastContact >= startOfYear;
-        }
-        case 'blacklist': {
-          // 拉黑名单
-          return contact.isBlacklisted === true;
-        }
-        case 'todayReminders': {
-          // 今日提醒：有今天的提醒事项
-          // 这里需要后端返回提醒信息，暂时返回true显示所有
-          return true;
-        }
-        case 'weekReminders': {
-          // 本周提醒：有本周的提醒事项
-          return true;
-        }
-        case 'monthReminders': {
-          // 本月提醒：有本月的提醒事项
-          return true;
-        }
-        default:
-          return true;
-      }
-    });
-  }, [mergedContacts, filterType]);
+  // 根据筛选条件过滤人脉（后端已处理，这里直接使用mergedContacts）
+  const contacts = mergedContacts;
   
   // 获取人脉的全局字段分类（公司、职位等）- 移到这里以便在filteredContacts中使用
   const { data: fieldCategories } = trpc.contacts.fieldCategories.list.useQuery();
@@ -485,7 +682,7 @@ export default function ContactsList() {
   // 获取公司字段的categoryId
   const companyCategoryId = React.useMemo(() => {
     if (!fieldCategories) return null;
-    const category = fieldCategories.find(c => c.name === '公司');
+    const category = fieldCategories.find(c => c.name === '公司名称');
     return category?.id || null;
   }, [fieldCategories]);
   
@@ -519,6 +716,37 @@ export default function ContactsList() {
     });
   }, [contacts, selectedTagIds, viewMode, companyCategoryId]);
   
+  // 检查所有公司的报告状态
+  useEffect(() => {
+    if (!filteredContacts || !companyCategoryId) return;
+    
+    // 收集所有公司名称
+    const allCompanyNames = new Set<string>();
+    filteredContacts.forEach(contact => {
+      const companies = contact.fieldValues?.filter((fv: any) => 
+        fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== ''
+      ) || [];
+      companies.forEach((company: any) => {
+        allCompanyNames.add(company.value);
+      });
+    });
+    
+    // 检查每个公司是否有报告
+    allCompanyNames.forEach(companyName => {
+      // 如果已经检查过，跳过
+      if (companyName in companyReportExistsMap) return;
+      
+      fetch(`/api/company-reports/${encodeURIComponent(companyName)}`)
+        .then(res => res.json())
+        .then(data => {
+          setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: !!data.data }));
+        })
+        .catch(() => {
+          setCompanyReportExistsMap(prev => ({ ...prev, [companyName]: false }));
+        });
+    });
+  }, [filteredContacts, companyCategoryId]);
+  
   // 获取人脉的全局字段值（公司、职位等）- 已移到上方
   
   const getFieldValue = (contact: any, fieldName: string) => {
@@ -541,11 +769,21 @@ export default function ContactsList() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // 搜索框输入时显示下拉列表
+  // 搜索框输入时显示模糊搜索下拉列表
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    setShowDropdown(e.target.value.trim().length > 0);
-    setShowHistory(false);
+    const value = e.target.value;
+    setSearchQuery(value);
+    // 当有输入内容时显示下拉框，否则隐藏
+    if (value.trim()) {
+      setShowDropdown(true);
+      setShowHistory(false);
+    } else {
+      setShowDropdown(false);
+      // 当清空输入时，如果有历史记录则显示历史
+      if (searchHistory.length > 0) {
+        setShowHistory(true);
+      }
+    }
   };
   
   // 搜索框获得焦点时显示历史记录
@@ -575,12 +813,27 @@ export default function ContactsList() {
   
   const confirmRecordInteraction = () => {
     if (contactToRecord) {
-      const note = quickContactNote.trim() || "快捷联络";
+      let note = quickContactNote.trim() || "快捷联络";
+      // 如果选择了联络方式，添加到备注中
+      if (contactMethod) {
+        note = `${contactMethod} - ${note}`;
+      }
+      // 如果选择了重要性评分，添加到备注中
+      if (importanceScore > 0) {
+        note = `${note} [重要性:${importanceScore}分]`;
+      }
       recordInteractionMutation.mutate({ 
         contactId: contactToRecord.id,
         note
+      }, {
+        onSuccess: () => {
+          // 立即更新本地状态，让按钮颜色变暗
+          setContactToRecord(prev => prev ? { ...prev, hasTodayInteraction: true } : null);
+        }
       });
       setQuickContactNote("");
+      setContactMethod("");
+      setImportanceScore(0);
     }
   };
   
@@ -594,16 +847,32 @@ export default function ContactsList() {
   };
   
   // 点击人脉项跳转到详情页
-  const handleContactClick = (contactId: number) => {
+  const handleContactClick = (contactId: number, contact?: any, event?: React.MouseEvent) => {
     // 保存搜索历史
     if (searchQuery.trim()) {
       saveSearchHistory(searchQuery.trim());
     }
     
+    // 关闭下拉列表和历史记录
     setShowDropdown(false);
     setShowHistory(false);
-    setSearchQuery("");
-    setLocation(`/parent/contacts/${contactId}`);
+    
+    // 设置搜索查询为该人脉的名字,让它显示在列表中
+    if (contact && contact.name) {
+      setSearchQuery(contact.name);
+    } else {
+      setSearchQuery("");
+    }
+    
+    // 让搜索框失去焦点,防止下拉列表重新打开
+    if (searchRef.current) {
+      const input = searchRef.current.querySelector('input');
+      if (input) {
+        input.blur();
+      }
+    }
+    
+    // 不再直接显示toast或跳转,让用户在列表中点击名片时才触发
   };
   
   // 点击历史记录项
@@ -726,87 +995,188 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div className="container py-4 sm:py-8 px-2 sm:px-4">
-      {/* 返回按钮、标题和登录/退出按钮 */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-start justify-between mb-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLocation("/parent/contacts")}
-            className="-ml-2"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            返回
-          </Button>
-        </div>
-        
-        <div className="flex items-center justify-between mb-1 sm:mb-2">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
-            {filterType === 'thisWeek' && '本周新增人脉'}
-            {filterType === 'thisMonth' && '本月新增人脉'}
-            {filterType === 'thisYear' && '本年新增人脉'}
-            {filterType === 'needsAttention' && '需要关注的人脉'}
-            {filterType === 'monthlyActive' && '本月活跃人脉'}
-            {filterType === 'todayActive' && '今日活跃人脉'}
-            {filterType === 'weeklyActive' && '本周活跃人脉'}
-            {filterType === 'yearlyActive' && '今年活跃人脉'}
-            {filterType === 'blacklist' && '拉黑名单'}
-            {filterType === 'todayReminders' && '今日提醒'}
-            {filterType === 'weekReminders' && '本周提醒'}
-            {filterType === 'monthReminders' && '本月提醒'}
-            {viewMode === 'company' && '公司人脉'}
-            {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
-            {!filterType && !selectedTagId && !viewMode && '所有人脉'}
+      <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen">
+      {/* 顶部深红色头部 */}
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-5 rounded-b-3xl mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-lg sm:text-xl font-bold text-white">
+          {filterType === 'thisWeek' && '本周新增人脉'}
+          {filterType === 'thisMonth' && '本月新增人脉'}
+          {filterType === 'thisYear' && '本年新增人脉'}
+          {filterType === 'needsAttention' && '需要关注的人脉'}
+          {filterType === 'monthlyActive' && '本月活跃人脉'}
+          {filterType === 'todayActive' && '今日活跃人脉'}
+          {filterType === 'weeklyActive' && '本周活跃人脉'}
+          {filterType === 'yearlyActive' && '今年活跃人脉'}
+          {filterType === 'blacklist' && '拉黑名单'}
+          {filterType === 'todayReminders' && '今日提醒'}
+          {filterType === 'weekReminders' && '本周提醒'}
+          {filterType === 'monthReminders' && '本月提醒'}
+          {viewMode === 'company' && '公司数量'}
+          {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
+          {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
           
-          {/* 登录/登出按钮 - 标签风格 */}
-          <div className="flex items-center gap-2">
-            {isAuthenticated ? (
-              <>
-                <Badge 
-                  variant="outline"
-                  className="cursor-default border-gray-300 text-gray-700 bg-white px-3 py-1.5 text-sm font-normal"
-                >
-                  {user?.name}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="cursor-pointer border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors p-1.5"
-                  onClick={() => {
-                    logout();
-                    toast.success("已退出登录");
-                  }}
-                  title="退出登录"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </Badge>
-              </>
-            ) : (
-              <Badge
-                variant="outline"
-                className="cursor-pointer border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors px-3 py-1.5 text-sm font-normal"
-                onClick={() => window.location.href = "/login"}
+          <div className="flex items-center gap-1">
+            {/* 共享人脉筛选按钮 */}
+              <button
+                onClick={() => setShareFilter('all')}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
-                <LogIn className="h-3.5 w-3.5 mr-1.5" />
-                登录
-              </Badge>
-            )}
+                全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
+              </button>
+              <button
+                onClick={() => setShareFilter('mine')}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+              >
+                我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
+              </button>
+              <button
+                onClick={() => setShareFilter('shared')}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+              >
+                共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
+              </button>
           </div>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-6">
-          共 {filteredContacts?.length || 0} 位人脉
+        
+        <p className="text-xs sm:text-sm text-white/70 mb-3">
+          {viewMode === 'company' && companyList ? (
+            `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
+          ) : isLoading ? (
+            `加载中...`
+          ) : (filterType && filteredCounts) ? (
+            // 有筛选类型时，根据 shareFilter 显示对应的分类数量
+            shareFilter === 'all' ? `共 ${filteredCounts.total} 位人脉` :
+            shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位人脉` :
+            `共 ${filteredCounts.shared} 位人脉`
+          ) : contactCounts ? (
+            // 无筛选类型时，显示总人脉数量
+            shareFilter === 'all' ? `共 ${contactCounts.total} 位人脉` :
+            shareFilter === 'mine' ? `共 ${contactCounts.mine} 位人脉` :
+            `共 ${contactCounts.shared} 位人脉`
+          ) : (
+            `共 0 位人脉`
+          )}
         </p>
         
+      </div>
+      {/* 工具栏区域 */}
+      <div className="px-4">
+        {/* 折叠标签按钮和排序按钮 */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            {allTags && allTags.length > 0 && (
+              <button
+                onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#A80000] font-medium hover:bg-red-50 transition-all"
+              >
+                <Tag className="h-3.5 w-3.5 mr-1.5" />
+                {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
+              </button>
+            )}
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#A80000] font-medium hover:bg-red-50 transition-all"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                  {!sortBy && '按排序筛选'}
+                  {sortBy === 'tagCount_desc' && '排序：标签数↓'}
+                  {sortBy === 'tagCount_asc' && '排序：标签数↑'}
+                  {sortBy === 'interactionCount_desc' && '排序：联络次数↓'}
+                  {sortBy === 'interactionCount_asc' && '排序：联络次数↑'}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={() => setSortBy(undefined)}>
+                  <span className={!sortBy ? 'font-bold' : ''}>默认排序</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('tagCount_desc')}>
+                  <span className={sortBy === 'tagCount_desc' ? 'font-bold' : ''}>标签数量：由高到低</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('tagCount_asc')}>
+                  <span className={sortBy === 'tagCount_asc' ? 'font-bold' : ''}>标签数量：由低到高</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('interactionCount_desc')}>
+                  <span className={sortBy === 'interactionCount_desc' ? 'font-bold' : ''}>联络次数：由高到低</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('interactionCount_asc')}>
+                  <span className={sortBy === 'interactionCount_asc' ? 'font-bold' : ''}>联络次数：由低到高</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            {/* 共享人筛选 - 带搜索功能的Combobox，只在选中“共享”时可用 */}
+            <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  role="combobox"
+                  aria-expanded={sharerPopoverOpen}
+                  disabled={shareFilter !== 'shared'}
+                  className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm font-medium transition-all ${
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#A80000] hover:bg-red-50'
+                  }`}
+                >
+                  <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                  <span className="truncate max-w-[80px]">
+                    {sharerFilter === 'all' ? '按共享人筛选' : 
+                      sharerList.find(s => s.id === sharerFilter)?.name || '按共享人筛选'}
+                  </span>
+                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="搜索共享人..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>未找到共享人</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setSharerFilter('all');
+                          setSharerPopoverOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={`mr-2 h-4 w-4 ${
+                            sharerFilter === 'all' ? 'opacity-100' : 'opacity-0'
+                          }`}
+                        />
+                        全部共享人
+                      </CommandItem>
+                      {sharerList.map((sharer) => (
+                        <CommandItem
+                          key={sharer.id}
+                          value={sharer.name}
+                          onSelect={() => {
+                            setSharerFilter(sharer.id);
+                            setSharerPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={`mr-2 h-4 w-4 ${
+                              sharerFilter === sharer.id ? 'opacity-100' : 'opacity-0'
+                            }`}
+                          />
+                          {sharer.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+        
         {/* 标签筛选器 */}
-        {allTags && allTags.length > 0 && (
+        {allTags && allTags.length > 0 && isTagAreaExpanded && (
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 sm:gap-3">
-                <div className="flex items-center gap-1 sm:gap-2">
-                  <Tag className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                  <span className="text-xs sm:text-sm text-muted-foreground">按标签筛选：</span>
-                </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
                 {/* 多选模式复选框 */}
                 <label className="flex items-center gap-1 sm:gap-2 cursor-pointer">
                   <span className="text-xs sm:text-sm">多选</span>
@@ -825,45 +1195,16 @@ export default function ContactsList() {
                     className="h-3.5 w-3.5 sm:h-4 sm:w-4"
                 />
               </label>
-              {/* 共享人脉筛选按钮 - 所有用户都显示 */}
-              <div className="flex items-center gap-1 sm:gap-2">
-                  <Button
-                    variant={shareFilter === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setShareFilter('all')}
-                    className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                  >
-                    全部
-                  </Button>
-                  <Button
-                    variant={shareFilter === 'mine' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setShareFilter('mine')}
-                    className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                  >
-                    我的
-                  </Button>
-                  <Button
-                    variant={shareFilter === 'shared' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setShareFilter('shared')}
-                    className="h-7 px-2 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                  >
-                    共享
-                  </Button>
-                </div>
+
             </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowTagManagement(true)}
-                className="h-6 px-2 text-xs sm:h-7 sm:px-3 sm:text-xs"
-              >
-                <Settings className="h-3 w-3 mr-1" />
-                标签管理
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowTagManagement(true)}
+              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#A80000] hover:bg-red-50 transition-all mb-2"
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              标签管理
+            </button>
+              <div className="flex flex-wrap gap-2">
               {allTags.map((tag) => {
                 const isSelected = selectedTagIds.includes(tag.id);
                 
@@ -873,8 +1214,8 @@ export default function ContactsList() {
                     variant={isSelected ? "default" : "outline"}
                     className="cursor-pointer transition-all hover:scale-105"
                     style={{
-                      backgroundColor: isSelected ? tag.color : '#ffffff',
-                      borderColor: isSelected ? tag.color : '#d1d5db',
+                      backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
+                      borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
                       color: isSelected ? '#fff' : '#9ca3af',
                     }}
                     onClick={() => {
@@ -924,33 +1265,49 @@ export default function ContactsList() {
                   </Badge>
                 );
               })}
+              </div>
             </div>
           </div>
         )}
         
-        {/* 搜索框和添加按钮 */}
+        {/* 搜索框和按钮 */}
         <div className="flex gap-2 sm:gap-4">
           <div ref={searchRef} className="relative flex-1">
-            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground z-10" />
             <Input
               placeholder="搜索人脉..."
               value={searchQuery}
               onChange={handleSearchChange}
               onFocus={handleSearchFocus}
-              className="pl-7 sm:pl-10 h-8 sm:h-10 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  // 回车键也可以触发搜索
+                  console.log('搜索:', searchQuery);
+                }
+              }}
+              className="pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-[#A80000] focus:ring-[#A80000]"
             />
+            {searchQuery && (
+              <X
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                onClick={() => {
+                  setSearchQuery("");
+                  setShowDropdown(false);
+                  setShowHistory(false);
+                }}
+              />
+            )}
             
             {/* 搜索下拉列表 */}
             {showDropdown && dropdownContacts.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
                 {dropdownContacts.map((contact: any) => {
-                  const company = getFieldValue(contact, "公司");
+                  const company = getFieldValue(contact, "公司名称");
                   const position = getFieldValue(contact, "职位");
                   
                   return (
                     <div
                       key={contact.id}
-                      onClick={() => handleContactClick(contact.id)}
+                      onClick={(e) => handleContactClick(contact.id, contact, e)}
                       className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
@@ -983,7 +1340,7 @@ export default function ContactsList() {
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-xs text-[#A80000] hover:underline"
                   >
                     清空
                   </button>
@@ -1007,38 +1364,20 @@ export default function ContactsList() {
             )}
           </div>
           
-          {selectedContactIds.length === 0 ? (
-            <Button 
-              onClick={() => {
-                // 进入批量选择模式，选中第一个人脉
-                if (filteredContacts && filteredContacts.length > 0) {
-                  setSelectedContactIds([filteredContacts[0].id]);
-                }
-              }}
-              variant="outline"
-              size="sm"
-              className="h-8 sm:h-10 text-xs sm:text-sm whitespace-nowrap"
-            >
-              <span>批量选择</span>
-            </Button>
-          ) : null}
-          
-          <Button 
+          <button 
             onClick={handleAddContact}
-            size="sm"
-            className="h-8 sm:h-10 text-xs sm:text-sm whitespace-nowrap"
+            className="flex items-center justify-center h-9 w-9 rounded-xl bg-[#A80000] text-white hover:bg-[#8a0000] transition-all shadow-sm"
           >
-            <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-            <span className="hidden sm:inline">添加人脉</span>
-          </Button>
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="border border-[#A80000]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-red-50">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-blue-700">
+            <span className="text-sm font-medium text-[#A80000]">
               已选择 {selectedContactIds.length} 人
             </span>
             <Button
@@ -1092,7 +1431,7 @@ export default function ContactsList() {
                     setIsBatchOperating(false);
                   }
                 }}
-                className="text-xs h-7 px-2 text-orange-600 hover:text-orange-700"
+                className="text-xs h-7 px-2 text-[#A80000] hover:text-[#8a0000]"
                 disabled={isBatchOperating}
               >
                 <Undo className="h-3 w-3 mr-1" />
@@ -1144,7 +1483,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     周关注
                   </Button>
@@ -1184,7 +1523,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     月关注
                   </Button>
@@ -1224,7 +1563,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                    className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                   >
                     季关注
                   </Button>
@@ -1242,7 +1581,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-green-50 border-green-300 text-green-700 hover:bg-green-100"
+                  className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
@@ -1289,7 +1628,7 @@ export default function ContactsList() {
                     >
                       <span 
                         className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
-                        style={{ backgroundColor: tag.color || '#6b7280' }}
+                        style={{ backgroundColor: mapColorToTheme(tag.color || '#6b7280') }}
                       />
                       {tag.name}
                     </DropdownMenuItem>
@@ -1310,7 +1649,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-red-50 border-red-300 text-red-700 hover:bg-red-100"
+                  className="text-xs h-7 px-2 bg-red-50 border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
                 >
                   <X className="h-3 w-3 mr-1" />
                   选择标签
@@ -1357,7 +1696,7 @@ export default function ContactsList() {
                     >
                       <span 
                         className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
-                        style={{ backgroundColor: tag.color || '#6b7280' }}
+                        style={{ backgroundColor: mapColorToTheme(tag.color || '#6b7280') }}
                       />
                       {tag.name}
                     </DropdownMenuItem>
@@ -1373,8 +1712,81 @@ export default function ContactsList() {
 
       {/* 人脉列表 */}
       <div>
-        {isLoading ? (
+        {(isLoading || isLoadingCompanyList) ? (
           <div className="text-center py-8 text-muted-foreground">加载中...</div>
+        ) : viewMode === 'company' ? (
+          // 公司视图
+          companyList && companyList.length > 0 ? (
+          // 公司列表视图
+          <div className="space-y-2">
+            {companyList.map((company) => (
+              <Card 
+                key={company.companyName}
+                className={`bg-white rounded-2xl shadow-sm hover:shadow-md transition-all border-0 ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                onClick={() => {
+                  // 如果是共享的公司，弹出提示
+                  if (company.isShared) {
+                    alert('该公司为共享人脉，请联系共享人查看详情');
+                    return;
+                  }
+                  // 如果只有一个联系人，直接跳转到该联系人详情
+                  if (company.contactCount === 1) {
+                    setLocation(`/parent/contacts/${company.contactIds[0]}`);
+                  }
+                  // 如果有多个联系人，暂时不跳转（未来可以弹出选择对话框）
+                }}
+              >
+                <CardHeader className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg text-[#A80000]">{company.companyName}</CardTitle>
+                        {company.contactCount > 1 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {company.contactCount} 人
+                          </Badge>
+                        )}
+                        <CompanyReportIcon
+                          hasReport={company.hasReport}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCompanyForReport(company.companyName);
+                            setShowCompanyReportDialog(true);
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {company.contactNames.map((name, index) => (
+                          <span key={index}>
+                            <span 
+                              className={`text-sm text-muted-foreground ${company.isShared ? 'cursor-not-allowed' : 'hover:text-primary cursor-pointer'}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (company.isShared) {
+                                  alert('该公司为共享人脉，请联系共享人查看详情');
+                                  return;
+                                }
+                                setLocation(`/parent/contacts/${company.contactIds[index]}`);
+                              }}
+                            >
+                              {name}
+                            </span>
+                            {index < company.contactNames.length - 1 && <span className="text-muted-foreground">, </span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>暂无公司信息</p>
+              <p className="text-sm mt-2">请为人脉添加"公司名称"字段</p>
+            </div>
+          )
         ) : filteredContacts && filteredContacts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredContacts.map((contact) => {
@@ -1382,22 +1794,48 @@ export default function ContactsList() {
               return (
                 <Card 
                   key={contact.id}
-                  className={`hover:shadow-lg transition-all cursor-pointer relative ${isContactSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
-                  onClick={() => {
+                  className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative border-0"
+                  style={isContactSelected ? {
+                    boxShadow: `0 0 0 2px #A80000`,
+                    backgroundColor: '#A800000d'
+                  } : {}}
+                  onClick={(e) => {
                     if (selectedContactIds.length > 0) {
                       // 如果已有选中的人脉，点击卡片切换选中状态
+                      // 共享人脉不可选中
+                      if (contact._isShared) {
+                        e.stopPropagation();
+                        return;
+                      }
                       if (isContactSelected) {
                         setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
                       } else {
                         setSelectedContactIds(prev => [...prev, contact.id]);
                       }
                     } else {
-                      setLocation(`/parent/contacts/${contact.id}`);
+                      // 判断是否为共享人脉
+                      if (contact._isShared && contact._sharedBy) {
+                        // 共享人脉，显示提示信息
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        toast(`共享人脉 赶快找${contact._sharedBy}介绍吧！`, {
+                          duration: 1000,
+                          position: "top",
+                          style: {
+                            position: 'fixed',
+                            top: `${rect.top - 60}px`,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                          },
+                        });
+                      } else {
+                        // 自己的人脉，正常跳转
+                        setLocation(`/parent/contacts/${contact.id}`);
+                      }
                     }
                   }}
                 >
                 {/* 批量选择checkbox */}
-                {selectedContactIds.length > 0 && (
+                {selectedContactIds.length > 0 && !contact._isShared && (
                   <div 
                     className="absolute top-2 right-2 z-10"
                     onClick={(e) => e.stopPropagation()}
@@ -1412,7 +1850,10 @@ export default function ContactsList() {
                           setSelectedContactIds(prev => prev.filter(id => id !== contact.id));
                         }
                       }}
-                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="w-5 h-5 rounded border-gray-300"
+                      style={{ 
+                        accentColor: '#A80000'
+                      }}
                     />
                   </div>
                 )}
@@ -1431,7 +1872,10 @@ export default function ContactsList() {
                         {/* 推荐人状态指示器 - 放在名字右边 */}
                         {(contact as any).hasReferrer !== undefined && (
                           (contact as any).hasReferrer ? (
-                            <UserCheck className="h-4 w-4 text-blue-500" />
+                            <UserCheck className={`h-4 w-4 ${
+                              contact._isShared ? 'text-gray-400' : ''
+                            }`}
+                            style={!contact._isShared ? { color: '#A80000' } : {}} />
                           ) : (
                             <UserX className="h-4 w-4 text-gray-400" />
                           )
@@ -1440,12 +1884,22 @@ export default function ContactsList() {
                         {(contact as any).totalInteractions !== undefined && (contact as any).totalInteractions > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
                               setSelectedContactForInteraction(contact);
                               setShowInteractionDialog(true);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看互动记录"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'hover:opacity-70 cursor-pointer'
+                            }`}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
+                            title={contact._isShared ? '' : '点击查看互动记录'}
+                            disabled={contact._isShared}
                           >
                             <Smile className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).totalInteractions}</span>
@@ -1455,13 +1909,21 @@ export default function ContactsList() {
                         {(contact as any).directReferrals !== undefined && (contact as any).directReferrals > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
-                              setSelectedContactForReferral(contact);
-                              setReferralType('direct');
-                              setShowReferralDialog(true);
+                              setLocation(`/parent/contacts/${contact.id}/referrals/direct`);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看直接推荐"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'hover:opacity-70 cursor-pointer'
+                            }`}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
+                            title={contact._isShared ? '' : '点击查看直接推荐'}
+                            disabled={contact._isShared}
                           >
                             <Layers2 className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).directReferrals}</span>
@@ -1471,35 +1933,60 @@ export default function ContactsList() {
                         {(contact as any).indirectReferrals !== undefined && (contact as any).indirectReferrals > 0 && (
                           <button
                             onClick={(e) => {
+                              if (contact._isShared) {
+                                e.stopPropagation();
+                                return; // 共享人脉不可点击
+                              }
                               e.stopPropagation();
-                              setSelectedContactForReferral(contact);
-                              setReferralType('indirect');
-                              setShowReferralDialog(true);
+                              setLocation(`/parent/contacts/${contact.id}/referrals/indirect`);
                             }}
-                            className="flex items-center gap-0.5 text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="点击查看间接推荐"
+                            className={`flex items-center gap-0.5 transition-opacity ${
+                              contact._isShared 
+                                ? 'text-gray-400 cursor-default' 
+                                : 'hover:opacity-70 cursor-pointer'
+                            }`}
+                            style={!contact._isShared ? { color: '#A80000' } : {}}
+                            title={contact._isShared ? '' : '点击查看间接推荐'}
+                            disabled={contact._isShared}
                           >
                             <Layers3 className="h-4 w-4" />
                             <span className="text-xs font-medium">×{(contact as any).indirectReferrals}</span>
                           </button>
                         )}
-                        {/* Network图标 - 查看推荐链路 */}
-                        {((contact as any).directReferrals > 0 || (contact as any).indirectReferrals > 0) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocation(`/parent/contacts/${contact.id}/referral-chain`);
-                            }}
-                            className="text-blue-500 hover:opacity-70 transition-opacity cursor-pointer"
-                            title="查看推荐链路"
-                          >
-                            <Network className="h-4 w-4" />
-                          </button>
-                        )}
+
+                        {/* 机器人图标 - 显示公司数量 */}
+                        {(() => {
+                          if (!companyCategoryId) return null;
+                          const companies = contact.fieldValues?.filter((fv: any) => fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== '') || [];
+                          if (companies.length === 0) return null;
+                          return (
+                            <button
+                              onClick={(e) => {
+                                if (contact._isShared) {
+                                  e.stopPropagation();
+                                  return; // 共享人脉不可点击
+                                }
+                                e.stopPropagation();
+                                setSelectedContactForCompanyList(contact);
+                                setShowCompanyListDialog(true);
+                              }}
+                              className={`flex items-center gap-0.5 transition-opacity ${
+                                contact._isShared 
+                                  ? 'text-gray-400 cursor-default' 
+                                  : 'text-[#A80000] hover:opacity-70 cursor-pointer'
+                              }`}
+                              title={contact._isShared ? '' : '点击查看公司列表'}
+                              disabled={contact._isShared}
+                            >
+                              <CompanyReportIcon hasReport={true} onClick={() => {}} />
+                              <span className="text-xs font-medium">×{companies.length}</span>
+                            </button>
+                          );
+                        })()}
                         {/* 共享者标识 - 显示这个人脉是谁共享给我的，放在最后 */}
                         {contact._isShared && contact._sharedBy && (
                           <span className="flex items-center gap-0.5">
-                            <Handshake className="h-4 w-4 text-blue-500" />
+                            <Handshake className="h-4 w-4" style={{ color: '#A80000' }} />
                             <span className="text-xs text-muted-foreground">{contact._sharedBy}</span>
                           </span>
                         )}
@@ -1509,20 +1996,32 @@ export default function ContactsList() {
                           {contact.title}
                         </span>
                       )}
-                      {/* 公司信息显示 - 当viewMode为company时突出显示 */}
+                      {/* 公司列表显示 - 显示所有公司全称+报告图标 */}
                       {(() => {
-                        const company = getFieldValue(contact, "公司");
-                        const position = getFieldValue(contact, "职位");
-                        if (!company && !position) return null;
+                        if (!companyCategoryId) return null;
+                        const companies = contact.fieldValues?.filter((fv: any) => fv.categoryId === companyCategoryId && fv.value && fv.value.trim() !== '') || [];
+                        if (companies.length === 0) return null;
                         return (
-                          <div className={`text-xs sm:text-sm mt-0.5 ${
-                            viewMode === 'company' 
-                              ? 'text-teal-600 dark:text-teal-400 font-medium' 
-                              : 'text-muted-foreground'
-                          }`}>
-                            {company && <span>{company}</span>}
-                            {company && position && <span className="mx-1">·</span>}
-                            {position && <span>{position}</span>}
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {companies.map((companyField: any, index: number) => (
+                              <div key={index} className="flex items-center gap-1">
+                                <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                                  {companyField.value}
+                                </span>
+                                <CompanyReportIcon 
+                                  hasReport={companyReportExistsMap[companyField.value] || false}
+                                  onClick={(e) => {
+                                    if (contact._isShared) {
+                                      e.stopPropagation();
+                                      return;
+                                    }
+                                    e.stopPropagation();
+                                    setSelectedCompanyForReport(companyField.value);
+                                    setShowCompanyReportDialog(true);
+                                  }}
+                                />
+                              </div>
+                            ))}
                           </div>
                         );
                       })()}
@@ -1530,6 +2029,7 @@ export default function ContactsList() {
                     {/* 右上角操作按钮 */}
                     <div className="flex items-center gap-1">
                       {/* 快捷联络按钮 - 共享人脉禁用 */}
+                      {/* 快速联络按钮 */}
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -1537,20 +2037,18 @@ export default function ContactsList() {
                         onClick={(e) => {
                           if (contact._isShared) {
                             e.stopPropagation();
-                            return; // 共享人脉不可点击
+                            return;
                           }
                           handleQuickContactClick(e, contact);
                         }}
-                        disabled={contact._isShared}
+                        disabled={contact._isShared || contact.hasTodayInteraction}
                       >
                         <MessageCircle 
-                          className={`h-4 w-4 ${
-                            contact._isShared
-                              ? 'text-gray-300' // 共享人脉显示暗色
-                              : contact.hasTodayInteraction 
-                                ? 'text-gray-400' 
-                                : 'text-blue-500'
-                          }`} 
+                          className={`h-4 w-4 transition-colors ${
+                            contact._isShared || contact.hasTodayInteraction
+                              ? 'text-gray-400 opacity-50'
+                              : 'text-[#A80000] hover:text-[#8a0000]'
+                          }`}
                         />
                       </Button>
                       {/* 更多操作菜单 - 共享人脉不显示编辑和删除按钮 */}
@@ -1612,8 +2110,8 @@ export default function ContactsList() {
                           variant="outline"
                           className="text-xs cursor-pointer hover:bg-opacity-10 transition-colors"
                           style={{
-                            borderColor: tag.color || '#3b82f6',
-                            color: tag.color || '#3b82f6',
+                            borderColor: mapColorToTheme(tag.color || '#3b82f6'),
+                            color: mapColorToTheme(tag.color || '#3b82f6'),
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1633,7 +2131,7 @@ export default function ContactsList() {
                           key={`personal-${tag.id}`}
                           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs text-white"
                           style={{
-                            backgroundColor: tag.color || '#8b5cf6',
+                            backgroundColor: mapColorToTheme(tag.color || '#A80000'),
                           }}
                         >
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -1649,9 +2147,19 @@ export default function ContactsList() {
               );
             })}
           </div>
-        ) : (
+        ) : !isLoading && !isLoadingCompanyList && filteredContacts && filteredContacts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            {searchQuery ? '没有找到匹配的人脉' : '还没有添加人脉，点击上方按钮开始添加'}
+            {searchQuery ? '没有找到匹配的人脉' : ''}
+          </div>
+        ) : null}
+        
+        {/* 无限滚动触发器 */}
+        {contactsData && contactsData.hasMore && (
+          <div 
+            ref={loadMoreRef}
+            className="text-center py-4 text-muted-foreground"
+          >
+            {isFetching ? '加载中...' : ''}
           </div>
         )}
       </div>
@@ -1725,12 +2233,12 @@ export default function ContactsList() {
                 onChange={(e) => setTagName(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>标签颜色</Label>
+              <div className="space-y-2">
+              <Label>标签颜色（基于当前主题）</Label>
               <div className="flex gap-2 flex-wrap">
-                {COLOR_OPTIONS.map((color) => (
+                {(themeColorOptions.length > 0 ? themeColorOptions : COLOR_OPTIONS).map((color, index) => (
                   <button
-                    key={color}
+                    key={`${color}-${index}`}
                     className={`w-8 h-8 rounded-full border-2 ${
                       tagColor === color ? "border-black" : "border-transparent"
                     }`}
@@ -1770,11 +2278,11 @@ export default function ContactsList() {
               />
             </div>
             <div className="space-y-2">
-              <Label>标签颜色</Label>
+              <Label>标签颜色（基于当前主题）</Label>
               <div className="flex gap-2 flex-wrap">
-                {COLOR_OPTIONS.map((color) => (
+                {(themeColorOptions.length > 0 ? themeColorOptions : COLOR_OPTIONS).map((color, index) => (
                   <button
-                    key={color}
+                    key={`${color}-${index}`}
                     className={`w-8 h-8 rounded-full border-2 ${
                       tagColor === color ? "border-black" : "border-transparent"
                     }`}
@@ -1850,11 +2358,13 @@ export default function ContactsList() {
         if (!open) {
           setContactToRecord(null);
           setQuickContactNote("");
+          setContactMethod("");
+          setImportanceScore(0);
         }
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>记录联络</DialogTitle>
+            <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
               {contactToRecord?.hasTodayInteraction 
                 ? `今天已经记录过与 "${contactToRecord?.name}" 的联络，单日确认上限1次`
@@ -1863,6 +2373,65 @@ export default function ContactsList() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-3">
+            {!contactToRecord?.hasTodayInteraction && (
+              <>
+                {/* 联络方式选择（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={contactMethod === "会面" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "会面" ? "" : "会面")}
+                      className="flex-1"
+                    >
+                      会面
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "电话" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "电话" ? "" : "电话")}
+                      className="flex-1"
+                    >
+                      电话
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={contactMethod === "微信" ? "default" : "outline"}
+                      onClick={() => setContactMethod(contactMethod === "微信" ? "" : "微信")}
+                      className="flex-1"
+                    >
+                      微信
+                    </Button>
+                  </div>
+                </div>
+                {/* 互动重要性评分（可选） */}
+                <div className="w-full">
+                  <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((score) => (
+                      <Button
+                        key={score}
+                        type="button"
+                        variant={importanceScore === score ? "default" : "outline"}
+                        onClick={() => setImportanceScore(importanceScore === score ? 0 : score)}
+                        className="flex-1"
+                      >
+                        {score}分
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                {/* 备注输入 */}
+                <div className="w-full">
+                  <Input
+                    placeholder="输入备注（可选）"
+                    value={quickContactNote}
+                    onChange={(e) => setQuickContactNote(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
             <Button 
               onClick={confirmRecordInteraction}
               disabled={recordInteractionMutation.isPending || contactToRecord?.hasTodayInteraction}
@@ -1876,20 +2445,13 @@ export default function ContactsList() {
                 setShowQuickContactDialog(false);
                 setContactToRecord(null);
                 setQuickContactNote("");
+                setContactMethod("");
+                setImportanceScore(0);
               }}
               className="w-full"
             >
               取消
             </Button>
-            {!contactToRecord?.hasTodayInteraction && (
-              <div className="w-full">
-                <Input
-                  placeholder="输入备注（可选）"
-                  value={quickContactNote}
-                  onChange={(e) => setQuickContactNote(e.target.value)}
-                />
-              </div>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1923,22 +2485,22 @@ export default function ContactsList() {
             <AlertDialogDescription>
               {confirmDialog.type === 'add' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉批量添加「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉批量添加「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'remove' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉批量移除「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉批量移除「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」标签，是否继续？
                 </span>
               )}
               {confirmDialog.type === 'cycle' && (
                 <span>
-                  将为 <span className="font-semibold text-blue-600">{selectedContactIds.length}</span> 位人脉设置「
-                  <span className="font-semibold text-blue-600">{confirmDialog.tagName}</span>
+                  将为 <span className="font-semibold" style={{ color: '#A80000' }}>{selectedContactIds.length}</span> 位人脉设置「
+                  <span className="font-semibold" style={{ color: '#A80000' }}>{confirmDialog.tagName}</span>
                   」关注周期，是否继续？
                 </span>
               )}
@@ -1947,6 +2509,7 @@ export default function ContactsList() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
+              className="bg-[#A80000] hover:bg-[#8a0000] text-white"
               onClick={async () => {
                 if (confirmDialog.onConfirm) {
                   await confirmDialog.onConfirm();
@@ -1959,6 +2522,20 @@ export default function ContactsList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* 企业报告弹窗 */}
+      <CompanyReportDialog
+        open={showCompanyReportDialog}
+        onOpenChange={setShowCompanyReportDialog}
+        companyName={selectedCompanyForReport}
+      />
+      
+      {/* 公司列表弹窗 */}
+      <CompanyListDialog
+        open={showCompanyListDialog}
+        onOpenChange={setShowCompanyListDialog}
+        contact={selectedContactForCompanyList}
+      />
     </div>
   );
 }

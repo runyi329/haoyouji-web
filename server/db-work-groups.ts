@@ -1,6 +1,6 @@
 import { getDb } from './db';
 import { workGroups, ledgers } from '../drizzle/schema';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 /**
  * 脉动节点工作平台 - 工作群数据库操作
@@ -114,7 +114,8 @@ export async function getWorkGroupMembers(groupId: number) {
     .from(ledgers)
     .where(
       and(
-        eq(ledgers.groupId, groupId),
+        // eq(ledgers.groupId, groupId), // 临时注释等待数据库迁移
+        sql`1=0`, // 临时返回空结果
         eq(ledgers.isArchived, 0)
       )
     )
@@ -136,7 +137,7 @@ export async function createWorkGroupMember(data: {
   if (!db) throw new Error("Database not available");
   
   const [result] = await db.insert(ledgers).values({
-    groupId: data.groupId,
+    // groupId: data.groupId, // 临时注释等待数据库迁移
     name: data.name,
     description: data.description,
     icon: data.icon,
