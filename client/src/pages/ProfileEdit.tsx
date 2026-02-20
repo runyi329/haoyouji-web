@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, X, ChevronDown, ChevronUp } from "lucide-react";
+import { trpc } from "../lib/trpc";
 
 export default function ProfileEdit() {
   const [activeTab, setActiveTab] = useState<"basic" | "verification" | "address">("basic");
@@ -37,38 +38,24 @@ export default function ProfileEdit() {
     label: "",
   });
 
-  // 加载用户资料
+  // 使用tRPC获取用户信息
+  const { data: user, isLoading } = trpc.auth.me.useQuery();
+
+  // 当用户数据加载完成后，填充表单
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user) {
+      setBasicForm({
+        name: user.username || "",
+        nickname: user.name || "",
+        email: user.email || "",
+        phone: "", // 暂时为空，等后端添加phone字段
+      });
+    }
+  }, [user]);
 
   const loadProfile = async () => {
-    try {
-      const res = await fetch("/api/user/profile");
-      if (!res.ok) throw new Error("加载失败");
-      const data = await res.json();
-      
-      // 加载基本信息
-      setBasicForm({
-        name: data.user?.name || "",
-        nickname: data.profile?.nickname || "",
-        email: data.user?.email || "",
-        phone: data.profile?.phone || "",
-      });
-
-      // 加载实名认证信息
-      setVerificationForm({
-        realName: data.profile?.realName || "",
-        idCardNumber: data.profile?.idCardNumber || "",
-        verificationStatus: data.profile?.verificationStatus || "pending",
-      });
-
-      // 加载收件地址
-      setAddresses(data.addresses || []);
-    } catch (error) {
-      console.error("加载用户资料失败:", error);
-      showMessage("error", "加载用户资料失败");
-    }
+    // 这个函数现在主要用于重新加载地址等其他信息
+    // 用户基本信息通过trpc.auth.me获取
   };
 
   const showMessage = (type: "success" | "error", text: string) => {
