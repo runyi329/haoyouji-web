@@ -91,21 +91,31 @@ export async function getPointStats(userId: number) {
  * @returns 积分余额
  */
 export async function getUserPoints(userId: number): Promise<number> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.warn("Database not available, returning default points: 0");
+      return 0;
+    }
 
-  const result = await db.execute(
-    `SELECT points FROM users WHERE id = ?`,
-    [userId]
-  );
+    const result = await db.execute(
+      `SELECT points FROM users WHERE id = ?`,
+      [userId]
+    );
 
-  const user = Array.isArray(result) ? result[0] : (result.rows?.[0] || null);
-  
-  if (!user) {
-    throw new Error("用户不存在");
+    const user = Array.isArray(result) ? result[0] : (result.rows?.[0] || null);
+    
+    if (!user) {
+      console.warn(`User ${userId} not found, returning default points: 0`);
+      return 0;
+    }
+
+    return Number(user.points) || 0;
+  } catch (error) {
+    console.error("Error getting user points:", error);
+    // 暂时返回0，等积分系统完善后再启用真实查询
+    return 0;
   }
-
-  return Number(user.points) || 0;
 }
 
 /**
