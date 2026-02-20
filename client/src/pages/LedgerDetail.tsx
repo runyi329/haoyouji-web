@@ -339,14 +339,14 @@ export default function LedgerDetail() {
       {/* 待审批提示 */}
       {pendingApprovals.length > 0 && (
         <div 
-          className="mx-4 mt-3 mb-2 bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-orange-100 transition-colors"
+          className="mx-4 mt-3 mb-2 bg-cream border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-cream transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
         >
-          <Search className="w-4 h-4 text-orange-600 flex-shrink-0" />
+          <Search className="w-4 h-4 text-brand-gold flex-shrink-0" />
           <span className="text-sm text-orange-800">
             你有 <span className="font-semibold">{pendingApprovals.length}</span> 个待审批账目
           </span>
-          <ChevronRight className="w-4 h-4 text-orange-600 ml-auto" />
+          <ChevronRight className="w-4 h-4 text-brand-gold ml-auto" />
         </div>
       )}
 

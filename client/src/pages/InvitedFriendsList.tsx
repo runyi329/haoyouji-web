@@ -94,7 +94,7 @@ export default function InvitedFriendsList() {
               <p className="text-red-500">加载失败: {error.message}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-3 px-4 py-2 bg-[#A80000] text-white rounded-lg text-sm"
+                className="mt-3 px-4 py-2 bg-brand-red text-white rounded-lg text-sm"
               >
                 重试
               </button>
@@ -126,11 +126,11 @@ export default function InvitedFriendsList() {
           <CardContent className="p-3">
             <div className="flex items-center gap-2">
               <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50">
-                <UserPlus className="w-4 h-4 text-[#A80000] dark:text-red-400" />
+                <UserPlus className="w-4 h-4 text-brand-red dark:text-red-400" />
               </div>
               <div>
                 <p className="text-xs text-stable-gray dark:text-gray-400">已邀请好友</p>
-                <p className="text-xl font-bold text-[#A80000] dark:text-red-400">
+                <p className="text-xl font-bold text-brand-red dark:text-red-400">
                   {friends?.length || 0}<span className="text-xs font-normal ml-1">人</span>
                 </p>
               </div>
@@ -181,7 +181,7 @@ export default function InvitedFriendsList() {
                       }}
                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
                         sortType === option.value
-                          ? "bg-brand-red-light dark:bg-red-900/20 text-[#A80000] dark:text-red-400 font-medium"
+                          ? "bg-brand-red-light dark:bg-red-900/20 text-brand-red dark:text-red-400 font-medium"
                           : ""
                       }`}
                     >
@@ -277,9 +277,9 @@ export default function InvitedFriendsList() {
 
                     {/* 全部 */}
                     <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-brand-red-light dark:bg-red-900/20">
-                      <Users className="w-4 h-4 text-[#A80000] dark:text-red-400" />
+                      <Users className="w-4 h-4 text-brand-red dark:text-red-400" />
                       <span className="text-xs text-stable-gray dark:text-gray-400">全部</span>
-                      <span className="text-sm text-[#A80000] dark:text-red-400 font-semibold">
+                      <span className="text-sm text-brand-red dark:text-red-400 font-semibold">
                         {friend.totalContactsCount}
                       </span>
                     </div>
@@ -296,12 +296,12 @@ export default function InvitedFriendsList() {
                     </div>
                     
                     {/* 联络数 */}
-                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-orange-50 dark:bg-orange-900/20">
-                      <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-cream dark:bg-orange-900/20">
+                      <svg className="w-4 h-4 text-brand-gold dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
                       <span className="text-xs text-stable-gray dark:text-gray-400">联络</span>
-                      <span className="text-sm text-orange-600 dark:text-orange-400 font-semibold">
+                      <span className="text-sm text-brand-gold dark:text-orange-400 font-semibold">
                         {friend.interactionsCount || 0}
                       </span>
                     </div>

@@ -13,7 +13,7 @@ export default function ReadingStoryList() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 flex items-center justify-center">
-        <div className="text-2xl text-orange-600">加载中...</div>
+        <div className="text-2xl text-brand-gold">加载中...</div>
       </div>
     );
   }
@@ -27,13 +27,13 @@ export default function ReadingStoryList() {
       {/* 顶部导航 */}
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games">
-          <Button variant="ghost" size="lg" className="text-orange-600">
+          <Button variant="ghost" size="lg" className="text-brand-gold">
             <ArrowLeft className="w-6 h-6 mr-2" />
             返回游戏列表
           </Button>
         </Link>
         <Link href="/parent/reading-config">
-          <Button variant="default" size="lg" className="bg-[#A80000] hover:bg-[#8a0000]">
+          <Button variant="default" size="lg" className="bg-brand-red hover:bg-brand-red-dark">
             <Settings className="w-5 h-5 mr-2" />
             家长设置
           </Button>
@@ -42,7 +42,7 @@ export default function ReadingStoryList() {
       
       {/* 页面标题 */}
       <div className="max-w-6xl mx-auto mb-8 text-center">
-        <h1 className="text-5xl font-bold text-orange-600 mb-4">📖 阅读识字</h1>
+        <h1 className="text-5xl font-bold text-brand-gold mb-4">📖 阅读识字</h1>
         <p className="text-xl text-gray-600">
           选择一个故事，点击文字就能听到读音哦！
         </p>
@@ -99,7 +99,7 @@ export default function ReadingStoryList() {
       {customStories.length > 0 && (
         <div className="max-w-6xl mx-auto mb-12">
           <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-            <Sparkles className="w-8 h-8 text-[#A80000]" />
+            <Sparkles className="w-8 h-8 text-brand-red" />
             我的故事
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -120,9 +120,9 @@ export default function ReadingStoryList() {
                       {!story.coverImageUrl && (
                         <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                           {story.type === "ai_generated" ? (
-                            <Sparkles className="w-6 h-6 text-[#A80000]" />
+                            <Sparkles className="w-6 h-6 text-brand-red" />
                           ) : (
-                            <BookOpen className="w-6 h-6 text-[#A80000]" />
+                            <BookOpen className="w-6 h-6 text-brand-red" />
                           )}
                         </div>
                       )}
@@ -136,7 +136,7 @@ export default function ReadingStoryList() {
                         <div className="flex items-center gap-4 text-sm text-gray-500">
                           <span>{story.wordCount} 字</span>
                           {story.type === "ai_generated" && (
-                            <span className="text-[#A80000] font-semibold">AI生成</span>
+                            <span className="text-brand-red font-semibold">AI生成</span>
                           )}
                         </div>
                       </div>
@@ -158,7 +158,7 @@ export default function ReadingStoryList() {
             请家长在设置页面添加自定义故事或使用AI生成故事
           </p>
           <Link href="/parent/reading-config">
-            <Button size="lg" className="bg-[#A80000] hover:bg-[#8a0000]">
+            <Button size="lg" className="bg-brand-red hover:bg-brand-red-dark">
               <Settings className="w-5 h-5 mr-2" />
               前往设置
             </Button>

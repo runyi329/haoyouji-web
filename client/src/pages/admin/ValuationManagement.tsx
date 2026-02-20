@@ -81,7 +81,7 @@ export default function ValuationManagement() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <RefreshCw className="w-8 h-8 animate-spin text-[#800000]" />
+        <RefreshCw className="w-8 h-8 animate-spin text-brand-red-dark" />
       </div>
     );
   }
@@ -106,7 +106,7 @@ export default function ValuationManagement() {
       <div className="mx-6 -mt-4 bg-white rounded-lg shadow-sm p-6 mb-6">
         <div className="text-center">
           <div className="text-sm text-gray-500 mb-2">当前平台估值</div>
-          <div className="text-4xl font-bold text-[#800000]">
+          <div className="text-4xl font-bold text-brand-red-dark">
             ¥{currentValuation.toLocaleString()}
           </div>
           <div className="text-xs text-gray-400 mt-2">基于AI实时计算</div>
@@ -123,7 +123,7 @@ export default function ValuationManagement() {
                   type="checkbox"
                   checked={weight.is_enabled}
                   onChange={() => handleToggleEnabled(weight.id)}
-                  className="w-5 h-5 text-[#800000] rounded focus:ring-[#800000]"
+                  className="w-5 h-5 text-brand-red-dark rounded focus:ring-[#800000]"
                 />
                 <div>
                   <div className="font-bold text-gray-900">{weight.action_name}</div>

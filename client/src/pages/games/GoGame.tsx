@@ -447,7 +447,7 @@ export default function GoGame() {
     
     return (
       <div 
-        className="inline-grid bg-amber-200 p-3 md:p-4 rounded-lg shadow-lg"
+        className="inline-grid bg-cream p-3 md:p-4 rounded-lg shadow-lg"
         style={{ 
           gridTemplateColumns: `repeat(${size}, ${sizes.cell})`,
           gap: '0px'
@@ -466,13 +466,13 @@ export default function GoGame() {
                 onClick={() => placeStone(rowIndex, colIndex)}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="absolute bg-amber-900/60 w-full h-px" />
-                  <div className="absolute bg-amber-900/60 w-px h-full" />
+                  <div className="absolute bg-brand-gold/60 w-full h-px" />
+                  <div className="absolute bg-brand-gold/60 w-px h-full" />
                 </div>
                 
                 {isStarPoint && !cell && (
                   <div 
-                    className="absolute bg-amber-900/80 rounded-full z-10" 
+                    className="absolute bg-brand-gold/80 rounded-full z-10" 
                     style={{ width: sizes.star, height: sizes.star }}
                   />
                 )}
@@ -537,7 +537,7 @@ export default function GoGame() {
                   </div>
                   <div className="flex-1">
                     <p className="font-medium">{currentKid.name} 正在玩</p>
-                    <div className="flex items-center gap-1 text-sm text-amber-600">
+                    <div className="flex items-center gap-1 text-sm text-brand-gold">
                       <Star className="w-4 h-4 fill-current" />
                       <span>获胜可得 {getWinReward()} 颗星星</span>
                     </div>

@@ -279,7 +279,7 @@ export default function PuzzleGame() {
                   <div className="text-xs text-muted-foreground">得分</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-[#A80000]">{moves}</div>
+                  <div className="text-2xl font-bold text-brand-red">{moves}</div>
                   <div className="text-xs text-muted-foreground">步数</div>
                 </div>
                 <div>

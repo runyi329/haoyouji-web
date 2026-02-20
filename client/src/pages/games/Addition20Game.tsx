@@ -476,7 +476,7 @@ export default function Addition20Game() {
               <Card className="p-4 mb-6 max-w-md mx-auto bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-600" />
+                    <Trophy className="w-5 h-5 text-brand-gold" />
                     <h3 className="font-semibold text-amber-900">继续挑战</h3>
                   </div>
                   <Button 
@@ -499,22 +499,22 @@ export default function Addition20Game() {
                 )}
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-amber-700">奖品：</span>
+                    <span className="text-brand-gold">奖品：</span>
                     <span className="font-medium text-amber-900">{activeChallenge.rewardTitle}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-amber-700">当前进度：</span>
+                    <span className="text-brand-gold">当前进度：</span>
                     <span className="font-medium text-amber-900">
                       {activeChallenge.currentCorrectCount} / {activeChallenge.targetCorrectCount} 题
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-amber-200 rounded-full overflow-hidden mt-2">
+                  <div className="w-full h-2 bg-cream rounded-full overflow-hidden mt-2">
                     <div
                       className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
                       style={{ width: `${(activeChallenge.currentCorrectCount / activeChallenge.targetCorrectCount) * 100}%` }}
                     />
                   </div>
-                  <p className="text-xs text-amber-600 mt-2">
+                  <p className="text-xs text-brand-gold mt-2">
                     还差 {activeChallenge.targetCorrectCount - activeChallenge.currentCorrectCount} 题就可以获得奖品！
                   </p>
                 </div>
@@ -607,12 +607,12 @@ export default function Addition20Game() {
                     </div>
                   )}
                 </div>
-                <h2 className="text-3xl font-bold mb-4 text-amber-600">🎉 挑战完成！</h2>
+                <h2 className="text-3xl font-bold mb-4 text-brand-gold">🎉 挑战完成！</h2>
                 <Card className="max-w-md mx-auto p-6 mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
                   <h3 className="text-2xl font-bold text-amber-900 mb-4">
                     你赢得了：{activeChallenge.rewardTitle}
                   </h3>
-                  <div className="space-y-2 text-sm text-amber-700">
+                  <div className="space-y-2 text-sm text-brand-gold">
                     <p>累计答对：{activeChallenge.targetCorrectCount} 题</p>
                     <p>总答题次数：{activeChallenge.totalAttempted} 次</p>
                     <p>正确率：{Math.round((activeChallenge.totalCorrect / activeChallenge.totalAttempted) * 100)}%</p>
@@ -667,7 +667,7 @@ export default function Addition20Game() {
               <Card className="p-4 mb-4 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-600" />
+                    <Trophy className="w-5 h-5 text-brand-gold" />
                     <span className="font-semibold text-amber-900">有奖挑战进行中</span>
                   </div>
                   <Button
@@ -678,25 +678,25 @@ export default function Addition20Game() {
                       toast.success("已保存进度，下次继续！");
                       window.location.href = `/games?kidId=${selectedKidId}`;
                     }}
-                    className="border-amber-400 text-amber-700 hover:bg-amber-100"
+                    className="border-amber-400 text-brand-gold hover:bg-cream"
                   >
                     休息保存
                   </Button>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-amber-700">奖品：{activeChallenge.rewardTitle}</span>
+                    <span className="text-brand-gold">奖品：{activeChallenge.rewardTitle}</span>
                     <span className="font-semibold text-amber-900">
                       {activeChallenge.currentCorrectCount} / {activeChallenge.targetCorrectCount} 题
                     </span>
                   </div>
-                  <div className="w-full h-3 bg-amber-200 rounded-full overflow-hidden">
+                  <div className="w-full h-3 bg-cream rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-300"
                       style={{ width: `${(activeChallenge.currentCorrectCount / activeChallenge.targetCorrectCount) * 100}%` }}
                     />
                   </div>
-                  <p className="text-xs text-amber-600">
+                  <p className="text-xs text-brand-gold">
                     还差 {activeChallenge.targetCorrectCount - activeChallenge.currentCorrectCount} 题就可以获得奖品啦！
                   </p>
                 </div>
@@ -740,7 +740,7 @@ export default function Addition20Game() {
                 <div className="text-center">
                   <div className="text-6xl font-bold mb-8 flex items-center justify-center gap-4">
                     <span className="text-primary">{currentQuestion.num1}</span>
-                    <span className="text-orange-500">+</span>
+                    <span className="text-brand-gold">+</span>
                     <span className="text-primary">{currentQuestion.num2}</span>
                     <span className="text-muted-foreground">=</span>
                     <span className="text-4xl text-muted-foreground">?</span>

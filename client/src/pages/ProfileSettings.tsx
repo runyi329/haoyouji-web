@@ -289,11 +289,11 @@ export default function ProfileSettings() {
                         fill="none"
                         strokeDasharray={`${2 * Math.PI * 32}`}
                         strokeDashoffset={`${2 * Math.PI * 32 * (1 - 0.8)}`}
-                        className="text-orange-500 transition-all duration-500"
+                        className="text-brand-gold transition-all duration-500"
                       />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xl font-bold text-orange-600 dark:text-orange-400">4/5</span>
+                      <span className="text-xl font-bold text-brand-gold dark:text-orange-400">4/5</span>
                     </div>
                   </div>
                 </div>

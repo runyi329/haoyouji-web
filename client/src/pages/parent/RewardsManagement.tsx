@@ -232,7 +232,7 @@ export default function RewardsManagement() {
                     </p>
                     <div className="flex items-center gap-2 mb-4">
                       <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                      <span className="font-bold text-amber-600">{reward.pointsCost} 颗星星</span>
+                      <span className="font-bold text-brand-gold">{reward.pointsCost} 颗星星</span>
                     </div>
                     <div className="flex gap-2 w-full">
                       <Button
@@ -261,7 +261,7 @@ export default function RewardsManagement() {
           )}
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-amber-50 border border-amber-200">
+          <div className="mt-6 p-4 rounded-lg bg-cream border border-amber-200">
             <p className="text-sm text-amber-800">
               <strong>提示：</strong>在这里添加和管理您为宝贝准备的奖品。宝贝可以用游戏获得的星星在"星星商城"兑换这些奖品。
             </p>

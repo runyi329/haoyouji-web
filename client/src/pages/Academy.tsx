@@ -434,7 +434,7 @@ export default function Academy() {
         )}
 
         {/* 底部提示 */}
-        <div className="bg-amber-50 rounded-2xl p-4 shadow-sm">
+        <div className="bg-cream rounded-2xl p-4 shadow-sm">
           <p className="text-sm text-amber-800 text-center">
             💡 小贴士：如需在使用过程中遇到问题，可以随时返回这里查看相关功能说明。
           </p>

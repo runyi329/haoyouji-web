@@ -617,7 +617,7 @@ export default function GomokuGame() {
     
     return (
       <div 
-        className="inline-grid bg-amber-200 p-2 md:p-3 rounded-lg shadow-lg"
+        className="inline-grid bg-cream p-2 md:p-3 rounded-lg shadow-lg"
         style={{ 
           gridTemplateColumns: `repeat(${BOARD_SIZE}, ${cellSize})`,
           gap: '0px'
@@ -635,12 +635,12 @@ export default function GomokuGame() {
                 onClick={() => placeStone(rowIndex, colIndex)}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="absolute bg-amber-900/60 w-full h-px" />
-                  <div className="absolute bg-amber-900/60 w-px h-full" />
+                  <div className="absolute bg-brand-gold/60 w-full h-px" />
+                  <div className="absolute bg-brand-gold/60 w-px h-full" />
                 </div>
                 
                 {isStarPoint(rowIndex, colIndex) && !cell && (
-                  <div className="absolute w-1.5 h-1.5 bg-amber-900/80 rounded-full z-10" />
+                  <div className="absolute w-1.5 h-1.5 bg-brand-gold/80 rounded-full z-10" />
                 )}
                 
                 {cell && (
@@ -703,7 +703,7 @@ export default function GomokuGame() {
                   </div>
                   <div className="flex-1">
                     <p className="font-medium">{currentKid.name} 正在玩</p>
-                    <div className="flex items-center gap-1 text-sm text-amber-600">
+                    <div className="flex items-center gap-1 text-sm text-brand-gold">
                       <Star className="w-4 h-4 fill-current" />
                       <span>获胜可得 {getWinReward()} 颗星星</span>
                     </div>
@@ -778,7 +778,7 @@ export default function GomokuGame() {
                     {aiDan >= 4 && aiDan <= 6 && "适合有一定基础的玩家"}
                     {aiDan >= 7 && "高手级别，电脑几乎不会失误"}
                   </p>
-                  <div className="flex items-center gap-1 mt-2 text-amber-600">
+                  <div className="flex items-center gap-1 mt-2 text-brand-gold">
                     <Star className="w-4 h-4 fill-current" />
                     <span className="text-xs">获胜奖励: {getWinReward()} 颗星星</span>
                   </div>

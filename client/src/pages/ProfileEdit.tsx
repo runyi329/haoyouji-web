@@ -196,7 +196,7 @@ export default function ProfileEdit() {
             onClick={() => setActiveTab("basic")}
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "basic"
-                ? "border-[#A80000] text-[#A80000] font-medium"
+                ? "border-brand-red text-brand-red font-medium"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -206,7 +206,7 @@ export default function ProfileEdit() {
             onClick={() => setActiveTab("verification")}
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "verification"
-                ? "border-[#A80000] text-[#A80000] font-medium"
+                ? "border-brand-red text-brand-red font-medium"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -216,7 +216,7 @@ export default function ProfileEdit() {
             onClick={() => setActiveTab("address")}
             className={`py-3 px-2 border-b-2 transition-colors ${
               activeTab === "address"
-                ? "border-[#A80000] text-[#A80000] font-medium"
+                ? "border-brand-red text-brand-red font-medium"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -282,7 +282,7 @@ export default function ProfileEdit() {
             <button
               onClick={handleSaveProfile}
               disabled={saving}
-              className="mt-6 w-full bg-[#A80000] text-white py-2 rounded-lg hover:bg-[#800000] transition-colors disabled:bg-gray-400"
+              className="mt-6 w-full bg-brand-red text-white py-2 rounded-lg hover:bg-brand-red-dark transition-colors disabled:bg-gray-400"
             >
               {saving ? "保存中..." : "保存"}
             </button>
@@ -333,7 +333,7 @@ export default function ProfileEdit() {
                       ? "bg-green-50 text-green-700"
                       : verificationForm.verificationStatus === "rejected"
                       ? "bg-red-50 text-red-700"
-                      : "bg-yellow-50 text-yellow-700"
+                      : "bg-cream text-brand-gold"
                   }`}
                 >
                   {verificationForm.verificationStatus === "verified"
@@ -347,7 +347,7 @@ export default function ProfileEdit() {
             <button
               onClick={handleSaveProfile}
               disabled={saving}
-              className="mt-6 w-full bg-[#A80000] text-white py-2 rounded-lg hover:bg-[#800000] transition-colors disabled:bg-gray-400"
+              className="mt-6 w-full bg-brand-red text-white py-2 rounded-lg hover:bg-brand-red-dark transition-colors disabled:bg-gray-400"
             >
               {saving ? "保存中..." : "保存"}
             </button>
@@ -366,7 +366,7 @@ export default function ProfileEdit() {
                       <span className="font-medium text-gray-900">{address.recipientName}</span>
                       <span className="text-gray-600">{address.recipientPhone}</span>
                       {address.isDefault === 1 && (
-                        <span className="px-2 py-0.5 text-xs bg-[#A80000] text-white rounded">
+                        <span className="px-2 py-0.5 text-xs bg-brand-red text-white rounded">
                           默认
                         </span>
                       )}
@@ -387,7 +387,7 @@ export default function ProfileEdit() {
                   <div className="flex space-x-2 ml-4">
                     <button
                       onClick={() => handleEditAddress(address)}
-                      className="text-[#A80000] hover:text-[#800000] text-sm"
+                      className="text-brand-red hover:text-brand-red-dark text-sm"
                     >
                       编辑
                     </button>
@@ -406,7 +406,7 @@ export default function ProfileEdit() {
             {!editingAddress && (
               <button
                 onClick={handleAddAddress}
-                className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-4 text-gray-600 hover:border-[#A80000] hover:text-[#A80000] transition-colors"
+                className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg py-4 text-gray-600 hover:border-brand-red hover:text-brand-red transition-colors"
               >
                 + 添加新地址
               </button>
@@ -553,7 +553,7 @@ export default function ProfileEdit() {
                       onChange={(e) =>
                         setAddressForm({ ...addressForm, isDefault: e.target.checked })
                       }
-                      className="w-4 h-4 text-[#A80000] border-gray-300 rounded focus:ring-[#A80000]"
+                      className="w-4 h-4 text-brand-red border-gray-300 rounded focus:ring-[#A80000]"
                     />
                     <label htmlFor="isDefault" className="ml-2 text-sm text-gray-700">
                       设为默认地址
@@ -569,7 +569,7 @@ export default function ProfileEdit() {
                   </button>
                   <button
                     onClick={handleSaveAddress}
-                    className="flex-1 bg-[#A80000] text-white py-2 rounded-lg hover:bg-[#800000] transition-colors"
+                    className="flex-1 bg-brand-red text-white py-2 rounded-lg hover:bg-brand-red-dark transition-colors"
                   >
                     保存
                   </button>

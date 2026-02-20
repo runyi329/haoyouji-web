@@ -402,27 +402,27 @@ export default function Profile() {
       id: "invite-friends",
       icon: UserPlus, 
       label: "邀请好友", 
-      color: "bg-orange-50 text-orange-600",
+      color: "bg-cream text-brand-gold",
       badge: null, 
       onClick: () => navigate("/parent/profile/invite")
     },
-    { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => navigate("/parent/my-equity") },
+    { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-cream text-brand-gold", badge: null, onClick: () => navigate("/parent/my-equity") },
     { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-pink-50 text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
     { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/work-groups") },
-    { id: "points", icon: Award, label: "我的积分", color: "bg-yellow-50 text-yellow-600", badge: null, onClick: () => navigate("/parent/points") },
+    { id: "points", icon: Award, label: "我的积分", color: "bg-cream text-brand-gold", badge: null, onClick: () => navigate("/parent/points") },
     { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
-    { id: "notifications", icon: Bell, label: "消息通知", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "notifications", icon: Bell, label: "消息通知", color: "bg-cream text-brand-gold", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
   ];
 
   // 帮助与支持功能
   const helpFeatures: FeatureItem[] = [
-    { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-brand-red-light text-[#A80000]", badge: null, onClick: () => navigate("/parent/theme-settings") },
+    { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-brand-red-light text-brand-red", badge: null, onClick: () => navigate("/parent/theme-settings") },
     { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-cyan-50 text-cyan-600", badge: null, onClick: () => navigate("/parent/academy") },
     { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-teal-50 text-teal-600", badge: null, onClick: () => toast("功能开发中") },
     { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => navigate("/parent/business-plan") },
@@ -442,7 +442,7 @@ export default function Profile() {
   if (userLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
       </div>
     );
   }
@@ -476,7 +476,7 @@ export default function Profile() {
             <button
               onClick={handleAvatarClick}
               disabled={isUploading}
-              className="absolute bottom-0 right-0 bg-white-pure text-[#A80000] rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+              className="absolute bottom-0 right-0 bg-white-pure text-brand-red rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
             >
               <Camera className="w-3 h-3" />
             </button>

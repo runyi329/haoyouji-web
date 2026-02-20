@@ -187,9 +187,9 @@ export default function LedgerApprovalSettings() {
       {/* 内容区域 */}
       <div className="p-4">
         {/* 说明文字 */}
-        <Card className="bg-orange-50 border-orange-200 p-4 mb-4">
+        <Card className="bg-cream border-orange-200 p-4 mb-4">
           <div className="flex items-start gap-2">
-            <AlertCircle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="h-5 w-5 text-brand-gold flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm text-orange-800 leading-relaxed">
                 开启审批人之后，记账人添加新的账目需要所属全部审批人审批之后才会入账。账目在未审批之前不会统计到系统

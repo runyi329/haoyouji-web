@@ -216,7 +216,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
                         {vocab.category}
                       </span>
-                      <span className="px-2 py-1 bg-red-100 text-[#8a0000] rounded">
+                      <span className="px-2 py-1 bg-red-100 text-brand-red-dark rounded">
                         {vocab.difficulty === "easy" ? "简单" : vocab.difficulty === "medium" ? "中等" : "困难"}
                       </span>
                     </div>
@@ -271,7 +271,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
                         {vocab.category}
                       </span>
-                      <span className="px-2 py-1 bg-red-100 text-[#8a0000] rounded">
+                      <span className="px-2 py-1 bg-red-100 text-brand-red-dark rounded">
                         {vocab.difficulty === "easy" ? "简单" : vocab.difficulty === "medium" ? "中等" : "困难"}
                       </span>
                     </div>

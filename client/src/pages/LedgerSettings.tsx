@@ -497,7 +497,7 @@ function SettingItem({
       <div className="flex items-center gap-2">
         <span className="text-[15px] text-core-black">{label}</span>
         {isVip && (
-          <span className="text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
+          <span className="text-xs font-bold text-brand-gold bg-cream px-1.5 py-0.5 rounded">
             VIP
           </span>
         )}

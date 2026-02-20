@@ -112,7 +112,7 @@ export default function LedgerFilter() {
   // 账目类型选项
   const transactionTypes = [
     { value: "all", label: "不限制", color: "bg-blue-500" },
-    { value: "expense", label: "支出", color: "bg-orange-500" },
+    { value: "expense", label: "支出", color: "bg-brand-gold" },
     { value: "income", label: "收入", color: "bg-green-500" },
   ];
 
@@ -121,8 +121,8 @@ export default function LedgerFilter() {
     { value: "all", label: "全部", color: "bg-blue-500" },
     { value: "wechat", label: "微信", color: "bg-green-500" },
     { value: "alipay", label: "支付宝", color: "bg-blue-400" },
-    { value: "bank", label: "银行卡", color: "bg-orange-500" },
-    { value: "digital", label: "数字钱包", color: "bg-[#A80000]" },
+    { value: "bank", label: "银行卡", color: "bg-brand-gold" },
+    { value: "digital", label: "数字钱包", color: "bg-brand-red" },
     { value: "cash", label: "现金", color: "bg-gray-500" },
   ];
 

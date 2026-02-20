@@ -49,7 +49,7 @@ export default function PointsDetail() {
       game: { label: "游戏奖励", color: "text-green-600" },
       task: { label: "任务完成", color: "text-blue-600" },
       reward: { label: "兑换奖品", color: "text-red-600" },
-      admin: { label: "系统调整", color: "text-[#A80000]" },
+      admin: { label: "系统调整", color: "text-brand-red" },
     };
     return typeMap[type] || { label: "其他", color: "text-gray-600" };
   };
@@ -58,10 +58,10 @@ export default function PointsDetail() {
   const pointLevels = [
     { level: 1, name: "青铜", minPoints: 0, maxPoints: 999, color: "bg-orange-700" },
     { level: 2, name: "白银", minPoints: 1000, maxPoints: 4999, color: "bg-gray-400" },
-    { level: 3, name: "黄金", minPoints: 5000, maxPoints: 9999, color: "bg-yellow-500" },
+    { level: 3, name: "黄金", minPoints: 5000, maxPoints: 9999, color: "bg-brand-gold" },
     { level: 4, name: "铂金", minPoints: 10000, maxPoints: 49999, color: "bg-cyan-500" },
     { level: 5, name: "钻石", minPoints: 50000, maxPoints: 99999, color: "bg-blue-600" },
-    { level: 6, name: "王者", minPoints: 100000, maxPoints: Infinity, color: "bg-[#A80000]" },
+    { level: 6, name: "王者", minPoints: 100000, maxPoints: Infinity, color: "bg-brand-red" },
   ];
 
   // 获取当前等级

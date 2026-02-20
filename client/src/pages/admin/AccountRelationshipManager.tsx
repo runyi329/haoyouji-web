@@ -133,7 +133,7 @@ export default function AccountRelationshipManager() {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "super_admin":
-        return <Badge className="bg-[#A80000]">超级管理员</Badge>;
+        return <Badge className="bg-brand-red">超级管理员</Badge>;
       case "parent":
         return <Badge className="bg-blue-500">家长</Badge>;
       case "baby":
@@ -391,13 +391,13 @@ export default function AccountRelationshipManager() {
       {/* 说明卡片 */}
       <Card className="p-6 bg-gradient-to-br from-red-50 to-rose-50">
         <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-          <Users className="w-5 h-5 text-[#A80000]" />
+          <Users className="w-5 h-5 text-brand-red" />
           账户体系说明
         </h3>
         <div className="space-y-2 text-sm text-gray-700">
           <p><strong>三级权限体系：</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-4">
-            <li><Badge className="bg-[#A80000] mr-2">超级管理员</Badge>拥有所有权限，可管理所有家庭和用户</li>
+            <li><Badge className="bg-brand-red mr-2">超级管理员</Badge>拥有所有权限，可管理所有家庭和用户</li>
             <li><Badge className="bg-blue-500 mr-2">家长</Badge>可管理自己家庭的宝宝、词库、奖励等</li>
             <li><Badge className="bg-pink-500 mr-2">宝宝</Badge>只能使用游戏和学习功能</li>
           </ul>
@@ -419,7 +419,7 @@ export default function AccountRelationshipManager() {
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <UserCircle className="w-5 h-5 text-[#A80000]" />
+            <UserCircle className="w-5 h-5 text-brand-red" />
             用户账户列表
           </h3>
           <div className="flex items-center gap-2">
@@ -679,7 +679,7 @@ export default function AccountRelationshipManager() {
                             onClick={() => handleOpenFeatureManagement(user.id)}
                             title="功能权限"
                           >
-                            <Settings className="w-4 h-4 text-[#A80000]" />
+                            <Settings className="w-4 h-4 text-brand-red" />
                           </Button>
                         )}
                       </TableCell>
