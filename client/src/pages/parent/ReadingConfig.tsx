@@ -103,7 +103,7 @@ export default function ReadingConfig() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 flex items-center justify-center">
-        <div className="text-2xl text-brand-red">加载中...</div>
+        <div className="text-2xl text-[#D32F2F]">加载中...</div>
       </div>
     );
   }
@@ -117,7 +117,7 @@ export default function ReadingConfig() {
       {/* 顶部导航 */}
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games/reading">
-          <Button variant="ghost" size="lg" className="text-brand-red">
+          <Button variant="ghost" size="lg" className="text-[#D32F2F]">
             <ArrowLeft className="w-6 h-6 mr-2" />
             返回
           </Button>
@@ -126,7 +126,7 @@ export default function ReadingConfig() {
       
       {/* 页面标题 */}
       <div className="max-w-6xl mx-auto mb-8 text-center">
-        <h1 className="text-5xl font-bold text-brand-red mb-4">📚 阅读识字设置</h1>
+        <h1 className="text-5xl font-bold text-[#D32F2F] mb-4">📚 阅读识字设置</h1>
         <p className="text-xl text-gray-600">
           管理故事内容，为孩子创建个性化的阅读材料
         </p>

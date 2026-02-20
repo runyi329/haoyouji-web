@@ -122,7 +122,7 @@ function CopyableItem({
   };
 
   return (
-    <div className="flex items-start gap-2 py-2 hover:bg-cream transition-colors">
+    <div className="flex items-start gap-2 py-2 hover:bg-[#FAF3ED] transition-colors">
       <div className="flex-1 min-w-0">
         {isComposite ? (
           <div className="space-y-0.5">
@@ -241,8 +241,8 @@ function ExtendedInfoSection({
             {fieldIndex > 0 && <div className="border-t" />}
             
             {/* 字段标题 */}
-            <div className="px-3 py-1.5 bg-cream border-b">
-              <span className="text-xs font-medium text-stable-gray">{field.categoryName}</span>
+            <div className="px-3 py-1.5 bg-[#FAF3ED] border-b">
+              <span className="text-xs font-medium text-[#757575]">{field.categoryName}</span>
             </div>
             
             {/* 字段条目列表 */}
@@ -454,7 +454,7 @@ function FieldItem({
             <div key={index} className="flex-1 min-w-0">
               <div className="text-sm">{addr.address}</div>
               {(addr.name || addr.phone) && (
-                <div className="text-xs text-stable-gray mt-1">
+                <div className="text-xs text-[#757575] mt-1">
                   {addr.name && <span>{addr.name}</span>}
                   {addr.name && addr.phone && <span className="mx-1">·</span>}
                   {addr.phone && <span>{addr.phone}</span>}
@@ -515,7 +515,7 @@ function FieldItem({
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-background border-b border-l border-r hover:bg-cream transition-colors">
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-background border-b border-l border-r hover:bg-[#FAF3ED] transition-colors">
       <div className="flex-1 min-w-0">
         <span className="font-medium text-muted-foreground text-sm">{fv.categoryName}: </span>
         {renderValue()}
@@ -1080,7 +1080,7 @@ export default function ContactDetail() {
       id: "monthlyInteractions",
       title: "本月联络",
       value: "",
-      color: "text-brand-red",
+      color: "text-[#D32F2F]",
       getValue: (stats) => `${stats.monthlyInteractions}次`,
     },
   ];
@@ -1112,7 +1112,7 @@ export default function ContactDetail() {
             card.id === "daysSinceLastInteraction" &&
             stats.daysSinceLastInteraction !== null &&
             stats.daysSinceLastInteraction > 30
-              ? "text-brand-gold"
+              ? "text-[#CBA471]"
               : card.color,
         }))
       );
@@ -1556,7 +1556,7 @@ export default function ContactDetail() {
                     <div className="flex items-center gap-3 text-sm mt-2">
                       {contact.title && (
                         <div className="flex items-center max-w-[200px]">
-                          <User className="h-4 w-4 mr-1.5 text-brand-red flex-shrink-0" />
+                          <User className="h-4 w-4 mr-1.5 text-[#D32F2F] flex-shrink-0" />
                           <span className="truncate" title={contact.title}>{contact.title}</span>
                         </div>
                       )}
@@ -1783,10 +1783,10 @@ export default function ContactDetail() {
                 <div className="space-y-3">
                   {customFields.map((field) => (
                     <div key={field.id} className="flex items-start gap-2">
-                      <div className="text-sm font-medium text-core-black min-w-[80px]">
+                      <div className="text-sm font-medium text-[#222222] min-w-[80px]">
                         {field.fieldName}:
                       </div>
-                      <div className="text-sm flex-1 text-core-black">
+                      <div className="text-sm flex-1 text-[#222222]">
                         {isBankCardField(field.fieldName) 
                           ? formatBankCardDisplay(field.fieldValue)
                           : field.fieldValue}
@@ -1848,7 +1848,7 @@ export default function ContactDetail() {
                       </span>
                       {isPersonalTagEditMode && (
                         <button
-                          className="ml-1 p-0.5 rounded-full bg-brand-red-light0 hover:bg-brand-red text-white transition-colors"
+                          className="ml-1 p-0.5 rounded-full bg-[#D32F2F]-light0 hover:bg-[#D32F2F] text-white transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeletePersonalTag(tag.id);
@@ -1971,16 +1971,16 @@ export default function ContactDetail() {
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
-                  <div className="text-center p-4 bg-brand-red-light dark:bg-red-950/30 rounded-lg">
+                  <div className="text-center p-4 bg-[#D32F2F]-light dark:bg-red-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">间接推荐</div>
-                    <div className="text-2xl font-bold text-brand-red dark:text-red-400">
+                    <div className="text-2xl font-bold text-[#D32F2F] dark:text-red-400">
                       {contact.referrerContribution.indirectReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
                   <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">贡献值</div>
-                    <div className="text-2xl font-bold text-brand-gold dark:text-orange-400">
+                    <div className="text-2xl font-bold text-[#CBA471] dark:text-orange-400">
                       {contact.referrerContribution.totalScore}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">分</div>
@@ -2707,9 +2707,9 @@ export default function ContactDetail() {
             setShowToast(false);
           }
         }}>
-          <div className="bg-white-pure rounded-2xl p-6 max-w-[85%] w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl p-6 max-w-[85%] w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-core-black">{toastMessage}</h3>
+              <h3 className="text-lg font-semibold text-[#222222]">{toastMessage}</h3>
               {toastType === 'success' && (
                 <p className="text-sm text-gray-500 mt-2">内容已复制到剪贴板</p>
               )}

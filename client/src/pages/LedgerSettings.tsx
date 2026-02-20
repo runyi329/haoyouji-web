@@ -100,7 +100,7 @@ export default function LedgerSettings() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     );
@@ -108,16 +108,16 @@ export default function LedgerSettings() {
 
   if (!ledgerData) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-gray-500">账本不存在</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cream pb-20">
+    <div className="min-h-screen bg-[#FAF3ED] pb-20">
       {/* 顶部导航栏 */}
-      <div className="bg-white-pure border-b border-divider sticky top-0 z-10">
+      <div className="bg-white border-b border-divider sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}`)}
@@ -125,7 +125,7 @@ export default function LedgerSettings() {
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
-          <h1 className="text-lg font-medium text-core-black">
+          <h1 className="text-lg font-medium text-[#222222]">
             {ledgerData.name}
           </h1>
           <div className="w-10"></div>
@@ -133,7 +133,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 成员管理区域 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <div className="px-4 py-3 text-sm text-gray-500">
           {members?.length || 0}个共享成员
         </div>
@@ -162,7 +162,7 @@ export default function LedgerSettings() {
                 )}
 
               </div>
-              <div className="text-sm text-core-black mt-1">
+              <div className="text-sm text-[#222222] mt-1">
                 {member.nickname || "用户"}
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 基本设置 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <SettingItem 
           label="账本名称" 
           value={ledgerData.name} 
@@ -248,7 +248,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 高级设置 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <SettingItem label="自动重复记账" showIcon hasHelp />
         <SettingItem 
           label="账本结算币种" 
@@ -258,7 +258,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 共享设置 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <SettingItem 
           label="共享账本收支条目" 
           rightContent={
@@ -276,7 +276,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 账本管理 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <SettingItem label="账本状态(封账)" value="使用中" />
 
 
@@ -288,7 +288,7 @@ export default function LedgerSettings() {
       </div>
 
       {/* 导入导出功能 */}
-      <div className="bg-white-pure mt-3">
+      <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
         <SettingItem label="手动导出表格" showIcon />
         <SettingItem label="定期自动备份账目" showIcon />
@@ -296,7 +296,7 @@ export default function LedgerSettings() {
 
       {/* 底部操作按钮 */}
       <div className="mt-6 px-4 space-y-3">
-        <button className="w-full py-3 bg-brand-red-light0 text-white rounded-lg font-medium">
+        <button className="w-full py-3 bg-[#D32F2F]-light0 text-white rounded-lg font-medium">
           退出账本
         </button>
       </div>
@@ -322,7 +322,7 @@ export default function LedgerSettings() {
               <div className={`p-3 rounded-lg text-sm ${
                 inviteMessage.type === 'success' 
                   ? 'bg-green-50 text-green-700 border border-green-200' 
-                  : 'bg-brand-red-light text-red-700 border border-red-200'
+                  : 'bg-[#D32F2F]-light text-red-700 border border-red-200'
               }`}>
                 {inviteMessage.text}
               </div>
@@ -335,7 +335,7 @@ export default function LedgerSettings() {
                   searchResults.map((user: any) => (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-3 bg-cream rounded-lg"
+                      className="flex items-center justify-between p-3 bg-[#FAF3ED] rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <UserAvatar
@@ -344,7 +344,7 @@ export default function LedgerSettings() {
                           size="sm"
                         />
                         <div>
-                          <div className="font-medium text-core-black">{user.username}</div>
+                          <div className="font-medium text-[#222222]">{user.username}</div>
                           {user.name && (
                             <div className="text-sm text-gray-500">{user.name}</div>
                           )}
@@ -403,7 +403,7 @@ export default function LedgerSettings() {
             {members?.filter((m: any) => m.role !== 'owner').map((member: any) => (
               <div
                 key={member.userId}
-                className="flex items-center justify-between p-3 bg-cream rounded-lg"
+                className="flex items-center justify-between p-3 bg-[#FAF3ED] rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <UserAvatar
@@ -414,7 +414,7 @@ export default function LedgerSettings() {
                     className="w-10 h-10 rounded-full"
                   />
                   <div>
-                    <div className="font-medium text-core-black">{member.nickname || member.username}</div>
+                    <div className="font-medium text-[#222222]">{member.nickname || member.username}</div>
                     <div className="text-xs text-gray-400">
                       {member.role === 'admin' ? '管理员' : '普通成员'}
                     </div>
@@ -426,7 +426,7 @@ export default function LedgerSettings() {
                     setShowRemovePicker(false);
                     setShowRemoveDialog(true);
                   }}
-                  className="px-3 py-1.5 bg-brand-red-light0 text-white text-sm rounded-lg hover:bg-brand-red transition-colors"
+                  className="px-3 py-1.5 bg-[#D32F2F]-light0 text-white text-sm rounded-lg hover:bg-[#D32F2F] transition-colors"
                 >
                   移除
                 </button>
@@ -456,7 +456,7 @@ export default function LedgerSettings() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
-              className="bg-brand-red-light0 hover:bg-brand-red"
+              className="bg-[#D32F2F]-light0 hover:bg-[#D32F2F]"
             >
               确认移除
             </AlertDialogAction>
@@ -491,13 +491,13 @@ function SettingItem({
 }: SettingItemProps) {
   return (
     <div 
-      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-cream"
+      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-[#FAF3ED]"
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[15px] text-core-black">{label}</span>
+        <span className="text-[15px] text-[#222222]">{label}</span>
         {isVip && (
-          <span className="text-xs font-bold text-brand-gold bg-cream px-1.5 py-0.5 rounded">
+          <span className="text-xs font-bold text-[#CBA471] bg-[#FAF3ED] px-1.5 py-0.5 rounded">
             VIP
           </span>
         )}

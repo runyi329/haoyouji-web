@@ -123,7 +123,7 @@ export default function DataSecurityPanel() {
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-brand-red" />
+            <Shield className="w-5 h-5 text-[#D32F2F]" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">数据安全管理</h2>
@@ -157,7 +157,7 @@ export default function DataSecurityPanel() {
           <button
             onClick={() => initMutation.mutate()}
             disabled={initMutation.isPending}
-            className="px-4 py-2 bg-brand-red text-white rounded-xl text-sm font-medium hover:bg-brand-red-dark disabled:opacity-50"
+            className="px-4 py-2 bg-[#D32F2F] text-white rounded-xl text-sm font-medium hover:bg-[#D32F2F]-dark disabled:opacity-50"
           >
             {initMutation.isPending ? "初始化中..." : "初始化加密配置"}
           </button>
@@ -168,7 +168,7 @@ export default function DataSecurityPanel() {
       {initialized && Object.entries(groupedConfigs).map(([group, items]) => (
         <div key={group} className="bg-white rounded-2xl p-5 shadow-sm">
           <h3 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-brand-red" />
+            <ShieldCheck className="w-5 h-5 text-[#D32F2F]" />
             {group}
           </h3>
           <div className="space-y-3">

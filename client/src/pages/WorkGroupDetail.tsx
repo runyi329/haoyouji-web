@@ -68,17 +68,17 @@ export default function WorkGroupDetail() {
 
   if (groupLoading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
-        <div className="text-stable-gray">加载中...</div>
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
+        <div className="text-[#757575]">加载中...</div>
       </div>
     );
   }
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-core-black mb-2">工作群不存在</h3>
+          <h3 className="text-lg font-semibold text-[#222222] mb-2">工作群不存在</h3>
           <Button onClick={() => setLocation("/work-groups")} variant="outline">
             返回列表
           </Button>
@@ -88,9 +88,9 @@ export default function WorkGroupDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航栏 */}
-      <div className="bg-brand-red border-b border-brand-red-dark sticky top-0 z-10">
+      <div className="bg-[#D32F2F] border-b border-[#D32F2F]-dark sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -121,8 +121,8 @@ export default function WorkGroupDetail() {
       {/* 主内容区域 */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* 统计信息 */}
-        <div className="bg-white-pure rounded-lg p-4 mb-6 border border-divider">
-          <div className="flex items-center gap-2 text-stable-gray">
+        <div className="bg-white rounded-lg p-4 mb-6 border border-divider">
+          <div className="flex items-center gap-2 text-[#757575]">
             <Users className="h-5 w-5" />
             <span className="text-sm">共 {members.length} 人</span>
           </div>
@@ -130,14 +130,14 @@ export default function WorkGroupDetail() {
 
         {/* 人员列表 */}
         {membersLoading ? (
-          <div className="text-center py-12 text-stable-gray">加载中...</div>
+          <div className="text-center py-12 text-[#757575]">加载中...</div>
         ) : members.length === 0 ? (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
               <UserPlus className="h-8 w-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-semibold text-core-black mb-2">暂无人员</h3>
-            <p className="text-stable-gray mb-6">添加第一个人员，开始跟进工作节点</p>
+            <h3 className="text-lg font-semibold text-[#222222] mb-2">暂无人员</h3>
+            <p className="text-[#757575] mb-6">添加第一个人员，开始跟进工作节点</p>
             <Button
               onClick={() => setShowAddMemberDialog(true)}
               className="btn-primary-gold"
@@ -151,7 +151,7 @@ export default function WorkGroupDetail() {
             {members.map((member) => (
               <Card
                 key={member.id}
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white-pure"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white"
                 onClick={() => setLocation(`/ledger/${member.id}`)}
               >
                 <div className="flex items-center justify-between">
@@ -162,20 +162,20 @@ export default function WorkGroupDetail() {
                       size="md"
                     />
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-core-black mb-1">
+                      <h3 className="text-lg font-semibold text-[#222222] mb-1">
                         {member.name}
                       </h3>
                       {member.description && (
-                        <p className="text-sm text-stable-gray line-clamp-1">
+                        <p className="text-sm text-[#757575] line-clamp-1">
                           {member.description}
                         </p>
                       )}
-                      <p className="text-xs text-stable-gray mt-1">
+                      <p className="text-xs text-[#757575] mt-1">
                         创建时间: {new Date(member.createdAt).toLocaleDateString('zh-CN')}
                       </p>
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-stable-gray flex-shrink-0 ml-4" />
+                  <ChevronRight className="h-5 w-5 text-[#757575] flex-shrink-0 ml-4" />
                 </div>
               </Card>
             ))}

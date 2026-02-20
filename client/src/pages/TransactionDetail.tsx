@@ -459,7 +459,7 @@ export default function TransactionDetail() {
           {displayStatus === 'none' && (
             <button 
               onClick={() => setShowReimbursementForm(true)}
-              className="w-full py-3 bg-brand-red hover:bg-brand-red-dark text-white rounded-lg font-medium text-base transition-colors"
+              className="w-full py-3 bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white rounded-lg font-medium text-base transition-colors"
             >
               申请报销
             </button>
@@ -668,7 +668,7 @@ function DetailItem({ label, value, rightContent, highlight }: DetailItemProps) 
       {rightContent ? (
         rightContent
       ) : (
-        <span className={`text-sm ${highlight ? 'text-brand-gold font-medium' : 'text-gray-900'}`}>
+        <span className={`text-sm ${highlight ? 'text-[#CBA471] font-medium' : 'text-gray-900'}`}>
           {value}
         </span>
       )}

@@ -509,7 +509,7 @@ const LedgerCategories = () => {
               (categoryToDelete.parentId === null || 
                (categoryToDelete.children && categoryToDelete.children.length > 0))
             ) && (
-              <div className="bg-cream border border-yellow-200 rounded p-3">
+              <div className="bg-[#FAF3ED] border border-yellow-200 rounded p-3">
                 <p className="text-sm text-yellow-800">
                   ⚠️ 一旦删除，下面的子分类将全部被删除
                 </p>

@@ -165,7 +165,7 @@ const AddTransaction = () => {
 
   // 预设分类（当数据库中没有分类时显示）
   const defaultCategories = [
-    { id: 2, name: "购物", icon: "🛍️", color: "bg-brand-red-light0" },
+    { id: 2, name: "购物", icon: "🛍️", color: "bg-[#D32F2F]-light0" },
   ];
 
   // 预设子分类（包括三级分类）
@@ -504,12 +504,12 @@ const AddTransaction = () => {
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   // 主题颜色数组
-  const themeColors = ["bg-brand-red", "bg-brand-gold", "bg-green-500", "bg-blue-500"];
+  const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-green-500", "bg-blue-500"];
 
   return (
-    <div className="h-screen flex flex-col bg-cream">
+    <div className="h-screen flex flex-col bg-[#FAF3ED]">
       {/* 顶部导航 */}
-      <div className="bg-brand-red text-white p-3 flex items-center justify-between flex-shrink-0">
+      <div className="bg-[#D32F2F] text-white p-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setLocation(`/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -519,12 +519,12 @@ const AddTransaction = () => {
 
       {/* 类型标签页 - 独立白色容器 */}
       <div className="px-4 py-3 flex-shrink-0">
-        <div className="bg-white-pure rounded-lg flex overflow-hidden shadow-sm">
+        <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "expense"
-                ? "bg-brand-red text-white font-semibold"
-                : "text-stable-gray bg-white"
+                ? "bg-[#D32F2F] text-white font-semibold"
+                : "text-[#757575] bg-white"
             }`}
             onClick={() => setTransactionType("expense")}
           >
@@ -533,8 +533,8 @@ const AddTransaction = () => {
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
               transactionType === "income"
-                ? "bg-brand-red text-white font-semibold"
-                : "text-stable-gray bg-white"
+                ? "bg-[#D32F2F] text-white font-semibold"
+                : "text-[#757575] bg-white"
             }`}
             onClick={() => setTransactionType("income")}
           >
@@ -544,8 +544,8 @@ const AddTransaction = () => {
       </div>
 
       {/* 金额显示 */}
-      <div className="bg-white-pure py-3 px-4 flex-shrink-0">
-        <div className="text-5xl font-light text-core-black">
+      <div className="bg-white py-3 px-4 flex-shrink-0">
+        <div className="text-5xl font-light text-[#222222]">
           {amount || "0.00"}
         </div>
       </div>
@@ -553,9 +553,9 @@ const AddTransaction = () => {
       {/* 可滚动内容区域 */}
       <div className="flex-1 overflow-y-auto">
         {/* 多级分类选择 */}
-        <div className="bg-white-pure mt-1">
+        <div className="bg-white mt-1">
           {/* 一级分类标题 */}
-          <div className="bg-cream px-3 py-2 text-xs text-gray-500">选择分类</div>
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 - 每级单独一行 */}
           {categoryLevels.map((categories, level) => {
@@ -587,7 +587,7 @@ const AddTransaction = () => {
                     {/* 只在第一级显示"+"按钮 */}
                     {level === 0 && (
                       <button
-                        className="px-3 py-1.5 rounded text-xs bg-white-pure border border-dashed border-brand-red text-brand-red flex items-center gap-1 hover:bg-brand-red-light"
+                        className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1 hover:bg-[#D32F2F]-light"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
                       >
                         <Plus className="w-4 h-4" />
@@ -609,8 +609,8 @@ const AddTransaction = () => {
 
 
         {/* 账户选择 */}
-        <div className="bg-white-pure mt-1">
-          <div className="bg-cream px-3 py-2 text-xs text-gray-500">
+        <div className="bg-white mt-1">
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
             {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
           <div className="p-3">
@@ -620,7 +620,7 @@ const AddTransaction = () => {
                 key={account}
                 className={`px-3 py-1.5 rounded text-xs ${
                   selectedAccounts.includes(account)
-                    ? "bg-brand-red text-white"
+                    ? "bg-[#D32F2F] text-white"
                     : "bg-gray-100 text-gray-700"
                 }`}
                 onClick={() => {
@@ -641,8 +641,8 @@ const AddTransaction = () => {
         </div>
 
         {/* 报销状态选择 */}
-        <div className="bg-white-pure mt-1">
-          <div className="bg-cream px-3 py-2 text-xs text-gray-500">
+        <div className="bg-white mt-1">
+          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
             报销状态
           </div>
           <div className="p-3">
@@ -660,7 +660,7 @@ const AddTransaction = () => {
         </div>
 
         {/* 备注输入 */}
-        <div className="bg-white-pure mt-1 flex items-stretch">
+        <div className="bg-white mt-1 flex items-stretch">
           <input
             type="text"
             placeholder="备注"
@@ -705,7 +705,7 @@ const AddTransaction = () => {
             }}
           />
           <button 
-            className="px-6 bg-brand-red text-white flex items-center gap-2"
+            className="px-6 bg-[#D32F2F] text-white flex items-center gap-2"
             onClick={() => fileInputRef.current?.click()}
           >
             <ImageIcon className="w-5 h-5" />
@@ -715,7 +715,7 @@ const AddTransaction = () => {
 
         {/* 图片预览区域 */}
         {uploadedImages.length > 0 && (
-          <div className="bg-white-pure mt-1 p-3">
+          <div className="bg-white mt-1 p-3">
             <div className="flex flex-wrap gap-2">
               {uploadedImages.map((image, index) => (
                 <div key={index} className="relative w-20 h-20">
@@ -725,7 +725,7 @@ const AddTransaction = () => {
                     className="w-full h-full object-cover rounded"
                   />
                   <button
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-brand-red-light0 text-white rounded-full flex items-center justify-center text-xs"
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F]-light0 text-white rounded-full flex items-center justify-center text-xs"
                     onClick={() => {
                       setUploadedImages(prev => prev.filter((_, i) => i !== index));
                     }}
@@ -739,21 +739,21 @@ const AddTransaction = () => {
         )}
 
         {/* 底部工具栏 */}
-        <div className="bg-white-pure mt-1 p-3 mb-2">
+        <div className="bg-white mt-1 p-3 mb-2">
           <div className="flex items-center justify-between text-xs">
-            <button className="flex items-center gap-1 text-stable-gray">
+            <button className="flex items-center gap-1 text-[#757575]">
               <Link2 className="w-3.5 h-3.5" />
               <span>关联账户</span>
             </button>
             <button 
-              className="flex items-center gap-1 text-stable-gray"
+              className="flex items-center gap-1 text-[#757575]"
               onClick={() => setIsDateSheetOpen(true)}
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </button>
             <button 
-              className="flex items-center gap-1 text-stable-gray"
+              className="flex items-center gap-1 text-[#757575]"
               onClick={() => setIsPayerSheetOpen(true)}
             >
               <User className="w-3.5 h-3.5" />
@@ -768,7 +768,7 @@ const AddTransaction = () => {
         {["7", "8", "9", "-"].map((key) => (
           <button
             key={key}
-            className="bg-white-pure p-3 text-xl font-light text-core-black active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
             onClick={() => {
               if (key !== "-") handleNumberInput(key);
             }}
@@ -779,7 +779,7 @@ const AddTransaction = () => {
         {["4", "5", "6", "+"].map((key) => (
           <button
             key={key}
-            className="bg-white-pure p-3 text-xl font-light text-core-black active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
             onClick={() => {
               if (key !== "+") handleNumberInput(key);
             }}
@@ -790,32 +790,32 @@ const AddTransaction = () => {
         {["1", "2", "3"].map((key) => (
           <button
             key={key}
-            className="bg-white-pure p-3 text-xl font-light text-core-black active:bg-gray-200"
+            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
             onClick={() => handleNumberInput(key)}
           >
             {key}
           </button>
         ))}
         <button
-          className="bg-brand-red text-white p-3 text-base font-semibold row-span-2 active:bg-brand-red-dark"
+          className="bg-[#D32F2F] text-white p-3 text-base font-semibold row-span-2 active:bg-[#D32F2F]-dark"
           onClick={handleSave}
         >
           保存
         </button>
         <button
-          className="bg-white-pure p-3 text-xl font-light text-core-black active:bg-gray-200"
+          className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
           onClick={() => handleNumberInput(".")}
         >
           .
         </button>
         <button
-          className="bg-white-pure p-3 text-xl font-light text-core-black active:bg-gray-200"
+          className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
           onClick={() => handleNumberInput("0")}
         >
           0
         </button>
         <button
-          className="bg-white-pure p-3 text-lg text-core-black active:bg-gray-200 flex items-center justify-center"
+          className="bg-white p-3 text-lg text-[#222222] active:bg-gray-200 flex items-center justify-center"
           onClick={handleDelete}
         >
           ⌫
@@ -835,7 +835,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={prevMonth} className="p-1.5">
-                <ChevronLeft className="w-5 h-5 text-brand-red" />
+                <ChevronLeft className="w-5 h-5 text-[#D32F2F]" />
               </button>
               
               {/* 年月显示 */}
@@ -845,7 +845,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={nextMonth} className="p-1.5">
-                <ChevronRight className="w-5 h-5 text-brand-red" />
+                <ChevronRight className="w-5 h-5 text-[#D32F2F]" />
               </button>
               
               {/* 外层箭头 - 控制年份 */}
@@ -856,7 +856,7 @@ const AddTransaction = () => {
               {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="ml-auto px-3 py-1 text-sm text-brand-red border-2 border-brand-red rounded-full"
+                className="ml-auto px-3 py-1 text-sm text-[#D32F2F] border-2 border-[#D32F2F] rounded-full"
               >
                 今天
               </button>
@@ -865,7 +865,7 @@ const AddTransaction = () => {
             {/* 星期标题 */}
             <div className="grid grid-cols-7 gap-1 mb-1">
               {weekDays.map((day) => (
-                <div key={day} className="text-center text-xs text-brand-red py-0.5">
+                <div key={day} className="text-center text-xs text-[#D32F2F] py-0.5">
                   {day}
                 </div>
               ))}
@@ -884,9 +884,9 @@ const AddTransaction = () => {
                     onClick={() => handleDateSelect(day)}
                     className={`
                       h-9 sm:h-10 flex items-center justify-center text-sm rounded
-                      ${!isCurrentMonth ? "text-gray-300" : "text-core-black"}
-                      ${isSelected ? "bg-brand-red text-white font-semibold" : ""}
-                      ${isTodayDate && !isSelected ? "border border-brand-red" : ""}
+                      ${!isCurrentMonth ? "text-gray-300" : "text-[#222222]"}
+                      ${isSelected ? "bg-[#D32F2F] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected ? "border border-[#D32F2F]" : ""}
                       ${isCurrentMonth && !isSelected ? "hover:bg-gray-100" : ""}
                     `}
                   >
@@ -933,7 +933,7 @@ const AddTransaction = () => {
               <span className="text-sm">请选择支出人：</span>
               <button
                 onClick={() => setIsPayerSheetOpen(false)}
-                className="text-brand-red text-sm"
+                className="text-[#D32F2F] text-sm"
               >
                 完成
               </button>
@@ -943,7 +943,7 @@ const AddTransaction = () => {
             {members.map((member) => (
               <button
                 key={member.id}
-                className="w-full flex items-center justify-between p-2 hover:bg-cream rounded"
+                className="w-full flex items-center justify-between p-2 hover:bg-[#FAF3ED] rounded"
                 onClick={() => {
                   setPayer(member.name);
                   setIsPayerSheetOpen(false);

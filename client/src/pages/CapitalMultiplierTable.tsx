@@ -127,7 +127,7 @@ const CapitalMultiplierTable: React.FC = () => {
             <p className="text-sm text-gray-600 mb-2">
               编号 {displaySeatNumber.toString().padStart(4, '0')}
             </p>
-            <div className="text-4xl font-bold text-brand-gold font-mono">
+            <div className="text-4xl font-bold text-[#CBA471] font-mono">
               ×{currentMultiplier.toFixed(4)}
             </div>
           </div>

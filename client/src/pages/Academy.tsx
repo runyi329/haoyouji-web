@@ -48,7 +48,7 @@ const academyModules: AcademyModule[] = [
     icon: Home,
     title: "首页统计",
     color: "text-red-600",
-    bgColor: "bg-brand-red",
+    bgColor: "bg-[#D32F2F]",
     category: "core",
     content: {
       introduction: "首页提供了19个可自定义排序的统计容器，帮助您快速了解人脉管理的整体情况。",
@@ -70,7 +70,7 @@ const academyModules: AcademyModule[] = [
     icon: Users,
     title: "人脉管理",
     color: "text-red-500",
-    bgColor: "bg-brand-red-light0",
+    bgColor: "bg-[#D32F2F]-light0",
     category: "core",
     content: {
       introduction: "全方位管理您的人脉关系，记录每一次联络，维护每一份关系。",
@@ -271,7 +271,7 @@ const academyModules: AcademyModule[] = [
     icon: Heart,
     title: "权益中心",
     color: "text-red-500",
-    bgColor: "bg-brand-red-light0",
+    bgColor: "bg-[#D32F2F]-light0",
     category: "system",
     content: {
       introduction: "查看和管理您的会员权益。",
@@ -361,7 +361,7 @@ export default function Academy() {
 
       {/* 搜索区域 - 修改为白色背景 */}
       <div className="px-4 -mt-16 mb-4">
-        <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
@@ -374,7 +374,7 @@ export default function Academy() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-stable-gray"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#757575]"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -391,8 +391,8 @@ export default function Academy() {
       <div className="px-4 pb-6 space-y-4">
         {/* 核心功能 */}
         {coreModules.length > 0 && (
-          <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
-            <h2 className="text-base font-semibold text-core-black mb-4">核心功能</h2>
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-[#222222] mb-4">核心功能</h2>
             <div className="grid grid-cols-4 gap-4">
               {coreModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
@@ -403,8 +403,8 @@ export default function Academy() {
 
         {/* 高级功能 */}
         {advancedModules.length > 0 && (
-          <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
-            <h2 className="text-base font-semibold text-core-black mb-4">高级功能</h2>
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-[#222222] mb-4">高级功能</h2>
             <div className="grid grid-cols-4 gap-4">
               {advancedModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
@@ -415,8 +415,8 @@ export default function Academy() {
 
         {/* 系统功能 */}
         {systemModules.length > 0 && (
-          <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
-            <h2 className="text-base font-semibold text-core-black mb-4">系统功能</h2>
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-base font-semibold text-[#222222] mb-4">系统功能</h2>
             <div className="grid grid-cols-4 gap-4">
               {systemModules.map(module => (
                 <ModuleIcon key={module.id} module={module} />
@@ -427,14 +427,14 @@ export default function Academy() {
 
         {/* 无搜索结果提示 */}
         {searchQuery && filteredModules.length === 0 && (
-          <div className="bg-white-pure rounded-2xl p-8 shadow-sm text-center">
+          <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
             <p className="text-gray-500">未找到相关功能</p>
             <p className="text-sm text-gray-400 mt-2">请尝试其他关键词</p>
           </div>
         )}
 
         {/* 底部提示 */}
-        <div className="bg-cream rounded-2xl p-4 shadow-sm">
+        <div className="bg-[#FAF3ED] rounded-2xl p-4 shadow-sm">
           <p className="text-sm text-amber-800 text-center">
             💡 小贴士：如需在使用过程中遇到问题，可以随时返回这里查看相关功能说明。
           </p>
@@ -459,15 +459,15 @@ export default function Academy() {
               {selectedModule && (
                 <>
                   <div>
-                    <h4 className="font-medium text-core-black mb-2">功能介绍</h4>
-                    <p className="text-sm text-stable-gray">{selectedModule.content.introduction}</p>
+                    <h4 className="font-medium text-[#222222] mb-2">功能介绍</h4>
+                    <p className="text-sm text-[#757575]">{selectedModule.content.introduction}</p>
                   </div>
                   
                   <div>
-                    <h4 className="font-medium text-core-black mb-2">主要功能</h4>
+                    <h4 className="font-medium text-[#222222] mb-2">主要功能</h4>
                     <ul className="space-y-2">
                       {selectedModule.content.features.map((feature, index) => (
-                        <li key={index} className="text-sm text-stable-gray flex items-start gap-2">
+                        <li key={index} className="text-sm text-[#757575] flex items-start gap-2">
                           <span className="text-red-500 mt-0.5">•</span>
                           <span>{feature}</span>
                         </li>
@@ -476,10 +476,10 @@ export default function Academy() {
                   </div>
 
                   <div>
-                    <h4 className="font-medium text-core-black mb-2">使用技巧</h4>
+                    <h4 className="font-medium text-[#222222] mb-2">使用技巧</h4>
                     <ul className="space-y-2">
                       {selectedModule.content.tips.map((tip, index) => (
-                        <li key={index} className="text-sm text-stable-gray flex items-start gap-2">
+                        <li key={index} className="text-sm text-[#757575] flex items-start gap-2">
                           <span className="text-amber-500 mt-0.5">💡</span>
                           <span>{tip}</span>
                         </li>

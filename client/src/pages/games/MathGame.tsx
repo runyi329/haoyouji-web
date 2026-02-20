@@ -472,7 +472,7 @@ export default function MathGame() {
                 {/* 获得五角星提示 */}
                 <div className="mb-3">
                   <h2 className="text-2xl font-bold mb-1">挑战完成！</h2>
-                  <p className="text-base text-brand-gold font-semibold">获得 {rewardStars || 1} 个五角星！</p>
+                  <p className="text-base text-[#CBA471] font-semibold">获得 {rewardStars || 1} 个五角星！</p>
                 </div>
 
                 <Card className="p-4 mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0 max-w-sm mx-auto">

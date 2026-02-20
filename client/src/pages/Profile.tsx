@@ -116,11 +116,11 @@ function SortableFeatureItem({ item }: { item: FeatureItem }) {
         <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center shadow-sm`}>
           <Icon className="w-5 h-5" />
         </div>
-        <span className="text-xs font-medium text-stable-gray text-center">
+        <span className="text-xs font-medium text-[#757575] text-center">
           {item.label}
         </span>
         {item.badge !== null && item.badge !== undefined && (
-          <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-brand-red-light0 text-white">
+          <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-[#D32F2F]-light0 text-white">
             {item.badge}
           </span>
         )}
@@ -140,7 +140,7 @@ function StaticFeatureItem({ item }: { item: FeatureItem }) {
       <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center shadow-sm`}>
         <Icon className="w-5 h-5" />
       </div>
-      <span className="text-xs font-medium text-stable-gray text-center">
+      <span className="text-xs font-medium text-[#757575] text-center">
         {item.label}
       </span>
     </button>
@@ -395,34 +395,34 @@ export default function Profile() {
   // 定义所有可用的功能项（带颜色）
   const allFeatures: FeatureItem[] = [
     ...(user.role === "super_admin" ? [
-      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-brand-red-light text-red-600", badge: null, onClick: () => navigate("/admin") },
+      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-red-600", badge: null, onClick: () => navigate("/admin") },
     ] : []),
     { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-blue-50 text-blue-600", badge: null, onClick: handleEditProfile },
     { 
       id: "invite-friends",
       icon: UserPlus, 
       label: "邀请好友", 
-      color: "bg-cream text-brand-gold",
+      color: "bg-[#FAF3ED] text-[#CBA471]",
       badge: null, 
       onClick: () => navigate("/parent/profile/invite")
     },
-    { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-cream text-brand-gold", badge: null, onClick: () => navigate("/parent/my-equity") },
+    { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
     { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-pink-50 text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
     { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/work-groups") },
-    { id: "points", icon: Award, label: "我的积分", color: "bg-cream text-brand-gold", badge: null, onClick: () => navigate("/parent/points") },
+    { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
     { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
-    { id: "notifications", icon: Bell, label: "消息通知", color: "bg-cream text-brand-gold", badge: null, onClick: () => toast("功能开发中") },
+    { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
   ];
 
   // 帮助与支持功能
   const helpFeatures: FeatureItem[] = [
-    { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-brand-red-light text-brand-red", badge: null, onClick: () => navigate("/parent/theme-settings") },
+    { id: "theme-settings", icon: Palette, label: "高级皮肤", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/parent/theme-settings") },
     { id: "academy", icon: GraduationCap, label: "脉动学院", color: "bg-cyan-50 text-cyan-600", badge: null, onClick: () => navigate("/parent/academy") },
     { id: "help", icon: HelpCircle, label: "帮助中心", color: "bg-teal-50 text-teal-600", badge: null, onClick: () => toast("功能开发中") },
     { id: "about", icon: BookOpen, label: "关于我们", color: "bg-emerald-50 text-emerald-600", badge: null, onClick: () => navigate("/parent/business-plan") },
@@ -442,7 +442,7 @@ export default function Profile() {
   if (userLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D32F2F]" />
       </div>
     );
   }
@@ -454,7 +454,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="bg-cream pb-24 max-w-md mx-auto relative shadow-2xl">
+    <div className="bg-[#FAF3ED] pb-24 max-w-md mx-auto relative shadow-2xl">
       {/* 顶部用户信息卡片 */}
       <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6 relative">
         {/* 返回首页箭头 */}
@@ -476,7 +476,7 @@ export default function Profile() {
             <button
               onClick={handleAvatarClick}
               disabled={isUploading}
-              className="absolute bottom-0 right-0 bg-white-pure text-brand-red rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+              className="absolute bottom-0 right-0 bg-white text-[#D32F2F] rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
             >
               <Camera className="w-3 h-3" />
             </button>
@@ -517,7 +517,7 @@ export default function Profile() {
 
       {/* 常用功能 */}
       <div className="px-4 mt-3">
-        <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700">常用功能</h3>
             <span className="text-xs text-gray-400">长按拖拽排序</span>
@@ -543,7 +543,7 @@ export default function Profile() {
 
       {/* 账户管理 */}
       <div className="px-4 mt-3">
-        <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">账户管理</h3>
           <div className="grid grid-cols-4 gap-4">
             {accountFeatures.map((item) => (
@@ -555,7 +555,7 @@ export default function Profile() {
 
       {/* 帮助与支持 */}
       <div className="px-4 mt-3">
-        <div className="bg-white-pure rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">帮助与支持</h3>
           <div className="grid grid-cols-4 gap-4">
             {helpFeatures.map((item) => (
@@ -595,7 +595,7 @@ export default function Profile() {
                 logoutMutation.mutate();
               }}
               disabled={logoutMutation.isPending}
-              className="bg-brand-red hover:bg-red-700 text-white"
+              className="bg-[#D32F2F] hover:bg-red-700 text-white"
             >
               {logoutMutation.isPending ? "退出中..." : "确认退出"}
             </Button>

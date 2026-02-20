@@ -482,7 +482,7 @@ export default function ChessGame() {
             <div className="flex items-center justify-between mb-2">
               <div className="text-center flex-1">
                 <div className="text-xs text-muted-foreground">当前轮次</div>
-                <div className="text-lg font-bold text-brand-red">
+                <div className="text-lg font-bold text-[#D32F2F]">
                   {currentTurn === "white" ? "你的回合" : "电脑思考中..."}
                 </div>
               </div>
@@ -506,7 +506,7 @@ export default function ChessGame() {
 
           {/* 棋盘 */}
           <Card className="mb-3 p-3 bg-white/80 backdrop-blur">
-            <div className="aspect-square bg-cream rounded-lg overflow-hidden border-4 border-amber-900">
+            <div className="aspect-square bg-[#FAF3ED] rounded-lg overflow-hidden border-4 border-amber-900">
               <div className="grid grid-cols-8 h-full">
                 {board.map((row, r) =>
                   row.map((piece, c) => {
@@ -519,7 +519,7 @@ export default function ChessGame() {
                         key={`${r}-${c}`}
                         onClick={() => handleCellClick(r, c)}
                         className={`flex items-center justify-center text-4xl font-bold transition-colors ${
-                          isLight ? "bg-cream" : "bg-cream"
+                          isLight ? "bg-[#FAF3ED]" : "bg-[#FAF3ED]"
                         } ${isSelected ? "ring-4 ring-yellow-400" : ""} ${
                           isPossibleMove ? "ring-4 ring-green-400" : ""
                         } hover:opacity-80`}

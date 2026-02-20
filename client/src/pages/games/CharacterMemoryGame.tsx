@@ -78,7 +78,7 @@ const playDifficultyVoice = (difficulty: number) => {
 function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenProps) {
   const difficultyButtons = [
     { id: 1, label: '简单', description: '6对卡片', stars: 1, color: 'bg-green-500 hover:bg-green-600' },
-    { id: 2, label: '中等', description: '8对卡片', stars: 2, color: 'bg-brand-gold hover:bg-brand-gold' },
+    { id: 2, label: '中等', description: '8对卡片', stars: 2, color: 'bg-[#CBA471] hover:bg-[#CBA471]' },
     { id: 3, label: '困难', description: '12对卡片', stars: 3, color: 'bg-red-500 hover:bg-red-600' },
   ];
   
@@ -429,7 +429,7 @@ export default function CharacterMemoryGame() {
               </div>
               <div className="p-4 bg-red-50 rounded-lg">
                 <div className="text-sm text-gray-600">步数</div>
-                <div className="text-2xl font-bold text-brand-red">{moves}</div>
+                <div className="text-2xl font-bold text-[#D32F2F]">{moves}</div>
               </div>
             </div>
 

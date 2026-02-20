@@ -253,7 +253,7 @@ export default function InteractionStats() {
                       <span className={`w-2 h-2 rounded-full ${
                         p.tier === '核心圈' ? 'bg-green-500' :
                         p.tier === '活跃圈' ? 'bg-blue-500' :
-                        p.tier === '普通圈' ? 'bg-brand-gold' : 'bg-gray-500'
+                        p.tier === '普通圈' ? 'bg-[#CBA471]' : 'bg-gray-500'
                       }`}></span>
                       {p.tier}
                     </td>

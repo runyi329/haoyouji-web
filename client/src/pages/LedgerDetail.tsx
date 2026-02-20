@@ -174,7 +174,7 @@ export default function LedgerDetail() {
 
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col">
+    <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
       {/* 顶部区域 */}
       <div className="pb-4" style={{ backgroundColor: THEME_PRIMARY, color: THEME_ACCENT1 }}>
         {/* 标题栏 */}
@@ -210,7 +210,7 @@ export default function LedgerDetail() {
             {/* 显示更多按钮 */}
             {membersData && Array.isArray(membersData) && membersData.length > 0 && (
               <div
-                className="w-10 h-10 rounded-full bg-white-pure border-2 border-gray-300 flex items-center justify-center text-stable-gray text-lg font-medium cursor-pointer hover:bg-cream"
+                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-[#757575] text-lg font-medium cursor-pointer hover:bg-[#FAF3ED]"
                 style={{ marginLeft: membersData.length > 0 ? '-12px' : 0, zIndex: 0 }}
                 onClick={() => setShowMembersDialog(true)}
               >
@@ -270,13 +270,13 @@ export default function LedgerDetail() {
               
               {/* 周期选择菜单 */}
               {showPeriodMenu && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white-pure rounded-lg shadow-lg border border-divider overflow-hidden z-50 w-[5.5rem]">
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white rounded-lg shadow-lg border border-divider overflow-hidden z-50 w-[5.5rem]">
                   <button
                     onClick={() => {
                       setStatsPeriod('day');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-core-black active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按天
                   </button>
@@ -285,7 +285,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('week');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-core-black active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然周
                   </button>
@@ -294,7 +294,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('month');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-core-black active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然月
                   </button>
@@ -303,7 +303,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('year');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-core-black active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然年
                   </button>
@@ -339,14 +339,14 @@ export default function LedgerDetail() {
       {/* 待审批提示 */}
       {pendingApprovals.length > 0 && (
         <div 
-          className="mx-4 mt-3 mb-2 bg-cream border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-cream transition-colors"
+          className="mx-4 mt-3 mb-2 bg-[#FAF3ED] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
         >
-          <Search className="w-4 h-4 text-brand-gold flex-shrink-0" />
+          <Search className="w-4 h-4 text-[#CBA471] flex-shrink-0" />
           <span className="text-sm text-orange-800">
             你有 <span className="font-semibold">{pendingApprovals.length}</span> 个待审批账目
           </span>
-          <ChevronRight className="w-4 h-4 text-brand-gold ml-auto" />
+          <ChevronRight className="w-4 h-4 text-[#CBA471] ml-auto" />
         </div>
       )}
 
@@ -381,7 +381,7 @@ export default function LedgerDetail() {
                   {dayRecord.records.map((record: any) => (
                     <div
                       key={record.id}
-                      className="bg-white-pure rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-cream transition-colors"
+                      className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
                       onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
                     >
                       {/* 成员头像 */}
@@ -397,8 +397,8 @@ export default function LedgerDetail() {
                       {/* 分类信息 */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-brand-red-light0' : 'bg-green-500'}`}></span>
-                          <span className="text-xs text-core-black font-normal">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-green-500'}`}></span>
+                          <span className="text-xs text-[#222222] font-normal">
                             {record.category}
                             {record.subcategory && `–${record.subcategory}`}
                           </span>
