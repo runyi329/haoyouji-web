@@ -126,7 +126,7 @@ export default function WorkGroupList() {
 
       {/* 创建工作群对话框 */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md fixed top-4 left-1/2 -translate-x-1/2 max-h-[80vh] overflow-y-auto">
           <DialogTitle>创建工作群</DialogTitle>
           <DialogDescription>
             创建一个新的工作群来管理您的团队成员和工作节点
