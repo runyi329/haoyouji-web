@@ -14,7 +14,7 @@ interface ValuationWeight {
 }
 
 export default function ValuationManagement() {
-  const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
   const [weights, setWeights] = useState<ValuationWeight[]>([]);
   const [currentValuation, setCurrentValuation] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +91,7 @@ export default function ValuationManagement() {
       {/* 顶部导航 */}
       <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-8">
         <button
-          onClick={() => navigate('/admin')}
+          onClick={() => setLocation('/admin')}
           className="flex items-center space-x-1 text-white/90 hover:text-white transition-colors mb-6"
         >
           <ArrowLeft className="w-5 h-5" />
