@@ -21,7 +21,7 @@ export default function WorkGroupDetail() {
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberDescription, setNewMemberDescription] = useState("");
-  const [dialogBottom, setDialogBottom] = useState<number | null>(null);
+  const [viewportHeight, setViewportHeight] = useState<number>(window.innerHeight);
 
   // 获取工作群详情
   const { data: groupData, isLoading: groupLoading } = trpc.workGroups.getById.useQuery({ id: groupId });
@@ -45,28 +45,17 @@ export default function WorkGroupDetail() {
     },
   });
 
-  // 监听键盘弹出和收起
+  // 监听键盘弹出和收起，动态调整可视区域高度
   useEffect(() => {
     if (!showAddMemberDialog) return;
 
     const handleResize = () => {
-      // 获取视口高度
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      const windowHeight = window.innerHeight;
-      
-      // 如果视口高度小于窗口高度，说明键盘弹出了
-      if (viewportHeight < windowHeight) {
-        // 键盘高度 = 窗口高度 - 视口高度
-        const keyboardHeight = windowHeight - viewportHeight;
-        // 设置对话框底部距离为键盘高度 + 一点间距
-        setDialogBottom(keyboardHeight + 16);
-      } else {
-        // 键盘收起，居中显示
-        setDialogBottom(null);
-      }
+      // 使用visualViewport获取实际可视区域高度（扣除键盘）
+      const vh = window.visualViewport?.height || window.innerHeight;
+      setViewportHeight(vh);
     };
 
-    // 监听visualViewport的resize事件（更准确地检测键盘）
+    // 监听visualViewport的resize事件
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
@@ -101,17 +90,16 @@ export default function WorkGroupDetail() {
     });
   };
 
-  // 动态计算对话框样式
-  const dialogStyle = dialogBottom !== null
-    ? {
-        position: 'fixed' as const,
-        bottom: `${dialogBottom}px`,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        top: 'auto',
-        maxHeight: '60vh',
-      }
-    : {};
+  // 动态计算对话框样式 - 让对话框在可视区域内垂直居中，并紧贴键盘上沿
+  const dialogStyle = {
+    position: 'fixed' as const,
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    maxHeight: `${Math.min(viewportHeight * 0.8, 500)}px`, // 最大高度为可视区域的80%或500px
+    width: '90%',
+    maxWidth: '448px',
+  };
 
   if (groupLoading) {
     return (
@@ -233,7 +221,7 @@ export default function WorkGroupDetail() {
       {/* 添加人员对话框 */}
       <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
         <DialogContent 
-          className="sm:max-w-md overflow-y-auto"
+          className="overflow-y-auto"
           style={dialogStyle}
         >
           <DialogTitle>添加人员</DialogTitle>
