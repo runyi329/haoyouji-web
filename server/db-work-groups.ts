@@ -1,4 +1,4 @@
-import { db } from './db';
+import { getDb } from './db';
 import { workGroups, ledgers } from '../drizzle/schema';
 import { eq, and, or, desc } from 'drizzle-orm';
 
@@ -14,6 +14,9 @@ export async function createWorkGroup(data: {
   createdBy: number;
   ownerId: number;
 }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const [result] = await db.insert(workGroups).values({
     name: data.name,
     description: data.description,
@@ -28,6 +31,9 @@ export async function createWorkGroup(data: {
 
 // 获取用户的所有工作群（包括创建的和参与的）
 export async function getUserWorkGroups(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   // 获取用户创建或拥有的工作群
   const ownedGroups = await db
     .select()
@@ -48,6 +54,9 @@ export async function getUserWorkGroups(userId: number) {
 
 // 获取工作群详情
 export async function getWorkGroupById(groupId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const [group] = await db
     .select()
     .from(workGroups)
@@ -65,6 +74,9 @@ export async function updateWorkGroup(
     icon?: string;
   }
 ) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const [result] = await db
     .update(workGroups)
     .set({
@@ -78,6 +90,9 @@ export async function updateWorkGroup(
 
 // 删除（归档）工作群
 export async function archiveWorkGroup(groupId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const [result] = await db
     .update(workGroups)
     .set({
@@ -91,6 +106,9 @@ export async function archiveWorkGroup(groupId: number) {
 
 // 获取工作群中的所有人员（账本）
 export async function getWorkGroupMembers(groupId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const members = await db
     .select()
     .from(ledgers)
@@ -114,6 +132,9 @@ export async function createWorkGroupMember(data: {
   createdBy: number;
   ownerId: number;
 }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
   const [result] = await db.insert(ledgers).values({
     groupId: data.groupId,
     name: data.name,
