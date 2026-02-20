@@ -416,11 +416,12 @@ export default function Admin() {
                 {users?.map((u) => (
                   <div
                     key={u.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                    className="p-3 rounded-lg bg-muted/50 space-y-3"
                   >
+                    {/* 用户信息区 */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{u.name || u.username}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{u.name || u.username}</span>
                         {u.role === "super_admin" && (
                           <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-[#A80000]">
                             超级管理员
@@ -442,11 +443,13 @@ export default function Admin() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xs text-muted-foreground mt-1">
                         @{u.username} · {u.points} 积分
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    
+                    {/* 操作按钮区 - 移动端优化布局 */}
+                    <div className="flex items-center gap-1 flex-wrap">
                       {u.isLocked && (
                         <Button
                           size="icon"

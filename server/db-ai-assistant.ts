@@ -22,8 +22,8 @@ import {
   getSessionHistory,
 } from "./db-ai-sessions";
 import {
-  getUserPoints,
-  deductPoints,
+  // getUserPoints, // 积分功能已暂时禁用
+  // deductPoints, // 积分功能已暂时禁用
   calculateAICost,
 } from "./db-points";
 
@@ -52,11 +52,11 @@ export async function queryWithAI(
     throw new Error("DEEPSEEK_API_KEY 环境变量未配置，请联系管理员配置");
   }
 
-  // 检查用户积分余额
-  const currentBalance = await getUserPoints(userId);
-  if (currentBalance <= 0) {
-    throw new Error("积分余额不足，请充值后继续使用AI助手");
-  }
+  // 积分功能已暂时禁用，允许所有用户免费使用AI助手
+  // const currentBalance = await getUserPoints(userId);
+  // if (currentBalance <= 0) {
+  //   throw new Error("积分余额不足，请充值后继续使用AI助手");
+  // }
 
   // 如果没有提供sessionId，创建新会话
   let currentSessionId = sessionId;
@@ -414,14 +414,15 @@ export async function queryWithAI(
         
         console.log(`[AI] Total usage - Prompt: ${totalPromptTokens}, Completion: ${totalCompletionTokens}, Total: ${totalTokens}, Cost: ${cost}`);
         
-        // 扣除积分
-        const balanceAfter = await deductPoints(
-          userId,
-          cost,
-          "ai_message",
-          null,
-          `AI对话消费 (${totalTokens} tokens)`
-        );
+        // 积分功能已暂时禁用，不扣除积分
+        // const balanceAfter = await deductPoints(
+        //   userId,
+        //   cost,
+        //   "ai_message",
+        //   null,
+        //   `AI对话消费 (${totalTokens} tokens)`
+        // );
+        const balanceAfter = 0; // 积分功能禁用后，返回0
         
         // 保存AI回复
         await saveMessage(currentSessionId, "assistant", result, totalTokens, cost);

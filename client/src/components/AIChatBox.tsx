@@ -269,15 +269,15 @@ export function AIChatBox({
             <h1 className="text-sm font-semibold text-gray-800">AI助手</h1>
           </div>
 
-          {/* Points Balance */}
-          {pointsBalance !== undefined && (
+          {/* 积分功能已暂时禁用 */}
+          {/* {pointsBalance !== undefined && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
               <span className="text-xs text-gray-600">积分余额：</span>
               <span className="text-xs font-semibold text-[#A80000]">
                 {pointsBalance.toFixed(2)}
               </span>
             </div>
-          )}
+          )} */}
         </div>
 
         {/* Messages Area */}
