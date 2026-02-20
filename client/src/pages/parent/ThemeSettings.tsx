@@ -7,9 +7,7 @@ import { toast } from "sonner";
 export default function ThemeSettings() {
   const [, setLocation] = useLocation();
   const handleApplyTheme = (themeId: string) => {
-    toast("需要更高权限", {
-      description: "该功能暂未开放，敬请期待",
-    });
+    toast("需要更高权限");
   };
 
   const handleCopyColor = (color: string) => {
