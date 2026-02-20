@@ -1,4 +1,4 @@
-import { getDbConnection } from "./db";
+import { getDb } from "./db";
 
 /**
  * 数据库初始化模块
@@ -9,14 +9,14 @@ export async function initDatabase() {
   try {
     console.log("[DB Init] Starting database initialization...");
     
-    const connection = await getDbConnection();
-    if (!connection) {
+    const db = await getDb();
+    if (!db) {
       console.error("[DB Init] Failed to get database connection");
       return;
     }
 
     // 创建AI会话表
-    await connection.execute(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS ai_sessions (
         id INT PRIMARY KEY AUTO_INCREMENT,
         user_id INT NOT NULL,
@@ -33,7 +33,7 @@ export async function initDatabase() {
     console.log("[DB Init] ✅ ai_sessions table checked/created");
 
     // 创建AI消息表
-    await connection.execute(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS ai_messages (
         id INT PRIMARY KEY AUTO_INCREMENT,
         session_id INT NOT NULL,
