@@ -109,7 +109,7 @@ export default function UserPermissionsManager() {
                       variant={isEnabled ? "default" : "outline"}
                       onClick={() => togglePermission(feature.key)}
                       disabled={setPermissionsMutation.isPending}
-                      className={isEnabled ? "bg-green-500 hover:bg-green-600" : ""}
+                      className={isEnabled ? "bg-[#4CAF50] hover:bg-[#4CAF50]" : ""}
                     >
                       {isEnabled ? (
                         <>

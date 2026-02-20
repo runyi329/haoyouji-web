@@ -52,7 +52,7 @@ export default function ReadingStoryList() {
       {templateStories.length > 0 && (
         <div className="max-w-6xl mx-auto mb-12">
           <h2 className="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-            <BookOpen className="w-8 h-8 text-blue-600" />
+            <BookOpen className="w-8 h-8 text-[#1976D2]" />
             故事模板
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -71,8 +71,8 @@ export default function ReadingStoryList() {
                   <div className="p-6">
                     <div className="flex items-start gap-4">
                       {!story.coverImageUrl && (
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-6 h-6 text-blue-600" />
+                        <div className="w-12 h-12 bg-[#F5F5F5] rounded-full flex items-center justify-center flex-shrink-0">
+                          <BookOpen className="w-6 h-6 text-[#1976D2]" />
                         </div>
                       )}
                       <div className="flex-1">
@@ -118,7 +118,7 @@ export default function ReadingStoryList() {
                   <div className="p-6">
                     <div className="flex items-start gap-4">
                       {!story.coverImageUrl && (
-                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <div className="w-12 h-12 bg-[#FFEBEE] rounded-full flex items-center justify-center flex-shrink-0">
                           {story.type === "ai_generated" ? (
                             <Sparkles className="w-6 h-6 text-[#D32F2F]" />
                           ) : (

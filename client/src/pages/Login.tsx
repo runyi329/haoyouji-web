@@ -233,7 +233,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-green-500 border-green-500" : "border-gray-300"
+                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
                     }`}
                   >
                     {agreedToTerms && (
@@ -350,7 +350,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-green-500 border-green-500" : "border-gray-300"
+                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
                     }`}
                   >
                     {agreedToTerms && (

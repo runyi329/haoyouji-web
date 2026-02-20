@@ -9,9 +9,9 @@ import { StarRewardPopup } from "@/components/StarRewardPopup";
 
 // 玩家颜色配置
 const PLAYER_COLORS = {
-  red: { bg: "bg-red-500", text: "text-red-500", light: "bg-red-100", name: "红方" },
-  blue: { bg: "bg-blue-500", text: "text-blue-500", light: "bg-blue-100", name: "蓝方" },
-  green: { bg: "bg-green-500", text: "text-green-500", light: "bg-green-100", name: "绿方" },
+  red: { bg: "bg-[#D32F2F]", text: "text-[#D32F2F]", light: "bg-[#FFEBEE]", name: "红方" },
+  blue: { bg: "bg-[#1976D2]", text: "text-[#1976D2]", light: "bg-[#F5F5F5]", name: "蓝方" },
+  green: { bg: "bg-[#4CAF50]", text: "text-[#4CAF50]", light: "bg-[#E8F5E9]", name: "绿方" },
   yellow: { bg: "bg-[#CBA471]", text: "text-yellow-500", light: "bg-[#FAF3ED]", name: "黄方" },
 };
 
@@ -413,15 +413,15 @@ export default function LudoGame() {
     // 四个角落的基地
     if (row < 4 && col < 4) return { bg: "bg-red-200", type: "base-red" };
     if (row < 4 && col > 6) return { bg: "bg-blue-200", type: "base-blue" };
-    if (row > 6 && col < 4) return { bg: "bg-yellow-200", type: "base-yellow" };
+    if (row > 6 && col < 4) return { bg: "bg-[#FFF3E0]", type: "base-yellow" };
     if (row > 6 && col > 6) return { bg: "bg-green-200", type: "base-green" };
     
     // 中心终点区域
     if (row >= 4 && row <= 6 && col >= 4 && col <= 6) {
       if (row === 5 && col === 5) return { bg: "bg-[#d44]", type: "center" };
-      if (row === 5 && col < 5) return { bg: "bg-red-100", type: "home-red" };
-      if (col === 5 && row < 5) return { bg: "bg-blue-100", type: "home-blue" };
-      if (row === 5 && col > 5) return { bg: "bg-green-100", type: "home-green" };
+      if (row === 5 && col < 5) return { bg: "bg-[#FFEBEE]", type: "home-red" };
+      if (col === 5 && row < 5) return { bg: "bg-[#F5F5F5]", type: "home-blue" };
+      if (row === 5 && col > 5) return { bg: "bg-[#E8F5E9]", type: "home-green" };
       if (col === 5 && row > 5) return { bg: "bg-[#FAF3ED]", type: "home-yellow" };
       return { bg: "bg-gray-100", type: "empty" };
     }

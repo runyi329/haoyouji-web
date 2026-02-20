@@ -53,7 +53,7 @@ export default function ReadingGame() {
             className={`inline-block cursor-pointer transition-all rounded px-0.5 ${
               isCurrentReading 
                 ? 'bg-orange-400 scale-125 shadow-lg' 
-                : 'hover:bg-yellow-200 active:bg-yellow-300'
+                : 'hover:bg-[#FFF3E0] active:bg-yellow-300'
             }`}
             style={{
               userSelect: 'none',
@@ -297,7 +297,7 @@ export default function ReadingGame() {
             onClick={() => setShowPinyin(!showPinyin)}
             variant={showPinyin ? "default" : "outline"}
             size="lg"
-            className={showPinyin ? "bg-red-500 hover:bg-[#D32F2F]" : ""}
+            className={showPinyin ? "bg-[#D32F2F] hover:bg-[#D32F2F]" : ""}
           >
             <Languages className="w-5 h-5 mr-2" />
             {showPinyin ? "隐藏拼音" : "显示拼音"}
@@ -324,7 +324,7 @@ export default function ReadingGame() {
             onClick={handleComplete}
             variant="default"
             size="lg"
-            className="bg-green-500 hover:bg-green-600"
+            className="bg-[#4CAF50] hover:bg-[#4CAF50]"
           >
             <BookOpen className="w-5 h-5 mr-2" />
             完成阅读
@@ -352,8 +352,8 @@ export default function ReadingGame() {
           </h1>
         
         {/* 提示信息 */}
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6 flex items-center gap-3">
-          <Volume2 className="w-6 h-6 text-blue-600 flex-shrink-0" />
+        <div className="bg-[#F5F5F5] border-2 border-blue-200 rounded-lg p-4 mb-6 flex items-center gap-3">
+          <Volume2 className="w-6 h-6 text-[#1976D2] flex-shrink-0" />
           <p className="text-blue-800 text-lg">
             点击文字，就能听到读音哦！
           </p>
@@ -404,7 +404,7 @@ export default function ReadingGame() {
             <div className="text-sm text-gray-600 mt-1">点读次数</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600">{story.wordCount}</div>
+            <div className="text-3xl font-bold text-[#1976D2]">{story.wordCount}</div>
             <div className="text-sm text-gray-600 mt-1">总字数</div>
           </div>
         </div>

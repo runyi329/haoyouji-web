@@ -94,8 +94,8 @@ export default function Register() {
         <CardContent className="space-y-4">
           {/* 邀请码区域 */}
           {inviteCode && inviteValidation?.valid && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-2">
+            <div className="p-4 bg-[#E8F5E9] dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 text-[#4CAF50] dark:text-green-400 mb-2">
                 <Gift className="w-5 h-5" />
                 <span className="font-semibold">使用邀请码注册</span>
               </div>
@@ -148,7 +148,7 @@ export default function Register() {
                     </Button>
                   </div>
                   {inviteCode.length === 6 && inviteValidation && (
-                    <p className={`text-xs ${inviteValidation.valid ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs ${inviteValidation.valid ? 'text-[#4CAF50]' : 'text-[#D32F2F]'}`}>
                       {inviteValidation.valid ? '✓ 邀请码有效' : '✗ 邀请码无效'}
                     </p>
                   )}

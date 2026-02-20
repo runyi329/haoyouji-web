@@ -99,7 +99,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
                 <div
                   key={u.id}
                   className={`flex items-center px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    value === u.id.toString() ? "bg-red-50" : ""
+                    value === u.id.toString() ? "bg-[#FFEBEE]" : ""
                   }`}
                   onClick={() => handleSelect(u)}
                 >
@@ -132,10 +132,10 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
 
 // 预定义的池类型颜色
 const POOL_COLORS: Record<string, { bg: string; text: string }> = {
-  investment_pool_percentage: { bg: "bg-red-50", text: "text-[#D32F2F]" },
-  contribution_pool_percentage: { bg: "bg-blue-50", text: "text-blue-600" },
-  option_pool_percentage: { bg: "bg-purple-50", text: "text-purple-600" },
-  reserve_pool_percentage: { bg: "bg-green-50", text: "text-green-600" },
+  investment_pool_percentage: { bg: "bg-[#FFEBEE]", text: "text-[#D32F2F]" },
+  contribution_pool_percentage: { bg: "bg-[#F5F5F5]", text: "text-[#1976D2]" },
+  option_pool_percentage: { bg: "bg-[#F3E5F5]", text: "text-purple-600" },
+  reserve_pool_percentage: { bg: "bg-[#E8F5E9]", text: "text-[#4CAF50]" },
   founder_pool_percentage: { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
 };
 
@@ -153,7 +153,7 @@ function getPoolColor(key: string, index: number) {
   const colors = [
     { bg: "bg-teal-50", text: "text-teal-600" },
     { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
-    { bg: "bg-pink-50", text: "text-pink-600" },
+    { bg: "bg-[#FFEBEE]", text: "text-pink-600" },
     { bg: "bg-cyan-50", text: "text-cyan-600" },
     { bg: "bg-indigo-50", text: "text-indigo-600" },
   ];
@@ -503,7 +503,7 @@ export default function EquityManagement() {
                       </div>
                       <button
                         onClick={() => handleRemovePool(index)}
-                        className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                        className="text-red-400 hover:text-[#D32F2F] transition-colors flex-shrink-0"
                         title="删除此池"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -540,11 +540,11 @@ export default function EquityManagement() {
 
               {/* 总和提示 */}
               <div className={`p-3 rounded-lg flex items-center justify-between ${
-                Math.abs(poolTotal - 100) < 0.01 ? "bg-green-50" : "bg-red-50"
+                Math.abs(poolTotal - 100) < 0.01 ? "bg-[#E8F5E9]" : "bg-[#FFEBEE]"
               }`}>
                 <span className="text-sm font-medium text-gray-700">所有池总和</span>
                 <span className={`text-lg font-bold ${
-                  Math.abs(poolTotal - 100) < 0.01 ? "text-green-600" : "text-red-600"
+                  Math.abs(poolTotal - 100) < 0.01 ? "text-[#4CAF50]" : "text-[#D32F2F]"
                 }`}>
                   {poolTotal.toFixed(2)}% / 100%
                   {Math.abs(poolTotal - 100) < 0.01 ? " ✓" : " (需等于100%)"}
@@ -733,13 +733,13 @@ export default function EquityManagement() {
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => openEditDialog(investment)}
-                            className="text-blue-600 hover:text-blue-800"
+                            className="text-[#1976D2] hover:text-blue-800"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(investment.id)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-[#D32F2F] hover:text-red-800"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

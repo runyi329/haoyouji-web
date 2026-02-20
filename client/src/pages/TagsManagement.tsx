@@ -98,7 +98,7 @@ function SortableTagItem({
         <Button
           size="icon"
           variant="ghost"
-          className="text-red-500 hover:text-red-600"
+          className="text-[#D32F2F] hover:text-[#D32F2F]"
           onClick={onDelete}
         >
           <Trash2 className="w-4 h-4" />

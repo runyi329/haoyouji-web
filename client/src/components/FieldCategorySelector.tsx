@@ -184,9 +184,9 @@ export function FieldCategorySelector({
               </div>
 
               {/* 联系管理员提示 */}
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg flex items-start gap-2">
-                <MessageCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-900 dark:text-blue-100">
+              <div className="mt-4 p-3 bg-[#F5F5F5] dark:bg-[#212121] rounded-lg flex items-start gap-2">
+                <MessageCircle className="h-5 w-5 text-[#1976D2] dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-[#424242] dark:text-blue-100">
                   <p className="font-medium mb-1">需要新类目？</p>
                   <p>请联系管理员（微信：tina_u）</p>
                 </div>
@@ -240,7 +240,7 @@ export function FieldCategorySelector({
                   
                   <div className="space-y-2">
                     <Label htmlFor="bankAccountNumber">
-                      银行卡号 <span className="text-red-500">*</span>
+                      银行卡号 <span className="text-[#D32F2F]">*</span>
                     </Label>
                     <Input
                       id="bankAccountNumber"
@@ -254,7 +254,7 @@ export function FieldCategorySelector({
                   
                   <div className="space-y-2">
                     <Label htmlFor="bankName">
-                      开户银行 <span className="text-red-500">*</span>
+                      开户银行 <span className="text-[#D32F2F]">*</span>
                     </Label>
                     <Input
                       id="bankName"
@@ -291,7 +291,7 @@ export function FieldCategorySelector({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRemoveTempCard(index)}
-                              className="text-red-500 hover:text-red-700"
+                              className="text-[#D32F2F] hover:text-[#D32F2F]"
                             >
                               删除
                             </Button>
@@ -305,7 +305,7 @@ export function FieldCategorySelector({
                 // 普通字段
                 <div className="space-y-2">
                   <Label htmlFor="fieldValue">
-                    {selectedSubCategory.name} <span className="text-red-500">*</span>
+                    {selectedSubCategory.name} <span className="text-[#D32F2F]">*</span>
                   </Label>
                   <Input
                     id="fieldValue"
@@ -318,8 +318,8 @@ export function FieldCategorySelector({
                 </div>
               )}
 
-              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                <p className="text-sm text-blue-900 dark:text-blue-100">
+              <div className="p-3 bg-[#F5F5F5] dark:bg-[#212121] rounded-lg">
+                <p className="text-sm text-[#424242] dark:text-blue-100">
                   💡 温馨提示
                 </p>
                 <ul className="text-sm text-blue-800 dark:text-blue-200 mt-1 space-y-1">

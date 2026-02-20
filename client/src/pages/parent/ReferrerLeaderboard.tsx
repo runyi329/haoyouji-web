@@ -141,7 +141,7 @@ export default function ReferrerLeaderboard() {
                         <td className="py-4 px-4 font-medium text-gray-900">
                           {stat.contactName}
                         </td>
-                        <td className="py-4 px-4 text-center text-blue-600 font-semibold">
+                        <td className="py-4 px-4 text-center text-[#1976D2] font-semibold">
                           {stat.directCount}人
                         </td>
                         <td className="py-4 px-4 text-center text-[#D32F2F] font-semibold">
@@ -150,7 +150,7 @@ export default function ReferrerLeaderboard() {
                         <td className="py-4 px-4 text-center text-indigo-700 font-bold">
                           {totalCount}人
                         </td>
-                        <td className="py-4 px-4 text-center text-green-600 font-bold">
+                        <td className="py-4 px-4 text-center text-[#4CAF50] font-bold">
                           {stat.totalScore.toFixed(1)}
                         </td>
                       </tr>

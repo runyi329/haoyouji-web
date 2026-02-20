@@ -180,7 +180,7 @@ export default function CompanyEquityStructureCard() {
         </div>
         <div className="text-right">
           <div className="text-gray-500 mb-1">期权池余额</div>
-          <div className="text-lg font-bold text-green-600" style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <div className="text-lg font-bold text-[#4CAF50]" style={{ fontVariantNumeric: 'tabular-nums' }}>
             25%
           </div>
         </div>

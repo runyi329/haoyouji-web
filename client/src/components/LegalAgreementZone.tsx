@@ -96,7 +96,7 @@ export default function LegalAgreementZone({
                       </div>
                       <div>
                         <span className="text-gray-500">法律效力</span>
-                        <p className="font-semibold text-green-600 mt-0.5 flex items-center">
+                        <p className="font-semibold text-[#4CAF50] mt-0.5 flex items-center">
                           <Shield className="w-3 h-3 mr-1" />
                           已生效
                         </p>
@@ -134,7 +134,7 @@ export default function LegalAgreementZone({
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => onDownload(agreement.id)}
-                      className="flex-1 flex items-center justify-center space-x-1.5 bg-white border border-green-300 text-green-700 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-green-50 transition-all"
+                      className="flex-1 flex items-center justify-center space-x-1.5 bg-white border border-green-300 text-green-700 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-[#E8F5E9] transition-all"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>下载协议</span>
@@ -158,11 +158,11 @@ export default function LegalAgreementZone({
                       {/* 火漆印 */}
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center shadow-2xl animate-pulse">
                         <div className="w-20 h-20 rounded-full border-4 border-red-400/30 flex items-center justify-center">
-                          <Lock className="w-10 h-10 text-red-100" />
+                          <Lock className="w-10 h-10 text-[#FFEBEE]" />
                         </div>
                       </div>
                       {/* 光晕效果 */}
-                      <div className="absolute inset-0 rounded-full bg-red-500/20 blur-xl animate-pulse"></div>
+                      <div className="absolute inset-0 rounded-full bg-[#D32F2F]/20 blur-xl animate-pulse"></div>
                     </div>
                     <p className="text-sm font-semibold text-gray-900 mt-4">待签署状态</p>
                     <p className="text-xs text-gray-500 mt-1 text-center">

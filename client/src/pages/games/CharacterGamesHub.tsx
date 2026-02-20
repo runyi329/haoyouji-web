@@ -21,7 +21,7 @@ const literacyGames: LiteracyGame[] = [
     description: "看图片学汉字，快乐认字！",
     icon: Image,
     gradient: "from-blue-400 to-cyan-600",
-    bgColor: "bg-blue-50",
+    bgColor: "bg-[#F5F5F5]",
     path: "/games/character",
   },
   {
@@ -39,7 +39,7 @@ const literacyGames: LiteracyGame[] = [
     description: "听声音找汉字，锻炼听力！",
     icon: Headphones,
     gradient: "from-green-400 to-emerald-600",
-    bgColor: "bg-green-50",
+    bgColor: "bg-[#E8F5E9]",
     path: "/games/listening",
   },
   {
@@ -48,7 +48,7 @@ const literacyGames: LiteracyGame[] = [
     description: "翻牌配对记汉字，训练记忆！",
     icon: Layers,
     gradient: "from-[#A80000] to-[#d44]",
-    bgColor: "bg-red-50",
+    bgColor: "bg-[#FFEBEE]",
     path: "/games/character-memory",
   },
 ];

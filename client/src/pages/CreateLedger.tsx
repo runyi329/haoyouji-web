@@ -108,7 +108,7 @@ export default function CreateLedger() {
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航栏 */}
-      <div className="bg-blue-500 text-white px-3 py-2.5 flex items-center">
+      <div className="bg-[#1976D2] text-white px-3 py-2.5 flex items-center">
         <button
           onClick={() => setLocation("/ledger/create-type")}
           className="p-1 -ml-1"
@@ -122,7 +122,7 @@ export default function CreateLedger() {
       <div className="p-4 space-y-4">
         {/* 账本类型显示 */}
         <div className="bg-white rounded-lg p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-[#F5F5F5] text-[#1976D2] flex items-center justify-center flex-shrink-0">
             <Icon className="w-5 h-5" />
           </div>
           <div>
@@ -183,7 +183,7 @@ export default function CreateLedger() {
         <Button
           onClick={handleCreate}
           disabled={createLedgerMutation.isPending}
-          className="w-full h-10 bg-blue-500 hover:bg-blue-600 text-white"
+          className="w-full h-10 bg-[#1976D2] hover:bg-[#1976D2] text-white"
         >
           {createLedgerMutation.isPending ? "创建中..." : "创建账本"}
         </Button>
@@ -208,7 +208,7 @@ export default function CreateLedger() {
             </Button>
             <Button
               onClick={handleGoToSettings}
-              className="flex-1 h-9 bg-blue-500 hover:bg-blue-600"
+              className="flex-1 h-9 bg-[#1976D2] hover:bg-[#1976D2]"
             >
               去设置
             </Button>

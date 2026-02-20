@@ -135,7 +135,7 @@ export default function AccountRelationshipManager() {
       case "super_admin":
         return <Badge className="bg-[#D32F2F]">超级管理员</Badge>;
       case "parent":
-        return <Badge className="bg-blue-500">家长</Badge>;
+        return <Badge className="bg-[#1976D2]">家长</Badge>;
       case "baby":
         return <Badge className="bg-pink-500">宝宝</Badge>;
       default:
@@ -398,7 +398,7 @@ export default function AccountRelationshipManager() {
           <p><strong>三级权限体系：</strong></p>
           <ul className="list-disc list-inside space-y-1 ml-4">
             <li><Badge className="bg-[#D32F2F] mr-2">超级管理员</Badge>拥有所有权限，可管理所有家庭和用户</li>
-            <li><Badge className="bg-blue-500 mr-2">家长</Badge>可管理自己家庭的宝宝、词库、奖励等</li>
+            <li><Badge className="bg-[#1976D2] mr-2">家长</Badge>可管理自己家庭的宝宝、词库、奖励等</li>
             <li><Badge className="bg-pink-500 mr-2">宝宝</Badge>只能使用游戏和学习功能</li>
           </ul>
           <p className="mt-4"><strong>登录状态判断：</strong></p>
@@ -647,7 +647,7 @@ export default function AccountRelationshipManager() {
                               onClick={handleSaveUserInfo}
                               title="保存"
                             >
-                              <Check className="w-4 h-4 text-green-500" />
+                              <Check className="w-4 h-4 text-[#4CAF50]" />
                             </Button>
                             <Button
                               size="sm"
@@ -655,7 +655,7 @@ export default function AccountRelationshipManager() {
                               onClick={handleCancelEditUserInfo}
                               title="取消"
                             >
-                              <X className="w-4 h-4 text-red-500" />
+                              <X className="w-4 h-4 text-[#D32F2F]" />
                             </Button>
                           </div>
                         ) : (
@@ -707,7 +707,7 @@ export default function AccountRelationshipManager() {
                             onClick={() => handleQuickLogin(user.id)}
                             title="一键登录"
                           >
-                            <LogIn className="w-4 h-4 text-blue-500" />
+                            <LogIn className="w-4 h-4 text-[#1976D2]" />
                           </Button>
                         )}
                       </TableCell>
@@ -724,7 +724,7 @@ export default function AccountRelationshipManager() {
                                   onClick={handleSaveEdit}
                                   title="保存关系"
                                 >
-                                  <Check className="w-4 h-4 text-green-500" />
+                                  <Check className="w-4 h-4 text-[#4CAF50]" />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -732,7 +732,7 @@ export default function AccountRelationshipManager() {
                                   onClick={handleCancelEdit}
                                   title="取消"
                                 >
-                                  <X className="w-4 h-4 text-red-500" />
+                                  <X className="w-4 h-4 text-[#D32F2F]" />
                                 </Button>
                               </div>
                             ) : (
@@ -767,7 +767,7 @@ export default function AccountRelationshipManager() {
             <AlertDialogDescription>
               您即将删除 <strong>{selectedUserIds.length}</strong> 个用户账户。
               <br />
-              <span className="text-red-500 font-semibold">此操作不可恢复，请谨慎操作！</span>
+              <span className="text-[#D32F2F] font-semibold">此操作不可恢复，请谨慎操作！</span>
               <br />
               <br />
               将要删除的用户ID：{selectedUserIds.join(", ")}
@@ -777,7 +777,7 @@ export default function AccountRelationshipManager() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-500 hover:bg-red-600"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]"
             >
               确认删除
             </AlertDialogAction>

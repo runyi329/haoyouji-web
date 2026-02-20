@@ -132,13 +132,13 @@ const LedgerPermissions = () => {
   const getPermissionButtonClass = (permission: Permission) => {
     switch (permission) {
       case "all":
-        return "text-green-600 font-medium text-sm";
+        return "text-[#4CAF50] font-medium text-sm";
       case "own":
         return "text-[#CBA471] font-medium text-sm";
       case "none":
-        return "text-red-500 font-medium text-sm";
+        return "text-[#D32F2F] font-medium text-sm";
       default:
-        return "text-green-600 font-medium text-sm";
+        return "text-[#4CAF50] font-medium text-sm";
     }
   };
 
@@ -194,7 +194,7 @@ const LedgerPermissions = () => {
             {/* 查看账目权限 */}
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium text-sm">全部</span>
+                <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "view")}
@@ -209,7 +209,7 @@ const LedgerPermissions = () => {
             {/* 添加账目权限 */}
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium text-sm">全部</span>
+                <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "add")}
@@ -224,7 +224,7 @@ const LedgerPermissions = () => {
             {/* 修改账目权限 */}
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium text-sm">全部</span>
+                <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "edit")}
@@ -239,7 +239,7 @@ const LedgerPermissions = () => {
             {/* 删除账目权限 */}
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
-                <span className="text-green-600 font-medium text-sm">全部</span>
+                <span className="text-[#4CAF50] font-medium text-sm">全部</span>
               ) : (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "delete")}
@@ -300,7 +300,7 @@ const LedgerPermissions = () => {
       {/* 说明文字 */}
       <div className="p-4 text-xs text-gray-500">
         <p className="mb-2">
-          <span className="text-green-600 font-medium">全部</span>：可以查看/操作账本中的所有账目
+          <span className="text-[#4CAF50] font-medium">全部</span>：可以查看/操作账本中的所有账目
         </p>
         <p>
           <span className="text-[#CBA471] font-medium">仅自己</span>：只能查看/操作自己添加的账目
@@ -328,7 +328,7 @@ const LedgerPermissions = () => {
           >
             <button
               onClick={() => selectPermission("all")}
-              className="w-full px-4 py-3 text-sm text-green-600 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-[#4CAF50] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               全部
             </button>
@@ -340,7 +340,7 @@ const LedgerPermissions = () => {
             </button>
             <button
               onClick={() => selectPermission("none")}
-              className="w-full px-4 py-3 text-sm text-red-500 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-[#D32F2F] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               不允许
             </button>

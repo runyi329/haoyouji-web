@@ -415,17 +415,17 @@ export default function MathGame() {
                   <div className="text-7xl opacity-20">❌</div>
                 </div>
                 <div className="mb-3">
-                  <h2 className="text-2xl font-bold mb-1 text-red-600">挑战失败！</h2>
+                  <h2 className="text-2xl font-bold mb-1 text-[#D32F2F]">挑战失败！</h2>
                   <p className="text-sm text-muted-foreground">答错了，再来一局吧！</p>
                 </div>
                 <Card className="p-4 mb-4 bg-gradient-to-br from-red-50 to-orange-50 border-0 max-w-sm mx-auto">
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <div className="text-xl font-bold text-green-600">{correctCount}</div>
+                      <div className="text-xl font-bold text-[#4CAF50]">{correctCount}</div>
                       <div className="text-xs text-muted-foreground">正确答案</div>
                     </div>
                     <div>
-                      <div className="text-xl font-bold text-red-600">{totalQuestions - correctCount}</div>
+                      <div className="text-xl font-bold text-[#D32F2F]">{totalQuestions - correctCount}</div>
                       <div className="text-xs text-muted-foreground">错误答案</div>
                     </div>
                     <div>
@@ -478,15 +478,15 @@ export default function MathGame() {
                 <Card className="p-4 mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0 max-w-sm mx-auto">
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <div className="text-xl font-bold text-green-600">{correctCount}</div>
+                      <div className="text-xl font-bold text-[#4CAF50]">{correctCount}</div>
                       <div className="text-xs text-muted-foreground">正确答案</div>
                     </div>
                     <div>
-                      <div className="text-xl font-bold text-green-600">{totalQuestions - correctCount}</div>
+                      <div className="text-xl font-bold text-[#4CAF50]">{totalQuestions - correctCount}</div>
                       <div className="text-xs text-muted-foreground">错误答案</div>
                     </div>
                     <div>
-                      <div className="text-xl font-bold text-green-600">{formatTime(elapsedTime)}</div>
+                      <div className="text-xl font-bold text-[#4CAF50]">{formatTime(elapsedTime)}</div>
                       <div className="text-xs text-muted-foreground">用时</div>
                     </div>
                   </div>
@@ -526,7 +526,7 @@ export default function MathGame() {
             {currentQuestion && (
               <Card className="p-8 mb-8 bg-gradient-to-br from-blue-50 to-cyan-50 border-0 max-w-md mx-auto">
                 <div className="text-center">
-                  <div className="text-5xl font-bold text-blue-600 mb-4">
+                  <div className="text-5xl font-bold text-[#1976D2] mb-4">
                     {currentQuestion.num1} {currentQuestion.operator} {currentQuestion.num2}
                   </div>
                   <div className="text-3xl font-bold text-muted-foreground">= ?</div>
@@ -550,9 +550,9 @@ export default function MathGame() {
                       className={`p-6 rounded-2xl text-2xl font-bold transition-all duration-300 ${
                         showResult
                           ? isAnswer
-                            ? "bg-green-500 text-white scale-105"
+                            ? "bg-[#4CAF50] text-white scale-105"
                             : isSelected
-                            ? "bg-red-500 text-white"
+                            ? "bg-[#D32F2F] text-white"
                             : "bg-muted text-muted-foreground"
                           : "bg-white shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
                       }`}

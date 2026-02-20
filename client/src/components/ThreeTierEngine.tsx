@@ -224,7 +224,7 @@ export default function ThreeTierEngine({ leverageMultiplier }: ThreeTierEngineP
                 >
                   <div className="flex items-center justify-between mb-2">
                     {task.completed ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
                     ) : (
                       <Circle className="w-4 h-4 text-gray-300" />
                     )}
@@ -347,7 +347,7 @@ export default function ThreeTierEngine({ leverageMultiplier }: ThreeTierEngineP
       {/* 增值路线图建议 */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <div className="flex items-start space-x-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[#1976D2] flex items-center justify-center flex-shrink-0">
             <span className="text-white text-sm">💡</span>
           </div>
           <div className="flex-1">
@@ -357,15 +357,15 @@ export default function ThreeTierEngine({ leverageMultiplier }: ThreeTierEngineP
             </p>
             <div className="space-y-1 text-xs text-gray-500">
               <div className="flex items-center space-x-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">1</span>
+                <span className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">1</span>
                 <span>完成L1全部任务（5分钟，+120 PU）</span>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">2</span>
+                <span className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">2</span>
                 <span>邀请10位好友（+1000 PU，+0.5%股权）</span>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">3</span>
+                <span className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">3</span>
                 <span>提交1条产品建议（+500 PU）</span>
               </div>
             </div>

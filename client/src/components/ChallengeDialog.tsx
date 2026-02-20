@@ -202,7 +202,7 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
             <div className="space-y-2">
               <Label>每答错一题扣减</Label>
               <div className="text-center mb-2">
-                <span className="text-3xl font-bold text-red-500">{penaltyPerWrong}</span>
+                <span className="text-3xl font-bold text-[#D32F2F]">{penaltyPerWrong}</span>
                 <span className="text-lg text-muted-foreground ml-2">题</span>
               </div>
               <Slider
@@ -221,8 +221,8 @@ export default function ChallengeDialog({ open, onOpenChange, kidId, kidName, on
             </div>
 
             {/* 提示信息 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+            <div className="bg-[#F5F5F5] border border-blue-200 rounded-lg p-4 flex gap-3">
+              <AlertCircle className="w-5 h-5 text-[#1976D2] flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-700 space-y-1">
                 <p>• 挑战开始后，题目数量将变为无限</p>
                 <p>• 孩子可以多次间断进行，随时保存进度</p>

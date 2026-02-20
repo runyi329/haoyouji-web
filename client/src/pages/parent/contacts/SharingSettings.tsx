@@ -407,7 +407,7 @@ export default function SharingSettings() {
                         <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
                           {conn.receiverName}
                         </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-medium flex-shrink-0">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] dark:bg-[#424242]/30 text-[#1976D2] dark:text-blue-400 text-[10px] font-medium flex-shrink-0">
                           <Users className="h-2.5 w-2.5" />
                           {conn.sharedContactCount || 0}人
                         </span>
@@ -432,7 +432,7 @@ export default function SharingSettings() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                        className="h-8 w-8 text-gray-300 hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
                         onClick={() => handleDeleteConnection(conn.id)}
                         title="删除连接"
                       >
@@ -507,7 +507,7 @@ export default function SharingSettings() {
                         <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
                           {conn.sharerName}
                         </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-medium flex-shrink-0">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] dark:bg-green-900/30 text-[#4CAF50] dark:text-green-400 text-[10px] font-medium flex-shrink-0">
                           <Users className="h-2.5 w-2.5" />
                           {conn.sharedContactCount || 0}人
                         </span>

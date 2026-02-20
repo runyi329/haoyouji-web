@@ -77,9 +77,9 @@ const playDifficultyVoice = (difficulty: number) => {
 
 function GameSetupScreen({ level, onLevelSelect, onStartGame }: GameSetupScreenProps) {
   const difficultyButtons = [
-    { id: 1, label: '简单', description: '6对卡片', stars: 1, color: 'bg-green-500 hover:bg-green-600' },
+    { id: 1, label: '简单', description: '6对卡片', stars: 1, color: 'bg-[#4CAF50] hover:bg-[#4CAF50]' },
     { id: 2, label: '中等', description: '8对卡片', stars: 2, color: 'bg-[#CBA471] hover:bg-[#CBA471]' },
-    { id: 3, label: '困难', description: '12对卡片', stars: 3, color: 'bg-red-500 hover:bg-red-600' },
+    { id: 3, label: '困难', description: '12对卡片', stars: 3, color: 'bg-[#D32F2F] hover:bg-[#D32F2F]' },
   ];
   
   return (
@@ -352,7 +352,7 @@ export default function CharacterMemoryGame() {
             {/* 游戏信息 */}
             <div className="flex gap-4 justify-center flex-wrap">
               <Card className="px-6 py-3 flex items-center gap-2">
-                <Clock size={20} className="text-blue-500" />
+                <Clock size={20} className="text-[#1976D2]" />
                 <span className="font-mono font-bold">{formatTime(elapsedTime)}</span>
               </Card>
               <Card className="px-6 py-3 flex items-center gap-2">
@@ -423,11 +423,11 @@ export default function CharacterMemoryGame() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-              <div className="p-4 bg-blue-50 rounded-lg">
+              <div className="p-4 bg-[#F5F5F5] rounded-lg">
                 <div className="text-sm text-gray-600">用时</div>
-                <div className="text-2xl font-bold text-blue-600">{formatTime(elapsedTime)}</div>
+                <div className="text-2xl font-bold text-[#1976D2]">{formatTime(elapsedTime)}</div>
               </div>
-              <div className="p-4 bg-red-50 rounded-lg">
+              <div className="p-4 bg-[#FFEBEE] rounded-lg">
                 <div className="text-sm text-gray-600">步数</div>
                 <div className="text-2xl font-bold text-[#D32F2F]">{moves}</div>
               </div>

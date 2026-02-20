@@ -221,7 +221,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const currentContact = props.promotionStats?.contactCount || props.contactCount;
                 const targetContact = props.nodeLevel === 'standard' ? 100 : props.nodeLevel === 'advanced' ? 150 : 50;
                 const contactAchieved = currentContact >= targetContact;
-                return <span className={contactAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{contactAchieved ? '✓' : '✗'}</span>;
+                return <span className={contactAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{contactAchieved ? '✓' : '✗'}</span>;
               })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>人脉数</span>
             </div>
@@ -234,7 +234,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const currentTag = props.promotionStats?.tagCount || 0;
                 const targetTag = props.nodeLevel === 'standard' ? 300 : props.nodeLevel === 'advanced' ? 500 : 100;
                 const tagAchieved = currentTag >= targetTag;
-                return <span className={tagAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{tagAchieved ? '✓' : '✗'}</span>;
+                return <span className={tagAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{tagAchieved ? '✓' : '✗'}</span>;
               })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>标签数</span>
             </div>
@@ -247,7 +247,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
                 const currentInteraction = props.promotionStats?.interactionCount || 0;
                 const targetInteraction = props.nodeLevel === 'standard' ? 200 : props.nodeLevel === 'advanced' ? 250 : 150;
                 const interactionAchieved = currentInteraction >= targetInteraction;
-                return <span className={interactionAchieved ? 'text-[#C5B358] mr-1' : 'text-red-500 mr-1'}>{interactionAchieved ? '✓' : '✗'}</span>;
+                return <span className={interactionAchieved ? 'text-[#C5B358] mr-1' : 'text-[#D32F2F] mr-1'}>{interactionAchieved ? '✓' : '✗'}</span>;
               })()}
               <span className={props.nodeLevel === 'none' ? 'text-gray-400' : 'opacity-80'}>联络数</span>
             </div>
@@ -621,7 +621,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
             onClick={() => setLocation('/parent/promotion-rules')}
             className="flex items-center justify-between bg-gradient-to-br from-blue-50/30 to-blue-100/20 hover:from-blue-50/50 hover:to-blue-100/30 rounded-xl px-4 py-3 transition-all duration-200 border border-blue-100/30">
             <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-[#1976D2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
               <span className="text-xs font-medium text-gray-700">查阅晋升准则</span>

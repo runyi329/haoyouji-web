@@ -45,7 +45,7 @@ export function ReferralRelationshipDialog({
         <ScrollArea className="flex-1 pr-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+              <Loader2 className="h-6 w-6 animate-spin text-[#1976D2]" />
               <span className="ml-2 text-muted-foreground">加载中...</span>
             </div>
           ) : !referrals || referrals.length === 0 ? (

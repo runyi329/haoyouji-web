@@ -187,7 +187,7 @@ const LedgerCategories = () => {
                     className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                   >
                     {isDeleteMode && (
-                      <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                      <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
                         -
                       </span>
                     )}
@@ -200,16 +200,16 @@ const LedgerCategories = () => {
                         setSelectedAction(null);
                         setIsAddDialogOpen(true);
                       }}
-                      className="w-8 h-8 flex items-center justify-center border border-blue-500 text-blue-500 rounded hover:bg-blue-50"
+                      className="w-8 h-8 flex items-center justify-center border border-[#1976D2] text-[#1976D2] rounded hover:bg-[#F5F5F5]"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setIsDeleteMode(!isDeleteMode)}
-                      className={`w-8 h-8 flex items-center justify-center border rounded hover:bg-blue-50 ${
+                      className={`w-8 h-8 flex items-center justify-center border rounded hover:bg-[#F5F5F5] ${
                         isDeleteMode 
-                          ? 'border-red-500 text-red-500 bg-red-50' 
-                          : 'border-blue-500 text-blue-500'
+                          ? 'border-[#D32F2F] text-[#D32F2F] bg-[#FFEBEE]' 
+                          : 'border-[#1976D2] text-[#1976D2]'
                       }`}
                     >
                       <Minus className="w-4 h-4" />
@@ -244,7 +244,7 @@ const LedgerCategories = () => {
                           className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                         >
                           {isDeleteMode && (
-                            <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                            <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
                               -
                             </span>
                           )}
@@ -275,7 +275,7 @@ const LedgerCategories = () => {
                                 className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
                               >
                                 {isDeleteMode && (
-                                  <span className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">
+                                  <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
                                     -
                                   </span>
                                 )}
@@ -542,7 +542,7 @@ const LedgerCategories = () => {
                   
                   setIsDeleteMode(false);
                 }}
-                className="flex-1 bg-red-500 hover:bg-red-600"
+                className="flex-1 bg-[#D32F2F] hover:bg-[#D32F2F]"
                 disabled={deleteCategoryMutation.isPending}
               >
                 {deleteCategoryMutation.isPending ? "正在删除..." : "确认删除"}

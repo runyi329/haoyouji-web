@@ -52,7 +52,7 @@ function ContactsStatsCard({ totalContacts, onClick, dragListeners, isBreathing 
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400">人脉总数</p>
+        <p className="text-xs sm:text-sm text-[#1976D2] dark:text-blue-400">人脉总数</p>
         <p className="font-bold text-blue-700 dark:text-blue-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - totalContacts.toString().length * 0.175)}rem, 1.05rem)` }}>
           {totalContacts}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
@@ -72,7 +72,7 @@ function WeeklyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-green-600 dark:text-green-400">本周新增</p>
+        <p className="text-xs sm:text-sm text-[#4CAF50] dark:text-green-400">本周新增</p>
         <p className="font-bold text-green-700 dark:text-green-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}
         </p>
@@ -113,7 +113,7 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
         <p className="text-xs sm:text-sm text-[#D32F2F] dark:text-red-400">今年新增</p>
-        <p className="font-bold text-[#D32F2F] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="font-bold text-[#D32F2F] dark:text-[#D32F2F]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -148,8 +148,8 @@ function NeedsAttentionCard({ count, onClick, dragListeners, isBreathing }: { co
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">需要关注</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-[#D32F2F] dark:text-red-400">需要关注</p>
+        <p className="font-bold text-[#D32F2F] dark:text-[#D32F2F]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -209,7 +209,7 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
         <p className="text-xs sm:text-sm text-[#D32F2F] dark:text-red-400">今年活跃</p>
-        <p className="font-bold text-[#D32F2F] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="font-bold text-[#D32F2F] dark:text-[#D32F2F]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -228,8 +228,8 @@ function BlacklistCard({ count, onClick, dragListeners, isBreathing }: { count: 
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">拉黑名单</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-[#D32F2F] dark:text-red-400">拉黑名单</p>
+        <p className="font-bold text-[#D32F2F] dark:text-[#D32F2F]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -248,8 +248,8 @@ function TodayRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">今日提醒</p>
-        <p className="font-bold text-red-700 dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-[#D32F2F] dark:text-red-400">今日提醒</p>
+        <p className="font-bold text-[#D32F2F] dark:text-[#D32F2F]" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -1295,7 +1295,7 @@ export default function ContactsManagement() {
                       // 退出后跳转到登录页面
                       window.location.href = "/login";
                     }}
-                    className="text-red-600"
+                    className="text-[#D32F2F]"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     退出登录
@@ -1598,9 +1598,9 @@ export default function ContactsManagement() {
             
             {/* 当前状态显示 */}
             {autoGenerateStatus?.isRunning && autoGenerateStatus?.config && (
-              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="p-3 bg-[#E8F5E9] dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
                 <p className="text-sm font-medium text-green-700 dark:text-green-300 mb-2">当前任务进度（今日）</p>
-                <div className="text-xs text-green-600 dark:text-green-400 space-y-1">
+                <div className="text-xs text-[#4CAF50] dark:text-green-400 space-y-1">
                   <p>新人脉: {autoGenerateStatus.config.todayNewCount}/{autoGenerateStatus.config.dailyNewContacts}</p>
                   <p>随机联络: {autoGenerateStatus.config.todayInteractionCount}/{autoGenerateStatus.config.dailyRandomInteractions}</p>
                   <p>随机标签: {autoGenerateStatus.config.todayTagCount}/{autoGenerateStatus.config.dailyRandomTags}</p>

@@ -265,11 +265,11 @@ export default function MemoryGame() {
                   <div className="text-xs text-muted-foreground">得分</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-blue-600">{moves}</div>
+                  <div className="text-2xl font-bold text-[#1976D2]">{moves}</div>
                   <div className="text-xs text-muted-foreground">步数</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-green-600">{formatTime(elapsedTime)}</div>
+                  <div className="text-2xl font-bold text-[#4CAF50]">{formatTime(elapsedTime)}</div>
                   <div className="text-xs text-muted-foreground">用时</div>
                 </div>
               </div>
@@ -290,13 +290,13 @@ export default function MemoryGame() {
             {/* 状态栏 */}
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFEBEE]">
                   <Sparkles className="w-4 h-4 text-[#D32F2F]" />
                   <span className="text-sm font-medium text-[#D32F2F]">{score}</span>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-600">{formatTime(elapsedTime)}</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#F5F5F5]">
+                  <Clock className="w-4 h-4 text-[#1976D2]" />
+                  <span className="text-sm font-medium text-[#1976D2]">{formatTime(elapsedTime)}</span>
                 </div>
               </div>
               <div className="text-sm text-muted-foreground">

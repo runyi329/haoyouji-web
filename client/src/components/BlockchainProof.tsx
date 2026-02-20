@@ -35,7 +35,7 @@ export default function BlockchainProof({
   return (
     <div className="space-y-3">
       {/* 主存证标签 */}
-      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-4 border-2 border-green-500/30 shadow-lg">
+      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-4 border-2 border-[#4CAF50]/30 shadow-lg">
         <div className="flex items-start space-x-3">
           {/* 左侧：盾牌图标 + 呼吸灯 */}
           <div className="relative flex-shrink-0">
@@ -51,7 +51,7 @@ export default function BlockchainProof({
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               <h4 className="text-sm font-bold text-white">数据已通过区块链进行哈希存证</h4>
-              <div className="flex items-center space-x-1 bg-green-500/20 px-2 py-0.5 rounded-full">
+              <div className="flex items-center space-x-1 bg-[#4CAF50]/20 px-2 py-0.5 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
                 <span className="text-[10px] text-green-400 font-semibold">实时同步</span>
               </div>
@@ -95,7 +95,7 @@ export default function BlockchainProof({
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white rounded-lg p-2.5 border border-gray-200">
           <div className="flex items-center space-x-1.5 mb-1">
-            <Database className="w-3 h-3 text-blue-600" />
+            <Database className="w-3 h-3 text-[#1976D2]" />
             <span className="text-[10px] text-gray-500">数据快照</span>
           </div>
           <p className="text-xs font-semibold text-gray-900">每日备份</p>
@@ -109,7 +109,7 @@ export default function BlockchainProof({
         </div>
         <div className="bg-white rounded-lg p-2.5 border border-gray-200">
           <div className="flex items-center space-x-1.5 mb-1">
-            <CheckCircle className="w-3 h-3 text-green-600" />
+            <CheckCircle className="w-3 h-3 text-[#4CAF50]" />
             <span className="text-[10px] text-gray-500">法律效力</span>
           </div>
           <p className="text-xs font-semibold text-gray-900">已生效</p>
@@ -117,15 +117,15 @@ export default function BlockchainProof({
       </div>
 
       {/* 说明文案 */}
-      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+      <div className="bg-[#F5F5F5] rounded-lg p-3 border border-blue-200">
         <div className="flex items-start space-x-2">
-          <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+          <div className="w-1 h-1 rounded-full bg-[#1976D2] mt-1.5 flex-shrink-0" />
           <p className="text-xs text-gray-700 leading-relaxed">
-            <span className="font-semibold text-blue-900">数据安全与区块链存证：</span>
+            <span className="font-semibold text-[#424242]">数据安全与区块链存证：</span>
             好友集采用<span className="font-semibold">多层次数据保护机制</span>。
             所有股权变动记录均生成唯一的<span className="font-semibold text-green-700">Hash校验值</span>，
             并计划接入<span className="font-semibold text-orange-600">蚂蚁链/腾讯至信链</span>进行存证。
-            这确保了每位合伙人的资产数据<span className="font-semibold text-red-600">可追溯、不可篡改</span>，
+            这确保了每位合伙人的资产数据<span className="font-semibold text-[#D32F2F]">可追溯、不可篡改</span>，
             在未来任何法律纠纷中均可作为有效证据。
           </p>
         </div>

@@ -82,7 +82,7 @@ export default function JoinLedger() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
         <Card className="p-8 bg-white max-w-md w-full text-center">
-          <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <CheckCircle2 className="w-16 h-16 text-[#4CAF50] mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入成功！</h2>
           <p className="text-gray-600 mb-2">
             您已成功加入账本
@@ -103,7 +103,7 @@ export default function JoinLedger() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${themeColors.primary}15` }}>
         <Card className="p-8 bg-white max-w-md w-full text-center">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="w-16 h-16 text-[#D32F2F] mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-4" style={{ color: themeColors.text }}>加入失败</h2>
           <p className="text-gray-600 mb-6">
             {errorMessage}

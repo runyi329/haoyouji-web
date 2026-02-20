@@ -237,7 +237,7 @@ export default function Ledger() {
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                       <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
                         开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
                       </span>
                       <span className="text-gray-300">|</span>
@@ -318,7 +318,7 @@ export default function Ledger() {
                           设置
                         </button>
                         <button
-                          className="text-xs h-8 rounded-xl bg-[#D32F2F]-light text-red-500 font-medium hover:bg-red-100 transition-colors"
+                          className="text-xs h-8 rounded-xl bg-[#D32F2F]-light text-[#D32F2F] font-medium hover:bg-[#FFEBEE] transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             setArchivingLedgerId(ledger.id);
@@ -341,7 +341,7 @@ export default function Ledger() {
                           导出
                         </button>
                         <button
-                          className="text-xs h-8 rounded-xl bg-[#D32F2F]-light text-red-500 font-medium hover:bg-red-100 transition-colors"
+                          className="text-xs h-8 rounded-xl bg-[#D32F2F]-light text-[#D32F2F] font-medium hover:bg-[#FFEBEE] transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             setDestroyingLedgerId(ledger.id);
@@ -365,7 +365,7 @@ export default function Ledger() {
         <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="flex gap-3">
             <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-red-100 transition-colors shadow-sm"
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
               onClick={() => {
                 // TODO: 加入他人账本
               }}
@@ -391,7 +391,7 @@ export default function Ledger() {
               setShowCreateDialog(false);
               setLocation("/ledger/create-type");
             }}
-            className="w-full text-center py-3.5 text-blue-500 font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
+            className="w-full text-center py-3.5 text-[#1976D2] font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
           >
             新建全新账本
           </button>
@@ -400,7 +400,7 @@ export default function Ledger() {
               setShowCreateDialog(false);
               // TODO: 实现复制已有账本功能
             }}
-            className="w-full text-center py-3.5 text-blue-500 font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
+            className="w-full text-center py-3.5 text-[#1976D2] font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
           >
             复制已有账本
           </button>
@@ -425,7 +425,7 @@ export default function Ledger() {
           <button
             onClick={handleArchiveConfirm}
             disabled={archiveMutation.isPending}
-            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-divider hover:bg-[#FAF3ED] transition-colors disabled:opacity-50"
+            className="w-full text-center py-3.5 text-[#D32F2F] font-medium border-t border-divider hover:bg-[#FAF3ED] transition-colors disabled:opacity-50"
           >
             {archiveMutation.isPending ? '封存中...' : '确认封存'}
           </button>
@@ -525,7 +525,7 @@ export default function Ledger() {
           <button
             onClick={handleDestroyConfirm}
             disabled={deleteMutation.isPending}
-            className="w-full text-center py-3.5 text-red-500 font-medium border-t border-divider hover:bg-[#FAF3ED] transition-colors disabled:opacity-50"
+            className="w-full text-center py-3.5 text-[#D32F2F] font-medium border-t border-divider hover:bg-[#FAF3ED] transition-colors disabled:opacity-50"
           >
             {deleteMutation.isPending ? '销毁中...' : '确认销毁'}
           </button>

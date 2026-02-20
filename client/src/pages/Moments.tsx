@@ -16,7 +16,7 @@ export default function Moments() {
       <div className="container mx-auto px-4 py-8">
         <Card className="p-8">
           <div className="flex flex-col items-center justify-center space-y-4 text-center">
-            <Construction className="w-16 h-16 text-blue-500" />
+            <Construction className="w-16 h-16 text-[#1976D2]" />
             <h2 className="text-2xl font-bold text-gray-900">功能开发中</h2>
             <p className="text-gray-600 max-w-md">
               动态功能正在紧张开发中，即将上线！

@@ -87,7 +87,7 @@ export default function LedgerReport() {
               onClick={() => setActiveTab("chart")}
               className={`px-3 py-1 text-sm ${
                 activeTab === "chart" 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -97,7 +97,7 @@ export default function LedgerReport() {
               onClick={() => setActiveTab("calendar")}
               className={`px-3 py-1 text-sm ${
                 activeTab === "calendar" 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -107,7 +107,7 @@ export default function LedgerReport() {
               onClick={() => setActiveTab("list")}
               className={`px-3 py-1 text-sm ${
                 activeTab === "list" 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -166,11 +166,11 @@ function ListViewContent({
   return (
     <div className="p-4 space-y-4">
       {/* 年度汇总卡片 */}
-      <div className="bg-red-50 rounded-lg p-4">
+      <div className="bg-[#FFEBEE] rounded-lg p-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-xs text-gray-500 mb-1">{selectedYear}年收入</div>
-            <div className="text-lg font-semibold text-green-600">
+            <div className="text-lg font-semibold text-[#4CAF50]">
               {formatAmount(yearIncome)}
             </div>
           </div>
@@ -182,7 +182,7 @@ function ListViewContent({
           </div>
           <div>
             <div className="text-xs text-gray-500 mb-1">{selectedYear}年支出</div>
-            <div className="text-lg font-semibold text-red-600">
+            <div className="text-lg font-semibold text-[#D32F2F]">
               {formatAmount(yearExpense)}
             </div>
           </div>
@@ -192,7 +192,7 @@ function ListViewContent({
       {/* 成员收支 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
-          <div className="w-1 h-5 bg-blue-600 rounded mr-2"></div>
+          <div className="w-1 h-5 bg-[#1976D2] rounded mr-2"></div>
           <h3 className="font-medium">成员收支</h3>
         </div>
         <table className="w-full">
@@ -219,16 +219,16 @@ function ListViewContent({
                     </div>
                     {member.nickname || member.username || "匿名用户"}
                   </td>
-                  <td className="py-3 text-right text-green-600">
+                  <td className="py-3 text-right text-[#4CAF50]">
                     {formatAmount(member.income || 0)}
                   </td>
-                  <td className="py-3 text-right text-red-600">
+                  <td className="py-3 text-right text-[#D32F2F]">
                     {formatAmount(member.expense || 0)}
                   </td>
                   <td className={`py-3 text-right ${
                     (member.income || 0) - (member.expense || 0) >= 0 
-                      ? 'text-green-600' 
-                      : 'text-red-600'
+                      ? 'text-[#4CAF50]' 
+                      : 'text-[#D32F2F]'
                   }`}>
                     {formatAmount((member.income || 0) - (member.expense || 0))}
                   </td>
@@ -248,7 +248,7 @@ function ListViewContent({
       {/* 年度每月收支 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
-          <div className="w-1 h-5 bg-blue-600 rounded mr-2"></div>
+          <div className="w-1 h-5 bg-[#1976D2] rounded mr-2"></div>
           <h3 className="font-medium">年度每月收支</h3>
         </div>
         <table className="w-full">
@@ -264,14 +264,14 @@ function ListViewContent({
             {monthlyData.map((month) => (
               <tr key={month.month} className="border-t border-gray-100">
                 <td className="py-3">{month.month}月</td>
-                <td className="py-3 text-right text-green-600">
+                <td className="py-3 text-right text-[#4CAF50]">
                   {formatAmount(month.income)}
                 </td>
-                <td className="py-3 text-right text-red-600">
+                <td className="py-3 text-right text-[#D32F2F]">
                   {formatAmount(month.expense)}
                 </td>
                 <td className={`py-3 text-right ${
-                  month.balance >= 0 ? 'text-green-600' : 'text-red-600'
+                  month.balance >= 0 ? 'text-[#4CAF50]' : 'text-[#D32F2F]'
                 }`}>
                   {formatAmount(month.balance)}
                 </td>
@@ -387,7 +387,7 @@ function ChartViewContent({
               }}
               className={`px-2 py-1 text-xs ${
                 timeDimension === 'month' 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -400,7 +400,7 @@ function ChartViewContent({
               }}
               className={`px-2 py-1 text-xs ${
                 timeDimension === 'year' 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -413,7 +413,7 @@ function ChartViewContent({
               }}
               className={`px-2 py-1 text-xs ${
                 timeDimension === 'custom' 
-                  ? "bg-white text-blue-600" 
+                  ? "bg-white text-[#1976D2]" 
                   : "text-white"
               }`}
             >
@@ -424,7 +424,7 @@ function ChartViewContent({
           {/* 成员筛选按钮 */}
           <button
             onClick={() => setShowMemberPicker(true)}
-            className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
+            className="w-6 h-6 rounded-full bg-[#D32F2F] flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
           >
             {(() => {
               if (selectedMemberIds.length === 0) {
@@ -453,21 +453,21 @@ function ChartViewContent({
               <div 
                 onClick={() => toggleMember(0)}
                 className={`flex items-center p-2 rounded cursor-pointer ${
-                  selectedMemberIds.length === 0 ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  selectedMemberIds.length === 0 ? 'bg-[#F5F5F5]' : 'hover:bg-gray-50'
                 }`}
               >
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm mr-2">
+                <div className="w-8 h-8 rounded-full bg-[#1976D2] flex items-center justify-center text-white text-sm mr-2">
                   全
                 </div>
                 <span>全部成员</span>
-                {selectedMemberIds.length === 0 && <span className="ml-auto text-blue-600">✓</span>}
+                {selectedMemberIds.length === 0 && <span className="ml-auto text-[#1976D2]">✓</span>}
               </div>
               {membersData?.map((member: any) => (
                 <div 
                   key={member.id}
                   onClick={() => toggleMember(member.id)}
                   className={`flex items-center p-2 rounded cursor-pointer ${
-                    selectedMemberIds.includes(member.id) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    selectedMemberIds.includes(member.id) ? 'bg-[#F5F5F5]' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="mr-2">
@@ -479,13 +479,13 @@ function ChartViewContent({
                     />
                   </div>
                   <span>{member.nickname}</span>
-                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-blue-600">✓</span>}
+                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-[#1976D2]">✓</span>}
                 </div>
               ))}
             </div>
             <button 
               onClick={() => setShowMemberPicker(false)}
-              className="w-full mt-4 bg-blue-600 text-white py-2 rounded"
+              className="w-full mt-4 bg-[#1976D2] text-white py-2 rounded"
             >
               确定
             </button>
@@ -505,7 +505,7 @@ function ChartViewContent({
                 onClick={() => setTimeDimension('month')}
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'month' 
-                    ? 'bg-blue-600 text-white' 
+                    ? 'bg-[#1976D2] text-white' 
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
@@ -515,7 +515,7 @@ function ChartViewContent({
                 onClick={() => setTimeDimension('year')}
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'year' 
-                    ? 'bg-blue-600 text-white' 
+                    ? 'bg-[#1976D2] text-white' 
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
@@ -525,7 +525,7 @@ function ChartViewContent({
                 onClick={() => setTimeDimension('custom')}
                 className={`flex-1 py-2 rounded ${
                   timeDimension === 'custom' 
-                    ? 'bg-blue-600 text-white' 
+                    ? 'bg-[#1976D2] text-white' 
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
@@ -607,7 +607,7 @@ function ChartViewContent({
               </button>
               <button 
                 onClick={() => setShowTimePicker(false)}
-                className="flex-1 bg-blue-600 text-white py-2 rounded"
+                className="flex-1 bg-[#1976D2] text-white py-2 rounded"
               >
                 确定
               </button>
@@ -620,7 +620,7 @@ function ChartViewContent({
       {/* 收支曲线 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
-          <div className="w-1 h-5 bg-blue-600 rounded mr-2"></div>
+          <div className="w-1 h-5 bg-[#1976D2] rounded mr-2"></div>
           <h3 className="font-medium">收支曲线</h3>
         </div>
         
@@ -656,7 +656,7 @@ function ChartViewContent({
                     }}
                   />
                   <div 
-                    className="bg-blue-500 rounded-t"
+                    className="bg-[#1976D2] rounded-t"
                     style={{ 
                       width: '40%',
                       height: `${expenseHeight}%`, 
@@ -676,7 +676,7 @@ function ChartViewContent({
         {/* 图例 */}
         <div className="flex justify-center space-x-6 mt-4 text-sm">
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-blue-500 rounded-full mr-1"></div>
+            <div className="w-3 h-3 bg-[#1976D2] rounded-full mr-1"></div>
             <span>支出</span>
           </div>
           <div className="flex items-center">
@@ -689,11 +689,11 @@ function ChartViewContent({
         <div className="mt-4 space-y-2">
           <div className="flex justify-between">
             <span className="text-gray-600">{daysPassed}天平均收入</span>
-            <span className="text-green-600">{formatAmount(avgIncome)}</span>
+            <span className="text-[#4CAF50]">{formatAmount(avgIncome)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">{daysPassed}天平均支出</span>
-            <span className="text-red-600">{formatAmount(avgExpense)}</span>
+            <span className="text-[#D32F2F]">{formatAmount(avgExpense)}</span>
           </div>
         </div>
       </div>
@@ -701,7 +701,7 @@ function ChartViewContent({
       {/* 支出比例 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
-          <div className="w-1 h-5 bg-blue-600 rounded mr-2"></div>
+          <div className="w-1 h-5 bg-[#1976D2] rounded mr-2"></div>
           <h3 className="font-medium">支出比例</h3>
         </div>
         
@@ -736,14 +736,14 @@ function ChartViewContent({
                       <div className="flex items-center justify-center">
                         <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-blue-500 rounded-full"
+                            className="h-full bg-[#1976D2] rounded-full"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <span className="ml-2 text-red-600">{percentage}%</span>
+                        <span className="ml-2 text-[#D32F2F]">{percentage}%</span>
                       </div>
                     </td>
-                    <td className="py-3 text-right text-red-600">
+                    <td className="py-3 text-right text-[#D32F2F]">
                       {formatAmount(cat.amount)}
                     </td>
                   </tr>
@@ -763,7 +763,7 @@ function ChartViewContent({
       {/* 收入比例 */}
       <div className="bg-white rounded-lg p-4">
         <div className="flex items-center mb-4">
-          <div className="w-1 h-5 bg-blue-600 rounded mr-2"></div>
+          <div className="w-1 h-5 bg-[#1976D2] rounded mr-2"></div>
           <h3 className="font-medium">收入比例</h3>
         </div>
         
@@ -799,14 +799,14 @@ function ChartViewContent({
                       <div className="flex items-center justify-center">
                         <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-green-500 rounded-full"
+                            className="h-full bg-[#4CAF50] rounded-full"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <span className="ml-2 text-green-600">{percentage}%</span>
+                        <span className="ml-2 text-[#4CAF50]">{percentage}%</span>
                       </div>
                     </td>
-                    <td className="py-3 text-right text-green-600">
+                    <td className="py-3 text-right text-[#4CAF50]">
                       {formatAmount(cat.amount)}
                     </td>
                   </tr>
@@ -1145,12 +1145,12 @@ function CalendarViewContent({
               className="flex items-center px-4 py-3 border-b cursor-pointer hover:bg-gray-50"
               onClick={selectAllMembers}
             >
-              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3">
+              <div className="w-10 h-10 rounded-full bg-[#1976D2] flex items-center justify-center text-white mr-3">
                 <span>全</span>
               </div>
               <span className="flex-1 text-gray-800">全部成员</span>
               {selectedMemberIds.length === 0 && (
-                <span className="text-blue-500">✓</span>
+                <span className="text-[#1976D2]">✓</span>
               )}
             </div>
             {/* 成员列表 */}
@@ -1170,14 +1170,14 @@ function CalendarViewContent({
                 </div>
                 <span className="flex-1 text-gray-800">{member.nickname || '未命名'}</span>
                 {selectedMemberIds.includes(member.id) && (
-                  <span className="text-blue-500">✓</span>
+                  <span className="text-[#1976D2]">✓</span>
                 )}
               </div>
             ))}
             <div className="p-3">
               <button 
                 onClick={() => setShowMemberPicker(false)}
-                className="w-full bg-blue-500 text-white py-2 rounded"
+                className="w-full bg-[#1976D2] text-white py-2 rounded"
               >
                 确定
               </button>
@@ -1203,19 +1203,19 @@ function CalendarViewContent({
           <div className="flex bg-white/20 rounded overflow-hidden">
             <button
               onClick={() => setViewType("balance")}
-              className={`px-2.5 py-1 text-xs ${viewType === "balance" ? "bg-white text-blue-600" : "text-white"}`}
+              className={`px-2.5 py-1 text-xs ${viewType === "balance" ? "bg-white text-[#1976D2]" : "text-white"}`}
             >
               结余
             </button>
             <button
               onClick={() => setViewType("income")}
-              className={`px-2.5 py-1 text-xs ${viewType === "income" ? "bg-white text-blue-600" : "text-white"}`}
+              className={`px-2.5 py-1 text-xs ${viewType === "income" ? "bg-white text-[#1976D2]" : "text-white"}`}
             >
               收入
             </button>
             <button
               onClick={() => setViewType("expense")}
-              className={`px-2.5 py-1 text-xs ${viewType === "expense" ? "bg-white text-blue-600" : "text-white"}`}
+              className={`px-2.5 py-1 text-xs ${viewType === "expense" ? "bg-white text-[#1976D2]" : "text-white"}`}
             >
               支出
             </button>
@@ -1224,7 +1224,7 @@ function CalendarViewContent({
           {/* 成员筛选按钮（圆形头像样式，缩小20%） */}
           <button
             onClick={() => setShowMemberPicker(true)}
-            className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
+            className="w-6 h-6 rounded-full bg-[#D32F2F] flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0 overflow-hidden"
           >
             {(() => {
               if (selectedMemberIds.length === 0) {
@@ -1260,7 +1260,7 @@ function CalendarViewContent({
         </div>
 
         {/* 日历网格 */}
-        <div className="mx-4 mt-3 bg-blue-600/50 rounded overflow-hidden">
+        <div className="mx-4 mt-3 bg-[#1976D2]/50 rounded overflow-hidden">
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -1294,12 +1294,12 @@ function CalendarViewContent({
                         onClick={() => setSelectedDate(day)}
                       >
                         <div className="flex flex-col items-center justify-center h-full">
-                          <span className={`text-sm ${isSelected ? "font-bold text-blue-600" : "text-white"}`}>
+                          <span className={`text-sm ${isSelected ? "font-bold text-[#1976D2]" : "text-white"}`}>
                             {day}
                           </span>
                           <span className={`text-xs ${
                             isSelected 
-                              ? (dayValue >= 0 ? "text-green-600" : "text-red-500")
+                              ? (dayValue >= 0 ? "text-[#4CAF50]" : "text-[#D32F2F]")
                               : "text-white/70"
                           }`}>
                             {hasData ? dayValue.toFixed(0) : "0"}
@@ -1345,14 +1345,14 @@ function CalendarViewContent({
                 <div className="flex-1">
                   <div className="flex items-center">
                     <span className={`w-2 h-2 rounded-full mr-2 ${
-                      record.type === "income" ? "bg-green-500" : "bg-red-500"
+                      record.type === "income" ? "bg-[#4CAF50]" : "bg-[#D32F2F]"
                     }`} />
                     <span className="text-gray-800">{record.categoryName || "未分类"}</span>
                   </div>
                 </div>
                 
                 <span className={`font-medium ${
-                  record.type === "income" ? "text-green-600" : "text-gray-800"
+                  record.type === "income" ? "text-[#4CAF50]" : "text-gray-800"
                 }`}>
                   {record.type === "income" ? "+" : "-"}{formatAmount(record.amount)}
                 </span>
@@ -1370,7 +1370,7 @@ function CalendarViewContent({
       <div className="bg-white border-t p-4">
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-          className="w-full bg-blue-500 text-white py-3 rounded-full flex items-center justify-center"
+          className="w-full bg-[#1976D2] text-white py-3 rounded-full flex items-center justify-center"
         >
           <span className="mr-1">+</span>
           <span>记一笔</span>

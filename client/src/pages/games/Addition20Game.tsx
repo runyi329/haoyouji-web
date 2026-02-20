@@ -482,7 +482,7 @@ export default function Addition20Game() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-[#D32F2F] hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
                     onClick={() => setShowCancelDialog(true)}
                   >
                     放弃挑战
@@ -757,9 +757,9 @@ export default function Addition20Game() {
                         let buttonClass = "p-6 text-2xl font-bold transition-all ";
                         if (showResult) {
                           if (isCorrectOption) {
-                            buttonClass += "bg-green-500 text-white border-green-500";
+                            buttonClass += "bg-[#4CAF50] text-white border-[#4CAF50]";
                           } else if (isSelected && !isCorrectOption) {
-                            buttonClass += "bg-red-500 text-white border-red-500";
+                            buttonClass += "bg-[#D32F2F] text-white border-[#D32F2F]";
                           } else {
                             buttonClass += "opacity-50";
                           }
@@ -816,7 +816,7 @@ export default function Addition20Game() {
                         </Button>
                       </div>
                       {selectedAnswer !== null && (
-                        <div className={`mt-4 p-3 rounded-lg ${isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        <div className={`mt-4 p-3 rounded-lg ${isCorrect ? "bg-[#E8F5E9] text-green-700" : "bg-[#FFEBEE] text-[#D32F2F]"}`}>
                           {isCorrect ? (
                             <div className="flex items-center justify-center gap-2">
                               <Check className="w-5 h-5" />

@@ -260,13 +260,13 @@ export default function ReimbursementForm({
                 <div className="flex flex-col gap-1.5">
                   <button
                     onClick={() => fileRef.current?.click()}
-                    className="text-xs text-blue-600 underline"
+                    className="text-xs text-[#1976D2] underline"
                   >
                     重新上传
                   </button>
                   <button
                     onClick={() => setVoucherImage(null)}
-                    className="text-xs text-red-500 underline"
+                    className="text-xs text-[#D32F2F] underline"
                   >
                     删除
                   </button>

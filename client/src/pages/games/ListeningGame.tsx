@@ -223,20 +223,20 @@ export default function ListeningGame(props: any) {
             <Button variant="ghost" onClick={onBack}>
               <RotateCcw className="w-5 h-5" />
             </Button>
-            <h1 className="text-3xl font-bold text-blue-600">听音辨字</h1>
+            <h1 className="text-3xl font-bold text-[#1976D2]">听音辨字</h1>
           </div>
           
           <Card className="p-8 bg-white/90 backdrop-blur">
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">🎧</div>
-              <h2 className="text-2xl font-bold text-blue-600 mb-2">练习+测试模式</h2>
+              <h2 className="text-2xl font-bold text-[#1976D2] mb-2">练习+测试模式</h2>
               <p className="text-gray-600">先练习，再测试，全部答对进入下一张卡</p>
             </div>
             
             {/* 卡片数量选择 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                选择卡片数量：<span className="text-blue-600 font-bold">{cardCount}张</span>
+                选择卡片数量：<span className="text-[#1976D2] font-bold">{cardCount}张</span>
               </label>
               <div className="px-2">
                 <input
@@ -261,19 +261,19 @@ export default function ListeningGame(props: any) {
             {/* 每张卡字数选择 */}
             <div className="mb-8">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                每张卡字数：<span className="text-blue-600 font-bold">{charsPerCard}个字</span>
+                每张卡字数：<span className="text-[#1976D2] font-bold">{charsPerCard}个字</span>
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <Button
                   variant={charsPerCard === 9 ? "default" : "outline"}
-                  className={charsPerCard === 9 ? "bg-blue-500" : ""}
+                  className={charsPerCard === 9 ? "bg-[#1976D2]" : ""}
                   onClick={() => setCharsPerCard(9)}
                 >
                   9个字 (3×3)
                 </Button>
                 <Button
                   variant={charsPerCard === 16 ? "default" : "outline"}
-                  className={charsPerCard === 16 ? "bg-blue-500" : ""}
+                  className={charsPerCard === 16 ? "bg-[#1976D2]" : ""}
                   onClick={() => setCharsPerCard(16)}
                 >
                   16个字 (4×4)
@@ -310,11 +310,11 @@ export default function ListeningGame(props: any) {
         <div className="max-w-2xl mx-auto pt-8">
           <Card className="p-12 bg-white/90 backdrop-blur text-center">
             <div className="text-8xl mb-6">🎉</div>
-            <h2 className="text-4xl font-bold text-blue-600 mb-4">挑战完成！</h2>
+            <h2 className="text-4xl font-bold text-[#1976D2] mb-4">挑战完成！</h2>
             
             <div className="grid grid-cols-3 gap-6 my-8">
-              <div className="bg-blue-50 p-6 rounded-xl">
-                <div className="text-3xl font-bold text-blue-600">{totalScore}</div>
+              <div className="bg-[#F5F5F5] p-6 rounded-xl">
+                <div className="text-3xl font-bold text-[#1976D2]">{totalScore}</div>
                 <div className="text-gray-600 mt-2">答对次数</div>
               </div>
               <div className="bg-cyan-50 p-6 rounded-xl">
@@ -362,9 +362,9 @@ export default function ListeningGame(props: any) {
         {/* 顶部信息栏 */}
         <div className="flex justify-between items-center mb-2 text-sm" style={{ fontFamily: "'KaiTi', 'STKaiti', 'BiauKai', serif" }}>
           <div className="flex items-center gap-2">
-            <span className="text-blue-600 font-semibold">第{currentCardIndex + 1}/{cardCount}张</span>
+            <span className="text-[#1976D2] font-semibold">第{currentCardIndex + 1}/{cardCount}张</span>
             <span className="text-gray-600">⏱️{formatTime(timer)}</span>
-            <span className="text-green-600">✅{correctChars.size}/{charsPerCard}</span>
+            <span className="text-[#4CAF50]">✅{correctChars.size}/{charsPerCard}</span>
           </div>
           <Button
             variant="outline"
@@ -383,14 +383,14 @@ export default function ListeningGame(props: any) {
             {isPracticeMode && (
               <>
                 <div className="text-3xl mb-1">✋</div>
-                <h2 className="text-lg font-bold text-blue-600 mb-1">练习模式</h2>
+                <h2 className="text-lg font-bold text-[#1976D2] mb-1">练习模式</h2>
                 <p className="text-sm text-gray-600">点击任意汉字，听听它的读音</p>
               </>
             )}
             {isTestMode && (
               <>
                 <div className="text-3xl mb-1">🎧</div>
-                <h2 className="text-lg font-bold text-blue-600 mb-1">测试模式</h2>
+                <h2 className="text-lg font-bold text-[#1976D2] mb-1">测试模式</h2>
                 <p className="text-sm text-gray-600">请听语音，点击正确的汉字</p>
               </>
             )}
@@ -415,7 +415,7 @@ export default function ListeningGame(props: any) {
                   className={`
                     relative p-3 rounded-xl border-2 transition-all 
                     text-5xl font-bold aspect-square flex items-center justify-center
-                    ${isCorrect ? 'bg-green-100 border-green-500' : 'bg-white border-gray-200'}
+                    ${isCorrect ? 'bg-[#E8F5E9] border-[#4CAF50]' : 'bg-white border-gray-200'}
                     ${!isCorrect && 'hover:border-blue-400 hover:scale-105 cursor-pointer'}
                     ${isWrong && 'animate-shake border-red-400'}
                   `}

@@ -172,9 +172,9 @@ const AddTransaction = () => {
   const defaultSubCategories: Record<number, any[]> = {
     "2": [{ id: 25, name: "淘宝", icon: "🛍️", color: "bg-red-400", parentId: 2 }],
     "25": [
-      { id: 251, name: "服饰", icon: "👔", color: "bg-red-300", parentId: 25 },
-      { id: 252, name: "数码", icon: "📱", color: "bg-red-300", parentId: 25 },
-      { id: 253, name: "食品", icon: "🍞", color: "bg-red-300", parentId: 25 },
+      { id: 251, name: "服饰", icon: "👔", color: "bg-[#D32F2F]", parentId: 25 },
+      { id: 252, name: "数码", icon: "📱", color: "bg-[#D32F2F]", parentId: 25 },
+      { id: 253, name: "食品", icon: "🍞", color: "bg-[#D32F2F]", parentId: 25 },
     ],
   };
 
@@ -504,7 +504,7 @@ const AddTransaction = () => {
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   // 主题颜色数组
-  const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-green-500", "bg-blue-500"];
+  const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-[#4CAF50]", "bg-[#1976D2]"];
 
   return (
     <div className="h-screen flex flex-col bg-[#FAF3ED]">
@@ -649,7 +649,7 @@ const AddTransaction = () => {
             <button
               className={`px-3 py-1.5 rounded text-xs ${
                 reimbursementStatus === 'pending'
-                  ? "bg-blue-500 text-white"
+                  ? "bg-[#1976D2] text-white"
                   : "bg-gray-100 text-gray-700"
               }`}
               onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
@@ -958,7 +958,7 @@ const AddTransaction = () => {
                   <span className="text-sm">{member.name}</span>
                 </div>
                 {payer === member.name && (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-[#4CAF50]" />
                 )}
               </button>
             ))}

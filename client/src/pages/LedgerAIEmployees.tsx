@@ -157,7 +157,7 @@ const LedgerAIEmployees = () => {
                   <button
                     onClick={() => handleRemoveAIEmployee(employee.id)}
                     disabled={removeAIEmployeeMutation.isPending}
-                    className="text-red-500 text-sm px-3 py-1 hover:bg-red-50 rounded"
+                    className="text-[#D32F2F] text-sm px-3 py-1 hover:bg-[#FFEBEE] rounded"
                   >
                     删除
                   </button>

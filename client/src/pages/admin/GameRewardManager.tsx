@@ -25,13 +25,13 @@ const GAMES: GameConfig[] = [
   // 棋类游戏
   { id: "chess", name: "国际象棋", icon: "♟️", color: "bg-gray-100", activityPrefix: ["chess_"] },
   { id: "go", name: "围棋", icon: "⚫", color: "bg-gray-100", activityPrefix: ["go_"] },
-  { id: "gomoku", name: "五子棋", icon: "⭕", color: "bg-red-100", activityPrefix: ["gomoku_"], hasDan: true },
-  { id: "ludo", name: "飞行棋", icon: "🎲", color: "bg-blue-100", activityPrefix: ["ludo_"] },
+  { id: "gomoku", name: "五子棋", icon: "⭕", color: "bg-[#FFEBEE]", activityPrefix: ["gomoku_"], hasDan: true },
+  { id: "ludo", name: "飞行棋", icon: "🎲", color: "bg-[#F5F5F5]", activityPrefix: ["ludo_"] },
   
   // 识字游戏 - 4个独立入口
   { id: "character_picture", name: "看图识字", icon: "🖼️", color: "bg-cyan-100", activityPrefix: ["character_picture_"], hasDifficulty: true },
   { id: "character_flashcard", name: "快闪识字", icon: "⚡", color: "bg-[#FAF3ED]", activityPrefix: ["character_flashcard_"], hasDifficulty: true },
-  { id: "character_listening", name: "听音识字", icon: "🎧", color: "bg-green-100", activityPrefix: ["character_listening_"], hasDifficulty: true },
+  { id: "character_listening", name: "听音识字", icon: "🎧", color: "bg-[#E8F5E9]", activityPrefix: ["character_listening_"], hasDifficulty: true },
   { id: "character_memory", name: "翻牌记字", icon: "🃏", color: "bg-pink-100", activityPrefix: ["character_memory_"], hasDifficulty: true },
   
   // 其他游戏
@@ -48,27 +48,27 @@ const GAMES: GameConfig[] = [
 
 // 难度等级配置
 const DIFFICULTY_CONFIG = {
-  easy: { name: "简单", color: "bg-green-100 text-green-700 border-green-300" },
+  easy: { name: "简单", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
   medium: { name: "中等", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
-  hard: { name: "困难", color: "bg-red-100 text-red-700 border-red-300" },
+  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
 };
 
 // 20加法难度配置
 const ADDITION20_DIFFICULTY_CONFIG = {
-  easy: { name: "简单", color: "bg-green-100 text-green-700 border-green-300" },
-  hard: { name: "困难", color: "bg-red-100 text-red-700 border-red-300" },
+  easy: { name: "简单", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
+  hard: { name: "困难", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
 };
 
 // 五子棋段位配置
 const DAN_CONFIG: Record<number, { name: string; color: string }> = {
-  1: { name: "1段·入门", color: "bg-green-100 text-green-700 border-green-300" },
-  2: { name: "2段·初学", color: "bg-green-100 text-green-600 border-green-300" },
-  3: { name: "3段·业余", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  4: { name: "4段·进阶", color: "bg-blue-100 text-blue-600 border-blue-300" },
-  5: { name: "5段·熟练", color: "bg-red-100 text-[#D32F2F]-dark border-red-300" },
-  6: { name: "6段·高手", color: "bg-red-100 text-[#D32F2F] border-red-300" },
+  1: { name: "1段·入门", color: "bg-[#E8F5E9] text-green-700 border-green-300" },
+  2: { name: "2段·初学", color: "bg-[#E8F5E9] text-[#4CAF50] border-green-300" },
+  3: { name: "3段·业余", color: "bg-[#F5F5F5] text-blue-700 border-blue-300" },
+  4: { name: "4段·进阶", color: "bg-[#F5F5F5] text-[#1976D2] border-blue-300" },
+  5: { name: "5段·熟练", color: "bg-[#FFEBEE] text-[#D32F2F]-dark border-red-300" },
+  6: { name: "6段·高手", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
   7: { name: "7段·专家", color: "bg-[#FAF3ED] text-orange-700 border-orange-300" },
-  8: { name: "8段·大师", color: "bg-red-100 text-red-600 border-red-300" },
+  8: { name: "8段·大师", color: "bg-[#FFEBEE] text-[#D32F2F] border-red-300" },
   9: { name: "9段·棋圣", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
 };
 
@@ -255,7 +255,7 @@ export default function GameRewardManager() {
                 variant="ghost"
                 onClick={() => handleSave(rule.id)}
                 disabled={updateMutation.isPending}
-                className="text-green-600 hover:text-green-700"
+                className="text-[#4CAF50] hover:text-green-700"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -283,7 +283,7 @@ export default function GameRewardManager() {
                 variant="outline"
                 onClick={() => handleEdit(rule)}
                 disabled={!rule.isActive}
-                className="text-[#D32F2F] border-red-200 hover:bg-red-50"
+                className="text-[#D32F2F] border-red-200 hover:bg-[#FFEBEE]"
               >
                 编辑
               </Button>

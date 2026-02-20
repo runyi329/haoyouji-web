@@ -174,7 +174,7 @@ export default function LedgerApprovalSettings() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 to-blue-600">
       {/* 顶部导航 */}
-      <div className="bg-blue-500 text-white p-4 flex items-center">
+      <div className="bg-[#1976D2] text-white p-4 flex items-center">
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
           className="mr-4"
@@ -201,7 +201,7 @@ export default function LedgerApprovalSettings() {
               </p>
               <button
                 onClick={() => setShowMoreInfo(!showMoreInfo)}
-                className="text-blue-600 text-sm mt-1 underline"
+                className="text-[#1976D2] text-sm mt-1 underline"
               >
                 {showMoreInfo ? '收起' : '更多介绍'}
               </button>
@@ -233,7 +233,7 @@ export default function LedgerApprovalSettings() {
                       {index > 0 && (
                         <button
                           onClick={() => removeRule(index)}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-[#D32F2F] hover:text-[#D32F2F]"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -305,7 +305,7 @@ export default function LedgerApprovalSettings() {
         <Button
           onClick={handleSave}
           disabled={saveRulesMutation.isPending}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white py-6 text-base rounded-lg"
+          className="w-full bg-[#1976D2] hover:bg-[#1976D2] text-white py-6 text-base rounded-lg"
         >
           {saveRulesMutation.isPending ? "保存中..." : "保存设置"}
         </Button>

@@ -219,7 +219,7 @@ export default function BannerConfig() {
           </Card>
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-blue-200">
             <p className="text-sm text-blue-800">
               <strong>提示：</strong>首页横幅会显示在所有用户的首页顶部。您可以设置标题、描述和图片，也可以全部留空来隐藏横幅。
             </p>

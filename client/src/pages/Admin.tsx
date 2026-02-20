@@ -430,12 +430,12 @@ export default function Admin() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{u.name || u.username}</span>
                         {u.role === "super_admin" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-[#D32F2F]">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-[#FFEBEE] text-[#D32F2F]">
                             超级管理员
                           </span>
                         )}
                         {u.role === "parent" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-600">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-[#F5F5F5] text-[#1976D2]">
                             家长
                           </span>
                         )}
@@ -445,7 +445,7 @@ export default function Admin() {
                           </span>
                         )}
                         {u.isLocked && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-600">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-[#FFEBEE] text-[#D32F2F]">
                             已锁定
                           </span>
                         )}
@@ -502,7 +502,7 @@ export default function Admin() {
                         variant="ghost"
                         className={`w-8 h-8 ${
                           u.inviteEnabled 
-                            ? 'text-green-600 hover:text-green-700' 
+                            ? 'text-[#4CAF50] hover:text-green-700' 
                             : 'text-gray-400 hover:text-gray-500'
                         }`}
                         onClick={() => {
@@ -631,7 +631,7 @@ export default function Admin() {
                         onOpenChange={(open) => setShowDeleteUser(open ? u.id : null)}
                       >
                         <DialogTrigger asChild>
-                          <Button size="icon" variant="ghost" className="w-8 h-8 text-red-500 hover:text-red-600">
+                          <Button size="icon" variant="ghost" className="w-8 h-8 text-[#D32F2F] hover:text-[#D32F2F]">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </DialogTrigger>
@@ -745,7 +745,7 @@ export default function Admin() {
                               {userPaymentData.profile.wallet_qr_code_url && (
                                 <div className="flex items-center">
                                   <span className="text-gray-500 min-w-[100px]">收款码：</span>
-                                  <a href={userPaymentData.profile.wallet_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                  <a href={userPaymentData.profile.wallet_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
                             </div>
@@ -763,7 +763,7 @@ export default function Admin() {
                               {userPaymentData.profile.alipay_qr_code_url && (
                                 <div className="flex items-center">
                                   <span className="text-gray-500 min-w-[100px]">收款码：</span>
-                                  <a href={userPaymentData.profile.alipay_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                  <a href={userPaymentData.profile.alipay_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
                               <div className="flex items-center">
@@ -779,7 +779,7 @@ export default function Admin() {
                               {userPaymentData.profile.wechat_qr_code_url && (
                                 <div className="flex items-center">
                                   <span className="text-gray-500 min-w-[100px]">收款码：</span>
-                                  <a href={userPaymentData.profile.wechat_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-xs hover:underline">查看图片</a>
+                                  <a href={userPaymentData.profile.wechat_qr_code_url} target="_blank" rel="noopener noreferrer" className="text-[#1976D2] text-xs hover:underline">查看图片</a>
                                 </div>
                               )}
                               <div className="flex items-center">
@@ -813,9 +813,9 @@ export default function Admin() {
                             <div className="flex items-center">
                               <span className="text-gray-500 min-w-[100px]">认证状态：</span>
                               <span className={`px-2 py-0.5 text-xs rounded ${
-                                userPaymentData.profile.verification_status === 'verified' ? 'bg-green-100 text-green-700' :
+                                userPaymentData.profile.verification_status === 'verified' ? 'bg-[#E8F5E9] text-green-700' :
                                 userPaymentData.profile.verification_status === 'pending' ? 'bg-[#FAF3ED] text-[#CBA471]' :
-                                'bg-red-100 text-red-700'
+                                'bg-[#FFEBEE] text-[#D32F2F]'
                               }`}>
                                 {userPaymentData.profile.verification_status === 'verified' && '已认证'}
                                 {userPaymentData.profile.verification_status === 'pending' && '待审核'}

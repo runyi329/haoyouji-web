@@ -133,7 +133,7 @@ VC看到的是什么
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                           {isCopied && (
-                            <span className="absolute -top-6 right-0 bg-green-500 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
+                            <span className="absolute -top-6 right-0 bg-[#4CAF50] text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
                               已复制
                             </span>
                           )}
@@ -158,7 +158,7 @@ VC看到的是什么
                 </svg>
                 <span>复制全部文字</span>
                 {copiedId === `all-${index}` && (
-                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#4CAF50] text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                     已复制全部
                   </span>
                 )}
@@ -596,7 +596,7 @@ export default function MyEquity() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-[10px] text-red-300/60 mt-1 text-right">
+                    <div className="text-[10px] text-[#D32F2F]/60 mt-1 text-right">
                       若错过本轮，资产将缩水 {(equity.dynamicLeverage.hesitationCost * 10000).toFixed(0)} 权证点
                     </div>
                   </div>

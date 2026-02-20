@@ -115,12 +115,12 @@ export function MultiItemFieldV2({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={item.id || `temp_${index}`} className={`flex items-center gap-2 p-2 rounded-md border ${isEditing(index) ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
+            <div key={item.id || `temp_${index}`} className={`flex items-center gap-2 p-2 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <span className="flex-1 text-sm">{item.value}</span>
               <button
                 type="button"
                 onClick={() => handleEdit(index)}
-                className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                 title="编辑"
               >
                 <Pencil className="w-4 h-4" />
@@ -128,7 +128,7 @@ export function MultiItemFieldV2({
               <button
                 type="button"
                 onClick={() => handleDelete(index)}
-                className="p-1 text-red-500 hover:bg-red-50 rounded"
+                className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
                 title="删除"
               >
                 <Trash2 className="w-4 h-4" />
@@ -157,7 +157,7 @@ export function MultiItemFieldV2({
         )}
         {editingId !== null ? (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
               保存
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -291,7 +291,7 @@ export function MultiAddressFieldV2({
           {items.map((item, index) => {
             const parsed = parseAddress(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
                     <div><span className="text-gray-500">收件人：</span>{parsed.name}</div>
@@ -302,7 +302,7 @@ export function MultiAddressFieldV2({
                     <button
                       type="button"
                       onClick={() => handleEdit(index)}
-                      className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                       title="编辑"
                     >
                       <Pencil className="w-4 h-4" />
@@ -310,7 +310,7 @@ export function MultiAddressFieldV2({
                     <button
                       type="button"
                       onClick={() => handleDelete(index)}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
                       title="删除"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -332,7 +332,7 @@ export function MultiAddressFieldV2({
           <Input className="flex-1" placeholder="详细地址" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -463,7 +463,7 @@ export function MultiBankFieldV2({
           {items.map((item, index) => {
             const parsed = parseBank(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
                     <div><span className="text-gray-500">账户名：</span>{parsed.accountName}</div>
@@ -474,7 +474,7 @@ export function MultiBankFieldV2({
                     <button
                       type="button"
                       onClick={() => handleEdit(index)}
-                      className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                       title="编辑"
                     >
                       <Pencil className="w-4 h-4" />
@@ -482,7 +482,7 @@ export function MultiBankFieldV2({
                     <button
                       type="button"
                       onClick={() => handleDelete(index)}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
                       title="删除"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -504,7 +504,7 @@ export function MultiBankFieldV2({
           <Input className="flex-1" placeholder="银行账号" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} />
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -631,7 +631,7 @@ export function MultiInvoiceFieldV2({
           {items.map((item, index) => {
             const parsed = parseInvoice(item.value);
             return (
-              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-blue-50 border-blue-300' : 'bg-gray-50 border-transparent'}`}>
+              <div key={item.id || `temp_${index}`} className={`p-3 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
                 <div className="flex justify-between items-start">
                   <div className="space-y-1 text-sm flex-1">
                     <div><span className="text-gray-500">公司名称：</span>{parsed.companyName}</div>
@@ -641,7 +641,7 @@ export function MultiInvoiceFieldV2({
                     <button
                       type="button"
                       onClick={() => handleEdit(index)}
-                      className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                       title="编辑"
                     >
                       <Pencil className="w-4 h-4" />
@@ -649,7 +649,7 @@ export function MultiInvoiceFieldV2({
                     <button
                       type="button"
                       onClick={() => handleDelete(index)}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
                       title="删除"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -670,7 +670,7 @@ export function MultiInvoiceFieldV2({
         <div className="flex justify-end gap-2">
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>

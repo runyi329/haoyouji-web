@@ -163,7 +163,7 @@ export default function KidsManagement() {
 
           {/* 添加宝贝表单 */}
           {showAddForm && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mb-6 p-4 bg-[#F5F5F5] border border-blue-200 rounded-lg">
               <h3 className="font-semibold mb-3">添加新宝贝</h3>
               <div className="flex gap-2">
                 <Input
@@ -235,7 +235,7 @@ export default function KidsManagement() {
                         className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors"
                       >
                         {uploadingAvatar === kid.id ? (
-                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                          <div className="w-4 h-4 border-2 border-[#1976D2] border-t-transparent rounded-full animate-spin"></div>
                         ) : (
                           <Camera className="w-4 h-4 text-gray-600" />
                         )}
@@ -274,7 +274,7 @@ export default function KidsManagement() {
                             }
                           }}
                         >
-                          <Check className="w-4 h-4 text-green-600" />
+                          <Check className="w-4 h-4 text-[#4CAF50]" />
                         </Button>
                         <Button
                           size="icon"
@@ -282,7 +282,7 @@ export default function KidsManagement() {
                           className="w-8 h-8"
                           onClick={() => setEditingKid(null)}
                         >
-                          <X className="w-4 h-4 text-red-600" />
+                          <X className="w-4 h-4 text-[#D32F2F]" />
                         </Button>
                       </div>
                     ) : (
@@ -302,7 +302,7 @@ export default function KidsManagement() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="w-8 h-8 text-red-600 hover:text-red-700"
+                          className="w-8 h-8 text-[#D32F2F] hover:text-[#D32F2F]"
                           onClick={() => {
                             if (confirm(`确定要删除 ${kid.name} 吗？\n\n删除后将同时删除该宝贝的登录账户，此操作不可恢复！`)) {
                               deleteKidMutation.mutate({ id: kid.id });
@@ -336,7 +336,7 @@ export default function KidsManagement() {
           )}
 
           {/* 提示信息 */}
-          <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="mt-6 p-4 rounded-lg bg-[#F5F5F5] border border-blue-200">
             <p className="text-sm text-blue-800">
               <strong>提示：</strong>点击头像右下角的相机图标可以上传照片，点击名称旁边的编辑图标可以修改名称。
               点击垃圾桶图标可以删除宝贝（删除后将同时删除该宝贝的登录账户）。

@@ -83,7 +83,7 @@ function SortableFieldButton({
       }}
       className={`px-2 py-1.5 border rounded-lg text-sm transition-colors w-full ${
         hasValue 
-          ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium' 
+          ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium' 
           : 'border-gray-300 hover:bg-[#FAF3ED]'
       }`}
     >
@@ -219,12 +219,12 @@ function MultiItemField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className={`flex items-center gap-2 p-2 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
+            <div key={index} className={`flex items-center gap-2 p-2 rounded-md border ${editingIndex === index ? 'bg-[#F5F5F5] border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
               <span className="flex-1 text-sm">{item}</span>
               <button
                 type="button"
                 onClick={() => handleEdit(index)}
-                className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                 title="编辑"
               >
                 <Pencil className="w-4 h-4" />
@@ -232,7 +232,7 @@ function MultiItemField({
               <button
                 type="button"
                 onClick={() => handleDelete(index)}
-                className="p-1 text-red-500 hover:bg-[#D32F2F]-light rounded"
+                className="p-1 text-[#D32F2F] hover:bg-[#D32F2F]-light rounded"
                 title="删除"
               >
                 <Trash2 className="w-4 h-4" />
@@ -261,7 +261,7 @@ function MultiItemField({
         )}
         {editingIndex !== null ? (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
               保存
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -409,7 +409,7 @@ function MultiAddressField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-[#F5F5F5] border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">收件人：</span>{item.name}</div>
@@ -420,7 +420,7 @@ function MultiAddressField({
                   <button
                     type="button"
                     onClick={() => handleEdit(index)}
-                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                     title="编辑"
                   >
                     <Pencil className="w-4 h-4" />
@@ -428,7 +428,7 @@ function MultiAddressField({
                   <button
                     type="button"
                     onClick={() => handleDelete(index)}
-                    className="p-1 text-red-500 hover:bg-[#D32F2F]-light rounded"
+                    className="p-1 text-[#D32F2F] hover:bg-[#D32F2F]-light rounded"
                     title="删除"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -449,7 +449,7 @@ function MultiAddressField({
           <Input className="flex-1" placeholder="详细地址" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
           {editingIndex !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -598,7 +598,7 @@ function MultiBankField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-[#F5F5F5] border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">账户名：</span>{item.accountName}</div>
@@ -609,7 +609,7 @@ function MultiBankField({
                   <button
                     type="button"
                     onClick={() => handleEdit(index)}
-                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                     title="编辑"
                   >
                     <Pencil className="w-4 h-4" />
@@ -617,7 +617,7 @@ function MultiBankField({
                   <button
                     type="button"
                     onClick={() => handleDelete(index)}
-                    className="p-1 text-red-500 hover:bg-[#D32F2F]-light rounded"
+                    className="p-1 text-[#D32F2F] hover:bg-[#D32F2F]-light rounded"
                     title="删除"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -638,7 +638,7 @@ function MultiBankField({
           <Input className="flex-1" placeholder="银行账号" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} />
           {editingIndex !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -785,7 +785,7 @@ function MultiInvoiceField({
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
-            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-blue-50 border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
+            <div key={index} className={`p-3 rounded-md border ${editingIndex === index ? 'bg-[#F5F5F5] border-blue-300' : 'bg-[#FAF3ED] border-transparent'}`}>
               <div className="flex justify-between items-start">
                 <div className="space-y-1 text-sm flex-1">
                   <div><span className="text-gray-500">公司名称：</span>{item.companyName}</div>
@@ -795,7 +795,7 @@ function MultiInvoiceField({
                   <button
                     type="button"
                     onClick={() => handleEdit(index)}
-                    className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                    className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
                     title="编辑"
                   >
                     <Pencil className="w-4 h-4" />
@@ -803,7 +803,7 @@ function MultiInvoiceField({
                   <button
                     type="button"
                     onClick={() => handleDelete(index)}
-                    className="p-1 text-red-500 hover:bg-[#D32F2F]-light rounded"
+                    className="p-1 text-[#D32F2F] hover:bg-[#D32F2F]-light rounded"
                     title="删除"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -821,7 +821,7 @@ function MultiInvoiceField({
           <Input className="flex-1" placeholder="税号" value={newTaxNumber} onChange={(e) => setNewTaxNumber(e.target.value)} />
           {editingIndex !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-blue-600">
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
                 保存
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
@@ -1412,8 +1412,8 @@ export default function AddContact() {
             {saveMessage && (
               <div className={`px-3 py-1 rounded text-sm ${
                 saveMessage.type === "error" 
-                  ? "bg-[#D32F2F]-light text-red-700 border border-red-200" 
-                  : "bg-green-50 text-green-700 border border-green-200"
+                  ? "bg-[#D32F2F]-light text-[#D32F2F] border border-red-200" 
+                  : "bg-[#E8F5E9] text-green-700 border border-green-200"
               }`}>
                 {saveMessage.text}
               </div>
@@ -1515,7 +1515,7 @@ export default function AddContact() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2 relative">
                 <Label htmlFor="name">
-                  姓名 <span className="text-red-500">*</span>
+                  姓名 <span className="text-[#D32F2F]">*</span>
                 </Label>
                 <Input
                   id="name"
@@ -1662,7 +1662,7 @@ export default function AddContact() {
                   onClick={() => setSelectedConstellation(constellation)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedConstellation === constellation
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -1674,8 +1674,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -1737,8 +1737,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -1811,7 +1811,7 @@ export default function AddContact() {
                   onClick={() => setSelectedBloodType(bloodType)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedBloodType === bloodType
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -1823,8 +1823,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -1879,7 +1879,7 @@ export default function AddContact() {
                   onClick={() => setSelectedZodiac(zodiac)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedZodiac === zodiac
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -1891,8 +1891,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -1965,7 +1965,7 @@ export default function AddContact() {
                     onClick={() => setSelectedAge(String(year))}
                     className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                       selectedAge === String(year)
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                        ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                         : 'border-gray-300 hover:bg-[#FAF3ED]'
                     }`}
                   >
@@ -1978,8 +1978,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2062,7 +2062,7 @@ export default function AddContact() {
                   onClick={() => setSelectedHeight(height)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedHeight === height
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2074,8 +2074,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2117,7 +2117,7 @@ export default function AddContact() {
                   onClick={() => setSelectedShoeSize(size)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedShoeSize === size
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2129,8 +2129,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2177,7 +2177,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedDietaries.includes(dietary)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2189,8 +2189,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2236,7 +2236,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedHabits.includes(habit)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2248,8 +2248,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2295,7 +2295,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedHealths.includes(health)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2307,8 +2307,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2354,7 +2354,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedPersonalities.includes(personality)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2366,8 +2366,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2409,7 +2409,7 @@ export default function AddContact() {
                   onClick={() => setSelectedEthnic(ethnic)}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedEthnic === ethnic
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2421,8 +2421,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2468,7 +2468,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedFamily.includes(family)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2480,8 +2480,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2544,7 +2544,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedIdentity.includes(identity)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2556,8 +2556,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2603,7 +2603,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedBrands.includes(brand)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2615,8 +2615,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2662,7 +2662,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedEntertainments.includes(entertainment)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -2674,8 +2674,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2725,7 +2725,7 @@ export default function AddContact() {
                             setSelectedCompany(company);
                             setDialogMessage({type: "success", text: "已加载到输入框"});
                           }}
-                          className="text-blue-500 hover:text-blue-700"
+                          className="text-[#1976D2] hover:text-blue-700"
                           title="选择"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2737,7 +2737,7 @@ export default function AddContact() {
                             setCompanyList(prev => prev.filter((_, i) => i !== index));
                             setDialogMessage({type: "success", text: "已删除"});
                           }}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-[#D32F2F] hover:text-[#D32F2F]"
                           title="删除"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2765,8 +2765,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -2873,7 +2873,7 @@ export default function AddContact() {
                             setPrivateAccountList(prev => prev.filter((_, i) => i !== index));
                             setDialogMessage({type: "success", text: "已加载到编辑框，修改后点击确定"});
                           }}
-                          className="text-blue-500 hover:text-blue-700 mt-1"
+                          className="text-[#1976D2] hover:text-blue-700 mt-1"
                           title="编辑"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2882,7 +2882,7 @@ export default function AddContact() {
                         </button>
                         <button
                           onClick={() => setPrivateAccountList(prev => prev.filter((_, i) => i !== index))}
-                          className="text-red-500 hover:text-red-700 mt-1"
+                          className="text-[#D32F2F] hover:text-[#D32F2F] mt-1"
                           title="删除"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2931,8 +2931,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -3079,7 +3079,7 @@ export default function AddContact() {
             </div>
             
             {dialogMessage && (
-              <div className={`text-sm mb-4 ${dialogMessage.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>
+              <div className={`text-sm mb-4 ${dialogMessage.type === 'error' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'}`}>
                 {dialogMessage.text}
               </div>
             )}
@@ -3134,7 +3134,7 @@ export default function AddContact() {
                           setEditingPhoneIndex(index);
                           setDialogMessage({type: "success", text: '已加载到输入框，修改后点击保存'});
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        className="text-[#1976D2] hover:text-blue-700 flex-shrink-0"
                         title="编辑"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3150,7 +3150,7 @@ export default function AddContact() {
                           }
                           setDialogMessage({type: "success", text: '已删除'});
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="text-[#D32F2F] hover:text-[#D32F2F] flex-shrink-0"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3180,8 +3180,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -3268,7 +3268,7 @@ export default function AddContact() {
                             setAddressList(addressList.filter((_, i) => i !== index));
                             setDialogMessage({type: "success", text: "已加载到输入框"});
                           }}
-                          className="text-blue-500 hover:text-blue-700"
+                          className="text-[#1976D2] hover:text-blue-700"
                           title="编辑"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3280,7 +3280,7 @@ export default function AddContact() {
                             setAddressList(addressList.filter((_, i) => i !== index));
                             setDialogMessage({type: "success", text: "已删除"});
                           }}
-                          className="text-red-500 hover:text-red-700"
+                          className="text-[#D32F2F] hover:text-[#D32F2F]"
                           title="删除"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3326,8 +3326,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -3415,7 +3415,7 @@ export default function AddContact() {
                           setCurrentEmail(email);
                           setDialogMessage({type: "success", text: '已加载到输入框'});
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0"
+                        className="text-[#1976D2] hover:text-blue-700 flex-shrink-0"
                         title="选择此邮箱"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3427,7 +3427,7 @@ export default function AddContact() {
                           setEmailList(prev => prev.filter((_, i) => i !== index));
                           setDialogMessage({type: "success", text: '已删除'});
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
+                        className="text-[#D32F2F] hover:text-[#D32F2F] flex-shrink-0"
                         title="删除此邮箱"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3455,8 +3455,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -3518,7 +3518,7 @@ export default function AddContact() {
                       <span className="flex-1 text-sm">{wechat}</span>
                       <button
                         onClick={() => setWechatList(prev => prev.filter((_, i) => i !== index))}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-[#D32F2F] hover:text-[#D32F2F]"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3564,8 +3564,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -3625,7 +3625,7 @@ export default function AddContact() {
                           setShowAddContactInput('phone');
                           setNewContactPhone('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
+                        className="text-[#4CAF50] hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3641,7 +3641,7 @@ export default function AddContact() {
                           const newList = contactPhoneList.filter((_, i) => i !== index);
                           setContactPhoneList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
+                        className="text-[#D32F2F] hover:text-[#D32F2F] flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3670,7 +3670,7 @@ export default function AddContact() {
                             setNewContactPhone(phone);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
+                        className="text-[#1976D2] hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'phone' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3745,7 +3745,7 @@ export default function AddContact() {
                           setShowAddContactInput('wechat');
                           setNewContactWechat('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
+                        className="text-[#4CAF50] hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3760,7 +3760,7 @@ export default function AddContact() {
                           const newList = contactWechatList.filter((_, i) => i !== index);
                           setContactWechatList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
+                        className="text-[#D32F2F] hover:text-[#D32F2F] flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3787,7 +3787,7 @@ export default function AddContact() {
                             setNewContactWechat(wechat);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
+                        className="text-[#1976D2] hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'wechat' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3861,7 +3861,7 @@ export default function AddContact() {
                           setShowAddContactInput('email');
                           setNewContactEmail('');
                         }}
-                        className="text-green-500 hover:text-green-700 flex-shrink-0 p-1"
+                        className="text-[#4CAF50] hover:text-green-700 flex-shrink-0 p-1"
                         title="添加"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3876,7 +3876,7 @@ export default function AddContact() {
                           const newList = contactEmailList.filter((_, i) => i !== index);
                           setContactEmailList(newList);
                         }}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0 p-1"
+                        className="text-[#D32F2F] hover:text-[#D32F2F] flex-shrink-0 p-1"
                         title="删除"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3903,7 +3903,7 @@ export default function AddContact() {
                             setNewContactEmail(email);
                           }
                         }}
-                        className="text-blue-500 hover:text-blue-700 flex-shrink-0 p-1"
+                        className="text-[#1976D2] hover:text-blue-700 flex-shrink-0 p-1"
                         title={editingContactType === 'email' && editingContactIndex === index ? '保存' : '编辑'}
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3961,8 +3961,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -4059,7 +4059,7 @@ export default function AddContact() {
                   }}
                   className={`px-3 py-2 border rounded-lg text-sm transition-colors ${
                     selectedTypes.includes(type)
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                      ? 'border-[#1976D2] bg-[#F5F5F5] text-blue-700 font-medium'
                       : 'border-gray-300 hover:bg-[#FAF3ED]'
                   }`}
                 >
@@ -4071,8 +4071,8 @@ export default function AddContact() {
             {dialogMessage && (
               <div className={`mb-3 p-3 rounded-lg text-sm ${
                 dialogMessage.type === 'error' 
-                  ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                  : 'bg-green-50 text-green-700 border border-green-200'
+                  ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                  : 'bg-[#E8F5E9] text-green-700 border border-green-200'
               }`}>
                 {dialogMessage.text}
               </div>
@@ -4155,9 +4155,9 @@ export default function AddContact() {
                 <>
                   {hasValue && (
                     <div className="mb-4">
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <div className="bg-[#F5F5F5] p-4 rounded-lg border border-blue-200">
                         <div className="text-xs text-gray-500 mb-1">上一次记录</div>
-                        <div className="text-2xl font-bold text-blue-600 mb-1">{score}</div>
+                        <div className="text-2xl font-bold text-[#1976D2] mb-1">{score}</div>
                         <div className="text-sm text-gray-500">保存时间：{timestamp}</div>
                       </div>
                     </div>
@@ -4184,8 +4184,8 @@ export default function AddContact() {
                   {dialogMessage && (
                     <div className={`mb-3 p-3 rounded-lg text-sm ${
                       dialogMessage.type === 'error' 
-                        ? 'bg-[#D32F2F]-light text-red-700 border border-red-200' 
-                        : 'bg-green-50 text-green-700 border border-green-200'
+                        ? 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200' 
+                        : 'bg-[#E8F5E9] text-green-700 border border-green-200'
                     }`}>
                       {dialogMessage.text}
                     </div>
