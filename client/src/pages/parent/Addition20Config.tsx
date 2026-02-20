@@ -297,8 +297,8 @@ export default function Addition20Config() {
               }}
             >
               <div className="text-4xl mb-3">🏆</div>
-              <Label className="font-medium cursor-pointer text-amber-700">有奖挑战</Label>
-              <p className="text-xs text-amber-600 mt-1 text-center">设置奖品和目标</p>
+              <Label className="font-medium cursor-pointer text-brand-gold">有奖挑战</Label>
+              <p className="text-xs text-brand-gold mt-1 text-center">设置奖品和目标</p>
             </div>
           </RadioGroup>
         </Card>
@@ -319,8 +319,8 @@ export default function Addition20Config() {
         )}
         
         {!canEdit && (
-          <Card className="p-4 bg-amber-50 border-amber-200">
-            <p className="text-sm text-amber-700 text-center">
+          <Card className="p-4 bg-cream border-amber-200">
+            <p className="text-sm text-brand-gold text-center">
               只有家长可以修改游戏设置
             </p>
           </Card>

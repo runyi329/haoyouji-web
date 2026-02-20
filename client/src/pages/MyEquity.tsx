@@ -313,7 +313,7 @@ export default function MyEquity() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
       </div>
     );
   }
@@ -672,7 +672,7 @@ export default function MyEquity() {
                 我的股权估值
               </div>
               <div className="flex items-baseline space-x-1">
-                <span className="text-2xl font-bold text-orange-600">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
+                <span className="text-2xl font-bold text-brand-gold">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
                 <span className="text-sm text-stable-gray">万</span>
               </div>
               <div className="mt-1 text-xs text-gray-400">

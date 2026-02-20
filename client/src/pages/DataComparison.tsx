@@ -585,7 +585,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
             {layerData.layers.map((layer: any, index: number) => {
               const layerConfig: any = {
                 '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
-                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-brand-gold', days: '8-30天' },
                 '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
                 '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
               };
@@ -646,16 +646,16 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
-                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
                       <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-brand-gold">{healthData.averageInteractionFrequency.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
-                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -664,7 +664,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
-                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.dormantContactsCount.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -682,7 +682,7 @@ function AllDataContent({ themeColors, tableTab, setTableTab }: DataContentProps
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
-                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-brand-gold'
                       }`}>{healthData.highValueInteractionRate.status}</td>
                     </tr>
                   </tbody>
@@ -1215,7 +1215,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
             {layerData.layers.map((layer: any, index: number) => {
               const layerConfig: any = {
                 '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
-                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-brand-gold', days: '8-30天' },
                 '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
                 '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
               };
@@ -1276,16 +1276,16 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
-                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
                       <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-brand-gold">{healthData.averageInteractionFrequency.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
-                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -1294,7 +1294,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
-                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.dormantContactsCount.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -1312,7 +1312,7 @@ function MyDataContent({ themeColors, tableTab, setTableTab }: DataContentProps)
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
-                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-brand-gold'
                       }`}>{healthData.highValueInteractionRate.status}</td>
                     </tr>
                   </tbody>
@@ -1845,7 +1845,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
             {layerData.layers.map((layer: any, index: number) => {
               const layerConfig: any = {
                 '活跃层': { color: themeColors.primary, action: '维持现状', actionColor: 'text-green-600', days: '≤7天' },
-                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-orange-600', days: '8-30天' },
+                '常温层': { color: themeColors.secondary, action: '本月需联系', actionColor: 'text-brand-gold', days: '8-30天' },
                 '低温层': { color: '#f97316', action: '季度内激活', actionColor: 'text-red-600', days: '31-90天' },
                 '失联层': { color: '#dc2626', action: '制定激活计划', actionColor: 'text-red-700 font-medium', days: '>180天' },
               };
@@ -1906,16 +1906,16 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.thirtyDayInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.thirtyDayInteractionRate.status === '良好' ? 'text-green-600' : 
-                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.thirtyDayInteractionRate.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.thirtyDayInteractionRate.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle">平均互动频率</td>
                       <td className="text-center py-2 px-1.5 font-medium border border-gray-200 align-middle">{healthData.averageInteractionFrequency.value}</td>
-                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-orange-600">{healthData.averageInteractionFrequency.trend}</td>
+                      <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-brand-gold">{healthData.averageInteractionFrequency.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.averageInteractionFrequency.status === '良好' ? 'text-green-600' : 
-                        healthData.averageInteractionFrequency.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.averageInteractionFrequency.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.averageInteractionFrequency.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -1924,7 +1924,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.dormantContactsCount.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.dormantContactsCount.status === '良好' ? 'text-green-600' : 
-                        healthData.dormantContactsCount.status === '注意' ? 'text-orange-600' : 'text-red-600'
+                        healthData.dormantContactsCount.status === '注意' ? 'text-brand-gold' : 'text-red-600'
                       }`}>{healthData.dormantContactsCount.status}</td>
                     </tr>
                     <tr className="border-b hover:bg-gray-50">
@@ -1942,7 +1942,7 @@ function SharedDataContent({ themeColors, tableTab, setTableTab }: DataContentPr
                       <td className="text-center py-2 px-1.5 border border-gray-200 align-middle text-green-600">{healthData.highValueInteractionRate.trend}</td>
                       <td className={`text-center py-2 px-1.5 border border-gray-200 align-middle ${
                         healthData.highValueInteractionRate.status === '优秀' ? 'text-green-600' : 
-                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-orange-600'
+                        healthData.highValueInteractionRate.status === '良好' ? 'text-green-600' : 'text-brand-gold'
                       }`}>{healthData.highValueInteractionRate.status}</td>
                     </tr>
                   </tbody>

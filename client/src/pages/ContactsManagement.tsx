@@ -92,7 +92,7 @@ function MonthlyNewCard({ count, onClick, dragListeners, isBreathing }: { count:
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-3 px-3">
-        <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本月新增</p>
+        <p className="text-xs sm:text-sm text-brand-gold dark:text-orange-400">本月新增</p>
         <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
@@ -112,8 +112,8 @@ function YearlyNewCard({ count, onClick, dragListeners, isBreathing }: { count: 
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[#A80000] dark:text-red-400">今年新增</p>
-        <p className="font-bold text-[#A80000] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-brand-red dark:text-red-400">今年新增</p>
+        <p className="font-bold text-brand-red dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -208,8 +208,8 @@ function YearlyActiveCard({ count, onClick, dragListeners, isBreathing }: { coun
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-[#A80000] dark:text-red-400">今年活跃</p>
-        <p className="font-bold text-[#A80000] dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-brand-red dark:text-red-400">今年活跃</p>
+        <p className="font-bold text-brand-red dark:text-red-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -268,7 +268,7 @@ function WeekRemindersCard({ count, onClick, dragListeners, isBreathing }: { cou
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-orange-600 dark:text-orange-400">本周提醒</p>
+        <p className="text-xs sm:text-sm text-brand-gold dark:text-orange-400">本周提醒</p>
         <p className="font-bold text-orange-700 dark:text-orange-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
@@ -288,8 +288,8 @@ function MonthRemindersCard({ count, onClick, dragListeners, isBreathing }: { co
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">本月提醒</p>
-        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-brand-gold dark:text-yellow-400">本月提醒</p>
+        <p className="font-bold text-brand-gold dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - count.toString().length * 0.175)}rem, 1.05rem)` }}>
           {count}<span className="text-xs sm:text-sm font-normal">人</span>
         </p>
       </CardContent>
@@ -407,8 +407,8 @@ function TotalUsageDaysCard({ days, dragListeners, isBreathing }: { days: number
       }`}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">累计使用</p>
-        <p className="font-bold text-amber-700 dark:text-amber-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-brand-gold dark:text-amber-400">累计使用</p>
+        <p className="font-bold text-brand-gold dark:text-amber-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - days.toString().length * 0.175)}rem, 1.05rem)` }}>
           {days}<span className="text-xs sm:text-sm font-normal">天</span>
         </p>
       </CardContent>
@@ -427,8 +427,8 @@ function MyPointsCard({ points, onClick, dragListeners, isBreathing }: { points:
       onClick={onClick}
     >
       <CardContent className="flex flex-col items-center justify-center gap-1 py-2.5 px-3">
-        <p className="text-xs sm:text-sm text-yellow-600 dark:text-yellow-400">我的积分</p>
-        <p className="font-bold text-yellow-700 dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - points.toString().length * 0.175)}rem, 1.05rem)` }}>
+        <p className="text-xs sm:text-sm text-brand-gold dark:text-yellow-400">我的积分</p>
+        <p className="font-bold text-brand-gold dark:text-yellow-300" style={{ fontSize: `clamp(0.7rem, ${Math.max(0.84, 1.68 - points.toString().length * 0.175)}rem, 1.05rem)` }}>
           {points}<span className="text-xs sm:text-sm font-normal">分</span>
         </p>
       </CardContent>

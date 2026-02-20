@@ -12,7 +12,7 @@ const PLAYER_COLORS = {
   red: { bg: "bg-red-500", text: "text-red-500", light: "bg-red-100", name: "红方" },
   blue: { bg: "bg-blue-500", text: "text-blue-500", light: "bg-blue-100", name: "蓝方" },
   green: { bg: "bg-green-500", text: "text-green-500", light: "bg-green-100", name: "绿方" },
-  yellow: { bg: "bg-yellow-500", text: "text-yellow-500", light: "bg-yellow-100", name: "黄方" },
+  yellow: { bg: "bg-brand-gold", text: "text-yellow-500", light: "bg-cream", name: "黄方" },
 };
 
 type PlayerColor = keyof typeof PLAYER_COLORS;
@@ -422,7 +422,7 @@ export default function LudoGame() {
       if (row === 5 && col < 5) return { bg: "bg-red-100", type: "home-red" };
       if (col === 5 && row < 5) return { bg: "bg-blue-100", type: "home-blue" };
       if (row === 5 && col > 5) return { bg: "bg-green-100", type: "home-green" };
-      if (col === 5 && row > 5) return { bg: "bg-yellow-100", type: "home-yellow" };
+      if (col === 5 && row > 5) return { bg: "bg-cream", type: "home-yellow" };
       return { bg: "bg-gray-100", type: "empty" };
     }
     

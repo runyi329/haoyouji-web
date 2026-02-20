@@ -186,7 +186,7 @@ export default function Ledger() {
             onClick={() => setActiveTab("active")}
             className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
               activeTab === "active"
-                ? "bg-[#A80000] text-white shadow-sm"
+                ? "bg-brand-red text-white shadow-sm"
                 : "text-stable-gray hover:bg-gray-100"
             }`}
           >
@@ -196,7 +196,7 @@ export default function Ledger() {
             onClick={() => setActiveTab("archived")}
             className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
               activeTab === "archived"
-                ? "bg-[#A80000] text-white shadow-sm"
+                ? "bg-brand-red text-white shadow-sm"
                 : "text-stable-gray hover:bg-gray-100"
             }`}
           >
@@ -227,7 +227,7 @@ export default function Ledger() {
                   {/* 账本标题区 */}
                   <div className="mb-3">
                     <div className="flex items-center gap-2 mb-1.5">
-                      <Notebook className="w-5 h-5 flex-shrink-0 text-[#A80000]" strokeWidth={2.5} />
+                      <Notebook className="w-5 h-5 flex-shrink-0 text-brand-red" strokeWidth={2.5} />
                       <h3 className="font-bold text-lg text-core-black truncate">{ledger.name}</h3>
                       {ledger.isVip === true && (
                         <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
@@ -242,7 +242,7 @@ export default function Ledger() {
                       </span>
                       <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#A80000]"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-red"></span>
                         {ledger.recordCount || 0}条账目
                       </span>
                     </div>
@@ -262,7 +262,7 @@ export default function Ledger() {
                         </div>
                       ))}
                     </div>
-                    <span className="text-sm font-semibold text-[#A80000]">
+                    <span className="text-sm font-semibold text-brand-red">
                       {ledger.memberCount}人共享
                     </span>
                   </div>
@@ -365,7 +365,7 @@ export default function Ledger() {
         <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white-pure border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           <div className="flex gap-3">
             <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-brand-red-light text-[#A80000] hover:bg-red-100 transition-colors shadow-sm"
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-brand-red-light text-brand-red hover:bg-red-100 transition-colors shadow-sm"
               onClick={() => {
                 // TODO: 加入他人账本
               }}
@@ -373,7 +373,7 @@ export default function Ledger() {
               加入他人账本
             </button>
             <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#A80000] text-white hover:bg-[#8a0000] transition-colors shadow-sm"
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-brand-red text-white hover:bg-brand-red-dark transition-colors shadow-sm"
               onClick={() => setShowCreateDialog(true)}
             >
               创建新的账本
@@ -484,7 +484,7 @@ export default function Ledger() {
                       size="sm"
                       onClick={() => handleInviteUser(user.username)}
                       disabled={inviteMutation.isPending}
-                      className="text-white hover:opacity-90 bg-[#A80000]"
+                      className="text-white hover:opacity-90 bg-brand-red"
                     >
                       <UserPlus className="w-4 h-4 mr-1" />
                       添加

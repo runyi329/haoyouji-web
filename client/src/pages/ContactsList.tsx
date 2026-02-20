@@ -1021,19 +1021,19 @@ export default function ContactsList() {
             {/* 共享人脉筛选按钮 */}
               <button
                 onClick={() => setShareFilter('all')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white-pure text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
               </button>
               <button
                 onClick={() => setShareFilter('mine')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white-pure text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
               </button>
               <button
                 onClick={() => setShareFilter('shared')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white-pure text-[#A80000]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
               </button>
@@ -1069,7 +1069,7 @@ export default function ContactsList() {
             {allTags && allTags.length > 0 && (
               <button
                 onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
-                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-[#A80000] font-medium hover:bg-brand-red-light transition-all"
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-brand-red font-medium hover:bg-brand-red-light transition-all"
               >
                 <Tag className="h-3.5 w-3.5 mr-1.5" />
                 {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
@@ -1079,7 +1079,7 @@ export default function ContactsList() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-[#A80000] font-medium hover:bg-brand-red-light transition-all"
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-brand-red font-medium hover:bg-brand-red-light transition-all"
                 >
                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                   {!sortBy && '按排序筛选'}
@@ -1116,7 +1116,7 @@ export default function ContactsList() {
                   aria-expanded={sharerPopoverOpen}
                   disabled={shareFilter !== 'shared'}
                   className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm font-medium transition-all ${
-                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#A80000] hover:bg-brand-red-light'
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-brand-red hover:bg-brand-red-light'
                   }`}
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
@@ -1199,7 +1199,7 @@ export default function ContactsList() {
             </div>
             <button
               onClick={() => setShowTagManagement(true)}
-              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#A80000] hover:bg-brand-red-light transition-all mb-2"
+              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-brand-red hover:bg-brand-red-light transition-all mb-2"
             >
               <Settings className="h-3 w-3 mr-1" />
               标签管理
@@ -1284,7 +1284,7 @@ export default function ContactsList() {
                   console.log('搜索:', searchQuery);
                 }
               }}
-              className="pr-8 h-9 text-sm rounded-xl border-divider focus:border-[#A80000] focus:ring-[#A80000]"
+              className="pr-8 h-9 text-sm rounded-xl border-divider focus:border-brand-red focus:ring-[#A80000]"
             />
             {searchQuery && (
               <X
@@ -1340,7 +1340,7 @@ export default function ContactsList() {
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs text-[#A80000] hover:underline"
+                    className="text-xs text-brand-red hover:underline"
                   >
                     清空
                   </button>
@@ -1366,7 +1366,7 @@ export default function ContactsList() {
           
           <button 
             onClick={handleAddContact}
-            className="flex items-center justify-center h-9 w-9 rounded-xl bg-[#A80000] text-white hover:bg-[#8a0000] transition-all shadow-sm"
+            className="flex items-center justify-center h-9 w-9 rounded-xl bg-brand-red text-white hover:bg-brand-red-dark transition-all shadow-sm"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -1375,9 +1375,9 @@ export default function ContactsList() {
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="border border-[#A80000]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-brand-red-light">
+        <div className="border border-brand-red/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-brand-red-light">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[#A80000]">
+            <span className="text-sm font-medium text-brand-red">
               已选择 {selectedContactIds.length} 人
             </span>
             <Button
@@ -1431,7 +1431,7 @@ export default function ContactsList() {
                     setIsBatchOperating(false);
                   }
                 }}
-                className="text-xs h-7 px-2 text-[#A80000] hover:text-[#8a0000]"
+                className="text-xs h-7 px-2 text-brand-red hover:text-brand-red-dark"
                 disabled={isBatchOperating}
               >
                 <Undo className="h-3 w-3 mr-1" />
@@ -1442,7 +1442,7 @@ export default function ContactsList() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground">设置关注周期:</span>
             {allTags?.filter(tag => ['周关注', '周关注', '月关注', '季关注'].includes(tag.name)).length === 0 ? (
-              <span className="text-xs text-amber-600">请先创建“周关注”、“月关注”、“季关注”标签</span>
+              <span className="text-xs text-brand-gold">请先创建“周关注”、“月关注”、“季关注”标签</span>
             ) : (
               <>
                 {allTags?.filter(tag => tag.name === '周关注').map(tag => (
@@ -1483,7 +1483,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
                   >
                     周关注
                   </Button>
@@ -1523,7 +1523,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
                   >
                     月关注
                   </Button>
@@ -1563,7 +1563,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
                   >
                     季关注
                   </Button>
@@ -1581,7 +1581,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-brand-red-light border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
@@ -1649,7 +1649,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-brand-red-light border-[#A80000]/30 text-[#A80000] hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
                 >
                   <X className="h-3 w-3 mr-1" />
                   选择标签
@@ -1740,7 +1740,7 @@ export default function ContactsList() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg text-[#A80000]">{company.companyName}</CardTitle>
+                        <CardTitle className="text-lg text-brand-red">{company.companyName}</CardTitle>
                         {company.contactCount > 1 && (
                           <Badge variant="secondary" className="text-xs">
                             {company.contactCount} 人
@@ -1973,7 +1973,7 @@ export default function ContactsList() {
                               className={`flex items-center gap-0.5 transition-opacity ${
                                 contact._isShared 
                                   ? 'text-gray-400 cursor-default' 
-                                  : 'text-[#A80000] hover:opacity-70 cursor-pointer'
+                                  : 'text-brand-red hover:opacity-70 cursor-pointer'
                               }`}
                               title={contact._isShared ? '' : '点击查看公司列表'}
                               disabled={contact._isShared}
@@ -2047,7 +2047,7 @@ export default function ContactsList() {
                           className={`h-4 w-4 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
                               ? 'text-gray-400 opacity-50'
-                              : 'text-[#A80000] hover:text-[#8a0000]'
+                              : 'text-brand-red hover:text-brand-red-dark'
                           }`}
                         />
                       </Button>
@@ -2509,7 +2509,7 @@ export default function ContactsList() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#A80000] hover:bg-[#8a0000] text-white"
+              className="bg-brand-red hover:bg-brand-red-dark text-white"
               onClick={async () => {
                 if (confirmDialog.onConfirm) {
                   await confirmDialog.onConfirm();

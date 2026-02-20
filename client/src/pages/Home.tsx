@@ -201,10 +201,10 @@ export default function Home() {
   ];
 
   const features = [
-    { name: "地域", icon: MapPin, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
-    { name: "共享", icon: Handshake, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/sharing` },
-    { name: "数据", icon: BarChart2, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/data-comparison` },
-    { name: "资产", icon: Coins, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/asset-report` },
+    { name: "地域", icon: MapPin, color: "bg-brand-red-light text-brand-red", href: `${BASE_URL}/parent/contacts/map` },
+    { name: "共享", icon: Handshake, color: "bg-brand-red-light text-brand-red", href: `${BASE_URL}/parent/contacts/sharing` },
+    { name: "数据", icon: BarChart2, color: "bg-brand-red-light text-brand-red", href: `${BASE_URL}/parent/contacts/data-comparison` },
+    { name: "资产", icon: Coins, color: "bg-brand-red-light text-brand-red", href: `${BASE_URL}/parent/asset-report` },
   ];
 
   const metricsLeft = [
@@ -322,7 +322,7 @@ export default function Home() {
               <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
             ) : (
               <>
-                <span className="text-2xl font-bold text-[#A80000]">{totalTagCount ? formatNumber(totalTagCount) : "—"}</span>
+                <span className="text-2xl font-bold text-brand-red">{totalTagCount ? formatNumber(totalTagCount) : "—"}</span>
                 <span className="text-sm text-gray-400">个</span>
               </>
             )}
@@ -388,8 +388,8 @@ export default function Home() {
             >
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm relative ${
                 needsAttentionCount > 0 
-                  ? 'bg-[#A80000] text-white' 
-                  : 'bg-brand-red-light text-[#A80000]'
+                  ? 'bg-brand-red text-white' 
+                  : 'bg-brand-red-light text-brand-red'
               }`}>
                 <Bell className={`w-5 h-5 ${isAnimating ? 'bell-shake' : ''}`} />
                 {/* 红色角标 */}
@@ -407,7 +407,7 @@ export default function Home() {
               onClick={handleRefresh}
               className="flex flex-col items-center space-y-2 cursor-pointer"
             >
-              <div className={`w-10 h-10 rounded-full bg-brand-red-light text-[#A80000] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
+              <div className={`w-10 h-10 rounded-full bg-brand-red-light text-brand-red flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
                 <RefreshCw className="w-5 h-5" />
               </div>
               <span className="text-xs font-medium text-stable-gray">刷新</span>
@@ -424,7 +424,7 @@ export default function Home() {
               <div className="bg-white-pure p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-cream transition-colors aspect-square">
                 <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
                 <div className="flex items-baseline justify-center space-x-0.5">
-                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-core-black'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
+                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-brand-red' : 'text-core-black'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
                     {formatNumber(stat.value)}
                   </span>
                   <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
@@ -461,19 +461,19 @@ export default function Home() {
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white-pure border-t border-divider px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div className="flex flex-col items-center space-y-1 text-[#A80000]">
+        <div className="flex flex-col items-center space-y-1 text-brand-red">
           <Users className="w-6 h-6" />
           <span className="text-xs font-bold">人脉</span>
         </div>
         
         <a href={`${BASE_URL}/parent/contacts/add`}>
-          <div className="w-12 h-12 bg-[#A80000] rounded-full -mt-8 flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-[#8a0000] transition-colors">
+          <div className="w-12 h-12 bg-brand-red rounded-full -mt-8 flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-brand-red-dark transition-colors">
             <Plus className="w-6 h-6 text-white" />
           </div>
         </a>
         
         <Link href="/ledger">
-          <a className="flex flex-col items-center space-y-1 text-gray-400 hover:text-[#A80000] transition-colors">
+          <a className="flex flex-col items-center space-y-1 text-gray-400 hover:text-brand-red transition-colors">
             <Wallet className="w-6 h-6" />
             <span className="text-xs font-medium">钱脉</span>
           </a>

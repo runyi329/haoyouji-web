@@ -263,7 +263,7 @@ export default function Admin() {
             <h1 className="font-bold text-lg">后台管理</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-[#A80000]" />
+            <ShieldCheck className="w-5 h-5 text-brand-red" />
             <span className="text-sm font-medium">{user.name || user.username}</span>
           </div>
         </div>
@@ -338,7 +338,7 @@ export default function Admin() {
                 <h2 className="font-bold">用户管理</h2>
                 <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="bg-[#A80000] hover:bg-[#8a0000] text-white border-0">
+                    <Button size="sm" className="bg-brand-red hover:bg-brand-red-dark text-white border-0">
                       <Plus className="w-4 h-4 mr-1" />
                       创建用户
                     </Button>
@@ -398,7 +398,7 @@ export default function Admin() {
                       </div>
                       <Button
                         type="submit"
-                        className="w-full bg-[#A80000] hover:bg-[#8a0000] text-white border-0"
+                        className="w-full bg-brand-red hover:bg-brand-red-dark text-white border-0"
                         disabled={createUserMutation.isPending}
                       >
                         {createUserMutation.isPending ? "创建中..." : "创建用户"}
@@ -430,7 +430,7 @@ export default function Admin() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{u.name || u.username}</span>
                         {u.role === "super_admin" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-[#A80000]">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-brand-red">
                             超级管理员
                           </span>
                         )}
@@ -703,7 +703,7 @@ export default function Admin() {
                         <div className="p-4 border border-gray-200 rounded-lg">
                           <div className="flex items-center gap-2 mb-3">
                             <h3 className="text-sm font-medium text-gray-700">支付账号</h3>
-                            <span className="px-2.5 py-0.5 bg-[#A80000] text-white text-xs font-medium rounded">
+                            <span className="px-2.5 py-0.5 bg-brand-red text-white text-xs font-medium rounded">
                               {userPaymentData.profile.payment_method === 'bank_card' && '银行卡'}
                               {userPaymentData.profile.payment_method === 'digital_wallet' && '数字钱包'}
                               {userPaymentData.profile.payment_method === 'alipay' && '支付宝'}
@@ -814,7 +814,7 @@ export default function Admin() {
                               <span className="text-gray-500 min-w-[100px]">认证状态：</span>
                               <span className={`px-2 py-0.5 text-xs rounded ${
                                 userPaymentData.profile.verification_status === 'verified' ? 'bg-green-100 text-green-700' :
-                                userPaymentData.profile.verification_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                userPaymentData.profile.verification_status === 'pending' ? 'bg-cream text-brand-gold' :
                                 'bg-red-100 text-red-700'
                               }`}>
                                 {userPaymentData.profile.verification_status === 'verified' && '已认证'}
@@ -837,7 +837,7 @@ export default function Admin() {
                                   <span className="font-medium">{addr.recipient_name}</span>
                                   <span className="text-gray-500">{addr.recipient_phone}</span>
                                   {addr.is_default && (
-                                    <span className="px-2 py-0.5 bg-[#A80000] text-white text-xs rounded">默认</span>
+                                    <span className="px-2 py-0.5 bg-brand-red text-white text-xs rounded">默认</span>
                                   )}
                                 </div>
                                 <p className="text-gray-600">{addr.address}</p>
@@ -933,7 +933,7 @@ export default function Admin() {
                 在这里管理 AI 提示词、企业报告等 AI 功能。
               </p>
               <Link href="/parent/ai-management">
-                <Button className="bg-[#A80000] hover:bg-[#8a0000] text-white border-0">
+                <Button className="bg-brand-red hover:bg-brand-red-dark text-white border-0">
                   <Sparkles className="w-4 h-4 mr-2" />
                   前往 AI 管理
                 </Button>
@@ -953,7 +953,7 @@ export default function Admin() {
                 管理投资股东的资金记录、查看股东股权总览、配置股份池规则。
               </p>
               <Link href="/admin/equity">
-                <Button className="bg-[#A80000] hover:bg-[#8a0000]">
+                <Button className="bg-brand-red hover:bg-brand-red-dark">
                   <Coins className="w-4 h-4 mr-2" />
                   前往股权管理
                 </Button>

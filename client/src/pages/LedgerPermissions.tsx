@@ -134,7 +134,7 @@ const LedgerPermissions = () => {
       case "all":
         return "text-green-600 font-medium text-sm";
       case "own":
-        return "text-orange-500 font-medium text-sm";
+        return "text-brand-gold font-medium text-sm";
       case "none":
         return "text-red-500 font-medium text-sm";
       default:
@@ -303,7 +303,7 @@ const LedgerPermissions = () => {
           <span className="text-green-600 font-medium">全部</span>：可以查看/操作账本中的所有账目
         </p>
         <p>
-          <span className="text-orange-500 font-medium">仅自己</span>：只能查看/操作自己添加的账目
+          <span className="text-brand-gold font-medium">仅自己</span>：只能查看/操作自己添加的账目
         </p>
       </div>
 
@@ -334,7 +334,7 @@ const LedgerPermissions = () => {
             </button>
             <button
               onClick={() => selectPermission("own")}
-              className="w-full px-4 py-3 text-sm text-orange-500 font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
+              className="w-full px-4 py-3 text-sm text-brand-gold font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
             >
               仅自己
             </button>

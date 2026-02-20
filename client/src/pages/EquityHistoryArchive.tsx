@@ -167,9 +167,9 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> =
         </div>
         <div className={`
           w-12 h-12 rounded-full flex items-center justify-center
-          ${isIdle ? 'bg-gray-300' : 'bg-[#C5B358]/10'}
+          ${isIdle ? 'bg-gray-300' : 'bg-brand-gold/10'}
         `}>
-          <Shield className={`w-6 h-6 ${isIdle ? 'text-gray-400' : 'text-[#C5B358]'}`} />
+          <Shield className={`w-6 h-6 ${isIdle ? 'text-gray-400' : 'text-brand-gold'}`} />
         </div>
       </div>
 
@@ -183,7 +183,7 @@ const WeeklyReportCard: React.FC<{ report: WeeklyReport; weekNumber: string }> =
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <div className="text-xs text-gray-500 mb-1">定格权重</div>
-            <div className="text-2xl font-bold text-[#C5B358]">
+            <div className="text-2xl font-bold text-brand-gold">
               +{report.weightGain.toFixed(4)}%
             </div>
           </div>
@@ -241,7 +241,7 @@ const EquityHistoryArchive: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+      <div className="min-h-screen bg-cream flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     );
@@ -249,12 +249,12 @@ const EquityHistoryArchive: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+      <div className="min-h-screen bg-cream flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">加载失败，请稍后重试</p>
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 bg-[#A80000] text-white rounded-lg hover:opacity-90"
+            className="px-4 py-2 bg-brand-red text-white rounded-lg hover:opacity-90"
           >
             重新加载
           </button>
@@ -264,7 +264,7 @@ const EquityHistoryArchive: React.FC = () => {
   }
   
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
+    <div className="min-h-screen bg-cream">
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
@@ -306,7 +306,7 @@ const EquityHistoryArchive: React.FC = () => {
             </div>
             <div>
               <div className="text-white/70 text-xs mb-1">累计定格股权</div>
-              <div className="text-[#C5B358] text-3xl font-bold">
+              <div className="text-brand-gold text-3xl font-bold">
                 {allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)} <span className="text-lg font-normal">张</span>
               </div>
             </div>
@@ -322,7 +322,7 @@ const EquityHistoryArchive: React.FC = () => {
             </div>
             <div>
               <div className="text-white/70 text-xs mb-1">总增长权重</div>
-              <div className="text-[#C5B358] text-xl font-bold">
+              <div className="text-brand-gold text-xl font-bold">
                 +{overview.totalWeightGain.toFixed(4)}%
               </div>
             </div>
@@ -334,7 +334,7 @@ const EquityHistoryArchive: React.FC = () => {
       <div className="bg-white m-4 rounded-xl p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold text-gray-900">资产增长趋势</div>
-          <TrendingUp className="w-4 h-4 text-[#C5B358]" />
+          <TrendingUp className="w-4 h-4 text-brand-gold" />
         </div>
         <AssetGrowthChart
           data={allReports
@@ -355,7 +355,7 @@ const EquityHistoryArchive: React.FC = () => {
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
             <div className="text-xs text-gray-500 mb-1">累计股权</div>
-            <div className="text-2xl font-bold text-[#C5B358]">
+            <div className="text-2xl font-bold text-brand-gold">
               {allReports.filter(r => r.status === 'confirmed').reduce((sum, r) => sum + r.equityGain, 0)}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">张</div>
@@ -380,7 +380,7 @@ const EquityHistoryArchive: React.FC = () => {
       {/* 筛选功能 */}
       <div className="px-4 mb-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          <button className="px-4 py-2 rounded-lg bg-[#A80000] text-white text-sm font-medium whitespace-nowrap">
+          <button className="px-4 py-2 rounded-lg bg-brand-red text-white text-sm font-medium whitespace-nowrap">
             全部
           </button>
           <button className="px-4 py-2 rounded-lg bg-white text-gray-700 text-sm font-medium whitespace-nowrap border border-gray-200">

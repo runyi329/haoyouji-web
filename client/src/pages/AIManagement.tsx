@@ -492,7 +492,7 @@ export default function AIManagement() {
               </div>
 
               {/* 提示 */}
-              <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4">
+              <div className="rounded-lg bg-cream dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4">
                 <p className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
                   ⚠️ 重要提示
                 </p>

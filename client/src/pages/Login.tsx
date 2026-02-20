@@ -220,7 +220,7 @@ export default function Login() {
                   disabled={loginMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     loginUsername && loginPassword && agreedToTerms
-                      ? 'bg-[#A80000] text-white hover:bg-[#8B0000]'
+                      ? 'bg-brand-red text-white hover:bg-brand-red-dark'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -337,7 +337,7 @@ export default function Login() {
                   disabled={registerMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     regUsername && regPassword && regConfirmPassword && regName && agreedToTerms
-                      ? 'bg-[#A80000] text-white hover:bg-[#8B0000]'
+                      ? 'bg-brand-red text-white hover:bg-brand-red-dark'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >

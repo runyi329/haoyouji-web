@@ -41,7 +41,7 @@ export default function TagStats() {
       {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-[#A80000]" />
+          <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
         </div>
       ) : tagStats ? (
         <div className="container mx-auto px-4 py-6 space-y-4">
@@ -141,9 +141,9 @@ export default function TagStats() {
               {tagStats.distribution.slice(0, 10).map((t, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                    index === 0 ? 'bg-cream text-brand-gold' :
                     index === 1 ? 'bg-gray-100 text-gray-600' :
-                    index === 2 ? 'bg-orange-100 text-orange-600' :
+                    index === 2 ? 'bg-cream text-brand-gold' :
                     'bg-blue-100 text-blue-600'
                   }`}>
                     {index + 1}
@@ -156,9 +156,9 @@ export default function TagStats() {
                     <div className="w-full bg-gray-200 rounded-full h-1.5">
                       <div 
                         className={`h-1.5 rounded-full transition-all ${
-                          index === 0 ? 'bg-yellow-500' :
+                          index === 0 ? 'bg-brand-gold' :
                           index === 1 ? 'bg-gray-400' :
-                          index === 2 ? 'bg-orange-500' :
+                          index === 2 ? 'bg-brand-gold' :
                           'bg-blue-500'
                         }`}
                         style={{ width: `${t.percentage}%` }}
@@ -178,13 +178,13 @@ export default function TagStats() {
             <div className="space-y-2 text-sm text-gray-700">
               {tagStats.distribution.length > 0 && (
                 <>
-                  <p>• 最热门标签: <span className="font-semibold text-[#A80000]">{tagStats.distribution[0].tag}</span>，使用了 {tagStats.distribution[0].contacts} 次</p>
+                  <p>• 最热门标签: <span className="font-semibold text-brand-red">{tagStats.distribution[0].tag}</span>，使用了 {tagStats.distribution[0].contacts} 次</p>
                   {tagStats.matrix.length > 0 && (
                     <>
-                      <p>• 最活跃标签: <span className="font-semibold text-[#A80000]">
+                      <p>• 最活跃标签: <span className="font-semibold text-brand-red">
                         {tagStats.matrix.reduce((max, m) => m.activeRate > max.activeRate ? m : max).tag}
                       </span>，活跃率 {tagStats.matrix.reduce((max, m) => m.activeRate > max.activeRate ? m : max).activeRate}%</p>
-                      <p>• 人均互动最高: <span className="font-semibold text-[#A80000]">
+                      <p>• 人均互动最高: <span className="font-semibold text-brand-red">
                         {tagStats.matrix.reduce((max, m) => m.avgPerContact > max.avgPerContact ? m : max).tag}
                       </span>，人均 {tagStats.matrix.reduce((max, m) => m.avgPerContact > max.avgPerContact ? m : max).avgPerContact} 次</p>
                     </>
@@ -205,7 +205,7 @@ export default function TagStats() {
             <Button
               onClick={() => setLocation('/parent/contacts/list')}
               variant="outline"
-              className="h-12 rounded-xl border-2 border-[#A80000] text-[#A80000] hover:bg-[#A80000] hover:text-white transition-all"
+              className="h-12 rounded-xl border-2 border-brand-red text-brand-red hover:bg-brand-red hover:text-white transition-all"
             >
               查看人脉
             </Button>

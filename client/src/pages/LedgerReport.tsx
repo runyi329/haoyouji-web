@@ -1289,7 +1289,7 @@ function CalendarViewContent({
                       <td 
                         key={`day-${day}`}
                         className={`h-12 text-center border-b border-r border-blue-400/20 cursor-pointer ${
-                          isSelected ? "bg-orange-100" : ""
+                          isSelected ? "bg-cream" : ""
                         }`}
                         onClick={() => setSelectedDate(day)}
                       >

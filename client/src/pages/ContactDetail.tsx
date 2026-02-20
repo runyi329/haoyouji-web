@@ -1080,7 +1080,7 @@ export default function ContactDetail() {
       id: "monthlyInteractions",
       title: "本月联络",
       value: "",
-      color: "text-[#A80000]",
+      color: "text-brand-red",
       getValue: (stats) => `${stats.monthlyInteractions}次`,
     },
   ];
@@ -1112,7 +1112,7 @@ export default function ContactDetail() {
             card.id === "daysSinceLastInteraction" &&
             stats.daysSinceLastInteraction !== null &&
             stats.daysSinceLastInteraction > 30
-              ? "text-orange-600"
+              ? "text-brand-gold"
               : card.color,
         }))
       );
@@ -1556,7 +1556,7 @@ export default function ContactDetail() {
                     <div className="flex items-center gap-3 text-sm mt-2">
                       {contact.title && (
                         <div className="flex items-center max-w-[200px]">
-                          <User className="h-4 w-4 mr-1.5 text-[#A80000] flex-shrink-0" />
+                          <User className="h-4 w-4 mr-1.5 text-brand-red flex-shrink-0" />
                           <span className="truncate" title={contact.title}>{contact.title}</span>
                         </div>
                       )}
@@ -1973,14 +1973,14 @@ export default function ContactDetail() {
                   </div>
                   <div className="text-center p-4 bg-brand-red-light dark:bg-red-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">间接推荐</div>
-                    <div className="text-2xl font-bold text-[#A80000] dark:text-red-400">
+                    <div className="text-2xl font-bold text-brand-red dark:text-red-400">
                       {contact.referrerContribution.indirectReferrals}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">人</div>
                   </div>
                   <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/30 dark:to-orange-950/30 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">贡献值</div>
-                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                    <div className="text-2xl font-bold text-brand-gold dark:text-orange-400">
                       {contact.referrerContribution.totalScore}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">分</div>
