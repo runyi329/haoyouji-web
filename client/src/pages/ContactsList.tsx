@@ -89,13 +89,13 @@ function SortableTagItem({
   };
 
   return (
-    <Card ref={setNodeRef} style={style} className="bg-white-pure rounded-2xl shadow-sm border-0 p-3">
+    <Card ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm border-0 p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1">
           <div
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-stable-gray flex-shrink-0"
+            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-[#757575] flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
@@ -995,7 +995,7 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div className="max-w-md mx-auto shadow-2xl bg-cream min-h-screen">
+      <div className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen">
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-5 rounded-b-3xl mb-4">
         <div className="flex items-center justify-between mb-2">
@@ -1021,19 +1021,19 @@ export default function ContactsList() {
             {/* 共享人脉筛选按钮 */}
               <button
                 onClick={() => setShareFilter('all')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
               </button>
               <button
                 onClick={() => setShareFilter('mine')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
               </button>
               <button
                 onClick={() => setShareFilter('shared')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white-pure text-brand-red' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
               >
                 共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
               </button>
@@ -1069,7 +1069,7 @@ export default function ContactsList() {
             {allTags && allTags.length > 0 && (
               <button
                 onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
-                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-brand-red font-medium hover:bg-brand-red-light transition-all"
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-[#D32F2F]-light transition-all"
               >
                 <Tag className="h-3.5 w-3.5 mr-1.5" />
                 {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
@@ -1079,7 +1079,7 @@ export default function ContactsList() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm text-brand-red font-medium hover:bg-brand-red-light transition-all"
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-[#D32F2F]-light transition-all"
                 >
                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
                   {!sortBy && '按排序筛选'}
@@ -1115,8 +1115,8 @@ export default function ContactsList() {
                   role="combobox"
                   aria-expanded={sharerPopoverOpen}
                   disabled={shareFilter !== 'shared'}
-                  className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white-pure shadow-sm font-medium transition-all ${
-                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-brand-red hover:bg-brand-red-light'
+                  className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm font-medium transition-all ${
+                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#D32F2F] hover:bg-[#D32F2F]-light'
                   }`}
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
@@ -1199,7 +1199,7 @@ export default function ContactsList() {
             </div>
             <button
               onClick={() => setShowTagManagement(true)}
-              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-brand-red hover:bg-brand-red-light transition-all mb-2"
+              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-[#D32F2F]-light transition-all mb-2"
             >
               <Settings className="h-3 w-3 mr-1" />
               标签管理
@@ -1284,7 +1284,7 @@ export default function ContactsList() {
                   console.log('搜索:', searchQuery);
                 }
               }}
-              className="pr-8 h-9 text-sm rounded-xl border-divider focus:border-brand-red focus:ring-[#A80000]"
+              className="pr-8 h-9 text-sm rounded-xl border-divider focus:border-[#D32F2F] focus:ring-[#A80000]"
             />
             {searchQuery && (
               <X
@@ -1299,7 +1299,7 @@ export default function ContactsList() {
             
             {/* 搜索下拉列表 */}
             {showDropdown && dropdownContacts.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white-pure dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
                 {dropdownContacts.map((contact: any) => {
                   const company = getFieldValue(contact, "公司名称");
                   const position = getFieldValue(contact, "职位");
@@ -1308,7 +1308,7 @@ export default function ContactsList() {
                     <div
                       key={contact.id}
                       onClick={(e) => handleContactClick(contact.id, contact, e)}
-                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-cream dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
@@ -1335,12 +1335,12 @@ export default function ContactsList() {
             
             {/* 搜索历史记录 */}
             {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white-pure dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50">
                 <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-700">
                   <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
                   <button
                     onClick={handleClearHistory}
-                    className="text-xs text-brand-red hover:underline"
+                    className="text-xs text-[#D32F2F] hover:underline"
                   >
                     清空
                   </button>
@@ -1349,7 +1349,7 @@ export default function ContactsList() {
                   <div
                     key={index}
                     onClick={() => handleHistoryClick(query)}
-                    className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-cream dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                   >
                     <span className="text-sm truncate flex-1">{query}</span>
                     <button
@@ -1366,7 +1366,7 @@ export default function ContactsList() {
           
           <button 
             onClick={handleAddContact}
-            className="flex items-center justify-center h-9 w-9 rounded-xl bg-brand-red text-white hover:bg-brand-red-dark transition-all shadow-sm"
+            className="flex items-center justify-center h-9 w-9 rounded-xl bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark transition-all shadow-sm"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -1375,9 +1375,9 @@ export default function ContactsList() {
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="border border-brand-red/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-brand-red-light">
+        <div className="border border-[#D32F2F]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-brand-red">
+            <span className="text-sm font-medium text-[#D32F2F]">
               已选择 {selectedContactIds.length} 人
             </span>
             <Button
@@ -1431,7 +1431,7 @@ export default function ContactsList() {
                     setIsBatchOperating(false);
                   }
                 }}
-                className="text-xs h-7 px-2 text-brand-red hover:text-brand-red-dark"
+                className="text-xs h-7 px-2 text-[#D32F2F] hover:text-[#D32F2F]-dark"
                 disabled={isBatchOperating}
               >
                 <Undo className="h-3 w-3 mr-1" />
@@ -1442,7 +1442,7 @@ export default function ContactsList() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground">设置关注周期:</span>
             {allTags?.filter(tag => ['周关注', '周关注', '月关注', '季关注'].includes(tag.name)).length === 0 ? (
-              <span className="text-xs text-brand-gold">请先创建“周关注”、“月关注”、“季关注”标签</span>
+              <span className="text-xs text-[#CBA471]">请先创建“周关注”、“月关注”、“季关注”标签</span>
             ) : (
               <>
                 {allTags?.filter(tag => tag.name === '周关注').map(tag => (
@@ -1483,7 +1483,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
                   >
                     周关注
                   </Button>
@@ -1523,7 +1523,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
                   >
                     月关注
                   </Button>
@@ -1563,7 +1563,7 @@ export default function ContactsList() {
                         },
                       });
                     }}
-                    className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
+                    className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
                   >
                     季关注
                   </Button>
@@ -1581,7 +1581,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   选择标签
@@ -1649,7 +1649,7 @@ export default function ContactsList() {
                   variant="outline"
                   size="sm"
                   disabled={isBatchOperating}
-                  className="text-xs h-7 px-2 bg-brand-red-light border-brand-red/30 text-brand-red hover:bg-red-100 rounded-lg"
+                  className="text-xs h-7 px-2 bg-[#D32F2F]-light border-[#D32F2F]/30 text-[#D32F2F] hover:bg-red-100 rounded-lg"
                 >
                   <X className="h-3 w-3 mr-1" />
                   选择标签
@@ -1722,7 +1722,7 @@ export default function ContactsList() {
             {companyList.map((company) => (
               <Card 
                 key={company.companyName}
-                className={`bg-white-pure rounded-2xl shadow-sm hover:shadow-md transition-all border-0 ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                className={`bg-white rounded-2xl shadow-sm hover:shadow-md transition-all border-0 ${company.isShared ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
                 onClick={() => {
                   // 如果是共享的公司，弹出提示
                   if (company.isShared) {
@@ -1740,7 +1740,7 @@ export default function ContactsList() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg text-brand-red">{company.companyName}</CardTitle>
+                        <CardTitle className="text-lg text-[#D32F2F]">{company.companyName}</CardTitle>
                         {company.contactCount > 1 && (
                           <Badge variant="secondary" className="text-xs">
                             {company.contactCount} 人
@@ -1794,7 +1794,7 @@ export default function ContactsList() {
               return (
                 <Card 
                   key={contact.id}
-                  className="bg-white-pure rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative border-0"
+                  className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative border-0"
                   style={isContactSelected ? {
                     boxShadow: `0 0 0 2px #A80000`,
                     backgroundColor: '#A800000d'
@@ -1973,7 +1973,7 @@ export default function ContactsList() {
                               className={`flex items-center gap-0.5 transition-opacity ${
                                 contact._isShared 
                                   ? 'text-gray-400 cursor-default' 
-                                  : 'text-brand-red hover:opacity-70 cursor-pointer'
+                                  : 'text-[#D32F2F] hover:opacity-70 cursor-pointer'
                               }`}
                               title={contact._isShared ? '' : '点击查看公司列表'}
                               disabled={contact._isShared}
@@ -2005,7 +2005,7 @@ export default function ContactsList() {
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {companies.map((companyField: any, index: number) => (
                               <div key={index} className="flex items-center gap-1">
-                                <span className="text-xs sm:text-sm text-stable-gray dark:text-gray-400 font-medium">
+                                <span className="text-xs sm:text-sm text-[#757575] dark:text-gray-400 font-medium">
                                   {companyField.value}
                                 </span>
                                 <CompanyReportIcon 
@@ -2047,7 +2047,7 @@ export default function ContactsList() {
                           className={`h-4 w-4 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
                               ? 'text-gray-400 opacity-50'
-                              : 'text-brand-red hover:text-brand-red-dark'
+                              : 'text-[#D32F2F] hover:text-[#D32F2F]-dark'
                           }`}
                         />
                       </Button>
@@ -2509,7 +2509,7 @@ export default function ContactsList() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-brand-red hover:bg-brand-red-dark text-white"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
               onClick={async () => {
                 if (confirmDialog.onConfirm) {
                   await confirmDialog.onConfirm();

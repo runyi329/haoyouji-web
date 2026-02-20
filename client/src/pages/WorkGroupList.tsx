@@ -58,9 +58,9 @@ export default function WorkGroupList() {
   };
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航栏 */}
-      <div className="bg-brand-red border-b border-brand-red-dark sticky top-0 z-10">
+      <div className="bg-[#D32F2F] border-b border-[#D32F2F]-dark sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
@@ -107,24 +107,24 @@ export default function WorkGroupList() {
             {groups.map((group) => (
               <Card
                 key={group.id}
-                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white-pure"
+                className="p-4 hover:shadow-md transition-shadow cursor-pointer border border-divider bg-white"
                 onClick={() => setLocation(`/work-groups/${group.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-core-black mb-1">
+                    <h3 className="text-lg font-semibold text-[#222222] mb-1">
                       {group.name}
                     </h3>
                     {group.description && (
-                      <p className="text-sm text-stable-gray line-clamp-2">
+                      <p className="text-sm text-[#757575] line-clamp-2">
                         {group.description}
                       </p>
                     )}
-                    <p className="text-xs text-stable-gray mt-2">
+                    <p className="text-xs text-[#757575] mt-2">
                       创建时间: {new Date(group.createdAt).toLocaleDateString('zh-CN')}
                     </p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-stable-gray flex-shrink-0 ml-4" />
+                  <ChevronRight className="h-5 w-5 text-[#757575] flex-shrink-0 ml-4" />
                 </div>
               </Card>
             ))}

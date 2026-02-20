@@ -375,7 +375,7 @@ export default function CharacterGame() {
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
         <div className="max-w-2xl mx-auto pt-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-brand-red mb-2">📚 识字游戏</h1>
+            <h1 className="text-4xl font-bold text-[#D32F2F] mb-2">📚 识字游戏</h1>
             <p className="text-gray-600">选择你喜欢的学习方式！</p>
           </div>
           
@@ -387,7 +387,7 @@ export default function CharacterGame() {
             >
               <div className="text-center">
                 <div className="text-6xl mb-4">🖼️</div>
-                <h2 className="text-2xl font-bold text-brand-red mb-3">看图识字</h2>
+                <h2 className="text-2xl font-bold text-[#D32F2F] mb-3">看图识字</h2>
                 <p className="text-gray-600 mb-4">看图片选汉字，语音播报，快乐学习！</p>
                 <Button className="w-full bg-gradient-to-r from-[#A80000] to-[#d44] text-white">
                   开始游戏
@@ -402,7 +402,7 @@ export default function CharacterGame() {
             >
               <div className="text-center">
                 <div className="text-6xl mb-4">⚡</div>
-                <h2 className="text-2xl font-bold text-brand-gold mb-3">快闪识字</h2>
+                <h2 className="text-2xl font-bold text-[#CBA471] mb-3">快闪识字</h2>
                 <p className="text-gray-600 mb-4">田字格展示，认识忘记，快速记忆！</p>
                 <Button className="w-full bg-gradient-to-r from-amber-400 to-amber-600 text-white">
                   开始游戏
@@ -436,7 +436,7 @@ export default function CharacterGame() {
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
         <div className="max-w-2xl mx-auto pt-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-brand-red mb-2">📚 看图识字</h1>
+            <h1 className="text-4xl font-bold text-[#D32F2F] mb-2">📚 看图识字</h1>
             <p className="text-gray-600">看图片，选汉字，快乐学习！</p>
           </div>
           
@@ -471,7 +471,7 @@ export default function CharacterGame() {
             {/* 题目数量 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                选择题目数量：<span className="text-brand-red font-bold">{questionCount}题</span>
+                选择题目数量：<span className="text-[#D32F2F] font-bold">{questionCount}题</span>
               </label>
               <div className="px-2">
                 <input
@@ -514,14 +514,14 @@ export default function CharacterGame() {
                 </Button>
                 <Button
                   variant={reviewMode ? "default" : "outline"}
-                  className={reviewMode ? "bg-brand-gold hover:bg-orange-600" : ""}
+                  className={reviewMode ? "bg-[#CBA471] hover:bg-orange-600" : ""}
                   onClick={() => setReviewMode(true)}
                 >
                   📖 错题复习
                 </Button>
               </div>
               {reviewMode && (
-                <p className="text-xs text-brand-gold mt-2">
+                <p className="text-xs text-[#CBA471] mt-2">
                   💡 复习模式：只会出现你答错过的汉字，答对后从错题本移除
                 </p>
               )}
@@ -575,7 +575,7 @@ export default function CharacterGame() {
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 p-4">
         <div className="max-w-2xl mx-auto pt-8">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-brand-gold mb-2">⚡ 快闪识字</h1>
+            <h1 className="text-4xl font-bold text-[#CBA471] mb-2">⚡ 快闪识字</h1>
             <p className="text-gray-600">田字格展示，快速记忆汉字！</p>
           </div>
           
@@ -583,7 +583,7 @@ export default function CharacterGame() {
             {/* 题目数量 */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
-                选择题目数量：<span className="text-brand-gold font-bold">{questionCount}题</span>
+                选择题目数量：<span className="text-[#CBA471] font-bold">{questionCount}题</span>
               </label>
               <div className="px-2">
                 <input
@@ -596,7 +596,7 @@ export default function CharacterGame() {
                     const counts = [10, 20, 30, 40, 50];
                     setQuestionCount(counts[parseInt(e.target.value)]);
                   }}
-                  className="w-full h-2 bg-cream rounded-lg appearance-none cursor-pointer slider"
+                  className="w-full h-2 bg-[#FAF3ED] rounded-lg appearance-none cursor-pointer slider"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1 px-1">
                   <span>10</span>
@@ -630,7 +630,7 @@ export default function CharacterGame() {
                   <Button
                     key={option.label}
                     variant={category === option.value ? "default" : "outline"}
-                    className={category === option.value ? "bg-brand-gold" : ""}
+                    className={category === option.value ? "bg-[#CBA471]" : ""}
                     onClick={() => setCategory(option.value)}
                   >
                     {option.label}
@@ -751,7 +751,7 @@ export default function CharacterGame() {
           {/* 顶部信息栏 */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
-              <div className="text-lg font-semibold text-brand-gold">
+              <div className="text-lg font-semibold text-[#CBA471]">
                 剩余 {remainingCount} / {flashcardCharacters.length} 个
               </div>
               <div className="text-lg font-semibold text-gray-600">
@@ -795,7 +795,7 @@ export default function CharacterGame() {
                 </div>
                 
                 {/* 拼音 */}
-                <div className="text-3xl font-bold text-brand-gold mt-4">
+                <div className="text-3xl font-bold text-[#CBA471] mt-4">
                   {currentFlashcard.pinyin}
                 </div>
               </div>
@@ -836,7 +836,7 @@ export default function CharacterGame() {
         {/* 顶部信息栏 */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-4">
-            <div className="text-lg font-semibold text-brand-red">
+            <div className="text-lg font-semibold text-[#D32F2F]">
               第 {currentIndex + 1} / {questions.length} 题
             </div>
             <div className="text-lg font-semibold text-gray-600">
@@ -876,7 +876,7 @@ export default function CharacterGame() {
               <Button
                 onClick={handleManualPlay}
                 disabled={isPlaying}
-                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-red-500 hover:bg-brand-red"
+                className="absolute top-2 right-2 rounded-full w-12 h-12 bg-red-500 hover:bg-[#D32F2F]"
                 size="icon"
               >
                 <Volume2 className="w-6 h-6" />

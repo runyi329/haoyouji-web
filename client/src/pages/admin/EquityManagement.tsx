@@ -83,7 +83,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
               <input
                 ref={inputRef}
                 type="text"
-                className="w-full pl-8 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A80000]/20 focus:border-brand-red"
+                className="w-full pl-8 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-[#A80000]/20 focus:border-[#D32F2F]"
                 placeholder="搜索用户名或昵称..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -114,7 +114,7 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
                     <p className="text-xs text-gray-500">@{u.username} · ID: {u.id}</p>
                   </div>
                   {value === u.id.toString() && (
-                    <Check className="w-4 h-4 text-brand-red flex-shrink-0 ml-2" />
+                    <Check className="w-4 h-4 text-[#D32F2F] flex-shrink-0 ml-2" />
                   )}
                 </div>
               ))
@@ -132,11 +132,11 @@ function UserSelector({ value, onChange }: { value: string; onChange: (userId: s
 
 // 预定义的池类型颜色
 const POOL_COLORS: Record<string, { bg: string; text: string }> = {
-  investment_pool_percentage: { bg: "bg-red-50", text: "text-brand-red" },
+  investment_pool_percentage: { bg: "bg-red-50", text: "text-[#D32F2F]" },
   contribution_pool_percentage: { bg: "bg-blue-50", text: "text-blue-600" },
   option_pool_percentage: { bg: "bg-purple-50", text: "text-purple-600" },
   reserve_pool_percentage: { bg: "bg-green-50", text: "text-green-600" },
-  founder_pool_percentage: { bg: "bg-cream", text: "text-brand-gold" },
+  founder_pool_percentage: { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
 };
 
 const POOL_LABELS: Record<string, string> = {
@@ -152,7 +152,7 @@ function getPoolColor(key: string, index: number) {
   if (POOL_COLORS[key]) return POOL_COLORS[key];
   const colors = [
     { bg: "bg-teal-50", text: "text-teal-600" },
-    { bg: "bg-cream", text: "text-brand-gold" },
+    { bg: "bg-[#FAF3ED]", text: "text-[#CBA471]" },
     { bg: "bg-pink-50", text: "text-pink-600" },
     { bg: "bg-cyan-50", text: "text-cyan-600" },
     { bg: "bg-indigo-50", text: "text-indigo-600" },
@@ -403,7 +403,7 @@ export default function EquityManagement() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D32F2F]" />
       </div>
     );
   }
@@ -435,7 +435,7 @@ export default function EquityManagement() {
                 variant="outline"
                 size="sm"
                 onClick={startEditPools}
-                className="text-gray-600 hover:text-brand-red hover:border-brand-red"
+                className="text-gray-600 hover:text-[#D32F2F] hover:border-[#D32F2F]"
               >
                 <Settings className="w-4 h-4 mr-1" />
                 编辑配置
@@ -453,7 +453,7 @@ export default function EquityManagement() {
                 <Button
                   size="sm"
                   onClick={savePoolConfig}
-                  className="bg-brand-red hover:bg-brand-red-dark"
+                  className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
                   disabled={updateRulesMutation.isPending}
                 >
                   <Save className="w-4 h-4 mr-1" />
@@ -532,7 +532,7 @@ export default function EquityManagement() {
               {/* 添加新池按钮 */}
               <button
                 onClick={() => setIsAddPoolDialogOpen(true)}
-                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-brand-red hover:text-brand-red transition-colors flex items-center justify-center space-x-2"
+                className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors flex items-center justify-center space-x-2"
               >
                 <Plus className="w-5 h-5" />
                 <span>添加新的股份池</span>
@@ -563,7 +563,7 @@ export default function EquityManagement() {
                 variant="outline"
                 size="sm"
                 onClick={startEditRules}
-                className="text-gray-600 hover:text-brand-red hover:border-brand-red"
+                className="text-gray-600 hover:text-[#D32F2F] hover:border-[#D32F2F]"
               >
                 <Settings className="w-4 h-4 mr-1" />
                 编辑规则
@@ -581,7 +581,7 @@ export default function EquityManagement() {
                 <Button
                   size="sm"
                   onClick={saveRulesConfig}
-                  className="bg-brand-red hover:bg-brand-red-dark"
+                  className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
                   disabled={updateRulesMutation.isPending}
                 >
                   <Save className="w-4 h-4 mr-1" />
@@ -596,13 +596,13 @@ export default function EquityManagement() {
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-700">邀请新用户</span>
-                <span className="font-bold text-brand-red">
+                <span className="font-bold text-[#D32F2F]">
                   {rules?.invite_per_user_percentage?.toFixed(2) || "0.05"}% / 人
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <span className="text-gray-700">被邀请人每100人脉</span>
-                <span className="font-bold text-brand-red">
+                <span className="font-bold text-[#D32F2F]">
                   {rules?.referral_network_per_100_percentage?.toFixed(2) || "0.02"}%
                 </span>
               </div>
@@ -633,7 +633,7 @@ export default function EquityManagement() {
                         }}
                         className="bg-white"
                       />
-                      <span className="text-sm font-bold text-brand-red">%</span>
+                      <span className="text-sm font-bold text-[#D32F2F]">%</span>
                     </div>
                   </div>
                 );
@@ -661,11 +661,11 @@ export default function EquityManagement() {
                 <tbody>
                   {shareholders.map((shareholder: any) => (
                     <tr key={shareholder.userId} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-2 text-sm font-mono text-brand-red font-semibold">
+                      <td className="py-3 px-2 text-sm font-mono text-[#D32F2F] font-semibold">
                         {shareholder.seatNumber ? String(shareholder.seatNumber).padStart(4, '0') : '-'}
                       </td>
                       <td className="py-3 px-2 text-sm">{shareholder.userName}</td>
-                      <td className="py-3 px-2 text-sm text-right font-bold text-brand-red">
+                      <td className="py-3 px-2 text-sm text-right font-bold text-[#D32F2F]">
                         {shareholder.totalEquity.toFixed(4)}%
                       </td>
                       <td className="py-3 px-2 text-sm text-right">
@@ -695,7 +695,7 @@ export default function EquityManagement() {
                 setSelectedUserName("");
                 setIsAddDialogOpen(true);
               }}
-              className="bg-brand-red hover:bg-brand-red-dark"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
             >
               <Plus className="w-4 h-4 mr-2" />
               添加投资
@@ -718,7 +718,7 @@ export default function EquityManagement() {
                 {investments && investments.length > 0 ? (
                   investments.map((investment: any) => (
                     <tr key={investment.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-2 text-sm font-mono text-brand-red font-semibold">
+                      <td className="py-3 px-2 text-sm font-mono text-[#D32F2F] font-semibold">
                         {investment.seatNumber ? String(investment.seatNumber).padStart(4, '0') : '-'}
                       </td>
                       <td className="py-3 px-2 text-sm">{investment.userName || investment.username}</td>
@@ -836,7 +836,7 @@ export default function EquityManagement() {
             </Button>
             <Button
               onClick={handleAdd}
-              className="bg-brand-red hover:bg-brand-red-dark"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
               disabled={addInvestmentMutation.isPending}
             >
               {addInvestmentMutation.isPending ? "添加中..." : "确定"}
@@ -911,7 +911,7 @@ export default function EquityManagement() {
             </Button>
             <Button
               onClick={handleEdit}
-              className="bg-brand-red hover:bg-brand-red-dark"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
               disabled={updateInvestmentMutation.isPending}
             >
               {updateInvestmentMutation.isPending ? "更新中..." : "确定"}
@@ -970,7 +970,7 @@ export default function EquityManagement() {
             </Button>
             <Button
               onClick={handleAddPool}
-              className="bg-brand-red hover:bg-brand-red-dark"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark"
             >
               添加
             </Button>

@@ -30,26 +30,26 @@ const GAMES: GameConfig[] = [
   
   // 识字游戏 - 4个独立入口
   { id: "character_picture", name: "看图识字", icon: "🖼️", color: "bg-cyan-100", activityPrefix: ["character_picture_"], hasDifficulty: true },
-  { id: "character_flashcard", name: "快闪识字", icon: "⚡", color: "bg-cream", activityPrefix: ["character_flashcard_"], hasDifficulty: true },
+  { id: "character_flashcard", name: "快闪识字", icon: "⚡", color: "bg-[#FAF3ED]", activityPrefix: ["character_flashcard_"], hasDifficulty: true },
   { id: "character_listening", name: "听音识字", icon: "🎧", color: "bg-green-100", activityPrefix: ["character_listening_"], hasDifficulty: true },
   { id: "character_memory", name: "翻牌记字", icon: "🃏", color: "bg-pink-100", activityPrefix: ["character_memory_"], hasDifficulty: true },
   
   // 其他游戏
   { id: "memory", name: "记忆翻牌", icon: "🎴", color: "bg-indigo-100", activityPrefix: ["memory_"] },
   { id: "puzzle", name: "拼图游戏", icon: "🧩", color: "bg-teal-100", activityPrefix: ["puzzle_"] },
-  { id: "math", name: "数学问答", icon: "🔢", color: "bg-cream", activityPrefix: ["math_"] },
+  { id: "math", name: "数学问答", icon: "🔢", color: "bg-[#FAF3ED]", activityPrefix: ["math_"] },
   { id: "antonym", name: "反义词", icon: "🔄", color: "bg-emerald-100", activityPrefix: ["antonym_"] },
-  { id: "addition20", name: "20加法", icon: "➕", color: "bg-cream", activityPrefix: ["addition20_"], hasDifficulty: true },
+  { id: "addition20", name: "20加法", icon: "➕", color: "bg-[#FAF3ED]", activityPrefix: ["addition20_"], hasDifficulty: true },
   
   // 日常任务
   { id: "brushing", name: "刷牙任务", icon: "🪥", color: "bg-sky-100", activityPrefix: ["brushing_"] },
-  { id: "knowledge", name: "知识阅读", icon: "📚", color: "bg-cream", activityPrefix: ["knowledge_"] },
+  { id: "knowledge", name: "知识阅读", icon: "📚", color: "bg-[#FAF3ED]", activityPrefix: ["knowledge_"] },
 ];
 
 // 难度等级配置
 const DIFFICULTY_CONFIG = {
   easy: { name: "简单", color: "bg-green-100 text-green-700 border-green-300" },
-  medium: { name: "中等", color: "bg-cream text-brand-gold border-yellow-300" },
+  medium: { name: "中等", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
   hard: { name: "困难", color: "bg-red-100 text-red-700 border-red-300" },
 };
 
@@ -65,11 +65,11 @@ const DAN_CONFIG: Record<number, { name: string; color: string }> = {
   2: { name: "2段·初学", color: "bg-green-100 text-green-600 border-green-300" },
   3: { name: "3段·业余", color: "bg-blue-100 text-blue-700 border-blue-300" },
   4: { name: "4段·进阶", color: "bg-blue-100 text-blue-600 border-blue-300" },
-  5: { name: "5段·熟练", color: "bg-red-100 text-brand-red-dark border-red-300" },
-  6: { name: "6段·高手", color: "bg-red-100 text-brand-red border-red-300" },
-  7: { name: "7段·专家", color: "bg-cream text-orange-700 border-orange-300" },
+  5: { name: "5段·熟练", color: "bg-red-100 text-[#D32F2F]-dark border-red-300" },
+  6: { name: "6段·高手", color: "bg-red-100 text-[#D32F2F] border-red-300" },
+  7: { name: "7段·专家", color: "bg-[#FAF3ED] text-orange-700 border-orange-300" },
   8: { name: "8段·大师", color: "bg-red-100 text-red-600 border-red-300" },
-  9: { name: "9段·棋圣", color: "bg-cream text-brand-gold border-yellow-300" },
+  9: { name: "9段·棋圣", color: "bg-[#FAF3ED] text-[#CBA471] border-yellow-300" },
 };
 
 interface RewardRule {
@@ -178,7 +178,7 @@ export default function GameRewardManager() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D32F2F]" />
       </div>
     );
   }
@@ -274,8 +274,8 @@ export default function GameRewardManager() {
             </>
           ) : (
             <>
-              <div className="flex items-center gap-1 px-3 py-1 bg-cream rounded-full border border-yellow-200">
-                <span className="font-bold text-brand-gold">{rule.starsReward}</span>
+              <div className="flex items-center gap-1 px-3 py-1 bg-[#FAF3ED] rounded-full border border-yellow-200">
+                <span className="font-bold text-[#CBA471]">{rule.starsReward}</span>
                 <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
               </div>
               <Button
@@ -283,7 +283,7 @@ export default function GameRewardManager() {
                 variant="outline"
                 onClick={() => handleEdit(rule)}
                 disabled={!rule.isActive}
-                className="text-brand-red border-red-200 hover:bg-red-50"
+                className="text-[#D32F2F] border-red-200 hover:bg-red-50"
               >
                 编辑
               </Button>
@@ -345,7 +345,7 @@ export default function GameRewardManager() {
                   <Button
                     size="sm"
                     variant={isExpanded ? "default" : "outline"}
-                    className={isExpanded ? "bg-brand-red hover:bg-brand-red-dark" : ""}
+                    className={isExpanded ? "bg-[#D32F2F] hover:bg-[#D32F2F]-dark" : ""}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleExpand(game.id);

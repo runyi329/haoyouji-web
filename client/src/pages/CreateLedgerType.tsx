@@ -10,14 +10,14 @@ const ledgerTypes = [
     name: "家庭/情侣账本",
     description: "生活日常开销，柴米油盐酱醋茶",
     icon: Home,
-    color: "bg-cream text-brand-gold",
+    color: "bg-[#FAF3ED] text-[#CBA471]",
   },
   {
     id: "travel",
     name: "旅游账本",
     description: "多人同行，账目清晰明了",
     icon: Plane,
-    color: "bg-cream text-brand-gold",
+    color: "bg-[#FAF3ED] text-[#CBA471]",
   },
   {
     id: "renovation",
@@ -31,7 +31,7 @@ const ledgerTypes = [
     name: "生意账本",
     description: "收益情况，合伙人随时查看",
     icon: Briefcase,
-    color: "bg-red-100 text-brand-red",
+    color: "bg-red-100 text-[#D32F2F]",
   },
   {
     id: "class",

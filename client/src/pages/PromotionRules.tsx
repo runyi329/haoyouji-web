@@ -133,8 +133,8 @@ const PromotionRules: React.FC = () => {
                   <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
                     <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="text-sm font-bold text-brand-red leading-tight">{tier.levelChar1}</div>
-                        <div className="text-sm font-bold text-brand-red leading-tight">{tier.levelChar2}</div>
+                        <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar1}</div>
+                        <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar2}</div>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
@@ -184,8 +184,8 @@ const PromotionRules: React.FC = () => {
                   <tr key={`${index}-row1`} className={index > 0 ? 'border-t-2 border-gray-200' : ''}>
                     <td rowSpan={2} className="w-16 bg-gray-50/80 border-r border-gray-200 text-center align-middle py-3">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="text-sm font-bold text-brand-red leading-tight">{tier.levelChar1}</div>
-                        <div className="text-sm font-bold text-brand-red leading-tight">{tier.levelChar2}</div>
+                        <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar1}</div>
+                        <div className="text-sm font-bold text-[#D32F2F] leading-tight">{tier.levelChar2}</div>
                       </div>
                     </td>
                     <td className="text-center py-3 px-2 border-r border-gray-200">
@@ -233,7 +233,7 @@ const PromotionRules: React.FC = () => {
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">使用至今已添加：</span>
-                    <span className="font-bold text-brand-red text-sm">
+                    <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.contactCount}人
                     </span>
                   </div>
@@ -249,7 +249,7 @@ const PromotionRules: React.FC = () => {
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">使用至今已添加：</span>
-                    <span className="font-bold text-brand-red text-sm">
+                    <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.tagCount}个
                     </span>
                   </div>
@@ -266,7 +266,7 @@ const PromotionRules: React.FC = () => {
                 <div className="text-xs space-y-1.5">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">本考核周期联络：</span>
-                    <span className="font-bold text-brand-red text-sm">
+                    <span className="font-bold text-[#D32F2F] text-sm">
                       {promotionStats.assessmentPeriod.currentInteractionCount}次
                     </span>
                   </div>

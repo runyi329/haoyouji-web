@@ -72,7 +72,7 @@ export default function TagSearch() {
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: tag.color }}
                     />
-                    <h3 className="font-semibold text-lg group-hover:text-brand-red transition-colors">
+                    <h3 className="font-semibold text-lg group-hover:text-[#D32F2F] transition-colors">
                       {tag.name}
                     </h3>
                   </div>

@@ -144,7 +144,7 @@ export default function ReferrerLeaderboard() {
                         <td className="py-4 px-4 text-center text-blue-600 font-semibold">
                           {stat.directCount}人
                         </td>
-                        <td className="py-4 px-4 text-center text-brand-red font-semibold">
+                        <td className="py-4 px-4 text-center text-[#D32F2F] font-semibold">
                           {stat.indirectCount}人
                         </td>
                         <td className="py-4 px-4 text-center text-indigo-700 font-bold">

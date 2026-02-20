@@ -261,7 +261,7 @@ export default function MemoryGame() {
             <Card className="p-6 mb-4 bg-gradient-to-br from-red-50 to-pink-50 border-0 max-w-sm mx-auto">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-brand-red">{score}</div>
+                  <div className="text-2xl font-bold text-[#D32F2F]">{score}</div>
                   <div className="text-xs text-muted-foreground">得分</div>
                 </div>
                 <div>
@@ -291,8 +291,8 @@ export default function MemoryGame() {
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100">
-                  <Sparkles className="w-4 h-4 text-brand-red" />
-                  <span className="text-sm font-medium text-brand-red">{score}</span>
+                  <Sparkles className="w-4 h-4 text-[#D32F2F]" />
+                  <span className="text-sm font-medium text-[#D32F2F]">{score}</span>
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100">
                   <Clock className="w-4 h-4 text-blue-600" />

@@ -90,12 +90,12 @@ VC看到的是什么
   return (
     <div className="space-y-2">
       {faqs.map((faq, index) => (
-        <div key={index} className="border border-divider rounded-xl overflow-hidden bg-white-pure shadow-sm">
+        <div key={index} className="border border-divider rounded-xl overflow-hidden bg-white shadow-sm">
           <button
             onClick={() => setOpenIndex(openIndex === index ? null : index)}
-            className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-cream transition-colors"
+            className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-[#FAF3ED] transition-colors"
           >
-            <span className="text-sm font-semibold text-core-black pr-3">{faq.question}</span>
+            <span className="text-sm font-semibold text-[#222222] pr-3">{faq.question}</span>
             <svg
               className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform ${
                 openIndex === index ? 'rotate-180' : ''
@@ -120,7 +120,7 @@ VC看到的是什么
                   return (
                     <div key={i} className="text-sm relative group">
                       {block.title && (
-                        <div className="font-bold text-core-black mb-1">{block.title}</div>
+                        <div className="font-bold text-[#222222] mb-1">{block.title}</div>
                       )}
                       <div className="text-gray-700 leading-relaxed flex items-start justify-between">
                         <span className="flex-1 pr-2">{block.text}</span>
@@ -129,7 +129,7 @@ VC看到的是什么
                           className="flex-shrink-0 ml-1 mt-0.5 p-1 hover:bg-gray-100 rounded transition-colors relative"
                           title="复制这段"
                         >
-                          <svg className="w-3.5 h-3.5 text-gray-400 hover:text-stable-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-gray-400 hover:text-[#757575]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                           </svg>
                           {isCopied && (
@@ -138,7 +138,7 @@ VC看到的是什么
                             </span>
                           )}
                           {isError && (
-                            <span className="absolute -top-6 right-0 bg-brand-red-light0 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
+                            <span className="absolute -top-6 right-0 bg-[#D32F2F]-light0 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap">
                               复制失败
                             </span>
                           )}
@@ -163,7 +163,7 @@ VC看到的是什么
                   </span>
                 )}
                 {copiedId === `error-all-${index}` && (
-                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-brand-red-light0 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#D32F2F]-light0 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                     复制失败
                   </span>
                 )}
@@ -312,15 +312,15 @@ export default function MyEquity() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#D32F2F]" />
       </div>
     );
   }
 
   if (!enhanced) {
     return (
-      <div className="min-h-screen bg-cream flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500">暂无股权数据</p>
         </div>
@@ -432,18 +432,18 @@ export default function MyEquity() {
   ];
 
   return (
-    <div className="min-h-screen bg-cream pb-20">
+    <div className="min-h-screen bg-[#FAF3ED] pb-20">
       {/* 顶部导航 */}
-      <div className="bg-white-pure border-b sticky top-0 z-10">
+      <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center">
           <Link href="/parent/profile">
-            <button className="text-stable-gray hover:text-core-black">
+            <button className="text-[#757575] hover:text-[#222222]">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
           </Link>
-          <h1 className="flex-1 text-center text-lg font-bold text-core-black">我的股权</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-[#222222]">我的股权</h1>
           <div className="w-6"></div>
         </div>
       </div>
@@ -662,7 +662,7 @@ export default function MyEquity() {
         </Card>
 
         {/* 2. 资产仪表盘：估值 + 排名（左右布局） + 饼图 */}
-        <Card className="bg-cream rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
+        <Card className="bg-[#FAF3ED] rounded-t-none rounded-b-3xl shadow-sm border-none p-5">
           {/* 左右双列：估值 vs 排名 */}
           <div className="grid grid-cols-2 gap-6 mb-5 relative">
             {/* 左侧：我的股权估值 */}
@@ -672,8 +672,8 @@ export default function MyEquity() {
                 我的股权估值
               </div>
               <div className="flex items-baseline space-x-1">
-                <span className="text-2xl font-bold text-brand-gold">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
-                <span className="text-sm text-stable-gray">万</span>
+                <span className="text-2xl font-bold text-[#CBA471]">¥{(equity.estimatedValue / 10000).toFixed(2)}</span>
+                <span className="text-sm text-[#757575]">万</span>
               </div>
               <div className="mt-1 text-xs text-gray-400">
                 基于估值 ¥{(equity.companyValuation / 10000).toFixed(0)}万
@@ -691,7 +691,7 @@ export default function MyEquity() {
               </div>
               {equity.ranking ? (
                 <>
-                  <div className="text-2xl font-bold text-core-black">No.{equity.ranking.rank}</div>
+                  <div className="text-2xl font-bold text-[#222222]">No.{equity.ranking.rank}</div>
                   <div className="mt-1 text-xs text-gray-400">
                     共{equity.ranking.total}位股东
                   </div>
@@ -774,7 +774,7 @@ export default function MyEquity() {
           </div>
 
           {/* 灰色底座 */}
-          <div className="bg-cream rounded-t-none rounded-b-3xl p-5">
+          <div className="bg-[#FAF3ED] rounded-t-none rounded-b-3xl p-5">
             {/* 模块一：公司股权分配 - 内嵌手风琴 */}
             <ShareholderSection
               title="公司股权分配"

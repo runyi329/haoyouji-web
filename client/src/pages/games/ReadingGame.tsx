@@ -264,7 +264,7 @@ export default function ReadingGame() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 flex items-center justify-center">
-        <div className="text-2xl text-brand-gold">加载中...</div>
+        <div className="text-2xl text-[#CBA471]">加载中...</div>
       </div>
     );
   }
@@ -287,7 +287,7 @@ export default function ReadingGame() {
       {/* 顶部导航 */}
       <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games/reading">
-          <Button variant="ghost" size="lg" className="text-brand-gold">
+          <Button variant="ghost" size="lg" className="text-[#CBA471]">
             <ArrowLeft className="w-6 h-6 mr-2" />
             返回
           </Button>
@@ -297,7 +297,7 @@ export default function ReadingGame() {
             onClick={() => setShowPinyin(!showPinyin)}
             variant={showPinyin ? "default" : "outline"}
             size="lg"
-            className={showPinyin ? "bg-red-500 hover:bg-brand-red" : ""}
+            className={showPinyin ? "bg-red-500 hover:bg-[#D32F2F]" : ""}
           >
             <Languages className="w-5 h-5 mr-2" />
             {showPinyin ? "隐藏拼音" : "显示拼音"}
@@ -306,7 +306,7 @@ export default function ReadingGame() {
             onClick={isAutoReading ? stopAutoReading : startAutoReading}
             variant={isAutoReading ? "default" : "outline"}
             size="lg"
-            className={isAutoReading ? "bg-brand-gold hover:bg-orange-600" : ""}
+            className={isAutoReading ? "bg-[#CBA471] hover:bg-orange-600" : ""}
           >
             {isAutoReading ? (
               <>
@@ -347,7 +347,7 @@ export default function ReadingGame() {
         
         <div className="p-8">
           {/* 标题 */}
-          <h1 className="text-4xl font-bold text-center text-brand-gold mb-8">
+          <h1 className="text-4xl font-bold text-center text-[#CBA471] mb-8">
             {story.title}
           </h1>
         
@@ -386,8 +386,8 @@ export default function ReadingGame() {
         {clickedChar && (
           <div className="mt-8 p-6 bg-gradient-to-r from-red-100 to-pink-100 rounded-lg border-2 border-red-300">
             <div className="flex items-center gap-3 mb-2">
-              <Volume2 className={`w-8 h-8 text-brand-red ${isPlaying ? "animate-pulse" : ""}`} />
-              <span className="text-xl text-brand-red-dark font-semibold">
+              <Volume2 className={`w-8 h-8 text-[#D32F2F] ${isPlaying ? "animate-pulse" : ""}`} />
+              <span className="text-xl text-[#D32F2F]-dark font-semibold">
                 {isPlaying ? "正在播放..." : "点击了"}
               </span>
             </div>
@@ -400,7 +400,7 @@ export default function ReadingGame() {
         {/* 统计信息 */}
         <div className="mt-8 pt-6 border-t-2 border-gray-200 flex justify-center gap-8">
           <div className="text-center">
-            <div className="text-3xl font-bold text-brand-gold">{clickCount}</div>
+            <div className="text-3xl font-bold text-[#CBA471]">{clickCount}</div>
             <div className="text-sm text-gray-600 mt-1">点读次数</div>
           </div>
           <div className="text-center">

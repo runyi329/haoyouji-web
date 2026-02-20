@@ -469,7 +469,7 @@ export default function AntonymGame() {
                   }}
                   className={`px-8 py-3 rounded-full text-lg font-bold transition-all ${
                     gameState.difficulty === 'advanced'
-                      ? 'bg-brand-gold text-white shadow-lg scale-105'
+                      ? 'bg-[#CBA471] text-white shadow-lg scale-105'
                       : 'bg-white text-gray-600 hover:bg-gray-100'
                   }`}
                 >
@@ -588,7 +588,7 @@ export default function AntonymGame() {
 
           <div className="bg-white rounded-lg shadow-lg p-6 space-y-4">
             <div className="flex justify-between items-center">
-              <h1 className="text-xl font-bold text-brand-red">反义词游戏</h1>
+              <h1 className="text-xl font-bold text-[#D32F2F]">反义词游戏</h1>
               <span className="text-blue-600 font-bold">{formatTime(elapsedTime)}</span>
             </div>
 
@@ -619,7 +619,7 @@ export default function AntonymGame() {
                     disabled={isAnswered}
                     className={`py-6 text-lg font-bold transition-all ${
                       !isAnswered
-                        ? "bg-yellow-400 hover:bg-brand-gold text-gray-800"
+                        ? "bg-yellow-400 hover:bg-[#CBA471] text-gray-800"
                         : option === currentPair.antonym
                         ? "bg-green-500 text-white"
                         : option === gameState.selectedAnswer
@@ -643,14 +643,14 @@ export default function AntonymGame() {
                 )}
                 
                 {speechError && speechError.includes('权限') && (
-                  <div className="bg-cream border border-yellow-400 text-brand-gold px-4 py-3 rounded text-center">
+                  <div className="bg-[#FAF3ED] border border-yellow-400 text-[#CBA471] px-4 py-3 rounded text-center">
                     <p className="font-bold">🎤 需要麦克风权限</p>
                     <p className="text-sm mt-1">请在浏览器弹窗中点击“允许”按钮</p>
                   </div>
                 )}
                 
                 {speechError && !speechError.includes('权限') && (
-                  <div className="bg-cream border border-yellow-400 text-brand-gold px-4 py-3 rounded">
+                  <div className="bg-[#FAF3ED] border border-yellow-400 text-[#CBA471] px-4 py-3 rounded">
                     {speechError}
                   </div>
                 )}
@@ -661,7 +661,7 @@ export default function AntonymGame() {
                     {/* 录音中的波纹动画 */}
                     {isListening && (
                       <>
-                        <div className="absolute inset-0 rounded-full bg-brand-red opacity-75 animate-ping" />
+                        <div className="absolute inset-0 rounded-full bg-[#D32F2F] opacity-75 animate-ping" />
                         <div className="absolute inset-0 rounded-full bg-[#d44] opacity-50 animate-pulse" style={{ animationDelay: '0.15s' }} />
                       </>
                     )}
@@ -689,7 +689,7 @@ export default function AntonymGame() {
                   
                   {isListening && (
                     <div className="text-center animate-pulse">
-                      <p className="text-brand-red font-bold text-lg">🎤 请说出反义词...</p>
+                      <p className="text-[#D32F2F] font-bold text-lg">🎤 请说出反义词...</p>
                       <p className="text-gray-500 text-sm mt-1">系统正在认真听哦！</p>
                     </div>
                   )}
@@ -822,7 +822,7 @@ export default function AntonymGame() {
                 {/* 获得五角星提示 */}
                 <div className="mb-3">
                   <h2 className="text-2xl font-bold mb-1">挑战完成！</h2>
-                  <p className="text-base text-brand-gold font-semibold">获得 {starsEarned} 个五角星！</p>
+                  <p className="text-base text-[#CBA471] font-semibold">获得 {starsEarned} 个五角星！</p>
                 </div>
 
                 <Card className="p-4 mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0 max-w-sm mx-auto">

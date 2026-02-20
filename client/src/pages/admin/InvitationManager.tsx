@@ -305,7 +305,7 @@ export function InvitationManager() {
                       )}
                       <span>已邀请: {user.inviteCount}人</span>
                       {referrer && (
-                        <span className="text-brand-red">
+                        <span className="text-[#D32F2F]">
                           推荐人: {referrer.name || referrer.username}
                         </span>
                       )}
@@ -382,7 +382,7 @@ export function InvitationManager() {
                             <p className="font-medium">{referrer.name || referrer.username}</p>
                             <p className="text-xs text-muted-foreground">@{referrer.username}</p>
                             {referrer.inviteCode && (
-                              <p className="text-xs font-mono text-brand-red mt-1">
+                              <p className="text-xs font-mono text-[#D32F2F] mt-1">
                                 邀请码: {referrer.inviteCode}
                               </p>
                             )}

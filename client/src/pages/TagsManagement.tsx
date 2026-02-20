@@ -398,7 +398,7 @@ export default function TagsManagement() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-brand-red">
+                      <span className="text-sm font-medium text-[#D32F2F]">
                         × {stat.count}
                       </span>
                       <span className="text-sm text-muted-foreground">

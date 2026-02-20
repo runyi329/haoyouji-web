@@ -267,7 +267,7 @@ export default function SharingSettings() {
             <Button
               size="sm"
               onClick={() => setShowAddDialog(true)}
-              className="h-8 px-3 bg-brand-red hover:bg-brand-red-dark text-white"
+              className="h-8 px-3 bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
             >
               <Plus className="h-4 w-4 mr-1" />
               添加
@@ -283,7 +283,7 @@ export default function SharingSettings() {
             onClick={() => setActiveTab('my')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'my'
-                ? 'bg-white dark:bg-gray-700 text-brand-red shadow-sm'
+                ? 'bg-white dark:bg-gray-700 text-[#D32F2F] shadow-sm'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
             }`}
           >
@@ -292,7 +292,7 @@ export default function SharingSettings() {
             {myCount > 0 && (
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${
                 activeTab === 'my'
-                  ? 'bg-brand-red text-white'
+                  ? 'bg-[#D32F2F] text-white'
                   : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
               }`}>
                 {myCount}
@@ -303,7 +303,7 @@ export default function SharingSettings() {
             onClick={() => setActiveTab('shared')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'shared'
-                ? 'bg-white dark:bg-gray-700 text-brand-red shadow-sm'
+                ? 'bg-white dark:bg-gray-700 text-[#D32F2F] shadow-sm'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
             }`}
           >
@@ -312,7 +312,7 @@ export default function SharingSettings() {
             {sharedCount > 0 && (
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${
                 activeTab === 'shared'
-                  ? 'bg-brand-red text-white'
+                  ? 'bg-[#D32F2F] text-white'
                   : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
               }`}>
                 {sharedCount}
@@ -358,7 +358,7 @@ export default function SharingSettings() {
             // ========== 我的共享连接列表 ==========
             loadingConnections ? (
               <div className="flex flex-col items-center justify-center py-16">
-                <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-gray-400 mt-3">加载中...</p>
               </div>
             ) : !myConnections || myConnections.length === 0 ? (
@@ -423,7 +423,7 @@ export default function SharingSettings() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-brand-red hover:bg-gray-100"
+                        className="h-8 w-8 text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
                         onClick={() => openPermissionDialog(conn)}
                         title="权限设置"
                       >
@@ -458,7 +458,7 @@ export default function SharingSettings() {
             // ========== 共享给我的连接列表 ==========
             loadingSharedToMe ? (
               <div className="flex flex-col items-center justify-center py-16">
-                <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm text-gray-400 mt-3">加载中...</p>
               </div>
             ) : !sharedToMe || sharedToMe.length === 0 ? (
@@ -590,7 +590,7 @@ export default function SharingSettings() {
                           <p className="font-medium text-sm truncate">{user.name || user.username}</p>
                           <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
                         </div>
-                        <Plus className="h-4 w-4 text-brand-red" />
+                        <Plus className="h-4 w-4 text-[#D32F2F]" />
                       </div>
                     ))}
                   </div>
@@ -621,7 +621,7 @@ export default function SharingSettings() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-brand-red" />
+              <Shield className="h-5 w-5 text-[#D32F2F]" />
               权限配置
             </DialogTitle>
             <DialogDescription>
@@ -665,7 +665,7 @@ export default function SharingSettings() {
             <Button 
               onClick={handleSavePermissions} 
               disabled={updatePermissions.isPending}
-              className="bg-brand-red hover:bg-brand-red-dark text-white"
+              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
             >
               {updatePermissions.isPending ? "保存中..." : "保存"}
             </Button>

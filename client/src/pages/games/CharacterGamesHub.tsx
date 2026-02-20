@@ -30,7 +30,7 @@ const literacyGames: LiteracyGame[] = [
     description: "快速闪现学汉字，提升反应！",
     icon: Zap,
     gradient: "from-orange-400 to-red-600",
-    bgColor: "bg-cream",
+    bgColor: "bg-[#FAF3ED]",
     path: "/games/character",
   },
   {
@@ -63,7 +63,7 @@ export default function CharacterGamesHub() {
       {/* 顶部导航 */}
       <header className="z-50 bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="container flex items-center justify-between h-14">
-          <Link href={`/games?kidId=${kidId}`} className="flex items-center gap-2 text-brand-gold hover:text-brand-gold">
+          <Link href={`/games?kidId=${kidId}`} className="flex items-center gap-2 text-[#CBA471] hover:text-[#CBA471]">
             <ArrowLeft size={20} />
             <span className="font-medium">返回游戏乐园</span>
           </Link>

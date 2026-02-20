@@ -141,11 +141,11 @@ export default function InviteCode() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50">
-                  <Users className="w-5 h-5 text-brand-red" />
+                  <Users className="w-5 h-5 text-[#D32F2F]" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-600 dark:text-gray-400">已邀请好友</p>
-                  <p className="text-2xl font-bold text-brand-red">
+                  <p className="text-2xl font-bold text-[#D32F2F]">
                     {inviteInfo?.inviteCount || 0}<span className="text-sm font-normal ml-1">人</span>
                   </p>
                 </div>
@@ -156,7 +156,7 @@ export default function InviteCode() {
                   onClick={() => setLocation("/invited-friends")}
                   className="p-2 hover:bg-red-50 rounded-full transition-colors"
                 >
-                  <ChevronRight className="w-5 h-5 text-brand-red" />
+                  <ChevronRight className="w-5 h-5 text-[#D32F2F]" />
                 </button>
               )}
             </div>

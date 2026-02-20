@@ -70,7 +70,7 @@ export default function MyEquityRedWhite() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-red" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#D32F2F]" />
       </div>
     );
   }
@@ -82,7 +82,7 @@ export default function MyEquityRedWhite() {
           <p className="text-gray-500 mb-4">加载失败，请稍后重试</p>
           <button
             onClick={() => refetch()}
-            className="px-4 py-2 bg-brand-red text-white rounded-lg hover:opacity-90"
+            className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:opacity-90"
           >
             重新加载
           </button>
@@ -266,18 +266,18 @@ export default function MyEquityRedWhite() {
               triggerRef={equityTitleRef}
               content={
                 <div className="space-y-1.5">
-                  <div className="font-bold text-brand-red text-base pb-1.5 border-b border-gray-200">综合股权构成</div>
+                  <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">综合股权构成</div>
                   <div className="text-sm text-gray-800 leading-snug space-y-1">
                     <div className="py-1.5 border-b border-gray-100">
-                      <span className="font-semibold text-brand-red">天使股东池（30%）</span>
+                      <span className="font-semibold text-[#D32F2F]">天使股东池（30%）</span>
                       <span className="text-gray-700"> — 投资额度×入场系数，锁定终身，不与劳动挂钩</span>
                     </div>
                     <div className="py-1.5 border-b border-gray-100">
-                      <span className="font-semibold text-brand-red">市场贡献池（12.5%）</span>
+                      <span className="font-semibold text-[#D32F2F]">市场贡献池（12.5%）</span>
                       <span className="text-gray-700"> — 每周行为贡献结算，多劳多得，上不封顶</span>
                     </div>
                     <div className="py-1.5 text-gray-700">
-                      两池共占<span className="font-bold text-brand-red">42.5%</span>股权。既投资又经营可获双重复利。
+                      两池共占<span className="font-bold text-[#D32F2F]">42.5%</span>股权。既投资又经营可获双重复利。
                     </div>
                   </div>
                 </div>
@@ -310,7 +310,7 @@ export default function MyEquityRedWhite() {
                     <button
                       ref={multiplierHelpRef}
                       onClick={() => setShowMultiplierHelp(!showMultiplierHelp)}
-                      className="text-gray-400 hover:text-brand-gold transition-colors"
+                      className="text-gray-400 hover:text-[#CBA471] transition-colors"
                     >
                       <HelpCircle className="w-4 h-4" />
                     </button>
@@ -320,18 +320,18 @@ export default function MyEquityRedWhite() {
                       triggerRef={multiplierTitleRef}
                       content={
                         <div className="space-y-1.5">
-                          <div className="font-bold text-brand-red text-base pb-1.5 border-b border-gray-200">收益加速规则</div>
+                          <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">收益加速规则</div>
                           <div className="text-sm text-gray-800 leading-snug space-y-1">
                             <div className="py-1.5 border-b border-gray-100">
-                              <span className="font-semibold text-brand-red">资本杠杆</span>
+                              <span className="font-semibold text-[#D32F2F]">资本杠杆</span>
                               <span className="text-gray-700"> — 投资金额×入场顺序，一次性锁定</span>
                             </div>
                             <div className="py-1.5 border-b border-gray-100">
-                              <span className="font-semibold text-brand-red">贡献加速</span>
+                              <span className="font-semibold text-[#D32F2F]">贡献加速</span>
                               <span className="text-gray-700"> — 节点等级（标准/高级/超级）决定</span>
                             </div>
                             <div className="py-1.5 text-gray-700">
-                              <span className="font-semibold text-brand-red">总收益</span> = 市场贡献 × (资本杠杆 + 贡献加速)
+                              <span className="font-semibold text-[#D32F2F]">总收益</span> = 市场贡献 × (资本杠杆 + 贡献加速)
                             </div>
                           </div>
                         </div>
@@ -374,7 +374,7 @@ export default function MyEquityRedWhite() {
                   </div>
                   
                   {/* 下方：总推力 */}
-                  <div className="bg-brand-red rounded-lg py-3 px-4 text-center">
+                  <div className="bg-[#D32F2F] rounded-lg py-3 px-4 text-center">
                     <div className="text-sm text-white/80 mb-1">总推力</div>
                     <div className="text-3xl font-bold text-white font-mono">
                       ×{totalMultiplier.toFixed(2)}
@@ -436,14 +436,14 @@ export default function MyEquityRedWhite() {
               triggerRef={capitalStockTitleRef}
               content={
                 <div className="space-y-1.5">
-                  <div className="font-bold text-brand-red text-base pb-1.5 border-b border-gray-200">天使股东池（30%）</div>
+                  <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">天使股东池（30%）</div>
                   <div className="text-sm text-gray-800 leading-snug space-y-1">
                     <div className="py-1.5 border-b border-gray-100">
-                      <span className="font-semibold text-brand-red">分配逻辑</span>
+                      <span className="font-semibold text-[#D32F2F]">分配逻辑</span>
                       <span className="text-gray-700"> — 入场早晚×投资额度双重加权，系数从2.0递减至1.0</span>
                     </div>
                     <div className="py-1.5 text-gray-700">
-                      <span className="font-semibold text-brand-red">核心优势</span> — 一旦锁定终身受益，不与劳动挂钩，是生态底气
+                      <span className="font-semibold text-[#D32F2F]">核心优势</span> — 一旦锁定终身受益，不与劳动挂钩，是生态底气
                     </div>
                   </div>
                 </div>
@@ -479,7 +479,7 @@ export default function MyEquityRedWhite() {
                 <button
                   ref={leverageHelpRef}
                   onClick={() => setShowLeverageHelp(!showLeverageHelp)}
-                  className="text-gray-400 hover:text-brand-gold transition-colors"
+                  className="text-gray-400 hover:text-[#CBA471] transition-colors"
                 >
                   <HelpCircle className="w-3.5 h-3.5" />
                 </button>
@@ -487,7 +487,7 @@ export default function MyEquityRedWhite() {
 
               {/* 系数显示 - 超大号，最突出 */}
               <div className="mb-4">
-                <div className="text-5xl font-bold text-brand-gold font-mono">
+                <div className="text-5xl font-bold text-[#CBA471] font-mono">
                   ×{capitalLeverage.toFixed(4)}
                 </div>
               </div>
@@ -500,7 +500,7 @@ export default function MyEquityRedWhite() {
               {/* 系数对照表链接 - 小字 */}
               <button
                 onClick={() => setLocation('/parent/capital-multiplier-table')}
-                className="text-xs text-brand-red hover:underline"
+                className="text-xs text-[#D32F2F] hover:underline"
               >
                 系数对照表
               </button>
@@ -513,22 +513,22 @@ export default function MyEquityRedWhite() {
                 triggerRef={leverageTitleRef}
                 content={
                   <div className="space-y-1.5">
-                    <div className="font-bold text-brand-red text-base pb-1.5 border-b border-gray-200">资本加速（风险补偿）</div>
+                    <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">资本加速（风险补偿）</div>
                     <div className="text-sm text-gray-800 leading-snug space-y-1">
                       <div className="py-1.5 border-b border-gray-100">
-                        <span className="font-semibold text-brand-red">风险补偿</span>
+                        <span className="font-semibold text-[#D32F2F]">风险补偿</span>
                         <span className="text-gray-700"> — 早期投资者承担更大风险，按公平原则享受更多权益</span>
                       </div>
                       <div className="py-1.5 border-b border-gray-100">
-                        <span className="font-semibold text-brand-red">初始投资放大</span>
+                        <span className="font-semibold text-[#D32F2F]">初始投资放大</span>
                         <span className="text-gray-700"> — 投资额×系数=天使池权重。例：10万×2.0x=20万权重</span>
                       </div>
                       <div className="py-1.5 border-b border-gray-100">
-                        <span className="font-semibold text-brand-red">市场贡献放大</span>
+                        <span className="font-semibold text-[#D32F2F]">市场贡献放大</span>
                         <span className="text-gray-700"> — 每周贡献也乘以该系数。例：系数1.5x，贡献权益×1.5</span>
                       </div>
                       <div className="py-1.5 text-gray-700">
-                        <span className="font-semibold text-brand-red">递减原理</span> — 系数从2.0递减至1.0，越早加入风险越大回报越高
+                        <span className="font-semibold text-[#D32F2F]">递减原理</span> — 系数从2.0递减至1.0，越早加入风险越大回报越高
                       </div>
                     </div>
                   </div>
@@ -595,11 +595,11 @@ export default function MyEquityRedWhite() {
           </div>
 
           {/* 白色区域 */}
-          <div className="bg-cream px-4 py-4 rounded-b-3xl space-y-3 mx-4">
+          <div className="bg-[#FAF3ED] px-4 py-4 rounded-b-3xl space-y-3 mx-4">
             {/* 1. 公司股权分配 */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center space-x-1 mb-3">
-                <svg className="w-4 h-4 text-brand-red mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-[#D32F2F] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
                 </svg>
@@ -607,7 +607,7 @@ export default function MyEquityRedWhite() {
                 <button
                   ref={companyEquityHelpRef}
                   onClick={() => setShowCompanyEquityHelp(!showCompanyEquityHelp)}
-                  className="text-gray-400 hover:text-brand-gold transition-colors"
+                  className="text-gray-400 hover:text-[#CBA471] transition-colors"
                 >
                   <HelpCircle className="w-4 h-4" />
                 </button>
@@ -621,18 +621,18 @@ export default function MyEquityRedWhite() {
                 triggerRef={companyEquityTitleRef}
                 content={
                   <div className="space-y-1.5">
-                    <div className="font-bold text-brand-red text-base pb-1.5 border-b border-gray-200">双池设计原理</div>
+                    <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">双池设计原理</div>
                     <div className="text-sm text-gray-800 leading-snug space-y-1">
                       <div className="py-1.5 border-b border-gray-100">
-                        <span className="font-semibold text-brand-red">资产安全性</span>
+                        <span className="font-semibold text-[#D32F2F]">资产安全性</span>
                         <span className="text-gray-700"> — 30%天使池不与劳动挂钩，投资安全有保障</span>
                       </div>
                       <div className="py-1.5 border-b border-gray-100">
-                        <span className="font-semibold text-brand-red">收益爆发力</span>
+                        <span className="font-semibold text-[#D32F2F]">收益爆发力</span>
                         <span className="text-gray-700"> — 12.5%市场池激励扩张，平台估值翻倍时静态资产同步增值</span>
                       </div>
                       <div className="py-1.5 text-gray-700">
-                        <span className="font-semibold text-brand-red">防大户吸血</span> — 分池设计确保劳动者在12.5%池中享有统治权
+                        <span className="font-semibold text-[#D32F2F]">防大户吸血</span> — 分池设计确保劳动者在12.5%池中享有统治权
                       </div>
                     </div>
                   </div>
@@ -643,7 +643,7 @@ export default function MyEquityRedWhite() {
             {/* 2. 在线签署 */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center space-x-1 mb-3">
-                <svg className="w-4 h-4 text-brand-red mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-[#D32F2F] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <span className="text-sm font-semibold text-gray-700">在线签署</span>
@@ -655,14 +655,14 @@ export default function MyEquityRedWhite() {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">0/1 份协议</span>
-                  <span className="text-xs px-2 py-1 bg-brand-gold/10 text-brand-gold rounded">待签署</span>
+                  <span className="text-xs px-2 py-1 bg-[#CBA471]/10 text-[#CBA471] rounded">待签署</span>
                 </div>
                 <div className="pt-2 border-t border-gray-200">
                   <div className="text-xs text-gray-600 mb-1">电子股权投资协议</div>
                   <div className="text-[10px] text-gray-400 mb-2">
                     明确股东权益、义务及退出机制
                   </div>
-                  <button onClick={() => toast.info('没有需要签署的新合同')} className="w-full py-2 bg-brand-red text-white rounded-lg text-sm font-medium hover:bg-brand-red-dark transition-colors">
+                  <button onClick={() => toast.info('没有需要签署的新合同')} className="w-full py-2 bg-[#D32F2F] text-white rounded-lg text-sm font-medium hover:bg-[#D32F2F]-dark transition-colors">
                     立即签署
                   </button>
                 </div>
@@ -672,7 +672,7 @@ export default function MyEquityRedWhite() {
             {/* 3. 常见问题 */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
               <div className="flex items-center space-x-1 mb-3">
-                <svg className="w-4 h-4 text-brand-red mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-[#D32F2F] mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span className="text-sm font-semibold text-gray-700">常见问题</span>
