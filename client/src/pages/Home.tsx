@@ -72,7 +72,7 @@ function getLevelText(level?: string): string {
 
 // 根据等级返回样式类名
 function getLevelClassName(level?: string): string {
-  if (!level) return "text-gray-600";
+  if (!level) return "text-stable-gray";
   
   switch (level) {
     case 'standard_user':
@@ -85,7 +85,7 @@ function getLevelClassName(level?: string): string {
     case 'super':
       return "level-text-super";
     default:
-      return "text-gray-600";
+      return "text-stable-gray";
   }
 }
 
@@ -201,10 +201,10 @@ export default function Home() {
   ];
 
   const features = [
-    { name: "地域", icon: MapPin, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
-    { name: "共享", icon: Handshake, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/sharing` },
-    { name: "数据", icon: BarChart2, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/contacts/data-comparison` },
-    { name: "资产", icon: Coins, color: "bg-red-50 text-[#A80000]", href: `${BASE_URL}/parent/asset-report` },
+    { name: "地域", icon: MapPin, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/map` },
+    { name: "共享", icon: Handshake, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/sharing` },
+    { name: "数据", icon: BarChart2, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/contacts/data-comparison` },
+    { name: "资产", icon: Coins, color: "bg-brand-red-light text-[#A80000]", href: `${BASE_URL}/parent/asset-report` },
   ];
 
   const metricsLeft = [
@@ -231,7 +231,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="min-h-screen bg-cream pb-20 max-w-md mx-auto relative shadow-2xl">
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {
@@ -312,7 +312,7 @@ export default function Home() {
         </a>
         
         <a href="https://www.jiangyuchen.cn/parent/contacts/tag-stats" className="block">
-          <Card className="bg-white text-gray-800 p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
+          <Card className="bg-white-pure text-core-black p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 text-gray-500">
             <Coins className="w-5 h-5" />
             <span className="text-sm font-medium">累计标签</span>
@@ -333,7 +333,7 @@ export default function Home() {
 
       {/* Feature Icons */}
       <div className="px-4 mt-2">
-        <div className="bg-white rounded-2xl p-2 shadow-sm grid grid-cols-5 gap-1">
+        <div className="bg-white-pure rounded-2xl p-2 shadow-sm grid grid-cols-5 gap-1">
           {/* Avatar Button with Dropdown Menu */}
           <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -357,7 +357,7 @@ export default function Home() {
                   <span>个人中心</span>
                 </a>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-red-600">
+              <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-brand-red">
                 <LogOut className="w-4 h-4 mr-2" />
                 <span>退出登录</span>
               </DropdownMenuItem>
@@ -375,7 +375,7 @@ export default function Home() {
                 <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-medium text-gray-600">{feature.name}</span>
+                <span className="text-xs font-medium text-stable-gray">{feature.name}</span>
               </a>
             );
           })}
@@ -389,17 +389,17 @@ export default function Home() {
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm relative ${
                 needsAttentionCount > 0 
                   ? 'bg-[#A80000] text-white' 
-                  : 'bg-red-50 text-[#A80000]'
+                  : 'bg-brand-red-light text-[#A80000]'
               }`}>
                 <Bell className={`w-5 h-5 ${isAnimating ? 'bell-shake' : ''}`} />
                 {/* 红色角标 */}
                 {needsAttentionCount > 0 && (
-                  <span className={`absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white ${isAnimating ? 'badge-pulse' : ''}`}>
+                  <span className={`absolute -top-1 -right-1 bg-brand-red-light0 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white ${isAnimating ? 'badge-pulse' : ''}`}>
                     {needsAttentionCount > 99 ? '99+' : needsAttentionCount}
                   </span>
                 )}
               </div>
-              <span className="text-xs font-medium text-gray-600">提醒</span>
+              <span className="text-xs font-medium text-stable-gray">提醒</span>
             </a>
           ) : (
             <a
@@ -407,10 +407,10 @@ export default function Home() {
               onClick={handleRefresh}
               className="flex flex-col items-center space-y-2 cursor-pointer"
             >
-              <div className={`w-10 h-10 rounded-full bg-red-50 text-[#A80000] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
+              <div className={`w-10 h-10 rounded-full bg-brand-red-light text-[#A80000] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
                 <RefreshCw className="w-5 h-5" />
               </div>
-              <span className="text-xs font-medium text-gray-600">刷新</span>
+              <span className="text-xs font-medium text-stable-gray">刷新</span>
             </a>
           )}
         </div>
@@ -421,10 +421,10 @@ export default function Home() {
         <div className="grid grid-cols-4 gap-3">
           {[...metricsLeft, ...metricsRight].map((stat, index) => (
             <a key={index} href={stat.href}>
-              <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors aspect-square">
+              <div className="bg-white-pure p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-cream transition-colors aspect-square">
                 <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
                 <div className="flex items-baseline justify-center space-x-0.5">
-                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-gray-800'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
+                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#A80000]' : 'text-core-black'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
                     {formatNumber(stat.value)}
                   </span>
                   <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
@@ -460,7 +460,7 @@ export default function Home() {
       )}
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-0 left-0 right-0 bg-white-pure border-t border-divider px-6 py-3 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <div className="flex flex-col items-center space-y-1 text-[#A80000]">
           <Users className="w-6 h-6" />
           <span className="text-xs font-bold">人脉</span>
