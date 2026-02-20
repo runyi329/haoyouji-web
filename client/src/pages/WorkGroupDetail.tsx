@@ -1,9 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus, ChevronRight, ChevronLeft, Users, UserPlus, Settings } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
@@ -21,7 +29,6 @@ export default function WorkGroupDetail() {
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberDescription, setNewMemberDescription] = useState("");
-  const [viewportHeight, setViewportHeight] = useState<number>(window.innerHeight);
 
   // 获取工作群详情
   const { data: groupData, isLoading: groupLoading } = trpc.workGroups.getById.useQuery({ id: groupId });
@@ -45,37 +52,6 @@ export default function WorkGroupDetail() {
     },
   });
 
-  // 监听键盘弹出和收起，动态调整可视区域高度
-  useEffect(() => {
-    if (!showAddMemberDialog) return;
-
-    const handleResize = () => {
-      // 使用visualViewport获取实际可视区域高度（扣除键盘）
-      const vh = window.visualViewport?.height || window.innerHeight;
-      setViewportHeight(vh);
-    };
-
-    // 监听visualViewport的resize事件
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
-      window.visualViewport.addEventListener('scroll', handleResize);
-    }
-    
-    // 也监听window的resize事件作为备用
-    window.addEventListener('resize', handleResize);
-
-    // 初始化时检查一次
-    handleResize();
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleResize);
-        window.visualViewport.removeEventListener('scroll', handleResize);
-      }
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [showAddMemberDialog]);
-
   // 处理添加人员
   const handleAddMember = () => {
     if (!newMemberName.trim()) {
@@ -88,17 +64,6 @@ export default function WorkGroupDetail() {
       name: newMemberName.trim(),
       description: newMemberDescription.trim() || undefined,
     });
-  };
-
-  // 动态计算对话框样式 - 让对话框在可视区域内垂直居中，并紧贴键盘上沿
-  const dialogStyle = {
-    position: 'fixed' as const,
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    maxHeight: `${Math.min(viewportHeight * 0.8, 500)}px`, // 最大高度为可视区域的80%或500px
-    width: '90%',
-    maxWidth: '448px',
   };
 
   if (groupLoading) {
@@ -218,17 +183,16 @@ export default function WorkGroupDetail() {
         )}
       </div>
 
-      {/* 添加人员对话框 */}
-      <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
-        <DialogContent 
-          className="overflow-y-auto"
-          style={dialogStyle}
-        >
-          <DialogTitle>添加人员</DialogTitle>
-          <DialogDescription>
-            添加一个新人员到工作群，系统将为其创建独立的工作节点记录账本
-          </DialogDescription>
-          <div className="space-y-4 mt-4">
+      {/* 添加人员抽屉 */}
+      <Drawer open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>添加人员</DrawerTitle>
+            <DrawerDescription>
+              添加一个新人员到工作群，系统将为其创建独立的工作节点记录账本
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4 space-y-4">
             <div>
               <Label htmlFor="memberName">人员名称 *</Label>
               <Input
@@ -252,28 +216,29 @@ export default function WorkGroupDetail() {
               />
             </div>
           </div>
-          <div className="flex gap-3 mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowAddMemberDialog(false);
-                setNewMemberName("");
-                setNewMemberDescription("");
-              }}
-              className="flex-1"
-            >
-              取消
-            </Button>
+          <DrawerFooter>
             <Button
               onClick={handleAddMember}
               disabled={!newMemberName.trim() || addMemberMutation.isPending}
-              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+              className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
             >
               {addMemberMutation.isPending ? '添加中...' : '添加'}
             </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <DrawerClose asChild>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setNewMemberName("");
+                  setNewMemberDescription("");
+                }}
+              >
+                取消
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
