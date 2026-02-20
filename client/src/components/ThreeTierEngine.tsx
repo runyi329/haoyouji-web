@@ -345,7 +345,7 @@ export default function ThreeTierEngine({ leverageMultiplier }: ThreeTierEngineP
       ))}
 
       {/* 增值路线图建议 */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+      <div className="bg-gradient-to-r from-white to-white rounded-xl p-4 border border-blue-200">
         <div className="flex items-start space-x-3">
           <div className="w-8 h-8 rounded-lg bg-[#1976D2] flex items-center justify-center flex-shrink-0">
             <span className="text-white text-sm">💡</span>

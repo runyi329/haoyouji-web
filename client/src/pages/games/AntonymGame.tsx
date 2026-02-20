@@ -825,7 +825,7 @@ export default function AntonymGame() {
                   <p className="text-base text-[#CBA471] font-semibold">获得 {starsEarned} 个五角星！</p>
                 </div>
 
-                <Card className="p-4 mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border-0 max-w-sm mx-auto">
+                <Card className="p-4 mb-4 bg-gradient-to-br from-white to-white border-0 max-w-sm mx-auto">
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
                       <div className="text-xl font-bold text-[#4CAF50]">{gameState.correctCount}</div>

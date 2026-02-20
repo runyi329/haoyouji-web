@@ -96,7 +96,7 @@ export function VocabularyStatsCard({ stats }: VocabularyStatsCardProps) {
   ];
 
   return (
-    <Card className="p-4 sm:p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+    <Card className="p-4 sm:p-6 bg-gradient-to-br from-white to-white border-green-200">
       <h3 className="text-base sm:text-lg font-semibold text-green-800 mb-3 sm:mb-4">词库概览</h3>
       <div className="space-y-2 sm:space-y-3">
         {items.map((item, index) => (

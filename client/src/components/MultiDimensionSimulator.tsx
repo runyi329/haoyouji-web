@@ -105,7 +105,7 @@ export default function MultiDimensionSimulator({
       {/* 三个模拟维度 */}
       <div className="space-y-4">
         {/* 维度1：邀请裂变 */}
-        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-4">
+        <div className="bg-gradient-to-r from-white to-white rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Users className="w-4 h-4 text-[#D32F2F]" />
             <span className="text-sm font-semibold text-gray-900">邀请裂变</span>
@@ -161,7 +161,7 @@ export default function MultiDimensionSimulator({
         </div>
 
         {/* 维度3：平台参与 */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4">
+        <div className="bg-gradient-to-r from-white to-white rounded-xl p-4">
           <div className="flex items-center space-x-2 mb-2">
             <TrendingUp className="w-4 h-4 text-[#4CAF50]" />
             <span className="text-sm font-semibold text-gray-900">平台参与</span>
