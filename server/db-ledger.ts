@@ -2898,6 +2898,7 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
  * 获取账本所有带图片的记录
  */
 export async function getLedgerImages(ledgerId: number, requestUserId: number) {
+  console.log('[getLedgerImages] 开始查询:', { ledgerId, requestUserId });
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -2938,6 +2939,8 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
     )
     .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt));
   
+  console.log('[getLedgerImages] 查询结果:', { recordsLength: records.length, firstRecord: records[0] });
+  
   // 解密描述字段
   const decryptedRecords = await decryptFieldsArray(records, LEDGER_RECORD_ENCRYPT_FIELDS);
   
@@ -2956,7 +2959,7 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
   
   const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
   
-  return decryptedRecords.map((record: any) => ({
+  const result = decryptedRecords.map((record: any) => ({
     id: record.id,
     amount: Number(record.amount),
     type: record.type,
@@ -2965,4 +2968,7 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
     imageUrl: record.imageUrl,
     date: record.recordDate,
   }));
+  
+  console.log('[getLedgerImages] 返回结果:', { resultLength: result.length, firstResult: result[0] });
+  return result;
 }
