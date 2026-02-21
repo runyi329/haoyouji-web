@@ -25,6 +25,18 @@ export default function WorkGroupList() {
     { enabled: true }
   );
 
+  // 获取最新动态（从数据库）
+  const { data: dashboardActivities } = trpc.partnership.getDashboardActivities.useQuery(
+    { partnershipId },
+    { enabled: true }
+  );
+
+  // 获取预警雷达（从数据库）
+  const { data: dashboardAlerts } = trpc.partnership.getDashboardAlerts.useQuery(
+    { partnershipId },
+    { enabled: true }
+  );
+
   // 计算运行天数
   const startDate = new Date('2026-02-08');
   const today = new Date();
@@ -85,12 +97,20 @@ export default function WorkGroupList() {
       { name: "赵六", growth: 28 }
     ],
     recordCount: 128,
-    recentActivities: [
+    recentActivities: dashboardActivities?.map(a => ({
+      user: a.userName,
+      action: a.action,
+      time: a.timeText,
+    })) || [
       { user: "张三", action: "记账", time: "2小时前" },
       { user: "李四", action: "更新", time: "5小时前" },
       { user: "王五", action: "记账", time: "1天前" }
     ],
-    alerts: [
+    alerts: dashboardAlerts?.map(a => ({
+      type: a.type,
+      message: a.message,
+      action: a.actionText,
+    })) || [
       { type: "warning", message: "有3位伙伴已连续3天未联络新人", action: "建议介入辅导" },
       { type: "info", message: "本周新增2位潜在高级用户", action: "及时跟进" }
     ]
