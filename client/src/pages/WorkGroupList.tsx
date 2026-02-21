@@ -146,7 +146,7 @@ export default function WorkGroupList() {
             
             {/* 1/3: 合伙人数 - 最左边 */}
             <div className="border-r border-gray-200 pr-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1">合伙人数</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">合伙人</h3>
               <div className="flex items-center justify-between">
                 <div className="flex items-baseline gap-0.5">
                   <span className="text-xs text-[#757575]">{mockData.members.max}</span>
