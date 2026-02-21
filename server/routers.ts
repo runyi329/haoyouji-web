@@ -6080,6 +6080,15 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbLedger.getReimbursementStats(input.ledgerId, ctx.user.id);
       }),
+
+    // 获取账本所有图片
+    getImages: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerImages(input.ledgerId, ctx.user.id);
+      }),
   }),
   
   // 银行列表管理
