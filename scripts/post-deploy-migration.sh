@@ -9,6 +9,24 @@ echo "🔍 开始执行数据库迁移..."
 
 cd /root/haoyouji-web
 
+# 从 DATABASE_URL 解析数据库连接信息
+if [ -z "$DB_HOST" ]; then
+  # 如果没有设置 DB_HOST，尝试从 DATABASE_URL 解析
+  if [ -n "$DATABASE_URL" ]; then
+    # mysql://user:password@host:port/database
+    DB_USER=$(echo $DATABASE_URL | sed -n 's|mysql://\([^:]*\):.*|\1|p')
+    DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's|mysql://[^:]*:\([^@]*\)@.*|\1|p')
+    DB_HOST=$(echo $DATABASE_URL | sed -n 's|mysql://[^@]*@\([^:]*\):.*|\1|p')
+    DB_NAME=$(echo $DATABASE_URL | sed -n 's|.*/\([^?]*\).*|\1|p')
+  else
+    # 默认值（从 .env 文件读取）
+    DB_HOST="127.0.0.1"
+    DB_USER="root"
+    DB_PASSWORD="Miao@20190603"
+    DB_NAME="crm_db"
+  fi
+fi
+
 # 定义迁移文件列表（按顺序执行）
 MIGRATIONS=(
   "migrations/create_ai_tables.sql"
