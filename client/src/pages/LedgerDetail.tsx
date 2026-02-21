@@ -367,7 +367,7 @@ export default function LedgerDetail() {
             return (
               <div key={dayRecord.date}>
                 {/* 日期标题 */}
-                <div className="flex items-center justify-between text-xs text-gray-500" style={{ marginTop: '6px', marginBottom: '3px' }}>
+                <div className="flex items-center justify-between text-xs text-gray-500" style={{ marginTop: '3px', marginBottom: '3px' }}>
                   <span>
                     {dayRecord.date} {dayOfWeek}
                   </span>
