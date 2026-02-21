@@ -87,24 +87,29 @@ export default function WorkGroupList() {
           <div className="grid grid-cols-5 gap-3 px-4 py-2.5 border-b border-gray-200">
             
             {/* 左侧：日期信息区 - 占2列 */}
-            <div className="col-span-2 space-y-1.5">
+            <div className="col-span-2">
               <h3 className="text-sm font-bold text-[#222222] mb-1.5">时间轴</h3>
               
-              {/* 今天日期 - 日历卡片风格 */}
-              <div className="bg-gradient-to-br from-[#D32F2F] to-[#C62828] rounded-lg p-2 text-center">
-                <div className="text-xs text-white/80 mb-0.5">今天</div>
-                <div className="text-lg font-bold text-white">{mockData.today}</div>
-              </div>
-              
-              {/* 启动日期和运行天数 - 横向布局 */}
-              <div className="grid grid-cols-2 gap-1.5">
-                <div className="bg-gradient-to-br from-[#FAF3ED] to-[#F5E6D3] rounded-lg p-1.5 text-center border border-[#CBA471]/20">
-                  <div className="text-xs text-[#757575]">启动</div>
-                  <div className="text-sm font-bold text-[#CBA471]">02/08</div>
+              <div className="grid grid-cols-2 gap-2 h-[calc(100%-1.5rem)]">
+                {/* 左侧：今天和启动日期 - 占50% */}
+                <div className="flex flex-col justify-center space-y-1.5">
+                  <div className="text-center">
+                    <div className="text-xs text-[#757575] mb-0.5">今天</div>
+                    <div className="text-sm font-bold text-[#222222]">{mockData.today}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-[#757575] mb-0.5">启动</div>
+                    <div className="text-sm font-bold text-[#CBA471]">02/08</div>
+                  </div>
                 </div>
-                <div className="bg-gradient-to-br from-[#E8F5E9] to-[#C8E6C9] rounded-lg p-1.5 text-center border border-[#4CAF50]/20">
-                  <div className="text-xs text-[#757575]">运行</div>
-                  <div className="text-sm font-bold text-[#4CAF50]">{mockData.runningDays}天</div>
+                
+                {/* 右侧：运行天数 - 占50%，突出显示 */}
+                <div className="bg-gradient-to-br from-[#D32F2F] to-[#C62828] rounded-lg flex flex-col items-center justify-center">
+                  <div className="text-xs text-white/80 mb-0.5">已运行</div>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-2xl font-bold text-white">{mockData.runningDays}</span>
+                    <span className="text-sm text-white/90">天</span>
+                  </div>
                 </div>
               </div>
             </div>
