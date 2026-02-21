@@ -134,14 +134,14 @@ export default function WorkGroupList() {
 
       {/* 创建工作群抽屉 */}
       <Drawer open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DrawerContent>
+        <DrawerContent className="max-h-[85vh] flex flex-col">
           <DrawerHeader>
             <DrawerTitle>创建工作群</DrawerTitle>
             <DrawerDescription>
               创建一个新的工作群来管理您的团队成员和工作节点
             </DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 space-y-4">
+          <div className="px-4 space-y-4 flex-1 overflow-y-auto">
             <div>
               <Label htmlFor="groupName">工作群名称 *</Label>
               <Input
@@ -165,7 +165,7 @@ export default function WorkGroupList() {
               />
             </div>
           </div>
-          <DrawerFooter>
+          <DrawerFooter className="mt-auto">
             <Button
               onClick={handleCreate}
               disabled={!newGroupName.trim() || createMutation.isPending}
