@@ -249,7 +249,6 @@ export default function LedgerSettings() {
 
       {/* 高级设置 */}
       <div className="bg-white mt-3">
-        <SettingItem label="自动重复记账" showIcon hasHelp />
         <SettingItem 
           label="账本结算币种" 
           value="人民币 🇨🇳" 
