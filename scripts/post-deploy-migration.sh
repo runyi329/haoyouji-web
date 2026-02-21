@@ -38,6 +38,7 @@ MIGRATIONS=(
   "drizzle/migrations/fix_partnership_tables.sql"
   "drizzle/migrations/add_jiang_as_member.sql"
   "drizzle/migrations/add_dashboard_config.sql"
+  "drizzle/migrations/clear_dashboard_defaults.sql"
 )
 
 # 执行每个迁移文件
