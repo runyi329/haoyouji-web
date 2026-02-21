@@ -2923,11 +2923,10 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
       id: ledgerRecords.id,
       amount: ledgerRecords.amount,
       type: ledgerRecords.type,
-      category: ledgerRecords.category,
-      subcategory: ledgerRecords.subcategory,
+      categoryId: ledgerRecords.categoryId,
       description: ledgerRecords.description,
       imageUrl: ledgerRecords.imageUrl,
-      date: ledgerRecords.date,
+      recordDate: ledgerRecords.recordDate,
       createdAt: ledgerRecords.createdAt,
     })
     .from(ledgerRecords)
@@ -2937,19 +2936,33 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
         sql`${ledgerRecords.imageUrl} IS NOT NULL AND ${ledgerRecords.imageUrl} != ''`
       )
     )
-    .orderBy(desc(ledgerRecords.date), desc(ledgerRecords.createdAt));
+    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt));
   
   // 解密描述字段
   const decryptedRecords = await decryptFieldsArray(records, LEDGER_RECORD_ENCRYPT_FIELDS);
   
+  // 获取分类名称
+  const categoryIds = records.map((r: any) => r.categoryId).filter((id: any) => id);
+  let categories: any[] = [];
+  if (categoryIds.length > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);  
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
   return decryptedRecords.map((record: any) => ({
     id: record.id,
-    amount: record.amount,
+    amount: Number(record.amount),
     type: record.type,
-    category: record.category,
-    subcategory: record.subcategory,
+    category: categoryNameMap.get(record.categoryId) || '未分类',
     description: record.description,
     imageUrl: record.imageUrl,
-    date: record.date,
+    date: record.recordDate,
   }));
 }
