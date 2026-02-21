@@ -114,9 +114,13 @@ export default function WorkGroupList() {
               </div>
             </div>
 
-            {/* 2/3: 预留区 */}
+            {/* 2/3: 实缴 */}
             <div className="border-r border-gray-200 px-2">
-              {/* 预留给未来功能 */}
+              <h3 className="text-xs font-bold text-[#222222] mb-1">实缴</h3>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-xl font-bold text-[#D32F2F]">71</span>
+                <span className="text-xs text-[#757575]">万</span>
+              </div>
             </div>
 
             {/* 3/3: 时间 - 最右边 */}
