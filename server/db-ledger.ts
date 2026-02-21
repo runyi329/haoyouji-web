@@ -2893,3 +2893,63 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
     },
   };
 }
+
+/**
+ * 获取账本所有带图片的记录
+ */
+export async function getLedgerImages(ledgerId: number, requestUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取所有带图片的记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      amount: ledgerRecords.amount,
+      type: ledgerRecords.type,
+      category: ledgerRecords.category,
+      subcategory: ledgerRecords.subcategory,
+      description: ledgerRecords.description,
+      imageUrl: ledgerRecords.imageUrl,
+      date: ledgerRecords.date,
+      createdAt: ledgerRecords.createdAt,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.imageUrl} IS NOT NULL AND ${ledgerRecords.imageUrl} != ''`
+      )
+    )
+    .orderBy(desc(ledgerRecords.date), desc(ledgerRecords.createdAt));
+  
+  // 解密描述字段
+  const decryptedRecords = await decryptFieldsArray(records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  return decryptedRecords.map((record: any) => ({
+    id: record.id,
+    amount: record.amount,
+    type: record.type,
+    category: record.category,
+    subcategory: record.subcategory,
+    description: record.description,
+    imageUrl: record.imageUrl,
+    date: record.date,
+  }));
+}

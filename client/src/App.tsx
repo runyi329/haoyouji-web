@@ -108,6 +108,7 @@ const LedgerAIEmployees = lazy(() => import("./pages/LedgerAIEmployees"));
 const LedgerAdminManagement = lazy(() => import("./pages/LedgerAdminManagement"));
 const LedgerReport = lazy(() => import("./pages/LedgerReport"));
 const LedgerCalendar = lazy(() => import("./pages/LedgerCalendar"));
+const LedgerImages = lazy(() => import("./pages/LedgerImages"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
@@ -219,6 +220,7 @@ function Router() {
         <Route path="/ledger/:id/admin-management" component={LedgerAdminManagement} />
         <Route path="/ledger/:id/report" component={LedgerReport} />
         <Route path="/ledger/:id/calendar" component={LedgerCalendar} />
+        <Route path="/ledger/:id/images" component={LedgerImages} />
         <Route path="/ledger/:id/add" component={AddTransaction} />
         <Route path="/ledger/:id/categories" component={LedgerCategories} />
         <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
