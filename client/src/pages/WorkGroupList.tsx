@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, BookOpen } from "lucide-react";
 
 /**
  * 脉动节点合作平台 - 数据看板首页
@@ -104,7 +104,15 @@ export default function WorkGroupList() {
             {mockData.groupName}
           </h1>
           
-          <div className="w-8" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/node-growth-guide?view=mentor")}
+            className="text-white hover:bg-white/10 h-8 w-8"
+            title="节点成长手册"
+          >
+            <BookOpen className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 

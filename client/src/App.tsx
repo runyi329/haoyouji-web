@@ -130,6 +130,7 @@ const WorkGroupMembers = lazy(() => import("./pages/WorkGroupMembers"));
 const WorkGroupMemberDetail = lazy(() => import("./pages/WorkGroupMemberDetail"));
 const WorkGroupActivityDetail = lazy(() => import("./pages/WorkGroupActivityDetail"));
 const AddWorkGroupActivity = lazy(() => import("./pages/AddWorkGroupActivity"));
+const NodeGrowthGuide = lazy(() => import("./pages/NodeGrowthGuide"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
@@ -231,6 +232,7 @@ function Router() {
         <Route path="/work-group-member/:memberId/activity/:activityId" component={WorkGroupActivityDetail} />
         <Route path="/work-group-member/:id" component={WorkGroupMemberDetail} />
         <Route path="/work-groups/:id" component={WorkGroupDetail} />
+        <Route path="/node-growth-guide" component={NodeGrowthGuide} />
         
         {/* 404 */}
         <Route path="/404" component={NotFound} />
