@@ -2894,79 +2894,83 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
   };
 }
 
+
 /**
  * 获取账本所有带图片的记录
+ * 完全参照 getTransactionsList 的实现方式
  */
-export async function getLedgerImages(ledgerId: number, requestUserId: number) {
-  console.log('[getLedgerImages] 开始查询:', { ledgerId, requestUserId });
+export async function getLedgerImages(ledgerId: number, userId: number) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
   // 验证用户是否是账本成员
-  const member = await db
+  const membership = await db
     .select()
     .from(ledgerMembers)
     .where(
       and(
         eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, requestUserId)
+        eq(ledgerMembers.userId, userId)
       )
     )
     .limit(1);
   
-  if (member.length === 0) {
+  if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
   }
   
-  // 获取所有带图片的记录
+  // 获取记录 - 完全复制 getTransactionsList 的查询方式
   const records = await db
     .select({
       id: ledgerRecords.id,
-      amount: ledgerRecords.amount,
       type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
       categoryId: ledgerRecords.categoryId,
       description: ledgerRecords.description,
-      imageUrl: ledgerRecords.imageUrl,
-      recordDate: ledgerRecords.recordDate,
+      date: ledgerRecords.recordDate,
+      createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
+      imageUrl: ledgerRecords.imageUrl,
     })
     .from(ledgerRecords)
     .where(eq(ledgerRecords.ledgerId, ledgerId))
     .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
-    .limit(20);
+    .limit(500);
   
-  console.log('[getLedgerImages] 查询结果:', { recordsLength: records.length, firstRecord: records[0] });
+  // 解密敏感字段 - 使用和 getTransactionsList 完全相同的4参数调用
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, LEDGER_RECORD_ENCRYPT_FIELDS);
   
-  // 解密描述字段
-  const decryptedRecords = await decryptFieldsArray(records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  // 在应用层过滤出有图片的记录
+  const recordsWithImages = decryptedRecords.filter((record: any) => {
+    return record.imageUrl && String(record.imageUrl).trim() !== '';
+  });
   
   // 获取分类名称
-  const categoryIds = records.map((r: any) => r.categoryId).filter((id: any) => id);
+  const categoryIds = new Set<number>();
+  recordsWithImages.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+  });
+  
   let categories: any[] = [];
-  if (categoryIds.length > 0) {
+  if (categoryIds.size > 0) {
     categories = await db
       .select({
         id: ledgerCategories.id,
         name: ledgerCategories.name,
       })
       .from(ledgerCategories)
-      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);  
+      .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(categoryIds).map(id => sql`${id}`), sql`, `)})`);
   }
   
   const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
   
-  const result = decryptedRecords
-    .filter((record: any) => record.imageUrl && record.imageUrl.trim() !== '')
-    .map((record: any) => ({
-      id: record.id,
-      amount: Number(record.amount),
-      type: record.type,
-      category: categoryNameMap.get(record.categoryId) || '未分类',
-      description: record.description,
-      imageUrl: record.imageUrl,
-      date: record.recordDate,
-    }));
-  
-  console.log('[getLedgerImages] 返回结果:', { resultLength: result.length, firstResult: result[0] });
-  return result;
+  return recordsWithImages.map((record: any) => ({
+    id: record.id,
+    amount: Number(record.amount),
+    type: record.type,
+    category: categoryNameMap.get(record.categoryId) || '未分类',
+    description: record.description,
+    imageUrl: record.imageUrl,
+    date: record.date,
+  }));
 }
