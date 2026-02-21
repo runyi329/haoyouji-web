@@ -134,7 +134,7 @@ export default function WorkGroupList() {
 
       {/* 创建工作群抽屉 */}
       <Drawer open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DrawerContent className="max-h-[85vh] flex flex-col">
+        <DrawerContent className="fixed top-0 left-0 right-0 bottom-0 flex flex-col bg-white rounded-t-[10px] mt-[env(safe-area-inset-top)]" style={{ maxHeight: 'calc(100vh - env(safe-area-inset-top))' }}>
           <DrawerHeader>
             <DrawerTitle>创建工作群</DrawerTitle>
             <DrawerDescription>
