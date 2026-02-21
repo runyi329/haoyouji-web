@@ -78,7 +78,7 @@ export default function LedgerReport() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex-1 min-w-0">
-            <span className="font-medium text-sm leading-tight line-clamp-2">{ledgerData?.name || "账本"}</span>
+            <span className="font-medium text-sm leading-tight line-clamp-2 block text-center" style={{ textWrap: 'balance' }}>{ledgerData?.name || "账本"}</span>
           </div>
           {/* 标签页切换 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden flex-shrink-0">
