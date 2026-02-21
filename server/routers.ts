@@ -5706,12 +5706,14 @@ export const appRouter = router({
               ...member,
               userName: user?.name || user?.username || '未知用户',
               userAvatar: user?.avatar || null,
-              ledgerName: result.ledgerName,
             };
           })
         );
         
-        return membersWithUserInfo;
+        return {
+          members: membersWithUserInfo,
+          defaultPermissions: result.defaultPermissions,
+        };
       }),
 
     // 更新成员权限
