@@ -1,5 +1,6 @@
 import { useLocation, useParams } from 'wouter';
 import { useState } from 'react';
+import { trpc } from '../lib/trpc';
 import { Plus } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 
@@ -8,11 +9,20 @@ export default function WorkGroupMembers() {
   const { groupId } = useParams();
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false);
   
-  // TODO: 从context或API获取当前用户信息
-  const currentUser = { role: 'super_admin' }; // 临时模拟数据
+  // 获取当前用户信息
+  const { data: currentUser } = trpc.auth.me.useQuery();
 
-  // 模拟数据 - 6个成员，每个成员所属的工作群
-  const mockMembers = [
+  // 固定的有限合伙企业ID（目前只有一个企业）
+  const partnershipId = 1;
+
+  // 获取成员列表
+  const { data: members = [], refetch: refetchMembers } = trpc.partnership.getMembers.useQuery(
+    { partnershipId },
+    { enabled: true }
+  );
+
+  // 模拟数据 - 如果API返回空，使用模拟数据
+  const mockMembers = members.length > 0 ? members : [
     {
       id: 1,
       name: "张三",
@@ -81,6 +91,11 @@ export default function WorkGroupMembers() {
     }
   ];
 
+  // 处理添加成员成功
+  const handleAddMemberSuccess = () => {
+    refetchMembers();
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
       {/* 顶部导航栏 */}
@@ -98,6 +113,7 @@ export default function WorkGroupMembers() {
         {currentUser.role === 'super_admin' && (
           <button
             onClick={() => setIsAddMemberDialogOpen(true)}
+            disabled={!currentUser || currentUser.role !== 'super_admin'}
             className="p-1"
           >
             <Plus className="w-6 h-6" />
@@ -175,15 +191,12 @@ export default function WorkGroupMembers() {
         </div>
       </div>
 
-      {/* 添加成员弹窗 */}
+      {/* 添加成员对话框 */}
       <AddMemberDialog
         isOpen={isAddMemberDialogOpen}
         onClose={() => setIsAddMemberDialogOpen(false)}
-        onAdd={(userId, workGroupIds) => {
-          console.log('添加成员:', userId, '到工作群:', workGroupIds);
-          // TODO: 调用API添加成员
-          alert(`成功添加用户${userId}到工作群${workGroupIds.join(', ')}`);
-        }}
+        onSuccess={handleAddMemberSuccess}
+        partnershipId={partnershipId}
       />
     </div>
   );

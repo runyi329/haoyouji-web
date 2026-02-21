@@ -1125,6 +1125,42 @@ export const shippingAddresses = mysqlTable("shipping_addresses", {
 ]);
 
 // 工作群表（脉动节点合作平台）
+// 有限合伙企业表
+export const partnerships = mysqlTable("partnerships", {
+	id: int().autoincrement().primaryKey(),
+	name: varchar({ length: 255 }).notNull(),
+	description: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 工作群表（关联到企业）
+export const partnershipWorkGroups = mysqlTable("partnership_work_groups", {
+	id: int().autoincrement().primaryKey(),
+	partnershipId: int().notNull(),
+	name: varchar({ length: 100 }).notNull(),
+	description: text(),
+	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 成员-企业关联表
+export const partnershipMembers = mysqlTable("partnership_members", {
+	id: int().autoincrement().primaryKey(),
+	partnershipId: int().notNull(),
+	userId: int().notNull(),
+	role: mysqlEnum(['member', 'admin']).default('member').notNull(),
+	joinedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
+// 成员-工作群关联表
+export const partnershipWorkGroupMembers = mysqlTable("partnership_work_group_members", {
+	id: int().autoincrement().primaryKey(),
+	workGroupId: int().notNull(),
+	userId: int().notNull(),
+	joinedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
 export const workGroups = mysqlTable("work_groups", {
 	id: int().autoincrement().notNull(),
 	name: varchar({ length: 100 }).notNull(),

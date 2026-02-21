@@ -26,6 +26,7 @@ import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
 import { workGroupsRouter } from "./work-groups-api";
+import { partnershipRouter } from "./partnership-router";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -39,6 +40,7 @@ import ExcelJS from "exceljs";
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
+  partnership: partnershipRouter,
 
   
   auth: router({

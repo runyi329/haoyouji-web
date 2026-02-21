@@ -1,50 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Search, Check } from 'lucide-react';
+import { trpc } from '../lib/trpc';
 
 interface AddMemberDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (userId: number, workGroupIds: number[]) => void;
+  onSuccess: () => void;
+  partnershipId: number;
 }
 
-// 模拟用户数据
-const mockUsers = [
-  { id: 1, name: "测试用户1", username: "test1", email: "test1@example.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=test1" },
-  { id: 2, name: "测试用户2", username: "test2", email: "test2@example.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=test2" },
-  { id: 3, name: "测试用户3", username: "test3", email: "test3@example.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=test3" },
-  { id: 4, name: "测试用户4", username: "test4", email: "test4@example.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=test4" },
-  { id: 5, name: "测试用户5", username: "test5", email: "test5@example.com", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=test5" },
-];
-
-// 工作群选项
-const workGroupOptions = [
-  { id: 1, name: "工作群1" },
-  { id: 2, name: "工作群2" },
-  { id: 3, name: "工作群3" },
-];
-
-export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDialogProps) {
+export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershipId }: AddMemberDialogProps) {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedWorkGroups, setSelectedWorkGroups] = useState<number[]>([]);
-  const [searchResults, setSearchResults] = useState(mockUsers);
+
+  // 获取工作群列表
+  const { data: workGroups = [] } = trpc.partnership.getWorkGroups.useQuery(
+    { partnershipId },
+    { enabled: isOpen }
+  );
+
+  // 搜索用户
+  const { data: searchResults = [], refetch: searchUsers, isLoading: isSearching } = trpc.partnership.searchUsers.useQuery(
+    { partnershipId, query: searchKeyword },
+    { enabled: false }
+  );
+
+  // 添加成员mutation
+  const addMemberMutation = trpc.partnership.addMember.useMutation({
+    onSuccess: () => {
+      alert('添加成员成功！');
+      onSuccess();
+      handleClose();
+    },
+    onError: (error) => {
+      alert(`添加失败：${error.message}`);
+    },
+  });
+
+  // 初始加载用户列表
+  useEffect(() => {
+    if (isOpen) {
+      searchUsers();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   // 搜索用户
   const handleSearch = () => {
-    if (!searchKeyword.trim()) {
-      setSearchResults(mockUsers);
-      return;
-    }
-
-    const keyword = searchKeyword.toLowerCase();
-    const results = mockUsers.filter(user =>
-      user.name.toLowerCase().includes(keyword) ||
-      user.username.toLowerCase().includes(keyword) ||
-      user.email.toLowerCase().includes(keyword)
-    );
-    setSearchResults(results);
+    searchUsers();
   };
 
   // 切换工作群选择
@@ -67,13 +72,18 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
       return;
     }
 
-    onAdd(selectedUserId, selectedWorkGroups);
-    
-    // 重置状态
+    addMemberMutation.mutate({
+      partnershipId,
+      userId: selectedUserId,
+      workGroupIds: selectedWorkGroups,
+    });
+  };
+
+  // 关闭并重置状态
+  const handleClose = () => {
     setSearchKeyword('');
     setSelectedUserId(null);
     setSelectedWorkGroups([]);
-    setSearchResults(mockUsers);
     onClose();
   };
 
@@ -84,7 +94,7 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="text-lg font-bold text-[#222222]">添加企业成员</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
           >
             <X className="w-5 h-5 text-[#757575]" />
@@ -107,10 +117,11 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
               />
               <button
                 onClick={handleSearch}
-                className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors flex items-center gap-1"
+                disabled={isSearching}
+                className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors flex items-center gap-1 disabled:opacity-50"
               >
                 <Search className="w-4 h-4" />
-                搜索
+                {isSearching ? '搜索中...' : '搜索'}
               </button>
             </div>
           </div>
@@ -119,7 +130,9 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
           <div>
             <label className="block text-sm font-semibold text-[#222222] mb-2">选择用户</label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {searchResults.length === 0 ? (
+              {isSearching ? (
+                <div className="text-center py-8 text-[#757575]">搜索中...</div>
+              ) : searchResults.length === 0 ? (
                 <div className="text-center py-8 text-[#757575]">未找到匹配的用户</div>
               ) : (
                 searchResults.map((user) => (
@@ -133,13 +146,13 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
                     }`}
                   >
                     <img
-                      src={user.avatar}
-                      alt={user.name}
+                      src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                      alt={user.name || '用户'}
                       className="w-10 h-10 rounded-full"
                     />
                     <div className="flex-1">
-                      <div className="font-semibold text-[#222222]">{user.name}</div>
-                      <div className="text-xs text-[#757575]">{user.email}</div>
+                      <div className="font-semibold text-[#222222]">{user.name || '未命名'}</div>
+                      <div className="text-xs text-[#757575]">{user.email || '无邮箱'}</div>
                     </div>
                     {selectedUserId === user.id && (
                       <Check className="w-5 h-5 text-[#D32F2F]" />
@@ -154,28 +167,32 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
           <div>
             <label className="block text-sm font-semibold text-[#222222] mb-2">选择工作群（可多选）</label>
             <div className="space-y-2">
-              {workGroupOptions.map((group) => (
-                <div
-                  key={group.id}
-                  onClick={() => toggleWorkGroup(group.id)}
-                  className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                    selectedWorkGroups.includes(group.id)
-                      ? 'border-[#D32F2F] bg-[#FFEBEE]'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <span className="font-semibold text-[#222222]">{group.name}</span>
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    selectedWorkGroups.includes(group.id)
-                      ? 'border-[#D32F2F] bg-[#D32F2F]'
-                      : 'border-gray-300'
-                  }`}>
-                    {selectedWorkGroups.includes(group.id) && (
-                      <Check className="w-4 h-4 text-white" />
-                    )}
+              {workGroups.length === 0 ? (
+                <div className="text-center py-4 text-[#757575]">暂无工作群</div>
+              ) : (
+                workGroups.map((group) => (
+                  <div
+                    key={group.id}
+                    onClick={() => toggleWorkGroup(group.id)}
+                    className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedWorkGroups.includes(group.id)
+                        ? 'border-[#D32F2F] bg-[#FFEBEE]'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="font-semibold text-[#222222]">{group.name}</span>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      selectedWorkGroups.includes(group.id)
+                        ? 'border-[#D32F2F] bg-[#D32F2F]'
+                        : 'border-gray-300'
+                    }`}>
+                      {selectedWorkGroups.includes(group.id) && (
+                        <Check className="w-4 h-4 text-white" />
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -183,16 +200,18 @@ export default function AddMemberDialog({ isOpen, onClose, onAdd }: AddMemberDia
         {/* 底部按钮 */}
         <div className="p-4 border-t border-gray-200 flex gap-3">
           <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border-2 border-gray-300 text-[#757575] rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+            onClick={handleClose}
+            disabled={addMemberMutation.isLoading}
+            className="flex-1 px-4 py-2 border-2 border-gray-300 text-[#757575] rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50"
           >
             取消
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors font-semibold"
+            disabled={addMemberMutation.isLoading}
+            className="flex-1 px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors font-semibold disabled:opacity-50"
           >
-            确认添加
+            {addMemberMutation.isLoading ? '添加中...' : '确认添加'}
           </button>
         </div>
       </div>
