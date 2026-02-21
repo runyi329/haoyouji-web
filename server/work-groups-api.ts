@@ -13,7 +13,7 @@ import {
 } from './db-work-groups';
 
 /**
- * 脉动节点工作平台 - 工作群tRPC路由
+ * 脉动节点合作平台 - 工作群tRPC路由
  */
 
 export const workGroupsRouter = router({

@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 
 /**
- * 脉动节点工作平台 - 第二层：群详情（人员列表）
+ * 脉动节点合作平台 - 第二层：群详情（人员列表）
  */
 export default function WorkGroupDetail() {
   const params = useParams();
