@@ -181,17 +181,17 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
         <div className="p-4 border-t border-gray-200 flex gap-3">
           <button
             onClick={handleClose}
-            disabled={addMemberMutation.isLoading}
+            disabled={addMemberMutation.isPending}
             className="flex-1 px-4 py-2 border-2 border-gray-300 text-[#757575] rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50"
           >
             取消
           </button>
           <button
             onClick={handleConfirm}
-            disabled={addMemberMutation.isLoading}
+            disabled={addMemberMutation.isPending}
             className="flex-1 px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors font-semibold disabled:opacity-50"
           >
-            {addMemberMutation.isLoading ? '添加中...' : '确认添加'}
+            {addMemberMutation.isPending ? '添加中...' : '确认添加'}
           </button>
         </div>
       </div>
