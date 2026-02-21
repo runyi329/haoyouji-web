@@ -293,12 +293,7 @@ export default function LedgerSettings() {
         <SettingItem label="定期自动备份账目" showIcon />
       </div>
 
-      {/* 底部操作按钮 */}
-      <div className="mt-6 px-4 space-y-3">
-        <button className="w-full py-3 bg-[#D32F2F]-light0 text-white rounded-lg font-medium">
-          退出账本
-        </button>
-      </div>
+
 
       {/* 邀请成员对话框 */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
