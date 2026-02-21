@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { db } from "./db";
+import { getDb } from "./db";
 import { 
   partnerships, 
   partnershipWorkGroups, 
@@ -21,6 +21,7 @@ export const partnershipRouter = router({
       const { partnershipId, query } = input;
 
       // 获取已是成员的用户ID列表
+      const db = await getDb();
       const existingMembers = await db
         .select({ userId: partnershipMembers.userId })
         .from(partnershipMembers)
@@ -71,6 +72,7 @@ export const partnershipRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { partnershipId, userId, workGroupIds } = input;
 
+      const db = await getDb();
       // 检查用户是否已是成员
       const existingMember = await db
         .select()
@@ -114,6 +116,7 @@ export const partnershipRouter = router({
     }))
     .query(async ({ input }) => {
       const { partnershipId } = input;
+      const db = await getDb();
 
       // 获取成员列表
       const members = await db
@@ -174,6 +177,7 @@ export const partnershipRouter = router({
     }))
     .query(async ({ input }) => {
       const { partnershipId } = input;
+      const db = await getDb();
 
       const workGroups = await db
         .select({
@@ -195,6 +199,7 @@ export const partnershipRouter = router({
     }))
     .mutation(async ({ input }) => {
       const { partnershipId, userId } = input;
+      const db = await getDb();
 
       // 删除成员-企业关联
       await db
