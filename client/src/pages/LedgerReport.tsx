@@ -850,25 +850,39 @@ function PieChart({
   formatAmount: (n: number) => string;
   isIncome?: boolean;
 }) {
-  // 使用全局配色方案生成渐变色系
-  // 收入：基于成功绿的渐变
-  // 支出：基于品牌红的渐变
+  // 使用全局配色方案，基于13色系统
+  // 收入：以绿色为主，搭配其他颜色
+  // 支出：以红色为主，搭配其他颜色
   const colors = isIncome 
     ? [
-        '#4CAF50',  // 成功绿
-        '#66BB6A',  // 浅绿
-        '#81C784',  // 更浅绿
-        '#A5D6A7',  // 淡绿
-        '#C8E6C9',  // 极淡绿
-        '#E8F5E9'   // 背景绿
+        '#4CAF50',  // 1. 成功绿
+        '#1976D2',  // 2. 极速蓝
+        '#FFA000',  // 3. 告警橙
+        '#CBA471',  // 4. 至尊金
+        '#66BB6A',  // 5. 浅绿
+        '#42A5F5',  // 6. 浅蓝
+        '#FFB74D',  // 7. 浅橙
+        '#81C784',  // 8. 更浅绿
+        '#90CAF9',  // 9. 更浅蓝
+        '#FFCC80',  // 10. 更浅橙
+        '#A5D6A7',  // 11. 淡绿
+        '#BBDEFB',  // 12. 淡蓝
+        '#FFE0B2'   // 13. 淡橙
       ]
     : [
-        '#D32F2F',  // 品牌红
-        '#E57373',  // 浅红
-        '#EF5350',  // 中红
-        '#F44336',  // 错误红
-        '#FFCDD2',  // 淡红
-        '#FFEBEE'   // 背景红
+        '#D32F2F',  // 1. 品牌红
+        '#1976D2',  // 2. 极速蓝
+        '#FFA000',  // 3. 告警橙
+        '#CBA471',  // 4. 至尊金
+        '#E57373',  // 5. 浅红
+        '#42A5F5',  // 6. 浅蓝
+        '#FFB74D',  // 7. 浅橙
+        '#EF5350',  // 8. 中红
+        '#90CAF9',  // 9. 更浅蓝
+        '#FFCC80',  // 10. 更浅橙
+        '#FFCDD2',  // 11. 淡红
+        '#BBDEFB',  // 12. 淡蓝
+        '#FFE0B2'   // 13. 淡橙
       ];
 
   // 计算饼图路径
@@ -909,8 +923,8 @@ function PieChart({
   // 如果没有数据，显示一个完整的圆
   if (data.length === 0 || total === 0) {
     return (
-      <div className="relative">
-        <svg width="200" height="200" viewBox="0 0 200 200">
+      <div className="relative flex flex-col items-center">
+        <svg width="200" height="200" viewBox="0 0 200 200" className="mx-auto">
           <circle
             cx={centerX}
             cy={centerY}
@@ -932,8 +946,8 @@ function PieChart({
   }
 
   return (
-    <div className="relative">
-      <svg width="200" height="200" viewBox="0 0 200 200">
+    <div className="relative flex flex-col items-center">
+      <svg width="200" height="200" viewBox="0 0 200 200" className="mx-auto">
         {slices.length === 1 ? (
           // 如果只有一个分类，直接画一个完整的圆
           <>
