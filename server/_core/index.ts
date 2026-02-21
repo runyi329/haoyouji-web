@@ -74,6 +74,10 @@ async function startServer() {
   // 初始化字段分类
   await initFieldCategories();
   
+  // 添加管理员为企业成员
+  const { addAdminAsMember } = await import('../add-admin-member');
+  await addAdminAsMember();
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
