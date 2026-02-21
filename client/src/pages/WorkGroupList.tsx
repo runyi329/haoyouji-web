@@ -25,6 +25,11 @@ export default function WorkGroupList() {
       max: 50,
       percentage: 14
     },
+    poolProgress: {
+      target: 12.5,
+      current: 3.8,
+      percentage: 30.4
+    },
     active: {
       count: 8,
       rate: 40
@@ -38,11 +43,20 @@ export default function WorkGroupList() {
       { name: "李四", value: 72 },
       { name: "王五", value: 68 }
     ],
+    leapList: [
+      { name: "周八", growth: "+45", badge: "🚀" },
+      { name: "孙七", growth: "+32", badge: "⬆️" },
+      { name: "赵六", growth: "+28", badge: "🌟" }
+    ],
     recordCount: 128,
     recentActivities: [
       { user: "张三", action: "记账", time: "2小时前" },
       { user: "李四", action: "更新", time: "5小时前" },
       { user: "王五", action: "记账", time: "1天前" }
+    ],
+    alerts: [
+      { type: "warning", message: "有3位伙伴已连续3天未联络新人", action: "建议介入辅导" },
+      { type: "info", message: "本周新增2位潜在高级用户", action: "及时跟进" }
     ],
     workGroups: [
       {
@@ -109,7 +123,7 @@ export default function WorkGroupList() {
             </h2>
           </div>
 
-          {/* 第一行：成员人数 + 预留区 + 时间 */}
+          {/* 第一行：成员人数 + 池子可视化 + 时间 */}
           <div className="grid grid-cols-3 px-4 py-2.5 border-b border-gray-200">
             
             {/* 1/3: 合伙人数 - 最左边 */}
@@ -140,12 +154,25 @@ export default function WorkGroupList() {
               </div>
             </div>
 
-            {/* 2/3: 实缴 */}
+            {/* 2/3: 池子可视化 */}
             <div className="border-r border-gray-200 px-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1">实缴</h3>
-              <div className="flex items-baseline gap-0.5">
-                <span className="text-xl font-bold text-[#D32F2F]">71</span>
-                <span className="text-xs text-[#757575]">万</span>
+              <h3 className="text-xs font-bold text-[#222222] mb-1 flex items-center gap-1">
+                <span>🪣</span>
+                <span>总资产进度</span>
+              </h3>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-xl font-bold text-[#2196F3]">{mockData.poolProgress.current}</span>
+                  <span className="text-xs text-[#757575]">/{mockData.poolProgress.target}%</span>
+                </div>
+                {/* 进度条 */}
+                <div className="h-2 bg-[#E3F2FD] rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#2196F3] to-[#64B5F6] rounded-full transition-all"
+                    style={{ width: `${mockData.poolProgress.percentage}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[#757575]">已完成 {mockData.poolProgress.percentage.toFixed(1)}%</p>
               </div>
             </div>
 
@@ -215,27 +242,26 @@ export default function WorkGroupList() {
             ))}
           </div>
 
-          {/* 第三行：贡献排行 + 本月记账 */}
+          {/* 第三行：飞跃榜 + 本月记账 */}
           <div className="grid grid-cols-2 border-b border-gray-200">
-            {/* 贡献排行 */}
+            {/* 飞跃榜 */}
             <div className="px-4 py-2.5 border-r border-gray-200">
-              <h3 className="text-xs font-bold text-[#222222] mb-1.5">贡献排行</h3>
-              <div className="space-y-1">
-                {mockData.topContributors.map((contributor, index) => (
-                  <div key={index} className="flex items-center gap-1.5">
-                    <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#FAF3ED]">
-                      <span className="text-xs font-bold text-[#CBA471]">{index + 1}</span>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5 flex items-center gap-1">
+                <span>🚀</span>
+                <span>飞跃榜</span>
+                <span className="text-xs font-normal text-[#757575]">(本周进步)</span>
+              </h3>
+              <div className="space-y-1.5">
+                {mockData.leapList.map((member, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
+                      <span className="text-xs font-bold text-white">{index + 1}</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-xs font-medium text-[#222222]">{contributor.name}</span>
-                        <span className="text-xs font-bold text-[#D32F2F]">{contributor.value}</span>
-                      </div>
-                      <div className="h-1 bg-[#FFEBEE] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#D32F2F] rounded-full transition-all"
-                          style={{ width: `${contributor.value}%` }}
-                        />
+                    <div className="flex-1 flex items-center justify-between">
+                      <span className="text-xs font-medium text-[#222222]">{member.name}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-lg">{member.badge}</span>
+                        <span className="text-xs font-bold text-[#4CAF50]">{member.growth}</span>
                       </div>
                     </div>
                   </div>
@@ -261,6 +287,40 @@ export default function WorkGroupList() {
                 </div>
                 <span className="text-xs text-[#757575]">记账次数</span>
               </div>
+            </div>
+          </div>
+
+          {/* 预警雷达区域 */}
+          <div className="px-4 py-2.5 border-b border-gray-200">
+            <h3 className="text-xs font-bold text-[#222222] mb-1.5 flex items-center gap-1">
+              <span>⚠️</span>
+              <span>预警雷达</span>
+            </h3>
+            <div className="space-y-1.5">
+              {mockData.alerts.map((alert, index) => (
+                <div 
+                  key={index} 
+                  className={`p-2 rounded-lg ${
+                    alert.type === 'warning' 
+                      ? 'bg-[#FFF3E0] border border-[#FFB74D]' 
+                      : 'bg-[#E3F2FD] border border-[#64B5F6]'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-[#222222] mb-0.5">
+                        {alert.message}
+                      </p>
+                      <p className="text-xs text-[#757575]">
+                        {alert.action}
+                      </p>
+                    </div>
+                    <button className="text-xs font-medium text-[#D32F2F] hover:underline flex-shrink-0">
+                      处理
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
