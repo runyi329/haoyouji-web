@@ -325,17 +325,37 @@ export default function WorkGroupList() {
         {/* 最新动态 */}
         <div className="mt-4 bg-white rounded-2xl shadow-lg p-4">
           <h3 className="text-sm font-bold text-[#222222] mb-3">最新动态</h3>
-          <div className="space-y-2">
-            {mockData.recentActivities.map((activity, index) => (
-              <div key={index} className="flex items-center gap-2 text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F]" />
-                <span className="font-medium text-[#222222]">{activity.user}</span>
-                <span className="text-[#757575]">{activity.action}</span>
-                <span className="ml-auto text-[#757575]">{activity.time}</span>
-              </div>
-            ))}
+          <div className="overflow-hidden h-24 relative">
+            <div className="animate-scroll-up space-y-2">
+              {/* 复制两份数据实现无缝滚动 */}
+              {[...mockData.recentActivities, ...mockData.recentActivities].map((activity, index) => (
+                <div key={index} className="flex items-center gap-2 text-xs py-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F] flex-shrink-0" />
+                  <span className="font-medium text-[#222222]">{activity.user}</span>
+                  <span className="text-[#757575]">{activity.action}</span>
+                  <span className="ml-auto text-[#757575]">{activity.time}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+        
+        <style>{`
+          @keyframes scroll-up {
+            0% {
+              transform: translateY(0);
+            }
+            100% {
+              transform: translateY(-50%);
+            }
+          }
+          .animate-scroll-up {
+            animation: scroll-up 15s linear infinite;
+          }
+          .animate-scroll-up:hover {
+            animation-play-state: paused;
+          }
+        `}</style>
       </div>
     </div>
   );
