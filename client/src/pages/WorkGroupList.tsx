@@ -193,12 +193,14 @@ export default function WorkGroupList() {
 
             {/* 3/3: 时间 - 最右边 */}
             <div className="pl-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1">时间</h3>
-              <div className="flex items-baseline gap-1 flex-wrap">
+              <div className="flex items-center gap-1 mb-1">
+                <h3 className="text-xs font-bold text-[#222222]">时间</h3>
+                <span className="text-xs text-[#757575]">2月8日启动</span>
+              </div>
+              <div className="flex items-baseline gap-1">
                 <span className="text-xs text-[#757575]">运行</span>
                 <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
                 <span className="text-xs text-[#757575]">天</span>
-                <span className="text-xs text-[#757575] ml-1">2月8日启动</span>
               </div>
             </div>
           </div>
