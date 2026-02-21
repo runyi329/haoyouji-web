@@ -8,10 +8,18 @@ import { ChevronLeft } from "lucide-react";
 export default function WorkGroupList() {
   const [, setLocation] = useLocation();
 
+  // 计算运行天数
+  const startDate = new Date('2024-02-08');
+  const today = new Date();
+  const runningDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
   // 模拟数据
   const mockData = {
     companyName: "上海煦斌教育科技合伙企业（有限合伙）",
     groupName: "脉动节点合作平台",
+    startDate: "2024-02-08",
+    today: today.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+    runningDays: runningDays,
     members: {
       current: 5,
       max: 20,
@@ -68,40 +76,67 @@ export default function WorkGroupList() {
           className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer overflow-hidden border border-gray-100"
           onClick={() => setLocation("/work-groups/1")}
         >
-          {/* 公司名称头部 - 优化样式 */}
+          {/* 公司名称头部 */}
           <div className="px-4 py-2.5 border-b border-gray-200 bg-gradient-to-b from-white to-gray-50">
             <h2 className="text-sm font-bold text-[#222222] text-center leading-tight">
               {mockData.companyName}
             </h2>
           </div>
 
-          {/* 成员进度区域 - 压缩到1/3 */}
-          <div className="px-4 py-2.5 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-[#222222] mb-1">成员进度</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
-                  <span className="text-base text-[#757575]">/ {mockData.members.max}</span>
-                  <span className="text-xs text-[#757575]">人</span>
-                </div>
-                <p className="text-xs text-[#757575]">
-                  还有 <span className="font-semibold text-[#D32F2F]">{mockData.members.max - mockData.members.current}</span> 个空位
-                </p>
+          {/* 第一行：日期信息 + 成员进度 */}
+          <div className="grid grid-cols-5 gap-3 px-4 py-2.5 border-b border-gray-200">
+            
+            {/* 左侧：日期信息区 - 占2列 */}
+            <div className="col-span-2 space-y-1.5">
+              <h3 className="text-sm font-bold text-[#222222] mb-1.5">时间轴</h3>
+              
+              {/* 今天日期 - 日历卡片风格 */}
+              <div className="bg-gradient-to-br from-[#D32F2F] to-[#C62828] rounded-lg p-2 text-center">
+                <div className="text-xs text-white/80 mb-0.5">今天</div>
+                <div className="text-lg font-bold text-white">{mockData.today}</div>
               </div>
               
-              {/* 饼图 - 缩小并细线 */}
-              <div className="relative w-14 h-14">
-                <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                  <circle cx="50" cy="50" r="45" fill="none" stroke="#FFEBEE" strokeWidth="10" />
-                  <circle
-                    cx="50" cy="50" r="45" fill="none" stroke="#D32F2F" strokeWidth="10"
-                    strokeDasharray={`${mockData.members.percentage * 2.83} 283`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-[#D32F2F]">{mockData.members.percentage}%</span>
+              {/* 启动日期和运行天数 - 横向布局 */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="bg-gradient-to-br from-[#FAF3ED] to-[#F5E6D3] rounded-lg p-1.5 text-center border border-[#CBA471]/20">
+                  <div className="text-xs text-[#757575]">启动</div>
+                  <div className="text-sm font-bold text-[#CBA471]">02/08</div>
+                </div>
+                <div className="bg-gradient-to-br from-[#E8F5E9] to-[#C8E6C9] rounded-lg p-1.5 text-center border border-[#4CAF50]/20">
+                  <div className="text-xs text-[#757575]">运行</div>
+                  <div className="text-sm font-bold text-[#4CAF50]">{mockData.runningDays}天</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 右侧：成员进度 - 占3列 */}
+            <div className="col-span-3">
+              <h3 className="text-sm font-bold text-[#222222] mb-1">成员进度</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
+                    <span className="text-base text-[#757575]">/ {mockData.members.max}</span>
+                    <span className="text-xs text-[#757575]">人</span>
+                  </div>
+                  <p className="text-xs text-[#757575]">
+                    还有 <span className="font-semibold text-[#D32F2F]">{mockData.members.max - mockData.members.current}</span> 个空位
+                  </p>
+                </div>
+                
+                {/* 饼图 */}
+                <div className="relative w-14 h-14">
+                  <svg viewBox="0 0 100 100" className="transform -rotate-90">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#FFEBEE" strokeWidth="10" />
+                    <circle
+                      cx="50" cy="50" r="45" fill="none" stroke="#D32F2F" strokeWidth="10"
+                      strokeDasharray={`${mockData.members.percentage * 2.83} 283`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-sm font-bold text-[#D32F2F]">{mockData.members.percentage}%</span>
+                  </div>
                 </div>
               </div>
             </div>
