@@ -21,9 +21,9 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
   );
 
   // 搜索用户
-  const { data: searchResults = [], refetch: searchUsers, isLoading: isSearching } = trpc.partnership.searchUsers.useQuery(
+  const { data: searchResults = [], isLoading: isSearching } = trpc.partnership.searchUsers.useQuery(
     { partnershipId, query: searchKeyword },
-    { enabled: false }
+    { enabled: isOpen && searchKeyword.trim().length > 0 }
   );
 
   // 添加成员mutation
@@ -38,18 +38,20 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
     },
   });
 
-  // 初始加载用户列表
-  useEffect(() => {
-    if (isOpen) {
-      searchUsers();
-    }
-  }, [isOpen]);
+  // 当打开对话框时，如果没有搜索关键词，显示所有用户
+  const { data: allUsers = [] } = trpc.partnership.searchUsers.useQuery(
+    { partnershipId, query: '' },
+    { enabled: isOpen && searchKeyword.trim().length === 0 }
+  );
+
+  // 合并搜索结果和所有用户列表
+  const displayUsers = searchKeyword.trim().length > 0 ? searchResults : allUsers;
 
   if (!isOpen) return null;
 
-  // 搜索用户
+  // 搜索用户（实时搜索，不需要手动触发）
   const handleSearch = () => {
-    searchUsers();
+    // 搜索会自动触发，因为searchKeyword变化时会重新查询
   };
 
   // 切换工作群选择
@@ -132,10 +134,10 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {isSearching ? (
                 <div className="text-center py-8 text-[#757575]">搜索中...</div>
-              ) : searchResults.length === 0 ? (
+              ) : displayUsers.length === 0 ? (
                 <div className="text-center py-8 text-[#757575]">未找到匹配的用户</div>
               ) : (
-                searchResults.map((user) => (
+                displayUsers.map((user) => (
                   <div
                     key={user.id}
                     onClick={() => setSelectedUserId(user.id)}
