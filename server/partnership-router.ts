@@ -1,0 +1,230 @@
+import { z } from "zod";
+import { router, protectedProcedure } from "./_core/trpc";
+import { db } from "./db";
+import { 
+  partnerships, 
+  partnershipWorkGroups, 
+  partnershipMembers, 
+  partnershipWorkGroupMembers,
+  users 
+} from "../drizzle/schema";
+import { eq, and, inArray, like, or, sql } from "drizzle-orm";
+
+export const partnershipRouter = router({
+  // 搜索可邀请的用户（排除已是成员的用户）
+  searchUsers: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number(),
+      query: z.string().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { partnershipId, query } = input;
+
+      // 获取已是成员的用户ID列表
+      const existingMembers = await db
+        .select({ userId: partnershipMembers.userId })
+        .from(partnershipMembers)
+        .where(eq(partnershipMembers.partnershipId, partnershipId));
+
+      const existingUserIds = existingMembers.map(m => m.userId);
+
+      // 构建查询条件
+      let whereConditions = [];
+      
+      // 排除已是成员的用户
+      if (existingUserIds.length > 0) {
+        whereConditions.push(sql`${users.id} NOT IN (${sql.join(existingUserIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      // 搜索条件
+      if (query && query.trim()) {
+        whereConditions.push(
+          or(
+            like(users.name, `%${query}%`),
+            like(users.email, `%${query}%`)
+          )
+        );
+      }
+
+      // 查询用户
+      const searchResults = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+        .limit(20);
+
+      return searchResults;
+    }),
+
+  // 添加成员到企业和工作群
+  addMember: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number(),
+      userId: z.number(),
+      workGroupIds: z.array(z.number()),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { partnershipId, userId, workGroupIds } = input;
+
+      // 检查用户是否已是成员
+      const existingMember = await db
+        .select()
+        .from(partnershipMembers)
+        .where(
+          and(
+            eq(partnershipMembers.partnershipId, partnershipId),
+            eq(partnershipMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (existingMember.length > 0) {
+        throw new Error("该用户已是企业成员");
+      }
+
+      // 添加成员到企业
+      await db.insert(partnershipMembers).values({
+        partnershipId,
+        userId,
+        role: "member",
+      });
+
+      // 添加成员到工作群
+      if (workGroupIds.length > 0) {
+        const workGroupMemberValues = workGroupIds.map(workGroupId => ({
+          workGroupId,
+          userId,
+        }));
+
+        await db.insert(partnershipWorkGroupMembers).values(workGroupMemberValues);
+      }
+
+      return { success: true };
+    }),
+
+  // 获取企业成员列表
+  getMembers: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const { partnershipId } = input;
+
+      // 获取成员列表
+      const members = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          avatar: users.avatar,
+          role: partnershipMembers.role,
+          joinedAt: partnershipMembers.joinedAt,
+        })
+        .from(partnershipMembers)
+        .innerJoin(users, eq(partnershipMembers.userId, users.id))
+        .where(eq(partnershipMembers.partnershipId, partnershipId));
+
+      // 获取每个成员所属的工作群
+      const memberIds = members.map(m => m.id);
+      
+      if (memberIds.length === 0) {
+        return [];
+      }
+
+      const memberWorkGroups = await db
+        .select({
+          userId: partnershipWorkGroupMembers.userId,
+          workGroupId: partnershipWorkGroupMembers.workGroupId,
+          workGroupName: partnershipWorkGroups.name,
+        })
+        .from(partnershipWorkGroupMembers)
+        .innerJoin(
+          partnershipWorkGroups,
+          eq(partnershipWorkGroupMembers.workGroupId, partnershipWorkGroups.id)
+        )
+        .where(inArray(partnershipWorkGroupMembers.userId, memberIds));
+
+      // 组装数据
+      const membersWithWorkGroups = members.map(member => {
+        const workGroups = memberWorkGroups
+          .filter(wg => wg.userId === member.id)
+          .map(wg => ({
+            id: wg.workGroupId,
+            name: wg.workGroupName,
+          }));
+
+        return {
+          ...member,
+          workGroups,
+        };
+      });
+
+      return membersWithWorkGroups;
+    }),
+
+  // 获取工作群列表
+  getWorkGroups: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const { partnershipId } = input;
+
+      const workGroups = await db
+        .select({
+          id: partnershipWorkGroups.id,
+          name: partnershipWorkGroups.name,
+          description: partnershipWorkGroups.description,
+        })
+        .from(partnershipWorkGroups)
+        .where(eq(partnershipWorkGroups.partnershipId, partnershipId));
+
+      return workGroups;
+    }),
+
+  // 移除成员
+  removeMember: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number(),
+      userId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const { partnershipId, userId } = input;
+
+      // 删除成员-企业关联
+      await db
+        .delete(partnershipMembers)
+        .where(
+          and(
+            eq(partnershipMembers.partnershipId, partnershipId),
+            eq(partnershipMembers.userId, userId)
+          )
+        );
+
+      // 删除成员-工作群关联（通过工作群ID）
+      const workGroups = await db
+        .select({ id: partnershipWorkGroups.id })
+        .from(partnershipWorkGroups)
+        .where(eq(partnershipWorkGroups.partnershipId, partnershipId));
+
+      const workGroupIds = workGroups.map(wg => wg.id);
+
+      if (workGroupIds.length > 0) {
+        await db
+          .delete(partnershipWorkGroupMembers)
+          .where(
+            and(
+              inArray(partnershipWorkGroupMembers.workGroupId, workGroupIds),
+              eq(partnershipWorkGroupMembers.userId, userId)
+            )
+          );
+      }
+
+      return { success: true };
+    }),
+});
