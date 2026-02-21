@@ -83,22 +83,17 @@ export default function WorkGroupList() {
             </h2>
           </div>
 
-          {/* 第一行：成员进度 + 预留区 + 日期信息 */}
-          <div className="grid grid-cols-3 gap-2 px-4 py-2.5 border-b border-gray-200">
+          {/* 第一行：成员人数 + 预留区 + 时间 */}
+          <div className="grid grid-cols-3 px-4 py-2.5 border-b border-gray-200">
             
-            {/* 1/3: 成员进度 - 最左边 */}
-            <div>
-              <h3 className="text-xs font-bold text-[#222222] mb-1">成员进度</h3>
+            {/* 1/3: 成员人数 - 最左边 */}
+            <div className="border-r border-gray-200 pr-2">
+              <h3 className="text-xs font-bold text-[#222222] mb-1">成员人数</h3>
               <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
-                    <span className="text-xs text-[#757575]">/ {mockData.members.max}</span>
-                    <span className="text-xs text-[#757575]">人</span>
-                  </div>
-                  <p className="text-xs text-[#757575]">
-                    还有 <span className="font-semibold text-[#D32F2F]">{mockData.members.max - mockData.members.current}</span> 个空位
-                  </p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.max}</span>
+                  <span className="text-xs text-[#757575]">-</span>
+                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
                 </div>
                 
                 {/* 饼图 */}
@@ -119,25 +114,24 @@ export default function WorkGroupList() {
             </div>
 
             {/* 2/3: 预留区 */}
-            <div>
+            <div className="border-r border-gray-200 px-2">
               {/* 预留给未来功能 */}
             </div>
 
-            {/* 3/3: 日期信息 - 最右边，无容器 */}
-            <div>
-              <h3 className="text-xs font-bold text-[#222222] mb-1">时间轴</h3>
-              <div className="space-y-0.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-[#757575]">今天</span>
-                  <span className="font-bold text-[#222222]">{mockData.today}</span>
+            {/* 3/3: 时间 - 最右边 */}
+            <div className="pl-2">
+              <h3 className="text-xs font-bold text-[#222222] mb-1">时间</h3>
+              <div className="space-y-0.5">
+                {/* 突出运行天数 */}
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-[#757575]">运行</span>
+                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
+                  <span className="text-xs text-[#757575]">天</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#757575]">启动</span>
-                  <span className="font-bold text-[#CBA471]">{mockData.startDate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#757575]">运行</span>
-                  <span className="font-bold text-[#D32F2F]">{mockData.runningDays}天</span>
+                {/* 今天和启动日期 - 不突出 */}
+                <div className="text-xs text-[#757575] space-y-0.5">
+                  <div>今天 {mockData.today}</div>
+                  <div>启动 {mockData.startDate}</div>
                 </div>
               </div>
             </div>
