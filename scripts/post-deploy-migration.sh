@@ -13,6 +13,7 @@ cd /root/haoyouji-web
 MIGRATIONS=(
   "migrations/create_ai_tables.sql"
   "drizzle/migrations/add_work_groups.sql"
+  "drizzle/migrations/add_partnership_tables.sql"
 )
 
 # 执行每个迁移文件
