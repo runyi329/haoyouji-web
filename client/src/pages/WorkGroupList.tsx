@@ -9,7 +9,7 @@ export default function WorkGroupList() {
   const [, setLocation] = useLocation();
 
   // 计算运行天数
-  const startDate = new Date('2024-02-08');
+  const startDate = new Date('2026-02-08');
   const today = new Date();
   const runningDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -17,8 +17,8 @@ export default function WorkGroupList() {
   const mockData = {
     companyName: "上海煦斌教育科技合伙企业（有限合伙）",
     groupName: "脉动节点合作平台",
-    startDate: "2024-02-08",
-    today: today.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+    startDate: "2026年2月8日",
+    today: today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
     runningDays: runningDays,
     members: {
       current: 5,
@@ -83,45 +83,45 @@ export default function WorkGroupList() {
             </h2>
           </div>
 
-          {/* 第一行：日期信息 + 成员进度 */}
-          <div className="grid grid-cols-5 gap-3 px-4 py-2.5 border-b border-gray-200">
+          {/* 第一行：日期信息 + 成员进度 + 预留区 */}
+          <div className="grid grid-cols-3 gap-2 px-4 py-2.5 border-b border-gray-200">
             
-            {/* 左侧：日期信息区 - 占2列 */}
-            <div className="col-span-2">
-              <h3 className="text-sm font-bold text-[#222222] mb-1.5">时间轴</h3>
+            {/* 1/3: 日期信息区 */}
+            <div>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">时间轴</h3>
               
-              <div className="grid grid-cols-2 gap-2 h-[calc(100%-1.5rem)]">
-                {/* 左侧：今天和启动日期 - 占50% */}
-                <div className="flex flex-col justify-center space-y-1.5">
-                  <div className="text-center">
-                    <div className="text-xs text-[#757575] mb-0.5">今天</div>
-                    <div className="text-sm font-bold text-[#222222]">{mockData.today}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs text-[#757575] mb-0.5">启动</div>
-                    <div className="text-sm font-bold text-[#CBA471]">02/08</div>
-                  </div>
+              <div className="space-y-1">
+                {/* 今天日期 */}
+                <div className="bg-gradient-to-r from-[#FAF3ED] to-white rounded px-2 py-1 border-l-2 border-[#CBA471]">
+                  <div className="text-xs text-[#757575]">今天</div>
+                  <div className="text-xs font-bold text-[#222222]">{mockData.today}</div>
                 </div>
                 
-                {/* 右侧：运行天数 - 占50%，突出显示 */}
-                <div className="bg-gradient-to-br from-[#D32F2F] to-[#C62828] rounded-lg flex flex-col items-center justify-center">
-                  <div className="text-xs text-white/80 mb-0.5">已运行</div>
-                  <div className="flex items-baseline gap-0.5">
-                    <span className="text-2xl font-bold text-white">{mockData.runningDays}</span>
-                    <span className="text-sm text-white/90">天</span>
+                {/* 启动日期 */}
+                <div className="bg-gradient-to-r from-[#FAF3ED] to-white rounded px-2 py-1 border-l-2 border-[#CBA471]">
+                  <div className="text-xs text-[#757575]">启动</div>
+                  <div className="text-xs font-bold text-[#CBA471]">{mockData.startDate}</div>
+                </div>
+                
+                {/* 运行天数 - 突出显示 */}
+                <div className="bg-gradient-to-br from-[#D32F2F] to-[#C62828] rounded px-2 py-1.5 text-center">
+                  <div className="text-xs text-white/80">已运行</div>
+                  <div className="flex items-baseline justify-center gap-0.5">
+                    <span className="text-xl font-bold text-white">{mockData.runningDays}</span>
+                    <span className="text-xs text-white/90">天</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 右侧：成员进度 - 占3列 */}
-            <div className="col-span-3">
-              <h3 className="text-sm font-bold text-[#222222] mb-1">成员进度</h3>
+            {/* 2/3: 成员进度 */}
+            <div>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">成员进度</h3>
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
-                    <span className="text-base text-[#757575]">/ {mockData.members.max}</span>
+                    <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
+                    <span className="text-xs text-[#757575]">/ {mockData.members.max}</span>
                     <span className="text-xs text-[#757575]">人</span>
                   </div>
                   <p className="text-xs text-[#757575]">
@@ -130,7 +130,7 @@ export default function WorkGroupList() {
                 </div>
                 
                 {/* 饼图 */}
-                <div className="relative w-14 h-14">
+                <div className="relative w-12 h-12">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
                     <circle cx="50" cy="50" r="45" fill="none" stroke="#FFEBEE" strokeWidth="10" />
                     <circle
@@ -151,7 +151,7 @@ export default function WorkGroupList() {
           <div className="grid grid-cols-2 border-b border-gray-200">
             {/* 活跃度 */}
             <div className="px-4 py-2.5 border-r border-gray-200">
-              <h3 className="text-sm font-semibold text-[#222222] mb-1.5">活跃度</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5">活跃度</h3>
               <div className="flex items-baseline gap-1 mb-1.5">
                 <span className="text-xl font-bold text-[#4CAF50]">{mockData.active.count}</span>
                 <span className="text-xs text-[#757575]">人活跃</span>
@@ -169,17 +169,17 @@ export default function WorkGroupList() {
 
             {/* 收支总览 */}
             <div className="px-4 py-2.5">
-              <h3 className="text-sm font-semibold text-[#222222] mb-1.5">收支总览</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5">收支总览</h3>
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#757575]">收入</span>
-                  <span className="text-base font-bold text-[#4CAF50]">
+                  <span className="text-xl font-bold text-[#4CAF50]">
                     ¥{mockData.finance.income.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#757575]">支出</span>
-                  <span className="text-base font-bold text-[#D32F2F]">
+                  <span className="text-xl font-bold text-[#D32F2F]">
                     ¥{mockData.finance.expense.toLocaleString()}
                   </span>
                 </div>
@@ -191,7 +191,7 @@ export default function WorkGroupList() {
           <div className="grid grid-cols-2 border-b border-gray-200">
             {/* 贡献排行 */}
             <div className="px-4 py-2.5 border-r border-gray-200">
-              <h3 className="text-sm font-semibold text-[#222222] mb-1.5">贡献排行</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5">贡献排行</h3>
               <div className="space-y-1">
                 {mockData.topContributors.map((contributor, index) => (
                   <div key={index} className="flex items-center gap-1.5">
@@ -217,9 +217,9 @@ export default function WorkGroupList() {
 
             {/* 本月记账 */}
             <div className="px-4 py-2.5">
-              <h3 className="text-sm font-semibold text-[#222222] mb-1.5">本月记账</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5">本月记账</h3>
               <div className="flex flex-col items-center justify-center">
-                <div className="relative w-12 h-12 mb-1">
+                <div className="relative w-10 h-10 mb-1">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
                     <circle cx="50" cy="50" r="45" fill="none" stroke="#E3F2FD" strokeWidth="8" />
                     <circle
@@ -228,7 +228,7 @@ export default function WorkGroupList() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-bold text-[#1976D2]">{mockData.recordCount}</span>
+                    <span className="text-xs font-bold text-[#1976D2]">{mockData.recordCount}</span>
                   </div>
                 </div>
                 <span className="text-xs text-[#757575]">记账次数</span>
@@ -238,7 +238,7 @@ export default function WorkGroupList() {
 
           {/* 最新动态区域 */}
           <div className="px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-[#222222] mb-1.5">最新动态</h3>
+            <h3 className="text-xs font-bold text-[#222222] mb-1.5">最新动态</h3>
             <div className="space-y-1">
               {mockData.recentActivities.map((activity, index) => (
                 <div key={index} className="flex items-start gap-1.5 pb-1 border-b border-gray-100 last:border-0 last:pb-0">
