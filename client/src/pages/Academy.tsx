@@ -70,7 +70,7 @@ const academyModules: AcademyModule[] = [
     icon: Users,
     title: "人脉管理",
     color: "text-[#D32F2F]",
-    bgColor: "bg-[#D32F2F]-light0",
+    bgColor: "bg-[#FFEBEE]",
     category: "core",
     content: {
       introduction: "全方位管理您的人脉关系，记录每一次联络，维护每一份关系。",
@@ -271,7 +271,7 @@ const academyModules: AcademyModule[] = [
     icon: Heart,
     title: "权益中心",
     color: "text-[#D32F2F]",
-    bgColor: "bg-[#D32F2F]-light0",
+    bgColor: "bg-[#FFEBEE]",
     category: "system",
     content: {
       introduction: "查看和管理您的会员权益。",
