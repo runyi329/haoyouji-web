@@ -5,7 +5,7 @@
 INSERT INTO partnership_members (partnership_id, user_id, role, joined_at, updated_at)
 SELECT 1, u.id, 'admin', NOW(), NOW()
 FROM users u
-WHERE u.username = 'Jiang'
+WHERE u.username = 'jiang'
 AND NOT EXISTS (
   SELECT 1 FROM partnership_members pm
   WHERE pm.partnership_id = 1 AND pm.user_id = u.id
@@ -17,7 +17,7 @@ INSERT INTO partnership_work_group_members (work_group_id, user_id, joined_at, u
 SELECT pwg.id, u.id, NOW(), NOW()
 FROM users u
 CROSS JOIN partnership_work_groups pwg
-WHERE u.username = 'Jiang'
+WHERE u.username = 'jiang'
 AND pwg.partnership_id = 1
 AND NOT EXISTS (
   SELECT 1 FROM partnership_work_group_members pwgm
