@@ -343,7 +343,14 @@ export default function WorkGroupList() {
           <div className="px-4 py-2.5">
             <h3 className="text-xs font-bold text-[#222222] mb-1.5">最新动态</h3>
             <div className="overflow-hidden h-20 relative">
-              <div className="animate-scroll-up space-y-1.5">
+              <div 
+                className="space-y-1.5"
+                style={{
+                  animation: 'scroll-up 15s linear infinite',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.animationPlayState = 'paused'}
+                onMouseLeave={(e) => e.currentTarget.style.animationPlayState = 'running'}
+              >
                 {/* 复制两份数据实现无缝滚动 */}
                 {[...mockData.recentActivities, ...mockData.recentActivities].map((activity, index) => (
                   <div key={index} className="flex items-center gap-2 text-xs py-0.5">
@@ -366,12 +373,6 @@ export default function WorkGroupList() {
             100% {
               transform: translateY(-50%);
             }
-          }
-          .animate-scroll-up {
-            animation: scroll-up 15s linear infinite;
-          }
-          .animate-scroll-up:hover {
-            animation-play-state: paused;
           }
         `}</style>
       </div>
