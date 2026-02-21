@@ -394,9 +394,6 @@ export default function Profile() {
 
   // 定义所有可用的功能项（带颜色）
   const allFeatures: FeatureItem[] = [
-    ...(user.role === "super_admin" ? [
-      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
-    ] : []),
     { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-[#F5F5F5] text-[#1976D2]", badge: null, onClick: handleEditProfile },
     { 
       id: "invite-friends",
@@ -415,6 +412,9 @@ export default function Profile() {
 
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [
+    ...(user.role === "super_admin" ? [
+      { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
+    ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
