@@ -77,9 +77,8 @@ export default function LedgerReport() {
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center">
             <span className="font-medium">{ledgerData?.name || "账本"}</span>
-            <span className="text-sm opacity-80">⇄ 切换账本</span>
           </div>
           {/* 标签页切换 - 放在账本名称右边 */}
           <div className="flex bg-white/20 rounded-lg overflow-hidden">
