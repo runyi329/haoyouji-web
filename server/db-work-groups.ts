@@ -3,7 +3,7 @@ import { workGroups, ledgers } from '../drizzle/schema';
 import { eq, and, or, desc, sql } from 'drizzle-orm';
 
 /**
- * 脉动节点工作平台 - 工作群数据库操作
+ * 脉动节点合作平台 - 工作群数据库操作
  */
 
 // 创建工作群

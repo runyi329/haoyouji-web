@@ -220,7 +220,7 @@ function Router() {
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />
         
-        {/* 脉动节点工作平台 */}
+        {/* 脉动节点合作平台 */}
         <Route path="/work-groups" component={WorkGroupList} />
         <Route path="/work-groups/:id" component={WorkGroupDetail} />
         

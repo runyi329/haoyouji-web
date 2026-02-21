@@ -18,7 +18,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 /**
- * 脉动节点工作平台 - 第一层：工作台首页（群列表）
+ * 脉动节点合作平台 - 第一层：工作台首页（群列表）
  */
 export default function WorkGroupList() {
   const [, setLocation] = useLocation();
@@ -71,7 +71,7 @@ export default function WorkGroupList() {
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <h1 className="text-xl font-bold text-white">脉动节点工作平台</h1>
+            <h1 className="text-xl font-bold text-white">脉动节点合作平台</h1>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}

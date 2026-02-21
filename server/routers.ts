@@ -6246,7 +6246,7 @@ export const appRouter = router({
   // 邀请功能权限管理 (管理员)
   invitePermission: invitePermissionRouter,
 
-  // 脉动节点工作平台 - 工作群管理
+  // 脉动节点合作平台 - 工作群管理
   workGroups: workGroupsRouter,
 
   // ==================== 数据安全（加密管理） ====================

@@ -1124,7 +1124,7 @@ export const shippingAddresses = mysqlTable("shipping_addresses", {
 	index("idx_is_default").on(table.isDefault),
 ]);
 
-// 工作群表（脉动节点工作平台）
+// 工作群表（脉动节点合作平台）
 export const workGroups = mysqlTable("work_groups", {
 	id: int().autoincrement().notNull(),
 	name: varchar({ length: 100 }).notNull(),
