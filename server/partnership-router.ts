@@ -8,7 +8,27 @@ import {
   partnershipWorkGroupMembers,
   users 
 } from "../drizzle/schema";
-import { eq, and, inArray, like, or, sql } from "drizzle-orm";
+import { eq, and, inArray, like, or, sql, asc } from "drizzle-orm";
+import { mysqlTable, int, varchar, text, timestamp } from "drizzle-orm/mysql-core";
+
+// Dashboard tables (inline definition to avoid schema regeneration)
+const partnershipDashboardActivities = mysqlTable("partnership_dashboard_activities", {
+  id: int().autoincrement().notNull(),
+  partnershipId: int("partnership_id").notNull().default(1),
+  userName: varchar("user_name", { length: 100 }).notNull(),
+  action: varchar({ length: 100 }).notNull(),
+  timeText: varchar("time_text", { length: 100 }).notNull(),
+  sortOrder: int("sort_order").notNull().default(0),
+});
+
+const partnershipDashboardAlerts = mysqlTable("partnership_dashboard_alerts", {
+  id: int().autoincrement().notNull(),
+  partnershipId: int("partnership_id").notNull().default(1),
+  type: varchar({ length: 20 }).notNull().default("warning"),
+  message: text().notNull(),
+  actionText: varchar("action_text", { length: 255 }).notNull().default(""),
+  sortOrder: int("sort_order").notNull().default(0),
+});
 
 export const partnershipRouter = router({
   // 搜索可邀请的用户（排除已是成员的用户）
@@ -224,6 +244,98 @@ export const partnershipRouter = router({
           );
       }
 
+      return { success: true };
+    }),
+
+  // ========== Dashboard 管理 API ==========
+
+  // 获取最新动态列表
+  getDashboardActivities: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number().default(1),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const activities = await db
+        .select()
+        .from(partnershipDashboardActivities)
+        .where(eq(partnershipDashboardActivities.partnershipId, input.partnershipId))
+        .orderBy(asc(partnershipDashboardActivities.sortOrder));
+      return activities;
+    }),
+
+  // 保存最新动态（先删后插）
+  saveDashboardActivities: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number().default(1),
+      activities: z.array(z.object({
+        userName: z.string(),
+        action: z.string(),
+        timeText: z.string(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // 先删除旧数据
+      await db
+        .delete(partnershipDashboardActivities)
+        .where(eq(partnershipDashboardActivities.partnershipId, input.partnershipId));
+      // 插入新数据
+      if (input.activities.length > 0) {
+        const values = input.activities.map((a, index) => ({
+          partnershipId: input.partnershipId,
+          userName: a.userName,
+          action: a.action,
+          timeText: a.timeText,
+          sortOrder: index + 1,
+        }));
+        await db.insert(partnershipDashboardActivities).values(values);
+      }
+      return { success: true };
+    }),
+
+  // 获取预警雷达列表
+  getDashboardAlerts: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number().default(1),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const alerts = await db
+        .select()
+        .from(partnershipDashboardAlerts)
+        .where(eq(partnershipDashboardAlerts.partnershipId, input.partnershipId))
+        .orderBy(asc(partnershipDashboardAlerts.sortOrder));
+      return alerts;
+    }),
+
+  // 保存预警雷达（先删后插）
+  saveDashboardAlerts: protectedProcedure
+    .input(z.object({
+      partnershipId: z.number().default(1),
+      alerts: z.array(z.object({
+        type: z.string(),
+        message: z.string(),
+        actionText: z.string(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // 先删除旧数据
+      await db
+        .delete(partnershipDashboardAlerts)
+        .where(eq(partnershipDashboardAlerts.partnershipId, input.partnershipId));
+      // 插入新数据
+      if (input.alerts.length > 0) {
+        const values = input.alerts.map((a, index) => ({
+          partnershipId: input.partnershipId,
+          type: a.type,
+          message: a.message,
+          actionText: a.actionText,
+          sortOrder: index + 1,
+        }));
+        await db.insert(partnershipDashboardAlerts).values(values);
+      }
       return { success: true };
     }),
 });
