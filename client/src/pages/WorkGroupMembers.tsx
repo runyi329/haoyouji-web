@@ -110,7 +110,7 @@ export default function WorkGroupMembers() {
         </button>
         <h1 className="text-lg font-bold">上海煦斌教育科技合伙企业</h1>
         {/* 添加成员按钮（仅管理员可见） */}
-        {currentUser.role === 'super_admin' && (
+        {currentUser?.role === 'super_admin' && (
           <button
             onClick={() => setIsAddMemberDialogOpen(true)}
             disabled={!currentUser || currentUser.role !== 'super_admin'}
@@ -119,7 +119,7 @@ export default function WorkGroupMembers() {
             <Plus className="w-6 h-6" />
           </button>
         )}
-        {currentUser.role !== 'super_admin' && <div className="w-6"></div>}
+        {currentUser?.role !== 'super_admin' && <div className="w-6"></div>}
       </div>
 
       {/* 成员列表 */}
