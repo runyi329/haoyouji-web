@@ -174,8 +174,7 @@ export default function WorkGroupList() {
                   index < mockData.workGroups.length - 1 ? 'border-r border-gray-200' : ''
                 }`}
                 onClick={() => {
-                  // TODO: 打开编辑页面
-                  alert(`编辑${group.name}`);
+                  setLocation(`/work-group/${group.id}/members`);
                 }}
               >
                 <h3 className="text-xs font-bold text-[#222222] mb-1.5">{group.name}</h3>
