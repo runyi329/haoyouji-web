@@ -1329,23 +1329,31 @@ export async function getLedgerReport(
     )
     .groupBy(ledgerRecords.createdBy);
   
-  // 获取成员昵称
+  // 获取成员昵称和用户名
   const members = await db
     .select({
       userId: ledgerMembers.userId,
       nickname: ledgerMembers.nickname,
+      username: users.username,
+      avatar: users.avatar,
     })
     .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
     .where(eq(ledgerMembers.ledgerId, ledgerId));
   
-  const memberNicknameMap = new Map(members.map((m: any) => [m.userId, m.nickname]));
+  const memberInfoMap = new Map(members.map((m: any) => [m.userId, m]));
   
-  const memberStats = memberStatsRaw.map((stat: any) => ({
-    userId: stat.userId,
-    nickname: memberNicknameMap.get(stat.userId) || '未知用户',
-    income: Number(stat.totalIncome || 0),
-    expense: Number(stat.totalExpense || 0),
-  }));
+  const memberStats = memberStatsRaw.map((stat: any) => {
+    const memberInfo = memberInfoMap.get(stat.userId);
+    return {
+      userId: stat.userId,
+      nickname: memberInfo?.nickname,
+      username: memberInfo?.username,
+      avatar: memberInfo?.avatar,
+      income: Number(stat.totalIncome || 0),
+      expense: Number(stat.totalExpense || 0),
+    };
+  });
   
   // 获取月度统计数据
   const monthlyStatsRaw = await db
