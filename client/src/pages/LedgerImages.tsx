@@ -1,6 +1,6 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { trpc } from "../trpc";
-import { useState } from "preact/hooks";
+import { trpc } from "@/lib/trpc";
 
 export default function LedgerImages() {
   const { id } = useParams<{ id: string }>();
