@@ -69,19 +69,19 @@ export default function LedgerReport() {
     <div className="min-h-screen flex flex-col">
       {/* 顶部导航区 - 蓝色渐变背景 */}
       <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-        {/* 顶部导航栏：返回 + 账本名称 + 切换账本 + Tab切换 */}
-        <div className="flex items-center justify-between px-4 py-3">
+        {/* 顶部导航栏：返回 + 账本名称 + Tab切换 */}
+        <div className="flex items-center px-4 py-3 gap-3">
           <button 
             onClick={() => setLocation(`/ledger/${ledgerId}`)}
-            className="flex items-center"
+            className="flex items-center flex-shrink-0"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="flex items-center">
-            <span className="font-medium">{ledgerData?.name || "账本"}</span>
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-sm leading-tight line-clamp-2">{ledgerData?.name || "账本"}</span>
           </div>
-          {/* 标签页切换 - 放在账本名称右边 */}
-          <div className="flex bg-white/20 rounded-lg overflow-hidden">
+          {/* 标签页切换 */}
+          <div className="flex bg-white/20 rounded-lg overflow-hidden flex-shrink-0">
             <button
               onClick={() => setActiveTab("chart")}
               className={`px-3 py-1 text-sm ${
