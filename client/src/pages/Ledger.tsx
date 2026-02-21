@@ -318,7 +318,7 @@ export default function Ledger() {
                           设置
                         </button>
                         <button
-                          className="text-xs h-8 rounded-xl bg-[#D32F2F]-light text-[#D32F2F] font-medium hover:bg-[#FFEBEE] transition-colors"
+                          className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             setArchivingLedgerId(ledger.id);
