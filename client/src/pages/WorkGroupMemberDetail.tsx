@@ -1,6 +1,6 @@
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Lightbulb } from "lucide-react";
 import { useState } from "react";
 
 /**
@@ -318,22 +318,42 @@ export default function WorkGroupMemberDetail() {
           
           {/* 维度数值列表 */}
           <div className="mt-4 space-y-2">
-            {mockMember.radarData.dimensions.map((dim, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <span className="text-xs text-[#757575]">{dim.name}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-1.5 bg-[#FFEBEE] rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-[#D32F2F] rounded-full"
-                      style={{ width: `${(dim.value / dim.max) * 100}%` }}
-                    />
+            {mockMember.radarData.dimensions.map((dim, index) => {
+              const dimensionMap: Record<string, string> = {
+                '资产力': 'asset',
+                '蓄水力': 'network',
+                '链接力': 'contact',
+                '共享力': 'share',
+                '复制力': 'replicate'
+              };
+              const dimensionId = dimensionMap[dim.name] || 'asset';
+              
+              return (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-[#757575]">{dim.name}</span>
+                    <button
+                      onClick={() => setLocation(`/node-growth-guide?view=mentor&dimension=${dimensionId}`)}
+                      className="p-0.5 hover:bg-[#FAF3ED] rounded transition-colors"
+                      title="查看提升指南"
+                    >
+                      <Lightbulb size={14} className="text-[#CBA471]" />
+                    </button>
                   </div>
-                  <span className="text-xs font-bold text-[#D32F2F] w-8 text-right">
-                    {dim.value}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-1.5 bg-[#FFEBEE] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-[#D32F2F] rounded-full"
+                        style={{ width: `${(dim.value / dim.max) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-[#D32F2F] w-8 text-right">
+                      {dim.value}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

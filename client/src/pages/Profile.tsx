@@ -411,6 +411,7 @@ export default function Profile() {
     { id: "calendar", icon: Calendar, label: "活动记录", color: "bg-[#E8F5E9] text-[#4CAF50]", badge: null, onClick: () => navigate("/work-groups") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
     { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-purple-600", badge: null, onClick: () => navigate("/ai") },
+    { id: "node-growth-guide", icon: BookOpen, label: "节点成长手册", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/node-growth-guide?view=self") },
   ];
 
   // 账户管理功能
