@@ -220,7 +220,11 @@ export default function WorkGroupList() {
                   setLocation(`/work-group/all/members`);
                 }}
               >
-                <h3 className="text-xs font-bold text-[#222222] mb-1.5">{group.name}</h3>
+                {/* 标题和人数 */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <h3 className="text-xs font-bold text-[#222222]">{group.name}</h3>
+                  <span className="text-xs text-[#757575]">{group.members.length}人</span>
+                </div>
                 
                 {/* 成员头像展示 */}
                 <div className="flex items-center">
@@ -247,11 +251,6 @@ export default function WorkGroupList() {
                       +
                     </div>
                   </div>
-                  
-                  {/* 成员数量 */}
-                  <span className="ml-2 text-xs text-[#757575]">
-                    {group.members.length}人
-                  </span>
                 </div>
               </div>
             ))}
