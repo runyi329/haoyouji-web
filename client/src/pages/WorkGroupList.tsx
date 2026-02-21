@@ -86,14 +86,15 @@ export default function WorkGroupList() {
           {/* 第一行：成员人数 + 预留区 + 时间 */}
           <div className="grid grid-cols-3 px-4 py-2.5 border-b border-gray-200">
             
-            {/* 1/3: 成员人数 - 最左边 */}
+            {/* 1/3: 合伙人数 - 最左边 */}
             <div className="border-r border-gray-200 pr-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1">成员人数</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">合伙人数</h3>
               <div className="flex items-center justify-between">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.max}</span>
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-xs text-[#757575]">{mockData.members.max}</span>
                   <span className="text-xs text-[#757575]">-</span>
                   <span className="text-xl font-bold text-[#D32F2F]">{mockData.members.current}</span>
+                  <span className="text-xs text-[#757575]">人</span>
                 </div>
                 
                 {/* 饼图 */}
@@ -121,17 +122,16 @@ export default function WorkGroupList() {
             {/* 3/3: 时间 - 最右边 */}
             <div className="pl-2">
               <h3 className="text-xs font-bold text-[#222222] mb-1">时间</h3>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {/* 突出运行天数 */}
                 <div className="flex items-baseline gap-1">
                   <span className="text-xs text-[#757575]">运行</span>
                   <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
                   <span className="text-xs text-[#757575]">天</span>
                 </div>
-                {/* 今天和启动日期 - 不突出 */}
-                <div className="text-xs text-[#757575] space-y-0.5">
-                  <div>今天 {mockData.today}</div>
-                  <div>启动 {mockData.startDate}</div>
+                {/* 启动日期 */}
+                <div className="text-xs text-[#757575]">
+                  启动 {mockData.startDate}
                 </div>
               </div>
             </div>
