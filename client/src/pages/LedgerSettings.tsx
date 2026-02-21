@@ -163,7 +163,7 @@ export default function LedgerSettings() {
 
               </div>
               <div className="text-sm text-[#222222] mt-1">
-                {member.nickname || "用户"}
+                {member.nickname || member.username || "用户"}
               </div>
             </div>
           ))}
