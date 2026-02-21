@@ -224,10 +224,10 @@ export default function WorkGroupMemberDetail() {
         )}
       </div>
 
-      {/* 固定底部中间的添加记录按钮 */}
+      {/* 固定右下角的添加记录按钮 */}
       <Button
         onClick={() => setLocation(`/work-group-member/${memberId}/add-activity`)}
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
+        className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
         style={{ backgroundColor: THEME_PRIMARY }}
         size="icon"
       >
