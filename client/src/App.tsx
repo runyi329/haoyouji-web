@@ -148,9 +148,7 @@ function Router() {
       <Switch>
         {/* 首页 - 根据用户账本访问记录跳转 */}
         <Route path="/" component={lazy(() => import("./pages/Home"))} />
-        {/* 脉动Dashboard */}
-        {/* <Route path="/contacts" component={ContactsManagement} /> - 已废弃 */
-        <Route path="/login" component={Login} />
+        {/* 脉动Dashboard */}        <Route path="/login" component={Login} />
         <Route path="/privacy-policy" component={PrivacyPolicy} />
         <Route path="/user-agreement" component={UserAgreement} />
         
@@ -162,9 +160,7 @@ function Router() {
         <Route path="/admin/equity" component={EquityManagement} />
         <Route path="/admin/valuation-management" component={ValuationManagement} />
 
-        {/* 好友记相关页面 */}
-        {/* <Route path="/parent/contacts" component={ContactsManagement} /> - 已废弃 */
-        <Route path="/parent/contacts/list" component={ContactsList} />
+        {/* 好友记相关页面 */}        <Route path="/parent/contacts/list" component={ContactsList} />
         <Route path="/parent/contacts/map" component={RegionMap} />
         <Route path="/parent/contacts/tag-search" component={TagSearch} />
         <Route path="/parent/contacts/data-comparison" component={DataComparison} />
