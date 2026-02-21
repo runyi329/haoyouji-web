@@ -626,9 +626,9 @@ function ChartViewContent({
         {/* 最近30天每日收支折线图 */}
         <div className="h-48 flex items-end justify-around border-b border-l border-gray-200 relative">
           {/* Y轴标签 */}
-          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
-            <span>{Math.max(...dailyData.map((d: any) => Math.max(d.income, d.expense)), 0).toFixed(0)}</span>
-            <span>0</span>
+          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500 pr-1">
+            <span>¥{(Math.max(...dailyData.map((d: any) => Math.max(d.income, d.expense)), 0) / 1000).toFixed(0)}k</span>
+            <span>¥0</span>
           </div>
           
           {dailyData.map((day: any, index: number) => {
@@ -641,7 +641,8 @@ function ChartViewContent({
             
             // 每5天显示一个日期标签
             const showLabel = index % 5 === 0 || index === dailyData.length - 1;
-            const dateLabel = day.date ? new Date(day.date).getDate() : '';
+            const date = day.date ? new Date(day.date) : null;
+            const dateLabel = date ? `${date.getMonth() + 1}/${date.getDate()}` : '';
             
             return (
               <div key={index} className="flex flex-col items-center" style={{ width: '3%' }}>
