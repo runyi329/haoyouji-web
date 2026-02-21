@@ -2,6 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, ChevronDown, Calendar, List, BarChart3 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList
+} from 'recharts';
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   Select,
@@ -623,54 +626,62 @@ function ChartViewContent({
           <h3 className="font-medium">收支曲线</h3>
         </div>
         
-        {/* 最近30天每日收支折线图 */}
-        <div className="h-48 flex items-end justify-around border-b border-l border-gray-200 relative">
-          {/* Y轴标签 */}
-          <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500 pr-1">
-            <span>¥{(Math.max(...dailyData.map((d: any) => Math.max(d.income, d.expense)), 0) / 1000).toFixed(0)}k</span>
-            <span>¥0</span>
-          </div>
-          
-          {dailyData.map((day: any, index: number) => {
-            const maxValue = Math.max(
-              ...dailyData.map((d: any) => Math.max(d.income, d.expense)),
-              1
-            );
-            const incomeHeight = (day.income / maxValue) * 100;
-            const expenseHeight = (day.expense / maxValue) * 100;
-            
-            // 每5天显示一个日期标签
-            const showLabel = index % 5 === 0 || index === dailyData.length - 1;
-            const date = day.date ? new Date(day.date) : null;
-            const dateLabel = date ? `${date.getMonth() + 1}/${date.getDate()}` : '';
-            
-            return (
-              <div key={index} className="flex flex-col items-center" style={{ width: '3%' }}>
-                <div className="flex items-end space-x-0.5 h-40 w-full justify-center">
-                  <div 
-                    className="bg-orange-400 rounded-t"
-                    style={{ 
-                      width: '40%',
-                      height: `${incomeHeight}%`, 
-                      minHeight: day.income > 0 ? '2px' : '0' 
-                    }}
-                  />
-                  <div 
-                    className="bg-[#1976D2] rounded-t"
-                    style={{ 
-                      width: '40%',
-                      height: `${expenseHeight}%`, 
-                      minHeight: day.expense > 0 ? '2px' : '0' 
-                    }}
-                  />
-                </div>
-                {/* X轴标签 - 每5天显示一次 */}
-                <span className="text-[10px] text-gray-500 mt-1">
-                  {showLabel ? dateLabel : ''}
-                </span>
-              </div>
-            );
-          })}
+        {/* 最近30天每日收支柱状图 */}
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart 
+              data={dailyData.map((day: any) => ({
+                ...day,
+                displayDate: day.date ? (() => {
+                  const d = new Date(day.date);
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                })() : ''
+              }))}
+              margin={{ top: 20, right: 10, left: -10, bottom: 5 }}
+              barCategoryGap="5%"
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis 
+                dataKey="displayDate"
+                tick={{ fontSize: 10, fill: '#6b7280' }}
+                stroke="#9ca3af"
+                interval={4}
+              />
+              <YAxis 
+                tick={{ fontSize: 10, fill: '#6b7280' }}
+                stroke="#9ca3af"
+                width={45}
+                tickFormatter={(value: number) => `¥${(value / 1000).toFixed(0)}k`}
+                domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
+              />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: 'white',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                formatter={(value: any, name: string) => [
+                  `¥${value.toFixed(2)}`,
+                  name === 'income' ? '收入' : '支出'
+                ]}
+              />
+              <Bar 
+                dataKey="income" 
+                fill="#fb923c"
+                radius={[4, 4, 0, 0]}
+                animationBegin={0}
+                animationDuration={800}
+              />
+              <Bar 
+                dataKey="expense" 
+                fill="#1976D2"
+                radius={[4, 4, 0, 0]}
+                animationBegin={0}
+                animationDuration={800}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
         
         {/* 图例 */}
