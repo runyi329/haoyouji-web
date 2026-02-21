@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
+import { DatePicker } from "@/components/DatePicker";
 
 export default function LedgerFilter() {
   const [, params] = useRoute("/ledger/:id/filter");
@@ -40,6 +41,8 @@ export default function LedgerFilter() {
   const [showAmountRange, setShowAmountRange] = useState(false);
   const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
   const [showCustomDate, setShowCustomDate] = useState(false);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
   const [showCategories, setShowCategories] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set());
@@ -326,21 +329,19 @@ export default function LedgerFilter() {
           </div>
           {showCustomDate && (
             <div className="flex items-center gap-2 w-full">
-              <input
-                type="text"
-                placeholder="开始日期"
-                value={dateStart}
-                onChange={(e) => setDateStart(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-              />
+              <button
+                onClick={() => setShowStartDatePicker(true)}
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none hover:border-blue-400 transition-colors text-left"
+              >
+                {dateStart || "开始日期"}
+              </button>
               <span className="text-gray-400 text-xs flex-shrink-0">至</span>
-              <input
-                type="text"
-                placeholder="结束日期"
-                value={dateEnd}
-                onChange={(e) => setDateEnd(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400"
-              />
+              <button
+                onClick={() => setShowEndDatePicker(true)}
+                className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none hover:border-blue-400 transition-colors text-left"
+              >
+                {dateEnd || "结束日期"}
+              </button>
             </div>
           )}
         </div>
@@ -605,6 +606,24 @@ export default function LedgerFilter() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 开始日期选择器 */}
+      {showStartDatePicker && (
+        <DatePicker
+          value={dateStart}
+          onChange={(date) => setDateStart(date)}
+          onClose={() => setShowStartDatePicker(false)}
+        />
+      )}
+
+      {/* 结束日期选择器 */}
+      {showEndDatePicker && (
+        <DatePicker
+          value={dateEnd}
+          onChange={(date) => setDateEnd(date)}
+          onClose={() => setShowEndDatePicker(false)}
+        />
       )}
     </div>
   );
