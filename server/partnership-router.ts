@@ -15,13 +15,13 @@ export const partnershipRouter = router({
   searchUsers: protectedProcedure
     .input(z.object({
       partnershipId: z.number(),
-      query: z.string().optional(),
+      query: z.string(),
     }))
     .query(async ({ input, ctx }) => {
       const { partnershipId, query } = input;
+      const db = await getDb();
 
       // 获取已是成员的用户ID列表
-      const db = await getDb();
       const existingMembers = await db
         .select({ userId: partnershipMembers.userId })
         .from(partnershipMembers)
@@ -29,27 +29,8 @@ export const partnershipRouter = router({
 
       const existingUserIds = existingMembers.map(m => m.userId);
 
-      // 构建查询条件
-      let whereConditions = [];
-      
-      // 排除已是成员的用户
-      if (existingUserIds.length > 0) {
-        whereConditions.push(sql`${users.id} NOT IN (${sql.join(existingUserIds.map(id => sql`${id}`), sql`, `)})`);
-      }
-
-      // 搜索条件（搜索用户名、显示名、邮箱）
-      if (query && query.trim()) {
-        whereConditions.push(
-          or(
-            like(users.username, `%${query}%`),
-            like(users.name, `%${query}%`),
-            like(users.email, `%${query}%`)
-          )
-        );
-      }
-
-      // 查询用户
-      const searchResults = await db
+      // 搜索所有用户（模糊搜索username、name、email）
+      let allUsers = await db
         .select({
           id: users.id,
           username: users.username,
@@ -58,10 +39,21 @@ export const partnershipRouter = router({
           avatar: users.avatar,
         })
         .from(users)
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+        .where(
+          query.trim() 
+            ? or(
+                like(users.username, `%${query}%`),
+                like(users.name, `%${query}%`),
+                like(users.email, `%${query}%`)
+              )
+            : undefined
+        )
         .limit(20);
 
-      return searchResults;
+      // 过滤掉已是成员的用户
+      const filteredUsers = allUsers.filter(user => !existingUserIds.includes(user.id));
+
+      return filteredUsers;
     }),
 
   // 添加成员到企业和工作群
