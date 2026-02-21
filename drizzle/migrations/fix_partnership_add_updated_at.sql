@@ -1,0 +1,2 @@
+-- 给 partnerships 表添加 updated_at 列
+ALTER TABLE `partnerships` ADD COLUMN `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;

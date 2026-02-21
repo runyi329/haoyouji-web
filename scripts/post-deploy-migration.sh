@@ -28,10 +28,13 @@ if [ -z "$DB_HOST" ]; then
 fi
 
 # 定义迁移文件列表（按顺序执行）
+# 注意：ALTER TABLE和INSERT分开，避免ALTER失败导致INSERT不执行
 MIGRATIONS=(
   "migrations/create_ai_tables.sql"
   "drizzle/migrations/add_work_groups.sql"
   "drizzle/migrations/add_partnership_tables.sql"
+  "drizzle/migrations/fix_partnership_add_updated_at.sql"
+  "drizzle/migrations/fix_work_groups_add_updated_at.sql"
   "drizzle/migrations/fix_partnership_tables.sql"
 )
 
