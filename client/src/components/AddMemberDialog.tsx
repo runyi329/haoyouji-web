@@ -20,10 +20,10 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
     { enabled: isOpen }
   );
 
-  // 搜索用户
-  const { data: searchResults = [], isLoading: isSearching } = trpc.partnership.searchUsers.useQuery(
+  // 搜索用户（实时搜索）
+  const { data: searchResults = [] } = trpc.partnership.searchUsers.useQuery(
     { partnershipId, query: searchKeyword },
-    { enabled: isOpen && searchKeyword.trim().length > 0 }
+    { enabled: isOpen }
   );
 
   // 添加成员mutation
@@ -38,14 +38,7 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
     },
   });
 
-  // 当打开对话框时，如果没有搜索关键词，显示所有用户
-  const { data: allUsers = [] } = trpc.partnership.searchUsers.useQuery(
-    { partnershipId, query: '' },
-    { enabled: isOpen && searchKeyword.trim().length === 0 }
-  );
 
-  // 合并搜索结果和所有用户列表
-  const displayUsers = searchKeyword.trim().length > 0 ? searchResults : allUsers;
 
   if (!isOpen) return null;
 
@@ -119,11 +112,10 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
               />
               <button
                 onClick={handleSearch}
-                disabled={isSearching}
-                className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors flex items-center gap-1 disabled:opacity-50"
+                className="px-4 py-2 bg-[#D32F2F] text-white rounded-lg hover:bg-[#C62828] transition-colors flex items-center gap-1"
               >
                 <Search className="w-4 h-4" />
-                {isSearching ? '搜索中...' : '搜索'}
+                搜索
               </button>
             </div>
           </div>
@@ -132,12 +124,10 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
           <div>
             <label className="block text-sm font-semibold text-[#222222] mb-2">选择用户</label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {isSearching ? (
-                <div className="text-center py-8 text-[#757575]">搜索中...</div>
-              ) : displayUsers.length === 0 ? (
-                <div className="text-center py-8 text-[#757575]">未找到匹配的用户</div>
+              {searchResults.length === 0 ? (
+                <div className="text-center py-8 text-[#757575]">{searchKeyword.trim() ? '未找到匹配的用户' : '输入关键词搜索用户'}</div>
               ) : (
-                displayUsers.map((user) => (
+                searchResults.map((user) => (
                   <div
                     key={user.id}
                     onClick={() => setSelectedUserId(user.id)}
