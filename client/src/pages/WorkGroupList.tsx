@@ -44,9 +44,9 @@ export default function WorkGroupList() {
       { name: "王五", value: 68 }
     ],
     leapList: [
-      { name: "周八", growth: "+45", badge: "🚀" },
-      { name: "孙七", growth: "+32", badge: "⬆️" },
-      { name: "赵六", growth: "+28", badge: "🌟" }
+      { name: "周八", growth: 45 },
+      { name: "孙七", growth: 32 },
+      { name: "赵六", growth: 28 }
     ],
     recordCount: 128,
     recentActivities: [
@@ -156,19 +156,16 @@ export default function WorkGroupList() {
 
             {/* 2/3: 池子可视化 */}
             <div className="border-r border-gray-200 px-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1 flex items-center gap-1">
-                <span>🪣</span>
-                <span>总资产进度</span>
-              </h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">总资产进度</h3>
               <div className="space-y-1">
                 <div className="flex items-baseline gap-0.5">
-                  <span className="text-xl font-bold text-[#2196F3]">{mockData.poolProgress.current}</span>
+                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.poolProgress.current}</span>
                   <span className="text-xs text-[#757575]">/{mockData.poolProgress.target}%</span>
                 </div>
                 {/* 进度条 */}
-                <div className="h-2 bg-[#E3F2FD] rounded-full overflow-hidden">
+                <div className="h-2 bg-[#FFEBEE] rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#2196F3] to-[#64B5F6] rounded-full transition-all"
+                    className="h-full bg-[#D32F2F] rounded-full transition-all"
                     style={{ width: `${mockData.poolProgress.percentage}%` }}
                   />
                 </div>
@@ -246,23 +243,19 @@ export default function WorkGroupList() {
           <div className="grid grid-cols-2 border-b border-gray-200">
             {/* 飞跃榜 */}
             <div className="px-4 py-2.5 border-r border-gray-200">
-              <h3 className="text-xs font-bold text-[#222222] mb-1.5 flex items-center gap-1">
-                <span>🚀</span>
-                <span>飞跃榜</span>
-                <span className="text-xs font-normal text-[#757575]">(本周进步)</span>
+              <h3 className="text-xs font-bold text-[#222222] mb-1.5">
+                飞跃榜
+                <span className="text-xs font-normal text-[#757575] ml-1">(本周进步)</span>
               </h3>
               <div className="space-y-1.5">
                 {mockData.leapList.map((member, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-br from-[#FFD700] to-[#FFA500]">
-                      <span className="text-xs font-bold text-white">{index + 1}</span>
+                    <div className="flex items-center justify-center w-5 h-5 rounded-full bg-[#FAF3ED]">
+                      <span className="text-xs font-bold text-[#CBA471]">{index + 1}</span>
                     </div>
                     <div className="flex-1 flex items-center justify-between">
                       <span className="text-xs font-medium text-[#222222]">{member.name}</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-lg">{member.badge}</span>
-                        <span className="text-xs font-bold text-[#4CAF50]">{member.growth}</span>
-                      </div>
+                      <span className="text-xs font-bold text-[#D32F2F]">+{member.growth}</span>
                     </div>
                   </div>
                 ))}
@@ -275,14 +268,14 @@ export default function WorkGroupList() {
               <div className="flex flex-col items-center justify-center">
                 <div className="relative w-10 h-10 mb-1">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#E3F2FD" strokeWidth="8" />
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#FFEBEE" strokeWidth="8" />
                     <circle
-                      cx="50" cy="50" r="45" fill="none" stroke="#1976D2" strokeWidth="8"
+                      cx="50" cy="50" r="45" fill="none" stroke="#D32F2F" strokeWidth="8"
                       strokeDasharray="200 283" strokeLinecap="round"
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-[#1976D2]">{mockData.recordCount}</span>
+                    <span className="text-xs font-bold text-[#D32F2F]">{mockData.recordCount}</span>
                   </div>
                 </div>
                 <span className="text-xs text-[#757575]">记账次数</span>
@@ -292,19 +285,12 @@ export default function WorkGroupList() {
 
           {/* 预警雷达区域 */}
           <div className="px-4 py-2.5 border-b border-gray-200">
-            <h3 className="text-xs font-bold text-[#222222] mb-1.5 flex items-center gap-1">
-              <span>⚠️</span>
-              <span>预警雷达</span>
-            </h3>
+            <h3 className="text-xs font-bold text-[#222222] mb-1.5">预警雷达</h3>
             <div className="space-y-1.5">
               {mockData.alerts.map((alert, index) => (
                 <div 
                   key={index} 
-                  className={`p-2 rounded-lg ${
-                    alert.type === 'warning' 
-                      ? 'bg-[#FFF3E0] border border-[#FFB74D]' 
-                      : 'bg-[#E3F2FD] border border-[#64B5F6]'
-                  }`}
+                  className="p-2 rounded-lg bg-[#FAF3ED] border border-gray-200"
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
