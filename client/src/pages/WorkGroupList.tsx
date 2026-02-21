@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, BookOpen } from "lucide-react";
+import { trpc } from '../lib/trpc';
+import { useMemo } from 'react';
 
 /**
  * 脉动节点合作平台 - 数据看板首页
@@ -8,12 +10,46 @@ import { ChevronLeft, BookOpen } from "lucide-react";
 export default function WorkGroupList() {
   const [, setLocation] = useLocation();
 
+  // 固定的有限合伙企业ID（目前只有一个企业）
+  const partnershipId = 1;
+
+  // 获取工作群列表
+  const { data: workGroupsData = [] } = trpc.partnership.getWorkGroups.useQuery(
+    { partnershipId },
+    { enabled: true }
+  );
+
+  // 获取所有成员数据
+  const { data: membersData = [] } = trpc.partnership.getMembers.useQuery(
+    { partnershipId },
+    { enabled: true }
+  );
+
   // 计算运行天数
   const startDate = new Date('2026-02-08');
   const today = new Date();
   const runningDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  // 模拟数据
+  // 按工作群分组成员
+  const workGroupsWithMembers = useMemo(() => {
+    return workGroupsData.map(group => {
+      // 找到属于这个工作群的所有成员
+      const groupMembers = membersData.filter(member =>
+        member.workGroups?.some((wg: any) => wg.id === group.id)
+      );
+
+      return {
+        ...group,
+        members: groupMembers.map(member => ({
+          id: member.id,
+          name: member.name || '未命名',
+          avatar: member.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.id}`
+        }))
+      };
+    });
+  }, [workGroupsData, membersData]);
+
+  // 模拟数据（其他部分暂时保留）
   const mockData = {
     companyName: "上海煦斌教育科技合伙企业（有限合伙）",
     groupName: "脉动节点合作平台",
@@ -21,9 +57,9 @@ export default function WorkGroupList() {
     today: today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
     runningDays: runningDays,
     members: {
-      current: 7,
+      current: membersData.length || 7,
       max: 50,
-      percentage: 14
+      percentage: Math.round((membersData.length || 7) / 50 * 100)
     },
     poolProgress: {
       target: 12.5,
@@ -57,32 +93,6 @@ export default function WorkGroupList() {
     alerts: [
       { type: "warning", message: "有3位伙伴已连续3天未联络新人", action: "建议介入辅导" },
       { type: "info", message: "本周新增2位潜在高级用户", action: "及时跟进" }
-    ],
-    workGroups: [
-      {
-        id: 1,
-        name: "工作群1",
-        members: [
-          { id: 1, name: "张三", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1" },
-          { id: 2, name: "李四", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2" },
-          { id: 3, name: "王五", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3" }
-        ]
-      },
-      {
-        id: 2,
-        name: "工作群2",
-        members: [
-          { id: 4, name: "赵六", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=4" },
-          { id: 5, name: "孙七", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=5" }
-        ]
-      },
-      {
-        id: 3,
-        name: "工作群3",
-        members: [
-          { id: 6, name: "周八", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=6" }
-        ]
-      }
     ]
   };
 
@@ -199,11 +209,11 @@ export default function WorkGroupList() {
 
           {/* 第二行：工作群 */}
           <div className="grid grid-cols-3 border-b border-gray-200">
-            {mockData.workGroups.map((group, index) => (
+            {workGroupsWithMembers.map((group, index) => (
               <div 
                 key={group.id}
                 className={`px-4 py-2.5 cursor-pointer hover:bg-[#FAF3ED]/50 transition-colors ${
-                  index < mockData.workGroups.length - 1 ? 'border-r border-gray-200' : ''
+                  index < workGroupsWithMembers.length - 1 ? 'border-r border-gray-200' : ''
                 }`}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -283,65 +293,53 @@ export default function WorkGroupList() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xs font-bold text-[#D32F2F]">{mockData.recordCount}</span>
+                    <span className="text-xs font-bold text-[#D32F2F]">71%</span>
                   </div>
                 </div>
+                <span className="text-sm font-bold text-[#D32F2F]">{mockData.recordCount}</span>
                 <span className="text-xs text-[#757575]">记账次数</span>
               </div>
             </div>
           </div>
 
-          {/* 预警雷达区域 */}
-          <div className="px-4 py-2.5 border-b border-gray-200">
+          {/* 第四行：预警雷达 */}
+          <div className="px-4 py-2.5">
             <h3 className="text-xs font-bold text-[#222222] mb-1.5">预警雷达</h3>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {mockData.alerts.map((alert, index) => (
                 <div 
-                  key={index} 
-                  className="p-2 rounded-lg bg-[#FAF3ED] border border-gray-200"
+                  key={index}
+                  className="flex items-start gap-2 p-2 rounded-lg bg-[#FAF3ED]/50 hover:bg-[#FAF3ED] transition-colors cursor-pointer"
                 >
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-[#222222] mb-0.5">
-                        {alert.message}
-                      </p>
-                      <p className="text-xs text-[#757575]">
-                        {alert.action}
-                      </p>
-                    </div>
-                    <button className="text-xs font-medium text-[#D32F2F] hover:underline flex-shrink-0">
-                      处理
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 最新动态区域 */}
-          <div className="px-4 py-2.5">
-            <h3 className="text-xs font-bold text-[#222222] mb-1.5">最新动态</h3>
-            <div className="space-y-1">
-              {mockData.recentActivities.map((activity, index) => (
-                <div key={index} className="flex items-start gap-1.5 pb-1 border-b border-gray-100 last:border-0 last:pb-0">
-                  <div className="w-1 h-1 rounded-full bg-[#D32F2F] mt-1 flex-shrink-0" />
+                  <div className={`w-1 h-full rounded-full ${
+                    alert.type === 'warning' ? 'bg-[#FF9800]' : 'bg-[#2196F3]'
+                  }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[#222222]">
-                      <span className="font-semibold">{activity.user}</span> {activity.action}
-                    </p>
-                    <p className="text-xs text-[#757575]">{activity.time}</p>
+                    <p className="text-xs text-[#222222] mb-0.5">{alert.message}</p>
+                    <p className="text-xs text-[#757575]">{alert.action}</p>
                   </div>
+                  <button className="px-2 py-0.5 text-xs font-medium text-[#D32F2F] hover:bg-[#FFEBEE] rounded transition-colors">
+                    处理
+                  </button>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* 圆点指示器 */}
-        <div className="flex items-center justify-center gap-2 mt-4">
-          <div className="w-2 h-2 rounded-full bg-[#D32F2F]" />
-          <div className="w-2 h-2 rounded-full bg-gray-300" />
-          <div className="w-2 h-2 rounded-full bg-gray-300" />
+        {/* 最新动态 */}
+        <div className="mt-4 bg-white rounded-2xl shadow-lg p-4">
+          <h3 className="text-sm font-bold text-[#222222] mb-3">最新动态</h3>
+          <div className="space-y-2">
+            {mockData.recentActivities.map((activity, index) => (
+              <div key={index} className="flex items-center gap-2 text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F]" />
+                <span className="font-medium text-[#222222]">{activity.user}</span>
+                <span className="text-[#757575]">{activity.action}</span>
+                <span className="ml-auto text-[#757575]">{activity.time}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
