@@ -1161,6 +1161,30 @@ export const partnershipWorkGroupMembers = mysqlTable("partnership_work_group_me
 	joinedAt: timestamp("joined_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 });
 
+// 合伙人平台看板 - 最新动态表
+export const partnershipDashboardActivities = mysqlTable("partnership_dashboard_activities", {
+	id: int().autoincrement().primaryKey(),
+	partnershipId: int("partnership_id").notNull().default(1),
+	userName: varchar("user_name", { length: 100 }).notNull(),
+	action: varchar({ length: 100 }).notNull(),
+	timeText: varchar("time_text", { length: 100 }).notNull(),
+	sortOrder: int("sort_order").notNull().default(0),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 合伙人平台看板 - 预警雷达表
+export const partnershipDashboardAlerts = mysqlTable("partnership_dashboard_alerts", {
+	id: int().autoincrement().primaryKey(),
+	partnershipId: int("partnership_id").notNull().default(1),
+	type: varchar({ length: 20 }).notNull().default('warning'),
+	message: text().notNull(),
+	actionText: varchar("action_text", { length: 255 }).notNull().default(''),
+	sortOrder: int("sort_order").notNull().default(0),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
 export const workGroups = mysqlTable("work_groups", {
 	id: int().autoincrement().notNull(),
 	name: varchar({ length: 100 }).notNull(),
