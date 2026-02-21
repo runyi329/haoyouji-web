@@ -26,6 +26,7 @@ import {
   Sparkles,
   Share,
   Coins,
+  Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -326,6 +327,10 @@ export default function Admin() {
             <TabsTrigger value="valuation" className="text-xs sm:text-sm">
               <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
               市值管理
+            </TabsTrigger>
+            <TabsTrigger value="partnership" className="text-xs sm:text-sm">
+              <Briefcase className="w-4 h-4 mr-1 hidden sm:inline" />
+              合伙人平台
             </TabsTrigger>
           </TabsList>
 
@@ -962,6 +967,21 @@ export default function Admin() {
           </TabsContent>
           <TabsContent value="valuation">
             <ValuationManagement />
+          </TabsContent>
+          
+          {/* 合伙人平台 */}
+          <TabsContent value="partnership">
+            <Card className="p-6">
+              <h2 className="text-xl font-bold mb-4">合伙人平台管理</h2>
+              <p className="text-gray-600 mb-4">管理首页数据看板的内容，包括最新动态和预警雷达。</p>
+              <Button 
+                onClick={() => setLocation('/partnership/dashboard-manage')}
+                className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+              >
+                <Briefcase className="w-4 h-4 mr-2" />
+                进入管理页面
+              </Button>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
