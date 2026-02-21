@@ -174,7 +174,7 @@ export default function WorkGroupList() {
 
             {/* 2/3: 池子可视化 */}
             <div className="border-r border-gray-200 px-2">
-              <h3 className="text-xs font-bold text-[#222222] mb-1">总资产进度</h3>
+              <h3 className="text-xs font-bold text-[#222222] mb-1">实缴</h3>
               <div className="space-y-1">
                 <div className="flex items-baseline gap-0.5">
                   <span className="text-xl font-bold text-[#D32F2F]">{mockData.poolProgress.current}</span>
