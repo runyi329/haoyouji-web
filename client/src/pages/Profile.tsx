@@ -42,6 +42,7 @@ import {
   ArrowLeft,
   UserPlus,
   MessageCircle,
+  Briefcase,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -414,6 +415,7 @@ export default function Profile() {
   const accountFeatures: FeatureItem[] = [
     ...(user.role === "super_admin" ? [
       { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
+      { id: "partnership-platform", icon: Briefcase, label: "合伙人平台", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/partnership/dashboard-manage") },
     ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
