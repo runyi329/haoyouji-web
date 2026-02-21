@@ -43,6 +43,32 @@ export default function WorkGroupList() {
       { user: "张三", action: "记账", time: "2小时前" },
       { user: "李四", action: "更新", time: "5小时前" },
       { user: "王五", action: "记账", time: "1天前" }
+    ],
+    workGroups: [
+      {
+        id: 1,
+        name: "工作群1",
+        members: [
+          { id: 1, name: "张三", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1" },
+          { id: 2, name: "李四", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2" },
+          { id: 3, name: "王五", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3" }
+        ]
+      },
+      {
+        id: 2,
+        name: "工作群2",
+        members: [
+          { id: 4, name: "赵六", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=4" },
+          { id: 5, name: "孙七", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=5" }
+        ]
+      },
+      {
+        id: 3,
+        name: "工作群3",
+        members: [
+          { id: 6, name: "周八", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=6" }
+        ]
+      }
     ]
   };
 
@@ -139,44 +165,54 @@ export default function WorkGroupList() {
             </div>
           </div>
 
-          {/* 第二行：活跃度 + 收支总览 */}
-          <div className="grid grid-cols-2 border-b border-gray-200">
-            {/* 活跃度 */}
-            <div className="px-4 py-2.5 border-r border-gray-200">
-              <h3 className="text-xs font-bold text-[#222222] mb-1.5">活跃度</h3>
-              <div className="flex items-baseline gap-1 mb-1.5">
-                <span className="text-xl font-bold text-[#4CAF50]">{mockData.active.count}</span>
-                <span className="text-xs text-[#757575]">人活跃</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="flex-1 h-1.5 bg-[#E8F5E9] rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-[#4CAF50] rounded-full transition-all"
-                    style={{ width: `${mockData.active.rate}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-[#757575]">{mockData.active.rate}%</span>
-              </div>
-            </div>
-
-            {/* 收支总览 */}
-            <div className="px-4 py-2.5">
-              <h3 className="text-xs font-bold text-[#222222] mb-1.5">收支总览</h3>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#757575]">收入</span>
-                  <span className="text-xl font-bold text-[#4CAF50]">
-                    ¥{mockData.finance.income.toLocaleString()}
+          {/* 第二行：工作群 */}
+          <div className="grid grid-cols-3 border-b border-gray-200">
+            {mockData.workGroups.map((group, index) => (
+              <div 
+                key={group.id}
+                className={`px-4 py-2.5 cursor-pointer hover:bg-[#FAF3ED]/50 transition-colors ${
+                  index < mockData.workGroups.length - 1 ? 'border-r border-gray-200' : ''
+                }`}
+                onClick={() => {
+                  // TODO: 打开编辑页面
+                  alert(`编辑${group.name}`);
+                }}
+              >
+                <h3 className="text-xs font-bold text-[#222222] mb-1.5">{group.name}</h3>
+                
+                {/* 成员头像展示 */}
+                <div className="flex items-center">
+                  {/* 头像重叠展示 */}
+                  <div className="flex -space-x-2">
+                    {group.members.slice(0, 4).map((member, idx) => (
+                      <div
+                        key={member.id}
+                        className="w-8 h-8 rounded-full border-2 border-white bg-white overflow-hidden"
+                        style={{ zIndex: 10 - idx }}
+                      >
+                        <img 
+                          src={member.avatar} 
+                          alt={member.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                    {/* 添加按钮 */}
+                    <div 
+                      className="w-8 h-8 rounded-full border-2 border-white bg-[#D32F2F] flex items-center justify-center text-white text-sm font-bold"
+                      style={{ zIndex: 5 }}
+                    >
+                      +
+                    </div>
+                  </div>
+                  
+                  {/* 成员数量 */}
+                  <span className="ml-2 text-xs text-[#757575]">
+                    {group.members.length}人
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#757575]">支出</span>
-                  <span className="text-xl font-bold text-[#D32F2F]">
-                    ¥{mockData.finance.expense.toLocaleString()}
-                  </span>
-                </div>
               </div>
-            </div>
+            ))}
           </div>
 
           {/* 第三行：贡献排行 + 本月记账 */}
