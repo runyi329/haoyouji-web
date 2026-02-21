@@ -1,8 +1,15 @@
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams } from 'wouter';
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
+import AddMemberDialog from '../components/AddMemberDialog';
 
 export default function WorkGroupMembers() {
   const [, setLocation] = useLocation();
   const { groupId } = useParams();
+  const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false);
+  
+  // TODO: 从context或API获取当前用户信息
+  const currentUser = { role: 'super_admin' }; // 临时模拟数据
 
   // 模拟数据 - 6个成员，每个成员所属的工作群
   const mockMembers = [
@@ -87,7 +94,16 @@ export default function WorkGroupMembers() {
           </svg>
         </button>
         <h1 className="text-lg font-bold">上海煦斌教育科技合伙企业</h1>
-        <div className="w-6"></div>
+        {/* 添加成员按钮（仅管理员可见） */}
+        {currentUser.role === 'super_admin' && (
+          <button
+            onClick={() => setIsAddMemberDialogOpen(true)}
+            className="p-1"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
+        {currentUser.role !== 'super_admin' && <div className="w-6"></div>}
       </div>
 
       {/* 成员列表 */}
@@ -158,6 +174,17 @@ export default function WorkGroupMembers() {
           ))}
         </div>
       </div>
+
+      {/* 添加成员弹窗 */}
+      <AddMemberDialog
+        isOpen={isAddMemberDialogOpen}
+        onClose={() => setIsAddMemberDialogOpen(false)}
+        onAdd={(userId, workGroupIds) => {
+          console.log('添加成员:', userId, '到工作群:', workGroupIds);
+          // TODO: 调用API添加成员
+          alert(`成功添加用户${userId}到工作群${workGroupIds.join(', ')}`);
+        }}
+      />
     </div>
   );
 }
