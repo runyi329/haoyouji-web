@@ -198,7 +198,7 @@ export default function WorkGroupList() {
                 <span className="text-xs text-[#757575]">运行</span>
                 <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
                 <span className="text-xs text-[#757575]">天</span>
-                <span className="text-xs text-[#757575] ml-1">启动 2/8</span>
+                <span className="text-xs text-[#757575] ml-1">2月8日启动</span>
               </div>
             </div>
           </div>
