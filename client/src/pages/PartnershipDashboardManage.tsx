@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, Plus, Trash2, Save, Loader2, Search, Calendar, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronLeft, Plus, Trash2, Save, Loader2, Search, Calendar, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -99,16 +100,11 @@ function UserSearchSelect({
                   alt=""
                   className="w-6 h-6 rounded-full"
                 />
-                <span className="font-medium">{member.name || '未命名'}</span>
-                {member.email && (
-                  <span className="text-xs text-gray-400 ml-auto">@{member.email}</span>
-                )}
+                <span className="font-medium text-[#222222]">{member.name || member.email}</span>
               </button>
             ))
           ) : (
-            <div className="px-3 py-2 text-sm text-gray-400 text-center">
-              {searchText ? "未找到匹配成员" : "暂无成员"}
-            </div>
+            <div className="px-3 py-2 text-sm text-gray-400">未找到匹配成员</div>
           )}
         </div>
       )}
@@ -116,341 +112,430 @@ function UserSearchSelect({
   );
 }
 
-/**
- * 合伙人平台管理页面
- * 用于管理首页数据看板的内容（数据持久化到数据库）
- */
 export default function PartnershipDashboardManage() {
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
   const partnershipId = 1;
-  const [isSaving, setIsSaving] = useState(false);
 
-  // 最新动态管理（time存储原始日期YYYY-MM-DD，timeDisplay存储显示格式）
-  const [activities, setActivities] = useState<Array<{ user: string; action: string; time: string; timeDisplay?: string }>>([]);
-  // 预警雷达管理
-  const [alerts, setAlerts] = useState<Array<{ type: string; message: string; action: string }>>([]);
+  // 获取现有数据
+  const { data: existingActivities = [], refetch: refetchActivities } = trpc.partnership.getDashboardActivities.useQuery({ partnershipId });
+  const { data: existingAlerts = [], refetch: refetchAlerts } = trpc.partnership.getDashboardAlerts.useQuery({ partnershipId });
 
-  // 从数据库加载最新动态
-  const { data: dbActivities, isLoading: loadingActivities, refetch: refetchActivities } = trpc.partnership.getDashboardActivities.useQuery({
-    partnershipId,
-  });
+  // 保存单条动态的mutation
+  const saveActivityMutation = trpc.partnership.saveDashboardActivities.useMutation();
+  
+  // 保存单条预警的mutation
+  const saveAlertMutation = trpc.partnership.saveDashboardAlerts.useMutation();
 
-  // 从数据库加载预警雷达
-  const { data: dbAlerts, isLoading: loadingAlerts, refetch: refetchAlerts } = trpc.partnership.getDashboardAlerts.useQuery({
-    partnershipId,
-  });
-
-  // 保存最新动态
-  const saveActivitiesMutation = trpc.partnership.saveDashboardActivities.useMutation();
-
-  // 保存预警雷达
-  const saveAlertsMutation = trpc.partnership.saveDashboardAlerts.useMutation();
-
-  // 数据库数据加载后同步到本地状态
-  useEffect(() => {
-    if (dbActivities) {
-      setActivities(dbActivities.map(a => {
-        // 尝试从显示格式反推原始日期
-        const timeText = a.timeText;
-        let rawDate = "";
-        if (timeText && timeText.includes("月") && timeText.includes("日")) {
-          // 从"2月24日"提取月日
-          const match = timeText.match(/(\d+)月(\d+)日/);
-          if (match) {
-            const month = match[1].padStart(2, '0');
-            const day = match[2].padStart(2, '0');
-            rawDate = `2026-${month}-${day}`; // 假设2026年
-          }
-        }
-        return {
-          user: a.userName,
+  // 删除动态
+  const handleDeleteActivity = async (activityId: number) => {
+    try {
+      // 过滤掉要删除的动态
+      const remainingActivities = existingActivities.filter(a => a.id !== activityId);
+      await saveActivityMutation.mutateAsync({
+        partnershipId,
+        activities: remainingActivities.map(a => ({
+          userName: a.userName,
           action: a.action,
-          time: rawDate,
-          timeDisplay: timeText,
-        };
-      }));
+          timeText: a.timeText,
+        })),
+      });
+      await refetchActivities();
+      toast.success("删除成功");
+    } catch (error) {
+      toast.error("删除失败");
     }
-  }, [dbActivities]);
+  };
 
-  useEffect(() => {
-    if (dbAlerts) {
-      setAlerts(dbAlerts.map(a => ({
-        type: a.type,
-        message: a.message,
-        action: a.actionText,
-      })));
+  // 保存单条动态
+  const handleSaveActivity = async (activity: { userName: string; action: string; timeText: string; rawDate?: string }) => {
+    if (!activity.userName || !activity.action) {
+      toast.error("请填写完整信息");
+      return;
     }
-  }, [dbAlerts]);
-
-  const addActivity = () => {
-    setActivities([...activities, { user: "", action: "", time: "", timeDisplay: "" }]);
-  };
-
-  const removeActivity = (index: number) => {
-    setActivities(activities.filter((_, i) => i !== index));
-  };
-
-  const updateActivity = (index: number, field: string, value: string) => {
-    const newActivities = [...activities];
-    newActivities[index] = { ...newActivities[index], [field]: value };
-    setActivities(newActivities);
-  };
-
-  const addAlert = () => {
-    setAlerts([...alerts, { type: "info", message: "", action: "" }]);
-  };
-
-  const removeAlert = (index: number) => {
-    setAlerts(alerts.filter((_, i) => i !== index));
-  };
-
-  const updateAlert = (index: number, field: string, value: string) => {
-    const newAlerts = [...alerts];
-    newAlerts[index] = { ...newAlerts[index], [field]: value };
-    setAlerts(newAlerts);
-  };
-
-  const handleSave = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
 
     try {
-      // 同时保存动态和预警
-      await Promise.all([
-        saveActivitiesMutation.mutateAsync({
-          partnershipId,
-          activities: activities.map(a => ({
-            userName: a.user,
-            action: a.action,
-            timeText: a.timeDisplay || a.time || "",
-          })),
-        }),
-        saveAlertsMutation.mutateAsync({
-          partnershipId,
-          alerts: alerts.map(a => ({
-            type: a.type,
-            message: a.message,
-            actionText: a.action,
-          })),
-        }),
-      ]);
+      // 获取所有现有动态，加上当前这条
+      const allActivities = [
+        ...existingActivities.map(a => ({
+          userName: a.userName,
+          action: a.action,
+          timeText: a.timeText,
+        })),
+        {
+          userName: activity.userName,
+          action: activity.action,
+          timeText: activity.timeText,
+        }
+      ];
 
-      toast.success("保存成功！");
+      await saveActivityMutation.mutateAsync({
+        partnershipId,
+        activities: allActivities,
+      });
       
-      // 保存成功后延迟500ms刷新数据，确保数据库已更新
-      setTimeout(async () => {
-        await Promise.all([refetchActivities(), refetchAlerts()]);
-      }, 500);
-    } catch (error: any) {
-      toast.error("保存失败：" + (error?.message || "未知错误"));
-    } finally {
-      setIsSaving(false);
+      await refetchActivities();
+      toast.success("保存成功");
+    } catch (error) {
+      toast.error("保存失败");
     }
   };
 
-  // 格式化日期为 M月D日
-  const formatDateDisplay = (dateStr: string) => {
-    if (!dateStr) return "";
-    // 如果已经是中文格式，直接返回
-    if (dateStr.includes("月")) return dateStr;
-    // 尝试解析日期
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  // 删除预警
+  const handleDeleteAlert = async (alertId: number) => {
+    try {
+      const remainingAlerts = existingAlerts.filter(a => a.id !== alertId);
+      await saveAlertMutation.mutateAsync({
+        partnershipId,
+        alerts: remainingAlerts.map(a => ({
+          type: a.type,
+          message: a.message,
+          actionText: a.actionText,
+        })),
+      });
+      await refetchAlerts();
+      toast.success("删除成功");
+    } catch (error) {
+      toast.error("删除失败");
+    }
   };
 
-  const isLoading = loadingActivities || loadingAlerts;
+  // 保存单条预警
+  const handleSaveAlert = async (alert: { type: string; message: string; actionText: string }) => {
+    if (!alert.message) {
+      toast.error("请填写预警信息");
+      return;
+    }
+
+    try {
+      const allAlerts = [
+        ...existingAlerts.map(a => ({
+          type: a.type,
+          message: a.message,
+          actionText: a.actionText,
+        })),
+        {
+          type: alert.type,
+          message: alert.message,
+          actionText: alert.actionText,
+        }
+      ];
+
+      await saveAlertMutation.mutateAsync({
+        partnershipId,
+        alerts: allAlerts,
+      });
+      
+      await refetchAlerts();
+      toast.success("保存成功");
+    } catch (error) {
+      toast.error("保存失败");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
       {/* 顶部导航栏 */}
-      <div className="bg-[#D32F2F] border-b border-[#D32F2F] sticky top-0 z-10">
-        <div className="px-3 py-3 flex items-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocation("/admin")}
-            className="text-white hover:bg-white/10 h-8 w-8"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          
-          <h1 className="text-lg font-bold text-white absolute left-1/2 transform -translate-x-1/2">
-            合伙人平台管理
-          </h1>
-        </div>
+      <div className="bg-[#B85C38] text-white p-4 flex items-center justify-between sticky top-0 z-10">
+        <button onClick={() => navigate("/admin")} className="p-1">
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <h1 className="text-lg font-bold">合伙人平台管理</h1>
+        <div className="w-8" />
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-[#D32F2F]" />
-          <span className="ml-2 text-[#757575]">加载中...</span>
+      <div className="p-4 space-y-4 pb-20">
+        {/* 最新动态管理 */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-[#222222]">最新动态</h2>
+            <NewActivityForm onSave={handleSaveActivity} partnershipId={partnershipId} />
+          </div>
+          
+          {existingActivities.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              暂无动态，点击"添加"按钮创建
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {existingActivities.map((activity) => (
+                <ActivityItem
+                  key={activity.id}
+                  activity={activity}
+                  onDelete={() => handleDeleteActivity(activity.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="p-4 space-y-4">
-          {/* 最新动态管理 */}
-          <div className="bg-white rounded-2xl shadow-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-[#222222]">最新动态</h2>
-              <Button
-                size="sm"
-                onClick={addActivity}
-                className="bg-[#D32F2F] hover:bg-[#B71C1C]"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                添加
-              </Button>
-            </div>
 
-            <div className="space-y-3">
-              {activities.map((activity, index) => (
-                <div key={index} className="p-3 bg-[#FAF3ED] rounded-lg space-y-2">
-                  {/* 第一行：用户名搜索 + 日期选择 + 删除 */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <UserSearchSelect
-                        value={activity.user}
-                        onChange={(val) => updateActivity(index, "user", val)}
-                        partnershipId={partnershipId}
-                      />
-                    </div>
-                    <div className="relative flex-shrink-0">
-                      <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                      <input
-                        type="date"
-                        value={activity.time || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) {
-                            const displayText = formatDateDisplay(val);
-                            const newActivities = [...activities];
-                            newActivities[index] = { 
-                              ...newActivities[index], 
-                              time: val,
-                              timeDisplay: displayText
-                            };
-                            setActivities(newActivities);
-                          } else {
-                            const newActivities = [...activities];
-                            newActivities[index] = { 
-                              ...newActivities[index], 
-                              time: "",
-                              timeDisplay: ""
-                            };
-                            setActivities(newActivities);
-                          }
-                        }}
-                        className="w-[120px] pl-7 pr-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
-                        placeholder="选填"
-                      />
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => removeActivity(index)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {/* 时间提示 */}
-                  <div className="flex items-center gap-1 px-1">
-                    <span className="text-xs text-gray-400">
-                      {activity.timeDisplay ? `显示时间：${activity.timeDisplay}` : "未选择日期，将显示发布时间"}
-                    </span>
-                  </div>
-                  {/* 第二行：事件内容（支持emoji） */}
-                  <Textarea
-                    placeholder="输入事件内容，支持emoji表情 🎉📊✅..."
-                    value={activity.action}
-                    onChange={(e) => updateActivity(index, "action", e.target.value)}
-                    className="text-sm min-h-[60px] resize-none"
-                    rows={2}
-                  />
-                </div>
-              ))}
-              {activities.length === 0 && (
-                <p className="text-center text-[#757575] text-sm py-4">暂无动态，点击"添加"按钮创建</p>
-              )}
-            </div>
+        {/* 预警雷达管理 */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold text-[#222222]">预警雷达</h2>
+            <NewAlertForm onSave={handleSaveAlert} />
           </div>
-
-          {/* 预警雷达管理 */}
-          <div className="bg-white rounded-2xl shadow-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold text-[#222222]">预警雷达</h2>
-              <Button
-                size="sm"
-                onClick={addAlert}
-                className="bg-[#D32F2F] hover:bg-[#B71C1C]"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                添加
-              </Button>
+          
+          {existingAlerts.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              暂无预警，点击"添加"按钮创建
             </div>
-
-            <div className="space-y-3">
-              {alerts.map((alert, index) => (
-                <div key={index} className="p-3 bg-[#FAF3ED] rounded-lg space-y-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={alert.type}
-                      onChange={(e) => updateAlert(index, "type", e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="warning">警告</option>
-                      <option value="info">信息</option>
-                    </select>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => removeAlert(index)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Textarea
-                    placeholder="预警消息"
-                    value={alert.message}
-                    onChange={(e) => updateAlert(index, "message", e.target.value)}
-                    className="text-sm"
-                    rows={2}
-                  />
-                  <Input
-                    placeholder="建议操作"
-                    value={alert.action}
-                    onChange={(e) => updateAlert(index, "action", e.target.value)}
-                    className="text-sm"
-                  />
-                </div>
+          ) : (
+            <div className="space-y-2">
+              {existingAlerts.map((alert) => (
+                <AlertItem
+                  key={alert.id}
+                  alert={alert}
+                  onDelete={() => handleDeleteAlert(alert.id)}
+                />
               ))}
-              {alerts.length === 0 && (
-                <p className="text-center text-[#757575] text-sm py-4">暂无预警，点击"添加"按钮创建</p>
-              )}
             </div>
-          </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* 保存按钮 */}
+// 新增动态表单组件
+function NewActivityForm({ onSave, partnershipId }: { onSave: (activity: any) => Promise<void>; partnershipId: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [action, setAction] = useState("");
+  const [rawDate, setRawDate] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    
+    const timeText = rawDate 
+      ? `${new Date(rawDate).getMonth() + 1}月${new Date(rawDate).getDate()}日`
+      : "";
+
+    await onSave({ userName, action, timeText, rawDate });
+    
+    // 重置表单
+    setUserName("");
+    setAction("");
+    setRawDate("");
+    setIsOpen(false);
+    setIsSaving(false);
+  };
+
+  if (!isOpen) {
+    return (
+      <Button
+        onClick={() => setIsOpen(true)}
+        className="bg-[#B85C38] hover:bg-[#A04D2F] text-white text-sm"
+        size="sm"
+      >
+        <Plus className="h-4 w-4 mr-1" />
+        添加
+      </Button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-4 w-full max-w-md space-y-3">
+        <h3 className="text-base font-bold text-[#222222]">添加最新动态</h3>
+        
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">用户名</label>
+          <UserSearchSelect
+            value={userName}
+            onChange={setUserName}
+            partnershipId={partnershipId}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">日期（选填）</label>
+          <Input
+            type="date"
+            value={rawDate}
+            onChange={(e) => setRawDate(e.target.value)}
+            className="text-sm"
+          />
+          {rawDate && (
+            <p className="text-xs text-gray-400">
+              显示时间：{new Date(rawDate).getMonth() + 1}月{new Date(rawDate).getDate()}日
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">事件内容</label>
+          <Textarea
+            placeholder="输入事件内容，支持emoji表情 🎉📊✅..."
+            value={action}
+            onChange={(e) => setAction(e.target.value)}
+            className="text-sm min-h-[80px]"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIsOpen(false)}
+            variant="outline"
+            className="flex-1"
+            disabled={isSaving}
+          >
+            取消
+          </Button>
           <Button
             onClick={handleSave}
+            className="flex-1 bg-[#B85C38] hover:bg-[#A04D2F] text-white"
             disabled={isSaving}
-            className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white py-6"
           >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Save className="h-5 w-5 mr-2" />
-                保存所有修改
-              </>
-            )}
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+            保存
           </Button>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// 动态条目组件
+function ActivityItem({ activity, onDelete }: { activity: any; onDelete: () => void }) {
+  return (
+    <div className="bg-[#FAF3ED] rounded-lg p-3 flex items-start justify-between gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-[#222222]">{activity.userName}</span>
+          <span className="text-gray-600">{activity.action}</span>
+        </div>
+        <div className="text-xs text-gray-400 mt-1">{activity.timeText}</div>
+      </div>
+      <button
+        onClick={onDelete}
+        className="text-red-500 hover:text-red-600 p-1"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// 新增预警表单组件
+function NewAlertForm({ onSave }: { onSave: (alert: any) => Promise<void> }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [type, setType] = useState("warning");
+  const [message, setMessage] = useState("");
+  const [actionText, setActionText] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    
+    await onSave({ type, message, actionText });
+    
+    setType("warning");
+    setMessage("");
+    setActionText("");
+    setIsOpen(false);
+    setIsSaving(false);
+  };
+
+  if (!isOpen) {
+    return (
+      <Button
+        onClick={() => setIsOpen(true)}
+        className="bg-[#B85C38] hover:bg-[#A04D2F] text-white text-sm"
+        size="sm"
+      >
+        <Plus className="h-4 w-4 mr-1" />
+        添加
+      </Button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-4 w-full max-w-md space-y-3">
+        <h3 className="text-base font-bold text-[#222222]">添加预警信息</h3>
+        
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">预警类型</label>
+          <Select value={type} onValueChange={setType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="warning">警告</SelectItem>
+              <SelectItem value="info">信息</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">预警信息</label>
+          <Textarea
+            placeholder="输入预警信息..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="text-sm min-h-[60px]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-gray-600">建议操作（选填）</label>
+          <Input
+            placeholder="例如：建议介入辅导"
+            value={actionText}
+            onChange={(e) => setActionText(e.target.value)}
+            className="text-sm"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIsOpen(false)}
+            variant="outline"
+            className="flex-1"
+            disabled={isSaving}
+          >
+            取消
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="flex-1 bg-[#B85C38] hover:bg-[#A04D2F] text-white"
+            disabled={isSaving}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+            保存
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 预警条目组件
+function AlertItem({ alert, onDelete }: { alert: any; onDelete: () => void }) {
+  return (
+    <div className="bg-[#FAF3ED] rounded-lg p-3 flex items-start justify-between gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`text-xs px-2 py-0.5 rounded ${
+            alert.type === 'warning' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+          }`}>
+            {alert.type === 'warning' ? '警告' : '信息'}
+          </span>
+        </div>
+        <div className="text-sm text-[#222222]">{alert.message}</div>
+        {alert.actionText && (
+          <div className="text-xs text-gray-500 mt-1">{alert.actionText}</div>
+        )}
+      </div>
+      <button
+        onClick={onDelete}
+        className="text-red-500 hover:text-red-600 p-1"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     </div>
   );
 }
