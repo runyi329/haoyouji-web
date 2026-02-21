@@ -21,9 +21,9 @@ export default function WorkGroupList() {
     today: today.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
     runningDays: runningDays,
     members: {
-      current: 5,
-      max: 20,
-      percentage: 25
+      current: 7,
+      max: 50,
+      percentage: 14
     },
     active: {
       count: 8,
@@ -126,23 +126,14 @@ export default function WorkGroupList() {
             {/* 3/3: 时间 - 最右边 */}
             <div className="pl-2">
               <h3 className="text-xs font-bold text-[#222222] mb-1">时间</h3>
-              <div className="flex items-center justify-between">
-                {/* 左侧：文字信息 */}
-                <div className="space-y-1">
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-xs text-[#757575]">运行</span>
-                    <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
-                    <span className="text-xs text-[#757575]">天</span>
-                  </div>
-                  <div className="text-xs text-[#757575]">
-                    启动 {mockData.startDate}
-                  </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-[#757575]">运行</span>
+                  <span className="text-xl font-bold text-[#D32F2F]">{mockData.runningDays}</span>
+                  <span className="text-xs text-[#757575]">天</span>
                 </div>
-                
-                {/* 右侧：日历方块图形 */}
-                <div className="flex flex-col items-center justify-center w-12 h-12 border-2 border-[#D32F2F] rounded-lg bg-gradient-to-b from-[#D32F2F] to-[#C62828]">
-                  <div className="text-xs font-bold text-white">{mockData.runningDays}</div>
-                  <div className="text-xs text-white/80">天</div>
+                <div className="text-xs text-[#757575]">
+                  启动 2/8
                 </div>
               </div>
             </div>
