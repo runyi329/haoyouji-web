@@ -4,7 +4,7 @@ export default function WorkGroupMembers() {
   const [, setLocation] = useLocation();
   const { groupId } = useParams();
 
-  // 模拟数据 - 6个成员
+  // 模拟数据 - 6个成员，每个成员所属的工作群
   const mockMembers = [
     {
       id: 1,
@@ -14,7 +14,8 @@ export default function WorkGroupMembers() {
       connections: 128,
       tags: 45,
       contacts: 89,
-      shares: 12
+      shares: 12,
+      workGroups: [1, 2] // 在群1和群2
     },
     {
       id: 2,
@@ -24,7 +25,8 @@ export default function WorkGroupMembers() {
       connections: 95,
       tags: 32,
       contacts: 67,
-      shares: 8
+      shares: 8,
+      workGroups: [1] // 只在群1
     },
     {
       id: 3,
@@ -34,7 +36,8 @@ export default function WorkGroupMembers() {
       connections: 156,
       tags: 58,
       contacts: 102,
-      shares: 15
+      shares: 15,
+      workGroups: [1] // 只在群1
     },
     {
       id: 4,
@@ -44,7 +47,8 @@ export default function WorkGroupMembers() {
       connections: 73,
       tags: 28,
       contacts: 54,
-      shares: 6
+      shares: 6,
+      workGroups: [2] // 只在群2
     },
     {
       id: 5,
@@ -54,7 +58,8 @@ export default function WorkGroupMembers() {
       connections: 112,
       tags: 41,
       contacts: 78,
-      shares: 10
+      shares: 10,
+      workGroups: [2] // 只在群2
     },
     {
       id: 6,
@@ -64,7 +69,8 @@ export default function WorkGroupMembers() {
       connections: 64,
       tags: 22,
       contacts: 45,
-      shares: 5
+      shares: 5,
+      workGroups: [3] // 只在群3
     }
   ];
 
@@ -80,7 +86,7 @@ export default function WorkGroupMembers() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h1 className="text-lg font-bold">工作群{groupId}成员</h1>
+        <h1 className="text-lg font-bold">上海煦斌教育科技合伙企业</h1>
         <div className="w-6"></div>
       </div>
 
@@ -103,9 +109,22 @@ export default function WorkGroupMembers() {
 
                 {/* 信息区域 */}
                 <div className="flex-1">
-                  {/* 第一行：用户名和加入时间 */}
+                  {/* 第一行：用户名、工作群标签和加入时间 */}
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[#222222]">{member.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-[#222222]">{member.name}</span>
+                      {/* 工作群标签 */}
+                      <div className="flex gap-1">
+                        {member.workGroups.map((groupNum) => (
+                          <span 
+                            key={groupNum}
+                            className="px-1.5 py-0.5 text-xs bg-[#FFEBEE] text-[#D32F2F] rounded"
+                          >
+                            群{groupNum}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                     <span className="text-xs text-[#757575]">加入 {member.joinDate}</span>
                   </div>
 

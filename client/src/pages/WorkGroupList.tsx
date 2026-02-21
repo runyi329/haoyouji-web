@@ -100,7 +100,7 @@ export default function WorkGroupList() {
         {/* 工作群卡片 */}
         <div 
           className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow cursor-pointer overflow-hidden border border-gray-100"
-          onClick={() => setLocation("/work-groups/1")}
+          onClick={() => setLocation("/work-group/all/members")}
         >
           {/* 公司名称头部 */}
           <div className="px-4 py-2.5 border-b border-gray-200 bg-gradient-to-b from-white to-gray-50">
@@ -173,8 +173,9 @@ export default function WorkGroupList() {
                 className={`px-4 py-2.5 cursor-pointer hover:bg-[#FAF3ED]/50 transition-colors ${
                   index < mockData.workGroups.length - 1 ? 'border-r border-gray-200' : ''
                 }`}
-                onClick={() => {
-                  setLocation(`/work-group/${group.id}/members`);
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLocation(`/work-group/all/members`);
                 }}
               >
                 <h3 className="text-xs font-bold text-[#222222] mb-1.5">{group.name}</h3>
