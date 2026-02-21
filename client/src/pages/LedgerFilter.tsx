@@ -347,24 +347,8 @@ export default function LedgerFilter() {
 
         {/* 金额范围 */}
         <div className="bg-white rounded-lg p-3 shadow-sm">
-          <button
-            onClick={() => setShowAmountRange(!showAmountRange)}
-            className="w-full flex items-center justify-between mb-2"
-          >
-            <label className="text-sm font-medium text-gray-700 cursor-pointer">金额范围</label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">
-                {showAmountRange ? "点击收起" : "点击展开"}
-              </span>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                  showAmountRange ? "rotate-180" : ""
-                }`}
-              />
-            </div>
-          </button>
-          {showAmountRange && (
-            <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700 mb-2">金额范围</label>
+          <div className="space-y-3">
               <div className="flex items-center gap-2 w-full">
                 <input
                   type="number"
@@ -395,8 +379,7 @@ export default function LedgerFilter() {
                   className="w-full"
                 />
               </div>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* 账目类型 */}
