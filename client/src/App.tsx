@@ -126,6 +126,7 @@ const CapitalMultiplierTable = lazy(() => import("./pages/CapitalMultiplierTable
 const PosterFavorites = lazy(() => import("./pages/PosterFavorites"));
 const WorkGroupList = lazy(() => import("./pages/WorkGroupList"));
 const WorkGroupDetail = lazy(() => import("./pages/WorkGroupDetail"));
+const WorkGroupMembers = lazy(() => import("./pages/WorkGroupMembers"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
@@ -222,6 +223,7 @@ function Router() {
         
         {/* 脉动节点合作平台 */}
         <Route path="/work-groups" component={WorkGroupList} />
+        <Route path="/work-group/:groupId/members" component={WorkGroupMembers} />
         <Route path="/work-groups/:id" component={WorkGroupDetail} />
         
         {/* 404 */}
