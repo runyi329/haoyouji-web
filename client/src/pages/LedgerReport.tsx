@@ -455,7 +455,7 @@ function ChartViewContent({
               <div 
                 onClick={() => toggleMember(0)}
                 className={`flex items-center p-2 rounded cursor-pointer ${
-                  selectedMemberIds.length === 0 ? 'bg-[#f5f5f5]' : 'hover:bg-gray-50'
+                  selectedMemberIds.length === 0 ? 'bg-gray-100' : 'hover:bg-gray-50'
                 }`}
               >
                 <div className="w-8 h-8 rounded-full bg-[var(--status-link)] flex items-center justify-center text-white text-sm mr-2">
@@ -469,7 +469,7 @@ function ChartViewContent({
                   key={member.id}
                   onClick={() => toggleMember(member.id)}
                   className={`flex items-center p-2 rounded cursor-pointer ${
-                    selectedMemberIds.includes(member.id) ? 'bg-[#f5f5f5]' : 'hover:bg-gray-50'
+                    selectedMemberIds.includes(member.id) ? 'bg-gray-100' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="mr-2">
@@ -640,16 +640,16 @@ function ChartViewContent({
               margin={{ top: 20, right: 10, left: -10, bottom: 5 }}
               barCategoryGap="5%"
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-gray)" />
               <XAxis 
                 dataKey="displayDate"
-                tick={{ fontSize: 10, fill: '#6b7280' }}
-                stroke="#9ca3af"
+                tick={{ fontSize: 10, fill: 'var(--text-gray)' }}
+                stroke="var(--text-gray)"
                 interval={4}
               />
               <YAxis 
-                tick={{ fontSize: 10, fill: '#6b7280' }}
-                stroke="#9ca3af"
+                tick={{ fontSize: 10, fill: 'var(--text-gray)' }}
+                stroke="var(--text-gray)"
                 width={45}
                 tickFormatter={(value: number) => `¥${(value / 1000).toFixed(0)}k`}
                 domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
@@ -657,7 +657,7 @@ function ChartViewContent({
               <Tooltip 
                 contentStyle={{
                   backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--border-gray)',
                   borderRadius: '8px',
                   fontSize: '12px'
                 }}
@@ -668,14 +668,14 @@ function ChartViewContent({
               />
               <Bar 
                 dataKey="income" 
-                fill="#fb923c"
+                fill="var(--status-success)"
                 radius={[4, 4, 0, 0]}
                 animationBegin={0}
                 animationDuration={800}
               />
               <Bar 
                 dataKey="expense" 
-                fill="var(--status-link)"
+                fill="var(--brand-red)"
                 radius={[4, 4, 0, 0]}
                 animationBegin={0}
                 animationDuration={800}
@@ -687,12 +687,12 @@ function ChartViewContent({
         {/* 图例 */}
         <div className="flex justify-center space-x-6 mt-4 text-sm">
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-[var(--status-link)] rounded-full mr-1"></div>
-            <span>支出</span>
+            <div className="w-3 h-3 bg-[var(--status-success)] rounded-full mr-1"></div>
+            <span>收入</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-orange-400 rounded-full mr-1"></div>
-            <span>收入</span>
+            <div className="w-3 h-3 bg-[var(--brand-red)] rounded-full mr-1"></div>
+            <span>支出</span>
           </div>
         </div>
 
@@ -850,9 +850,26 @@ function PieChart({
   formatAmount: (n: number) => string;
   isIncome?: boolean;
 }) {
+  // 使用全局配色方案生成渐变色系
+  // 收入：基于成功绿的渐变
+  // 支出：基于品牌红的渐变
   const colors = isIncome 
-    ? ['#22c55e', '#4ade80', '#86efac', '#bbf7d0', '#dcfce7']
-    : ['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'];
+    ? [
+        '#4CAF50',  // 成功绿
+        '#66BB6A',  // 浅绿
+        '#81C784',  // 更浅绿
+        '#A5D6A7',  // 淡绿
+        '#C8E6C9',  // 极淡绿
+        '#E8F5E9'   // 背景绿
+      ]
+    : [
+        '#D32F2F',  // 品牌红
+        '#E57373',  // 浅红
+        '#EF5350',  // 中红
+        '#F44336',  // 错误红
+        '#FFCDD2',  // 淡红
+        '#FFEBEE'   // 背景红
+      ];
 
   // 计算饼图路径
   const radius = 80;
