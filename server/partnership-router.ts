@@ -37,10 +37,11 @@ export const partnershipRouter = router({
         whereConditions.push(sql`${users.id} NOT IN (${sql.join(existingUserIds.map(id => sql`${id}`), sql`, `)})`);
       }
 
-      // 搜索条件
+      // 搜索条件（搜索用户名、显示名、邮箱）
       if (query && query.trim()) {
         whereConditions.push(
           or(
+            like(users.username, `%${query}%`),
             like(users.name, `%${query}%`),
             like(users.email, `%${query}%`)
           )
@@ -51,6 +52,7 @@ export const partnershipRouter = router({
       const searchResults = await db
         .select({
           id: users.id,
+          username: users.username,
           name: users.name,
           email: users.email,
           avatar: users.avatar,
