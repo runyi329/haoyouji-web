@@ -351,7 +351,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 */}
-      <div className="flex-1 px-4 pb-20 space-y-2">
+      <div className="flex-1 px-4 pb-20 space-y-3">
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">还没有记账记录</div>
@@ -367,7 +367,7 @@ export default function LedgerDetail() {
             return (
               <div key={dayRecord.date}>
                 {/* 日期标题 */}
-                <div className="flex items-center justify-between py-1 text-xs text-gray-500">
+                <div className="flex items-center justify-between py-2 text-xs text-gray-500">
                   <span>
                     {dayRecord.date} {dayOfWeek}
                   </span>
@@ -377,7 +377,7 @@ export default function LedgerDetail() {
                 </div>
 
                 {/* 当天的记录 */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {dayRecord.records.map((record: any) => (
                     <div
                       key={record.id}
