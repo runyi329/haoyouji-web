@@ -125,18 +125,18 @@ export default function PartnershipDashboardManage() {
   const partnershipId = 1;
   const [isSaving, setIsSaving] = useState(false);
 
-  // 最新动态管理
-  const [activities, setActivities] = useState<Array<{ user: string; action: string; time: string }>>([]);
+  // 最新动态管理（time存储原始日期YYYY-MM-DD，timeDisplay存储显示格式）
+  const [activities, setActivities] = useState<Array<{ user: string; action: string; time: string; timeDisplay?: string }>>([]);
   // 预警雷达管理
   const [alerts, setAlerts] = useState<Array<{ type: string; message: string; action: string }>>([]);
 
   // 从数据库加载最新动态
-  const { data: dbActivities, isLoading: loadingActivities } = trpc.partnership.getDashboardActivities.useQuery({
+  const { data: dbActivities, isLoading: loadingActivities, refetch: refetchActivities } = trpc.partnership.getDashboardActivities.useQuery({
     partnershipId,
   });
 
   // 从数据库加载预警雷达
-  const { data: dbAlerts, isLoading: loadingAlerts } = trpc.partnership.getDashboardAlerts.useQuery({
+  const { data: dbAlerts, isLoading: loadingAlerts, refetch: refetchAlerts } = trpc.partnership.getDashboardAlerts.useQuery({
     partnershipId,
   });
 
@@ -149,11 +149,26 @@ export default function PartnershipDashboardManage() {
   // 数据库数据加载后同步到本地状态
   useEffect(() => {
     if (dbActivities) {
-      setActivities(dbActivities.map(a => ({
-        user: a.userName,
-        action: a.action,
-        time: a.timeText,
-      })));
+      setActivities(dbActivities.map(a => {
+        // 尝试从显示格式反推原始日期
+        const timeText = a.timeText;
+        let rawDate = "";
+        if (timeText && timeText.includes("月") && timeText.includes("日")) {
+          // 从"2月24日"提取月日
+          const match = timeText.match(/(\d+)月(\d+)日/);
+          if (match) {
+            const month = match[1].padStart(2, '0');
+            const day = match[2].padStart(2, '0');
+            rawDate = `2026-${month}-${day}`; // 假设2026年
+          }
+        }
+        return {
+          user: a.userName,
+          action: a.action,
+          time: rawDate,
+          timeDisplay: timeText,
+        };
+      }));
     }
   }, [dbActivities]);
 
@@ -168,7 +183,7 @@ export default function PartnershipDashboardManage() {
   }, [dbAlerts]);
 
   const addActivity = () => {
-    setActivities([...activities, { user: "", action: "", time: "" }]);
+    setActivities([...activities, { user: "", action: "", time: "", timeDisplay: "" }]);
   };
 
   const removeActivity = (index: number) => {
@@ -207,7 +222,7 @@ export default function PartnershipDashboardManage() {
           activities: activities.map(a => ({
             userName: a.user,
             action: a.action,
-            timeText: a.time,
+            timeText: a.timeDisplay || a.time || "",
           })),
         }),
         saveAlertsMutation.mutateAsync({
@@ -221,6 +236,11 @@ export default function PartnershipDashboardManage() {
       ]);
 
       toast.success("保存成功！");
+      
+      // 保存成功后延迟500ms刷新数据，确保数据库已更新
+      setTimeout(async () => {
+        await Promise.all([refetchActivities(), refetchAlerts()]);
+      }, 500);
     } catch (error: any) {
       toast.error("保存失败：" + (error?.message || "未知错误"));
     } finally {
@@ -298,13 +318,26 @@ export default function PartnershipDashboardManage() {
                       <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
                       <input
                         type="date"
-                        value={activity.time && !activity.time.includes("月") ? activity.time : ""}
+                        value={activity.time || ""}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val) {
-                            updateActivity(index, "time", formatDateDisplay(val));
+                            const displayText = formatDateDisplay(val);
+                            const newActivities = [...activities];
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              time: val,
+                              timeDisplay: displayText
+                            };
+                            setActivities(newActivities);
                           } else {
-                            updateActivity(index, "time", "");
+                            const newActivities = [...activities];
+                            newActivities[index] = { 
+                              ...newActivities[index], 
+                              time: "",
+                              timeDisplay: ""
+                            };
+                            setActivities(newActivities);
                           }
                         }}
                         className="w-[120px] pl-7 pr-2 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
@@ -323,7 +356,7 @@ export default function PartnershipDashboardManage() {
                   {/* 时间提示 */}
                   <div className="flex items-center gap-1 px-1">
                     <span className="text-xs text-gray-400">
-                      {activity.time ? `显示时间：${activity.time}` : "未选择日期，将显示发布时间"}
+                      {activity.timeDisplay ? `显示时间：${activity.timeDisplay}` : "未选择日期，将显示发布时间"}
                     </span>
                   </div>
                   {/* 第二行：事件内容（支持emoji） */}
