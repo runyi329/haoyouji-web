@@ -153,8 +153,8 @@ export default function AddMemberDialog({ isOpen, onClose, onSuccess, partnershi
                       className="w-10 h-10 rounded-full"
                     />
                     <div className="flex-1">
-                      <div className="font-semibold text-[#222222]">{user.name || '未命名'}</div>
-                      <div className="text-xs text-[#757575]">{user.email || '无邮箱'}</div>
+                      <div className="font-semibold text-[#222222]">{user.username || user.name || '未命名'}</div>
+                      <div className="text-xs text-[#757575]">{user.name || user.email || ''}</div>
                     </div>
                     {selectedUserId === user.id && (
                       <Check className="w-5 h-5 text-[#D32F2F]" />
