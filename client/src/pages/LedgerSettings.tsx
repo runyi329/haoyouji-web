@@ -154,8 +154,8 @@ export default function LedgerSettings() {
                 </div>
                 {member.role === 'owner' && (
                   <div 
-                    className="absolute top-0 left-0 text-white text-xs px-2 py-0.5 rounded-br-lg rounded-tl-lg font-medium shadow-sm" 
-                    style={{ backgroundColor: themeColors.primary }}
+                    className="absolute top-0 left-0 text-white px-1.5 py-0.5 rounded-br-lg rounded-tl-lg font-medium shadow-sm" 
+                    style={{ backgroundColor: themeColors.primary, fontSize: '10px' }}
                   >
                     创建人
                   </div>
