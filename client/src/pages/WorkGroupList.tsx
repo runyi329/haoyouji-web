@@ -101,19 +101,12 @@ export default function WorkGroupList() {
       user: a.userName,
       action: a.action,
       time: a.timeText,
-    })) || [
-      { user: "张三", action: "记账", time: "2小时前" },
-      { user: "李四", action: "更新", time: "5小时前" },
-      { user: "王五", action: "记账", time: "1天前" }
-    ],
+    })) || [],
     alerts: dashboardAlerts?.map(a => ({
       type: a.type,
       message: a.message,
       action: a.actionText,
-    })) || [
-      { type: "warning", message: "有3位伙伴已连续3天未联络新人", action: "建议介入辅导" },
-      { type: "info", message: "本周新增2位潜在高级用户", action: "及时跟进" }
-    ]
+    })) || []
   };
 
   return (
@@ -342,22 +335,25 @@ export default function WorkGroupList() {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* 最新动态 */}
-        <div className="mt-4 bg-white rounded-2xl shadow-lg p-4">
-          <h3 className="text-sm font-bold text-[#222222] mb-3">最新动态</h3>
-          <div className="overflow-hidden h-24 relative">
-            <div className="animate-scroll-up space-y-2">
-              {/* 复制两份数据实现无缝滚动 */}
-              {[...mockData.recentActivities, ...mockData.recentActivities].map((activity, index) => (
-                <div key={index} className="flex items-center gap-2 text-xs py-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F] flex-shrink-0" />
-                  <span className="font-medium text-[#222222]">{activity.user}</span>
-                  <span className="text-[#757575]">{activity.action}</span>
-                  <span className="ml-auto text-[#757575]">{activity.time}</span>
-                </div>
-              ))}
+          {/* 分隔线 */}
+          <div className="border-t border-gray-200 mx-4" />
+
+          {/* 第五行：最新动态 */}
+          <div className="px-4 py-2.5">
+            <h3 className="text-xs font-bold text-[#222222] mb-1.5">最新动态</h3>
+            <div className="overflow-hidden h-20 relative">
+              <div className="animate-scroll-up space-y-1.5">
+                {/* 复制两份数据实现无缝滚动 */}
+                {[...mockData.recentActivities, ...mockData.recentActivities].map((activity, index) => (
+                  <div key={index} className="flex items-center gap-2 text-xs py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F] flex-shrink-0" />
+                    <span className="font-medium text-[#222222]">{activity.user}</span>
+                    <span className="text-[#757575]">{activity.action}</span>
+                    <span className="ml-auto text-[#757575]">{activity.time}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
