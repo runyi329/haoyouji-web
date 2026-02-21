@@ -1,7 +1,7 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "wouter";
 
 export default function WorkGroupMembers() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const { groupId } = useParams();
 
   // 模拟数据 - 6个成员
@@ -73,7 +73,7 @@ export default function WorkGroupMembers() {
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <button 
-          onClick={() => navigate(-1)}
+          onClick={() => setLocation('/work-groups')}
           className="p-1"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,7 +90,7 @@ export default function WorkGroupMembers() {
           {mockMembers.map((member) => (
             <div
               key={member.id}
-              onClick={() => navigate(`/work-group-member/${member.id}`)}
+              onClick={() => setLocation(`/work-group-member/${member.id}`)}
               className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-center gap-3">
