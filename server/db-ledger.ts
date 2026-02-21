@@ -2931,13 +2931,9 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
       createdAt: ledgerRecords.createdAt,
     })
     .from(ledgerRecords)
-    .where(
-      and(
-        eq(ledgerRecords.ledgerId, ledgerId),
-        sql`${ledgerRecords.imageUrl} IS NOT NULL AND ${ledgerRecords.imageUrl} != ''`
-      )
-    )
-    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt));
+    .where(eq(ledgerRecords.ledgerId, ledgerId))
+    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
+    .limit(20);
   
   console.log('[getLedgerImages] 查询结果:', { recordsLength: records.length, firstRecord: records[0] });
   
@@ -2959,15 +2955,17 @@ export async function getLedgerImages(ledgerId: number, requestUserId: number) {
   
   const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
   
-  const result = decryptedRecords.map((record: any) => ({
-    id: record.id,
-    amount: Number(record.amount),
-    type: record.type,
-    category: categoryNameMap.get(record.categoryId) || '未分类',
-    description: record.description,
-    imageUrl: record.imageUrl,
-    date: record.recordDate,
-  }));
+  const result = decryptedRecords
+    .filter((record: any) => record.imageUrl && record.imageUrl.trim() !== '')
+    .map((record: any) => ({
+      id: record.id,
+      amount: Number(record.amount),
+      type: record.type,
+      category: categoryNameMap.get(record.categoryId) || '未分类',
+      description: record.description,
+      imageUrl: record.imageUrl,
+      date: record.recordDate,
+    }));
   
   console.log('[getLedgerImages] 返回结果:', { resultLength: result.length, firstResult: result[0] });
   return result;
