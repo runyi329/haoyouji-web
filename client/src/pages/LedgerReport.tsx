@@ -934,24 +934,34 @@ function PieChart({
   return (
     <div className="relative">
       <svg width="200" height="200" viewBox="0 0 200 200">
-        {slices.map((slice, index) => (
-          <path
-            key={index}
-            d={slice.path}
-            fill={slice.color}
-          />
-        ))}
-        {/* 显示百分比标签 */}
-        {slices.length === 1 && (
-          <text
-            x={centerX + radius * 0.6 * Math.cos((-90 * Math.PI) / 180)}
-            y={centerY + radius * 0.6 * Math.sin((-90 * Math.PI) / 180)}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            className="text-xs fill-white font-medium"
-          >
-            100%
-          </text>
+        {slices.length === 1 ? (
+          // 如果只有一个分类，直接画一个完整的圆
+          <>
+            <circle
+              cx={centerX}
+              cy={centerY}
+              r={radius}
+              fill={colors[0]}
+            />
+            <text
+              x={centerX}
+              y={centerY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="text-sm fill-white font-semibold"
+            >
+              100%
+            </text>
+          </>
+        ) : (
+          // 多个分类时用路径绘制
+          slices.map((slice, index) => (
+            <path
+              key={index}
+              d={slice.path}
+              fill={slice.color}
+            />
+          ))
         )}
       </svg>
       
