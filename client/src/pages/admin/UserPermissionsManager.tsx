@@ -14,9 +14,17 @@ import {
 
 export default function UserPermissionsManager() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   
   // 获取所有用户
   const { data: users } = trpc.admin.getUsers.useQuery();
+  
+  // 根据排序选项对用户进行排序
+  const sortedUsers = users ? [...users].sort((a, b) => {
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+  }) : [];
   
   // 获取所有可用功能
   const { data: allFeatures } = trpc.admin.getAllFeatures.useQuery();
@@ -68,6 +76,23 @@ export default function UserPermissionsManager() {
       </div>
       
       <div className="space-y-6">
+        {/* 排序选项 */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">注册时间排序</label>
+          <Select
+            value={sortOrder}
+            onValueChange={(value: "desc" | "asc") => setSortOrder(value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">最新注册在前</SelectItem>
+              <SelectItem value="asc">最早注册在前</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
         {/* 选择用户 */}
         <div className="space-y-2">
           <label className="text-sm font-medium">选择用户</label>
@@ -79,7 +104,7 @@ export default function UserPermissionsManager() {
               <SelectValue placeholder="请选择用户" />
             </SelectTrigger>
             <SelectContent>
-              {users?.map((user) => (
+              {sortedUsers?.map((user) => (
                 <SelectItem key={user.id} value={user.id.toString()}>
                   {user.name || user.username} ({user.role === "super_admin" ? "超级管理员" : user.role === "parent" ? "家长" : "宝宝"})
                 </SelectItem>
