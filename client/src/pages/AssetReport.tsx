@@ -1004,16 +1004,6 @@ export default function AssetReport() {
       tag: "热",
       content: (
         <div className="space-y-4">
-          {/* 引言 */}
-          <div className="text-sm text-gray-700 leading-relaxed">
-            <p className="mb-3">
-              在社交网络时代，我们常常陷入一个误区，认为拓展人脉就是不断增加联系人的数量。然而，真正有价值的人脉关系，其核心并非数量，而是质量。
-            </p>
-            <p>
-              本文将深入探讨拓展人脉的第一性原理，揭示如何构建真正有意义的社交资产。
-            </p>
-          </div>
-
           {/* 第一性原理列表 */}
           <div className="space-y-3">
             {/* 1. 构建信任资产 */}
