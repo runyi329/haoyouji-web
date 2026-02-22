@@ -1992,7 +1992,7 @@ export async function getTransactionsList(
       currentId = cat.parentId;
     }
     
-    return path.length > 0 ? path.join(' > ') : '未分类';
+    return path.length > 0 ? path.join('-') : '未分类';
   };
   
   // 获取所有涉及的创建者ID
