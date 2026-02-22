@@ -172,7 +172,7 @@ export default function LedgerDetail() {
 
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FFEBEE' }}>
+    <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
       <div className="pb-4" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* 标题栏 */}
