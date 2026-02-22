@@ -34,7 +34,11 @@ export default function WorkGroupMembers() {
       return (
         <span 
           key={group.id || index}
-          className="px-1.5 py-0.5 text-xs bg-[#FFEBEE] text-[#D32F2F] rounded"
+          className="px-1.5 py-0.5 text-xs rounded"
+          style={{ 
+            backgroundColor: 'var(--brand-red-light)', 
+            color: 'var(--brand-red)' 
+          }}
         >
           {group.name}
         </span>
@@ -44,7 +48,11 @@ export default function WorkGroupMembers() {
     return (
       <span 
         key={index}
-        className="px-1.5 py-0.5 text-xs bg-[#FFEBEE] text-[#D32F2F] rounded"
+        className="px-1.5 py-0.5 text-xs rounded"
+        style={{ 
+          backgroundColor: 'var(--brand-red-light)', 
+          color: 'var(--brand-red)' 
+        }}
       >
         群{group}
       </span>
@@ -54,7 +62,10 @@ export default function WorkGroupMembers() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 flex flex-col">
       {/* 顶部导航栏 */}
-      <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+      <div 
+        className="text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10"
+        style={{ backgroundColor: 'var(--brand-red)' }}
+      >
         <button 
           onClick={() => setLocation('/work-groups')}
           className="p-1"
@@ -81,9 +92,9 @@ export default function WorkGroupMembers() {
         {members.length === 0 ? (
           <Card className="bg-white/80 backdrop-blur-sm">
             <CardContent className="p-6 text-center">
-              <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-              <p className="text-gray-500 text-sm">暂无成员</p>
-              <p className="text-xs text-gray-400 mt-1">点击右上角 + 添加</p>
+              <Users className="w-10 h-10 mx-auto mb-2" style={{ color: 'var(--text-gray)' }} />
+              <p className="text-sm" style={{ color: 'var(--text-gray)' }}>暂无成员</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-gray)' }}>点击右上角 + 添加</p>
             </CardContent>
           </Card>
         ) : (
@@ -102,10 +113,16 @@ export default function WorkGroupMembers() {
                       <img
                         src={member.avatar}
                         alt={member.name}
-                        className="w-11 h-11 rounded-full object-cover border-2 border-[#D32F2F]/10"
+                        className="w-11 h-11 rounded-full object-cover border-2"
+                        style={{ borderColor: 'color-mix(in srgb, var(--brand-red) 10%, transparent)' }}
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center text-white font-bold text-sm">
+                      <div 
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                        style={{ 
+                          background: 'linear-gradient(135deg, var(--brand-red-dark) 0%, var(--brand-red) 100%)' 
+                        }}
+                      >
                         {(member.name || "?").charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -115,7 +132,12 @@ export default function WorkGroupMembers() {
                   <div className="flex-1 min-w-0">
                     {/* 姓名和工作群标签 */}
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <h3 className="font-semibold text-[15px] text-[#222222]">{member.name}</h3>
+                      <h3 
+                        className="font-semibold text-[15px]"
+                        style={{ color: 'var(--text-black)' }}
+                      >
+                        {member.name}
+                      </h3>
                       {/* 工作群标签 */}
                       {member.workGroups && member.workGroups.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
@@ -127,7 +149,10 @@ export default function WorkGroupMembers() {
                     </div>
 
                     {/* 角色、邮箱、加入时间（一行显示） */}
-                    <div className="text-[11px] text-[#757575] flex items-center gap-1.5">
+                    <div 
+                      className="text-[11px] flex items-center gap-1.5"
+                      style={{ color: 'var(--text-gray)' }}
+                    >
                       <span>{member.role === 'admin' ? '管理员' : '成员'}</span>
                       {member.email && (
                         <>
@@ -146,60 +171,90 @@ export default function WorkGroupMembers() {
                 {/* 第二行：统计数据（紧凑的横向布局，5个徽章） */}
                 <div className="grid grid-cols-5 gap-1.5">
                   {/* 我的 */}
-                  <div className="flex flex-col items-center px-1.5 py-1 rounded bg-[#F5F5F5]">
+                  <div 
+                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    style={{ backgroundColor: 'var(--bg-cream)' }}
+                  >
                     <div className="flex items-center gap-0.5 mb-0.5">
-                      <Users className="w-3 h-3 text-[#1976D2]" />
-                      <span className="text-[10px] text-[#757575]">我的</span>
+                      <Users className="w-3 h-3" style={{ color: 'var(--status-link)' }} />
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>我的</span>
                     </div>
-                    <span className="text-sm text-[#1976D2] font-semibold leading-none">
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: 'var(--status-link)' }}
+                    >
                       {member.ownContactsCount || 0}
                     </span>
                   </div>
 
                   {/* 共享 */}
-                  <div className="flex flex-col items-center px-1.5 py-1 rounded bg-[#E8F5E9]">
+                  <div 
+                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--status-success) 10%, white)' }}
+                  >
                     <div className="flex items-center gap-0.5 mb-0.5">
-                      <Share className="w-3 h-3 text-[#4CAF50]" />
-                      <span className="text-[10px] text-[#757575]">共享</span>
+                      <Share className="w-3 h-3" style={{ color: 'var(--status-success)' }} />
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>共享</span>
                     </div>
-                    <span className="text-sm text-[#4CAF50] font-semibold leading-none">
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: 'var(--status-success)' }}
+                    >
                       {member.sharedContactsCount || 0}
                     </span>
                   </div>
 
                   {/* 全部 */}
-                  <div className="flex flex-col items-center px-1.5 py-1 rounded bg-[#FFEBEE]">
+                  <div 
+                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    style={{ backgroundColor: 'var(--brand-red-light)' }}
+                  >
                     <div className="flex items-center gap-0.5 mb-0.5">
-                      <Users className="w-3 h-3 text-[#D32F2F]" />
-                      <span className="text-[10px] text-[#757575]">全部</span>
+                      <Users className="w-3 h-3" style={{ color: 'var(--brand-red)' }} />
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>全部</span>
                     </div>
-                    <span className="text-sm text-[#D32F2F] font-semibold leading-none">
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: 'var(--brand-red)' }}
+                    >
                       {member.totalContactsCount || 0}
                     </span>
                   </div>
                   
                   {/* 标签数 */}
-                  <div className="flex flex-col items-center px-1.5 py-1 rounded bg-[#F3E5F5]">
+                  <div 
+                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--brand-gold) 15%, white)' }}
+                  >
                     <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--brand-gold)' }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      <span className="text-[10px] text-[#757575]">标签</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>标签</span>
                     </div>
-                    <span className="text-sm text-purple-600 font-semibold leading-none">
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: 'var(--brand-gold)' }}
+                    >
                       {member.tagsCount || 0}
                     </span>
                   </div>
                   
                   {/* 联络数 */}
-                  <div className="flex flex-col items-center px-1.5 py-1 rounded bg-[#FAF3ED]">
+                  <div 
+                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    style={{ backgroundColor: 'var(--bg-cream)' }}
+                  >
                     <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3 text-[#CBA471]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--brand-gold)' }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      <span className="text-[10px] text-[#757575]">联络</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>联络</span>
                     </div>
-                    <span className="text-sm text-[#CBA471] font-semibold leading-none">
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: 'var(--brand-gold)' }}
+                    >
                       {member.interactionsCount || 0}
                     </span>
                   </div>
