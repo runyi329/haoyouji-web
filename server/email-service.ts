@@ -105,7 +105,7 @@ export async function sendBackupEmail(options: {
       </table>
     </div>
     <div class="footer">
-      <p>此邮件由好友记系统自动发送，请勿回复。</p>
+      <p>此邮件由脉动共享账本系统自动发送，请勿回复。</p>
     </div>
   </div>
 </body>
@@ -115,9 +115,9 @@ export async function sendBackupEmail(options: {
   const transporter = getTransporter();
   
   await transporter.sendMail({
-    from: `"好友记" <${SMTP_CONFIG.auth.user}>`,
+    from: `"脉动共享账本备份" <${SMTP_CONFIG.auth.user}>`,
     to,
-    subject: `【好友记】账本备份 - ${ledgerName} (${dateStr})`,
+    subject: `【脉动共享账本备份】${ledgerName} (${dateStr})`,
     html: htmlContent,
     attachments: [
       {
