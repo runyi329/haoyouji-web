@@ -655,6 +655,104 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
 }
 
 /**
+ * 获取分类使用数量
+ */
+export async function getCategoryUsageCount(
+  ledgerId: number,
+  categoryId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户权限
+  const hasAccess = await checkLedgerAccess(ledgerId, userId);
+  if (!hasAccess) {
+    throw new Error("无权限访问此账本");
+  }
+  
+  // 查询使用该分类的记录数量
+  const count = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, categoryId)
+      )
+    )
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  return { count };
+}
+
+/**
+ * 批量替换分类
+ */
+export async function replaceLedgerCategory(
+  ledgerId: number,
+  sourceCategoryId: number,
+  targetCategoryId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户权限
+  const hasAccess = await checkLedgerAccess(ledgerId, userId);
+  if (!hasAccess) {
+    throw new Error("无权限访问此账本");
+  }
+  
+  // 验证源分类和目标分类是否存在
+  const sourceCategory = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, sourceCategoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  const targetCategory = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, targetCategoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  if (!sourceCategory || !targetCategory) {
+    throw new Error("分类不存在");
+  }
+  
+  // 执行批量更新
+  const result = await db
+    .update(ledgerRecords)
+    .set({ categoryId: targetCategoryId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, sourceCategoryId)
+      )
+    );
+  
+  // 获取更新的记录数
+  const affectedCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, targetCategoryId)
+      )
+    )
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  return { 
+    success: true, 
+    affectedCount,
+    sourceCategoryName: sourceCategory.name,
+    targetCategoryName: targetCategory.name
+  };
+}
+
+/**
  * 更新分类信息
  */
 export async function updateLedgerCategory(

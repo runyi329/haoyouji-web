@@ -51,6 +51,12 @@ const LedgerCategories = () => {
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
+  // 批量替换状态
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
+  const [categoryToReplace, setCategoryToReplace] = useState<Category | null>(null);
+  const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
+  const [affectedCount, setAffectedCount] = useState<number>(0);
+  
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
@@ -103,6 +109,35 @@ const LedgerCategories = () => {
       toast.error(`删除失败: ${error.message}`);
     },
   });
+
+  // 批量替换分类的mutation
+  const replaceCategoryMutation = trpc.ledger.replaceCategory.useMutation({
+    onSuccess: (data) => {
+      toast.success(`替换成功，共修改${data.affectedCount}条记录`);
+      refetchCategories();
+      setShowReplaceDialog(false);
+      setCategoryToReplace(null);
+      setTargetCategoryId(null);
+      setAffectedCount(0);
+    },
+    onError: (error) => {
+      toast.error(`替换失败: ${error.message}`);
+    },
+  });
+
+  // 获取分类使用数量
+  const { data: usageCountData } = trpc.ledger.getCategoryUsageCount.useQuery(
+    {
+      ledgerId: Number(id),
+      categoryId: categoryToReplace?.id || 0,
+    },
+    {
+      enabled: !!categoryToReplace?.id,
+      onSuccess: (data) => {
+        setAffectedCount(data.count);
+      },
+    }
+  );
 
   // 构建分类树结构
   const buildCategoryTree = (flatCategories: Category[]): Category[] => {
@@ -194,6 +229,15 @@ const LedgerCategories = () => {
                     {category.name}
                   </button>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setCategoryToReplace(category);
+                        setShowReplaceDialog(true);
+                      }}
+                      className="px-2 py-1 text-xs border border-[#FF9800] text-[#FF9800] rounded hover:bg-[#FFF3E0]"
+                    >
+                      替换
+                    </button>
                     <button
                       onClick={() => {
                         setCurrentCategoryId(category.id);
@@ -546,6 +590,77 @@ const LedgerCategories = () => {
                 disabled={deleteCategoryMutation.isPending}
               >
                 {deleteCategoryMutation.isPending ? "正在删除..." : "确认删除"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量替换对话框 */}
+      <Dialog open={showReplaceDialog} onOpenChange={setShowReplaceDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>批量替换分类</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-[#FFF3E0] border border-[#FF9800] rounded p-3">
+              <p className="text-sm text-[#E65100]">
+                将所有使用 <strong>"{categoryToReplace?.name}"</strong> 分类的记账记录替换为其他分类
+              </p>
+            </div>
+            
+            <div>
+              <Label>选择目标分类</Label>
+              <select
+                value={targetCategoryId || ""}
+                onChange={(e) => setTargetCategoryId(Number(e.target.value))}
+                className="w-full mt-1 p-2 border border-gray-300 rounded"
+              >
+                <option value="">请选择...</option>
+                {categoriesData?.categories
+                  .filter((cat) => cat.id !== categoryToReplace?.id)
+                  .map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            
+            {affectedCount > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <p className="text-sm text-blue-800">
+                  将影响 <strong>{affectedCount}</strong> 条记账记录
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setShowReplaceDialog(false);
+                  setCategoryToReplace(null);
+                  setTargetCategoryId(null);
+                  setAffectedCount(0);
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!categoryToReplace || !targetCategoryId) return;
+                  replaceCategoryMutation.mutate({
+                    ledgerId: Number(id),
+                    sourceCategoryId: categoryToReplace.id,
+                    targetCategoryId: targetCategoryId,
+                  });
+                }}
+                className="flex-1 bg-[#FF9800] hover:bg-[#F57C00]"
+                disabled={!targetCategoryId || replaceCategoryMutation.isLoading}
+              >
+                {replaceCategoryMutation.isLoading ? "替换中..." : "确认替换"}
               </Button>
             </div>
           </div>
