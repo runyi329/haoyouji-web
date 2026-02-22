@@ -5688,6 +5688,36 @@ export const appRouter = router({
         );
       }),
 
+    // 批量替换分类
+    replaceCategory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        sourceCategoryId: z.number(),
+        targetCategoryId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.replaceLedgerCategory(
+          input.ledgerId,
+          input.sourceCategoryId,
+          input.targetCategoryId,
+          ctx.user.id
+        );
+      }),
+
+    // 获取分类使用数量
+    getCategoryUsageCount: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        categoryId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getCategoryUsageCount(
+          input.ledgerId,
+          input.categoryId,
+          ctx.user.id
+        );
+      }),
+
     // 获取成员权限列表
     getMemberPermissions: protectedProcedure
       .input(z.object({
