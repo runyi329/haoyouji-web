@@ -865,7 +865,7 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证请求用户是否是账本创建者
+  // 获取账本信息
   const ledger = await db
     .select()
     .from(ledgers)
@@ -876,26 +876,66 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
     throw new Error("账本不存在");
   }
   
-  if (ledger[0].createdBy !== requestUserId) {
-    throw new Error("只有账本创建者可以查看权限设置");
+  // 验证请求用户是否是账本成员
+  const currentMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (currentMember.length === 0) {
+    throw new Error("您不是该账本的成员");
   }
   
-  // 获取所有成员及其权限
-  const members = await db
-    .select({
-      id: ledgerMembers.id,
-      userId: ledgerMembers.userId,
-      role: ledgerMembers.role,
-      permissionView: ledgerMembers.permissionView,
-      permissionAdd: ledgerMembers.permissionAdd,
-      permissionEdit: ledgerMembers.permissionEdit,
-      permissionDelete: ledgerMembers.permissionDelete,
-    })
-    .from(ledgerMembers)
-    .where(eq(ledgerMembers.ledgerId, ledgerId));
+  const currentUserRole = currentMember[0].role;
+  const isOwner = ledger[0].createdBy === requestUserId;
+  
+  // 获取成员列表
+  let members;
+  if (isOwner) {
+    // 创建人可以看到所有成员
+    members = await db
+      .select({
+        id: ledgerMembers.id,
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        permissionView: ledgerMembers.permissionView,
+        permissionAdd: ledgerMembers.permissionAdd,
+        permissionEdit: ledgerMembers.permissionEdit,
+        permissionDelete: ledgerMembers.permissionDelete,
+      })
+      .from(ledgerMembers)
+      .where(eq(ledgerMembers.ledgerId, ledgerId));
+  } else {
+    // 普通成员只能看到自己
+    members = await db
+      .select({
+        id: ledgerMembers.id,
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        permissionView: ledgerMembers.permissionView,
+        permissionAdd: ledgerMembers.permissionAdd,
+        permissionEdit: ledgerMembers.permissionEdit,
+        permissionDelete: ledgerMembers.permissionDelete,
+      })
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          eq(ledgerMembers.userId, requestUserId)
+        )
+      );
+  }
   
   return {
     ledgerName: ledger[0].name,
+    currentUserRole,
+    isOwner,
     members,
     defaultPermissions: {
       view: ledger[0].defaultPermissionView,
