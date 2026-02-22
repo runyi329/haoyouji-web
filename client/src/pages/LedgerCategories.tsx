@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, ChevronRight, ChevronDown } from "lucide-react";
@@ -133,14 +133,18 @@ const LedgerCategories = () => {
     },
     {
       enabled: !!categoryToReplace?.id,
-      onSuccess: (data) => {
-        setAffectedCount(data.count);
-      },
     }
   );
 
+  // 当使用数量数据返回时更新affectedCount
+  useEffect(() => {
+    if (usageCountData) {
+      setAffectedCount(usageCountData.count);
+    }
+  }, [usageCountData]);
+
   // 构建分类树结构
-  const buildCategoryTree = (flatCategories: Category[]): Category[] => {
+  const buildCategoryTree = (flatCategories: any[]): Category[] => {
     const categoryMap = new Map<number, Category>();
     const rootCategories: Category[] = [];
 
@@ -617,9 +621,9 @@ const LedgerCategories = () => {
                 className="w-full mt-1 p-2 border border-gray-300 rounded"
               >
                 <option value="">请选择...</option>
-                {categoriesData?.categories
-                  .filter((cat) => cat.id !== categoryToReplace?.id)
-                  .map((cat) => (
+                {categoriesData
+                  ?.filter((cat: any) => cat.id !== categoryToReplace?.id)
+                  .map((cat: any) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
                     </option>
@@ -658,9 +662,9 @@ const LedgerCategories = () => {
                   });
                 }}
                 className="flex-1 bg-[#FF9800] hover:bg-[#F57C00]"
-                disabled={!targetCategoryId || replaceCategoryMutation.isLoading}
+                disabled={!targetCategoryId || replaceCategoryMutation.isPending}
               >
-                {replaceCategoryMutation.isLoading ? "替换中..." : "确认替换"}
+                {replaceCategoryMutation.isPending ? "替换中..." : "确认替换"}
               </Button>
             </div>
           </div>
