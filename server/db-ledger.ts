@@ -722,7 +722,13 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
   
   console.log("[getLedgerMembers] 成员列表:", members);
   
-  return members;
+  // 标记当前用户
+  const membersWithCurrentFlag = members.map(member => ({
+    ...member,
+    isCurrentUser: member.userId === userId
+  }));
+  
+  return membersWithCurrentFlag;
 }
 
 /**
