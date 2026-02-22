@@ -24,6 +24,8 @@ export default function Ledger() {
   const [searchUsername, setSearchUsername] = useState("");
   const [showDestroyDialog, setShowDestroyDialog] = useState(false);
   const [destroyingLedgerId, setDestroyingLedgerId] = useState<number | null>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportingLedgerId, setExportingLedgerId] = useState<number | null>(null);
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -106,8 +108,21 @@ export default function Ledger() {
     }
   };
 
+  // 获取导出统计信息
+  const { data: exportStats } = trpc.ledger.getExportStats.useQuery(
+    { ledgerId: exportingLedgerId! },
+    { enabled: showExportDialog && exportingLedgerId !== null }
+  );
+
+  // 打开导出预览对话框
+  const handleOpenExportDialog = (ledgerId: number) => {
+    setExportingLedgerId(ledgerId);
+    setShowExportDialog(true);
+  };
+
   // 导出账本的处理函数
   const handleExport = async (ledgerId: number) => {
+    setShowExportDialog(false);
     const loadingToast = toast.loading(
       <div className="flex items-center gap-2">
         <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-500"></div>
@@ -303,7 +318,7 @@ export default function Ledger() {
                           className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExport(ledger.id);
+                            handleOpenExportDialog(ledger.id);
                           }}
                         >
                           导出
@@ -335,7 +350,7 @@ export default function Ledger() {
                           className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-2"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExport(ledger.id);
+                            handleOpenExportDialog(ledger.id);
                           }}
                         >
                           导出
@@ -538,6 +553,89 @@ export default function Ledger() {
           >
             取消
           </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* 导出预览对话框 */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">导出账本</DialogTitle>
+          
+          {exportStats ? (
+            <div className="p-6">
+              {/* 标题 */}
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">导出账本</h3>
+                <p className="text-sm text-gray-600">{exportStats.ledgerName}</p>
+              </div>
+
+              {/* 统计信息 */}
+              <div className="space-y-3 mb-6">
+                {/* 记录数 */}
+                <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                  <span className="text-sm text-gray-600">记录总数</span>
+                  <span className="text-base font-semibold text-gray-900">{exportStats.totalRecords} 条</span>
+                </div>
+
+                {/* 时间范围 */}
+                {exportStats.earliestDate && exportStats.latestDate && (
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-1">时间范围</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {exportStats.earliestDate} 至 {exportStats.latestDate}
+                    </div>
+                  </div>
+                )}
+
+                {/* 收入支出 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-xs text-gray-500 mb-1">总收入</div>
+                    <div className="text-base font-semibold text-green-600">¥{exportStats.totalIncome}</div>
+                  </div>
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-xs text-gray-500 mb-1">总支出</div>
+                    <div className="text-base font-semibold text-red-600">¥{exportStats.totalExpense}</div>
+                  </div>
+                </div>
+
+                {/* 结余 */}
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">结余</span>
+                    <span className={`text-lg font-bold ${
+                      parseFloat(exportStats.balance) >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      ¥{exportStats.balance}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 按钮 */}
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleExport(exportingLedgerId!)}
+                  className="w-full h-12 text-base font-medium text-white rounded-lg"
+                  style={{ backgroundColor: '#D32F2F' }}
+                >
+                  下载 Excel 文件
+                </Button>
+                <Button
+                  onClick={() => setShowExportDialog(false)}
+                  variant="outline"
+                  className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  取消
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-500">正在加载统计信息...</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
