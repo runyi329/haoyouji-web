@@ -239,7 +239,6 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().optional(),
         email: z.string().email().optional(),
-        phone: z.string().optional(),
         realName: z.string().optional(),
         idCardNumber: z.string().optional(),
       }))
@@ -251,7 +250,6 @@ export const appRouter = router({
         const updateData: any = {};
         if (input.name !== undefined) updateData.name = input.name;
         if (input.email !== undefined) updateData.email = input.email;
-        if (input.phone !== undefined) updateData.phone = input.phone;
         if (input.realName !== undefined) updateData.realName = input.realName;
         if (input.idCardNumber !== undefined) updateData.idCardNumber = input.idCardNumber;
         

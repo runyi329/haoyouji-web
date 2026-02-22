@@ -873,7 +873,6 @@ export const users = mysqlTable("users", {
 	passwordHash: varchar({ length: 255 }),
 	name: text(),
 	email: varchar({ length: 320 }),
-	phone: varchar({ length: 20 }),
 	loginMethod: varchar({ length: 64 }),
 	role: mysqlEnum(['super_admin','parent','baby']).default('parent').notNull(),
 	familyId: int(),
