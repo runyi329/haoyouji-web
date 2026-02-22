@@ -6196,6 +6196,27 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { executeBackup } = await import('./backup-service');
         await executeBackup(input.ledgerId, ctx.user.id);
+        
+        // 发送成功后更新备份计数和上次发送时间
+        const db_instance = await getDb();
+        if (db_instance) {
+          const { ledgerBackupSettings } = await import("../drizzle/schema");
+          const { eq, and, sql } = await import("drizzle-orm");
+          
+          await db_instance
+            .update(ledgerBackupSettings)
+            .set({
+              backupCount: sql`backup_count + 1`,
+              lastBackupAt: new Date().toISOString(),
+            })
+            .where(
+              and(
+                eq(ledgerBackupSettings.ledgerId, input.ledgerId),
+                eq(ledgerBackupSettings.userId, ctx.user.id)
+              )
+            );
+        }
+        
         return { success: true };
       }),
   }),

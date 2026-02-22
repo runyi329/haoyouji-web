@@ -1215,6 +1215,7 @@ export const ledgerBackupSettings = mysqlTable("ledger_backup_settings", {
 	userId: int("user_id").notNull(),
 	frequency: mysqlEnum(['weekly','monthly','quarterly']).notNull(),
 	enabled: tinyint().default(1).notNull(),
+	backupCount: int("backup_count").default(0).notNull(),
 	lastBackupAt: timestamp("last_backup_at", { mode: 'string' }),
 	nextBackupAt: timestamp("next_backup_at", { mode: 'string' }),
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),

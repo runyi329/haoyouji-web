@@ -141,7 +141,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
   if (!db) throw new Error("Database not available");
   
   const { ledgerBackupSettings } = await import("../drizzle/schema");
-  const { lte, eq, and } = await import("drizzle-orm");
+  const { lte, eq, and, sql } = await import("drizzle-orm");
   
   const now = new Date();
   
@@ -177,6 +177,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
       await db
         .update(ledgerBackupSettings)
         .set({
+          backupCount: sql`backup_count + 1`,
           lastBackupAt: now.toISOString(),
           nextBackupAt: nextBackupAt.toISOString(),
         })
