@@ -447,7 +447,7 @@ export default function LedgerSettings() {
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
         <SettingItem label="手动导出表格" showIcon onClick={handleOpenExportDialog} />
-        <SettingItem label="定期自动备份账目" showIcon onClick={() => {
+        <SettingItem label="共享账本自动备份" showIcon onClick={() => {
           if (!user?.email) {
             toast.error("请先在个人中心填写邮箱地址", {
               action: {
@@ -718,7 +718,7 @@ export default function LedgerSettings() {
       <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
         <DialogContent className="max-w-md mx-auto">
           <DialogTitle className="text-xl font-bold text-center mb-4">
-            {backupEditMode ? '备份设置' : '自动备份'}
+            {backupEditMode ? '共享账本自动备份' : '共享账本自动备份'}
           </DialogTitle>
           
           {/* ===== 概览模式：已设置过备份且不在编辑状态 ===== */}
