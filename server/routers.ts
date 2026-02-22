@@ -5713,6 +5713,8 @@ export const appRouter = router({
         return {
           members: membersWithUserInfo,
           defaultPermissions: result.defaultPermissions,
+          currentUserRole: result.currentUserRole,
+          isOwner: result.isOwner,
         };
       }),
 

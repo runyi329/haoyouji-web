@@ -51,6 +51,7 @@ const LedgerPermissions = () => {
     edit: 'own' as Permission,
     delete: 'own' as Permission,
   };
+  const isOwner = data?.isOwner || false;
 
   // 更新成员权限
   const updatePermissionMutation = trpc.ledger.updateMemberPermission.useMutation({
@@ -195,7 +196,7 @@ const LedgerPermissions = () => {
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
-              ) : (
+              ) : isOwner ? (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "view")}
                   className={getPermissionButtonClass(member.permissionView)}
@@ -203,6 +204,10 @@ const LedgerPermissions = () => {
                 >
                   {getPermissionText(member.permissionView)}
                 </button>
+              ) : (
+                <span className={getPermissionButtonClass(member.permissionView)}>
+                  {getPermissionText(member.permissionView)}
+                </span>
               )}
             </div>
 
@@ -210,7 +215,7 @@ const LedgerPermissions = () => {
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
-              ) : (
+              ) : isOwner ? (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "add")}
                   className={getPermissionButtonClass(member.permissionAdd)}
@@ -218,6 +223,10 @@ const LedgerPermissions = () => {
                 >
                   {getPermissionText(member.permissionAdd)}
                 </button>
+              ) : (
+                <span className={getPermissionButtonClass(member.permissionAdd)}>
+                  {getPermissionText(member.permissionAdd)}
+                </span>
               )}
             </div>
 
@@ -225,7 +234,7 @@ const LedgerPermissions = () => {
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
-              ) : (
+              ) : isOwner ? (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "edit")}
                   className={getPermissionButtonClass(member.permissionEdit)}
@@ -233,6 +242,10 @@ const LedgerPermissions = () => {
                 >
                   {getPermissionText(member.permissionEdit)}
                 </button>
+              ) : (
+                <span className={getPermissionButtonClass(member.permissionEdit)}>
+                  {getPermissionText(member.permissionEdit)}
+                </span>
               )}
             </div>
 
@@ -240,7 +253,7 @@ const LedgerPermissions = () => {
             <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100">
               {member.role === "owner" ? (
                 <span className="text-[#4CAF50] font-medium text-sm">全部</span>
-              ) : (
+              ) : isOwner ? (
                 <button
                   onClick={(e) => showPermissionMenu(e, member.id, "delete")}
                   className={getPermissionButtonClass(member.permissionDelete)}
@@ -248,12 +261,17 @@ const LedgerPermissions = () => {
                 >
                   {getPermissionText(member.permissionDelete)}
                 </button>
+              ) : (
+                <span className={getPermissionButtonClass(member.permissionDelete)}>
+                  {getPermissionText(member.permissionDelete)}
+                </span>
               )}
             </div>
           </div>
         ))}
 
-        {/* 新加入成员 */}
+        {/* 新加入成员 - 只有创建人可以看到 */}
+        {isOwner && (
         <div className="grid grid-cols-5 border-b border-gray-100 bg-gray-50">
           <div className="py-4 px-2 flex items-center justify-center text-gray-500 text-sm">
             <span className="leading-tight">新加入<br />成员</span>
@@ -295,6 +313,7 @@ const LedgerPermissions = () => {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* 说明文字 */}
