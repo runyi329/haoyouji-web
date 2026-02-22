@@ -144,6 +144,8 @@ export async function checkAndExecuteBackups(): Promise<void> {
   const { lte, eq, and, sql } = await import("drizzle-orm");
   
   const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toMySQL = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   
   // 查询所有启用且到期的备份设置
   const dueBackups = await db
@@ -152,7 +154,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
     .where(
       and(
         eq(ledgerBackupSettings.enabled, 1),
-        lte(ledgerBackupSettings.nextBackupAt, now.toISOString())
+        lte(ledgerBackupSettings.nextBackupAt, toMySQL(now))
       )
     );
   
@@ -178,8 +180,8 @@ export async function checkAndExecuteBackups(): Promise<void> {
         .update(ledgerBackupSettings)
         .set({
           backupCount: sql`backup_count + 1`,
-          lastBackupAt: now.toISOString(),
-          nextBackupAt: nextBackupAt.toISOString(),
+          lastBackupAt: toMySQL(now),
+          nextBackupAt: toMySQL(nextBackupAt),
         })
         .where(eq(ledgerBackupSettings.id, backup.id));
       
