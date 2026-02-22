@@ -175,7 +175,7 @@ export default function Ledger() {
               <ChevronLeft className="w-6 h-6 text-[#222222]" />
             </button>
           </Link>
-          <h1 className="flex-1 text-lg font-medium text-center text-[#222222] -ml-6">我的账本</h1>
+          <h1 className="flex-1 text-lg font-medium text-center text-[#222222] -ml-6">共享账本</h1>
         </div>
       </div>
 
