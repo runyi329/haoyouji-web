@@ -1918,9 +1918,10 @@ export async function getTransactionsList(
     if (r.categoryId) categoryIds.add(r.categoryId);
   });
   
-  // 获取分类信息
+  // 获取分类信息（包括所有父级分类）
   let categories: any[] = [];
   if (categoryIds.size > 0) {
+    // 首先获取当前分类
     categories = await db
       .select({
         id: ledgerCategories.id,
@@ -1930,9 +1931,69 @@ export async function getTransactionsList(
       })
       .from(ledgerCategories)
       .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(categoryIds).map(id => sql`${id}`), sql`, `)})`);
+    
+    // 获取所有父级分类ID
+    const parentIds = new Set<number>();
+    categories.forEach((c: any) => {
+      if (c.parentId) parentIds.add(c.parentId);
+    });
+    
+    // 如果有父级分类，递归获取
+    if (parentIds.size > 0) {
+      const parentCategories = await db
+        .select({
+          id: ledgerCategories.id,
+          name: ledgerCategories.name,
+          icon: ledgerCategories.icon,
+          parentId: ledgerCategories.parentId,
+        })
+        .from(ledgerCategories)
+        .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(parentIds).map(id => sql`${id}`), sql`, `)})`);
+      
+      categories = [...categories, ...parentCategories];
+      
+      // 再获取父级的父级（最多3层）
+      const grandParentIds = new Set<number>();
+      parentCategories.forEach((c: any) => {
+        if (c.parentId) grandParentIds.add(c.parentId);
+      });
+      
+      if (grandParentIds.size > 0) {
+        const grandParentCategories = await db
+          .select({
+            id: ledgerCategories.id,
+            name: ledgerCategories.name,
+            icon: ledgerCategories.icon,
+            parentId: ledgerCategories.parentId,
+          })
+          .from(ledgerCategories)
+          .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(grandParentIds).map(id => sql`${id}`), sql`, `)})`);
+        
+        categories = [...categories, ...grandParentCategories];
+      }
+    }
   }
   
   const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
+  
+  // 构建分类路径的辅助函数
+  const buildCategoryPath = (categoryId: number | null): string => {
+    if (!categoryId) return '未分类';
+    
+    const path: string[] = [];
+    let currentId: number | null = categoryId;
+    
+    // 最多遍历3层，防止无限循环
+    for (let i = 0; i < 3 && currentId; i++) {
+      const cat = categoryMap.get(currentId);
+      if (!cat) break;
+      
+      path.unshift(cat.name); // 在前面插入，保证顺序是 一级 > 二级 > 三级
+      currentId = cat.parentId;
+    }
+    
+    return path.length > 0 ? path.join(' > ') : '未分类';
+  };
   
   // 获取所有涉及的创建者ID
   const creatorIds = new Set<number>();
@@ -1982,7 +2043,7 @@ export async function getTransactionsList(
       id: record.id,
       type: record.type,
       amount,
-      category: category?.name || '未分类',
+      category: buildCategoryPath(record.categoryId),
       categoryIcon: category?.icon,
       description: record.description,
       createdAt: record.createdAt,
