@@ -400,7 +400,6 @@ export default function LedgerDetail() {
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
                           <span className="text-xs text-[#222222] font-normal">
                             {record.category}
-                            {record.subcategory && `–${record.subcategory}`}
                           </span>
                           {/* 图片图标 */}
                           {record.imageUrl && (
