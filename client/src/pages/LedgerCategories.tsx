@@ -294,7 +294,7 @@ const LedgerCategories = () => {
                   <div key={child.id}>
                     {/* 二级分类容器 */}
                     <div className="bg-white p-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         <button
                           onClick={() => {
                             if (isDeleteMode) {
@@ -313,6 +313,15 @@ const LedgerCategories = () => {
                           )}
                           {child.name}
                         </button>
+                        <button
+                          onClick={() => {
+                            setCategoryToReplace(child);
+                            setShowReplaceDialog(true);
+                          }}
+                          className="px-2 py-1 text-xs border border-[#FF9800] text-[#FF9800] rounded hover:bg-[#FFF3E0]"
+                        >
+                          替换
+                        </button>
                       </div>
                     </div>
                     
@@ -324,28 +333,36 @@ const LedgerCategories = () => {
                           <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
                           
                           {/* 三级分类容器 */}
-                          <div className="bg-white p-1">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="bg-white p-1 space-y-2">
                             {child.children.map((subChild: any) => (
-                              <button
-                                key={subChild.id}
-                                onClick={() => {
-                                  if (isDeleteMode) {
-                                    setCategoryToDelete(subChild);
-                                    setShowDeleteConfirm(true);
-                                  }
-                                }}
-                                className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
-                              >
-                                {isDeleteMode && (
-                                  <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
-                                    -
-                                  </span>
-                                )}
-                                <span>{subChild.name}</span>
-                              </button>
+                              <div key={subChild.id} className="flex items-center justify-between gap-2">
+                                <button
+                                  onClick={() => {
+                                    if (isDeleteMode) {
+                                      setCategoryToDelete(subChild);
+                                      setShowDeleteConfirm(true);
+                                    }
+                                  }}
+                                  className="relative px-4 py-2 bg-gray-50 rounded text-sm border border-gray-200 hover:bg-gray-100"
+                                >
+                                  {isDeleteMode && (
+                                    <span className="absolute -top-1 -left-1 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs">
+                                      -
+                                    </span>
+                                  )}
+                                  <span>{subChild.name}</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setCategoryToReplace(subChild);
+                                    setShowReplaceDialog(true);
+                                  }}
+                                  className="px-2 py-1 text-xs border border-[#FF9800] text-[#FF9800] rounded hover:bg-[#FFF3E0]"
+                                >
+                                  替换
+                                </button>
+                              </div>
                             ))}
-                          </div>
                           </div>
                         </div>
                       </div>
