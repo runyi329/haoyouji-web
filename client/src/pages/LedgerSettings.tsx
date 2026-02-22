@@ -100,7 +100,7 @@ export default function LedgerSettings() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     );
@@ -108,14 +108,14 @@ export default function LedgerSettings() {
 
   if (!ledgerData) {
     return (
-      <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">账本不存在</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] pb-20">
+    <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-divider sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">
@@ -125,7 +125,7 @@ export default function LedgerSettings() {
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
-          <h1 className="text-lg font-medium text-[#222222]">
+          <h1 className="text-lg font-medium text-gray-900">
             {ledgerData.name}
           </h1>
           <div className="w-10"></div>
@@ -162,7 +162,7 @@ export default function LedgerSettings() {
                 )}
 
               </div>
-              <div className="text-sm text-[#222222] mt-1">
+              <div className="text-sm text-gray-900 mt-1">
                 {member.nickname || member.username || "用户"}
               </div>
             </div>
@@ -185,10 +185,10 @@ export default function LedgerSettings() {
               onClick={() => setShowRemovePicker(true)}
               className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
             >
-              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center border-red-400">
-                <span className="text-3xl text-[#D32F2F]">−</span>
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'var(--brand-red)' }}>
+                <span className="text-3xl" style={{ color: 'var(--brand-red)' }}>−</span>
               </div>
-              <div className="text-sm mt-1 text-[#D32F2F]">移除成员</div>
+              <div className="text-sm mt-1" style={{ color: 'var(--brand-red)' }}>移除成员</div>
             </button>
           )}
         </div>
@@ -313,11 +313,14 @@ export default function LedgerSettings() {
 
             {/* 提示信息 */}
             {inviteMessage && (
-              <div className={`p-3 rounded-lg text-sm ${
-                inviteMessage.type === 'success' 
-                  ? 'bg-[#E8F5E9] text-green-700 border border-green-200' 
-                  : 'bg-[#D32F2F]-light text-[#D32F2F] border border-red-200'
-              }`}>
+              <div 
+                className="p-3 rounded-lg text-sm border"
+                style={{
+                  backgroundColor: inviteMessage.type === 'success' ? 'var(--status-success-light)' : 'var(--brand-red-light)',
+                  color: inviteMessage.type === 'success' ? 'var(--status-success)' : 'var(--brand-red)',
+                  borderColor: inviteMessage.type === 'success' ? 'var(--status-success)' : 'var(--brand-red)'
+                }}
+              >
                 {inviteMessage.text}
               </div>
             )}
@@ -329,7 +332,7 @@ export default function LedgerSettings() {
                   searchResults.map((user: any) => (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-3 bg-[#FAF3ED] rounded-lg"
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <UserAvatar
@@ -338,7 +341,7 @@ export default function LedgerSettings() {
                           size="sm"
                         />
                         <div>
-                          <div className="font-medium text-[#222222]">{user.username}</div>
+                          <div className="font-medium text-gray-900">{user.username}</div>
                           {user.name && (
                             <div className="text-sm text-gray-500">{user.name}</div>
                           )}
@@ -397,7 +400,7 @@ export default function LedgerSettings() {
             {members?.filter((m: any) => m.role !== 'owner').map((member: any) => (
               <div
                 key={member.userId}
-                className="flex items-center justify-between p-3 bg-[#FAF3ED] rounded-lg"
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <UserAvatar
@@ -408,7 +411,7 @@ export default function LedgerSettings() {
                     className="w-10 h-10 rounded-full"
                   />
                   <div>
-                    <div className="font-medium text-[#222222]">{member.nickname || member.username}</div>
+                    <div className="font-medium text-gray-900">{member.nickname || member.username}</div>
                     <div className="text-xs text-gray-400">
                       {member.role === 'admin' ? '管理员' : '普通成员'}
                     </div>
@@ -420,7 +423,8 @@ export default function LedgerSettings() {
                     setShowRemovePicker(false);
                     setShowRemoveDialog(true);
                   }}
-                  className="px-3 py-1.5 bg-[#D32F2F]-light0 text-white text-sm rounded-lg hover:bg-[#D32F2F] transition-colors"
+                  className="px-3 py-1.5 text-white text-sm rounded-lg hover:opacity-90 transition-colors"
+                  style={{ backgroundColor: 'var(--brand-red)' }}
                 >
                   移除
                 </button>
@@ -450,7 +454,8 @@ export default function LedgerSettings() {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
-              className="bg-[#D32F2F]-light0 hover:bg-[#D32F2F]"
+              className="hover:opacity-90 text-white"
+              style={{ backgroundColor: 'var(--brand-red)' }}
             >
               确认移除
             </AlertDialogAction>
@@ -485,13 +490,13 @@ function SettingItem({
 }: SettingItemProps) {
   return (
     <div 
-      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-[#FAF3ED]"
+      className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0 cursor-pointer active:bg-gray-50"
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[15px] text-[#222222]">{label}</span>
+        <span className="text-[15px] text-gray-900">{label}</span>
         {isVip && (
-          <span className="text-xs font-bold text-[#CBA471] bg-[#FAF3ED] px-1.5 py-0.5 rounded">
+          <span className="text-xs font-bold bg-gray-50 px-1.5 py-0.5 rounded" style={{ color: 'var(--status-gold)' }}>
             VIP
           </span>
         )}
