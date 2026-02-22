@@ -666,9 +666,18 @@ export async function getCategoryUsageCount(
   if (!db) throw new Error("Ledger database connection failed");
   
   // 验证用户权限
-  const hasAccess = await checkLedgerAccess(ledgerId, userId);
-  if (!hasAccess) {
-    throw new Error("无权限访问此账本");
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员");
   }
   
   // 查询使用该分类的记录数量
@@ -699,9 +708,18 @@ export async function replaceLedgerCategory(
   if (!db) throw new Error("Ledger database connection failed");
   
   // 验证用户权限
-  const hasAccess = await checkLedgerAccess(ledgerId, userId);
-  if (!hasAccess) {
-    throw new Error("无权限访问此账本");
+  const member2 = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  if (member2.length === 0) {
+    throw new Error("您不是该账本的成员");
   }
   
   // 验证源分类和目标分类是否存在
@@ -724,7 +742,7 @@ export async function replaceLedgerCategory(
   // 执行批量更新
   const result = await db
     .update(ledgerRecords)
-    .set({ categoryId: targetCategoryId, updatedAt: new Date() })
+    .set({ categoryId: targetCategoryId, updatedAt: sql`NOW()` })
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
