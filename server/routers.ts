@@ -5578,7 +5578,7 @@ export const appRouter = router({
     updateMemberNickname: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        nickname: z.string().min(1).max(20),
+        nickname: z.string().min(0).max(20),
       }))
       .mutation(async ({ ctx, input }) => {
         await dbLedger.updateMemberNickname(input.ledgerId, ctx.user.id, input.nickname);
