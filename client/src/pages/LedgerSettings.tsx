@@ -155,7 +155,7 @@ export default function LedgerSettings() {
                 {member.role === 'owner' && (
                   <div 
                     className="absolute top-0 left-0 text-white px-1.5 py-0.5 rounded-br-lg rounded-tl-lg font-medium shadow-sm" 
-                    style={{ backgroundColor: themeColors.primary, fontSize: '10px' }}
+                    style={{ backgroundColor: #D32F2F, fontSize: '10px' }}
                   >
                     创建人
                   </div>
@@ -173,10 +173,10 @@ export default function LedgerSettings() {
             onClick={() => setShowInviteDialog(true)}
             className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
           >
-            <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: themeColors.primary }}>
-              <span className="text-3xl" style={{ color: themeColors.primary }}>+</span>
+            <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: #D32F2F }}>
+              <span className="text-3xl" style={{ color: #D32F2F }}>+</span>
             </div>
-            <div className="text-sm mt-1" style={{ color: themeColors.primary }}>邀请伙伴</div>
+            <div className="text-sm mt-1" style={{ color: #D32F2F }}>邀请伙伴</div>
           </button>
 
           {/* 移除成员按钮（-号）：创建人和管理员可见，且有非owner成员时才显示 */}
@@ -360,7 +360,7 @@ export default function LedgerSettings() {
                               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                               : "text-white hover:opacity-90"
                             }
-                            style={!isMember ? { backgroundColor: themeColors.primary } : {}}
+                            style={!isMember ? { backgroundColor: #D32F2F } : {}}
                           >
                             <UserPlus className="w-4 h-4 mr-1" />
                             {isMember ? '已添加' : '添加'}
