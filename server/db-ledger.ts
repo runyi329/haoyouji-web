@@ -3089,3 +3089,88 @@ export async function getLedgerImages(ledgerId: number, userId: number) {
     date: record.date,
   }));
 }
+
+/**
+ * 获取账本导出统计信息
+ */
+export async function getLedgerExportStats(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取账本信息
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  // 获取所有记录（不包括已删除的）
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      recordDate: ledgerRecords.recordDate,
+    })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.ledgerId, ledgerId));
+  
+  // 解密金额字段
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, ['amount']);
+  
+  // 统计数据
+  let totalRecords = decryptedRecords.length;
+  let totalIncome = 0;
+  let totalExpense = 0;
+  let earliestDate: string | null = null;
+  let latestDate: string | null = null;
+  
+  decryptedRecords.forEach((record: any) => {
+    const amount = parseFloat(record.amount || '0');
+    if (record.type === 'income') {
+      totalIncome += amount;
+    } else if (record.type === 'expense') {
+      totalExpense += amount;
+    }
+    
+    const recordDate = record.recordDate;
+    if (recordDate) {
+      if (!earliestDate || recordDate < earliestDate) {
+        earliestDate = recordDate;
+      }
+      if (!latestDate || recordDate > latestDate) {
+        latestDate = recordDate;
+      }
+    }
+  });
+  
+  return {
+    ledgerName: ledger[0].name,
+    totalRecords,
+    totalIncome: totalIncome.toFixed(2),
+    totalExpense: totalExpense.toFixed(2),
+    balance: (totalIncome - totalExpense).toFixed(2),
+    earliestDate,
+    latestDate,
+  };
+}
