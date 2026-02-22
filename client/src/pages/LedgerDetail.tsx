@@ -441,11 +441,10 @@ export default function LedgerDetail() {
       </div>
 
       {/* 固定底部中间的添加账目按钮 */}
-      <Button
+      <button
         onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-        style={{ backgroundColor: '#D32F2F' }}
-        size="icon"
+        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+        style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
           <line x1="12" y1="5" x2="12" y2="19"></line>
