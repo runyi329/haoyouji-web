@@ -6187,6 +6187,17 @@ export const appRouter = router({
         
         return { success: true };
       }),
+    
+    // 发送测试备份邮件
+    sendTestBackup: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { executeBackupForLedger } = await import('./backup-service');
+        await executeBackupForLedger(input.ledgerId, ctx.user.id);
+        return { success: true };
+      }),
   }),
   
   // 银行列表管理

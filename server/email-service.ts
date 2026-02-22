@@ -1,0 +1,145 @@
+import nodemailer from 'nodemailer';
+
+// SMTP配置
+const SMTP_CONFIG = {
+  host: 'smtp.qq.com',
+  port: 465,
+  secure: true, // 使用SSL
+  auth: {
+    user: process.env.SMTP_USER || 'tina_u@qq.com',
+    pass: process.env.SMTP_PASS || 'wqettalptfmebgdf',
+  },
+};
+
+// 创建邮件传输器
+const transporter = nodemailer.createTransporter(SMTP_CONFIG);
+
+/**
+ * 发送账本备份邮件
+ */
+export async function sendBackupEmail(options: {
+  to: string;
+  ledgerName: string;
+  excelBuffer: Buffer;
+  stats: {
+    totalRecords: number;
+    earliestDate: string;
+    latestDate: string;
+    totalIncome: number;
+    totalExpense: number;
+    balance: number;
+  };
+}): Promise<void> {
+  const { to, ledgerName, excelBuffer, stats } = options;
+  
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const filename = `账目导出_${dateStr}.xlsx`;
+  
+  // 邮件HTML内容
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background-color: #D32F2F; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background-color: #f9f9f9; padding: 30px; border: 1px solid #e0e0e0; border-top: none; }
+    .stats-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .stats-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; }
+    .stats-table td:first-child { font-weight: bold; color: #666; width: 40%; }
+    .stats-table td:last-child { text-align: right; }
+    .income { color: #4CAF50; font-weight: bold; }
+    .expense { color: #D32F2F; font-weight: bold; }
+    .balance { color: #2196F3; font-weight: bold; font-size: 18px; }
+    .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>📊 账本自动备份</h2>
+    </div>
+    <div class="content">
+      <p>您好！</p>
+      <p>这是您的账本定期自动备份。</p>
+      
+      <h3>账本信息</h3>
+      <table class="stats-table">
+        <tr>
+          <td>账本名称</td>
+          <td>${ledgerName}</td>
+        </tr>
+        <tr>
+          <td>备份时间</td>
+          <td>${dateStr}</td>
+        </tr>
+        <tr>
+          <td>记录总数</td>
+          <td>${stats.totalRecords} 条</td>
+        </tr>
+        <tr>
+          <td>时间范围</td>
+          <td>${stats.earliestDate} 至 ${stats.latestDate}</td>
+        </tr>
+        <tr>
+          <td>总收入</td>
+          <td class="income">¥${stats.totalIncome.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td>总支出</td>
+          <td class="expense">¥${stats.totalExpense.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td>结余</td>
+          <td class="balance">¥${stats.balance.toFixed(2)}</td>
+        </tr>
+      </table>
+      
+      <p>请查收附件中的 Excel 文件。</p>
+    </div>
+    <div class="footer">
+      <p>此邮件由系统自动发送，请勿回复。</p>
+      <p>好友记团队</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+  
+  // 发送邮件
+  await transporter.sendMail({
+    from: `"好友记" <${SMTP_CONFIG.auth.user}>`,
+    to,
+    subject: `【好友记】账本自动备份 - ${ledgerName}`,
+    html: htmlContent,
+    attachments: [
+      {
+        filename,
+        content: excelBuffer,
+      },
+    ],
+  });
+}
+
+/**
+ * 测试邮件发送
+ */
+export async function sendTestEmail(to: string): Promise<void> {
+  await transporter.sendMail({
+    from: `"好友记" <${SMTP_CONFIG.auth.user}>`,
+    to,
+    subject: '【好友记】邮件服务测试',
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>邮件服务测试成功！</h2>
+        <p>如果您收到这封邮件，说明邮件服务配置正确。</p>
+        <p>您可以正常使用账本自动备份功能了。</p>
+        <br>
+        <p>好友记团队</p>
+      </div>
+    `,
+  });
+}
