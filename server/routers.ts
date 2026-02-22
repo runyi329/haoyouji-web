@@ -6163,6 +6163,11 @@ export const appRouter = router({
           )
           .limit(1);
         
+        // 将Date转为MySQL格式
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const formatMySQLDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        const nextBackupStr = formatMySQLDate(nextBackupAt);
+        
         if (existing.length > 0) {
           // 更新现有设置
           await db_instance
@@ -6170,7 +6175,7 @@ export const appRouter = router({
             .set({
               frequency: input.frequency,
               enabled: input.enabled ? 1 : 0,
-              nextBackupAt: nextBackupAt.toISOString(),
+              nextBackupAt: nextBackupStr,
             })
             .where(eq(ledgerBackupSettings.id, existing[0].id));
         } else {
@@ -6181,7 +6186,7 @@ export const appRouter = router({
             frequency: input.frequency,
             enabled: input.enabled ? 1 : 0,
             lastBackupAt: null,
-            nextBackupAt: nextBackupAt,
+            nextBackupAt: nextBackupStr,
           });
         }
         
@@ -6203,11 +6208,15 @@ export const appRouter = router({
           const { ledgerBackupSettings } = await import("../drizzle/schema");
           const { eq, and, sql } = await import("drizzle-orm");
           
+          const now = new Date();
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          
           await db_instance
             .update(ledgerBackupSettings)
             .set({
               backupCount: sql`backup_count + 1`,
-              lastBackupAt: new Date().toISOString(),
+              lastBackupAt: nowStr,
             })
             .where(
               and(
