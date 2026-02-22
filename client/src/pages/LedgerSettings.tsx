@@ -48,6 +48,7 @@ export default function LedgerSettings() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [searchUsername, setSearchUsername] = useState("");
   const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -101,8 +102,20 @@ export default function LedgerSettings() {
     inviteMutation.mutate({ ledgerId, username });
   };
 
+  // 获取导出统计信息
+  const { data: exportStats } = trpc.ledger.getExportStats.useQuery(
+    { ledgerId },
+    { enabled: showExportDialog }
+  );
+
+  // 打开导出预览对话框
+  const handleOpenExportDialog = () => {
+    setShowExportDialog(true);
+  };
+
   // 导出账本的处理函数
   const handleExport = async () => {
+    setShowExportDialog(false);
     const loadingToast = toast.loading(
       <div className="flex items-center gap-2">
         <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-500"></div>
@@ -351,7 +364,7 @@ export default function LedgerSettings() {
       {/* 导入导出功能 */}
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
-        <SettingItem label="手动导出表格" showIcon onClick={handleExport} />
+        <SettingItem label="手动导出表格" showIcon onClick={handleOpenExportDialog} />
         <SettingItem label="定期自动备份账目" showIcon />
       </div>
 
@@ -524,6 +537,104 @@ export default function LedgerSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 导出预览对话框 */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">导出账本</DialogTitle>
+          
+          {exportStats ? (
+            <div className="p-6">
+              {/* 标题 */}
+              <div className="text-center mb-6">
+                <div className="text-2xl mb-2">📄</div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-1">导出账本</h3>
+                <p className="text-sm text-gray-500">{exportStats.ledgerName}</p>
+              </div>
+
+              {/* 统计信息 */}
+              <div className="space-y-4 mb-6">
+                {/* 记录数 */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                      <span className="text-lg">📊</span>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">记录总数</div>
+                      <div className="text-lg font-semibold text-gray-900">{exportStats.totalRecords} 条</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 时间范围 */}
+                {exportStats.earliestDate && exportStats.latestDate && (
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                        <span className="text-lg">📅</span>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">时间范围</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {exportStats.earliestDate} 至 {exportStats.latestDate}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 收入支出 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-green-50 rounded-xl">
+                    <div className="text-xs text-green-600 mb-1">总收入</div>
+                    <div className="text-lg font-semibold text-green-700">¥{exportStats.totalIncome}</div>
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-xl">
+                    <div className="text-xs text-red-600 mb-1">总支出</div>
+                    <div className="text-lg font-semibold text-red-700">¥{exportStats.totalExpense}</div>
+                  </div>
+                </div>
+
+                {/* 结余 */}
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">结余</span>
+                    <span className={`text-xl font-bold ${
+                      parseFloat(exportStats.balance) >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      ¥{exportStats.balance}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 按钮 */}
+              <div className="space-y-2">
+                <Button
+                  onClick={handleExport}
+                  className="w-full h-12 text-base font-medium text-white rounded-xl"
+                  style={{ backgroundColor: 'var(--brand-red)' }}
+                >
+                  ⬇️ 下载 Excel 文件
+                </Button>
+                <Button
+                  onClick={() => setShowExportDialog(false)}
+                  variant="outline"
+                  className="w-full h-12 text-base font-medium rounded-xl"
+                >
+                  取消
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500 mx-auto mb-4"></div>
+              <p className="text-gray-500">正在加载统计信息...</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
