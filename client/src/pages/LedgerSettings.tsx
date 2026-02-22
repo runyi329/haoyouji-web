@@ -29,6 +29,9 @@ export default function LedgerSettings() {
   const { currentTheme, customColors } = useColorTheme();
   const themeColors = customColors || currentTheme.colors;
 
+  // 获取当前用户信息
+  const { data: user } = trpc.auth.me.useQuery();
+
   // 获取账本详情
   const { data: ledgerData, isLoading } = trpc.ledger.getById.useQuery({
     ledgerId,
@@ -96,6 +99,65 @@ export default function LedgerSettings() {
   // 处理邀请用户
   const handleInviteUser = (username: string) => {
     inviteMutation.mutate({ ledgerId, username });
+  };
+
+  // 导出账本的处理函数
+  const handleExport = async () => {
+    const loadingToast = toast.loading(
+      <div className="flex items-center gap-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-blue-500"></div>
+        <span>正在生成Excel文件...</span>
+      </div>
+    );
+    try {
+      if (!user) {
+        throw new Error('未登录');
+      }
+      
+      const response = await fetch(`/api/ledger/${ledgerId}/export`, {
+        method: 'GET',
+        headers: {
+          'X-User-Id': user.id.toString(),
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '导出失败');
+      }
+      
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `账目导出_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(['"]?)([^'"\n]*?)\1/);
+        if (filenameMatch && filenameMatch[2]) {
+          filename = decodeURIComponent(filenameMatch[2]);
+        }
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss(loadingToast);
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <div className="font-semibold">导出成功！</div>
+          <div className="text-xs text-[#757575]">{filename}</div>
+          <div className="text-xs text-gray-500">文件已保存到下载文件夹</div>
+        </div>,
+        { duration: 4000 }
+      );
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      toast.error(`导出失败: ${error.message || '未知错误'}`);
+    }
   };
 
   if (isLoading) {
@@ -289,7 +351,7 @@ export default function LedgerSettings() {
       {/* 导入导出功能 */}
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
-        <SettingItem label="手动导出表格" showIcon />
+        <SettingItem label="手动导出表格" showIcon onClick={handleExport} />
         <SettingItem label="定期自动备份账目" showIcon />
       </div>
 
