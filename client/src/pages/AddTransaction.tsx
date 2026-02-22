@@ -182,6 +182,11 @@ const AddTransaction = () => {
   const { data: topCategories = [], isLoading: isLoadingTop } = trpc.ledger.getCategories.useQuery({
     ledgerId,
     parentId: null,
+  }, {
+    // 禁用缓存，每次都重新获取
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // 如果没有分类，使用预设分类
@@ -200,7 +205,12 @@ const AddTransaction = () => {
       ledgerId,
       parentId: selectedCategoryPath[0] || null,
     },
-    { enabled: selectedCategoryPath.length >= 1 }
+    { 
+      enabled: selectedCategoryPath.length >= 1,
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    }
   );
 
   const level2Query = trpc.ledger.getCategories.useQuery(
@@ -208,7 +218,12 @@ const AddTransaction = () => {
       ledgerId,
       parentId: selectedCategoryPath[1] || null,
     },
-    { enabled: selectedCategoryPath.length >= 2 }
+    { 
+      enabled: selectedCategoryPath.length >= 2,
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    }
   );
 
   // 构建多级分类数据
