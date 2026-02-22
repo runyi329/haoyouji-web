@@ -204,7 +204,7 @@ export default function LedgerSettings() {
         />
         <SettingItem 
           label="我在账本的昵称" 
-          value={members?.[0]?.nickname || "未设置"} 
+          value={members?.find(m => m.isCurrentUser)?.nickname || members?.find(m => m.isCurrentUser)?.username || "未设置"} 
           showIcon 
           onClick={() => setLocation(`/ledger/${ledgerId}/edit-nickname`)}
         />

@@ -24,7 +24,8 @@ export default function EditNickname() {
   // 初始化昵称
   useEffect(() => {
     if (members && members.length > 0 && !newNickname) {
-      setNewNickname(members[0]?.nickname || "");
+      const currentMember = members.find(m => m.isCurrentUser);
+      setNewNickname(currentMember?.nickname || "");
     }
   }, [members, newNickname]);
 
@@ -44,10 +45,7 @@ export default function EditNickname() {
 
   // 保存昵称
   const handleSave = () => {
-    if (!newNickname.trim()) {
-      toast.error("昵称不能为空");
-      return;
-    }
+    // 允许清空昵称，清空后会显示用户名
     updateNicknameMutation.mutate({
       ledgerId,
       nickname: newNickname.trim(),
@@ -94,14 +92,14 @@ export default function EditNickname() {
               {newNickname.length}/10
             </div>
             <p className="text-xs text-gray-500">
-              昵称将显示在账本成员列表和交易记录中
+              昵称将显示在账本成员列表和交易记录中，清空后将显示用户名
             </p>
           </div>
           
           {/* 确定按钮 */}
           <Button
             onClick={handleSave}
-            disabled={updateNicknameMutation.isPending || !newNickname.trim()}
+            disabled={updateNicknameMutation.isPending}
             className="w-full text-white hover:opacity-90"
             style={{ backgroundColor: themeColors.primary }}
           >
