@@ -52,6 +52,7 @@ export default function LedgerSettings() {
   const [showBackupDialog, setShowBackupDialog] = useState(false);
   const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
   const [backupEnabled, setBackupEnabled] = useState(false);
+  const [backupEditMode, setBackupEditMode] = useState(false);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -112,7 +113,7 @@ export default function LedgerSettings() {
   );
 
   // 获取备份设置
-  const { data: backupSettings } = trpc.ledger.getBackupSettings.useQuery(
+  const { data: backupSettings, refetch: refetchBackupSettings } = trpc.ledger.getBackupSettings.useQuery(
     { ledgerId },
     { enabled: showBackupDialog }
   );
@@ -121,7 +122,8 @@ export default function LedgerSettings() {
   const saveBackupMutation = trpc.ledger.saveBackupSettings.useMutation({
     onSuccess: () => {
       toast.success('备份设置已保存');
-      setShowBackupDialog(false);
+      setBackupEditMode(false);
+      refetchBackupSettings();
     },
     onError: (error) => {
       toast.error('保存失败: ' + error.message);
@@ -132,6 +134,7 @@ export default function LedgerSettings() {
   const sendTestBackupMutation = trpc.ledger.sendTestBackup.useMutation({
     onSuccess: () => {
       toast.success('测试邮件已发送，请检查您的邮箱');
+      refetchBackupSettings();
     },
     onError: (error) => {
       toast.error('发送失败: ' + error.message);
@@ -154,6 +157,38 @@ export default function LedgerSettings() {
       setBackupEnabled(backupSettings.enabled === 1);
     }
   }, [backupSettings]);
+
+  // 打开备份对话框时，根据是否已有设置决定显示模式
+  useEffect(() => {
+    if (showBackupDialog) {
+      // 如果没有设置过，直接进入编辑模式
+      if (!backupSettings) {
+        setBackupEditMode(true);
+      } else {
+        setBackupEditMode(false);
+      }
+    }
+  }, [showBackupDialog, backupSettings]);
+
+  // 格式化日期时间
+  const formatDateTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '暂无';
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '暂无';
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const frequencyLabel = (f: string) => {
+    if (f === 'weekly') return '每周一次';
+    if (f === 'monthly') return '每月一次';
+    if (f === 'quarterly') return '每季度一次';
+    return f;
+  };
 
   // 打开导出预览对话框
   const handleOpenExportDialog = () => {
@@ -682,83 +717,170 @@ export default function LedgerSettings() {
       {/* 备份设置对话框 */}
       <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
         <DialogContent className="max-w-md mx-auto">
-          <DialogTitle className="text-xl font-bold text-center mb-6">定期自动备份设置</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-center mb-4">
+            {backupEditMode ? '备份设置' : '自动备份'}
+          </DialogTitle>
           
-          <div className="space-y-6">
-            {/* 邮箱地址 */}
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div className="text-sm text-gray-600 mb-1">备份发送至</div>
-              <div className="text-base font-medium text-gray-900">{user?.email}</div>
-            </div>
+          {/* ===== 概览模式：已设置过备份且不在编辑状态 ===== */}
+          {!backupEditMode && backupSettings ? (
+            <div className="space-y-4">
+              {/* 状态指示 */}
+              <div className={`flex items-center gap-2 px-4 py-3 rounded-lg ${
+                backupSettings.enabled === 1 ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${
+                  backupSettings.enabled === 1 ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                }`} />
+                <span className={`text-sm font-medium ${
+                  backupSettings.enabled === 1 ? 'text-green-700' : 'text-gray-500'
+                }`}>
+                  {backupSettings.enabled === 1 ? '自动备份已启用' : '自动备份已暂停'}
+                </span>
+              </div>
 
-            {/* 备份频率 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                备份频率
-              </label>
-              <div className="space-y-2">
-                {[
-                  { value: 'weekly' as const, label: '每周一次' },
-                  { value: 'monthly' as const, label: '每月一次' },
-                  { value: 'quarterly' as const, label: '每季度一次' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => setBackupFrequency(option.value)}
-                    className={`w-full px-4 py-3 rounded-lg border-2 text-left transition-colors ${
-                      backupFrequency === option.value
-                        ? 'border-[#D32F2F] bg-red-50 text-[#D32F2F] font-medium'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              {/* 信息卡片 */}
+              <div className="bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">发送邮箱</span>
+                  <span className="text-sm font-medium text-gray-900">{user?.email || '未设置'}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">备份频率</span>
+                  <span className="text-sm font-medium text-gray-900">{frequencyLabel(backupSettings.frequency)}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">创建时间</span>
+                  <span className="text-sm font-medium text-gray-900">{formatDate(backupSettings.createdAt)}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">已发送次数</span>
+                  <span className="text-sm font-medium text-gray-900">{backupSettings.backupCount ?? 0} 次</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">上次发送</span>
+                  <span className="text-sm font-medium text-gray-900">{formatDateTime(backupSettings.lastBackupAt)}</span>
+                </div>
+                <div className="flex justify-between items-center px-4 py-3">
+                  <span className="text-sm text-gray-500">下次发送</span>
+                  <span className={`text-sm font-medium ${
+                    backupSettings.enabled === 1 ? 'text-[#D32F2F]' : 'text-gray-400'
+                  }`}>
+                    {backupSettings.enabled === 1 ? formatDateTime(backupSettings.nextBackupAt) : '已暂停'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 操作按钮 */}
+              <div className="space-y-2 pt-1">
+                <Button
+                  onClick={() => {
+                    setBackupEditMode(true);
+                    setBackupFrequency(backupSettings.frequency);
+                    setBackupEnabled(backupSettings.enabled === 1);
+                  }}
+                  className="w-full h-11 text-sm font-medium text-white rounded-lg"
+                  style={{ backgroundColor: '#D32F2F' }}
+                >
+                  编辑设置
+                </Button>
+                <Button
+                  onClick={handleSendTestBackup}
+                  disabled={sendTestBackupMutation.isPending || !user?.email}
+                  variant="outline"
+                  className="w-full h-11 text-sm font-medium rounded-lg border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
+                >
+                  {sendTestBackupMutation.isPending ? '发送中...' : '立即发送一次'}
+                </Button>
+                <Button
+                  onClick={() => setShowBackupDialog(false)}
+                  variant="outline"
+                  className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  关闭
+                </Button>
               </div>
             </div>
+          ) : (
+            /* ===== 编辑模式：首次设置 或 点击编辑 ===== */
+            <div className="space-y-5">
+              {/* 邮箱地址 */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="text-xs text-gray-500 mb-1">备份发送至</div>
+                <div className="text-sm font-medium text-gray-900">{user?.email || '请先在个人资料中设置邮箱'}</div>
+              </div>
 
-            {/* 开关 */}
-            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <span className="text-sm font-medium text-gray-700">启用自动备份</span>
-              <Switch
-                checked={backupEnabled}
-                onCheckedChange={setBackupEnabled}
-              />
-            </div>
+              {/* 备份频率 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-2">
+                  备份频率
+                </label>
+                <div className="space-y-2">
+                  {[
+                    { value: 'weekly' as const, label: '每周一次' },
+                    { value: 'monthly' as const, label: '每月一次' },
+                    { value: 'quarterly' as const, label: '每季度一次' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setBackupFrequency(option.value)}
+                      className={`w-full px-4 py-3 rounded-lg border-2 text-left text-sm transition-colors ${
+                        backupFrequency === option.value
+                          ? 'border-[#D32F2F] bg-red-50 text-[#D32F2F] font-medium'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            {/* 按钮 */}
-            <div className="space-y-2 pt-2">
-              <Button
-                onClick={() => {
-                  saveBackupMutation.mutate({
-                    ledgerId,
-                    frequency: backupFrequency,
-                    enabled: backupEnabled,
-                  });
-                }}
-                disabled={saveBackupMutation.isPending}
-                className="w-full h-12 text-base font-medium text-white rounded-lg"
-                style={{ backgroundColor: '#D32F2F' }}
-              >
-                保存设置
-              </Button>
-              <Button
-                onClick={handleSendTestBackup}
-                disabled={sendTestBackupMutation.isPending || !user?.email}
-                variant="outline"
-                className="w-full h-12 text-base font-medium rounded-lg border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
-              >
-                {sendTestBackupMutation.isPending ? '发送中...' : '立即发送测试邮件'}
-              </Button>
-              <Button
-                onClick={() => setShowBackupDialog(false)}
-                variant="outline"
-                className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                取消
-              </Button>
+              {/* 开关 */}
+              <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <span className="text-sm font-medium text-gray-700">启用自动备份</span>
+                <Switch
+                  checked={backupEnabled}
+                  onCheckedChange={setBackupEnabled}
+                />
+              </div>
+
+              {/* 按钮 */}
+              <div className="space-y-2 pt-1">
+                <Button
+                  onClick={() => {
+                    saveBackupMutation.mutate({
+                      ledgerId,
+                      frequency: backupFrequency,
+                      enabled: backupEnabled,
+                    });
+                  }}
+                  disabled={saveBackupMutation.isPending}
+                  className="w-full h-11 text-sm font-medium text-white rounded-lg"
+                  style={{ backgroundColor: '#D32F2F' }}
+                >
+                  {saveBackupMutation.isPending ? '保存中...' : '保存设置'}
+                </Button>
+                {backupSettings && (
+                  <Button
+                    onClick={() => setBackupEditMode(false)}
+                    variant="outline"
+                    className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    取消
+                  </Button>
+                )}
+                {!backupSettings && (
+                  <Button
+                    onClick={() => setShowBackupDialog(false)}
+                    variant="outline"
+                    className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    取消
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
