@@ -20,14 +20,16 @@ export default function EditNickname() {
   const { data: members, isLoading } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
   const [newNickname, setNewNickname] = useState("");
+  const [initialized, setInitialized] = useState(false);
 
-  // 初始化昵称
+  // 初始化昵称（只初始化一次）
   useEffect(() => {
-    if (members && members.length > 0 && !newNickname) {
+    if (members && members.length > 0 && !initialized) {
       const currentMember = members.find(m => m.isCurrentUser);
       setNewNickname(currentMember?.nickname || "");
+      setInitialized(true);
     }
-  }, [members, newNickname]);
+  }, [members, initialized]);
 
   // 更新昵称的mutation
   const utils = trpc.useUtils();
