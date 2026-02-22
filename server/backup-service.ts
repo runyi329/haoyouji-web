@@ -1,152 +1,144 @@
-import { getDb } from './db';
 import { sendBackupEmail } from './email-service';
+import * as dbLedger from './db-ledger';
+import { getLedgerDb } from './db';
 import ExcelJS from 'exceljs';
 
 /**
- * 执行单个账本的备份
+ * 执行单个账本的备份并发送邮件
+ * 
+ * 直接复用 dbLedger 中已有的函数获取数据，
+ * 复用 routers.ts 中 exportToExcel 的模式生成 Excel。
  */
 export async function executeBackup(ledgerId: number, userId: number): Promise<void> {
-  const db_instance = await getDb();
-  if (!db_instance) throw new Error("Database not available");
+  console.log('[executeBackup] 开始执行备份:', { ledgerId, userId });
   
-  const { ledgers, ledgerMembers, users, transactions, categories } = await import("../drizzle/schema");
-  const { eq, and, desc } = await import("drizzle-orm");
+  // 1. 获取账本信息（包含权限检查）
+  //    复用 dbLedger.getLedgerById，它会验证用户是否是账本成员
+  const ledgerInfo = await dbLedger.getLedgerById(ledgerId, userId);
+  console.log('[executeBackup] 获取账本信息成功:', { name: ledgerInfo.name });
   
-  // 1. 获取账本信息
-  const ledgerResult = await db_instance
-    .select()
-    .from(ledgers)
-    .where(eq(ledgers.id, ledgerId))
-    .limit(1);
+  // 2. 获取用户邮箱
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Database not available");
   
-  if (!ledgerResult || ledgerResult.length === 0) {
-    throw new Error(`账本不存在: ${ledgerId}`);
-  }
+  const { users } = await import("../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
   
-  const ledger = ledgerResult[0];
-  
-  if (!ledger || !ledger.name) {
-    console.error('账本数据异常:', ledger);
-    throw new Error(`账本数据异常: ${ledgerId}`);
-  }
-  
-  // 2. 获取用户信息（邮箱）
-  const user = await db_instance
-    .select()
+  const userRows = await db
+    .select({ id: users.id, email: users.email })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
   
-  if (user.length === 0 || !user[0].email) {
-    throw new Error(`用户邮箱未设置: ${userId}`);
+  if (userRows.length === 0 || !userRows[0].email) {
+    throw new Error('用户邮箱未设置，请先在个人资料中填写邮箱地址');
   }
   
-  // 3. 获取所有交易记录
-  const txList = await db_instance
-    .select({
-      id: transactions.id,
-      date: transactions.date,
-      type: transactions.type,
-      amount: transactions.amount,
-      categoryId: transactions.categoryId,
-      categoryName: categories.name,
-      description: transactions.description,
-      memberId: transactions.memberId,
-      memberNickname: ledgerMembers.nickname,
-      memberUsername: users.username,
-      createdAt: transactions.createdAt,
-    })
-    .from(transactions)
-    .leftJoin(categories, eq(transactions.categoryId, categories.id))
-    .leftJoin(ledgerMembers, eq(transactions.memberId, ledgerMembers.id))
-    .leftJoin(users, eq(ledgerMembers.userId, users.id))
-    .where(eq(transactions.ledgerId, ledgerId))
-    .orderBy(desc(transactions.date));
+  const userEmail = userRows[0].email;
+  console.log('[executeBackup] 用户邮箱:', userEmail);
   
-  // 4. 计算统计信息
+  // 3. 获取账目数据
+  //    复用 dbLedger.getTransactionsList，与 exportToExcel 使用完全相同的函数
+  //    设置 limit 为 10000 以获取所有记录
+  const transactions = await dbLedger.getTransactionsList(
+    ledgerId,
+    userId,
+    { limit: 10000 }
+  );
+  
+  console.log('[executeBackup] 获取到账目数据:', { dayGroups: transactions.length });
+  
+  // 4. 生成 Excel 文件
+  //    完全复制 routers.ts 中 exportToExcel 的逻辑
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('账目明细');
+  
+  // 设置列（与 exportToExcel 完全一致）
+  worksheet.columns = [
+    { header: '日期', key: 'date', width: 15 },
+    { header: '类型', key: 'type', width: 10 },
+    { header: '分类', key: 'category', width: 15 },
+    { header: '金额', key: 'amount', width: 15 },
+    { header: '备注', key: 'description', width: 30 },
+    { header: '创建人', key: 'creator', width: 15 },
+  ];
+  
+  // 添加数据 - transactions 是按日期分组的数组（与 exportToExcel 完全一致）
+  let rowCount = 0;
   let totalIncome = 0;
   let totalExpense = 0;
   let earliestDate = '';
   let latestDate = '';
   
-  if (txList.length > 0) {
-    latestDate = txList[0].date;
-    earliestDate = txList[txList.length - 1].date;
+  transactions.forEach((dayGroup: any) => {
+    // 记录日期范围
+    if (!earliestDate || dayGroup.date < earliestDate) {
+      earliestDate = dayGroup.date;
+    }
+    if (!latestDate || dayGroup.date > latestDate) {
+      latestDate = dayGroup.date;
+    }
     
-    txList.forEach(tx => {
-      const amount = parseFloat(tx.amount);
-      if (tx.type === 'income') {
+    dayGroup.records.forEach((record: any) => {
+      worksheet.addRow({
+        date: dayGroup.date,
+        type: record.type === 'income' ? '收入' : '支出',
+        category: record.category || '未分类',
+        amount: record.amount,
+        description: record.description || '',
+        creator: record.member?.username || '',
+      });
+      rowCount++;
+      
+      // 统计收支
+      const amount = Number(record.amount);
+      if (record.type === 'income') {
         totalIncome += amount;
       } else {
         totalExpense += amount;
       }
     });
-  }
-  
-  const balance = totalIncome - totalExpense;
-  
-  // 5. 生成Excel文件
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('账目明细');
-  
-  // 设置列
-  worksheet.columns = [
-    { header: '日期', key: 'date', width: 15 },
-    { header: '类型', key: 'type', width: 10 },
-    { header: '金额', key: 'amount', width: 15 },
-    { header: '分类', key: 'category', width: 15 },
-    { header: '成员', key: 'member', width: 15 },
-    { header: '备注', key: 'description', width: 30 },
-  ];
-  
-  // 添加数据
-  txList.forEach(tx => {
-    worksheet.addRow({
-      date: tx.date,
-      type: tx.type === 'income' ? '收入' : '支出',
-      amount: parseFloat(tx.amount),
-      category: tx.categoryName || '',
-      member: tx.memberNickname || tx.memberUsername || '',
-      description: tx.description || '',
-    });
   });
   
+  console.log('[executeBackup] 添加了', rowCount, '条记录');
+  
   // 设置表头样式
-  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   worksheet.getRow(1).fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: 'FFD32F2F' },
   };
-  worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
   
-  // 生成Buffer
-  const excelBuffer = await workbook.xlsx.writeBuffer();
+  // 生成 Buffer
+  const buffer = await workbook.xlsx.writeBuffer();
   
-  // 6. 发送邮件
+  const balance = totalIncome - totalExpense;
+  
+  // 5. 发送邮件
   await sendBackupEmail({
-    to: user[0].email,
-    ledgerName: ledger.name,
-    excelBuffer: Buffer.from(excelBuffer),
+    to: userEmail,
+    ledgerName: ledgerInfo.name,
+    excelBuffer: Buffer.from(buffer),
     stats: {
-      totalRecords: txList.length,
-      earliestDate,
-      latestDate,
+      totalRecords: rowCount,
+      earliestDate: earliestDate || '无记录',
+      latestDate: latestDate || '无记录',
       totalIncome,
       totalExpense,
       balance,
     },
   });
   
-  console.log(`备份邮件已发送: 账本=${ledger.name}, 用户=${user[0].email}`);
+  console.log(`[executeBackup] 备份邮件已发送: 账本=${ledgerInfo.name}, 用户=${userEmail}, 记录数=${rowCount}`);
 }
 
 /**
  * 检查并执行所有到期的备份任务
  */
 export async function checkAndExecuteBackups(): Promise<void> {
-  const db_instance = await getDb();
-  if (!db_instance) throw new Error("Database not available");
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Database not available");
   
   const { ledgerBackupSettings } = await import("../drizzle/schema");
   const { lte, eq, and } = await import("drizzle-orm");
@@ -154,7 +146,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
   const now = new Date();
   
   // 查询所有启用且到期的备份设置
-  const dueBackups = await db_instance
+  const dueBackups = await db
     .select()
     .from(ledgerBackupSettings)
     .where(
@@ -164,7 +156,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
       )
     );
   
-  console.log(`找到 ${dueBackups.length} 个到期的备份任务`);
+  console.log(`[checkAndExecuteBackups] 找到 ${dueBackups.length} 个到期的备份任务`);
   
   // 执行每个备份任务
   for (const backup of dueBackups) {
@@ -172,7 +164,7 @@ export async function checkAndExecuteBackups(): Promise<void> {
       await executeBackup(backup.ledgerId, backup.userId);
       
       // 计算下次备份时间
-      let nextBackupAt = new Date(now);
+      const nextBackupAt = new Date(now);
       if (backup.frequency === 'weekly') {
         nextBackupAt.setDate(now.getDate() + 7);
       } else if (backup.frequency === 'monthly') {
@@ -182,17 +174,17 @@ export async function checkAndExecuteBackups(): Promise<void> {
       }
       
       // 更新备份记录
-      await db_instance
+      await db
         .update(ledgerBackupSettings)
         .set({
-          lastBackupAt: now,
-          nextBackupAt: nextBackupAt,
+          lastBackupAt: now.toISOString(),
+          nextBackupAt: nextBackupAt.toISOString(),
         })
         .where(eq(ledgerBackupSettings.id, backup.id));
       
-      console.log(`备份任务完成: ID=${backup.id}`);
+      console.log(`[checkAndExecuteBackups] 备份任务完成: ID=${backup.id}`);
     } catch (error) {
-      console.error(`备份任务失败: ID=${backup.id}`, error);
+      console.error(`[checkAndExecuteBackups] 备份任务失败: ID=${backup.id}`, error);
     }
   }
 }
