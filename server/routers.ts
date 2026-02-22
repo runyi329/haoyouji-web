@@ -6180,7 +6180,8 @@ export const appRouter = router({
             userId: ctx.user.id,
             frequency: input.frequency,
             enabled: input.enabled ? 1 : 0,
-            nextBackupAt: nextBackupAt.toISOString(),
+            lastBackupAt: null,
+            nextBackupAt: nextBackupAt,
           });
         }
         
