@@ -21,9 +21,7 @@ export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
   
-  // 固定使用红色主题（#A80000），确保与全局风格统一
-  const THEME_PRIMARY = '#A80000';
-  const THEME_ACCENT1 = '#FFFFFF';
+  // 使用全局CSS变量，确保所有用户配色统一
 
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   console.log('[LedgerDetail] params:', params, 'ledgerId:', ledgerId);
@@ -105,16 +103,16 @@ export default function LedgerDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#A8000015' }}>
-        <div style={{ color: '#1F2937' }} className="text-lg">加载中...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--brand-red)15' }}>
+        <div style={{ color: 'var(--text-dark)' }} className="text-lg">加载中...</div>
       </div>
     );
   }
   
   if (error || !ledgerData) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#A8000015' }}>
-        <div style={{ color: '#1F2937' }} className="text-lg">账本不存在或您没有权限访问</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--brand-red)15' }}>
+        <div style={{ color: 'var(--text-dark)' }} className="text-lg">账本不存在或您没有权限访问</div>
       </div>
     );
   }
@@ -174,9 +172,9 @@ export default function LedgerDetail() {
 
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
+    <div className="min-h-screen bg-[var(--brand-red-light)] flex flex-col">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: THEME_PRIMARY, color: THEME_ACCENT1 }}>
+      <div className="pb-4" style={{ backgroundColor: 'var(--brand-red)', color: '#FFFFFF' }}>
         {/* 标题栏 */}
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <button
@@ -210,7 +208,7 @@ export default function LedgerDetail() {
             {/* 显示更多按钮 */}
             {membersData && Array.isArray(membersData) && membersData.length > 0 && (
               <div
-                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-[#757575] text-lg font-medium cursor-pointer hover:bg-[#FAF3ED]"
+                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-[var(--text-gray)] text-lg font-medium cursor-pointer hover:bg-[var(--brand-red-light)]"
                 style={{ marginLeft: membersData.length > 0 ? '-12px' : 0, zIndex: 0 }}
                 onClick={() => setShowMembersDialog(true)}
               >
@@ -223,24 +221,24 @@ export default function LedgerDetail() {
           <div className="flex items-center gap-2">
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: THEME_ACCENT1 }}
+              style={{ backgroundColor: '#FFFFFF' }}
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             >
-              <Settings className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
+              <Settings className="w-5 h-5" style={{ color: 'var(--brand-red)' }} />
             </div>
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: THEME_ACCENT1 }}
+              style={{ backgroundColor: '#FFFFFF' }}
               onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
             >
-              <Search className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
+              <Search className="w-5 h-5" style={{ color: 'var(--brand-red)' }} />
             </div>
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: THEME_ACCENT1 }}
+              style={{ backgroundColor: '#FFFFFF' }}
               onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
             >
-              <BarChart3 className="w-5 h-5" style={{ color: THEME_PRIMARY }} />
+              <BarChart3 className="w-5 h-5" style={{ color: 'var(--brand-red)' }} />
             </div>
           </div>
         </div>
@@ -276,7 +274,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('day');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[var(--text-dark)] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按天
                   </button>
@@ -285,7 +283,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('week');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[var(--text-dark)] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然周
                   </button>
@@ -294,7 +292,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('month');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[var(--text-dark)] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然月
                   </button>
@@ -303,7 +301,7 @@ export default function LedgerDetail() {
                       setStatsPeriod('year');
                       setShowPeriodMenu(false);
                     }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                    className="w-full px-2 py-2.5 text-sm text-[var(--text-dark)] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                   >
                     按自然年
                   </button>
@@ -339,14 +337,14 @@ export default function LedgerDetail() {
       {/* 待审批提示 */}
       {pendingApprovals.length > 0 && (
         <div 
-          className="mx-4 mt-3 mb-2 bg-[#FAF3ED] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
+          className="mx-4 mt-3 mb-2 bg-[var(--brand-red-light)] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[var(--brand-red-light)] transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
         >
-          <Search className="w-4 h-4 text-[#CBA471] flex-shrink-0" />
+          <Search className="w-4 h-4 text-[var(--status-gold)] flex-shrink-0" />
           <span className="text-sm text-orange-800">
             你有 <span className="font-semibold">{pendingApprovals.length}</span> 个待审批账目
           </span>
-          <ChevronRight className="w-4 h-4 text-[#CBA471] ml-auto" />
+          <ChevronRight className="w-4 h-4 text-[var(--status-gold)] ml-auto" />
         </div>
       )}
 
@@ -381,7 +379,7 @@ export default function LedgerDetail() {
                   {dayRecord.records.map((record: any) => (
                     <div
                       key={record.id}
-                      className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#FAF3ED] transition-colors"
+                      className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[var(--brand-red-light)] transition-colors"
                       onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
                     >
                       {/* 成员头像 */}
@@ -397,13 +395,13 @@ export default function LedgerDetail() {
                       {/* 分类信息 */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
-                          <span className="text-xs text-[#222222] font-normal">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[var(--brand-red)]-light0' : 'bg-[var(--status-success)]'}`}></span>
+                          <span className="text-xs text-[var(--text-dark)] font-normal">
                             {record.category}
                           </span>
                           {/* 图片图标 */}
                           {record.imageUrl && (
-                            <svg className="w-3.5 h-3.5 ml-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg className="w-3.5 h-3.5 ml-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="var(--status-link)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                               <circle cx="8.5" cy="8.5" r="1.5"/>
                               <polyline points="21 15 16 10 5 21"/>
@@ -411,7 +409,7 @@ export default function LedgerDetail() {
                           )}
                           {/* 待审批图标 */}
                           {record.approvalStatus === 'pending' && (
-                            <span className="ml-1 text-[#D32F2F] text-xs flex items-center gap-0.5">
+                            <span className="ml-1 text-[var(--brand-red)] text-xs flex items-center gap-0.5">
                               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                                 <circle cx="12" cy="12" r="10" opacity="0.2" />
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
@@ -421,7 +419,7 @@ export default function LedgerDetail() {
                           )}
                           {/* 报销状态图标 */}
                           {record.reimbursementStatus === 'pending' && (
-                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" />
+                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-[var(--status-link)] flex-shrink-0" />
                           )}
                         </div>
                         {record.description && (
@@ -430,7 +428,7 @@ export default function LedgerDetail() {
                       </div>
 
                       {/* 金额 */}
-                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'}`}>
+                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-[var(--brand-red)]' : 'text-[var(--status-success)]'}`}>
                         {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
                       </div>
                     </div>
@@ -446,7 +444,7 @@ export default function LedgerDetail() {
       <Button
         onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
         className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all"
-        style={{ backgroundColor: THEME_PRIMARY }}
+        style={{ backgroundColor: 'var(--brand-red)' }}
         size="icon"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
