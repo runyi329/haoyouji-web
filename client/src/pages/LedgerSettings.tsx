@@ -128,6 +128,25 @@ export default function LedgerSettings() {
     },
   });
 
+  // 发送测试备份邮件的mutation
+  const sendTestBackupMutation = trpc.ledger.sendTestBackup.useMutation({
+    onSuccess: () => {
+      toast.success('测试邮件已发送，请检查您的邮箱');
+    },
+    onError: (error) => {
+      toast.error('发送失败: ' + error.message);
+    },
+  });
+
+  // 处理发送测试邮件
+  const handleSendTestBackup = () => {
+    if (!user?.email) {
+      toast.error('请先在个人资料中填写邮箱地址');
+      return;
+    }
+    sendTestBackupMutation.mutate({ ledgerId });
+  };
+
   // 当备份设置加载完成后，填充表单
   useEffect(() => {
     if (backupSettings) {
@@ -722,6 +741,14 @@ export default function LedgerSettings() {
                 style={{ backgroundColor: '#D32F2F' }}
               >
                 保存设置
+              </Button>
+              <Button
+                onClick={handleSendTestBackup}
+                disabled={sendTestBackupMutation.isPending || !user?.email}
+                variant="outline"
+                className="w-full h-12 text-base font-medium rounded-lg border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
+              >
+                {sendTestBackupMutation.isPending ? '发送中...' : '立即发送测试邮件'}
               </Button>
               <Button
                 onClick={() => setShowBackupDialog(false)}
