@@ -997,6 +997,219 @@ export default function AssetReport() {
           </div>
         </div>
       )
+    },
+    {
+      id: 7,
+      title: "拓展人脉的第一性原理",
+      tag: "热",
+      content: (
+        <div className="space-y-4">
+          {/* 引言 */}
+          <div className="text-sm text-gray-700 leading-relaxed">
+            <p className="mb-3">
+              在社交网络时代，我们常常陷入一个误区，认为拓展人脉就是不断增加联系人的数量。然而，真正有价值的人脉关系，其核心并非数量，而是质量。
+            </p>
+            <p>
+              本文将深入探讨拓展人脉的第一性原理，揭示如何构建真正有意义的社交资产。
+            </p>
+          </div>
+
+          {/* 第一性原理列表 */}
+          <div className="space-y-3">
+            {/* 1. 构建信任资产 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">1. 构建信任资产，而非积累联系人数量</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">拓展人脉的第一性原理，是<span className="text-base">构建信任资产</span></span>，不是积累联系人的数量。
+                </p>
+                <p>
+                  人脉的本质是信任。一个值得信赖的形象，远比一个庞大但脆弱的通讯录更有价值。信任是所有合作与深度交流的基石。
+                </p>
+              </div>
+            </div>
+
+            {/* 2. 持续提供微小价值 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">2. 持续提供微小价值，而非等待重大交换</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">构建信任资产的第一性原理，是<span className="text-base">持续提供微小价值</span></span>，不是等待重大交换机会。
+                </p>
+                <p>
+                  真正的关系是通过持续、微小的善意和帮助建立起来的。一次及时的信息分享，一个真诚的建议，都能在不经意间积累信任。
+                </p>
+              </div>
+            </div>
+
+            {/* 3. 精准发现他人需求 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">3. 精准发现他人需求，而非泛泛展示自己</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">持续提供微小价值的第一性原理，是<span className="text-base">精准发现他人需求</span></span>，不是泛泛展示自己。
+                </p>
+                <p>
+                  提供价值的前提是了解对方需要什么。与其不断地自我推销，不如花时间去理解他人的痛点和目标。
+                </p>
+              </div>
+            </div>
+
+            {/* 4. 深度观察与倾听 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">4. 深度观察与倾听，而非急于自我表达</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">精准发现他人需求的第一性原理，是<span className="text-base">深度观察与倾听</span></span>，不是急于自我表达。
+                </p>
+                <p>
+                  每个人都渴望被理解。在交流中，做一个耐心的倾听者，远比做一个滔滔不绝的演讲者更受欢迎。
+                </p>
+              </div>
+            </div>
+
+            {/* 5. 保持长期在场 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">5. 保持长期在场，而非偶发性互动</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">深度倾听与观察的第一性原理，是<span className="text-base">保持长期在场</span></span>，不是偶发性互动。
+                </p>
+                <p>
+                  信任的建立需要时间的考验。在特定的社群或领域中保持持续的活跃和贡献，让人们习惯你的存在。
+                </p>
+              </div>
+            </div>
+
+            {/* 6. 聚焦特定领域深耕 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">6. 聚焦特定领域深耕，而非广泛浅层社交</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">保持长期在场的第一性原理，是<span className="text-base">聚焦特定领域深耕</span></span>，不是广泛浅层社交。
+                </p>
+                <p>
+                  与其成为一个“万事通”，不如成为某一领域的专家。当你成为特定领域的关键节点时，相关的资源和人脉会自然向你聚集。
+                </p>
+              </div>
+            </div>
+
+            {/* 7. 成为连接器 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">7. 成为连接器，而非独占资源</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">聚焦特定领域深耕的第一性原理，是<span className="text-base">成为信息与资源的连接器</span></span>，不是独占资源。
+                </p>
+                <p>
+                  当你掌握了信息和资源，最高级的价值创造是分享和连接。通过帮助他人建立连接，你会成为网络中的枢纽。
+                </p>
+              </div>
+            </div>
+
+            {/* 8. 促成他人连接 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">8. 促成他人连接，而非围绕自我中心</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">成为连接器的第一性原理，是<span className="text-base">促成他人连接</span></span>，不是围绕自我中心。
+                </p>
+                <p>
+                  一个健康的社交网络，是多节点、网状的，而不是以某个人为中心的星状结构。主动为他人牵线搭桥，创造共赢的机会。
+                </p>
+              </div>
+            </div>
+
+            {/* 9. 建立可复制的信任模式 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">9. 建立可复制的信任模式，而非依赖个人魅力</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">主动促成他人连接的第一性原理，是<span className="text-base">建立可复制的信任模式</span></span>，不是依赖个人魅力单向推动。
+                </p>
+                <p>
+                  个人魅力难以复制，但模式可以。通过标准化的流程、透明的规则和可靠的交付，建立一个可预测、可信赖的合作模式。
+                </p>
+              </div>
+            </div>
+
+            {/* 10. 打造个人IP */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">10. 打造个人IP，而非维护私人关系</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">建立可复制信任模式的第一性原理，是<span className="text-base">打造个人IP</span></span>，不是维护私人的关系薄。
+                </p>
+                <p>
+                  个人IP是你专业、能力和价值观的公开市场品牌。一个强大的IP能够自动吸引认同你的人，将你的影响力从熟人圈子扩展到更广阔的陆生人市场。
+                </p>
+              </div>
+            </div>
+
+            {/* 11. 输出系统性见解 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">11. 输出系统性见解，而非零散观点</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">打造个人IP的第一性原理，是<span className="text-base">输出系统性见解</span></span>，而不是零散的观点输出。
+                </p>
+                <p>
+                  零散的观点容易被遗忘，而系统性的知识框架和独到见解，才能真正构建起你的专业壁垒，让人们愿意持续关注和追随。
+                </p>
+              </div>
+            </div>
+
+            {/* 12. 吸引同频伙伴 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">12. 吸引同频伙伴，而非追逐人脉</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">系统性见解的第一性原理，是<span className="text-base">吸引同频伙伴自主汇聚</span></span>，而不是追逐人脉。
+                </p>
+                <p>
+                  当你持续输出价值和见解时，与你志同道合的人会自然被吸引而来。这种基于价值观和认知共鸣的连接，远比功利性的“人脉追逐”更稳固、更持久。
+                </p>
+              </div>
+            </div>
+
+            {/* 13. 形成生态网络 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">13. 形成生态网络，而非线性叠加</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">同频伙伴汇聚的第一性原理，是<span className="text-base">形成生态网络效应</span></span>，而不是线性的人脉叠加。
+                </p>
+                <p>
+                  真正的顶级人脉不是一条线一条线地累加，而是构建一个能够自我生长、自我循环的生态系统。在这个生态中，成员之间可以互相赋能，创造出1+1>2的价值。
+                </p>
+              </div>
+            </div>
+
+            {/* 14. 设计开放的合作规则 */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="font-bold text-gray-900 mb-2">14. 设计开放的合作规则，而非依赖个人关系</div>
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <p className="mb-2">
+                  <span className="font-bold text-[#D32F2F]">形成生态网络效应的第一性原理，是<span className="text-base">设计开放的合作规则与文化</span></span>，而不是依赖个人关系经营。
+                </p>
+                <p>
+                  一个能够长久发展的生态，必须有清晰、公平、开放的规则。这套规则是生态的“宪法”，确保了系统的稳定和所有参与者的利益，从而超越了对创始人的个人依赖。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 结语 */}
+          <div className="bg-[#D32F2F]-dark p-4 rounded-lg mt-4">
+            <div className="font-bold text-white mb-3 text-center">脚注：脉动共享</div>
+            <div className="text-sm text-white/90 leading-relaxed text-center">
+              <p>
+                专业设计开放的合作规则与文化
+              </p>
+            </div>
+          </div>
+        </div>
+      )
     }
   ];
 
