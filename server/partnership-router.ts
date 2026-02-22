@@ -9,7 +9,9 @@ import {
   users,
   contacts,
   contactSharingConnections,
-  contactInteractions
+  contactInteractions,
+  contactTags,
+  personalContactTags
 } from "../drizzle/schema";
 import { eq, and, inArray, like, or, sql, asc } from "drizzle-orm";
 import { mysqlTable, int, varchar, text, timestamp } from "drizzle-orm/mysql-core";
@@ -200,19 +202,24 @@ export const partnershipRouter = router({
         // 全部人脉 = 我的 + 共享
         const totalContactsCount = ownContactsCount + sharedContactsCount;
 
-        // 查询标签数（从我的联系人的tags字段中统计唯一标签）
-        const contactsWithTags = await db
-          .select({ tags: contacts.tags })
-          .from(contacts)
-          .where(eq(contacts.parentUserId, member.id));
-        
-        const allTags = new Set<string>();
-        contactsWithTags.forEach(c => {
-          if (c.tags && Array.isArray(c.tags)) {
-            (c.tags as string[]).forEach(tag => allTags.add(tag));
-          }
-        });
-        const tagsCount = allTags.size;
+        // 查询标签数（统计用户创建的全局标签和个人标签总数）
+        // 1. 全局标签（contactTags表）
+        const globalTagsResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(contactTags)
+          .where(eq(contactTags.parentUserId, member.id));
+        const globalTagsCount = globalTagsResult[0]?.count || 0;
+
+        // 2. 个人标签（personalContactTags表）- 统计唯一标签名称
+        const personalTagsResult = await db
+          .select({ name: personalContactTags.name })
+          .from(personalContactTags)
+          .where(eq(personalContactTags.parentUserId, member.id));
+        const uniquePersonalTags = new Set(personalTagsResult.map(t => t.name));
+        const personalTagsCount = uniquePersonalTags.size;
+
+        // 总标签数 = 全局标签 + 唯一个人标签
+        const tagsCount = globalTagsCount + personalTagsCount;
 
         // 查询联络数（我的联系人的互动记录总数）
         const myContactIds = await db
