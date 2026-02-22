@@ -12,7 +12,6 @@ export default function ProfileEdit() {
     username: "",
     nickname: "",
     email: "",
-    phone: "",
   });
 
   // 使用tRPC获取用户信息
@@ -38,7 +37,6 @@ export default function ProfileEdit() {
         username: user.username || "",
         nickname: user.name || "",
         email: user.email || "",
-        phone: user.phone || "",
       });
     }
   }, [user]);
@@ -56,7 +54,6 @@ export default function ProfileEdit() {
         username: user.username || "",
         nickname: user.name || "",
         email: user.email || "",
-        phone: user.phone || "",
       });
     }
     setIsEditing(false);
@@ -68,7 +65,6 @@ export default function ProfileEdit() {
       await updateProfileMutation.mutateAsync({
         name: formData.nickname,
         email: formData.email,
-        phone: formData.phone,
       });
     } catch (error) {
       console.error("保存失败:", error);
@@ -158,24 +154,6 @@ export default function ProfileEdit() {
               )}
               {!isEditing && !formData.email && (
                 <p className="text-xs text-[#D32F2F] mt-1">建议填写邮箱，用于接收账本备份</p>
-              )}
-            </div>
-
-            {/* 手机号 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                手机号
-              </label>
-              {isEditing ? (
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#D32F2F] focus:border-transparent"
-                  placeholder="请输入手机号"
-                />
-              ) : (
-                <div className="text-base text-gray-900">{formData.phone || "未设置"}</div>
               )}
             </div>
           </div>
