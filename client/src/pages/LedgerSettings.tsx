@@ -547,60 +547,45 @@ export default function LedgerSettings() {
             <div className="p-6">
               {/* 标题 */}
               <div className="text-center mb-6">
-                <div className="text-2xl mb-2">📄</div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-1">导出账本</h3>
-                <p className="text-sm text-gray-500">{exportStats.ledgerName}</p>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">导出账本</h3>
+                <p className="text-sm text-gray-600">{exportStats.ledgerName}</p>
               </div>
 
               {/* 统计信息 */}
-              <div className="space-y-4 mb-6">
+              <div className="space-y-3 mb-6">
                 {/* 记录数 */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-lg">📊</span>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">记录总数</div>
-                      <div className="text-lg font-semibold text-gray-900">{exportStats.totalRecords} 条</div>
-                    </div>
-                  </div>
+                <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                  <span className="text-sm text-gray-600">记录总数</span>
+                  <span className="text-base font-semibold text-gray-900">{exportStats.totalRecords} 条</span>
                 </div>
 
                 {/* 时间范围 */}
                 {exportStats.earliestDate && exportStats.latestDate && (
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                        <span className="text-lg">📅</span>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-500">时间范围</div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {exportStats.earliestDate} 至 {exportStats.latestDate}
-                        </div>
-                      </div>
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-1">时间范围</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {exportStats.earliestDate} 至 {exportStats.latestDate}
                     </div>
                   </div>
                 )}
 
                 {/* 收入支出 */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 bg-green-50 rounded-xl">
-                    <div className="text-xs text-green-600 mb-1">总收入</div>
-                    <div className="text-lg font-semibold text-green-700">¥{exportStats.totalIncome}</div>
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-xs text-gray-500 mb-1">总收入</div>
+                    <div className="text-base font-semibold text-green-600">¥{exportStats.totalIncome}</div>
                   </div>
-                  <div className="p-4 bg-red-50 rounded-xl">
-                    <div className="text-xs text-red-600 mb-1">总支出</div>
-                    <div className="text-lg font-semibold text-red-700">¥{exportStats.totalExpense}</div>
+                  <div className="p-3 bg-white border border-gray-200 rounded-lg">
+                    <div className="text-xs text-gray-500 mb-1">总支出</div>
+                    <div className="text-base font-semibold text-red-600">¥{exportStats.totalExpense}</div>
                   </div>
                 </div>
 
                 {/* 结余 */}
-                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">结余</span>
-                    <span className={`text-xl font-bold ${
+                    <span className={`text-lg font-bold ${
                       parseFloat(exportStats.balance) >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
                       ¥{exportStats.balance}
@@ -613,15 +598,15 @@ export default function LedgerSettings() {
               <div className="space-y-2">
                 <Button
                   onClick={handleExport}
-                  className="w-full h-12 text-base font-medium text-white rounded-xl"
-                  style={{ backgroundColor: 'var(--brand-red)' }}
+                  className="w-full h-12 text-base font-medium text-white rounded-lg"
+                  style={{ backgroundColor: '#D32F2F' }}
                 >
-                  ⬇️ 下载 Excel 文件
+                  下载 Excel 文件
                 </Button>
                 <Button
                   onClick={() => setShowExportDialog(false)}
                   variant="outline"
-                  className="w-full h-12 text-base font-medium rounded-xl"
+                  className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   取消
                 </Button>
