@@ -172,6 +172,21 @@ const LedgerCategories = () => {
 
   const categories = categoriesData ? buildCategoryTree(categoriesData) : [];
 
+  // 构建分类ID到完整路径的映射，用于替换对话框中显示层级
+  const getCategoryFullPath = (categoryId: number): string => {
+    if (!categoriesData) return '';
+    const catMap = new Map<number, any>();
+    categoriesData.forEach((cat: any) => catMap.set(cat.id, cat));
+    
+    const parts: string[] = [];
+    let current = catMap.get(categoryId);
+    while (current) {
+      parts.unshift(current.name);
+      current = current.parentId ? catMap.get(current.parentId) : null;
+    }
+    return parts.join(' > ');
+  };
+
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) {
       toast.error("请输入分类名称");
@@ -609,7 +624,7 @@ const LedgerCategories = () => {
           <div className="space-y-4">
             <div className="bg-[#FFF3E0] border border-[#FF9800] rounded p-3">
               <p className="text-sm text-[#E65100]">
-                将所有使用 <strong>"{categoryToReplace?.name}"</strong> 分类的记账记录替换为其他分类
+                将所有使用 <strong>"{categoryToReplace ? getCategoryFullPath(categoryToReplace.id) : ''}"</strong> 分类的记账记录替换为其他分类
               </p>
             </div>
             
@@ -625,7 +640,7 @@ const LedgerCategories = () => {
                   ?.filter((cat: any) => cat.id !== categoryToReplace?.id)
                   .map((cat: any) => (
                     <option key={cat.id} value={cat.id}>
-                      {cat.name}
+                      {getCategoryFullPath(cat.id)}
                     </option>
                   ))}
               </select>
