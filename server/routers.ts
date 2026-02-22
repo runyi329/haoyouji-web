@@ -6098,6 +6098,94 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbLedger.getLedgerExportStats(input.ledgerId, ctx.user.id);
       }),
+
+    // 获取账本备份设置
+    getBackupSettings: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db_instance = await getDb();
+        if (!db_instance) throw new Error("Database not available");
+        
+        const { ledgerBackupSettings } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        
+        const settings = await db_instance
+          .select()
+          .from(ledgerBackupSettings)
+          .where(
+            and(
+              eq(ledgerBackupSettings.ledgerId, input.ledgerId),
+              eq(ledgerBackupSettings.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        
+        return settings[0] || null;
+      }),
+
+    // 保存账本备份设置
+    saveBackupSettings: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        frequency: z.enum(['weekly', 'monthly', 'quarterly']),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db_instance = await getDb();
+        if (!db_instance) throw new Error("Database not available");
+        
+        const { ledgerBackupSettings } = await import("../drizzle/schema");
+        const { eq, and } = await import("drizzle-orm");
+        
+        // 计算下次备份时间
+        const now = new Date();
+        let nextBackupAt = new Date(now);
+        
+        if (input.frequency === 'weekly') {
+          nextBackupAt.setDate(now.getDate() + 7);
+        } else if (input.frequency === 'monthly') {
+          nextBackupAt.setMonth(now.getMonth() + 1);
+        } else if (input.frequency === 'quarterly') {
+          nextBackupAt.setMonth(now.getMonth() + 3);
+        }
+        
+        // 检查是否已存在设置
+        const existing = await db_instance
+          .select()
+          .from(ledgerBackupSettings)
+          .where(
+            and(
+              eq(ledgerBackupSettings.ledgerId, input.ledgerId),
+              eq(ledgerBackupSettings.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        
+        if (existing.length > 0) {
+          // 更新现有设置
+          await db_instance
+            .update(ledgerBackupSettings)
+            .set({
+              frequency: input.frequency,
+              enabled: input.enabled ? 1 : 0,
+              nextBackupAt: nextBackupAt.toISOString(),
+            })
+            .where(eq(ledgerBackupSettings.id, existing[0].id));
+        } else {
+          // 创建新设置
+          await db_instance.insert(ledgerBackupSettings).values({
+            ledgerId: input.ledgerId,
+            userId: ctx.user.id,
+            frequency: input.frequency,
+            enabled: input.enabled ? 1 : 0,
+            nextBackupAt: nextBackupAt.toISOString(),
+          });
+        }
+        
+        return { success: true };
+      }),
   }),
   
   // 银行列表管理
