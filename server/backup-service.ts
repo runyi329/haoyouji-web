@@ -13,14 +13,21 @@ export async function executeBackup(ledgerId: number, userId: number): Promise<v
   const { eq, and, desc } = await import("drizzle-orm");
   
   // 1. 获取账本信息
-  const ledger = await db_instance
+  const ledgerResult = await db_instance
     .select()
     .from(ledgers)
     .where(eq(ledgers.id, ledgerId))
     .limit(1);
   
-  if (ledger.length === 0) {
+  if (!ledgerResult || ledgerResult.length === 0) {
     throw new Error(`账本不存在: ${ledgerId}`);
+  }
+  
+  const ledger = ledgerResult[0];
+  
+  if (!ledger || !ledger.name) {
+    console.error('账本数据异常:', ledger);
+    throw new Error(`账本数据异常: ${ledgerId}`);
   }
   
   // 2. 获取用户信息（邮箱）
@@ -119,7 +126,7 @@ export async function executeBackup(ledgerId: number, userId: number): Promise<v
   // 6. 发送邮件
   await sendBackupEmail({
     to: user[0].email,
-    ledgerName: ledger[0].name,
+    ledgerName: ledger.name,
     excelBuffer: Buffer.from(excelBuffer),
     stats: {
       totalRecords: txList.length,
@@ -131,7 +138,7 @@ export async function executeBackup(ledgerId: number, userId: number): Promise<v
     },
   });
   
-  console.log(`备份邮件已发送: 账本=${ledger[0].name}, 用户=${user[0].email}`);
+  console.log(`备份邮件已发送: 账本=${ledger.name}, 用户=${user[0].email}`);
 }
 
 /**
