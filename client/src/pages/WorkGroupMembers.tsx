@@ -1,8 +1,9 @@
 import { useLocation, useParams } from 'wouter';
 import { useState } from 'react';
 import { trpc } from '../lib/trpc';
-import { Plus } from 'lucide-react';
+import { Plus, Users, Share } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function WorkGroupMembers() {
   const [, setLocation] = useLocation();
@@ -51,7 +52,7 @@ export default function WorkGroupMembers() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 flex flex-col">
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <button 
@@ -76,61 +77,122 @@ export default function WorkGroupMembers() {
       </div>
 
       {/* 成员列表 */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-3 space-y-2">
-          {members.length === 0 ? (
-            <div className="text-center text-[#757575] py-8">
-              暂无成员，点击右上角 + 添加
-            </div>
-          ) : (
-            members.map((member: any) => (
-              <div
-                key={member.id}
-                onClick={() => setLocation(`/work-group-member/${member.id}`)}
-                className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {members.length === 0 ? (
+          <Card className="bg-white/80 backdrop-blur-sm">
+            <CardContent className="p-6 text-center">
+              <Users className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+              <p className="text-gray-500 text-sm">暂无成员</p>
+              <p className="text-xs text-gray-400 mt-1">点击右上角 + 添加</p>
+            </CardContent>
+          </Card>
+        ) : (
+          members.map((member: any) => (
+            <Card 
+              key={member.id}
+              onClick={() => setLocation(`/work-group-member/${member.id}`)}
+              className="bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <CardContent className="p-4 space-y-3">
+                {/* 第一排：头像 + 名字 + 工作群标签 + 加入时间 */}
+                <div className="flex items-start gap-3">
                   {/* 头像 */}
-                  <img
-                    src={member.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.id}`}
-                    alt={member.name}
-                    className="w-12 h-12 rounded-full border-2 border-[#D32F2F]/10"
-                  />
-
-                  {/* 信息区域 */}
-                  <div className="flex-1">
-                    {/* 第一行：用户名、工作群标签和加入时间 */}
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-[#222222]">{member.name}</span>
-                        {/* 工作群标签 */}
-                        <div className="flex gap-1">
-                          {member.workGroups?.map((group: any, index: number) => 
-                            renderWorkGroupBadge(group, index)
-                          )}
-                        </div>
+                  <div className="flex-shrink-0">
+                    {member.avatar ? (
+                      <img
+                        src={member.avatar}
+                        alt={member.name}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-[#D32F2F]/10"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center text-white font-bold text-base">
+                        {(member.name || "?").charAt(0).toUpperCase()}
                       </div>
-                      <span className="text-xs text-[#757575]">
+                    )}
+                  </div>
+
+                  {/* 名字、工作群标签和加入时间 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-semibold text-base text-[#222222]">{member.name}</h3>
+                        {/* 工作群标签 */}
+                        {member.workGroups && member.workGroups.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {member.workGroups.map((group: any, index: number) => 
+                              renderWorkGroupBadge(group, index)
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
                         加入 {member.joinedAt ? member.joinedAt.split(' ')[0] : ''}
                       </span>
                     </div>
 
-                    {/* 第二行：角色信息 */}
+                    {/* 第二行：角色和邮箱 */}
                     <div className="text-xs text-[#757575]">
                       {member.role === 'admin' ? '管理员' : '成员'}
                       {member.email && ` · ${member.email}`}
                     </div>
                   </div>
-
-                  {/* 右箭头 */}
-                  <svg className="w-5 h-5 text-[#757575]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
+
+                {/* 第三排：统计数据徽章 */}
+                <div className="flex gap-2 flex-wrap">
+                  {/* 我的 */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F5F5F5]">
+                    <Users className="w-4 h-4 text-[#1976D2]" />
+                    <span className="text-xs text-[#757575]">我的</span>
+                    <span className="text-sm text-[#1976D2] font-semibold">
+                      {member.ownContactsCount || 0}
+                    </span>
+                  </div>
+
+                  {/* 共享 */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#E8F5E9]">
+                    <Share className="w-4 h-4 text-[#4CAF50]" />
+                    <span className="text-xs text-[#757575]">共享</span>
+                    <span className="text-sm text-[#4CAF50] font-semibold">
+                      {member.sharedContactsCount || 0}
+                    </span>
+                  </div>
+
+                  {/* 全部 */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#FFEBEE]">
+                    <Users className="w-4 h-4 text-[#D32F2F]" />
+                    <span className="text-xs text-[#757575]">全部</span>
+                    <span className="text-sm text-[#D32F2F] font-semibold">
+                      {member.totalContactsCount || 0}
+                    </span>
+                  </div>
+                  
+                  {/* 标签数 */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#F3E5F5]">
+                    <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <span className="text-xs text-[#757575]">标签</span>
+                    <span className="text-sm text-purple-600 font-semibold">
+                      {member.tagsCount || 0}
+                    </span>
+                  </div>
+                  
+                  {/* 联络数 */}
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-[#FAF3ED]">
+                    <svg className="w-4 h-4 text-[#CBA471]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span className="text-xs text-[#757575]">联络</span>
+                    <span className="text-sm text-[#CBA471] font-semibold">
+                      {member.interactionsCount || 0}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
       {/* 添加成员对话框 */}
