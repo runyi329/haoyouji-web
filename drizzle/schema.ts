@@ -1208,3 +1208,18 @@ export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type InsertShippingAddress = typeof shippingAddresses.$inferInsert;
 export type WorkGroup = typeof workGroups.$inferSelect;
 export type InsertWorkGroup = typeof workGroups.$inferInsert;
+
+export const ledgerBackupSettings = mysqlTable("ledger_backup_settings", {
+	id: int().autoincrement().notNull(),
+	ledgerId: int("ledger_id").notNull(),
+	userId: int("user_id").notNull(),
+	frequency: mysqlEnum(['weekly','monthly','quarterly']).notNull(),
+	enabled: tinyint().default(1).notNull(),
+	lastBackupAt: timestamp("last_backup_at", { mode: 'string' }),
+	nextBackupAt: timestamp("next_backup_at", { mode: 'string' }),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("ledger_backup_settings_ledger_id_user_id_unique").on(table.ledgerId, table.userId),
+]);

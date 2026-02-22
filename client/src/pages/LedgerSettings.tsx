@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Switch } from "@/components/ui/switch";
@@ -49,6 +49,9 @@ export default function LedgerSettings() {
   const [searchUsername, setSearchUsername] = useState("");
   const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showBackupDialog, setShowBackupDialog] = useState(false);
+  const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
+  const [backupEnabled, setBackupEnabled] = useState(false);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -107,6 +110,31 @@ export default function LedgerSettings() {
     { ledgerId },
     { enabled: showExportDialog }
   );
+
+  // 获取备份设置
+  const { data: backupSettings } = trpc.ledger.getBackupSettings.useQuery(
+    { ledgerId },
+    { enabled: showBackupDialog }
+  );
+
+  // 保存备份设置的mutation
+  const saveBackupMutation = trpc.ledger.saveBackupSettings.useMutation({
+    onSuccess: () => {
+      toast.success('备份设置已保存');
+      setShowBackupDialog(false);
+    },
+    onError: (error) => {
+      toast.error('保存失败: ' + error.message);
+    },
+  });
+
+  // 当备份设置加载完成后，填充表单
+  useEffect(() => {
+    if (backupSettings) {
+      setBackupFrequency(backupSettings.frequency);
+      setBackupEnabled(backupSettings.enabled === 1);
+    }
+  }, [backupSettings]);
 
   // 打开导出预览对话框
   const handleOpenExportDialog = () => {
@@ -365,7 +393,18 @@ export default function LedgerSettings() {
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
         <SettingItem label="手动导出表格" showIcon onClick={handleOpenExportDialog} />
-        <SettingItem label="定期自动备份账目" showIcon />
+        <SettingItem label="定期自动备份账目" showIcon onClick={() => {
+          if (!user?.email) {
+            toast.error("请先在个人中心填写邮箱地址", {
+              action: {
+                label: "去填写",
+                onClick: () => setLocation("/profile/edit"),
+              },
+            });
+          } else {
+            setShowBackupDialog(true);
+          }
+        }} />
       </div>
 
 
@@ -618,6 +657,81 @@ export default function LedgerSettings() {
               <p className="text-gray-500">正在加载统计信息...</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 备份设置对话框 */}
+      <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogTitle className="text-xl font-bold text-center mb-6">定期自动备份设置</DialogTitle>
+          
+          <div className="space-y-6">
+            {/* 邮箱地址 */}
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-600 mb-1">备份发送至</div>
+              <div className="text-base font-medium text-gray-900">{user?.email}</div>
+            </div>
+
+            {/* 备份频率 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                备份频率
+              </label>
+              <div className="space-y-2">
+                {[
+                  { value: 'weekly' as const, label: '每周一次' },
+                  { value: 'monthly' as const, label: '每月一次' },
+                  { value: 'quarterly' as const, label: '每季度一次' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setBackupFrequency(option.value)}
+                    className={`w-full px-4 py-3 rounded-lg border-2 text-left transition-colors ${
+                      backupFrequency === option.value
+                        ? 'border-[#D32F2F] bg-red-50 text-[#D32F2F] font-medium'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 开关 */}
+            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <span className="text-sm font-medium text-gray-700">启用自动备份</span>
+              <Switch
+                checked={backupEnabled}
+                onCheckedChange={setBackupEnabled}
+              />
+            </div>
+
+            {/* 按钮 */}
+            <div className="space-y-2 pt-2">
+              <Button
+                onClick={() => {
+                  saveBackupMutation.mutate({
+                    ledgerId,
+                    frequency: backupFrequency,
+                    enabled: backupEnabled,
+                  });
+                }}
+                disabled={saveBackupMutation.isPending}
+                className="w-full h-12 text-base font-medium text-white rounded-lg"
+                style={{ backgroundColor: '#D32F2F' }}
+              >
+                保存设置
+              </Button>
+              <Button
+                onClick={() => setShowBackupDialog(false)}
+                variant="outline"
+                className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                取消
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
