@@ -6,7 +6,10 @@ import {
   partnershipWorkGroups, 
   partnershipMembers, 
   partnershipWorkGroupMembers,
-  users 
+  users,
+  contacts,
+  contactSharingConnections,
+  contactInteractions
 } from "../drizzle/schema";
 import { eq, and, inArray, like, or, sql, asc } from "drizzle-orm";
 import { mysqlTable, int, varchar, text, timestamp } from "drizzle-orm/mysql-core";
@@ -166,8 +169,8 @@ export const partnershipRouter = router({
         )
         .where(inArray(partnershipWorkGroupMembers.userId, memberIds));
 
-      // 组装数据
-      const membersWithWorkGroups = members.map(member => {
+      // 为每个成员查询统计数据
+      const membersWithStats = await Promise.all(members.map(async (member) => {
         const workGroups = memberWorkGroups
           .filter(wg => wg.userId === member.id)
           .map(wg => ({
@@ -175,13 +178,70 @@ export const partnershipRouter = router({
             name: wg.workGroupName,
           }));
 
+        // 查询我的人脉数（作为parentUserId创建的联系人）
+        const ownContactsResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, member.id));
+        const ownContactsCount = ownContactsResult[0]?.count || 0;
+
+        // 查询共享给我的人脉数（作为receiverId且状态为active的连接）
+        const sharedContactsResult = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(contactSharingConnections)
+          .where(
+            and(
+              eq(contactSharingConnections.receiverId, member.id),
+              eq(contactSharingConnections.status, 'active')
+            )
+          );
+        const sharedContactsCount = sharedContactsResult[0]?.count || 0;
+
+        // 全部人脉 = 我的 + 共享
+        const totalContactsCount = ownContactsCount + sharedContactsCount;
+
+        // 查询标签数（从我的联系人的tags字段中统计唯一标签）
+        const contactsWithTags = await db
+          .select({ tags: contacts.tags })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, member.id));
+        
+        const allTags = new Set<string>();
+        contactsWithTags.forEach(c => {
+          if (c.tags && Array.isArray(c.tags)) {
+            (c.tags as string[]).forEach(tag => allTags.add(tag));
+          }
+        });
+        const tagsCount = allTags.size;
+
+        // 查询联络数（我的联系人的互动记录总数）
+        const myContactIds = await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.parentUserId, member.id));
+        
+        let interactionsCount = 0;
+        if (myContactIds.length > 0) {
+          const contactIds = myContactIds.map(c => c.id);
+          const interactionsResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(contactInteractions)
+            .where(inArray(contactInteractions.contactId, contactIds));
+          interactionsCount = interactionsResult[0]?.count || 0;
+        }
+
         return {
           ...member,
           workGroups,
+          ownContactsCount,
+          sharedContactsCount,
+          totalContactsCount,
+          tagsCount,
+          interactionsCount,
         };
-      });
+      }));
 
-      return membersWithWorkGroups;
+      return membersWithStats;
     }),
 
   // 获取工作群列表
