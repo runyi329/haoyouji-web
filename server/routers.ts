@@ -6194,8 +6194,8 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { executeBackupForLedger } = await import('./backup-service');
-        await executeBackupForLedger(input.ledgerId, ctx.user.id);
+        const { executeBackup } = await import('./backup-service');
+        await executeBackup(input.ledgerId, ctx.user.id);
         return { success: true };
       }),
   }),
