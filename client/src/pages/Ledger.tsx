@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
+import { pinyin } from "pinyin-pro";
 
 
 export default function Ledger() {
@@ -56,10 +57,25 @@ export default function Ledger() {
       );
     }
     
-    // 按成员筛选
+    // 按成员筛选（支持拼音首字母模糊查询）
     if (selectedMember) {
+      const searchTerm = selectedMember.toLowerCase();
       result = result.filter(ledger => 
-        ledger.members?.some(m => m.username === selectedMember)
+        ledger.members?.some(m => {
+          const username = m.username.toLowerCase();
+          // 直接匹配
+          if (username.includes(searchTerm)) return true;
+          
+          // 拼音全拼匹配
+          const fullPinyin = pinyin(m.username, { toneType: 'none', type: 'array' }).join('').toLowerCase();
+          if (fullPinyin.includes(searchTerm)) return true;
+          
+          // 拼音首字母匹配
+          const initialPinyin = pinyin(m.username, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
+          if (initialPinyin.includes(searchTerm)) return true;
+          
+          return false;
+        })
       );
     }
     
@@ -742,13 +758,13 @@ export default function Ledger() {
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">按成员筛选</label>
               <Input
-                placeholder="输入成员名称..."
+                placeholder="输入成员名称或首字母..."
                 value={selectedMember}
                 onChange={(e) => setSelectedMember(e.target.value)}
                 autoComplete="off"
                 list="no-suggestions"
               />
-              <p className="text-xs text-gray-500 mt-1">仅搜索账本内已有成员</p>
+              <p className="text-xs text-gray-500 mt-1">支持拼音首字母搜索，如“zs”匹配“张三”</p>
             </div>
             <div className="flex gap-2 pt-2">
               <Button
