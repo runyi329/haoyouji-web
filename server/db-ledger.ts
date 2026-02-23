@@ -190,6 +190,88 @@ export async function createLedger(data: {
 }
 
 /**
+ * 复制账本（复制分类和成员）
+ */
+export async function copyLedger(sourceLedgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 首先检查用户是否是源账本的成员
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, sourceLedgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员，无法复制");
+  }
+  
+  // 获取源账本信息
+  const sourceLedger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, sourceLedgerId))
+    .limit(1);
+  
+  if (sourceLedger.length === 0) {
+    throw new Error("源账本不存在");
+  }
+  
+  const source = sourceLedger[0];
+  
+  // 创建新账本，名称加上“复制”前缀
+  const newLedgerName = `复制-${source.name}`;
+  const result = await db.execute(sql`
+    INSERT INTO ledgers (name, description, type, currency, icon, createdBy, ownerId, isVip, isArchived)
+    VALUES (${newLedgerName}, ${source.description}, ${source.type}, ${source.currency}, ${source.icon}, ${userId}, ${userId}, ${0}, ${0})
+  `);
+  
+  const newLedgerId = Number((result as any)[0]?.insertId || result.insertId);
+  
+  // 将创建者添加为账本所有者
+  await db.insert(ledgerMembers).values({
+    ledgerId: newLedgerId,
+    userId: userId,
+    role: "owner",
+    memberType: "real",
+    nickname: null,
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "all",
+    permissionDelete: "all",
+    canEdit: 1,
+    canDelete: 1,
+    canInvite: 1,
+  });
+  
+  // 复制分类
+  const categories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.ledgerId, sourceLedgerId));
+  
+  for (const category of categories) {
+    await db.insert(ledgerCategories).values({
+      ledgerId: newLedgerId,
+      name: category.name,
+      type: category.type,
+      icon: category.icon,
+      color: category.color,
+      isDefault: category.isDefault,
+      sortOrder: category.sortOrder,
+    });
+  }
+  
+  return { id: newLedgerId, name: newLedgerName };
+}
+
+/**
  * 获取单个账本详情
  */
 export async function getLedgerById(ledgerId: number, userId: number) {
