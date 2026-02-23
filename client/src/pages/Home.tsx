@@ -180,8 +180,8 @@ export default function Home() {
   const banners = [
     {
       id: 1,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/newyear-2026.webp",
-      title: "脉动祝福 2026"
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/shared-ledger.webp",
+      title: "共享账本试用版上线"
     },
     {
       id: 2,
