@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
@@ -33,10 +33,43 @@ export default function Ledger() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMember, setSelectedMember] = useState<string>("");
   const [memberInput, setMemberInput] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortByState] = useState<"members" | "records" | "date">(() => {
+    try {
+      const saved = localStorage.getItem('ledgerSortBy');
+      if (saved === 'members' || saved === 'records' || saved === 'date') return saved;
+    } catch (e) {}
+    return 'date';
+  });
+  const [sortOrder, setSortOrderState] = useState<"asc" | "desc">(() => {
+    try {
+      const saved = localStorage.getItem('ledgerSortOrder');
+      if (saved === 'asc' || saved === 'desc') return saved;
+    } catch (e) {}
+    return 'desc';
+  });
+  const [lastClickedLedgerId, setLastClickedLedgerId] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem('lastClickedLedgerId');
+      return saved ? parseInt(saved, 10) : null;
+    } catch (e) {}
+    return null;
+  });
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
+
+  // 持久化排序设置的包装函数
+  const setSortBy = (val: "members" | "records" | "date") => {
+    setSortByState(val);
+    try { localStorage.setItem('ledgerSortBy', val); } catch (e) {}
+  };
+  const setSortOrder = (val: "asc" | "desc") => {
+    setSortOrderState(val);
+    try { localStorage.setItem('ledgerSortOrder', val); } catch (e) {}
+  };
+  const handleLedgerClick = (ledgerId: number) => {
+    setLastClickedLedgerId(ledgerId);
+    try { localStorage.setItem('lastClickedLedgerId', ledgerId.toString()); } catch (e) {}
+  };
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -119,8 +152,15 @@ export default function Ledger() {
       );
     }
     
-    // 排序
+    // 排序：最近点击的账本置顶，其余按自定义排序
     result = [...result].sort((a, b) => {
+      // 第一优先级：最近点击的账本置顶
+      if (lastClickedLedgerId !== null) {
+        if (a.id === lastClickedLedgerId && b.id !== lastClickedLedgerId) return -1;
+        if (b.id === lastClickedLedgerId && a.id !== lastClickedLedgerId) return 1;
+      }
+      
+      // 第二优先级：自定义排序
       let comparison = 0;
       switch (sortBy) {
         case "members":
@@ -134,12 +174,11 @@ export default function Ledger() {
           comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           break;
       }
-      // 如果是升序，反转比较结果
       return sortOrder === "asc" ? -comparison : comparison;
     });
     
     return result;
-  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder]);
+  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder, lastClickedLedgerId]);
 
   // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
@@ -527,7 +566,10 @@ export default function Ledger() {
             <div
               key={ledger.id}
               className="cursor-pointer"
-              onClick={() => setLocation(`/ledger/${ledger.id}`)}
+              onClick={() => {
+                handleLedgerClick(ledger.id);
+                setLocation(`/ledger/${ledger.id}`);
+              }}
             >
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 <div className="px-4 py-4">
