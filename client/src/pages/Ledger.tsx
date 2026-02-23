@@ -368,13 +368,9 @@ export default function Ledger() {
                         variant="outline"
                         size="sm"
                         className="flex-1 h-8"
-                        onClick={() => {
-                          setSearchQuery("");
-                          setSelectedMember("");
-                          setMemberInput("");
-                        }}
+                        onClick={() => setShowSearchDialog(false)}
                       >
-                        清除
+                        取消
                       </Button>
                       <Button
                         size="sm"
