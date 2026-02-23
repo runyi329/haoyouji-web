@@ -35,6 +35,8 @@ export default function Ledger() {
   const [memberInput, setMemberInput] = useState<string>("");
   const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -197,6 +199,26 @@ export default function Ledger() {
   const handleDestroyConfirm = () => {
     if (destroyingLedgerId) {
       deleteMutation.mutate({ ledgerId: destroyingLedgerId });
+    }
+  };
+
+  // 复制账本的mutation
+  const copyMutation = trpc.ledger.copy.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已成功复制账本：${data.name}`);
+      refetch();
+      setShowCopyDialog(false);
+      setSelectedCopyLedgerId(null);
+    },
+    onError: (error) => {
+      toast.error(`复制失败: ${error.message}`);
+    },
+  });
+
+  // 处理复制确认
+  const handleCopyConfirm = () => {
+    if (selectedCopyLedgerId) {
+      copyMutation.mutate({ ledgerId: selectedCopyLedgerId });
     }
   };
 
@@ -718,7 +740,7 @@ export default function Ledger() {
           <button
             onClick={() => {
               setShowCreateDialog(false);
-              // TODO: 实现复制已有账本功能
+              setShowCopyDialog(true);
             }}
             className="w-full text-center py-3.5 text-[#1976D2] font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
           >
@@ -944,7 +966,68 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-
+      {/* 复制账本选择对话框 */}
+      <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">选择要复制的账本</DialogTitle>
+          
+          <div className="p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4 text-center">选择要复制的账本</h3>
+            
+            {/* 账本列表 */}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {ledgers && ledgers.length > 0 ? (
+                ledgers.map((ledger) => (
+                  <button
+                    key={ledger.id}
+                    onClick={() => setSelectedCopyLedgerId(ledger.id)}
+                    className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                      selectedCopyLedgerId === ledger.id
+                        ? "border-[#D32F2F] bg-red-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Notebook className="w-5 h-5 text-[#D32F2F]" />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{ledger.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {ledger.memberCount}人共享 · {ledger.recordCount || 0}条账目
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  暂无可复制的账本
+                </div>
+              )}
+            </div>
+            
+            {/* 按钮 */}
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowCopyDialog(false);
+                  setSelectedCopyLedgerId(null);
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
+                onClick={handleCopyConfirm}
+                disabled={!selectedCopyLedgerId || copyMutation.isPending}
+              >
+                {copyMutation.isPending ? '复制中...' : '确认复制'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

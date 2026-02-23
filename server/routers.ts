@@ -5692,6 +5692,16 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 复制账本
+    copy: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const newLedger = await dbLedger.copyLedger(input.ledgerId, ctx.user.id);
+        return newLedger;
+      }),
+
     // 生成邀请token
     generateInviteToken: protectedProcedure
       .input(z.object({
