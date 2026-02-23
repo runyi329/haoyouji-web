@@ -53,6 +53,9 @@ export default function LedgerSettings() {
   const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
   const [backupEnabled, setBackupEnabled] = useState(false);
   const [backupEditMode, setBackupEditMode] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showTransferWarning, setShowTransferWarning] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<any>(null);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -104,6 +107,31 @@ export default function LedgerSettings() {
   // 处理邀请用户
   const handleInviteUser = (username: string) => {
     inviteMutation.mutate({ ledgerId, username });
+  };
+
+  // 转移创建人的mutation
+  const transferOwnershipMutation = trpc.ledger.transferOwnership.useMutation({
+    onSuccess: () => {
+      toast.success('账本创建人已成功转移');
+      setShowTransferWarning(false);
+      setShowTransferDialog(false);
+      setTransferTarget(null);
+      utils.ledger.getMembers.invalidate({ ledgerId });
+      utils.ledger.getById.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error(error.message || '转移失败');
+    },
+  });
+
+  // 处理转移确认
+  const handleTransferConfirm = () => {
+    if (transferTarget) {
+      transferOwnershipMutation.mutate({
+        ledgerId,
+        newOwnerId: transferTarget.userId,
+      });
+    }
   };
 
   // 获取导出统计信息
@@ -441,7 +469,15 @@ export default function LedgerSettings() {
         <SettingItem label="账本日志" showIcon />
         <SettingItem label="账本图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
         <SettingItem label="账本管理员管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
-        <SettingItem label="账本创建人转移" showIcon />
+        <SettingItem label="账本创建人转移" showIcon onClick={() => {
+          // 只有owner才能转移
+          const currentMember = members?.find(m => m.userId === user?.id);
+          if (currentMember?.role !== 'owner') {
+            toast.error('只有账本创建人才能转移所有权');
+            return;
+          }
+          setShowTransferDialog(true);
+        }} />
       </div>
 
       {/* 导入导出功能 */}
@@ -884,6 +920,120 @@ export default function LedgerSettings() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 转移创建人 - 选择成员对话框 */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>转移账本创建人</DialogTitle>
+          <div className="mt-2">
+            <p className="text-sm text-gray-500 mb-4">请选择要转移给的成员：</p>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {members?.filter(m => m.userId !== user?.id).map((member) => (
+                <div
+                  key={member.userId}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    transferTarget?.userId === member.userId
+                      ? 'bg-red-50 border-2 border-[#D32F2F]'
+                      : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                  }`}
+                  onClick={() => setTransferTarget(member)}
+                >
+                  <UserAvatar
+                    username={member.username}
+                    avatar={member.avatar}
+                    nickname={member.nickname}
+                    size="sm"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">{member.nickname || member.username}</div>
+                    <div className="text-xs text-gray-400">
+                      {member.role === 'admin' ? '管理员' : '普通成员'}
+                    </div>
+                  </div>
+                  {transferTarget?.userId === member.userId && (
+                    <span className="text-[#D32F2F] text-lg">✓</span>
+                  )}
+                </div>
+              ))}
+              {members?.filter(m => m.userId !== user?.id).length === 0 && (
+                <div className="text-center text-gray-400 py-6 text-sm">账本中没有其他成员</div>
+              )}
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button
+                variant="outline"
+                className="flex-1 h-11 rounded-lg border-gray-300"
+                onClick={() => {
+                  setShowTransferDialog(false);
+                  setTransferTarget(null);
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1 h-11 rounded-lg bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                disabled={!transferTarget}
+                onClick={() => {
+                  setShowTransferDialog(false);
+                  setShowTransferWarning(true);
+                }}
+              >
+                下一步
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 转移创建人 - 风险提醒和二次确认 */}
+      <AlertDialog open={showTransferWarning} onOpenChange={setShowTransferWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#D32F2F] flex items-center gap-2">
+              <span className="text-xl">⚠️</span> 重要提醒
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p className="text-sm text-gray-700 font-medium">
+                  您即将将账本创建人转移给 <span className="text-[#D32F2F] font-bold">{transferTarget?.nickname || transferTarget?.username}</span>，请仔细阅读以下内容：
+                </p>
+                <div className="bg-red-50 rounded-lg p-3 space-y-2">
+                  <p className="text-sm text-[#D32F2F] font-medium">转移后您将失去以下权限：</p>
+                  <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                    <li>删除账本的权限</li>
+                    <li>管理账本成员的最高权限</li>
+                    <li>设置账本管理员的权限</li>
+                    <li>修改账本核心设置的权限</li>
+                    <li>封存/解封账本的权限</li>
+                  </ul>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-3">
+                  <p className="text-sm text-orange-700 font-medium">❗ 此操作不可撤回</p>
+                  <p className="text-xs text-orange-600 mt-1">转移后您将无法自行恢复创建人身份，需要对方再次转移给您才能恢复。</p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-3 mt-4">
+            <AlertDialogCancel
+              className="flex-1 h-11 rounded-lg"
+              onClick={() => {
+                setShowTransferWarning(false);
+                setShowTransferDialog(true);
+              }}
+            >
+              返回重选
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="flex-1 h-11 rounded-lg bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+              onClick={handleTransferConfirm}
+              disabled={transferOwnershipMutation.isPending}
+            >
+              {transferOwnershipMutation.isPending ? '转移中...' : '确认转移'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
