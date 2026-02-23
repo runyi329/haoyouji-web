@@ -280,12 +280,15 @@ export default function Ledger() {
                       <div className="flex items-center gap-1.5">
                         <div className="flex -space-x-1">
                           {(ledger.members || []).slice(0, 3).map((member, index) => (
-                            <div key={member.userId} className="ring-1 ring-white rounded-full" style={{ zIndex: 3 - index }}>
-                              <UserAvatar
-                                username={member.username}
-                                avatar={member.avatar}
-                                nickname={member.nickname}
-                                size="xs"
+                            <div 
+                              key={member.userId} 
+                              className="ring-1 ring-white rounded-full overflow-hidden" 
+                              style={{ zIndex: 3 - index, width: '20px', height: '20px' }}
+                            >
+                              <img
+                                src={member.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${member.username}`}
+                                alt={member.nickname || member.username}
+                                className="w-full h-full object-cover"
                               />
                             </div>
                           ))}
