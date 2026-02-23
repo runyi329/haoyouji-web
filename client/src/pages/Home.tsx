@@ -385,7 +385,7 @@ export default function Home() {
                   <Icon className="w-5 h-5" />
                 </div>
                 {hasUnread && (
-                  <span className="absolute -top-2.5 -right-2 bg-[#D32F2F] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white shadow-sm animate-pulse">
+                  <span className="absolute -top-1 -right-1 bg-[#D32F2F] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white shadow-sm animate-pulse">
                     +{unreadSharingCount > 99 ? '99' : unreadSharingCount}
                   </span>
                 )}
