@@ -385,7 +385,7 @@ export default function Home() {
                   <Icon className="w-5 h-5" />
                 </div>
                 {showBadge && (
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#D32F2F] rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-[#D32F2F] rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
                     <Bell className="w-2.5 h-2.5 text-white" />
                   </span>
                 )}
