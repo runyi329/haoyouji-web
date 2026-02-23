@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Settings, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Shield } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Settings, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Shield, Bell, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -76,8 +76,16 @@ export default function SharingSettings() {
   // 获取共享给我的连接列表
   const { data: sharedToMe, isLoading: loadingSharedToMe } = trpc.sharing.listSharedToMe.useQuery();
   
+  // 获取未读共享通知详情
+  const { data: unreadNotifications } = trpc.sharing.getUnreadNotifications.useQuery();
+  
   // 标记共享通知为已读
-  const markAsRead = trpc.sharing.markAsRead.useMutation();
+  const markAsRead = trpc.sharing.markAsRead.useMutation({
+    onSuccess: () => {
+      utils.sharing.getUnreadNotifications.invalidate();
+      utils.sharing.getUnreadCount.invalidate();
+    },
+  });
   
   // 搜索用户
   const { data: searchResults, isLoading: searching } = trpc.sharing.searchUsers.useQuery(
@@ -199,10 +207,6 @@ export default function SharingSettings() {
     setSharedVisibleCount(BATCH_SIZE);
   }, [sharedSearchQuery]);
   
-  // 页面加载时标记共享通知为已读
-  useEffect(() => {
-    markAsRead.mutate();
-  }, []);
   
   // 打开权限配置对话框
   const openPermissionDialog = useCallback((connection: any) => {
@@ -328,6 +332,36 @@ export default function SharingSettings() {
             )}
           </button>
         </div>
+
+        {/* 未读共享通知提示 */}
+        {unreadNotifications && unreadNotifications.length > 0 && (
+          <div className="space-y-1.5">
+            {unreadNotifications.map((n: any) => (
+              <div
+                key={n.id}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm ${
+                  n.type === 'added'
+                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                }`}
+              >
+                <Bell className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="flex-1">
+                  {n.type === 'added'
+                    ? `🎉 ${n.actorName} 共享了人脉给你`
+                    : `👋 ${n.actorName} 取消了与你的共享`
+                  }
+                </span>
+              </div>
+            ))}
+            <button
+              onClick={() => markAsRead.mutate()}
+              className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1"
+            >
+              清除所有通知
+            </button>
+          </div>
+        )}
 
         {/* 搜索和排序栏 */}
         <div className="flex gap-2">

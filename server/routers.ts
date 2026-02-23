@@ -20,8 +20,8 @@ import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
 import * as dbEquity from "./db-equity";
 import { getDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications } from "../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
@@ -4866,6 +4866,18 @@ export const appRouter = router({
         // 奖励积分：共享人脉
         await addPointsForAction(ctx.user.id, 'share_contact', connectionId);
         
+        // 记录共享通知：通知接收者“XXX共享给你了”
+        const currentUser = await db.getUserById(ctx.user.id);
+        const dbConn = await getDb();
+        if (dbConn) {
+          await dbConn.insert(sharingNotifications).values({
+            receiverId: receiver.id,
+            actorId: ctx.user.id,
+            actorName: currentUser?.name || currentUser?.username || `用户${ctx.user.id}`,
+            type: 'added',
+          });
+        }
+        
         return { connectionId, receiverName: receiver.name || receiver.username };
       }),
 
@@ -4879,6 +4891,18 @@ export const appRouter = router({
         const connection = await db.getSharingConnectionById(input.connectionId);
         if (!connection || connection.sharerId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "连接不存在" });
+        }
+        
+        // 记录共享通知：通知接收者“XXX取消了共享”
+        const currentUser = await db.getUserById(ctx.user.id);
+        const dbConn = await getDb();
+        if (dbConn) {
+          await dbConn.insert(sharingNotifications).values({
+            receiverId: connection.receiverId,
+            actorId: ctx.user.id,
+            actorName: currentUser?.name || currentUser?.username || `用户${ctx.user.id}`,
+            type: 'removed',
+          });
         }
         
         // 删除权限配置
@@ -4980,31 +5004,67 @@ export const appRouter = router({
         return await db.getSharingPermissionsByConnectionId(input.connectionId);
       }),
 
-    // 获取未读共享通知数量
+    // 获取未读共享通知数量（区分新增和删除）
     getUnreadCount: protectedProcedure
       .query(async ({ ctx }) => {
-        const user = await db.getUserById(ctx.user.id);
-        const lastViewedAt = user?.lastViewedSharingAt;
+        const dbConn = await getDb();
+        if (!dbConn) return { addedCount: 0, removedCount: 0 };
         
-        // 如果从未查看过，统计所有共享连接
-        if (!lastViewedAt) {
-          const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
-          return { count: connections.length };
-        }
+        const unread = await dbConn
+          .select({
+            type: sharingNotifications.type,
+            id: sharingNotifications.id,
+          })
+          .from(sharingNotifications)
+          .where(
+            and(
+              eq(sharingNotifications.receiverId, ctx.user.id),
+              eq(sharingNotifications.isRead, 0)
+            )
+          );
         
-        // 统计 updatedAt > lastViewedAt 的共享连接
-        const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
-        const unreadConnections = connections.filter((conn: any) => 
-          new Date(conn.updatedAt) > new Date(lastViewedAt)
-        );
+        const addedCount = unread.filter(n => n.type === 'added').length;
+        const removedCount = unread.filter(n => n.type === 'removed').length;
         
-        return { count: unreadConnections.length };
+        return { addedCount, removedCount };
+      }),
+
+    // 获取未读共享通知详情列表
+    getUnreadNotifications: protectedProcedure
+      .query(async ({ ctx }) => {
+        const dbConn = await getDb();
+        if (!dbConn) return [];
+        
+        const notifications = await dbConn
+          .select()
+          .from(sharingNotifications)
+          .where(
+            and(
+              eq(sharingNotifications.receiverId, ctx.user.id),
+              eq(sharingNotifications.isRead, 0)
+            )
+          )
+          .orderBy(desc(sharingNotifications.createdAt));
+        
+        return notifications;
       }),
 
     // 标记共享通知为已读
     markAsRead: protectedProcedure
       .mutation(async ({ ctx }) => {
-        await db.updateUserLastViewedSharingAt(ctx.user.id);
+        const dbConn = await getDb();
+        if (!dbConn) return { success: false };
+        
+        await dbConn
+          .update(sharingNotifications)
+          .set({ isRead: 1 })
+          .where(
+            and(
+              eq(sharingNotifications.receiverId, ctx.user.id),
+              eq(sharingNotifications.isRead, 0)
+            )
+          );
+        
         return { success: true };
       }),
 
