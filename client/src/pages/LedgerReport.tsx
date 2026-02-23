@@ -458,11 +458,11 @@ function ChartViewContent({
                   selectedMemberIds.length === 0 ? 'bg-gray-100' : 'hover:bg-gray-50'
                 }`}
               >
-                <div className="w-8 h-8 rounded-full bg-[var(--status-link)] flex items-center justify-center text-white text-sm mr-2">
+                <div className="w-8 h-8 rounded-full bg-[#D32F2F] flex items-center justify-center text-white text-sm mr-2">
                   全
                 </div>
                 <span>全部成员</span>
-                {selectedMemberIds.length === 0 && <span className="ml-auto text-[var(--status-link)]">✓</span>}
+                {selectedMemberIds.length === 0 && <span className="ml-auto text-[#D32F2F]">✓</span>}
               </div>
               {membersData?.map((member: any) => (
                 <div 
@@ -481,13 +481,13 @@ function ChartViewContent({
                     />
                   </div>
                   <span className="flex-1">{member.nickname || member.username}</span>
-                  {selectedMemberIds.includes(member.id) && <span className="text-[var(--status-link)]">✓</span>}
+                  {selectedMemberIds.includes(member.id) && <span className="text-[#D32F2F]">✓</span>}
                 </div>
               ))}
             </div>
             <button 
               onClick={() => setShowMemberPicker(false)}
-              className="w-full mt-4 bg-[var(--status-link)] text-white py-2 rounded"
+              className="w-full mt-4 bg-[#D32F2F] hover:bg-[#B71C1C] text-white py-2 rounded"
             >
               确定
             </button>
@@ -1197,12 +1197,12 @@ function CalendarViewContent({
               className="flex items-center px-4 py-3 border-b cursor-pointer hover:bg-gray-50"
               onClick={selectAllMembers}
             >
-              <div className="w-10 h-10 rounded-full bg-[var(--status-link)] flex items-center justify-center text-white mr-3">
+              <div className="w-10 h-10 rounded-full bg-[#D32F2F] flex items-center justify-center text-white mr-3">
                 <span>全</span>
               </div>
               <span className="flex-1 text-gray-800">全部成员</span>
               {selectedMemberIds.length === 0 && (
-                <span className="text-[var(--status-link)]">✓</span>
+                <span className="text-[#D32F2F]">✓</span>
               )}
             </div>
             {/* 成员列表 */}
@@ -1222,14 +1222,14 @@ function CalendarViewContent({
                 </div>
                 <span className="flex-1 text-gray-800">{member.nickname || member.username}</span>
                 {selectedMemberIds.includes(member.id) && (
-                  <span className="text-[var(--status-link)]">✓</span>
+                  <span className="text-[#D32F2F]">✓</span>
                 )}
               </div>
             ))}
             <div className="p-3">
               <button 
                 onClick={() => setShowMemberPicker(false)}
-                className="w-full bg-[var(--status-link)] text-white py-2 rounded"
+                className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white py-2 rounded"
               >
                 确定
               </button>
