@@ -61,10 +61,16 @@ export default function Ledger() {
   const setSortBy = (val: "members" | "records" | "date") => {
     setSortByState(val);
     try { localStorage.setItem('ledgerSortBy', val); } catch (e) {}
+    // 排序时清除点击置顶，排序优先
+    setLastClickedLedgerId(null);
+    try { localStorage.removeItem('lastClickedLedgerId'); } catch (e) {}
   };
   const setSortOrder = (val: "asc" | "desc") => {
     setSortOrderState(val);
     try { localStorage.setItem('ledgerSortOrder', val); } catch (e) {}
+    // 排序时清除点击置顶，排序优先
+    setLastClickedLedgerId(null);
+    try { localStorage.removeItem('lastClickedLedgerId'); } catch (e) {}
   };
   const handleLedgerClick = (ledgerId: number) => {
     setLastClickedLedgerId(ledgerId);
