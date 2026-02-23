@@ -381,12 +381,14 @@ export default function Home() {
                 href={feature.href}
                 className="flex flex-col items-center space-y-2 cursor-pointer relative"
               >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm relative`}>
+                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
                   <Icon className="w-5 h-5" />
-                  {hasUnread && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#D32F2F] rounded-full border-2 border-white animate-pulse" />
-                  )}
                 </div>
+                {hasUnread && (
+                  <span className="absolute -top-2.5 -right-2 bg-[#D32F2F] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white shadow-sm animate-pulse">
+                    +{unreadSharingCount > 99 ? '99' : unreadSharingCount}
+                  </span>
+                )}
                 <span className="text-xs font-medium text-[#757575]">{feature.name}</span>
               </a>
             );
