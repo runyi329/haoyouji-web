@@ -369,113 +369,91 @@ export default function Ledger() {
               
               {/* 排序下拉菜单 */}
               {showSortDialog && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-3">
-                  <div className="space-y-2.5">
-                    {/* 成员人数 */}
-                    <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-gray-600">成员人数</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "members" && sortOrder === "desc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("members");
-                            setSortOrder("desc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↓ 由多到少
-                        </button>
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "members" && sortOrder === "asc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("members");
-                            setSortOrder("asc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↑ 由少到多
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 账目条数 */}
-                    <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-gray-600">账目条数</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "records" && sortOrder === "desc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("records");
-                            setSortOrder("desc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↓ 由多到少
-                        </button>
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "records" && sortOrder === "asc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("records");
-                            setSortOrder("asc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↑ 由少到多
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 开账日期 */}
-                    <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-gray-600">开账日期</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "date" && sortOrder === "desc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("date");
-                            setSortOrder("desc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↓ 由新到旧
-                        </button>
-                        <button
-                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
-                            sortBy === "date" && sortOrder === "asc"
-                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
-                              : "border-gray-200 hover:border-gray-300 text-gray-700"
-                          }`}
-                          onClick={() => {
-                            setSortBy("date");
-                            setSortOrder("asc");
-                            setShowSortDialog(false);
-                          }}
-                        >
-                          ↑ 由旧到新
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-2">
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "members" && sortOrder === "desc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("members");
+                      setSortOrder("desc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    成员人数：由多到少
+                  </button>
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "members" && sortOrder === "asc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("members");
+                      setSortOrder("asc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    成员人数：由少到多
+                  </button>
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "records" && sortOrder === "desc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("records");
+                      setSortOrder("desc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    账目条数：由多到少
+                  </button>
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "records" && sortOrder === "asc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("records");
+                      setSortOrder("asc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    账目条数：由少到多
+                  </button>
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "date" && sortOrder === "desc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("date");
+                      setSortOrder("desc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    开账日期：由新到旧
+                  </button>
+                  <button
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      sortBy === "date" && sortOrder === "asc"
+                        ? "bg-red-50 text-[#D32F2F]"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setSortBy("date");
+                      setSortOrder("asc");
+                      setShowSortDialog(false);
+                    }}
+                  >
+                    开账日期：由旧到新
+                  </button>
                 </div>
               )}
             </div>
