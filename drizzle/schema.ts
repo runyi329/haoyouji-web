@@ -203,6 +203,16 @@ export const contactSharingConnections = mysqlTable("contact_sharing_connections
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
+export const sharingNotifications = mysqlTable("sharing_notifications", {
+	id: int().autoincrement().notNull(),
+	receiverId: int('receiver_id').notNull(),
+	actorId: int('actor_id').notNull(),
+	actorName: varchar('actor_name', { length: 100 }),
+	type: mysqlEnum(['added', 'removed']).notNull(),
+	isRead: tinyint('is_read').default(0).notNull(),
+	createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+});
+
 export const contactSharingPermissions = mysqlTable("contact_sharing_permissions", {
 	id: int().autoincrement().notNull(),
 	connectionId: int().notNull(),
