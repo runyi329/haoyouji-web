@@ -76,6 +76,9 @@ export default function SharingSettings() {
   // 获取共享给我的连接列表
   const { data: sharedToMe, isLoading: loadingSharedToMe } = trpc.sharing.listSharedToMe.useQuery();
   
+  // 标记共享通知为已读
+  const markAsRead = trpc.sharing.markAsRead.useMutation();
+  
   // 搜索用户
   const { data: searchResults, isLoading: searching } = trpc.sharing.searchUsers.useQuery(
     { query: searchUsername },
@@ -195,6 +198,11 @@ export default function SharingSettings() {
   useEffect(() => {
     setSharedVisibleCount(BATCH_SIZE);
   }, [sharedSearchQuery]);
+  
+  // 页面加载时标记共享通知为已读
+  useEffect(() => {
+    markAsRead.mutate();
+  }, []);
   
   // 打开权限配置对话框
   const openPermissionDialog = useCallback((connection: any) => {

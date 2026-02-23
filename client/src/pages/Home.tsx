@@ -147,7 +147,14 @@ export default function Home() {
   // 获取邀请统计
   const { data: inviteInfo } = trpc.invite.getMyInviteInfo.useQuery();
   
-  // 获取晋升数据（用于显示等级）
+  // 获取未读共享通知数量
+  const { data: unreadSharingData } = trpc.sharing.getUnreadCount.useQuery(undefined, {
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unreadSharingCount = unreadSharingData?.count || 0;
+  
+  // 获取晋升数据（用于显礼等级）
   const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
 
   // 仅liulifan用户：获取需要关注的人数
@@ -366,14 +373,19 @@ export default function Home() {
 
           {features.map((feature) => {
             const Icon = feature.icon;
+            const isSharing = feature.name === '共享';
+            const hasUnread = isSharing && unreadSharingCount > 0;
             return (
               <a
                 key={feature.name}
                 href={feature.href}
-                className="flex flex-col items-center space-y-2 cursor-pointer"
+                className="flex flex-col items-center space-y-2 cursor-pointer relative"
               >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
+                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm relative`}>
                   <Icon className="w-5 h-5" />
+                  {hasUnread && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#D32F2F] rounded-full border-2 border-white animate-pulse" />
+                  )}
                 </div>
                 <span className="text-xs font-medium text-[#757575]">{feature.name}</span>
               </a>
