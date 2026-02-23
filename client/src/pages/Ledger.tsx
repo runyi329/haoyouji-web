@@ -32,6 +32,7 @@ export default function Ledger() {
   const [showSortDialog, setShowSortDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMember, setSelectedMember] = useState<string>("");
+  const [memberInput, setMemberInput] = useState<string>("");
   const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -46,6 +47,36 @@ export default function Ledger() {
   // 分别查询使用中和已存档的数量
   const { data: activeLedgers } = trpc.ledger.list.useQuery({ isArchived: false });
   const { data: archivedLedgers } = trpc.ledger.list.useQuery({ isArchived: true });
+
+  // 获取所有账本中的成员名单（去重）
+  const allMembers = useMemo(() => {
+    const memberSet = new Set<string>();
+    ledgers?.forEach(ledger => {
+      ledger.members?.forEach(m => memberSet.add(m.username));
+    });
+    return Array.from(memberSet).sort();
+  }, [ledgers]);
+
+  // 根据输入匹配成员（支持拼音首字母）
+  const matchedMembers = useMemo(() => {
+    if (!memberInput.trim()) return allMembers;
+    
+    const searchTerm = memberInput.toLowerCase();
+    return allMembers.filter(username => {
+      // 直接匹配
+      if (username.toLowerCase().includes(searchTerm)) return true;
+      
+      // 拼音全拼匹配
+      const fullPinyin = pinyin(username, { toneType: 'none', type: 'array' }).join('').toLowerCase();
+      if (fullPinyin.includes(searchTerm)) return true;
+      
+      // 拼音首字母匹配
+      const initialPinyin = pinyin(username, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
+      if (initialPinyin.includes(searchTerm)) return true;
+      
+      return false;
+    });
+  }, [allMembers, memberInput]);
 
   // 搜索和排序逻辑
   const filteredLedgers = useMemo(() => {
@@ -762,16 +793,33 @@ export default function Ledger() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div>
+            <div className="relative">
               <label className="text-sm font-medium text-gray-700 mb-2 block">按成员筛选</label>
               <Input
                 placeholder="输入成员名称或首字母..."
-                value={selectedMember}
-                onChange={(e) => setSelectedMember(e.target.value)}
+                value={memberInput}
+                onChange={(e) => setMemberInput(e.target.value)}
                 autoComplete="off"
-                list="no-suggestions"
               />
-              <p className="text-xs text-gray-500 mt-1">支持拼音首字母搜索，如“zs”匹配“张三”</p>
+              <p className="text-xs text-gray-500 mt-1">支持拼音首字母搜索，如“j”匹配“姜”</p>
+              
+              {/* 下拉提示列表 */}
+              {memberInput && matchedMembers.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {matchedMembers.map((username, index) => (
+                    <button
+                      key={index}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
+                      onClick={() => {
+                        setSelectedMember(username);
+                        setMemberInput(username);
+                      }}
+                    >
+                      <span className="text-gray-900">{username}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 pt-2">
               <Button
@@ -780,6 +828,7 @@ export default function Ledger() {
                 onClick={() => {
                   setSearchQuery("");
                   setSelectedMember("");
+                  setMemberInput("");
                 }}
               >
                 清除
