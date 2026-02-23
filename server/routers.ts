@@ -5743,6 +5743,16 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 转移账本创建人
+    transferOwnership: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        newOwnerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.transferOwnership(input.ledgerId, ctx.user.id, input.newOwnerId);
+      }),
+
     // 获取账本分类列表
     getCategories: protectedProcedure
       .input(z.object({

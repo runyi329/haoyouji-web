@@ -3603,3 +3603,85 @@ export async function getLedgerExportStats(ledgerId: number, userId: number) {
     latestDate,
   };
 }
+
+/**
+ * 转移账本创建人（所有权转移）
+ * 将当前owner的角色降为admin，将目标成员提升为owner
+ * 同时更新ledgers表的ownerId和createdBy
+ */
+export async function transferOwnership(
+  ledgerId: number,
+  currentOwnerId: number,
+  newOwnerId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证当前用户是owner
+  const ownerRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, currentOwnerId)
+      )
+    )
+    .limit(1);
+
+  if (ownerRows.length === 0 || ownerRows[0].role !== 'owner') {
+    throw new Error('只有账本创建人才能转移所有权');
+  }
+
+  // 验证目标用户是账本成员
+  const targetRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, newOwnerId)
+      )
+    )
+    .limit(1);
+
+  if (targetRows.length === 0) {
+    throw new Error('目标用户不是该账本的成员');
+  }
+
+  if (targetRows[0].userId === currentOwnerId) {
+    throw new Error('不能转移给自己');
+  }
+
+  // 将当前owner降为admin
+  await db
+    .update(ledgerMembers)
+    .set({ role: 'admin' })
+    .where(eq(ledgerMembers.id, ownerRows[0].id));
+
+  // 将目标成员提升为owner，并赋予全部权限
+  await db
+    .update(ledgerMembers)
+    .set({
+      role: 'owner',
+      permissionView: 'all',
+      permissionAdd: 'all',
+      permissionEdit: 'all',
+      permissionDelete: 'all',
+      canEdit: 1,
+      canDelete: 1,
+      canInvite: 1,
+    })
+    .where(eq(ledgerMembers.id, targetRows[0].id));
+
+  // 更新ledgers表的ownerId
+  await db.execute(sql`UPDATE ledgers SET ownerId = ${newOwnerId} WHERE id = ${ledgerId}`);
+
+  console.log('[transferOwnership] 所有权转移成功:', {
+    ledgerId,
+    from: currentOwnerId,
+    to: newOwnerId,
+  });
+
+  return { success: true };
+}
