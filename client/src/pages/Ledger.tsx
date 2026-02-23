@@ -284,18 +284,201 @@ export default function Ledger() {
           </Link>
           <h1 className="flex-1 text-lg font-medium text-center text-[#222222]">共享账本</h1>
           <div className="flex items-center gap-1">
-            <button 
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              onClick={() => setShowSearchDialog(true)}
-            >
-              <Search className="w-5 h-5 text-[#222222]" strokeWidth={2} />
-            </button>
-            <button 
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              onClick={() => setShowSortDialog(true)}
-            >
-              <ArrowUpDown className="w-5 h-5 text-[#222222]" strokeWidth={2} />
-            </button>
+            <div className="relative">
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setShowSearchDialog(!showSearchDialog)}
+              >
+                <Search className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+              </button>
+              
+              {/* 搜索下拉菜单 */}
+              {showSearchDialog && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1.5 block">账本名称</label>
+                      <Input
+                        placeholder="输入账本名称..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="relative">
+                      <label className="text-sm font-medium text-gray-700 mb-1.5 block">按成员筛选</label>
+                      <Input
+                        placeholder="输入成员名称或首字母..."
+                        value={memberInput}
+                        onChange={(e) => setMemberInput(e.target.value)}
+                        autoComplete="off"
+                        className="h-9"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">支持拼音首字母搜索，如“j”匹配“姜”</p>
+                      
+                      {/* 下拉提示列表 */}
+                      {memberInput && matchedMembers.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                          {matchedMembers.map((username, index) => (
+                            <button
+                              key={index}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 text-sm"
+                              onClick={() => {
+                                setSelectedMember(username);
+                                setMemberInput(username);
+                              }}
+                            >
+                              <span className="text-gray-900">{username}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-8"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedMember("");
+                          setMemberInput("");
+                        }}
+                      >
+                        清除
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 h-8 bg-[#D32F2F] hover:bg-[#B71C1C]"
+                        onClick={() => setShowSearchDialog(false)}
+                      >
+                        确定
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setShowSortDialog(!showSortDialog)}
+              >
+                <ArrowUpDown className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+              </button>
+              
+              {/* 排序下拉菜单 */}
+              {showSortDialog && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-3">
+                  <div className="space-y-2.5">
+                    {/* 成员人数 */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium text-gray-600">成员人数</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "members" && sortOrder === "desc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("members");
+                            setSortOrder("desc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↓ 由多到少
+                        </button>
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "members" && sortOrder === "asc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("members");
+                            setSortOrder("asc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↑ 由少到多
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 账目条数 */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium text-gray-600">账目条数</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "records" && sortOrder === "desc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("records");
+                            setSortOrder("desc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↓ 由多到少
+                        </button>
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "records" && sortOrder === "asc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("records");
+                            setSortOrder("asc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↑ 由少到多
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 开账日期 */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium text-gray-600">开账日期</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "date" && sortOrder === "desc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("date");
+                            setSortOrder("desc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↓ 由新到旧
+                        </button>
+                        <button
+                          className={`px-2 py-2 rounded-lg border transition-all text-sm ${
+                            sortBy === "date" && sortOrder === "asc"
+                              ? "border-[#D32F2F] bg-red-50 text-[#D32F2F]"
+                              : "border-gray-200 hover:border-gray-300 text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setSortBy("date");
+                            setSortOrder("asc");
+                            setShowSortDialog(false);
+                          }}
+                        >
+                          ↑ 由旧到新
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -780,200 +963,7 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      {/* 搜索对话框 */}
-      <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
-        <DialogContent className="max-w-sm top-[15%] translate-y-0">
-          <DialogTitle>搜索账本</DialogTitle>
-          <div className="space-y-4 pt-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-2 block">账本名称</label>
-              <Input
-                placeholder="输入账本名称..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <div className="relative">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">按成员筛选</label>
-              <Input
-                placeholder="输入成员名称或首字母..."
-                value={memberInput}
-                onChange={(e) => setMemberInput(e.target.value)}
-                autoComplete="off"
-              />
-              <p className="text-xs text-gray-500 mt-1">支持拼音首字母搜索，如“j”匹配“姜”</p>
-              
-              {/* 下拉提示列表 */}
-              {memberInput && matchedMembers.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {matchedMembers.map((username, index) => (
-                    <button
-                      key={index}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
-                      onClick={() => {
-                        setSelectedMember(username);
-                        setMemberInput(username);
-                      }}
-                    >
-                      <span className="text-gray-900">{username}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2 pt-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedMember("");
-                  setMemberInput("");
-                }}
-              >
-                清除
-              </Button>
-              <Button
-                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
-                onClick={() => setShowSearchDialog(false)}
-              >
-                确定
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* 排序对话框 */}
-      <Dialog open={showSortDialog} onOpenChange={setShowSortDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogTitle>排序方式</DialogTitle>
-          <div className="space-y-3 pt-4">
-            {/* 成员人数 */}
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700">成员人数</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "members" && sortOrder === "desc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("members");
-                    setSortOrder("desc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↓</div>
-                    <div className="text-sm text-gray-700">由多到少</div>
-                  </div>
-                </button>
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "members" && sortOrder === "asc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("members");
-                    setSortOrder("asc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↑</div>
-                    <div className="text-sm text-gray-700">由少到多</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* 账目条数 */}
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700">账目条数</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "records" && sortOrder === "desc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("records");
-                    setSortOrder("desc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↓</div>
-                    <div className="text-sm text-gray-700">由多到少</div>
-                  </div>
-                </button>
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "records" && sortOrder === "asc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("records");
-                    setSortOrder("asc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↑</div>
-                    <div className="text-sm text-gray-700">由少到多</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* 开账日期 */}
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700">开账日期</div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "date" && sortOrder === "desc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("date");
-                    setSortOrder("desc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↓</div>
-                    <div className="text-sm text-gray-700">由新到旧</div>
-                  </div>
-                </button>
-                <button
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    sortBy === "date" && sortOrder === "asc"
-                      ? "border-[#D32F2F] bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    setSortBy("date");
-                    setSortOrder("asc");
-                    setShowSortDialog(false);
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-lg mb-1">↑</div>
-                    <div className="text-sm text-gray-700">由旧到新</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
     </div>
   );
