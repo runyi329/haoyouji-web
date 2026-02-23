@@ -745,6 +745,8 @@ export default function Ledger() {
                 placeholder="输入成员名称..."
                 value={selectedMember}
                 onChange={(e) => setSelectedMember(e.target.value)}
+                autoComplete="off"
+                list="no-suggestions"
               />
               <p className="text-xs text-gray-500 mt-1">仅搜索账本内已有成员</p>
             </div>
