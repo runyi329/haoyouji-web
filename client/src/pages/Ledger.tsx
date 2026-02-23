@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -27,6 +27,11 @@ export default function Ledger() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportingLedgerId, setExportingLedgerId] = useState<number | null>(null);
   const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<number>>(new Set());
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [showSortDialog, setShowSortDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMember, setSelectedMember] = useState<string>("");
+  const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -40,7 +45,39 @@ export default function Ledger() {
   const { data: activeLedgers } = trpc.ledger.list.useQuery({ isArchived: false });
   const { data: archivedLedgers } = trpc.ledger.list.useQuery({ isArchived: true });
 
-  const filteredLedgers = ledgers || [];
+  // 搜索和排序逻辑
+  const filteredLedgers = useMemo(() => {
+    let result = ledgers || [];
+    
+    // 搜索过滤
+    if (searchQuery) {
+      result = result.filter(ledger => 
+        ledger.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // 按成员筛选
+    if (selectedMember) {
+      result = result.filter(ledger => 
+        ledger.members?.some(m => m.username === selectedMember)
+      );
+    }
+    
+    // 排序
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case "members":
+          return (b.memberCount || 0) - (a.memberCount || 0);
+        case "records":
+          return (b.recordCount || 0) - (a.recordCount || 0);
+        case "date":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+    
+    return result;
+  }, [ledgers, searchQuery, selectedMember, sortBy]);
 
   // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
@@ -191,7 +228,21 @@ export default function Ledger() {
               <ChevronLeft className="w-6 h-6 text-[#222222]" />
             </button>
           </Link>
-          <h1 className="flex-1 text-lg font-medium text-center text-[#222222] -ml-6">共享账本</h1>
+          <h1 className="flex-1 text-lg font-medium text-center text-[#222222]">共享账本</h1>
+          <div className="flex items-center gap-1">
+            <button 
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setShowSearchDialog(true)}
+            >
+              <Search className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+            </button>
+            <button 
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={() => setShowSortDialog(true)}
+            >
+              <ArrowUpDown className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -672,6 +723,111 @@ export default function Ledger() {
               <p className="text-gray-500">正在加载统计信息...</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 搜索对话框 */}
+      <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>搜索账本</DialogTitle>
+          <div className="space-y-4 pt-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">账本名称</label>
+              <Input
+                placeholder="输入账本名称..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">按成员筛选</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={selectedMember}
+                onChange={(e) => setSelectedMember(e.target.value)}
+              >
+                <option value="">所有成员</option>
+                {Array.from(new Set((ledgers || []).flatMap(l => l.members || []).map(m => m.username))).map(username => (
+                  <option key={username} value={username}>{username}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedMember("");
+                }}
+              >
+                清除
+              </Button>
+              <Button
+                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
+                onClick={() => setShowSearchDialog(false)}
+              >
+                确定
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 排序对话框 */}
+      <Dialog open={showSortDialog} onOpenChange={setShowSortDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>排序方式</DialogTitle>
+          <div className="space-y-3 pt-4">
+            <button
+              className={`w-full p-3 rounded-lg border-2 transition-all ${
+                sortBy === "members"
+                  ? "border-[#D32F2F] bg-red-50"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+              onClick={() => {
+                setSortBy("members");
+                setShowSortDialog(false);
+              }}
+            >
+              <div className="text-left">
+                <div className="font-medium text-gray-900">成员人数</div>
+                <div className="text-sm text-gray-500">按共享成员数量排序</div>
+              </div>
+            </button>
+            <button
+              className={`w-full p-3 rounded-lg border-2 transition-all ${
+                sortBy === "records"
+                  ? "border-[#D32F2F] bg-red-50"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+              onClick={() => {
+                setSortBy("records");
+                setShowSortDialog(false);
+              }}
+            >
+              <div className="text-left">
+                <div className="font-medium text-gray-900">账目条数</div>
+                <div className="text-sm text-gray-500">按账目数量排序</div>
+              </div>
+            </button>
+            <button
+              className={`w-full p-3 rounded-lg border-2 transition-all ${
+                sortBy === "date"
+                  ? "border-[#D32F2F] bg-red-50"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+              onClick={() => {
+                setSortBy("date");
+                setShowSortDialog(false);
+              }}
+            >
+              <div className="text-left">
+                <div className="font-medium text-gray-900">开账日期</div>
+                <div className="text-sm text-gray-500">按创建时间排序</div>
+              </div>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
