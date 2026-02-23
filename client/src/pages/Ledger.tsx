@@ -4,7 +4,7 @@ import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +26,7 @@ export default function Ledger() {
   const [destroyingLedgerId, setDestroyingLedgerId] = useState<number | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportingLedgerId, setExportingLedgerId] = useState<number | null>(null);
+  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<number>>(new Set());
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
