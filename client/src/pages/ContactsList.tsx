@@ -448,9 +448,9 @@ export default function ContactsList() {
   // 轻量级获取共享人列表（用于下拉筛选）
   const { data: sharerListData } = trpc.sharing.getSharerList.useQuery();
   
-  // 只有当用户点击"共享"筛选时才加载共享联系人列表（懒加载优化）
+  // 当用户点击"共享"或"全部"筛选时加载共享联系人列表（懒加载优化）
   const { data: sharedContacts, isLoading: isLoadingShared } = trpc.sharing.getSharedContacts.useQuery(undefined, {
-    enabled: shareFilter === 'shared', // 只有选中"共享"时才加载
+    enabled: shareFilter === 'shared' || shareFilter === 'all', // 选中"共享"或"全部"时才加载
   });
   
   // 获取所有标签
