@@ -33,10 +33,36 @@ export default function Ledger() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMember, setSelectedMember] = useState<string>("");
   const [memberInput, setMemberInput] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  // 排序相关状态，从 localStorage 读取
+  const [sortBy, setSortBy] = useState<"members" | "records" | "date">(() => {
+    const saved = localStorage.getItem('ledgerSortBy');
+    return (saved as "members" | "records" | "date") || "date";
+  });
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() => {
+    const saved = localStorage.getItem('ledgerSortOrder');
+    return (saved as "asc" | "desc") || "desc";
+  });
+  
+  // 最近点击的账本ID，从 localStorage 读取
+  const [lastClickedLedgerId, setLastClickedLedgerId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('lastClickedLedgerId');
+    return saved ? parseInt(saved) : null;
+  });
+  
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
+  
+  // 持久化排序设置
+  useEffect(() => {
+    localStorage.setItem('ledgerSortBy', sortBy);
+    localStorage.setItem('ledgerSortOrder', sortOrder);
+  }, [sortBy, sortOrder]);
+  
+  // 记录账本点击
+  const handleLedgerClick = (ledgerId: number) => {
+    setLastClickedLedgerId(ledgerId);
+    localStorage.setItem('lastClickedLedgerId', ledgerId.toString());
+  };
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -119,8 +145,13 @@ export default function Ledger() {
       );
     }
     
-    // 排序
+    // 排序：最近点击的账本置顶，其余按自定义排序
     result = [...result].sort((a, b) => {
+      // 第一优先级：最近点击的账本置顶
+      if (a.id === lastClickedLedgerId) return -1;
+      if (b.id === lastClickedLedgerId) return 1;
+      
+      // 第二优先级：自定义排序
       let comparison = 0;
       switch (sortBy) {
         case "members":
@@ -139,7 +170,7 @@ export default function Ledger() {
     });
     
     return result;
-  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder]);
+  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder, lastClickedLedgerId]);
 
   // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
@@ -527,7 +558,10 @@ export default function Ledger() {
             <div
               key={ledger.id}
               className="cursor-pointer"
-              onClick={() => setLocation(`/ledger/${ledger.id}`)}
+              onClick={() => {
+                handleLedgerClick(ledger.id);
+                setLocation(`/ledger/${ledger.id}`);
+              }}
             >
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 <div className="px-4 py-4">
