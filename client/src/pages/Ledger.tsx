@@ -728,7 +728,7 @@ export default function Ledger() {
 
       {/* 搜索对话框 */}
       <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm top-[15%] translate-y-0">
           <DialogTitle>搜索账本</DialogTitle>
           <div className="space-y-4 pt-4">
             <div>
@@ -741,16 +741,12 @@ export default function Ledger() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-2 block">按成员筛选</label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <Input
+                placeholder="输入成员名称..."
                 value={selectedMember}
                 onChange={(e) => setSelectedMember(e.target.value)}
-              >
-                <option value="">所有成员</option>
-                {Array.from(new Set((ledgers || []).flatMap(l => l.members || []).map(m => m.username))).map(username => (
-                  <option key={username} value={username}>{username}</option>
-                ))}
-              </select>
+              />
+              <p className="text-xs text-gray-500 mt-1">仅搜索账本内已有成员</p>
             </div>
             <div className="flex gap-2 pt-2">
               <Button
