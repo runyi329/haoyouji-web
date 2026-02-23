@@ -1104,10 +1104,11 @@ export default function Ledger() {
         <DialogContent className="max-w-sm mx-auto top-[20%] translate-y-0">
           <DialogTitle>加入他人账本</DialogTitle>
           <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-500">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">账本密钥</label>
               <Input
-                placeholder="请输入66位账本密钥（0x开头）"
+                placeholder="请输入66位密钥"
                 value={joinSecretKey}
                 onChange={(e) => setJoinSecretKey(e.target.value)}
                 className="font-mono text-xs"
