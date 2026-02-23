@@ -292,6 +292,14 @@ export default function Ledger() {
                               />
                             </div>
                           ))}
+                          {(ledger.memberCount || 0) > 3 && (
+                            <div 
+                              className="ring-1 ring-white rounded-full bg-gray-200 flex items-center justify-center" 
+                              style={{ zIndex: 0, width: '20px', height: '20px' }}
+                            >
+                              <span className="text-gray-600 text-xs font-bold">+</span>
+                            </div>
+                          )}
                         </div>
                         <span className="text-[#D32F2F] font-semibold">{ledger.memberCount}人共享</span>
                       </div>
