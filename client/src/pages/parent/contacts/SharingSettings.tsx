@@ -207,6 +207,10 @@ export default function SharingSettings() {
     setSharedVisibleCount(BATCH_SIZE);
   }, [sharedSearchQuery]);
   
+  // 页面加载时自动标记共享通知为已读
+  useEffect(() => {
+    markAsRead.mutate();
+  }, []);
   
   // 打开权限配置对话框
   const openPermissionDialog = useCallback((connection: any) => {
