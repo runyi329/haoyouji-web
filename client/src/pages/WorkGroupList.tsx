@@ -169,7 +169,7 @@ export default function WorkGroupList() {
                 </div>
                 
                 {/* 饼图 */}
-                <div className="relative w-12 h-12">
+                <div className="relative w-12 h-12 aspect-square rounded-full">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
                     <circle cx="50" cy="50" r="45" fill="none" stroke="#FFEBEE" strokeWidth="10" />
                     <circle
