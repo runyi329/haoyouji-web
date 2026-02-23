@@ -4,7 +4,7 @@ import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +26,7 @@ export default function Ledger() {
   const [destroyingLedgerId, setDestroyingLedgerId] = useState<number | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [exportingLedgerId, setExportingLedgerId] = useState<number | null>(null);
+  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<number>>(new Set());
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -231,59 +232,87 @@ export default function Ledger() {
             <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已封存"}的账本</p>
           </div>
         ) : (
-          filteredLedgers.map((ledger) => (
+          filteredLedgers.map((ledger) => {
+            const isExpanded = expandedLedgerIds.has(ledger.id);
+            
+            return (
             <div
               key={ledger.id}
-              className="cursor-pointer"
-              onClick={() => setLocation(`/ledger/${ledger.id}`)}
+              className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-all mb-3"
             >
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="px-4 py-4">
-                  {/* 账本标题区 */}
-                  <div className="mb-3">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
-                      <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
-                      {ledger.isVip === true && (
-                        <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
-                          VIP
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
-                      <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
-                        开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
-                      </span>
-                      <span className="text-gray-300">|</span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F]"></span>
-                        {ledger.recordCount || 0}条账目
-                      </span>
-                    </div>
+              {/* 紧凑标题行 - 点击进入账本详情 */}
+              <div 
+                className="px-4 py-3 cursor-pointer"
+                onClick={() => setLocation(`/ledger/${ledger.id}`)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
+                    <h3 className="font-bold text-base text-[#222222] truncate">{ledger.name}</h3>
+                    {ledger.isVip === true && (
+                      <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
+                        VIP
+                      </Badge>
+                    )}
                   </div>
-
-                  {/* 成员信息区 */}
-                  <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">
-                    <div className="flex -space-x-2">
-                      {(ledger.members || []).slice(0, 4).map((member, index) => (
-                        <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: (ledger.members || []).length - index }}>
+                  {/* 展开/收起按钮 */}
+                  <button
+                    className="ml-2 p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedLedgerIds(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(ledger.id)) {
+                          newSet.delete(ledger.id);
+                        } else {
+                          newSet.add(ledger.id);
+                        }
+                        return newSet;
+                      });
+                    }}
+                  >
+                    <ChevronDown 
+                      className={`w-5 h-5 text-gray-400 transition-transform ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+                
+                {/* 紧凑信息行 */}
+                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400 font-medium">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
+                    开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F]"></span>
+                    {ledger.recordCount || 0}条账目
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="flex items-center gap-1">
+                    <div className="flex -space-x-1">
+                      {(ledger.members || []).slice(0, 3).map((member, index) => (
+                        <div key={member.userId} className="ring-1 ring-white rounded-full" style={{ zIndex: 3 - index }}>
                           <UserAvatar
                             username={member.username}
                             avatar={member.avatar}
                             nickname={member.nickname}
-                            size="sm"
+                            size="xs"
                           />
                         </div>
                       ))}
                     </div>
-                    <span className="text-sm font-semibold text-[#D32F2F]">
-                      {ledger.memberCount}人共享
-                    </span>
-                  </div>
+                    <span className="text-[#D32F2F] font-semibold ml-1">{ledger.memberCount}人</span>
+                  </span>
+                </div>
+              </div>
 
-                  {/* 操作按钮区 */}
-                  <div className="grid grid-cols-3 gap-2">
+              {/* 展开的操作按钮区 */}
+              {isExpanded && (
+                <div className="px-4 pb-3 border-t border-gray-100">
+                  <div className="grid grid-cols-3 gap-2 mt-3">
                     {activeTab === "active" && (
                       <>
                         <button
@@ -369,9 +398,10 @@ export default function Ledger() {
                     )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
