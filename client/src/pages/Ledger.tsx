@@ -241,16 +241,57 @@ export default function Ledger() {
                 <div className="px-4 py-4">
                   {/* 账本标题区 */}
                   <div className="mb-3">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
-                      <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
-                      {ledger.isVip === true && (
-                        <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
-                          VIP
-                        </Badge>
-                      )}
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
+                        <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                        {ledger.isVip === true && (
+                          <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
+                            VIP
+                          </Badge>
+                        )}
+                      </div>
+                      {/* 展开/收起按钮 */}
+                      <button
+                        className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedLedgerIds(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(ledger.id)) {
+                              newSet.delete(ledger.id);
+                            } else {
+                              newSet.add(ledger.id);
+                            }
+                            return newSet;
+                          });
+                        }}
+                      >
+                        <ChevronDown 
+                          className={`w-5 h-5 text-gray-400 transition-transform ${
+                            expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
                     </div>
+                    {/* 信息行：小头像 + 开账天数 + 账目条数 */}
                     <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex -space-x-1">
+                          {(ledger.members || []).slice(0, 3).map((member, index) => (
+                            <div key={member.userId} className="ring-1 ring-white rounded-full" style={{ zIndex: 3 - index }}>
+                              <UserAvatar
+                                username={member.username}
+                                avatar={member.avatar}
+                                nickname={member.nickname}
+                                size="xs"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-[#D32F2F] font-semibold">{ledger.memberCount}人共享</span>
+                      </div>
+                      <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
                         开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
@@ -263,27 +304,9 @@ export default function Ledger() {
                     </div>
                   </div>
 
-                  {/* 成员信息区 */}
-                  <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">
-                    <div className="flex -space-x-2">
-                      {(ledger.members || []).slice(0, 4).map((member, index) => (
-                        <div key={member.userId} className="ring-2 ring-white rounded-full" style={{ zIndex: (ledger.members || []).length - index }}>
-                          <UserAvatar
-                            username={member.username}
-                            avatar={member.avatar}
-                            nickname={member.nickname}
-                            size="sm"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <span className="text-sm font-semibold text-[#D32F2F]">
-                      {ledger.memberCount}人共享
-                    </span>
-                  </div>
-
-                  {/* 操作按钮区 */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* 操作按钮区 - 默认折叠 */}
+                  {expandedLedgerIds.has(ledger.id) && (
+                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                     {activeTab === "active" && (
                       <>
                         <button
@@ -368,6 +391,7 @@ export default function Ledger() {
                       </>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
