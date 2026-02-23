@@ -256,12 +256,6 @@ export async function updateUserLastSignedIn(userId: number, lastSignedIn: Date)
   await db.update(users).set({ lastSignedIn }).where(eq(users.id, userId));
 }
 
-export async function updateUserLastViewedSharingAt(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(users).set({ lastViewedSharingAt: sql`NOW()` }).where(eq(users.id, userId));
-}
-
 export async function updateUserPoints(userId: number, amount: number) {
   const db = await getDb();
  if (!db) throw new Error("Database not available");
