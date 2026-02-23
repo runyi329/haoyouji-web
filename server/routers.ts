@@ -4980,34 +4980,6 @@ export const appRouter = router({
         return await db.getSharingPermissionsByConnectionId(input.connectionId);
       }),
 
-    // 获取未读共享通知数量
-    getUnreadCount: protectedProcedure
-      .query(async ({ ctx }) => {
-        const user = await db.getUserById(ctx.user.id);
-        const lastViewedAt = user?.lastViewedSharingAt;
-        
-        // 如果从未查看过，统计所有共享连接
-        if (!lastViewedAt) {
-          const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
-          return { count: connections.length };
-        }
-        
-        // 统计 updatedAt > lastViewedAt 的共享连接
-        const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
-        const unreadConnections = connections.filter((conn: any) => 
-          new Date(conn.updatedAt) > new Date(lastViewedAt)
-        );
-        
-        return { count: unreadConnections.length };
-      }),
-
-    // 标记共享通知为已读
-    markAsRead: protectedProcedure
-      .mutation(async ({ ctx }) => {
-        await db.updateUserLastViewedSharingAt(ctx.user.id);
-        return { success: true };
-      }),
-
     // 轻量级获取共享人列表（只返回共享人名字和ID，使用单次SQL查询优化）
     getSharerList: protectedProcedure
       .query(async ({ ctx }) => {
