@@ -33,6 +33,7 @@ export default function Ledger() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMember, setSelectedMember] = useState<string>("");
   const [sortBy, setSortBy] = useState<"members" | "records" | "date">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
@@ -81,19 +82,25 @@ export default function Ledger() {
     
     // 排序
     result = [...result].sort((a, b) => {
+      let comparison = 0;
       switch (sortBy) {
         case "members":
-          return (b.memberCount || 0) - (a.memberCount || 0);
+          comparison = (b.memberCount || 0) - (a.memberCount || 0);
+          break;
         case "records":
-          return (b.recordCount || 0) - (a.recordCount || 0);
+          comparison = (b.recordCount || 0) - (a.recordCount || 0);
+          break;
         case "date":
         default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          break;
       }
+      // 如果是升序，反转比较结果
+      return sortOrder === "asc" ? -comparison : comparison;
     });
     
     return result;
-  }, [ledgers, searchQuery, selectedMember, sortBy]);
+  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder]);
 
   // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
@@ -793,54 +800,128 @@ export default function Ledger() {
         <DialogContent className="max-w-sm">
           <DialogTitle>排序方式</DialogTitle>
           <div className="space-y-3 pt-4">
-            <button
-              className={`w-full p-3 rounded-lg border-2 transition-all ${
-                sortBy === "members"
-                  ? "border-[#D32F2F] bg-red-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              onClick={() => {
-                setSortBy("members");
-                setShowSortDialog(false);
-              }}
-            >
-              <div className="text-left">
-                <div className="font-medium text-gray-900">成员人数</div>
-                <div className="text-sm text-gray-500">按共享成员数量排序</div>
+            {/* 成员人数 */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700">成员人数</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "members" && sortOrder === "desc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("members");
+                    setSortOrder("desc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↓</div>
+                    <div className="text-sm text-gray-700">由多到少</div>
+                  </div>
+                </button>
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "members" && sortOrder === "asc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("members");
+                    setSortOrder("asc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↑</div>
+                    <div className="text-sm text-gray-700">由少到多</div>
+                  </div>
+                </button>
               </div>
-            </button>
-            <button
-              className={`w-full p-3 rounded-lg border-2 transition-all ${
-                sortBy === "records"
-                  ? "border-[#D32F2F] bg-red-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              onClick={() => {
-                setSortBy("records");
-                setShowSortDialog(false);
-              }}
-            >
-              <div className="text-left">
-                <div className="font-medium text-gray-900">账目条数</div>
-                <div className="text-sm text-gray-500">按账目数量排序</div>
+            </div>
+
+            {/* 账目条数 */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700">账目条数</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "records" && sortOrder === "desc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("records");
+                    setSortOrder("desc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↓</div>
+                    <div className="text-sm text-gray-700">由多到少</div>
+                  </div>
+                </button>
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "records" && sortOrder === "asc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("records");
+                    setSortOrder("asc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↑</div>
+                    <div className="text-sm text-gray-700">由少到多</div>
+                  </div>
+                </button>
               </div>
-            </button>
-            <button
-              className={`w-full p-3 rounded-lg border-2 transition-all ${
-                sortBy === "date"
-                  ? "border-[#D32F2F] bg-red-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              onClick={() => {
-                setSortBy("date");
-                setShowSortDialog(false);
-              }}
-            >
-              <div className="text-left">
-                <div className="font-medium text-gray-900">开账日期</div>
-                <div className="text-sm text-gray-500">按创建时间排序</div>
+            </div>
+
+            {/* 开账日期 */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700">开账日期</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "date" && sortOrder === "desc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("date");
+                    setSortOrder("desc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↓</div>
+                    <div className="text-sm text-gray-700">由新到旧</div>
+                  </div>
+                </button>
+                <button
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    sortBy === "date" && sortOrder === "asc"
+                      ? "border-[#D32F2F] bg-red-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => {
+                    setSortBy("date");
+                    setSortOrder("asc");
+                    setShowSortDialog(false);
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg mb-1">↑</div>
+                    <div className="text-sm text-gray-700">由旧到新</div>
+                  </div>
+                </button>
               </div>
-            </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
