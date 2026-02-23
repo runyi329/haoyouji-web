@@ -56,6 +56,8 @@ export default function Ledger() {
   });
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [joinSecretKey, setJoinSecretKey] = useState("");
 
   // 持久化排序设置的包装函数
   const setSortBy = (val: "members" | "records" | "date") => {
@@ -270,6 +272,25 @@ export default function Ledger() {
   const handleCopyConfirm = () => {
     if (selectedCopyLedgerId) {
       copyMutation.mutate({ ledgerId: selectedCopyLedgerId });
+    }
+  };
+
+  // 通过密钥加入账本
+  const joinMutation = trpc.ledger.joinBySecretKey.useMutation({
+    onSuccess: (data) => {
+      toast.success(`已成功加入账本：${data.ledgerName}`);
+      refetch();
+      setShowJoinDialog(false);
+      setJoinSecretKey("");
+    },
+    onError: (error) => {
+      toast.error(`加入失败: ${error.message}`);
+    },
+  });
+
+  const handleJoinConfirm = () => {
+    if (joinSecretKey.trim()) {
+      joinMutation.mutate({ secretKey: joinSecretKey.trim() });
     }
   };
 
@@ -759,9 +780,7 @@ export default function Ledger() {
           <div className="flex gap-3">
             <button
               className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
-              onClick={() => {
-                // TODO: 加入他人账本
-              }}
+              onClick={() => setShowJoinDialog(true)}
             >
               加入他人账本
             </button>
@@ -1074,6 +1093,44 @@ export default function Ledger() {
                 disabled={!selectedCopyLedgerId || copyMutation.isPending}
               >
                 {copyMutation.isPending ? '复制中...' : '确认复制'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 加入他人账本对话框 */}
+      <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
+        <DialogContent className="max-w-sm mx-auto">
+          <DialogTitle>加入他人账本</DialogTitle>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-500">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">账本密钥</label>
+              <Input
+                placeholder="请输入账本密钥，如 0x7a3b9c4d..."
+                value={joinSecretKey}
+                onChange={(e) => setJoinSecretKey(e.target.value)}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-[#D32F2F] text-[#D32F2F]"
+                onClick={() => {
+                  setShowJoinDialog(false);
+                  setJoinSecretKey("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                onClick={handleJoinConfirm}
+                disabled={!joinSecretKey.trim() || joinMutation.isPending}
+              >
+                {joinMutation.isPending ? '加入中...' : '确认加入'}
               </Button>
             </div>
           </div>
