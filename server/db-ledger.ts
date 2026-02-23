@@ -3685,3 +3685,131 @@ export async function transferOwnership(
 
   return { success: true };
 }
+
+/**
+ * 获取或生成账本密钥（Web3风格的长密钥）
+ * 密钥存储在数据库中，如果不存在则自动生成
+ */
+export async function getLedgerSecretKey(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证用户是否是账本成员且有管理权限（owner或admin）
+  const memberRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (memberRows.length === 0) {
+    throw new Error('您不是该账本的成员');
+  }
+
+  if (memberRows[0].role !== 'owner' && memberRows[0].role !== 'admin') {
+    throw new Error('只有管理员或创建人可以查看账本密钥');
+  }
+
+  // 确保secret_key列存在
+  try {
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN secret_key VARCHAR(130) NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[getLedgerSecretKey] add column error:', e.message);
+    }
+  }
+
+  // 查询现有密钥
+  const result = await db.execute(sql`SELECT secret_key FROM ledgers WHERE id = ${ledgerId}`);
+  const rows = (result as any)[0] || result;
+  const existingKey = Array.isArray(rows) ? rows[0]?.secret_key : null;
+
+  if (existingKey) {
+    return { secretKey: existingKey };
+  }
+
+  // 生成Web3风格的密钥：0x + 64位十六进制字符
+  const crypto = await import('crypto');
+  const randomBytes = crypto.randomBytes(32);
+  const secretKey = '0x' + randomBytes.toString('hex');
+
+  // 保存到数据库
+  await db.execute(sql`UPDATE ledgers SET secret_key = ${secretKey} WHERE id = ${ledgerId}`);
+
+  console.log('[getLedgerSecretKey] 生成新密钥:', { ledgerId });
+  return { secretKey };
+}
+
+/**
+ * 通过密钥加入账本
+ */
+export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 确保secret_key列存在
+  try {
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN secret_key VARCHAR(130) NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      // ignore
+    }
+  }
+
+  // 通过密钥查找账本
+  const result = await db.execute(sql`SELECT id, name FROM ledgers WHERE secret_key = ${secretKey}`);
+  const rows = (result as any)[0] || result;
+  const ledgerRow = Array.isArray(rows) ? rows[0] : null;
+
+  if (!ledgerRow) {
+    throw new Error('无效的账本密钥，请检查后重试');
+  }
+
+  const ledgerId = ledgerRow.id;
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (existingMember.length > 0) {
+    throw new Error('您已经是该账本的成员');
+  }
+
+  // 检查账本是否已封存
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length > 0 && ledger[0].isArchived) {
+    throw new Error('该账本已封存，无法加入');
+  }
+
+  // 添加用户为账本成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+  });
+
+  console.log('[joinLedgerBySecretKey] 用户通过密钥加入账本:', { userId, ledgerId });
+  return { ledgerId, ledgerName: ledgerRow.name };
+}

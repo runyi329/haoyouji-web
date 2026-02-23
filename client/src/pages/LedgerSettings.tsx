@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Switch } from "@/components/ui/switch";
-import { ChevronRight, ChevronLeft, X, Search, UserPlus } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, Search, UserPlus, Eye, EyeOff, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -56,6 +56,7 @@ export default function LedgerSettings() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showTransferWarning, setShowTransferWarning] = useState(false);
   const [transferTarget, setTransferTarget] = useState<any>(null);
+  const [showSecretKey, setShowSecretKey] = useState(false);
 
   // 移除成员的mutation
   const utils = trpc.useUtils();
@@ -469,6 +470,13 @@ export default function LedgerSettings() {
         <SettingItem label="账本日志" showIcon />
         <SettingItem label="账本图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
         <SettingItem label="账本管理员管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
+        {/* 账本密钥 - 只有管理员和创建人可见 */}
+        {(() => {
+          const currentMember = members?.find(m => m.userId === user?.id);
+          const isAdminOrOwner = currentMember?.role === 'owner' || currentMember?.role === 'admin';
+          if (!isAdminOrOwner) return null;
+          return <SecretKeyItem ledgerId={ledgerId} showSecretKey={showSecretKey} setShowSecretKey={setShowSecretKey} />;
+        })()}
         <SettingItem label="账本创建人转移" showIcon onClick={() => {
           // 只有owner才能转移
           const currentMember = members?.find(m => m.userId === user?.id);
@@ -1087,6 +1095,66 @@ function SettingItem({
         {showIcon && (
           <ChevronRight className="w-5 h-5 text-gray-400" />
         )}
+      </div>
+    </div>
+  );
+}
+
+function SecretKeyItem({ ledgerId, showSecretKey, setShowSecretKey }: { ledgerId: number; showSecretKey: boolean; setShowSecretKey: (v: boolean) => void }) {
+  const { data: secretKeyData } = trpc.ledger.getSecretKey.useQuery(
+    { ledgerId },
+    { enabled: showSecretKey }
+  );
+
+  const handleCopy = async () => {
+    if (secretKeyData?.secretKey) {
+      try {
+        await navigator.clipboard.writeText(secretKeyData.secretKey);
+        toast.success('密钥已复制到剪贴板');
+      } catch {
+        // fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = secretKeyData.secretKey;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        toast.success('密钥已复制到剪贴板');
+      }
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <span className="text-[15px] text-gray-900 shrink-0">账本密钥</span>
+      <div className="flex items-center gap-2 ml-3 min-w-0">
+        {showSecretKey && secretKeyData?.secretKey ? (
+          <>
+            <span className="text-xs font-mono text-gray-500 truncate max-w-[160px]">
+              {secretKeyData.secretKey}
+            </span>
+            <button
+              className="p-1 hover:bg-gray-100 rounded transition-colors shrink-0"
+              onClick={handleCopy}
+              title="复制密钥"
+            >
+              <Copy className="w-4 h-4 text-gray-500" />
+            </button>
+          </>
+        ) : (
+          <span className="text-xs text-gray-400 font-mono">••••••••••••••••</span>
+        )}
+        <button
+          className="p-1 hover:bg-gray-100 rounded transition-colors shrink-0"
+          onClick={() => setShowSecretKey(!showSecretKey)}
+          title={showSecretKey ? "隐藏密钥" : "显示密钥"}
+        >
+          {showSecretKey ? (
+            <EyeOff className="w-4 h-4 text-gray-500" />
+          ) : (
+            <Eye className="w-4 h-4 text-gray-500" />
+          )}
+        </button>
       </div>
     </div>
   );

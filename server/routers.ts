@@ -5753,6 +5753,24 @@ export const appRouter = router({
         return await dbLedger.transferOwnership(input.ledgerId, ctx.user.id, input.newOwnerId);
       }),
 
+    // 获取账本密钥
+    getSecretKey: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerSecretKey(input.ledgerId, ctx.user.id);
+      }),
+
+    // 通过密钥加入账本
+    joinBySecretKey: protectedProcedure
+      .input(z.object({
+        secretKey: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.joinLedgerBySecretKey(input.secretKey, ctx.user.id);
+      }),
+
     // 获取账本分类列表
     getCategories: protectedProcedure
       .input(z.object({
