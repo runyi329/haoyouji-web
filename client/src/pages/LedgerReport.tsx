@@ -480,8 +480,8 @@ function ChartViewContent({
                       size="sm"
                     />
                   </div>
-                  <span>{member.nickname}</span>
-                  {selectedMemberIds.includes(member.id) && <span className="ml-auto text-[var(--status-link)]">✓</span>}
+                  <span className="flex-1">{member.nickname || member.username}</span>
+                  {selectedMemberIds.includes(member.id) && <span className="text-[var(--status-link)]">✓</span>}
                 </div>
               ))}
             </div>
@@ -1220,7 +1220,7 @@ function CalendarViewContent({
                     size="md"
                   />
                 </div>
-                <span className="flex-1 text-gray-800">{member.nickname || '未命名'}</span>
+                <span className="flex-1 text-gray-800">{member.nickname || member.username}</span>
                 {selectedMemberIds.includes(member.id) && (
                   <span className="text-[var(--status-link)]">✓</span>
                 )}

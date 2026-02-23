@@ -52,11 +52,15 @@ export default function Ledger() {
 
   // 获取所有账本中的成员名单（去重）
   const allMembers = useMemo(() => {
-    const memberSet = new Set<string>();
+    const memberMap = new Map<string, { username: string; nickname?: string }>();
     ledgers?.forEach(ledger => {
-      ledger.members?.forEach(m => memberSet.add(m.username));
+      ledger.members?.forEach(m => {
+        if (!memberMap.has(m.username)) {
+          memberMap.set(m.username, { username: m.username, nickname: m.nickname });
+        }
+      });
     });
-    return Array.from(memberSet).sort();
+    return Array.from(memberMap.values()).sort((a, b) => a.username.localeCompare(b.username));
   }, [ledgers]);
 
   // 根据输入匹配成员（支持拼音首字母）
@@ -64,16 +68,18 @@ export default function Ledger() {
     if (!memberInput.trim()) return allMembers;
     
     const searchTerm = memberInput.toLowerCase();
-    return allMembers.filter(username => {
+    return allMembers.filter(member => {
+      const displayName = member.nickname || member.username;
+      
       // 直接匹配
-      if (username.toLowerCase().includes(searchTerm)) return true;
+      if (displayName.toLowerCase().includes(searchTerm)) return true;
       
       // 拼音全拼匹配
-      const fullPinyin = pinyin(username, { toneType: 'none', type: 'array' }).join('').toLowerCase();
+      const fullPinyin = pinyin(displayName, { toneType: 'none', type: 'array' }).join('').toLowerCase();
       if (fullPinyin.includes(searchTerm)) return true;
       
       // 拼音首字母匹配
-      const initialPinyin = pinyin(username, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
+      const initialPinyin = pinyin(displayName, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
       if (initialPinyin.includes(searchTerm)) return true;
       
       return false;
@@ -341,16 +347,17 @@ export default function Ledger() {
                       {/* 下拉提示列表 */}
                       {memberInput && matchedMembers.length > 0 && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                          {matchedMembers.map((username, index) => (
+                          {matchedMembers.map((member, index) => (
                             <button
                               key={index}
                               className="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0 text-sm"
                               onClick={() => {
-                                setSelectedMember(username);
-                                setMemberInput(username);
+                                const displayName = member.nickname || member.username;
+                                setSelectedMember(displayName);
+                                setMemberInput(displayName);
                               }}
                             >
-                              <span className="text-gray-900">{username}</span>
+                              <span className="text-gray-900">{member.nickname || member.username}</span>
                             </button>
                           ))}
                         </div>
