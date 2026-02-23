@@ -742,7 +742,7 @@ function ChartViewContent({
                   : 0;
                 return (
                   <tr key={index} className="border-t border-gray-100">
-                    <td className="py-3">{cat.category || "未分类"}</td>
+                    <td className="py-3 text-sm">{cat.category || "未分类"}</td>
                     <td className="py-3">
                       <div className="flex items-center justify-center">
                         <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -751,10 +751,10 @@ function ChartViewContent({
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <span className="ml-2 text-[var(--brand-red)]">{percentage}%</span>
+                        <span className="ml-2 text-sm text-[var(--brand-red)]">{percentage}%</span>
                       </div>
                     </td>
-                    <td className="py-3 text-right text-[var(--brand-red)]">
+                    <td className="py-3 text-right text-sm text-[var(--brand-red)]">
                       {formatAmount(cat.amount)}
                     </td>
                   </tr>
@@ -805,7 +805,7 @@ function ChartViewContent({
                   : 0;
                 return (
                   <tr key={index} className="border-t border-gray-100">
-                    <td className="py-3">{cat.category || "未分类"}</td>
+                    <td className="py-3 text-sm">{cat.category || "未分类"}</td>
                     <td className="py-3">
                       <div className="flex items-center justify-center">
                         <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -814,10 +814,10 @@ function ChartViewContent({
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <span className="ml-2 text-[var(--status-success)]">{percentage}%</span>
+                        <span className="ml-2 text-sm text-[var(--status-success)]">{percentage}%</span>
                       </div>
                     </td>
-                    <td className="py-3 text-right text-[var(--status-success)]">
+                    <td className="py-3 text-right text-sm text-[var(--status-success)]">
                       {formatAmount(cat.amount)}
                     </td>
                   </tr>
@@ -982,7 +982,7 @@ function PieChart({
       {/* 图例 */}
       <div className="flex flex-wrap justify-center gap-2 mt-2">
         {slices.map((slice, index) => (
-          <div key={index} className="flex items-center text-xs">
+          <div key={index} className="flex items-center text-[10px]">
             <div 
               className="w-2 h-2 rounded-full mr-1"
               style={{ backgroundColor: slice.color }}
