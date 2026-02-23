@@ -58,6 +58,44 @@ export default function Ledger() {
   const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [joinSecretKey, setJoinSecretKey] = useState("");
+  const [dialogBottom, setDialogBottom] = useState<number | null>(null);
+
+  // 监听键盘弹出，调整对话框位置
+  useEffect(() => {
+    if (!showJoinDialog) {
+      setDialogBottom(null);
+      return;
+    }
+
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const keyboardHeight = windowHeight - viewportHeight;
+        
+        if (keyboardHeight > 100) {
+          // 键盘弹出，计算对话框应该在的位置（留出20px间隙）
+          setDialogBottom(keyboardHeight + 20);
+        } else {
+          // 键盘收起
+          setDialogBottom(null);
+        }
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+      handleResize(); // 初始调用
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
+    };
+  }, [showJoinDialog]);
 
   // 持久化排序设置的包装函数
   const setSortBy = (val: "members" | "records" | "date") => {
@@ -1101,7 +1139,15 @@ export default function Ledger() {
 
       {/* 加入他人账本对话框 */}
       <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-        <DialogContent className="max-w-sm mx-auto !top-[30%] !translate-y-[-50%] !fixed">
+        <DialogContent 
+          className="max-w-sm mx-auto !fixed !left-[50%] !translate-x-[-50%]"
+          style={{
+            top: dialogBottom === null ? '30%' : 'auto',
+            bottom: dialogBottom !== null ? `${dialogBottom}px` : 'auto',
+            transform: dialogBottom === null ? 'translateX(-50%) translateY(-50%)' : 'translateX(-50%)',
+            transition: 'bottom 0.2s ease-out, top 0.2s ease-out'
+          }}
+        >
           <DialogTitle>加入他人账本</DialogTitle>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-500">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
