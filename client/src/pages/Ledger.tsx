@@ -1101,7 +1101,7 @@ export default function Ledger() {
 
       {/* 加入他人账本对话框 */}
       <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-        <DialogContent className="max-w-sm mx-auto top-[35%] translate-y-0">
+        <DialogContent className="max-w-sm mx-auto top-[30%] translate-y-[-50%]">
           <DialogTitle>加入他人账本</DialogTitle>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-500">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
