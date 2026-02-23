@@ -437,7 +437,7 @@ export default function LedgerSettings() {
 
 
         <SettingItem label="账本分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
-        <SettingItem label="删除账单找回" showIcon />
+        <SettingItem label="删除账单找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
         <SettingItem label="账本日志" showIcon />
         <SettingItem label="账本图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
         <SettingItem label="账本管理员管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />

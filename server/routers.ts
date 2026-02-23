@@ -5903,6 +5903,30 @@ export const appRouter = router({
         return await dbLedger.deleteTransaction(input.recordId, ctx.user.id);
       }),
 
+    // 获取已删除的账目记录（30天内）
+    getDeletedTransactions: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getDeletedTransactions(input.ledgerId, ctx.user.id);
+      }),
+
+    // 恢复已删除的账目记录
+    restoreTransaction: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.restoreTransaction(input.recordId, ctx.user.id);
+      }),
+
+    // 清理超过30天的已删除记录
+    purgeExpiredDeletedRecords: protectedProcedure
+      .mutation(async () => {
+        return await dbLedger.purgeExpiredDeletedRecords();
+      }),
+
     // 更新记账记录
     updateTransaction: protectedProcedure
       .input(z.object({

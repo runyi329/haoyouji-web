@@ -513,6 +513,8 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	reimbursementVoucherUrl: text('reimbursement_voucher_url'),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	deletedAt: timestamp('deleted_at', { mode: 'string' }),
+	deletedBy: int('deleted_by'),
 });
 
 export const ledgerRecordHistory = mysqlTable("ledger_record_history", {

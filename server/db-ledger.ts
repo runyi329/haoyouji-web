@@ -8,6 +8,35 @@ const LEDGER_RECORD_ENCRYPT_FIELDS = ['description'];
 // 报销历史需要加密的字段
 const REIMBURSEMENT_ENCRYPT_FIELDS = ['notes'];
 
+// ========== 软删除自动迁移 ==========
+let _softDeleteMigrated = false;
+async function ensureSoftDeleteColumns() {
+  if (_softDeleteMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 尝试添加列，如果已存在则忽略
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`);
+  } catch (e: any) {
+    // 列已存在时忽略错误
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureSoftDeleteColumns] deleted_at error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN deleted_by INT NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureSoftDeleteColumns] deleted_by error:', e.message);
+    }
+  }
+  _softDeleteMigrated = true;
+}
+// 在模块加载时执行迁移
+ensureSoftDeleteColumns().catch(console.error);
+
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
@@ -64,14 +93,14 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
       const recordCount = await db
         .select({ count: sql<number>`count(*)` })
         .from(ledgerRecords)
-        .where(eq(ledgerRecords.ledgerId, ledger.id))
+        .where(and(eq(ledgerRecords.ledgerId, ledger.id), isNull(ledgerRecords.deletedAt)))
         .then((rows: any[]) => rows[0]?.count || 0);
 
       // 获取该账本最近一条账目的创建时间（作为最近活动时间）
       const latestRecord = await db
         .select({ latestAt: sql<string>`MAX(${ledgerRecords.createdAt})` })
         .from(ledgerRecords)
-        .where(eq(ledgerRecords.ledgerId, ledger.id))
+        .where(and(eq(ledgerRecords.ledgerId, ledger.id), isNull(ledgerRecords.deletedAt)))
         .then((rows: any[]) => rows[0]?.latestAt || null);
 
       // 获取当前用户在这个账本中的角色
@@ -635,7 +664,7 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
     const hasRecords = await db
       .select({ count: sql<number>`count(*)` })
       .from(ledgerRecords)
-      .where(eq(ledgerRecords.categoryId, id))
+      .where(and(eq(ledgerRecords.categoryId, id), isNull(ledgerRecords.deletedAt)))
       .then((rows: any[]) => rows[0]?.count || 0);
     
     if (hasRecords > 0) {
@@ -687,7 +716,8 @@ export async function getCategoryUsageCount(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        eq(ledgerRecords.categoryId, categoryId)
+        eq(ledgerRecords.categoryId, categoryId),
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .then((rows: any[]) => rows[0]?.count || 0);
@@ -757,7 +787,8 @@ export async function replaceLedgerCategory(
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        eq(ledgerRecords.categoryId, targetCategoryId)
+        eq(ledgerRecords.categoryId, targetCategoryId),
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .then((rows: any[]) => rows[0]?.count || 0);
@@ -1467,7 +1498,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
-        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt)
       )
     );
   
@@ -1486,7 +1518,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
-        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(ledgerRecords.createdBy);
@@ -1529,7 +1562,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
-        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(sql`MONTH(${ledgerRecords.recordDate})`);
@@ -1555,7 +1589,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
-        sql`${ledgerRecords.recordDate} <= ${yearEnd}`
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
@@ -1609,7 +1644,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
-        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
       )
     );
   
@@ -1628,7 +1664,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
-        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(ledgerRecords.recordDate)
@@ -1661,7 +1698,8 @@ export async function getLedgerReport(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
-        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
@@ -1774,7 +1812,8 @@ export async function getCalendarData(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${monthStart}`,
         sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
-        memberCondition
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
       )
     );
   
@@ -1796,7 +1835,8 @@ export async function getCalendarData(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${monthStart}`,
         sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
-        memberCondition
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .groupBy(ledgerRecords.recordDate);
@@ -1867,7 +1907,8 @@ export async function getDayRecords(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} = ${date}`,
-        memberCondition
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .orderBy(desc(ledgerRecords.createdAt));
@@ -2069,7 +2110,7 @@ export async function getTransactionsList(
       reimbursementStatus: ledgerRecords.reimbursementStatus,
     })
     .from(ledgerRecords)
-    .where(and(...conditions))
+    .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
     .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
     .limit(options?.limit || 100)
     .offset(options?.offset || 0);
@@ -2287,7 +2328,8 @@ export async function getTransactionDetail(
     .where(
       and(
         eq(ledgerRecords.id, transactionId),
-        eq(ledgerRecords.ledgerId, ledgerId)
+        eq(ledgerRecords.ledgerId, ledgerId),
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .limit(1);
@@ -2419,7 +2461,7 @@ export async function deleteTransaction(
       createdBy: ledgerRecords.createdBy,
     })
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.id, recordId))
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
     .limit(1);
   
   if (record.length === 0) {
@@ -2442,10 +2484,197 @@ export async function deleteTransaction(
     throw new Error("您不是该账本的成员");
   }
   
-  // 删除记录
+  // 软删除：设置 deletedAt 和 deletedBy
   await db
-    .delete(ledgerRecords)
+    .update(ledgerRecords)
+    .set({
+      deletedAt: sql`NOW()`,
+      deletedBy: userId,
+    } as any)
     .where(eq(ledgerRecords.id, recordId));
+  
+  return { success: true };
+}
+
+/**
+ * 获取已删除的账目记录（30天内）
+ */
+export async function getDeletedTransactions(
+  ledgerId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取30天内删除的记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.recordDate,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      imageUrl: ledgerRecords.imageUrl,
+      deletedAt: ledgerRecords.deletedAt,
+      deletedBy: ledgerRecords.deletedBy,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.deletedAt} IS NOT NULL`,
+        sql`${ledgerRecords.deletedAt} >= DATE_SUB(NOW(), INTERVAL 30 DAY)`
+      )
+    )
+    .orderBy(desc(ledgerRecords.deletedAt));
+  
+  // 获取分类信息
+  const categoryIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+  });
+  
+  let categoriesMap: Record<number, string> = {};
+  if (categoryIds.size > 0) {
+    const categories = await db
+      .select({ id: ledgerCategories.id, name: ledgerCategories.name })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join([...categoryIds].map(id => sql`${id}`), sql`, `)})`);
+    categories.forEach((c: any) => {
+      categoriesMap[c.id] = c.name;
+    });
+  }
+  
+  // 获取删除人信息
+  const deleterIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.deletedBy) deleterIds.add(r.deletedBy);
+  });
+  records.forEach((r: any) => {
+    if (r.createdBy) deleterIds.add(r.createdBy);
+  });
+  
+  let usersMap: Record<number, string> = {};
+  if (deleterIds.size > 0) {
+    const usersList = await db
+      .select({ id: users.id, nickname: users.nickname, username: users.username })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join([...deleterIds].map(id => sql`${id}`), sql`, `)})`);
+    usersList.forEach((u: any) => {
+      usersMap[u.id] = u.nickname || u.username;
+    });
+  }
+  
+  // 解密敏感字段
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  return decryptedRecords.map((r: any) => ({
+    ...r,
+    categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
+    createdByName: usersMap[r.createdBy] || '未知',
+    deletedByName: r.deletedBy ? (usersMap[r.deletedBy] || '未知') : '未知',
+  }));
+}
+
+/**
+ * 恢复已删除的账目记录
+ */
+export async function restoreTransaction(
+  recordId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取记录信息
+  const record = await db
+    .select({
+      id: ledgerRecords.id,
+      ledgerId: ledgerRecords.ledgerId,
+      deletedAt: ledgerRecords.deletedAt,
+    })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, recordId))
+    .limit(1);
+  
+  if (record.length === 0) {
+    throw new Error("记录不存在");
+  }
+  
+  if (!record[0].deletedAt) {
+    throw new Error("该记录未被删除");
+  }
+  
+  // 检查是否超过30天
+  const deletedDate = new Date(record[0].deletedAt);
+  const now = new Date();
+  const diffDays = (now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays > 30) {
+    throw new Error("该记录已超过30天，无法恢复");
+  }
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record[0].ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 恢复记录：清除 deletedAt 和 deletedBy
+  await db
+    .update(ledgerRecords)
+    .set({
+      deletedAt: null,
+      deletedBy: null,
+    } as any)
+    .where(eq(ledgerRecords.id, recordId));
+  
+  return { success: true };
+}
+
+/**
+ * 清理超过30天的已删除记录（永久删除）
+ */
+export async function purgeExpiredDeletedRecords() {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  const result = await db
+    .delete(ledgerRecords)
+    .where(
+      and(
+        sql`${ledgerRecords.deletedAt} IS NOT NULL`,
+        sql`${ledgerRecords.deletedAt} < DATE_SUB(NOW(), INTERVAL 30 DAY)`
+      )
+    );
   
   return { success: true };
 }
@@ -2480,7 +2709,7 @@ export async function updateTransaction(
       createdBy: ledgerRecords.createdBy,
     })
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.id, recordId))
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
     .limit(1);
   
   if (record.length === 0) {
@@ -2895,7 +3124,7 @@ export async function manageReimbursement(
   const record = await db
     .select()
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.id, recordId))
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
     .limit(1)
     .then((rows: any[]) => rows[0]);
   
@@ -2991,7 +3220,7 @@ export async function getReimbursementHistory(recordId: number, userId: number) 
   const record = await db
     .select()
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.id, recordId))
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
     .limit(1)
     .then((rows: any[]) => rows[0]);
   
@@ -3093,7 +3322,8 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        eq(ledgerRecords.reimbursementStatus, 'pending')
+        eq(ledgerRecords.reimbursementStatus, 'pending'),
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .then((rows: any[]) => rows[0]);
@@ -3108,7 +3338,8 @@ export async function getReimbursementStats(ledgerId: number, userId: number) {
     .where(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
-        eq(ledgerRecords.reimbursementStatus, 'completed')
+        eq(ledgerRecords.reimbursementStatus, 'completed'),
+        isNull(ledgerRecords.deletedAt)
       )
     )
     .then((rows: any[]) => rows[0]);
@@ -3164,7 +3395,7 @@ export async function getLedgerImages(ledgerId: number, userId: number) {
       imageUrl: ledgerRecords.imageUrl,
     })
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.ledgerId, ledgerId))
+    .where(and(eq(ledgerRecords.ledgerId, ledgerId), isNull(ledgerRecords.deletedAt)))
     .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
     .limit(500);
   
@@ -3249,7 +3480,7 @@ export async function getLedgerExportStats(ledgerId: number, userId: number) {
       recordDate: ledgerRecords.recordDate,
     })
     .from(ledgerRecords)
-    .where(eq(ledgerRecords.ledgerId, ledgerId));
+    .where(and(eq(ledgerRecords.ledgerId, ledgerId), isNull(ledgerRecords.deletedAt)))
   
   // 解密金额字段
   const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, ['amount']);
