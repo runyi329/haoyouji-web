@@ -567,7 +567,10 @@ export default function Ledger() {
                             </div>
                           )}
                         </div>
-                        <span className="text-[#D32F2F] font-semibold">{ledger.memberCount}人共享</span>
+                        <span>
+                          <span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span>
+                          <span className="text-gray-500">人共享</span>
+                        </span>
                       </div>
                       <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
