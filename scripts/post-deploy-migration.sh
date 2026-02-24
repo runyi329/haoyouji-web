@@ -49,6 +49,7 @@ MIGRATIONS=(
   "migrations/create_unmatched_transactions.sql"
   "migrations/add_submitted_status.sql"
   "migrations/create_wallet_addresses.sql"
+  "migrations/fix_wallet_addresses_duplicates.sql"
 )
 
 # 执行每个迁移文件
