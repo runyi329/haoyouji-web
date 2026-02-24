@@ -321,6 +321,106 @@ export const appRouter = router({
         }
         return await dbRecharge.deleteWalletAddress(input.id);
       }),
+    // 管理员一键修复扫描器
+    adminFixScanner: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        
+        const results: string[] = [];
+        const db = await getDb();
+        
+        try {
+          // 1. 检查scanner_heartbeat表是否存在
+          results.push('步骤1: 检查scanner_heartbeat表...');
+          try {
+            await db.select().from(schema.scannerHeartbeat).limit(1);
+            results.push('✅ scanner_heartbeat表存在');
+          } catch (error) {
+            results.push('⚠️ scanner_heartbeat表不存在，尝试创建...');
+            // 执行创建表SQL
+            const createTableSQL = `
+              CREATE TABLE IF NOT EXISTS scanner_heartbeat (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                scanner_type VARCHAR(50) NOT NULL,
+                last_scan_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                scan_count INT DEFAULT 0,
+                success_count INT DEFAULT 0,
+                error_count INT DEFAULT 0,
+                last_error TEXT,
+                scanned_addresses INT DEFAULT 0,
+                found_transactions INT DEFAULT 0,
+                matched_orders INT DEFAULT 0,
+                unmatched_transactions INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_scanner_type (scanner_type)
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            `;
+            await db.execute(sql.raw(createTableSQL));
+            results.push('✅ scanner_heartbeat表创建成功');
+          }
+          
+          // 2. 检查是否有启用的收款地址
+          results.push('步骤2: 检查收款地址...');
+          const enabledAddresses = await db
+            .select()
+            .from(schema.walletAddresses)
+            .where(eq(schema.walletAddresses.enabled, 1));
+          
+          if (enabledAddresses.length === 0) {
+            results.push('⚠️ 没有启用的收款地址，尝试添加默认地址...');
+            // 添加默认地址
+            await db.insert(schema.walletAddresses).values({
+              address: 'TTHZ7NvpKSMCyU3JNLLN6zZNruysy5emQJ',
+              network: 'TRC20',
+              label: '默认TRC20钱包',
+              enabled: 1,
+            });
+            results.push('✅ 已添加默认收款地址');
+          } else {
+            results.push(`✅ 找到 ${enabledAddresses.length} 个启用的收款地址`);
+          }
+          
+          // 3. 初始化心跳记录
+          results.push('步骤3: 初始化心跳记录...');
+          const existingHeartbeat = await db
+            .select()
+            .from(schema.scannerHeartbeat)
+            .where(eq(schema.scannerHeartbeat.scannerType, 'blockchain'))
+            .limit(1);
+          
+          if (existingHeartbeat.length === 0) {
+            await db.insert(schema.scannerHeartbeat).values({
+              scannerType: 'blockchain',
+              lastScanAt: new Date().toISOString(),
+              scanCount: 0,
+              successCount: 0,
+              errorCount: 0,
+            });
+            results.push('✅ 心跳记录初始化成功');
+          } else {
+            results.push('✅ 心跳记录已存在');
+          }
+          
+          results.push('✅ 修复完成！请稍后刷新页面查看扫描器状态');
+          
+          return {
+            success: true,
+            message: '修复成功',
+            logs: results,
+          };
+          
+        } catch (error) {
+          results.push(`❌ 错误: ${error instanceof Error ? error.message : String(error)}`);
+          return {
+            success: false,
+            message: '修复失败',
+            logs: results,
+          };
+        }
+      }),
   }),
 
   // 卡券系统
