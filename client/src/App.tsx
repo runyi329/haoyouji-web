@@ -120,6 +120,7 @@ const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
 const WeeklyReportDetail = lazy(() => import("./pages/WeeklyReportDetail"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const ValuationManagement = lazy(() => import("./pages/admin/ValuationManagement"));
+const RechargeMonitor = lazy(() => import("./pages/admin/RechargeMonitor"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
@@ -167,6 +168,7 @@ function Router() {
         <Route path="/admin/point-rules" component={PointRulesManagement} />
         <Route path="/admin/equity" component={EquityManagement} />
         <Route path="/admin/valuation-management" component={ValuationManagement} />
+        <Route path="/admin/recharge-monitor" component={RechargeMonitor} />
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
