@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useRoute } from 'wouter';
 import { trpc } from '../trpc';
 import { ChevronLeft, Calendar, User, CheckCircle } from 'lucide-react';
 
 export default function CouponDetail() {
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
+  const [, params] = useRoute('/coupons/:id');
+  const id = params?.id;
   const [useNotes, setUseNotes] = useState('');
 
   // 获取卡券详情
@@ -86,7 +87,7 @@ export default function CouponDetail() {
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center">
-        <button onClick={() => navigate(-1)} className="mr-3">
+        <button onClick={() => setLocation('/coupons')} className="mr-3">
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold">卡券详情</h1>
