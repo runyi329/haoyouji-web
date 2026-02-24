@@ -46,6 +46,7 @@ MIGRATIONS=(
   "drizzle/migrations/create_payment_accounts_tables.sql"
   "migrations/add_balance_field.sql"
   "migrations/create_recharge_tables.sql"
+  "migrations/create_unmatched_transactions.sql"
 )
 
 # 执行每个迁移文件

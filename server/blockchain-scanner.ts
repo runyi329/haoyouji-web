@@ -62,7 +62,7 @@ export async function scanTRC20Transactions() {
 }
 
 /**
- * 处理单笔TRC20交易
+ * 处理单笔TRC20交易（改进版：支持模糊匹配）
  */
 async function processTRC20Transaction(tx: any) {
   try {
@@ -82,27 +82,39 @@ async function processTRC20Transaction(tx: any) {
     // 解析转账金额（USDT有6位小数）
     const amount = parseFloat(tx.value) / 1e6;
     const toAddress = tx.to;
+    const fromAddress = tx.from || '';
 
     // 确认是转到我们的地址
     if (toAddress.toLowerCase() !== WALLET_ADDRESS.toLowerCase()) {
       return;
     }
 
-    console.log(`[Scanner] Detected transfer: ${amount} USDT (tx: ${txnHash})`);
+    console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} (tx: ${txnHash})`);
 
-    // 查找匹配的订单
-    const order = await dbRecharge.findOrderByAmount(amount);
+    // 使用改进的匹配算法查找订单
+    const matchResult = await dbRecharge.findOrderByAmount(amount);
 
-    if (!order) {
-      console.log(`[Scanner] No matching order for amount ${amount}`);
+    if (!matchResult) {
+      console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT`);
+      // 记录未匹配交易，供管理员手动处理
+      await dbRecharge.recordUnmatchedTransaction(txnHash, amount, fromAddress);
+      processedTxns.add(txnHash);
       return;
     }
 
-    // 完成订单
-    const success = await dbRecharge.completeRechargeOrder(order.id, txnHash, amount);
+    const { order, matchType, amountDiff } = matchResult;
+
+    if (matchType === 'exact') {
+      console.log(`[Scanner] ✅ Exact match! Order ${order.orderNo}, amount ${amount} USDT`);
+    } else {
+      console.log(`[Scanner] 🔄 Fuzzy match! Order ${order.orderNo}, order amount ${order.amount}, actual ${amount} USDT, diff ${amountDiff} (likely fee)`);
+    }
+
+    // 完成订单（按实际到账金额入账）
+    const success = await dbRecharge.completeRechargeOrder(order.id, txnHash, amount, matchType);
 
     if (success) {
-      console.log(`[Scanner] ✅ Order ${order.orderNo} completed! User ${order.userId} +${amount} USDT`);
+      console.log(`[Scanner] ✅ Order ${order.orderNo} completed! User ${order.userId} +${amount} USDT (match: ${matchType})`);
       processedTxns.add(txnHash);
     }
 
@@ -118,6 +130,7 @@ export function startScanner() {
   console.log('[Scanner] Starting blockchain scanner...');
   console.log(`[Scanner] Wallet address: ${WALLET_ADDRESS}`);
   console.log(`[Scanner] Scan interval: 60 seconds`);
+  console.log(`[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched`);
 
   // 立即执行一次
   scanTRC20Transactions();

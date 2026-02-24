@@ -164,11 +164,21 @@ export default function Recharge() {
           {/* 重要提示 */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="font-medium text-yellow-900 mb-2">⚠️ 重要提示</div>
-            <ul className="text-sm text-yellow-800 space-y-1">
-              <li>• 请务必转账 <span className="font-bold">{order.amount} USDT</span>（精确金额）</li>
+            <ul className="text-sm text-yellow-800 space-y-1.5">
+              <li>• 请转账 <span className="font-bold">{order.amount} USDT</span>，系统按实际到账金额入账</li>
               <li>• 请选择 <span className="font-bold">{order.network}</span> 网络</li>
               <li>• 转账完成后，系统将在1-3分钟内自动到账</li>
               <li>• 请勿向此地址转账其他币种</li>
+            </ul>
+          </div>
+
+          {/* 手续费说明 */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="font-medium text-gray-700 mb-2">💬 关于手续费</div>
+            <ul className="text-sm text-gray-600 space-y-1.5">
+              <li>• 部分钱包会从转账金额中扣除手续费，导致实际到账金额略少</li>
+              <li>• 系统支持智能匹配，即使因手续费导致金额不完全一致，也能自动识别并入账</li>
+              <li>• 如果超过30分钟未自动到账，请联系管理员手动处理</li>
             </ul>
           </div>
         </div>
@@ -274,11 +284,12 @@ export default function Recharge() {
         {/* 温馨提示 */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="font-medium text-blue-900 mb-2">💡 温馨提示</div>
-          <ul className="text-sm text-blue-800 space-y-1">
+          <ul className="text-sm text-blue-800 space-y-1.5">
             <li>• 最低充值金额：1 USDT</li>
             <li>• 到账时间：1-3分钟（区块确认后自动到账）</li>
-            <li>• 请确保转账金额与订单金额完全一致</li>
+            <li>• 系统按实际到账金额入账，无需担心手续费差异</li>
             <li>• 转账时请选择正确的网络，否则资产将无法找回</li>
+            <li>• 如果长时间未到账，请联系管理员处理</li>
           </ul>
         </div>
       </div>
