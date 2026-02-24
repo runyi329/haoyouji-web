@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useRoute } from 'wouter';
-import { trpc } from '../trpc';
+import { trpc } from '@/lib/trpc';
 import { ChevronLeft, Calendar, User, CheckCircle } from 'lucide-react';
 
 export default function CouponDetail() {
