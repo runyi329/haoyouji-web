@@ -91,7 +91,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
   const result = await Promise.all(
     ledgerList.map(async (ledger: any) => {
       // 使用账本数据库连接,关联users表获取头像
-      const members = await db
+      const membersRaw = await db
         .select({
           userId: ledgerMembers.userId,
           role: ledgerMembers.role,
@@ -100,8 +100,16 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         })
         .from(ledgerMembers)
         .leftJoin(users, eq(ledgerMembers.userId, users.id))
-        .where(eq(ledgerMembers.ledgerId, ledger.id))
-        .limit(4); // 最多显示4个成员头像
+        .where(eq(ledgerMembers.ledgerId, ledger.id));
+      
+      // 将当前用户排在第一位，然后只取前4个
+      const members = membersRaw
+        .sort((a, b) => {
+          if (a.userId === userId) return -1;
+          if (b.userId === userId) return 1;
+          return 0;
+        })
+        .slice(0, 4); // 最多显示4个成员头像
 
       const memberCount = await db
         .select({ count: sql<number>`count(*)` })
