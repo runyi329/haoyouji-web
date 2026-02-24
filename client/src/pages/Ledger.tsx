@@ -789,11 +789,11 @@ export default function Ledger() {
                     <X className="w-4 h-4 text-gray-500" />
                   </button>
                 </div>
-                <p className="text-sm text-gray-500 mb-3">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
+                <p className="text-sm text-gray-500 mb-3">请输入密钥（66位）以加入共享账本。密钥可从账本管理员处获取。</p>
                 <div className="mb-3">
                   <label className="text-sm font-medium text-gray-700 mb-1.5 block">账本密钥</label>
                   <Input
-                    placeholder="请输入66位密钥"
+                    placeholder="请输入密钥"
                     value={joinSecretKey}
                     onChange={(e) => setJoinSecretKey(e.target.value)}
                     className="font-mono text-xs h-9"
