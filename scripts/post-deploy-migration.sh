@@ -41,6 +41,7 @@ MIGRATIONS=(
   "drizzle/migrations/clear_dashboard_defaults.sql"
   "drizzle/migrations/add_ledger_backup_settings.sql"
   "scripts/add-backup-count.sql"
+  "drizzle/migrations/add_default_permission_backup.sql"
 )
 
 # 执行每个迁移文件
