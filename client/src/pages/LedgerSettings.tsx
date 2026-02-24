@@ -47,7 +47,7 @@ export default function LedgerSettings() {
     if (ledgerData?.userRole === 'owner') return true; // owner始终允许
     const myPermission = permissionsData.members?.find((m: any) => m.userId === user.id);
     if (!myPermission) return true;
-    return myPermission.backup !== 'none';
+    return myPermission.permissionBackup !== 'none';
   })();
 
   // shareCategories 已移除，功能整合到成员权限设置中
