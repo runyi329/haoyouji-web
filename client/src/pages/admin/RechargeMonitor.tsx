@@ -20,6 +20,7 @@ export default function RechargeMonitor() {
   const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery();
   
   const fixScannerMutation = trpc.recharge.adminFixScanner.useMutation();
+  const triggerScanMutation = trpc.recharge.adminTriggerScan.useMutation();
 
   const stats = statsQuery.data;
 
@@ -52,6 +53,26 @@ export default function RechargeMonitor() {
       }
     } catch (error) {
       toast.error('修复失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  // 手动触发扫描
+  const handleTriggerScan = async () => {
+    try {
+      toast.loading('正在扫描区块链...');
+      const result = await triggerScanMutation.mutateAsync();
+      
+      if (result.success) {
+        toast.success('扫描完成！');
+        // 1秒后刷新页面
+        setTimeout(() => {
+          handleRefresh();
+        }, 1000);
+      } else {
+        toast.error('扫描失败: ' + result.message);
+      }
+    } catch (error) {
+      toast.error('扫描失败: ' + (error instanceof Error ? error.message : '未知错误'));
     }
   };
 
@@ -207,7 +228,16 @@ export default function RechargeMonitor() {
                   <Wrench className="w-4 h-4" />
                   {fixScannerMutation.isPending ? '正在修复...' : '一键修复扫描器'}
                 </button>
-              ) : null}
+              ) : (
+                <button
+                  onClick={handleTriggerScan}
+                  disabled={triggerScanMutation.isPending}
+                  className="w-full py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  {triggerScanMutation.isPending ? '正在扫描...' : '手动扫描一次'}
+                </button>
+              )}
               <button
                 onClick={() => setLocation('/admin/wallet-addresses')}
                 className="w-full py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
