@@ -1,6 +1,5 @@
 import { User } from "lucide-react";
 import { useState } from "react";
-import { useColorTheme } from "@/contexts/ColorThemeContext";
 
 interface UserAvatarProps {
   username?: string | null;
@@ -21,9 +20,9 @@ export function UserAvatar({
 }: UserAvatarProps) {
   const [imageError, setImageError] = useState(false);
   
-  // 获取全局主题色
-  const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
+  // 使用固定红色，不再依赖全局主题
+  // const { currentTheme, customColors } = useColorTheme();
+  // const themeColors = customColors || currentTheme.colors;
   
   // 确定显示的文本:优先nickname,其次username
   const displayName = nickname || username || "用户";
@@ -58,8 +57,8 @@ export function UserAvatar({
     <div
       className={`${sizeClass} rounded-full text-white flex items-center justify-center font-medium border-2 border-white ${className}`}
       style={{ 
-        backgroundColor: themeColors.primary,
-        color: themeColors.accent1,
+        backgroundColor: '#D32F2F',
+        color: '#FFFFFF',
         boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
         ...style 
       }}

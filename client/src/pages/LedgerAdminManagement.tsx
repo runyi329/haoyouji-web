@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { ChevronLeft, Trash2, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -24,11 +23,6 @@ export default function LedgerAdminManagement() {
     userId: number;
     username: string;
   }>({ show: false, userId: 0, username: '' });
-
-  // 获取全局主题色
-  const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
-
   // 获取账本详情
   const { data: ledgerData, isLoading } = trpc.ledger.getById.useQuery({
     ledgerId,
@@ -168,7 +162,7 @@ export default function LedgerAdminManagement() {
               {member.role === 'owner' ? (
                 <div 
                   className="px-3 py-1.5 rounded-full text-sm font-medium text-white" 
-                  style={{ backgroundColor: themeColors.primary }}
+                  style={{ backgroundColor: '#D32F2F' }}
                 >
                   创始人
                 </div>
