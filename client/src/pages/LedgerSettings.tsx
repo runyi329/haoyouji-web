@@ -40,6 +40,16 @@ export default function LedgerSettings() {
   // 获取账本成员列表
   const { data: members } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
+  // 获取当前用户的备份权限
+  const { data: permissionsData } = trpc.ledger.getMemberPermissions.useQuery({ ledgerId });
+  const canBackup = (() => {
+    if (!permissionsData || !user) return true; // 加载中默认允许
+    if (ledgerData?.userRole === 'owner') return true; // owner始终允许
+    const myPermission = permissionsData.members?.find((m: any) => m.userId === user.id);
+    if (!myPermission) return true;
+    return myPermission.backup !== 'none';
+  })();
+
   // shareCategories 已移除，功能整合到成员权限设置中
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
@@ -475,8 +485,18 @@ export default function LedgerSettings() {
       {/* 导入导出功能 */}
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
-        <SettingItem label="手动导出表格" showIcon onClick={handleOpenExportDialog} />
+        <SettingItem label="手动导出表格" showIcon onClick={() => {
+          if (!canBackup) {
+            toast.error("您没有备份该账本的权限，请联系账本管理员");
+            return;
+          }
+          handleOpenExportDialog();
+        }} />
         <SettingItem label="共享账本自动备份" showIcon onClick={() => {
+          if (!canBackup) {
+            toast.error("您没有备份该账本的权限，请联系账本管理员");
+            return;
+          }
           if (!user?.email) {
             toast.error("请先在个人中心填写邮箱地址", {
               action: {
