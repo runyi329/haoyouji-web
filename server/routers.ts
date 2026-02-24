@@ -395,7 +395,7 @@ export const appRouter = router({
           if (existingHeartbeat.length === 0) {
             await db.insert(schema.scannerHeartbeat).values({
               scannerType: 'blockchain',
-              lastScanAt: new Date().toISOString(),
+              lastScanAt: new Date(),
               scanCount: 0,
               successCount: 0,
               errorCount: 0,
