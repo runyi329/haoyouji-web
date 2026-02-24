@@ -184,8 +184,8 @@ const LedgerPermissions = () => {
 
       {/* 权限表格 */}
       <div className="bg-white">
-        {/* 表头 */}
-        <div className="grid grid-cols-6 border-b border-gray-200 text-sm text-gray-700 font-medium">
+        {/* 表头 - 冻结在顶部 */}
+        <div className="grid grid-cols-6 border-b border-gray-200 text-sm text-gray-700 font-medium bg-white sticky top-0 z-10 shadow-sm">
           <div className="py-3 px-2 text-center flex items-center justify-center">成员</div>
           <div className="py-3 px-2 text-center border-l border-gray-200 flex items-center justify-center">
             <span className="leading-tight">查看<br />账目</span>
