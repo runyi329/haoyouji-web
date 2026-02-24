@@ -110,6 +110,7 @@ export default function PaymentAccounts() {
   
   // 银行卡相关状态
   const [isBankCardDialogOpen, setIsBankCardDialogOpen] = useState(false);
+  const [isBankCardConfirmOpen, setIsBankCardConfirmOpen] = useState(false);
   const [editingBankCard, setEditingBankCard] = useState<any>(null);
   const [showCardNumber, setShowCardNumber] = useState<Record<string, boolean>>({});
   const [bankCardForm, setBankCardForm] = useState({
@@ -122,6 +123,7 @@ export default function PaymentAccounts() {
 
   // 数字钱包相关状态
   const [isWalletDialogOpen, setIsWalletDialogOpen] = useState(false);
+  const [isWalletConfirmOpen, setIsWalletConfirmOpen] = useState(false);
   const [editingWallet, setEditingWallet] = useState<any>(null);
   const [showWalletAddress, setShowWalletAddress] = useState<Record<string, boolean>>({});
   const [walletForm, setWalletForm] = useState({
@@ -288,6 +290,12 @@ export default function PaymentAccounts() {
       return;
     }
 
+    // 先打开确认对话框
+    setIsBankCardConfirmOpen(true);
+  };
+
+  // 确认提交银行卡
+  const handleConfirmBankCard = () => {
     if (editingBankCard) {
       updateBankCardMutation.mutate({
         cardId: editingBankCard.id,
@@ -296,6 +304,7 @@ export default function PaymentAccounts() {
     } else {
       addBankCardMutation.mutate(bankCardForm);
     }
+    setIsBankCardConfirmOpen(false);
   };
 
   // 删除银行卡
@@ -346,6 +355,12 @@ export default function PaymentAccounts() {
       }
     }
 
+    // 先打开确认对话框
+    setIsWalletConfirmOpen(true);
+  };
+
+  // 确认提交钱包
+  const handleConfirmWallet = () => {
     if (editingWallet) {
       updateWalletMutation.mutate({
         walletId: editingWallet.id,
@@ -354,6 +369,7 @@ export default function PaymentAccounts() {
     } else {
       addWalletMutation.mutate(walletForm);
     }
+    setIsWalletConfirmOpen(false);
   };
 
   // 删除钱包
@@ -928,6 +944,142 @@ export default function PaymentAccounts() {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               {editingWallet ? "更新" : "添加"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 银行卡确认对话框 */}
+      <Dialog open={isBankCardConfirmOpen} onOpenChange={setIsBankCardConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-600">⚠️ 温馨提示</DialogTitle>
+            <DialogDescription>
+              请仔细核对以下信息，一旦填写错误，可能会造成财物损失！
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-4 bg-gray-50 rounded-lg p-4">
+            <div className="flex justify-between">
+              <span className="text-gray-600">开户行：</span>
+              <span className="font-medium">{bankCardForm.bankName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">持卡人：</span>
+              <span className="font-medium">{bankCardForm.cardHolder}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">卡号：</span>
+              <span className="font-medium font-mono">{bankCardForm.cardNumber}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">卡类型：</span>
+              <span className="font-medium">{bankCardForm.cardType === "debit" ? "借记卡" : "信用卡"}</span>
+            </div>
+            {bankCardForm.notes && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">备注：</span>
+                <span className="font-medium">{bankCardForm.notes}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsBankCardConfirmOpen(false)}
+            >
+              返回修改
+            </Button>
+            <Button
+              onClick={handleConfirmBankCard}
+              disabled={addBankCardMutation.isPending || updateBankCardMutation.isPending}
+              className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+            >
+              {(addBankCardMutation.isPending || updateBankCardMutation.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              确认{editingBankCard ? "更新" : "添加"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 数字钱包确认对话框 */}
+      <Dialog open={isWalletConfirmOpen} onOpenChange={setIsWalletConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-orange-600">⚠️ 温馨提示</DialogTitle>
+            <DialogDescription>
+              请仔细核对以下信息，一旦填写错误，可能会造成财物损失！
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-4 bg-gray-50 rounded-lg p-4">
+            <div className="flex justify-between">
+              <span className="text-gray-600">钱包类型：</span>
+              <span className="font-medium">
+                {walletForm.walletType === "blockchain" && "区块链钱包"}
+                {walletForm.walletType === "alipay" && "支付宝"}
+                {walletForm.walletType === "wechat" && "微信支付"}
+                {walletForm.walletType === "other" && "其他"}
+              </span>
+            </div>
+            
+            {walletForm.walletType === "blockchain" && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">网络：</span>
+                  <span className="font-medium">{walletForm.network}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">币种：</span>
+                  <span className="font-medium">{walletForm.currency}</span>
+                </div>
+                <div className="flex justify-between items-start">
+                  <span className="text-gray-600">钱包地址：</span>
+                  <span className="font-medium font-mono text-right break-all max-w-[200px]">{walletForm.walletAddress}</span>
+                </div>
+              </>
+            )}
+            
+            {(walletForm.walletType === "alipay" || walletForm.walletType === "wechat") && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">账号：</span>
+                  <span className="font-medium">{walletForm.account}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">账户名：</span>
+                  <span className="font-medium">{walletForm.accountName}</span>
+                </div>
+              </>
+            )}
+            
+            {walletForm.notes && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">备注：</span>
+                <span className="font-medium">{walletForm.notes}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsWalletConfirmOpen(false)}
+            >
+              返回修改
+            </Button>
+            <Button
+              onClick={handleConfirmWallet}
+              disabled={addWalletMutation.isPending || updateWalletMutation.isPending}
+              className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+            >
+              {(addWalletMutation.isPending || updateWalletMutation.isPending) && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              确认{editingWallet ? "更新" : "添加"}
             </Button>
           </DialogFooter>
         </DialogContent>
