@@ -35,6 +35,34 @@ import {
 
 type TabType = "bank" | "wallet";
 
+// 区块链网络配置
+const BLOCKCHAIN_NETWORKS = [
+  { code: "TRC20", name: "Tron (TRC20)", time: "约1分钟", minAmount: "0.01 USDT" },
+  { code: "ERC20", name: "Ethereum (ERC20)", time: "约2-7分钟", minAmount: "0.001 USDT" },
+  { code: "BEP20", name: "BNB Smart Chain (BEP20)", time: "约1分钟", minAmount: "0.01 USDT" },
+  { code: "POLYGON", name: "Polygon", time: "约3分钟", minAmount: "0.01 USDT" },
+  { code: "ARBITRUM", name: "Arbitrum One", time: "约1-18分钟", minAmount: "0.001 USDT" },
+  { code: "OPTIMISM", name: "Optimism", time: "约1-25分钟", minAmount: "0.001 USDT" },
+  { code: "AVALANCHE", name: "Avalanche C-Chain", time: "约1分钟", minAmount: "0.01 USDT" },
+  { code: "SOLANA", name: "Solana", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "TON", name: "The Open Network (TON)", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "APTOS", name: "Aptos", time: "约1分钟", minAmount: "0.01 USDT" },
+  { code: "NEAR", name: "NEAR Protocol", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "PLASMA", name: "Plasma", time: "约1分钟", minAmount: "0.000001 USDT" },
+  { code: "XLAYER", name: "X Layer", time: "约1分钟", minAmount: "0.01 USDT" },
+  { code: "BERACHAIN", name: "Berachain", time: "约2分钟", minAmount: "0.01 USDT" },
+  { code: "UNICHAIN", name: "Unichain", time: "约25分钟", minAmount: "0.01 USDT" },
+  { code: "OKT", name: "OKT Chain", time: "约2分钟", minAmount: "0.01 USDT" },
+  { code: "OPBNB", name: "opBNB", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "KAIA", name: "Kaia", time: "约1分钟", minAmount: "0.000001 USDT" },
+  { code: "SCROLL", name: "Scroll", time: "约1分钟", minAmount: "0.000001 USDT" },
+  { code: "DOT", name: "Asset Hub Polkadot", time: "约1分钟", minAmount: "0.02 USDT" },
+  { code: "KAVAEVM", name: "KAVAEVM", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "XTZ", name: "Tezos", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "AVAXC", name: "AVAX C-Chain", time: "约1分钟", minAmount: "0.001 USDT" },
+  { code: "CELO", name: "CELO", time: "约13分钟", minAmount: "0.001 USDT" },
+];
+
 // 银行配置：包括品牌色、渐变色和图标
 const BANK_CONFIGS: Record<string, { gradient: string; icon: string; textColor: string }> = {
   "工商银行": { gradient: "from-red-500 to-red-600", icon: "🏦", textColor: "text-white" },
@@ -771,14 +799,28 @@ export default function PaymentAccounts() {
               <>
                 <div className="space-y-2">
                   <Label htmlFor="network">网络 *</Label>
-                  <Input
-                    id="network"
+                  <Select
                     value={walletForm.network}
-                    onChange={(e) =>
-                      setWalletForm({ ...walletForm, network: e.target.value })
+                    onValueChange={(value) =>
+                      setWalletForm({ ...walletForm, network: value })
                     }
-                    placeholder="例如：TRC20, ERC20, BEP20"
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="请选择区块链网络" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {BLOCKCHAIN_NETWORKS.map((network) => (
+                        <SelectItem key={network.code} value={network.code}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{network.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {network.time} · 最小 {network.minAmount}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
