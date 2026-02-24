@@ -371,6 +371,15 @@ function ChartViewContent({
   const displayIncome = statsData.income;
   const displayExpense = statsData.expense;
   
+  // 格式化日期为 MM-DD 格式
+  const formatShortDate = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[1]}-${parts[2]}`; // MM-DD
+    }
+    return dateStr;
+  };
+  
   // 保留原有的最近30天数据（用于其他地方）
   const recentIncome = reportData?.recentStats?.income || 0;
   const recentExpense = reportData?.recentStats?.expense || 0;
@@ -747,7 +756,7 @@ function ChartViewContent({
               {timeDimension === 'month' && `${chartMonth}月总收入`}
               {timeDimension === 'year' && `${chartYear}年总收入`}
               {timeDimension === 'custom' && customStartDate && customEndDate && 
-                `${customStartDate}至${customEndDate}总收入`}
+                `${formatShortDate(customStartDate)}至${formatShortDate(customEndDate)}总收入`}
             </span>
             <span className="text-[var(--status-success)]">
               {formatAmount(displayIncome)}
@@ -758,7 +767,7 @@ function ChartViewContent({
               {timeDimension === 'month' && `${chartMonth}月总支出`}
               {timeDimension === 'year' && `${chartYear}年总支出`}
               {timeDimension === 'custom' && customStartDate && customEndDate && 
-                `${customStartDate}至${customEndDate}总支出`}
+                `${formatShortDate(customStartDate)}至${formatShortDate(customEndDate)}总支出`}
             </span>
             <span className="text-[var(--brand-red)]">
               {formatAmount(displayExpense)}
