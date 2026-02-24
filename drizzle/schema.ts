@@ -1402,3 +1402,26 @@ export const walletAddresses = mysqlTable("wallet_addresses", {
 
 export type WalletAddress = typeof walletAddresses.$inferSelect;
 export type InsertWalletAddress = typeof walletAddresses.$inferInsert;
+
+// 扫描器心跳记录表
+export const scannerHeartbeat = mysqlTable("scanner_heartbeat", {
+	id: int().autoincrement().notNull().primaryKey(),
+	scannerType: varchar("scanner_type", { length: 50 }).notNull(), // 扫描器类型
+	lastScanAt: timestamp("last_scan_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(), // 最后扫描时间
+	scanCount: int("scan_count").default(0), // 扫描次数
+	successCount: int("success_count").default(0), // 成功次数
+	errorCount: int("error_count").default(0), // 错误次数
+	lastError: text("last_error"), // 最后错误信息
+	scannedAddresses: int("scanned_addresses").default(0), // 扫描的地址数
+	foundTransactions: int("found_transactions").default(0), // 发现的交易数
+	matchedOrders: int("matched_orders").default(0), // 匹配的订单数
+	unmatchedTransactions: int("unmatched_transactions").default(0), // 未匹配的交易数
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("scanner_heartbeat_type_unique").on(table.scannerType),
+]);
+
+export type ScannerHeartbeat = typeof scannerHeartbeat.$inferSelect;
+export type InsertScannerHeartbeat = typeof scannerHeartbeat.$inferInsert;
