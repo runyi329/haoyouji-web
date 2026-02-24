@@ -208,11 +208,11 @@ export default function RechargeMonitor() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-gray-500">已匹配</span>
-                    <span className="font-medium text-green-600">{heartbeatQuery.data.matchedOrders}</span>
+                    <span className="font-medium text-green-600">{stats?.matchedOrdersCount ?? heartbeatQuery.data.matchedOrders}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">未匹配</span>
-                    <span className="font-medium text-orange-600">{heartbeatQuery.data.unmatchedTransactions}</span>
+                    <span className="font-medium text-orange-600">{stats?.unmatchedCount ?? heartbeatQuery.data.unmatchedTransactions}</span>
                   </div>
                 </div>
                 {heartbeatQuery.data.lastError && (
