@@ -127,13 +127,15 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     console.log(`[Scanner] Scanning ${label} (${walletAddress.slice(0, 8)}...)...`);
     
     // 获取最近的TRC20转账记录
+    const fetchOptions: RequestInit = {};
+    if (TRONGRID_API_KEY) {
+      fetchOptions.headers = {
+        'TRON-PRO-API-KEY': TRONGRID_API_KEY
+      };
+    }
     const response = await fetch(
       `${TRONGRID_API_URL}/v1/accounts/${walletAddress}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT_ADDRESS}`,
-      {
-        headers: {
-          'TRON-PRO-API-KEY': TRONGRID_API_KEY
-        }
-      }
+      fetchOptions
     );
 
     if (!response.ok) {
