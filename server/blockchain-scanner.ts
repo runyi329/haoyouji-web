@@ -22,7 +22,7 @@ export async function scanTRC20Transactions() {
     const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
     
     if (wallets.length === 0) {
-      console.log('[Scanner] No enabled TRC20 wallet addresses found in database');
+      console.warn('[Scanner] ⚠️  No enabled TRC20 wallet addresses found in database. Please add wallet addresses in admin panel.');
       return;
     }
 
@@ -56,6 +56,9 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Scanner] TronGrid API error for ${label}: ${response.status} ${response.statusText}`);
+      console.error(`[Scanner] Response: ${errorText}`);
       throw new Error(`TronGrid API error: ${response.status}`);
     }
 
