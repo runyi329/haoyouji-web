@@ -892,6 +892,7 @@ export const users = mysqlTable("users", {
 	familyId: int(),
 	avatar: longtext(),
 	points: int().default(0).notNull(),
+	balance: decimal({ precision: 20, scale: 8 }).default('0').notNull(),
 	sharingEnabled: tinyint().default(0).notNull(),
 	isLocked: tinyint().default(0).notNull(),
 	failedLoginAttempts: int().default(0).notNull(),
@@ -1335,3 +1336,51 @@ export type BankCard = typeof bankCards.$inferSelect;
 export type InsertBankCard = typeof bankCards.$inferInsert;
 export type DigitalWallet = typeof digitalWallets.$inferSelect;
 export type InsertDigitalWallet = typeof digitalWallets.$inferInsert;
+
+// ==================== 充值系统表 ====================
+
+// 充值订单表
+export const rechargeOrders = mysqlTable("recharge_orders", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	orderNo: varchar("order_no", { length: 50 }).notNull(),
+	amount: decimal("amount", { precision: 20, scale: 8 }).notNull(), // 带小数的唯一金额
+	currency: varchar({ length: 10 }).default('USDT').notNull(),
+	network: varchar({ length: 20 }).default('TRC20').notNull(),
+	status: mysqlEnum(['pending', 'completed', 'expired', 'cancelled']).default('pending').notNull(),
+	txnHash: varchar("txn_hash", { length: 100 }), // 交易哈希
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	completedAt: timestamp("completed_at", { mode: 'string' }),
+	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
+},
+(table) => [
+	index("recharge_orders_user_id_idx").on(table.userId),
+	index("recharge_orders_order_no_idx").on(table.orderNo),
+	index("recharge_orders_amount_status_idx").on(table.amount, table.status),
+	index("recharge_orders_status_idx").on(table.status),
+]);
+
+// 余额变动记录表
+export const balanceHistory = mysqlTable("balance_history", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	amount: decimal({ precision: 20, scale: 8 }).notNull(), // 变动金额（正数为增加，负数为减少）
+	type: mysqlEnum(['recharge', 'consume', 'refund', 'reward', 'withdraw']).notNull(),
+	relatedId: int("related_id"), // 关联订单ID
+	balance: decimal({ precision: 20, scale: 8 }).notNull(), // 变动后的余额
+	description: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("balance_history_user_id_idx").on(table.userId),
+	index("balance_history_type_idx").on(table.type),
+]);
+
+// 在users表添加balance字段（需要迁移）
+// ALTER TABLE users ADD COLUMN balance DECIMAL(20, 8) DEFAULT 0 NOT NULL;
+
+// TypeScript类型定义
+export type RechargeOrder = typeof rechargeOrders.$inferSelect;
+export type InsertRechargeOrder = typeof rechargeOrders.$inferInsert;
+export type BalanceHistory = typeof balanceHistory.$inferSelect;
+export type InsertBalanceHistory = typeof balanceHistory.$inferInsert;

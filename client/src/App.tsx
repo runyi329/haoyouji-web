@@ -175,6 +175,7 @@ function Router() {
 
         {/* 支付账户管理 */}
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
+        <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
 
         {/* 好友记相关页面 */}
         <Route path="/parent/contacts/list" component={ContactsList} />

@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
+import { startScanner } from "../blockchain-scanner";
 
 async function initFieldCategories() {
   try {
@@ -126,6 +127,13 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // 启动区块链扫描器
+    if (process.env.RECHARGE_WALLET_ADDRESS) {
+      startScanner();
+    } else {
+      console.log('[Scanner] Blockchain scanner disabled (RECHARGE_WALLET_ADDRESS not configured)');
+    }
   });
 }
 
