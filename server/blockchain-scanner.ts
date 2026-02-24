@@ -4,9 +4,6 @@ import * as dbRecharge from "./db-recharge";
 const TRONGRID_API_URL = 'https://api.trongrid.io';
 const TRONGRID_API_KEY = process.env.TRONGRID_API_KEY || '';
 
-// 收款钱包地址（从环境变量读取）
-const WALLET_ADDRESS = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || process.env.RECHARGE_WALLET_ADDRESS || '';
-
 // USDT TRC20 合约地址
 const USDT_CONTRACT_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
@@ -17,20 +14,40 @@ const processedTxns = new Set<string>();
 let lastScanTimestamp = Date.now() - 5 * 60 * 1000; // 从5分钟前开始
 
 /**
- * 扫描TRC20 USDT交易
+ * 扫描所有启用的收款地址的TRC20 USDT交易
  */
 export async function scanTRC20Transactions() {
-  if (!WALLET_ADDRESS) {
-    console.error('[Scanner] RECHARGE_WALLET_ADDRESS_TRC20 not configured');
-    return;
-  }
-
   try {
-    console.log(`[Scanner] Scanning TRC20 transactions for ${WALLET_ADDRESS}...`);
+    // 从数据库获取所有启用的TRC20收款地址
+    const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
+    
+    if (wallets.length === 0) {
+      console.log('[Scanner] No enabled TRC20 wallet addresses found in database');
+      return;
+    }
+
+    // 扫描每个地址
+    for (const wallet of wallets) {
+      await scanWalletAddress(wallet.address, wallet.label || wallet.address);
+    }
+
+    console.log(`[Scanner] Scan completed for ${wallets.length} wallet(s)`);
+    
+  } catch (error) {
+    console.error('[Scanner] Scan error:', error);
+  }
+}
+
+/**
+ * 扫描单个钱包地址的交易
+ */
+async function scanWalletAddress(walletAddress: string, label: string) {
+  try {
+    console.log(`[Scanner] Scanning ${label} (${walletAddress.slice(0, 8)}...)...`);
     
     // 获取最近的TRC20转账记录
     const response = await fetch(
-      `${TRONGRID_API_URL}/v1/accounts/${WALLET_ADDRESS}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT_ADDRESS}`,
+      `${TRONGRID_API_URL}/v1/accounts/${walletAddress}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT_ADDRESS}`,
       {
         headers: {
           'TRON-PRO-API-KEY': TRONGRID_API_KEY
@@ -45,26 +62,23 @@ export async function scanTRC20Transactions() {
     const data = await response.json();
     
     if (!data.data || data.data.length === 0) {
-      console.log('[Scanner] No new transactions found');
       return;
     }
 
     // 处理每笔交易
     for (const tx of data.data) {
-      await processTRC20Transaction(tx);
+      await processTRC20Transaction(tx, walletAddress);
     }
 
-    console.log(`[Scanner] Scan completed, processed ${data.data.length} transactions`);
-    
   } catch (error) {
-    console.error('[Scanner] Scan error:', error);
+    console.error(`[Scanner] Error scanning ${label}:`, error);
   }
 }
 
 /**
  * 处理单笔TRC20交易（改进版：支持模糊匹配）
  */
-async function processTRC20Transaction(tx: any) {
+async function processTRC20Transaction(tx: any, walletAddress: string) {
   try {
     const txnHash = tx.transaction_id;
     const timestamp = tx.block_timestamp;
@@ -85,11 +99,11 @@ async function processTRC20Transaction(tx: any) {
     const fromAddress = tx.from || '';
 
     // 确认是转到我们的地址
-    if (toAddress.toLowerCase() !== WALLET_ADDRESS.toLowerCase()) {
+    if (toAddress.toLowerCase() !== walletAddress.toLowerCase()) {
       return;
     }
 
-    console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} (tx: ${txnHash})`);
+    console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} to ${walletAddress.slice(0, 8)}... (tx: ${txnHash})`);
 
     // 使用改进的匹配算法查找订单
     const matchResult = await dbRecharge.findOrderByAmount(amount);
@@ -124,13 +138,13 @@ async function processTRC20Transaction(tx: any) {
 }
 
 /**
- * 启动扫描器
+ * 启动扫描器（不再依赖环境变量，从数据库读取地址）
  */
 export function startScanner() {
   console.log('[Scanner] Starting blockchain scanner...');
-  console.log(`[Scanner] Wallet address: ${WALLET_ADDRESS}`);
-  console.log(`[Scanner] Scan interval: 60 seconds`);
-  console.log(`[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched`);
+  console.log('[Scanner] Wallet addresses: loaded from database');
+  console.log('[Scanner] Scan interval: 60 seconds');
+  console.log('[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched');
 
   // 立即执行一次
   scanTRC20Transactions();
@@ -155,5 +169,4 @@ export function startScanner() {
  */
 export function stopScanner() {
   console.log('[Scanner] Stopping blockchain scanner...');
-  // 这里可以添加清理逻辑
 }

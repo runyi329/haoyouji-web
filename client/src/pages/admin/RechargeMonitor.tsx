@@ -79,17 +79,29 @@ export default function RechargeMonitor() {
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">收款地址</span>
-              <span className="font-mono text-xs">{stats?.walletAddress || '未配置'}</span>
+              <span className="text-gray-600">启用地址数</span>
+              <span className="font-medium">{stats?.walletAddresses?.length || 0} 个</span>
             </div>
+            {stats?.walletAddresses && stats.walletAddresses.length > 0 && (
+              <div className="space-y-1">
+                {stats.walletAddresses.map((wa: any) => (
+                  <div key={wa.id} className="flex justify-between items-center">
+                    <span className="text-gray-500 text-xs">{wa.label || wa.network}</span>
+                    <span className="font-mono text-xs">{wa.address.slice(0, 8)}...{wa.address.slice(-6)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-600">扫描间隔</span>
               <span className="font-medium">{stats?.scanInterval || 60} 秒</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">网络</span>
-              <span className="font-medium">TRC20 (Tron)</span>
-            </div>
+            <button
+              onClick={() => setLocation('/admin/wallet-addresses')}
+              className="w-full mt-2 py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
+            >
+              管理收款地址
+            </button>
           </div>
         </div>
 
@@ -195,18 +207,24 @@ export default function RechargeMonitor() {
         </div>
 
         {/* 快捷操作 */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => setLocation("/admin/recharge/orders")}
-            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium"
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
           >
             所有订单
           </button>
           <button
             onClick={() => setLocation("/admin/recharge/unmatched")}
-            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium"
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
           >
             未匹配交易
+          </button>
+          <button
+            onClick={() => setLocation("/admin/wallet-addresses")}
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
+          >
+            收款地址
           </button>
         </div>
       </div>

@@ -48,6 +48,7 @@ MIGRATIONS=(
   "migrations/create_recharge_tables.sql"
   "migrations/create_unmatched_transactions.sql"
   "migrations/add_submitted_status.sql"
+  "migrations/create_wallet_addresses.sql"
 )
 
 # 执行每个迁移文件
@@ -68,11 +69,10 @@ done
 
 echo "✅ 所有迁移执行完成！"
 
-# 强制PM2重新加载环境变量（确保充值配置生效）
-echo "🔄 重新加载PM2环境变量..."
-pm2 reload haoyouji-web --update-env 2>/dev/null || echo "⚠️  PM2重载失败，将在重启时生效"
+# ⚠️ 重要：必须先写入.env，再重启PM2，否则新配置不会生效！
 
-# 自动追加充值配置到.env文件（如果不存在）
+# 第一步：自动追加充值配置到.env文件（如果不存在）
+ENV_CHANGED=false
 if [ -f ".env" ]; then
   if ! grep -q "RECHARGE_WALLET_ADDRESS_TRC20" .env; then
     echo "" >> .env
@@ -81,8 +81,14 @@ if [ -f ".env" ]; then
     echo "RECHARGE_MIN_AMOUNT=1" >> .env
     echo "RECHARGE_ORDER_EXPIRE_MINUTES=30" >> .env
     echo "✅ 已自动添加充值配置到.env"
-    echo "ENV_UPDATED=true" > /tmp/haoyouji-env-updated
+    ENV_CHANGED=true
   else
     echo "ℹ️  充值配置已存在"
   fi
+fi
+
+# 第二步：如果.env有变更，需要在deploy.yml的pm2 restart之前确保配置已写入
+# deploy.yml中的pm2 restart会在本脚本之后执行，dotenv会重新读取.env文件
+if [ "$ENV_CHANGED" = true ]; then
+  echo "📝 .env文件已更新，PM2重启后新配置将自动生效"
 fi
