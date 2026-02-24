@@ -419,6 +419,115 @@ export const appRouter = router({
           };
         }
       }),
+    // 管理员诊断API：直接调用TronGrid API并返回原始数据
+    adminDiagnose: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        
+        const logs: string[] = [];
+        
+        try {
+          // 1. 检查环境变量
+          const apiKey = process.env.TRONGRID_API_KEY || '';
+          logs.push(`TRONGRID_API_KEY: ${apiKey ? '已设置 (' + apiKey.slice(0, 8) + '...)' : '❌ 未设置'}`);
+          
+          // 2. 获取启用的钱包地址
+          const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
+          logs.push(`启用的TRC20钱包: ${wallets.length}个`);
+          
+          if (wallets.length === 0) {
+            logs.push('❌ 没有启用的TRC20钱包地址');
+            return { success: false, logs };
+          }
+          
+          const walletAddress = wallets[0].address;
+          logs.push(`测试钱包: ${walletAddress}`);
+          
+          // 3. 直接调用TronGrid API
+          const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+          const apiUrl = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT}`;
+          logs.push(`API URL: ${apiUrl}`);
+          
+          const response = await fetch(apiUrl, {
+            headers: {
+              'TRON-PRO-API-KEY': apiKey
+            }
+          });
+          
+          logs.push(`HTTP状态: ${response.status} ${response.statusText}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            logs.push(`错误响应: ${errorText.slice(0, 500)}`);
+            return { success: false, logs };
+          }
+          
+          const data = await response.json();
+          logs.push(`返回数据: data.success=${data.success}, data.data长度=${data.data?.length || 0}`);
+          
+          if (data.data && data.data.length > 0) {
+            // 显示前5笔交易
+            for (let i = 0; i < Math.min(5, data.data.length); i++) {
+              const tx = data.data[i];
+              const amount = parseFloat(tx.value) / 1e6;
+              const txTime = new Date(tx.block_timestamp);
+              logs.push(`交易${i+1}: ${amount} USDT, from=${tx.from?.slice(0,10)}..., hash=${tx.transaction_id?.slice(0,16)}..., 时间=${txTime.toISOString()}`);
+            }
+          } else {
+            logs.push('⚠️ API返回0笔交易');
+          }
+          
+          // 4. 检查待处理订单
+          const db2 = await getDb();
+          const pendingOrders = await db2
+            .select()
+            .from(schema.rechargeOrders)
+            .where(
+              sql`${schema.rechargeOrders.status} IN ('pending', 'submitted')`
+            );
+          
+          logs.push(`待处理订单: ${pendingOrders.length}个`);
+          for (const order of pendingOrders) {
+            logs.push(`  订单 ${order.orderNo}: ${order.amount} USDT, 状态=${order.status}, 过期=${order.expiresAt}`);
+          }
+          
+          // 5. 检查lastScanTimestamp
+          const scanTimestamp = Date.now() - 24 * 60 * 60 * 1000;
+          logs.push(`扫描时间范围: ${new Date(scanTimestamp).toISOString()} 到现在`);
+          
+          // 6. 尝试匹配
+          if (data.data && data.data.length > 0 && pendingOrders.length > 0) {
+            logs.push('--- 尝试匹配 ---');
+            for (const tx of data.data.slice(0, 10)) {
+              const amount = parseFloat(tx.value) / 1e6;
+              const txTime = tx.block_timestamp;
+              if (txTime < scanTimestamp) {
+                logs.push(`跳过: ${amount} USDT (时间 ${new Date(txTime).toISOString()} 早于扫描范围)`);
+                continue;
+              }
+              
+              // 检查是否有匹配的订单
+              for (const order of pendingOrders) {
+                const orderAmount = parseFloat(order.amount);
+                const diff = Math.abs(orderAmount - amount);
+                if (diff <= 0.01) {
+                  logs.push(`✅ 精确匹配: 交易 ${amount} USDT ↔ 订单 ${order.orderNo} (${order.amount} USDT), 差额=${diff}`);
+                } else if (orderAmount > amount && orderAmount - amount <= 3) {
+                  logs.push(`🔄 模糊匹配: 交易 ${amount} USDT ↔ 订单 ${order.orderNo} (${order.amount} USDT), 差额=${(orderAmount - amount).toFixed(4)}`);
+                }
+              }
+            }
+          }
+          
+          return { success: true, logs };
+          
+        } catch (error) {
+          logs.push(`❌ 异常: ${error instanceof Error ? error.message : String(error)}`);
+          return { success: false, logs };
+        }
+      }),
     // 管理员手动触发扫描
     adminTriggerScan: protectedProcedure
       .mutation(async ({ ctx }) => {
