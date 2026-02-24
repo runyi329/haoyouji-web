@@ -1,28 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Wallet as WalletIcon, TrendingUp, CreditCard } from "lucide-react";
+import { ArrowLeft, Wallet as WalletIcon } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import PaymentAccounts from "./PaymentAccounts";
 
-type TabType = "home" | "recharge" | "withdraw";
+type TabType = "recharge" | "withdraw";
 
 export default function Wallet() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<TabType>("home");
+  const [activeTab, setActiveTab] = useState<TabType>("recharge");
   
   const balanceQuery = trpc.recharge.getBalance.useQuery();
 
-  // 如果Tab是充值或提现账户，直接渲染对应组件（隐藏顶部导航）
-  if (activeTab === "recharge") {
-    return <Recharge />;
-  }
-  
-  if (activeTab === "withdraw") {
-    return <PaymentAccounts />;
-  }
-
-  // 主页面（默认显示：余额 + 两个按钮）
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
@@ -49,39 +39,43 @@ export default function Wallet() {
         </div>
       </div>
 
-      {/* Tab选择 */}
-      <div className="p-4 space-y-3">
-        <button
-          onClick={() => setActiveTab("recharge")}
-          className="w-full bg-white rounded-xl p-6 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4">
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="text-left">
-              <div className="font-semibold text-gray-900">充值</div>
-              <div className="text-sm text-gray-500">USDT充值到账户</div>
-            </div>
-          </div>
-          <ArrowLeft className="w-5 h-5 text-gray-400 rotate-180" />
-        </button>
+      {/* Tab切换栏 */}
+      <div className="bg-white border-b sticky top-[57px] z-10">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab("recharge")}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              activeTab === "recharge"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
+                : "text-gray-500"
+            }`}
+          >
+            充值
+          </button>
+          <button
+            onClick={() => setActiveTab("withdraw")}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              activeTab === "withdraw"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
+                : "text-gray-500"
+            }`}
+          >
+            提现账户
+          </button>
+        </div>
+      </div>
 
-        <button
-          onClick={() => setActiveTab("withdraw")}
-          className="w-full bg-white rounded-xl p-6 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-              <CreditCard className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="text-left">
-              <div className="font-semibold text-gray-900">提现账户</div>
-              <div className="text-sm text-gray-500">管理收款方式</div>
-            </div>
+      {/* 内容区 */}
+      <div className="bg-gray-50">
+        {activeTab === "recharge" ? (
+          <div className="p-4">
+            <Recharge hideHeader hideBalance />
           </div>
-          <ArrowLeft className="w-5 h-5 text-gray-400 rotate-180" />
-        </button>
+        ) : (
+          <div className="p-4">
+            <PaymentAccounts hideHeader />
+          </div>
+        )}
       </div>
     </div>
   );
