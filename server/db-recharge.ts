@@ -442,3 +442,69 @@ export async function cleanExpiredOrders() {
       )
     );
 }
+
+// 获取系统统计信息（管理员用）
+export async function getSystemStats() {
+  const db = await getDb();
+  
+  // 统计各状态订单数量
+  const orderStats = await db
+    .select({
+      status: rechargeOrders.status,
+      count: sql<number>`COUNT(*)`,
+      totalAmount: sql<string>`SUM(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)))`
+    })
+    .from(rechargeOrders)
+    .groupBy(rechargeOrders.status);
+  
+  // 统计未匹配交易数量
+  const [unmatchedStats] = await db
+    .select({
+      count: sql<number>`COUNT(*)`,
+      totalAmount: sql<string>`SUM(CAST(${unmatchedTransactions.amount} AS DECIMAL(20,8)))`
+    })
+    .from(unmatchedTransactions)
+    .where(eq(unmatchedTransactions.processed, false));
+  
+  // 统计今日充值
+  const today = new Date().toISOString().slice(0, 10);
+  const [todayStats] = await db
+    .select({
+      count: sql<number>`COUNT(*)`,
+      totalAmount: sql<string>`SUM(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)))`
+    })
+    .from(rechargeOrders)
+    .where(
+      and(
+        eq(rechargeOrders.status, 'completed'),
+        sql`DATE(${rechargeOrders.completedAt}) = ${today}`
+      )
+    );
+  
+  // 获取最近10笔订单
+  const recentOrders = await db
+    .select()
+    .from(rechargeOrders)
+    .orderBy(sql`${rechargeOrders.createdAt} DESC`)
+    .limit(10);
+  
+  // 系统配置信息
+  const walletAddress = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || process.env.RECHARGE_WALLET_ADDRESS || '';
+  const scannerEnabled = !!walletAddress;
+  
+  return {
+    scannerEnabled,
+    walletAddress,
+    scanInterval: 60, // 秒
+    orderStats: orderStats.map(s => ({
+      status: s.status,
+      count: Number(s.count),
+      totalAmount: parseFloat(s.totalAmount || '0')
+    })),
+    unmatchedCount: Number(unmatchedStats?.count || 0),
+    unmatchedTotalAmount: parseFloat(unmatchedStats?.totalAmount || '0'),
+    todayCount: Number(todayStats?.count || 0),
+    todayTotalAmount: parseFloat(todayStats?.totalAmount || '0'),
+    recentOrders
+  };
+}

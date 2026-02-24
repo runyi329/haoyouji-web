@@ -256,6 +256,14 @@ export const appRouter = router({
           ctx.user.id, input.userId, input.amount, input.description
         );
       }),
+    // 获取系统统计信息
+    adminGetSystemStats: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.getSystemStats();
+      }),
   }),
 
   // 卡券系统

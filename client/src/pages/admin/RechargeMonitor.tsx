@@ -1,0 +1,215 @@
+import { useLocation } from "wouter";
+import { ArrowLeft, Activity, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, TrendingUp, RefreshCw } from "lucide-react";
+import { trpc } from "../../lib/trpc";
+import { useState } from "react";
+
+export default function RechargeMonitor() {
+  const [, setLocation] = useLocation();
+  const [refreshKey, setRefresh] = useState(0);
+
+  const statsQuery = trpc.recharge.adminGetSystemStats.useQuery(undefined, {
+    refetchInterval: 30000 // 每30秒自动刷新
+  });
+  const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery();
+  const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery();
+
+  const stats = statsQuery.data;
+
+  // 手动刷新
+  const handleRefresh = () => {
+    setRefresh(prev => prev + 1);
+    statsQuery.refetch();
+    pendingOrdersQuery.refetch();
+    unmatchedQuery.refetch();
+  };
+
+  // 格式化时间
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${month}-${day} ${hours}:${minutes}`;
+  };
+
+  // 订单状态配置
+  const statusConfig: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
+    pending: { label: '待支付', color: 'text-orange-700', bgColor: 'bg-orange-100', icon: Clock },
+    submitted: { label: '确认中', color: 'text-blue-700', bgColor: 'bg-blue-100', icon: Clock },
+    completed: { label: '已完成', color: 'text-green-700', bgColor: 'bg-green-100', icon: CheckCircle2 },
+    expired: { label: '已过期', color: 'text-gray-500', bgColor: 'bg-gray-100', icon: XCircle },
+    cancelled: { label: '已取消', color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle },
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* 顶部导航 */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
+            <button onClick={() => setLocation("/admin")} className="mr-3">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg font-semibold">充值系统监控</h1>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-5 h-5 ${statsQuery.isFetching ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* 扫描器状态 */}
+        <div className="bg-white rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 flex items-center">
+              <Activity className="w-5 h-5 mr-2 text-[#D32F2F]" />
+              扫描器状态
+            </h2>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              stats?.scannerEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {stats?.scannerEnabled ? '✓ 运行中' : '✗ 未启动'}
+            </span>
+          </div>
+          
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">收款地址</span>
+              <span className="font-mono text-xs">{stats?.walletAddress || '未配置'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">扫描间隔</span>
+              <span className="font-medium">{stats?.scanInterval || 60} 秒</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">网络</span>
+              <span className="font-medium">TRC20 (Tron)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 今日统计 */}
+        <div className="bg-gradient-to-r from-[#D32F2F] to-[#E57373] rounded-lg p-5 text-white">
+          <div className="flex items-center mb-2">
+            <TrendingUp className="w-5 h-5 mr-2" />
+            <span className="text-sm opacity-90">今日充值统计</span>
+          </div>
+          <div className="flex items-baseline gap-4">
+            <div>
+              <div className="text-3xl font-bold">{stats?.todayTotalAmount?.toFixed(2) || '0.00'}</div>
+              <div className="text-sm opacity-90">USDT</div>
+            </div>
+            <div className="text-lg opacity-90">
+              {stats?.todayCount || 0} 笔
+            </div>
+          </div>
+        </div>
+
+        {/* 订单状态统计 */}
+        <div className="bg-white rounded-lg p-4">
+          <h2 className="font-semibold text-gray-900 mb-3">订单状态统计</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {stats?.orderStats?.map((stat: any) => {
+              const config = statusConfig[stat.status] || statusConfig.pending;
+              const StatusIcon = config.icon;
+              return (
+                <div key={stat.status} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-600">{config.label}</span>
+                    <StatusIcon className={`w-4 h-4 ${config.color}`} />
+                  </div>
+                  <div className="text-xl font-bold text-gray-900">{stat.count}</div>
+                  <div className="text-xs text-gray-500">{stat.totalAmount.toFixed(2)} USDT</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 未匹配交易警告 */}
+        {stats && stats.unmatchedCount > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-medium text-yellow-900">
+                  {stats.unmatchedCount} 笔交易未匹配
+                </div>
+                <div className="text-sm text-yellow-700 mt-1">
+                  总金额: {stats.unmatchedTotalAmount.toFixed(2)} USDT，需要手动处理
+                </div>
+                <button
+                  onClick={() => setLocation("/admin/recharge/unmatched")}
+                  className="mt-2 text-sm text-yellow-800 underline"
+                >
+                  查看详情 →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 最近订单 */}
+        <div className="bg-white rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b">
+            <h2 className="font-semibold text-gray-900">最近订单</h2>
+          </div>
+          {stats?.recentOrders && stats.recentOrders.length > 0 ? (
+            <div className="divide-y">
+              {stats.recentOrders.map((order: any) => {
+                const config = statusConfig[order.status] || statusConfig.pending;
+                const StatusIcon = config.icon;
+                return (
+                  <div key={order.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center">
+                        <span className="font-medium text-gray-900">{order.amount} USDT</span>
+                        <span className="text-xs text-gray-400 ml-2">{order.network}</span>
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
+                        <StatusIcon className="w-3 h-3 mr-1" />
+                        {config.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <span>订单号: {order.orderNo}</span>
+                      <span>{formatDate(order.createdAt)}</span>
+                    </div>
+                    {order.txnHash && (
+                      <div className="text-xs text-gray-400 mt-1 truncate">
+                        交易哈希: {order.txnHash}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-gray-500">暂无订单</div>
+          )}
+        </div>
+
+        {/* 快捷操作 */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setLocation("/admin/recharge/orders")}
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium"
+          >
+            所有订单
+          </button>
+          <button
+            onClick={() => setLocation("/admin/recharge/unmatched")}
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium"
+          >
+            未匹配交易
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
