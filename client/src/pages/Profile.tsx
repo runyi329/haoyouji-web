@@ -44,6 +44,7 @@ import {
   MessageCircle,
   Briefcase,
   Ticket,
+  Wallet,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
