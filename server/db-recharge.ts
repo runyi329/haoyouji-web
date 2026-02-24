@@ -577,6 +577,16 @@ export async function getSystemStats() {
     // 表可能不存在
   }
   
+  // 统计已匹配订单数（completed状态的订单）
+  const [matchedStats] = await db
+    .select({
+      count: sql<number>`COUNT(*)`
+    })
+    .from(rechargeOrders)
+    .where(eq(rechargeOrders.status, 'completed'));
+  
+  const matchedOrdersCount = Number(matchedStats?.count || 0);
+  
   // 统计今日充值
   const today = new Date().toISOString().slice(0, 10);
   const [todayStats] = await db
@@ -614,6 +624,7 @@ export async function getSystemStats() {
       count: Number(s.count),
       totalAmount: parseFloat(s.totalAmount || '0')
     })),
+    matchedOrdersCount,
     unmatchedCount,
     unmatchedTotalAmount,
     todayCount: Number(todayStats?.count || 0),
