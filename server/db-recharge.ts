@@ -23,6 +23,12 @@ export async function createRechargeOrder(
 ) {
   const db = await getDb();
   
+  // 检查钱包地址是否已配置
+  const walletAddress = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || '';
+  if (!walletAddress) {
+    throw new Error('充值功能暂未开放，请联系管理员配置收款地址');
+  }
+  
   const uniqueAmount = generateUniqueAmount(baseAmount);
   const orderNo = generateOrderNo();
   
@@ -44,7 +50,7 @@ export async function createRechargeOrder(
     amount: uniqueAmount,
     currency: 'USDT',
     network,
-    walletAddress: process.env.RECHARGE_WALLET_ADDRESS_TRC20 || '',
+    walletAddress,
     expiresAt
   };
 }

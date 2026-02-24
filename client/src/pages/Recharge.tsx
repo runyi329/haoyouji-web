@@ -35,9 +35,11 @@ export default function Recharge() {
 
       setOrder(result);
 
-      // 生成二维码
-      const qr = await QRCode.toDataURL(result.walletAddress);
-      setQrCode(qr);
+      // 生成二维码（确保walletAddress不为空）
+      if (result.walletAddress) {
+        const qr = await QRCode.toDataURL(result.walletAddress);
+        setQrCode(qr);
+      }
 
       // 计算剩余时间
       const expiresAt = new Date(result.expiresAt).getTime();
