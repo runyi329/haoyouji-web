@@ -129,10 +129,10 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
     
     // 启动区块链扫描器
-    if (process.env.RECHARGE_WALLET_ADDRESS) {
+    if (process.env.RECHARGE_WALLET_ADDRESS_TRC20 || process.env.RECHARGE_WALLET_ADDRESS) {
       startScanner();
     } else {
-      console.log('[Scanner] Blockchain scanner disabled (RECHARGE_WALLET_ADDRESS not configured)');
+      console.log('[Scanner] Blockchain scanner disabled (RECHARGE_WALLET_ADDRESS_TRC20 not configured)');
     }
   });
 }

@@ -168,6 +168,13 @@ export default function Profile() {
     staleTime: 30000,
   });
 
+  // 获取用户余额
+  const { data: balanceData } = trpc.recharge.getBalance.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
+
   // 获取用户股权数据（用于显示节点等级光环）
   const { data: equityData } = trpc.equity.getMyEquity.useQuery(undefined, {
     enabled: !!user,
@@ -506,6 +513,9 @@ export default function Profile() {
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
                 {pointsData?.points || 0} 积分
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white cursor-pointer" onClick={() => navigate('/recharge')}>
+                {typeof balanceData === 'number' ? balanceData.toFixed(2) : '0.00'} USDT
               </span>
             </div>
           </div>
