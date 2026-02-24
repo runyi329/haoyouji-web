@@ -27,6 +27,7 @@ import {
   Share,
   Coins,
   Briefcase,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -331,6 +332,10 @@ export default function Admin() {
             <TabsTrigger value="partnership" className="text-xs sm:text-sm">
               <Briefcase className="w-4 h-4 mr-1 hidden sm:inline" />
               合伙人平台
+            </TabsTrigger>
+            <TabsTrigger value="recharge" className="text-xs sm:text-sm">
+              <Wallet className="w-4 h-4 mr-1 hidden sm:inline" />
+              充值监控
             </TabsTrigger>
           </TabsList>
 
@@ -980,6 +985,21 @@ export default function Admin() {
               >
                 <Briefcase className="w-4 h-4 mr-2" />
                 进入管理页面
+              </Button>
+            </Card>
+          </TabsContent>
+          
+          {/* 充值系统监控 */}
+          <TabsContent value="recharge">
+            <Card className="p-6">
+              <h2 className="text-xl font-bold mb-4">充值系统监控</h2>
+              <p className="text-gray-600 mb-4">查看区块链扫描器状态、充值订单、未匹配交易和系统统计信息。</p>
+              <Button 
+                onClick={() => setLocation('/admin/recharge-monitor')}
+                className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                进入监控页面
               </Button>
             </Card>
           </TabsContent>
