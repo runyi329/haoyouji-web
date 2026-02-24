@@ -60,9 +60,20 @@ export async function getRandomWalletAddress(network: string = 'TRC20'): Promise
   };
 }
 
-// 添加收款地址
+// 添加收款地址（防止重复添加）
 export async function addWalletAddress(address: string, network: string, label?: string) {
   const db = await getDb();
+  
+  // 检查是否已存在相同地址
+  const existing = await db
+    .select()
+    .from(walletAddresses)
+    .where(and(eq(walletAddresses.address, address), eq(walletAddresses.network, network)))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    throw new Error(`该${network}地址已存在（ID: ${existing[0].id}）`);
+  }
   
   await db.insert(walletAddresses).values({
     address,

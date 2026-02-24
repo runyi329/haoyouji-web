@@ -8,10 +8,11 @@ CREATE TABLE IF NOT EXISTS `wallet_addresses` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `wallet_addresses_address_network_uk` (`address`, `network`),
   INDEX `wallet_addresses_network_idx` (`network`),
   INDEX `wallet_addresses_enabled_idx` (`enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 插入默认的TRC20收款地址
+-- 插入默认的TRC20收款地址（有唯一索引，不会重复插入）
 INSERT IGNORE INTO `wallet_addresses` (`address`, `network`, `label`, `enabled`)
 VALUES ('TTHZ7NvpKSMCyU3JNLLN6zZNruysy5emQJ', 'TRC20', '默认TRC20钱包', 1);
