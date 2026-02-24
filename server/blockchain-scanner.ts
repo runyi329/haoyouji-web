@@ -30,7 +30,7 @@ let currentScanStats = {
 async function updateScannerHeartbeat(success: boolean, error?: string) {
   try {
     const db = await getDb();
-    const now = new Date().toISOString();
+    const now = new Date();
     
     // 查找现有记录
     const existing = await db
