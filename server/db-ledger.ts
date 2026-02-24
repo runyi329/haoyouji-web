@@ -977,7 +977,14 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
     isCurrentUser: member.userId === userId
   }));
   
-  return membersWithCurrentFlag;
+  // 将当前用户排在第一位
+  const sortedMembers = membersWithCurrentFlag.sort((a, b) => {
+    if (a.isCurrentUser) return -1;
+    if (b.isCurrentUser) return 1;
+    return 0;
+  });
+  
+  return sortedMembers;
 }
 
 /**
@@ -1183,11 +1190,18 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
       );
   }
   
+  // 将当前用户排在第一位
+  const sortedMembers = members.sort((a, b) => {
+    if (a.userId === requestUserId) return -1;
+    if (b.userId === requestUserId) return 1;
+    return 0;
+  });
+  
   return {
     ledgerName: ledger[0].name,
     currentUserRole,
     isOwner,
-    members,
+    members: sortedMembers,
     defaultPermissions: {
       view: ledger[0].defaultPermissionView,
       add: ledger[0].defaultPermissionAdd,
