@@ -324,6 +324,22 @@ function ChartViewContent({
   // 获取账本成员
   const { data: membersData } = trpc.ledger.getMembers.useQuery({ ledgerId });
   
+  // 当选择自定义时间时，使用自定义参数查询
+  const { data: customReportData } = trpc.ledger.getReport.useQuery(
+    { 
+      ledgerId, 
+      year: selectedYear,
+      startDate: customStartDate || undefined,
+      endDate: customEndDate || undefined,
+    },
+    {
+      enabled: timeDimension === 'custom' && !!customStartDate && !!customEndDate,
+    }
+  );
+  
+  // 根据时间维度选择数据源
+  const activeReportData = (timeDimension === 'custom' && customReportData) ? customReportData : reportData;
+  
   const yearIncome = reportData?.yearlyStats?.income || 0;
   const yearExpense = reportData?.yearlyStats?.expense || 0;
   
@@ -343,10 +359,10 @@ function ChartViewContent({
         expense: reportData?.yearlyStats?.expense || 0
       };
     } else {
-      // 自定义：使用最近的统计数据（后端需要根据自定义时间范围返回）
+      // 自定义：使用自定义查询的数据
       return {
-        income: reportData?.recentStats?.income || 0,
-        expense: reportData?.recentStats?.expense || 0
+        income: activeReportData?.recentStats?.income || 0,
+        expense: activeReportData?.recentStats?.expense || 0
       };
     }
   };
@@ -730,7 +746,8 @@ function ChartViewContent({
             <span className="text-gray-600">
               {timeDimension === 'month' && `${chartMonth}月总收入`}
               {timeDimension === 'year' && `${chartYear}年总收入`}
-              {timeDimension === 'custom' && `所选时段总收入`}
+              {timeDimension === 'custom' && customStartDate && customEndDate && 
+                `${customStartDate}至${customEndDate}总收入`}
             </span>
             <span className="text-[var(--status-success)]">
               {formatAmount(displayIncome)}
@@ -740,7 +757,8 @@ function ChartViewContent({
             <span className="text-gray-600">
               {timeDimension === 'month' && `${chartMonth}月总支出`}
               {timeDimension === 'year' && `${chartYear}年总支出`}
-              {timeDimension === 'custom' && `所选时段总支出`}
+              {timeDimension === 'custom' && customStartDate && customEndDate && 
+                `${customStartDate}至${customEndDate}总支出`}
             </span>
             <span className="text-[var(--brand-red)]">
               {formatAmount(displayExpense)}

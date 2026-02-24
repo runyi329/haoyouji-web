@@ -1544,7 +1544,9 @@ export async function updateMemberNickname(
 export async function getLedgerReport(
   ledgerId: number,
   requestUserId: number,
-  year: number
+  year: number,
+  startDate?: string,
+  endDate?: string
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -1708,13 +1710,28 @@ export async function getLedgerReport(
     }))
     .sort((a: any, b: any) => b.amount - a.amount);
   
-  // 获取最近30天的统计数据(包含当天)
-  const today = new Date();
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(today.getDate() - 29); // 包含当天共30天
+  // 获取最近时间范围的统计数据
+  // 如果提供了 startDate 和 endDate，则使用自定义时间范围
+  // 否则使用最近30天
+  let recentStartDate: string;
+  let recentEndDate: string;
+  let daysPassed: number;
   
-  const recentStartDate = thirtyDaysAgo.toISOString().split('T')[0];
-  const recentEndDate = today.toISOString().split('T')[0];
+  if (startDate && endDate) {
+    recentStartDate = startDate;
+    recentEndDate = endDate;
+    // 计算天数
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    daysPassed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  } else {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 29); // 包含当天共30天
+    recentStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+    recentEndDate = today.toISOString().split('T')[0];
+    daysPassed = 30;
+  }
   
   const recentStats = await db
     .select({
@@ -1753,11 +1770,12 @@ export async function getLedgerReport(
     .groupBy(ledgerRecords.recordDate)
     .orderBy(asc(ledgerRecords.recordDate));
   
-  // 生成完整的30天数据(包含没有记录的日期)
+  // 生成完整的日期范围数据(包含没有记录的日期)
   const dailyStats = [];
-  for (let i = 0; i < 30; i++) {
-    const currentDate = new Date(thirtyDaysAgo);
-    currentDate.setDate(thirtyDaysAgo.getDate() + i);
+  const startDateObj = new Date(recentStartDate);
+  for (let i = 0; i < daysPassed; i++) {
+    const currentDate = new Date(startDateObj);
+    currentDate.setDate(startDateObj.getDate() + i);
     const dateStr = currentDate.toISOString().split('T')[0];
     
     const dayData = dailyStatsRaw.find((d: any) => d.date === dateStr);
@@ -1825,7 +1843,7 @@ export async function getLedgerReport(
     recentStats: {
       income: recentIncome,
       expense: recentExpense,
-      days: 30,
+      days: daysPassed,
     },
     dailyStats,
     memberStats,
