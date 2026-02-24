@@ -9,6 +9,8 @@ export default function RechargeMonitor() {
   const [refreshKey, setRefresh] = useState(0);
   const [showFixLogs, setShowFixLogs] = useState(false);
   const [fixLogs, setFixLogs] = useState<string[]>([]);
+  const [showDiagLogs, setShowDiagLogs] = useState(false);
+  const [diagLogs, setDiagLogs] = useState<string[]>([]);
 
   const statsQuery = trpc.recharge.adminGetSystemStats.useQuery(undefined, {
     refetchInterval: 30000 // 每30秒自动刷新
@@ -21,6 +23,7 @@ export default function RechargeMonitor() {
   
   const fixScannerMutation = trpc.recharge.adminFixScanner.useMutation();
   const triggerScanMutation = trpc.recharge.adminTriggerScan.useMutation();
+  const diagnoseMutation = trpc.recharge.adminDiagnose.useMutation();
 
   const stats = statsQuery.data;
 
@@ -53,6 +56,23 @@ export default function RechargeMonitor() {
       }
     } catch (error) {
       toast.error('修复失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  // 诊断扫描器
+  const handleDiagnose = async () => {
+    try {
+      toast.loading('正在诊断...');
+      const result = await diagnoseMutation.mutateAsync();
+      setDiagLogs(result.logs);
+      setShowDiagLogs(true);
+      if (result.success) {
+        toast.success('诊断完成');
+      } else {
+        toast.error('诊断发现问题');
+      }
+    } catch (error) {
+      toast.error('诊断失败: ' + (error instanceof Error ? error.message : '未知错误'));
     }
   };
 
@@ -242,6 +262,15 @@ export default function RechargeMonitor() {
               )}
               
               <button
+                onClick={handleDiagnose}
+                disabled={diagnoseMutation.isPending}
+                className="w-full py-2 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Wrench className="w-4 h-4" />
+                {diagnoseMutation.isPending ? '正在诊断...' : '诊断扫描器（查看API数据）'}
+              </button>
+              
+              <button
                 onClick={() => setLocation('/admin/wallet-addresses')}
                 className="w-full py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
               >
@@ -382,6 +411,49 @@ export default function RechargeMonitor() {
           </button>
         </div>
       </div>
+
+      {/* 诊断日志弹窗 */}
+      {showDiagLogs && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-lg">诊断结果</h3>
+              <button
+                onClick={() => setShowDiagLogs(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              <div className="space-y-2 font-mono text-xs">
+                {diagLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={`p-2 rounded ${
+                      log.includes('✅') ? 'bg-green-50 text-green-800' :
+                      log.includes('⚠️') ? 'bg-yellow-50 text-yellow-800' :
+                      log.includes('❌') ? 'bg-red-50 text-red-800' :
+                      log.includes('---') ? 'bg-blue-50 text-blue-800 font-bold' :
+                      'bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t">
+              <button
+                onClick={() => setShowDiagLogs(false)}
+                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 修复日志弹窗 */}
       {showFixLogs && (
