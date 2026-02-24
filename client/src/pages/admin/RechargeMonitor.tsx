@@ -219,7 +219,18 @@ export default function RechargeMonitor() {
               </div>
             )}
             <div className="space-y-2 mt-2">
-              {getScannerStatus().status === 'unknown' || getScannerStatus().status === 'stopped' ? (
+              {/* 始终显示手动扫描按钮 */}
+              <button
+                onClick={handleTriggerScan}
+                disabled={triggerScanMutation.isPending}
+                className="w-full py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {triggerScanMutation.isPending ? '正在扫描...' : '手动扫描一次'}
+              </button>
+              
+              {/* 只在扫描器异常时显示修复按钮 */}
+              {(getScannerStatus().status === 'unknown' || getScannerStatus().status === 'stopped') && (
                 <button
                   onClick={handleFixScanner}
                   disabled={fixScannerMutation.isPending}
@@ -228,16 +239,8 @@ export default function RechargeMonitor() {
                   <Wrench className="w-4 h-4" />
                   {fixScannerMutation.isPending ? '正在修复...' : '一键修复扫描器'}
                 </button>
-              ) : (
-                <button
-                  onClick={handleTriggerScan}
-                  disabled={triggerScanMutation.isPending}
-                  className="w-full py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  {triggerScanMutation.isPending ? '正在扫描...' : '手动扫描一次'}
-                </button>
               )}
+              
               <button
                 onClick={() => setLocation('/admin/wallet-addresses')}
                 className="w-full py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
