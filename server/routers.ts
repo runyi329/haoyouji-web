@@ -264,6 +264,25 @@ export const appRouter = router({
         }
         return await dbRecharge.getSystemStats();
       }),
+    // 管理员获取扫描器心跳状态
+    adminGetScannerHeartbeat: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        const db = await getDb();
+        const heartbeat = await db
+          .select()
+          .from(schema.scannerHeartbeat)
+          .where(eq(schema.scannerHeartbeat.scannerType, 'blockchain'))
+          .limit(1);
+        
+        if (heartbeat.length === 0) {
+          return null;
+        }
+        
+        return heartbeat[0];
+      }),
     // 管理员添加收款地址
     adminAddWalletAddress: protectedProcedure
       .input(z.object({

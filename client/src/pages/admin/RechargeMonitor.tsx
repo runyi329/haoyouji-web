@@ -10,6 +10,9 @@ export default function RechargeMonitor() {
   const statsQuery = trpc.recharge.adminGetSystemStats.useQuery(undefined, {
     refetchInterval: 30000 // 每30秒自动刷新
   });
+  const heartbeatQuery = trpc.recharge.adminGetScannerHeartbeat.useQuery(undefined, {
+    refetchInterval: 10000 // 每10秒刷新心跳
+  });
   const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery();
   const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery();
 
@@ -19,8 +22,44 @@ export default function RechargeMonitor() {
   const handleRefresh = () => {
     setRefresh(prev => prev + 1);
     statsQuery.refetch();
+    heartbeatQuery.refetch();
     pendingOrdersQuery.refetch();
     unmatchedQuery.refetch();
+  };
+
+  // 计算扫描器状态
+  const getScannerStatus = () => {
+    const heartbeat = heartbeatQuery.data;
+    if (!heartbeat) {
+      return { status: 'unknown', text: '未知', color: 'bg-gray-100 text-gray-800' };
+    }
+    
+    const lastScanTime = new Date(heartbeat.lastScanAt).getTime();
+    const now = Date.now();
+    const diffMinutes = (now - lastScanTime) / 1000 / 60;
+    
+    if (diffMinutes < 2) {
+      return { status: 'running', text: '✅ 正常运行', color: 'bg-green-100 text-green-800' };
+    } else if (diffMinutes < 5) {
+      return { status: 'warning', text: '⚠️ 响应迟缓', color: 'bg-yellow-100 text-yellow-800' };
+    } else {
+      return { status: 'stopped', text: '❌ 已停止', color: 'bg-red-100 text-red-800' };
+    }
+  };
+
+  // 格式化相对时间
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = Date.now();
+    const diff = now - date.getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (seconds < 60) return `${seconds}秒前`;
+    if (minutes < 60) return `${minutes}分钟前`;
+    if (hours < 24) return `${hours}小时前`;
+    return formatDate(dateStr);
   };
 
   // 格式化时间
@@ -70,15 +109,53 @@ export default function RechargeMonitor() {
               <Activity className="w-5 h-5 mr-2 text-[#D32F2F]" />
               扫描器状态
             </h2>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              stats?.scannerEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {stats?.scannerEnabled ? '✓ 运行中' : '✗ 未启动'}
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScannerStatus().color}`}>
+              {getScannerStatus().text}
             </span>
           </div>
           
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
+            {/* 心跳信息 */}
+            {heartbeatQuery.data && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">最后扫描</span>
+                  <span className="font-medium">{formatRelativeTime(heartbeatQuery.data.lastScanAt)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 py-2 border-t border-b border-gray-100">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">扫描次数</div>
+                    <div className="text-lg font-semibold text-gray-900">{heartbeatQuery.data.scanCount}</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">成功率</div>
+                    <div className="text-lg font-semibold text-green-600">
+                      {heartbeatQuery.data.scanCount > 0 
+                        ? Math.round((heartbeatQuery.data.successCount! / heartbeatQuery.data.scanCount) * 100)
+                        : 0}%
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">已匹配</span>
+                    <span className="font-medium text-green-600">{heartbeatQuery.data.matchedOrders}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">未匹配</span>
+                    <span className="font-medium text-orange-600">{heartbeatQuery.data.unmatchedTransactions}</span>
+                  </div>
+                </div>
+                {heartbeatQuery.data.lastError && (
+                  <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-700">
+                    <div className="font-medium">最后错误：</div>
+                    <div className="mt-1">{heartbeatQuery.data.lastError}</div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            <div className="flex justify-between pt-2 border-t border-gray-100">
               <span className="text-gray-600">启用地址数</span>
               <span className="font-medium">{stats?.walletAddresses?.length || 0} 个</span>
             </div>
@@ -92,10 +169,6 @@ export default function RechargeMonitor() {
                 ))}
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-gray-600">扫描间隔</span>
-              <span className="font-medium">{stats?.scanInterval || 60} 秒</span>
-            </div>
             <button
               onClick={() => setLocation('/admin/wallet-addresses')}
               className="w-full mt-2 py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"

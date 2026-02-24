@@ -1,4 +1,7 @@
 import * as dbRecharge from "./db-recharge";
+import { getDb } from "./db";
+import { scannerHeartbeat } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // TronGrid API配置
 const TRONGRID_API_URL = 'https://api.trongrid.io';
@@ -13,18 +16,88 @@ const processedTxns = new Set<string>();
 // 上次扫描的时间戳
 let lastScanTimestamp = Date.now() - 5 * 60 * 1000; // 从5分钟前开始
 
+// 扫描统计数据
+let currentScanStats = {
+  scannedAddresses: 0,
+  foundTransactions: 0,
+  matchedOrders: 0,
+  unmatchedTransactions: 0,
+};
+
+/**
+ * 更新扫描器心跳
+ */
+async function updateScannerHeartbeat(success: boolean, error?: string) {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    
+    // 查找现有记录
+    const existing = await db
+      .select()
+      .from(scannerHeartbeat)
+      .where(eq(scannerHeartbeat.scannerType, 'blockchain'))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      // 更新现有记录
+      await db
+        .update(scannerHeartbeat)
+        .set({
+          lastScanAt: now,
+          scanCount: existing[0].scanCount! + 1,
+          successCount: success ? existing[0].successCount! + 1 : existing[0].successCount,
+          errorCount: success ? existing[0].errorCount : existing[0].errorCount! + 1,
+          lastError: error || existing[0].lastError,
+          scannedAddresses: currentScanStats.scannedAddresses,
+          foundTransactions: currentScanStats.foundTransactions,
+          matchedOrders: currentScanStats.matchedOrders,
+          unmatchedTransactions: currentScanStats.unmatchedTransactions,
+        })
+        .where(eq(scannerHeartbeat.scannerType, 'blockchain'));
+    } else {
+      // 插入新记录
+      await db.insert(scannerHeartbeat).values({
+        scannerType: 'blockchain',
+        lastScanAt: now,
+        scanCount: 1,
+        successCount: success ? 1 : 0,
+        errorCount: success ? 0 : 1,
+        lastError: error,
+        scannedAddresses: currentScanStats.scannedAddresses,
+        foundTransactions: currentScanStats.foundTransactions,
+        matchedOrders: currentScanStats.matchedOrders,
+        unmatchedTransactions: currentScanStats.unmatchedTransactions,
+      });
+    }
+  } catch (err) {
+    console.error('[Scanner] Failed to update heartbeat:', err);
+  }
+}
+
 /**
  * 扫描所有启用的收款地址的TRC20 USDT交易
  */
 export async function scanTRC20Transactions() {
+  // 重置统计数据
+  currentScanStats = {
+    scannedAddresses: 0,
+    foundTransactions: 0,
+    matchedOrders: 0,
+    unmatchedTransactions: 0,
+  };
+  
   try {
     // 从数据库获取所有启用的TRC20收款地址
     const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
     
     if (wallets.length === 0) {
       console.warn('[Scanner] ⚠️  No enabled TRC20 wallet addresses found in database. Please add wallet addresses in admin panel.');
+      await updateScannerHeartbeat(false, 'No enabled wallet addresses');
       return;
     }
+
+    currentScanStats.scannedAddresses = wallets.length;
 
     // 扫描每个地址
     for (const wallet of wallets) {
@@ -33,8 +106,12 @@ export async function scanTRC20Transactions() {
 
     console.log(`[Scanner] Scan completed for ${wallets.length} wallet(s)`);
     
+    // 更新心跳（成功）
+    await updateScannerHeartbeat(true);
+    
   } catch (error) {
     console.error('[Scanner] Scan error:', error);
+    await updateScannerHeartbeat(false, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -69,6 +146,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     }
 
     // 处理每笔交易
+    currentScanStats.foundTransactions += data.data.length;
     for (const tx of data.data) {
       await processTRC20Transaction(tx, walletAddress);
     }
@@ -115,6 +193,7 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
       console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT`);
       // 记录未匹配交易，供管理员手动处理
       await dbRecharge.recordUnmatchedTransaction(txnHash, amount, fromAddress);
+      currentScanStats.unmatchedTransactions++;
       processedTxns.add(txnHash);
       return;
     }
@@ -132,6 +211,7 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
 
     if (success) {
       console.log(`[Scanner] ✅ Order ${order.orderNo} completed! User ${order.userId} +${amount} USDT (match: ${matchType})`);
+      currentScanStats.matchedOrders++;
       processedTxns.add(txnHash);
     }
 
