@@ -5,11 +5,11 @@ import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import PaymentAccounts from "./PaymentAccounts";
 
-type TabType = "recharge" | "withdraw";
+type TabType = "home" | "recharge" | "withdraw";
 
 export default function Wallet() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<TabType>("recharge");
+  const [activeTab, setActiveTab] = useState<TabType>("home");
   
   const balanceQuery = trpc.recharge.getBalance.useQuery();
 
@@ -22,7 +22,7 @@ export default function Wallet() {
     return <PaymentAccounts />;
   }
 
-  // 主页面（显示余额和Tab选择）
+  // 主页面（默认显示：余额 + 两个按钮）
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
