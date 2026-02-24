@@ -65,3 +65,17 @@ for migration in "${MIGRATIONS[@]}"; do
 done
 
 echo "✅ 所有迁移执行完成！"
+
+# 自动追加充值配置到.env文件（如果不存在）
+if [ -f ".env" ]; then
+  if ! grep -q "RECHARGE_WALLET_ADDRESS_TRC20" .env; then
+    echo "" >> .env
+    echo "# 充值配置" >> .env
+    echo "RECHARGE_WALLET_ADDRESS_TRC20=TTHZ7NvpKSMCyU3JNLLN6zZNruysy5emQJ" >> .env
+    echo "RECHARGE_MIN_AMOUNT=1" >> .env
+    echo "RECHARGE_ORDER_EXPIRE_MINUTES=30" >> .env
+    echo "✅ 已自动添加充值配置到.env"
+  else
+    echo "ℹ️  充值配置已存在"
+  fi
+fi
