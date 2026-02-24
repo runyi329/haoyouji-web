@@ -805,8 +805,8 @@ function ChartViewContent({
             {expenseCategories.length > 0 ? (
               expenseCategories.map((cat: any, index: number) => {
                 const percentage = recentExpense > 0 
-                  ? ((cat.amount / recentExpense) * 100).toFixed(0)
-                  : 0;
+                  ? ((cat.amount / recentExpense) * 100).toFixed(2)
+                  : '0.00';
                 return (
                   <tr key={index} className="border-t border-gray-100">
                     <td className="py-3 text-sm">{cat.category || "未分类"}</td>
@@ -868,8 +868,8 @@ function ChartViewContent({
             {incomeCategories.length > 0 ? (
               incomeCategories.map((cat: any, index: number) => {
                 const percentage = recentIncome > 0 
-                  ? ((cat.amount / recentIncome) * 100).toFixed(0)
-                  : 0;
+                  ? ((cat.amount / recentIncome) * 100).toFixed(2)
+                  : '0.00';
                 return (
                   <tr key={index} className="border-t border-gray-100">
                     <td className="py-3 text-sm">{cat.category || "未分类"}</td>
