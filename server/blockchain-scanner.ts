@@ -14,7 +14,7 @@ const USDT_CONTRACT_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const processedTxns = new Set<string>();
 
 // 上次扫描的时间戳
-let lastScanTimestamp = Date.now() - 5 * 60 * 1000; // 从5分钟前开始
+let lastScanTimestamp = Date.now() - 24 * 60 * 60 * 1000; // 从24小时前开始
 
 // 扫描统计数据
 let currentScanStats = {
@@ -86,6 +86,10 @@ export async function scanTRC20Transactions() {
     matchedOrders: 0,
     unmatchedTransactions: 0,
   };
+  
+  // 每次扫描前重置时间戳，从24小时前开始扫描
+  // 这样可以确保不会漏掉任何交易
+  lastScanTimestamp = Date.now() - 24 * 60 * 60 * 1000;
   
   try {
     // 从数据库获取所有启用的TRC20收款地址
