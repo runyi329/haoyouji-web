@@ -68,8 +68,11 @@ done
 
 echo "✅ 所有迁移执行完成！"
 
+# 强制PM2重新加载环境变量（确保充值配置生效）
+echo "🔄 重新加载PM2环境变量..."
+pm2 reload haoyouji-web --update-env 2>/dev/null || echo "⚠️  PM2重载失败，将在重启时生效"
+
 # 自动追加充值配置到.env文件（如果不存在）
-# 注意：应用会通过dotenv显式读取.env文件，PM2 restart后自动生效
 if [ -f ".env" ]; then
   if ! grep -q "RECHARGE_WALLET_ADDRESS_TRC20" .env; then
     echo "" >> .env

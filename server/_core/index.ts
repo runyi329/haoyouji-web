@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -11,31 +9,6 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
-
-// 显式指定.env文件路径，确保PM2重启后也能正确读取
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 尝试多个可能的.env路径
-const envPaths = [
-  path.resolve(__dirname, '.env'),           // dist/.env
-  path.resolve(__dirname, '..', '.env'),     // 项目根目录/.env
-  '/root/haoyouji-web/.env',                 // 服务器绝对路径
-  path.resolve(process.cwd(), '.env'),       // 当前工作目录/.env
-];
-
-for (const envPath of envPaths) {
-  const result = dotenv.config({ path: envPath });
-  if (!result.error) {
-    console.log(`[ENV] ✅ Loaded .env from: ${envPath}`);
-    break;
-  } else {
-    console.log(`[ENV] ❌ Not found: ${envPath}`);
-  }
-}
-
-console.log(`[ENV] DATABASE_URL: ${process.env.DATABASE_URL ? 'configured' : 'NOT SET'}`);
-console.log(`[ENV] RECHARGE_WALLET_ADDRESS_TRC20: ${process.env.RECHARGE_WALLET_ADDRESS_TRC20 ? 'configured' : 'NOT SET'}`);
 
 async function initFieldCategories() {
   try {
