@@ -696,15 +696,31 @@ function ChartViewContent({
           </div>
         </div>
 
-        {/* 平均值 */}
+        {/* 统计数据 - 根据时间维度动态显示 */}
         <div className="mt-4 space-y-2">
           <div className="flex justify-between">
-            <span className="text-gray-600">{daysPassed}天平均收入</span>
-            <span className="text-[var(--status-success)]">{formatAmount(avgIncome)}</span>
+            <span className="text-gray-600">
+              {timeDimension === 'month' && `${chartMonth}月总收入`}
+              {timeDimension === 'year' && `${chartYear}年总收入`}
+              {timeDimension === 'custom' && `所选时段总收入`}
+            </span>
+            <span className="text-[var(--status-success)]">
+              {timeDimension === 'month' || timeDimension === 'year' || timeDimension === 'custom' 
+                ? formatAmount(recentIncome) 
+                : formatAmount(avgIncome)}
+            </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">{daysPassed}天平均支出</span>
-            <span className="text-[var(--brand-red)]">{formatAmount(avgExpense)}</span>
+            <span className="text-gray-600">
+              {timeDimension === 'month' && `${chartMonth}月总支出`}
+              {timeDimension === 'year' && `${chartYear}年总支出`}
+              {timeDimension === 'custom' && `所选时段总支出`}
+            </span>
+            <span className="text-[var(--brand-red)]">
+              {timeDimension === 'month' || timeDimension === 'year' || timeDimension === 'custom' 
+                ? formatAmount(recentExpense) 
+                : formatAmount(avgExpense)}
+            </span>
           </div>
         </div>
       </div>
