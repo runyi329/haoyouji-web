@@ -122,6 +122,9 @@ const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const ValuationManagement = lazy(() => import("./pages/admin/ValuationManagement"));
 const RechargeMonitor = lazy(() => import("./pages/admin/RechargeMonitor"));
 const WalletAddressManager = lazy(() => import("./pages/admin/WalletAddressManager"));
+const RechargeManualConfirm = lazy(() => import("./pages/admin/RechargeManualConfirm"));
+const RechargeUnmatched = lazy(() => import("./pages/admin/RechargeUnmatched"));
+const RechargeOrders = lazy(() => import("./pages/admin/RechargeOrders"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
@@ -171,6 +174,9 @@ function Router() {
         <Route path="/admin/valuation-management" component={ValuationManagement} />
         <Route path="/admin/recharge-monitor" component={RechargeMonitor} />
         <Route path="/admin/wallet-addresses" component={WalletAddressManager} />
+        <Route path="/admin/recharge/manual-confirm" component={RechargeManualConfirm} />
+        <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
+        <Route path="/admin/recharge/orders" component={RechargeOrders} />
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
