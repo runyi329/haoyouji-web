@@ -1384,3 +1384,21 @@ export type RechargeOrder = typeof rechargeOrders.$inferSelect;
 export type InsertRechargeOrder = typeof rechargeOrders.$inferInsert;
 export type BalanceHistory = typeof balanceHistory.$inferSelect;
 export type InsertBalanceHistory = typeof balanceHistory.$inferInsert;
+
+// 收款地址管理表（管理员后台配置，替代环境变量）
+export const walletAddresses = mysqlTable("wallet_addresses", {
+	id: int().autoincrement().notNull().primaryKey(),
+	address: varchar({ length: 100 }).notNull(), // 钱包地址
+	network: varchar({ length: 20 }).notNull(), // 网络类型：TRC20, ERC20, BEP20
+	label: varchar({ length: 50 }), // 备注名称，如"主钱包"、"备用钱包"
+	enabled: tinyint().default(1).notNull(), // 是否启用：1启用 0禁用
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("wallet_addresses_network_idx").on(table.network),
+	index("wallet_addresses_enabled_idx").on(table.enabled),
+]);
+
+export type WalletAddress = typeof walletAddresses.$inferSelect;
+export type InsertWalletAddress = typeof walletAddresses.$inferInsert;

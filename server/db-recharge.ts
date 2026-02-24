@@ -1,6 +1,6 @@
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { rechargeOrders, balanceHistory, users } from "../drizzle/schema";
+import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 
 // 生成唯一的充值金额（原金额 + 0.0001-0.9999的随机数）
 function generateUniqueAmount(baseAmount: number): number {
@@ -15,7 +15,97 @@ function generateOrderNo(): string {
   return `CHG${timestamp}${random}`;
 }
 
-// 创建充值订单
+// ========== 收款地址管理（数据库存储） ==========
+
+// 获取所有启用的收款地址
+export async function getEnabledWalletAddresses(network?: string) {
+  const db = await getDb();
+  
+  if (network) {
+    return await db
+      .select()
+      .from(walletAddresses)
+      .where(and(eq(walletAddresses.enabled, 1), eq(walletAddresses.network, network)));
+  }
+  
+  return await db
+    .select()
+    .from(walletAddresses)
+    .where(eq(walletAddresses.enabled, 1));
+}
+
+// 获取所有收款地址（管理员用）
+export async function getAllWalletAddresses() {
+  const db = await getDb();
+  
+  return await db
+    .select()
+    .from(walletAddresses)
+    .orderBy(sql`${walletAddresses.createdAt} DESC`);
+}
+
+// 随机选择一个启用的收款地址
+export async function getRandomWalletAddress(network: string = 'TRC20'): Promise<{ address: string; id: number } | null> {
+  const addresses = await getEnabledWalletAddresses(network);
+  
+  if (addresses.length === 0) {
+    return null;
+  }
+  
+  // 随机选择一个
+  const randomIndex = Math.floor(Math.random() * addresses.length);
+  return {
+    address: addresses[randomIndex].address,
+    id: addresses[randomIndex].id
+  };
+}
+
+// 添加收款地址
+export async function addWalletAddress(address: string, network: string, label?: string) {
+  const db = await getDb();
+  
+  await db.insert(walletAddresses).values({
+    address,
+    network,
+    label: label || null,
+    enabled: 1
+  });
+  
+  return { success: true };
+}
+
+// 更新收款地址
+export async function updateWalletAddress(id: number, data: { address?: string; network?: string; label?: string; enabled?: number }) {
+  const db = await getDb();
+  
+  const updateData: any = {};
+  if (data.address !== undefined) updateData.address = data.address;
+  if (data.network !== undefined) updateData.network = data.network;
+  if (data.label !== undefined) updateData.label = data.label;
+  if (data.enabled !== undefined) updateData.enabled = data.enabled;
+  
+  await db
+    .update(walletAddresses)
+    .set(updateData)
+    .where(eq(walletAddresses.id, id));
+  
+  return { success: true };
+}
+
+// 删除收款地址
+export async function deleteWalletAddress(id: number) {
+  const db = await getDb();
+  
+  await db
+    .delete(walletAddresses)
+    .where(eq(walletAddresses.id, id));
+  
+  return { success: true };
+}
+
+// ========== 充值订单管理 ==========
+
+// 创建充值订单（从数据库随机选择收款地址）
 export async function createRechargeOrder(
   userId: number,
   baseAmount: number,
@@ -23,9 +113,9 @@ export async function createRechargeOrder(
 ) {
   const db = await getDb();
   
-  // 检查钱包地址是否已配置
-  const walletAddress = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || '';
-  if (!walletAddress) {
+  // 从数据库获取随机收款地址
+  const wallet = await getRandomWalletAddress(network);
+  if (!wallet) {
     throw new Error('充值功能暂未开放，请联系管理员配置收款地址');
   }
   
@@ -50,7 +140,7 @@ export async function createRechargeOrder(
     amount: uniqueAmount,
     currency: 'USDT',
     network,
-    walletAddress,
+    walletAddress: wallet.address,
     expiresAt
   };
 }
@@ -259,20 +349,19 @@ export async function adminConfirmRecharge(
 ) {
   const db = await getDb();
   
-  // 检查订单是否存在且状态为pending
+  // 检查订单是否存在且状态为pending或submitted
   const order = await db
     .select()
     .from(rechargeOrders)
-    .where(
-      and(
-        eq(rechargeOrders.id, orderId),
-        eq(rechargeOrders.status, 'pending')
-      )
-    )
+    .where(eq(rechargeOrders.id, orderId))
     .limit(1);
   
   if (order.length === 0) {
-    throw new Error('订单不存在或已处理');
+    throw new Error('订单不存在');
+  }
+  
+  if (order[0].status === 'completed') {
+    throw new Error('订单已完成');
   }
   
   // 完成订单
@@ -443,9 +532,14 @@ export async function cleanExpiredOrders() {
     );
 }
 
-// 获取系统统计信息（管理员用）
+// 获取系统统计信息（管理员用）— 从数据库读取收款地址配置
 export async function getSystemStats() {
   const db = await getDb();
+  
+  // 从数据库获取收款地址配置
+  const enabledAddresses = await getEnabledWalletAddresses();
+  const allAddresses = await getAllWalletAddresses();
+  const scannerEnabled = enabledAddresses.length > 0;
   
   // 统计各状态订单数量
   const orderStats = await db
@@ -458,13 +552,19 @@ export async function getSystemStats() {
     .groupBy(rechargeOrders.status);
   
   // 统计未匹配交易数量
-  const [unmatchedStats] = await db
-    .select({
-      count: sql<number>`COUNT(*)`,
-      totalAmount: sql<string>`SUM(CAST(${unmatchedTransactions.amount} AS DECIMAL(20,8)))`
-    })
-    .from(unmatchedTransactions)
-    .where(eq(unmatchedTransactions.processed, false));
+  let unmatchedCount = 0;
+  let unmatchedTotalAmount = 0;
+  try {
+    const unmatchedResult = await db.execute(sql`
+      SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as totalAmount 
+      FROM unmatched_transactions WHERE status = 'pending'
+    `);
+    const row = (unmatchedResult as any)[0]?.[0];
+    unmatchedCount = Number(row?.count || 0);
+    unmatchedTotalAmount = parseFloat(row?.totalAmount || '0');
+  } catch (e) {
+    // 表可能不存在
+  }
   
   // 统计今日充值
   const today = new Date().toISOString().slice(0, 10);
@@ -488,21 +588,23 @@ export async function getSystemStats() {
     .orderBy(sql`${rechargeOrders.createdAt} DESC`)
     .limit(10);
   
-  // 系统配置信息
-  const walletAddress = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || process.env.RECHARGE_WALLET_ADDRESS || '';
-  const scannerEnabled = !!walletAddress;
-  
   return {
     scannerEnabled,
-    walletAddress,
-    scanInterval: 60, // 秒
+    walletAddresses: enabledAddresses.map(a => ({
+      id: a.id,
+      address: a.address,
+      network: a.network,
+      label: a.label
+    })),
+    allWalletAddresses: allAddresses,
+    scanInterval: 60,
     orderStats: orderStats.map(s => ({
       status: s.status,
       count: Number(s.count),
       totalAmount: parseFloat(s.totalAmount || '0')
     })),
-    unmatchedCount: Number(unmatchedStats?.count || 0),
-    unmatchedTotalAmount: parseFloat(unmatchedStats?.totalAmount || '0'),
+    unmatchedCount,
+    unmatchedTotalAmount,
     todayCount: Number(todayStats?.count || 0),
     todayTotalAmount: parseFloat(todayStats?.totalAmount || '0'),
     recentOrders

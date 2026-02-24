@@ -264,6 +264,44 @@ export const appRouter = router({
         }
         return await dbRecharge.getSystemStats();
       }),
+    // 管理员添加收款地址
+    adminAddWalletAddress: protectedProcedure
+      .input(z.object({
+        address: z.string().min(1),
+        network: z.string().min(1),
+        label: z.string().optional()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.addWalletAddress(input.address, input.network, input.label);
+      }),
+    // 管理员更新收款地址
+    adminUpdateWalletAddress: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        address: z.string().optional(),
+        network: z.string().optional(),
+        label: z.string().optional(),
+        enabled: z.number().min(0).max(1).optional()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        const { id, ...data } = input;
+        return await dbRecharge.updateWalletAddress(id, data);
+      }),
+    // 管理员删除收款地址
+    adminDeleteWalletAddress: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.deleteWalletAddress(input.id);
+      }),
   }),
 
   // 卡券系统
