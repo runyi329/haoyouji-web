@@ -10,7 +10,8 @@ import { v4 as uuidv4 } from "uuid";
  */
 export async function getUserBankCards(userId: string) {
   try {
-    const cards = await getDb()
+    const db = await getDb();
+    const cards = await db
       .select()
       .from(bankCards)
       .where(eq(bankCards.userId, userId));
@@ -35,17 +36,18 @@ export async function addBankCard(data: {
   notes?: string;
 }) {
   try {
+    const db = await getDb();
     const id = uuidv4();
     
     // 如果设置为默认卡，先取消其他卡的默认状态
     if (data.isDefault) {
-      await getDb()
+      await db
         .update(bankCards)
         .set({ isDefault: 0 })
         .where(eq(bankCards.userId, data.userId));
     }
     
-    await getDb().insert(bankCards).values({
+    await db.insert(bankCards).values({
       id,
       userId: data.userId,
       cardNumber: data.cardNumber,
@@ -78,7 +80,8 @@ export async function updateBankCard(
   }
 ) {
   try {
-    await getDb()
+    const db = await getDb();
+    await db
       .update(bankCards)
       .set(data)
       .where(and(eq(bankCards.id, cardId), eq(bankCards.userId, userId)));
@@ -95,7 +98,8 @@ export async function updateBankCard(
  */
 export async function deleteBankCard(cardId: string, userId: string) {
   try {
-    await getDb()
+    const db = await getDb();
+    await db
       .delete(bankCards)
       .where(and(eq(bankCards.id, cardId), eq(bankCards.userId, userId)));
     
@@ -111,14 +115,16 @@ export async function deleteBankCard(cardId: string, userId: string) {
  */
 export async function setDefaultBankCard(cardId: string, userId: string) {
   try {
+    const db = await getDb();
+    
     // 先取消所有卡的默认状态
-    await getDb()
+    await db
       .update(bankCards)
       .set({ isDefault: 0 })
       .where(eq(bankCards.userId, userId));
     
     // 设置指定卡为默认
-    await getDb()
+    await db
       .update(bankCards)
       .set({ isDefault: 1 })
       .where(and(eq(bankCards.id, cardId), eq(bankCards.userId, userId)));
@@ -137,7 +143,8 @@ export async function setDefaultBankCard(cardId: string, userId: string) {
  */
 export async function getUserDigitalWallets(userId: string) {
   try {
-    const wallets = await getDb()
+    const db = await getDb();
+    const wallets = await db
       .select()
       .from(digitalWallets)
       .where(eq(digitalWallets.userId, userId));
@@ -166,17 +173,18 @@ export async function addDigitalWallet(data: {
   notes?: string;
 }) {
   try {
+    const db = await getDb();
     const id = uuidv4();
     
     // 如果设置为默认钱包，先取消其他钱包的默认状态
     if (data.isDefault) {
-      await getDb()
+      await db
         .update(digitalWallets)
         .set({ isDefault: 0 })
         .where(eq(digitalWallets.userId, data.userId));
     }
     
-    await getDb().insert(digitalWallets).values({
+    await db.insert(digitalWallets).values({
       id,
       userId: data.userId,
       walletType: data.walletType,
@@ -213,7 +221,8 @@ export async function updateDigitalWallet(
   }
 ) {
   try {
-    await getDb()
+    const db = await getDb();
+    await db
       .update(digitalWallets)
       .set(data)
       .where(and(eq(digitalWallets.id, walletId), eq(digitalWallets.userId, userId)));
@@ -230,7 +239,8 @@ export async function updateDigitalWallet(
  */
 export async function deleteDigitalWallet(walletId: string, userId: string) {
   try {
-    await getDb()
+    const db = await getDb();
+    await db
       .delete(digitalWallets)
       .where(and(eq(digitalWallets.id, walletId), eq(digitalWallets.userId, userId)));
     
@@ -246,14 +256,16 @@ export async function deleteDigitalWallet(walletId: string, userId: string) {
  */
 export async function setDefaultDigitalWallet(walletId: string, userId: string) {
   try {
+    const db = await getDb();
+    
     // 先取消所有钱包的默认状态
-    await getDb()
+    await db
       .update(digitalWallets)
       .set({ isDefault: 0 })
       .where(eq(digitalWallets.userId, userId));
     
     // 设置指定钱包为默认
-    await getDb()
+    await db
       .update(digitalWallets)
       .set({ isDefault: 1 })
       .where(and(eq(digitalWallets.id, walletId), eq(digitalWallets.userId, userId)));

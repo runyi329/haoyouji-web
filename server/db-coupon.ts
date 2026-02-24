@@ -10,8 +10,9 @@ import { v4 as uuidv4 } from "uuid";
  */
 export async function getAvailableRecipients(userId: string) {
   try {
+    const db = await getDb();
     // 查询已共享人脉给其他用户的列表
-    const recipients = await getDb()
+    const recipients = await db
       .select({
         userId: contactSharingConnections.sharedWithId,
         username: users.username,
@@ -41,10 +42,11 @@ export async function createCoupon(data: {
   recipientIds: string[] | 'all';
 }) {
   try {
+    const db = await getDb();
     const couponId = uuidv4();
     
     // 创建卡券
-    await getDb().insert(coupons).values({
+    await db.insert(coupons).values({
       id: couponId,
       creatorId: data.creatorId,
       title: data.title,
@@ -74,7 +76,7 @@ export async function createCoupon(data: {
         status: 'unused' as const,
       }));
 
-      await getDb().insert(couponRecipients).values(recipientRecords);
+      await db.insert(couponRecipients).values(recipientRecords);
     }
 
     return { couponId, recipientCount: recipientIds.length };
@@ -89,7 +91,8 @@ export async function createCoupon(data: {
  */
 export async function getReceivedCoupons(userId: string) {
   try {
-    const result = await getDb()
+    const db = await getDb();
+    const result = await db
       .select({
         id: coupons.id,
         title: coupons.title,
@@ -122,7 +125,8 @@ export async function getReceivedCoupons(userId: string) {
  */
 export async function getSentCoupons(userId: string) {
   try {
-    const result = await getDb()
+    const db = await getDb();
+    const result = await db
       .select({
         id: coupons.id,
         title: coupons.title,
@@ -152,8 +156,9 @@ export async function getSentCoupons(userId: string) {
  */
 export async function getCouponDetail(couponId: string, userId: string) {
   try {
+    const db = await getDb();
     // 获取卡券基本信息
-    const couponInfo = await getDb()
+    const couponInfo = await db
       .select()
       .from(coupons)
       .where(eq(coupons.id, couponId))
@@ -170,7 +175,7 @@ export async function getCouponDetail(couponId: string, userId: string) {
     
     let recipientRecord = null;
     if (!isCreator) {
-      const recipientRecords = await getDb()
+      const recipientRecords = await db
         .select()
         .from(couponRecipients)
         .where(
@@ -188,7 +193,7 @@ export async function getCouponDetail(couponId: string, userId: string) {
     }
 
     // 获取创建者信息
-    const creatorInfo = await getDb()
+    const creatorInfo = await db
       .select({
         username: users.username,
         avatar: users.avatar,
@@ -214,8 +219,9 @@ export async function getCouponDetail(couponId: string, userId: string) {
  */
 export async function useCoupon(recipientRecordId: string, userId: string, notes?: string) {
   try {
+    const db = await getDb();
     // 查询接收记录
-    const recipientRecords = await getDb()
+    const recipientRecords = await db
       .select()
       .from(couponRecipients)
       .where(eq(couponRecipients.id, recipientRecordId))
@@ -238,13 +244,13 @@ export async function useCoupon(recipientRecordId: string, userId: string, notes
     }
 
     // 更新接收记录状态
-    await getDb()
+    await db
       .update(couponRecipients)
       .set({ status: 'used' })
       .where(eq(couponRecipients.id, recipientRecordId));
 
     // 创建使用记录
-    await getDb().insert(couponUsage).values({
+    await db.insert(couponUsage).values({
       id: uuidv4(),
       recipientRecordId,
       couponId: recipientRecord.couponId,
@@ -264,8 +270,9 @@ export async function useCoupon(recipientRecordId: string, userId: string, notes
  */
 export async function getCouponUsageRecords(couponId: string, creatorId: string) {
   try {
+    const db = await getDb();
     // 验证创建者权限
-    const couponInfo = await getDb()
+    const couponInfo = await db
       .select()
       .from(coupons)
       .where(eq(coupons.id, couponId))
@@ -280,7 +287,7 @@ export async function getCouponUsageRecords(couponId: string, creatorId: string)
     }
 
     // 获取核销记录
-    const records = await getDb()
+    const records = await db
       .select({
         id: couponUsage.id,
         usedAt: couponUsage.usedAt,
