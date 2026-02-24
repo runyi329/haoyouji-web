@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle } from "lucide-react";
+import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, History } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
@@ -12,8 +12,11 @@ export default function Recharge() {
   const [qrCode, setQrCode] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
+  const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
   const balanceQuery = trpc.recharge.getBalance.useQuery();
 
   // 预设金额选项
@@ -51,6 +54,20 @@ export default function Recharge() {
     }
   };
 
+  // 提交转账确认
+  const handleSubmitTransfer = async () => {
+    if (!order?.orderNo) return;
+    setSubmitting(true);
+    try {
+      await submitTransferMutation.mutateAsync({ orderNo: order.orderNo });
+      setSubmitted(true);
+    } catch (error: any) {
+      alert(error.message || "提交失败，请重试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // 复制到剪贴板
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -82,7 +99,85 @@ export default function Recharge() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // 如果已创建订单，显示支付页面
+  // ========== 已提交确认页面 ==========
+  if (submitted && order) {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-20">
+        {/* 顶部导航 */}
+        <div className="bg-white border-b sticky top-0 z-10">
+          <div className="flex items-center px-4 py-3">
+            <button onClick={() => setLocation("/recharge/history")} className="mr-3">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg font-semibold">提交成功</h1>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* 成功图标 */}
+          <div className="bg-white rounded-lg p-8 text-center">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-12 h-12 text-green-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">转账确认已提交</h2>
+            <p className="text-gray-500">系统正在扫描链上交易，确认到账后将自动入账</p>
+          </div>
+
+          {/* 订单信息 */}
+          <div className="bg-white rounded-lg p-4 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">订单号</span>
+              <span className="font-mono text-sm">{order.orderNo}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">充值金额</span>
+              <span className="font-bold text-[#D32F2F]">{order.amount} USDT</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">网络</span>
+              <span>{order.network}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">状态</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <Clock className="w-3 h-3 mr-1" />
+                确认中
+              </span>
+            </div>
+          </div>
+
+          {/* 提示 */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="font-medium text-blue-900 mb-2">💡 温馨提示</div>
+            <ul className="text-sm text-blue-800 space-y-1.5">
+              <li>• 系统将自动扫描链上交易并匹配您的订单</li>
+              <li>• 通常1-3分钟内即可确认到账</li>
+              <li>• 您可以在充值记录中查看订单状态</li>
+              <li>• 如果超过30分钟未到账，请联系管理员处理</li>
+            </ul>
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="space-y-3">
+            <button
+              onClick={() => setLocation("/recharge/history")}
+              className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium"
+            >
+              查看充值记录
+            </button>
+            <button
+              onClick={() => { setOrder(null); setSubmitted(false); }}
+              className="w-full bg-white border border-gray-300 text-gray-700 py-4 rounded-lg font-medium"
+            >
+              继续充值
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ========== 确认支付页面（已创建订单） ==========
   if (order) {
     return (
       <div className="min-h-screen bg-gray-50 pb-20">
@@ -161,13 +256,32 @@ export default function Recharge() {
             <div className="font-mono text-sm">{order.orderNo}</div>
           </div>
 
+          {/* ★ 我已成功转账，提交确认 按钮 — 放在订单号下面、重要提示上面 */}
+          <button
+            onClick={handleSubmitTransfer}
+            disabled={submitting || timeLeft <= 0}
+            className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium text-lg disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+          >
+            {submitting ? (
+              <>
+                <Clock className="w-5 h-5 animate-spin" />
+                提交中...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-5 h-5" />
+                我已成功转账，提交确认
+              </>
+            )}
+          </button>
+
           {/* 重要提示 */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="font-medium text-yellow-900 mb-2">⚠️ 重要提示</div>
             <ul className="text-sm text-yellow-800 space-y-1.5">
               <li>• 请转账 <span className="font-bold">{order.amount} USDT</span>，系统按实际到账金额入账</li>
               <li>• 请选择 <span className="font-bold">{order.network}</span> 网络</li>
-              <li>• 转账完成后，系统将在1-3分钟内自动到账</li>
+              <li>• 转账完成后，请点击上方按钮提交确认</li>
               <li>• 请勿向此地址转账其他币种</li>
             </ul>
           </div>
@@ -186,16 +300,25 @@ export default function Recharge() {
     );
   }
 
-  // 默认显示充值金额选择页面
+  // ========== 默认显示充值金额选择页面 ==========
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
-        <div className="flex items-center px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
             <button onClick={() => window.history.back()} className="mr-3">
-            <ArrowLeft className="w-6 h-6" />
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg font-semibold">充值</h1>
+          </div>
+          <button
+            onClick={() => setLocation("/recharge/history")}
+            className="flex items-center text-sm text-gray-600 hover:text-[#D32F2F]"
+          >
+            <History className="w-4 h-4 mr-1" />
+            充值记录
           </button>
-          <h1 className="text-lg font-semibold">充值</h1>
         </div>
       </div>
 
