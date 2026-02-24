@@ -1693,7 +1693,7 @@ export default function ContactsList() {
       )}
 
       {/* 人脉列表 */}
-      <div>
+      <div className="mt-4">
         {(isLoading || isLoadingCompanyList) ? (
           <div className="text-center py-8 text-muted-foreground">加载中...</div>
         ) : viewMode === 'company' ? (
