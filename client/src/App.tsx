@@ -173,7 +173,8 @@ function Router() {
         <Route path="/coupons/create" component={lazy(() => import("./pages/CreateCoupon"))} />
         <Route path="/coupons/:id" component={lazy(() => import("./pages/CouponDetail"))} />
 
-        {/* 账本相关页面 */}        <Route path="/parent/contacts/list" component={ContactsList} />>
+        {/* 好友记相关页面 */}
+        <Route path="/parent/contacts/list" component={ContactsList} />
         <Route path="/parent/contacts/map" component={RegionMap} />
         <Route path="/parent/contacts/tag-search" component={TagSearch} />
         <Route path="/parent/contacts/data-comparison" component={DataComparison} />
