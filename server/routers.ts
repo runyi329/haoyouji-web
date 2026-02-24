@@ -581,18 +581,8 @@ export const appRouter = router({
             return { success: false, message: '订单不是已完成状态' };
           }
           
-          // 获取实际入账金额（从 balance_transactions 查询）
-          const [balanceTx] = await db.execute(sql`
-            SELECT amount FROM balance_transactions 
-            WHERE user_id = ${order.userId} 
-              AND type = 'recharge' 
-              AND related_id = ${order.id} 
-            ORDER BY created_at DESC LIMIT 1
-          `);
-          
-          const refundAmount = balanceTx && (balanceTx as any)[0]?.amount 
-            ? parseFloat((balanceTx as any)[0].amount) 
-            : parseFloat(order.amount);
+          // 使用订单金额作为退款金额（简化处理）
+          const refundAmount = parseFloat(order.amount);
           
           // 扣除余额
           await db
