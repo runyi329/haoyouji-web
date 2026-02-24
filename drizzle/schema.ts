@@ -1287,3 +1287,51 @@ export const couponUsage = mysqlTable("coupon_usage", {
 	index("coupon_usage_coupon_id_idx").on(table.couponId),
 	index("coupon_usage_user_id_idx").on(table.userId),
 ]);
+
+// ==================== 银行卡和数字钱包系统表 ====================
+
+// 银行卡表
+export const bankCards = mysqlTable("bank_cards", {
+	id: varchar({ length: 36 }).primaryKey().notNull(),
+	userId: varchar("user_id", { length: 36 }).notNull(),
+	cardNumber: text("card_number").notNull(), // 加密存储
+	cardHolder: text("card_holder").notNull(), // 加密存储
+	bankName: varchar("bank_name", { length: 100 }).notNull(),
+	cardType: mysqlEnum("card_type", ['debit', 'credit']).default('debit').notNull(),
+	isDefault: tinyint("is_default").default(0).notNull(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("bank_cards_user_id_idx").on(table.userId),
+	index("bank_cards_is_default_idx").on(table.isDefault),
+]);
+
+// 数字钱包表
+export const digitalWallets = mysqlTable("digital_wallets", {
+	id: varchar({ length: 36 }).primaryKey().notNull(),
+	userId: varchar("user_id", { length: 36 }).notNull(),
+	walletType: mysqlEnum("wallet_type", ['blockchain', 'alipay', 'wechat', 'other']).notNull(),
+	// 区块链钱包字段
+	network: varchar({ length: 50 }), // TRC20, ERC20, BEP20等
+	walletAddress: text("wallet_address"), // 钱包地址（加密存储）
+	currency: varchar({ length: 20 }), // USDT, USDC, ETH, BTC等
+	// 支付宝/微信字段
+	account: text(), // 账号/手机号（加密存储）
+	accountName: text("account_name"), // 账户名（加密存储）
+	isDefault: tinyint("is_default").default(0).notNull(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("digital_wallets_user_id_idx").on(table.userId),
+	index("digital_wallets_is_default_idx").on(table.isDefault),
+]);
+
+// TypeScript类型定义
+export type BankCard = typeof bankCards.$inferSelect;
+export type InsertBankCard = typeof bankCards.$inferInsert;
+export type DigitalWallet = typeof digitalWallets.$inferSelect;
+export type InsertDigitalWallet = typeof digitalWallets.$inferInsert;

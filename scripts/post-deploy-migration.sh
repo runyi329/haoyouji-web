@@ -43,6 +43,7 @@ MIGRATIONS=(
   "scripts/add-backup-count.sql"
   "drizzle/migrations/add_default_permission_backup.sql"
   "drizzle/migrations/create_coupon_tables.sql"
+  "drizzle/migrations/create_payment_accounts_tables.sql"
 )
 
 # 执行每个迁移文件
