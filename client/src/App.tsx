@@ -183,7 +183,8 @@ function Router() {
         <Route path="/coupons/create" component={lazy(() => import("./pages/CreateCoupon"))} />
         <Route path="/coupons/:id" component={lazy(() => import("./pages/CouponDetail"))} />
 
-        {/* 支付账户管理 */}
+        {/* 钱包相关页面 */}
+        <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />
