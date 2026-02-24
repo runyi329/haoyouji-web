@@ -77,6 +77,7 @@ if [ -f ".env" ]; then
     echo "RECHARGE_MIN_AMOUNT=1" >> .env
     echo "RECHARGE_ORDER_EXPIRE_MINUTES=30" >> .env
     echo "✅ 已自动添加充值配置到.env"
+    echo "ENV_UPDATED=true" > /tmp/haoyouji-env-updated
   else
     echo "ℹ️  充值配置已存在"
   fi
