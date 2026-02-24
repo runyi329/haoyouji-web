@@ -590,19 +590,6 @@ export const appRouter = router({
             .set({ balance: sql`balance - ${refundAmount}` })
             .where(eq(users.id, order.userId));
           
-          // 记录余额变动
-          await db.execute(sql`
-            INSERT INTO balance_transactions (user_id, amount, type, related_id, description, created_at)
-            VALUES (
-              ${order.userId},
-              ${-refundAmount},
-              'adjustment',
-              ${order.id},
-              '回滚错误充值：订单${input.orderNo}被重复匹配',
-              NOW()
-            )
-          `);
-          
           // 更新订单状态
           await db
             .update(rechargeOrders)
