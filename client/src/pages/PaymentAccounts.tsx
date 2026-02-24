@@ -405,19 +405,23 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 */}
-      {!hideHeader && (<div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => navigate("/parent/profile")}
-            className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">支付账户管理</h1>
-          <div className="w-9" />
+      {!hideHeader && (
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={() => navigate("/parent/profile")}
+              className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-700" />
+            </button>
+            <h1 className="text-lg font-semibold text-gray-900">支付账户管理</h1>
+            <div className="w-9" />
+          </div>
         </div>
+      )}
 
-        {/* 标签页切换 */}
+      {/* 标签页切换 */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex border-t border-gray-200">
           <button
             onClick={() => setActiveTab("bank")}
@@ -461,7 +465,7 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
             区块链
           </button>
         </div>
-      </div>)}
+      </div>
 
       {/* 银行卡列表 */}
       {activeTab === "bank" && (
