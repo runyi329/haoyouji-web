@@ -207,7 +207,21 @@ export default function RechargeMonitor() {
         </div>
 
         {/* 快捷操作 */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setLocation("/admin/recharge/manual-confirm")}
+            className="bg-[#D32F2F] text-white py-3 rounded-lg font-medium text-sm hover:bg-[#B71C1C]"
+          >
+            手动确认
+          </button>
+          <button
+            onClick={() => setLocation("/admin/wallet-addresses")}
+            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
+          >
+            收款地址
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setLocation("/admin/recharge/orders")}
             className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
@@ -219,12 +233,6 @@ export default function RechargeMonitor() {
             className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
           >
             未匹配交易
-          </button>
-          <button
-            onClick={() => setLocation("/admin/wallet-addresses")}
-            className="bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm"
-          >
-            收款地址
           </button>
         </div>
       </div>
