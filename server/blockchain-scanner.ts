@@ -5,7 +5,7 @@ const TRONGRID_API_URL = 'https://api.trongrid.io';
 const TRONGRID_API_KEY = process.env.TRONGRID_API_KEY || '';
 
 // 收款钱包地址（从环境变量读取）
-const WALLET_ADDRESS = process.env.RECHARGE_WALLET_ADDRESS || '';
+const WALLET_ADDRESS = process.env.RECHARGE_WALLET_ADDRESS_TRC20 || process.env.RECHARGE_WALLET_ADDRESS || '';
 
 // USDT TRC20 合约地址
 const USDT_CONTRACT_ADDRESS = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
@@ -21,7 +21,7 @@ let lastScanTimestamp = Date.now() - 5 * 60 * 1000; // 从5分钟前开始
  */
 export async function scanTRC20Transactions() {
   if (!WALLET_ADDRESS) {
-    console.error('[Scanner] RECHARGE_WALLET_ADDRESS not configured');
+    console.error('[Scanner] RECHARGE_WALLET_ADDRESS_TRC20 not configured');
     return;
   }
 

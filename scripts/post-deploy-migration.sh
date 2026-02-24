@@ -44,6 +44,8 @@ MIGRATIONS=(
   "drizzle/migrations/add_default_permission_backup.sql"
   "drizzle/migrations/create_coupon_tables.sql"
   "drizzle/migrations/create_payment_accounts_tables.sql"
+  "migrations/add_balance_field.sql"
+  "migrations/create_recharge_tables.sql"
 )
 
 # 执行每个迁移文件
