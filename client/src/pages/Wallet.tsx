@@ -33,7 +33,7 @@ export default function Wallet() {
             <span className="text-sm opacity-90">账户余额</span>
           </div>
           <div className="text-4xl font-bold mb-2">
-            {balanceQuery.data?.balance?.toFixed(2) || "0.00"}
+            {typeof balanceQuery.data === 'number' ? balanceQuery.data.toFixed(2) : "0.00"}
           </div>
           <div className="text-sm opacity-75">USDT</div>
         </div>
