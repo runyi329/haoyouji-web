@@ -216,13 +216,17 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
 /**
  * 根据金额查找匹配的订单（改进版：submitted优先 + 精确匹配优先 + 模糊匹配兜底）
  * 
- * 匹配策略（按优先级）：
- * 1. 先匹配submitted（用户已确认转账）的订单，再匹配pending的订单
+ * 匹配策略（按/**
+ * 改进的订单匹配算法（按优先级）：
+ * 1. 完全匹配（金额完全相同）— 直接自动确认
  * 2. 精确匹配（误差 ±0.01 USDT）— 直接自动确认
- * 3. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤3 USDT）— 自动确认，按实际到账金额入账
+ * 3. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤0.1 USDT）— 自动确认，按实际到账金额入账
  * 4. 无法匹配 — 记录未匹配交易，等待管理员手动处理
+ * 
+ * @param amount 交易金额
+ * @param txnHash 交易哈希（用于防止重复匹配）
  */
-export async function findOrderByAmount(amount: number): Promise<{
+export async function findOrderByAmount(amount: number, txnHash?: string): Promise<{
   order: any;
   matchType: 'exact' | 'fuzzy' | 'none';
   amountDiff: number;
@@ -233,16 +237,21 @@ export async function findOrderByAmount(amount: number): Promise<{
   const statusPriority = ['submitted', 'pending'] as const;
   
   for (const status of statusPriority) {
-    // 精确匹配（误差 ±0.01 USDT）
+    // 精确匹配（误差 ±0.01 USDT），且未被其他交易使用
+    const exactConditions = [
+      eq(rechargeOrders.status, status),
+      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`
+    ];
+    
+    // 如果提供了txnHash，排除已被其他交易使用的订单
+    if (txnHash) {
+      exactConditions.push(sql`(txn_hash IS NULL OR txn_hash = ${txnHash})`);
+    }
+    
     const exactOrders = await db
       .select()
       .from(rechargeOrders)
-      .where(
-        and(
-          eq(rechargeOrders.status, status),
-          sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`
-        )
-      )
+      .where(and(...exactConditions))
       .limit(1);
     
     if (exactOrders.length > 0) {
@@ -254,17 +263,22 @@ export async function findOrderByAmount(amount: number): Promise<{
       };
     }
     
-    // 模糊匹配（到账金额略少于订单金额，差额 ≤3 USDT，覆盖手续费场景）
+    // 模糊匹配（到账金额略少于订单金额，差额 ≤0.1 USDT，覆盖手续费场景）
+    const fuzzyConditions = [
+      eq(rechargeOrders.status, status),
+      sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
+      sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 0.1`
+    ];
+    
+    // 如果提供了txnHash，排除已被其他交易使用的订单
+    if (txnHash) {
+      fuzzyConditions.push(sql`(txn_hash IS NULL OR txn_hash = ${txnHash})`);
+    }
+    
     const fuzzyOrders = await db
       .select()
       .from(rechargeOrders)
-      .where(
-        and(
-          eq(rechargeOrders.status, status),
-          sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
-          sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 3`
-        )
-      )
+      .where(and(...fuzzyConditions))
       .orderBy(sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) ASC`)
       .limit(1);
     

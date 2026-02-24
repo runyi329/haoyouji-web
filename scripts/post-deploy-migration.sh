@@ -50,6 +50,7 @@ MIGRATIONS=(
   "migrations/add_submitted_status.sql"
   "migrations/create_wallet_addresses.sql"
   "migrations/fix_wallet_addresses_duplicates.sql"
+  "migrations/add_txn_hash_and_fix_duplicate.sql"
 )
 
 # 执行每个迁移文件
