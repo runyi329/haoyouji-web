@@ -40,7 +40,7 @@ export default function LedgerSettings() {
   // 获取账本成员列表
   const { data: members } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
-  const [shareCategories, setShareCategories] = useState(true);
+  // shareCategories 已移除，功能整合到成员权限设置中
   const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
@@ -442,23 +442,7 @@ export default function LedgerSettings() {
         />
       </div>
 
-      {/* 共享设置 */}
-      <div className="bg-white mt-3">
-        <SettingItem 
-          label="共享账本收支条目" 
-          rightContent={
-            <Switch 
-              checked={shareCategories} 
-              onCheckedChange={setShareCategories}
-            />
-          }
-          hasHelp
-        />
-
-
-
-
-      </div>
+      {/* 共享设置 - 已移除，功能整合到成员权限设置中 */}
 
       {/* 账本管理 */}
       <div className="bg-white mt-3">

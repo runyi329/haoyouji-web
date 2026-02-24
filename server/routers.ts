@@ -6165,6 +6165,12 @@ export const appRouter = router({
         try {
           console.log('[exportToExcel] 开始导出:', { ledgerId: input.ledgerId, userId: ctx.user.id });
           
+          // 检查备份权限
+          const hasBackupPermission = await dbLedger.checkBackupPermission(input.ledgerId, ctx.user.id);
+          if (!hasBackupPermission) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您没有备份该账本的权限' });
+          }
+          
           // 获取账目数据
           const transactions = await dbLedger.getTransactionsList(
             input.ledgerId,
@@ -6387,6 +6393,12 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // 检查备份权限
+        const hasBackupPermission = await dbLedger.checkBackupPermission(input.ledgerId, ctx.user.id);
+        if (!hasBackupPermission) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您没有备份该账本的权限' });
+        }
+        
         const { executeBackup } = await import('./backup-service');
         await executeBackup(input.ledgerId, ctx.user.id);
         

@@ -37,6 +37,26 @@ async function ensureSoftDeleteColumns() {
 // 在模块加载时执行迁移
 ensureSoftDeleteColumns().catch(console.error);
 
+// ========== 备份权限字段迁移 ==========
+let _backupPermissionMigrated = false;
+async function ensureBackupPermissionColumn() {
+  if (_backupPermissionMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 permission_backup 字段
+    await db.execute(sql`ALTER TABLE ledger_members ADD COLUMN permission_backup ENUM('allow','none') NOT NULL DEFAULT 'allow'`);
+    console.log('[ensureBackupPermissionColumn] permission_backup 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureBackupPermissionColumn] error:', e.message);
+    }
+  }
+  _backupPermissionMigrated = true;
+}
+// 在模块加载时执行迁移
+ensureBackupPermissionColumn().catch(console.error);
+
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
@@ -1137,6 +1157,7 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
         permissionAdd: ledgerMembers.permissionAdd,
         permissionEdit: ledgerMembers.permissionEdit,
         permissionDelete: ledgerMembers.permissionDelete,
+        permissionBackup: ledgerMembers.permissionBackup,
       })
       .from(ledgerMembers)
       .where(eq(ledgerMembers.ledgerId, ledgerId));
@@ -1151,6 +1172,7 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
         permissionAdd: ledgerMembers.permissionAdd,
         permissionEdit: ledgerMembers.permissionEdit,
         permissionDelete: ledgerMembers.permissionDelete,
+        permissionBackup: ledgerMembers.permissionBackup,
       })
       .from(ledgerMembers)
       .where(
@@ -1171,6 +1193,7 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
       add: ledger[0].defaultPermissionAdd,
       edit: ledger[0].defaultPermissionEdit,
       delete: ledger[0].defaultPermissionDelete,
+      backup: ledger[0].defaultPermissionBackup || 'allow',
     },
   };
 }
@@ -1181,8 +1204,8 @@ export async function getMemberPermissions(ledgerId: number, requestUserId: numb
 export async function updateMemberPermission(
   ledgerId: number,
   memberId: number,
-  permissionType: "view" | "add" | "edit" | "delete",
-  permissionValue: "all" | "own" | "none",
+  permissionType: "view" | "add" | "edit" | "delete" | "backup",
+  permissionValue: "all" | "own" | "none" | "allow",
   requestUserId: number
 ) {
   const db = await getLedgerDb();
@@ -1239,6 +1262,9 @@ export async function updateMemberPermission(
     case "delete":
       updateData.permissionDelete = permissionValue;
       break;
+    case "backup":
+      updateData.permissionBackup = permissionValue;
+      break;
   }
   
   await db
@@ -1254,8 +1280,8 @@ export async function updateMemberPermission(
  */
 export async function updateDefaultPermission(
   ledgerId: number,
-  permissionType: "view" | "add" | "edit" | "delete",
-  permissionValue: "all" | "own" | "none",
+  permissionType: "view" | "add" | "edit" | "delete" | "backup",
+  permissionValue: "all" | "own" | "none" | "allow",
   requestUserId: number
 ) {
   const db = await getLedgerDb();
@@ -1290,6 +1316,9 @@ export async function updateDefaultPermission(
       break;
     case "delete":
       updateData.defaultPermissionDelete = permissionValue;
+      break;
+    case "backup":
+      updateData.defaultPermissionBackup = permissionValue;
       break;
   }
   
@@ -1551,9 +1580,12 @@ export async function getLedgerReport(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证请求用户是否是账本成员
+  // 验证请求用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -1566,6 +1598,30 @@ export async function getLedgerReport(
   if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
   }
+  
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看，返回空数据
+    return {
+      income: 0,
+      expense: 0,
+      memberStats: [],
+      monthlyStats: Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        income: 0,
+        expense: 0,
+      })),
+      dailyStats: [],
+      categoryStats: { income: [], expense: [] },
+    };
+  }
+  
+  // 构建权限筛选条件
+  const permissionCondition = userPermission === 'own'
+    ? sql`${ledgerRecords.createdBy} = ${requestUserId}`
+    : undefined;
   
   // 获取年度统计数据
   const yearStart = `${year}-01-01`;
@@ -1583,7 +1639,8 @@ export async function getLedgerReport(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
         sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
-        isNull(ledgerRecords.deletedAt)
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
       )
     );
   
@@ -1603,7 +1660,8 @@ export async function getLedgerReport(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
         sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
-        isNull(ledgerRecords.deletedAt)
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
       )
     )
     .groupBy(ledgerRecords.createdBy);
@@ -1647,7 +1705,8 @@ export async function getLedgerReport(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
         sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
-        isNull(ledgerRecords.deletedAt)
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
       )
     )
     .groupBy(sql`MONTH(${ledgerRecords.recordDate})`);
@@ -1674,7 +1733,8 @@ export async function getLedgerReport(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.recordDate} >= ${yearStart}`,
         sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
-        isNull(ledgerRecords.deletedAt)
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
       )
     )
     .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
@@ -1970,9 +2030,12 @@ export async function getDayRecords(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证请求用户是否是账本成员
+  // 验证请求用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -1986,10 +2049,25 @@ export async function getDayRecords(
     throw new Error("您不是该账本的成员");
   }
   
+  const userPermission = membership[0].permissionView;
+  const userRole = membership[0].role;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看任何账目
+    return [];
+  }
+  
   // 构建成员筛选条件
-  const memberCondition = memberIds && memberIds.length > 0
-    ? sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
-    : undefined;
+  let memberCondition;
+  if (memberIds && memberIds.length > 0) {
+    // 如果指定了成员ID筛选，使用指定的ID
+    memberCondition = sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`;
+  } else if (userPermission === 'own') {
+    // 如果权限是“仅自己”，只查看自己创建的记录
+    memberCondition = sql`${ledgerRecords.createdBy} = ${requestUserId}`;
+  }
+  // 如果权限是 'all' 且没有指定 memberIds，则 memberCondition 为 undefined，查看所有记录
   
   // 获取指定日期的记录
   const records = await db
@@ -3830,4 +3908,42 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
 
   console.log('[joinLedgerBySecretKey] 用户通过密钥加入账本:', { userId, ledgerId });
   return { ledgerId, ledgerName: ledgerRow.name };
+}
+
+/**
+ * 检查用户是否有备份账本的权限
+ */
+export async function checkBackupPermission(
+  ledgerId: number,
+  userId: number
+): Promise<boolean> {
+  const db = await getLedgerDb();
+  if (!db) return false;
+  
+  // 查询用户的备份权限
+  const membership = await db
+    .select({
+      permissionBackup: ledgerMembers.permissionBackup,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    return false; // 不是账本成员
+  }
+  
+  // owner 始终有备份权限
+  if (membership[0].role === 'owner') {
+    return true;
+  }
+  
+  // 检查备份权限字段
+  return membership[0].permissionBackup === 'allow';
 }

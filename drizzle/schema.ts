@@ -497,6 +497,7 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 	permissionAdd: mysqlEnum("permission_add", ['all','own','none']).default('all').notNull(),
 	permissionEdit: mysqlEnum("permission_edit", ['all','own','none']).default('own').notNull(),
 	permissionDelete: mysqlEnum("permission_delete", ['all','own','none']).default('own').notNull(),
+	permissionBackup: mysqlEnum("permission_backup", ['allow','none']).default('allow').notNull(),
 	canEdit: tinyint().default(1).notNull(),
 	canDelete: tinyint().default(0).notNull(),
 	canInvite: tinyint().default(0).notNull(),
