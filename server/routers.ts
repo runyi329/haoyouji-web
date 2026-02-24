@@ -5877,8 +5877,8 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         memberId: z.number(),
-        permissionType: z.enum(['view', 'add', 'edit', 'delete']),
-        permissionValue: z.enum(['all', 'own', 'none']),
+        permissionType: z.enum(['view', 'add', 'edit', 'delete', 'backup']),
+        permissionValue: z.enum(['all', 'own', 'none', 'allow']),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.updateMemberPermission(
@@ -5894,8 +5894,8 @@ export const appRouter = router({
     updateDefaultPermission: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        permissionType: z.enum(['view', 'add', 'edit', 'delete']),
-        permissionValue: z.enum(['all', 'own', 'none']),
+        permissionType: z.enum(['view', 'add', 'edit', 'delete', 'backup']),
+        permissionValue: z.enum(['all', 'own', 'none', 'allow']),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.updateDefaultPermission(
