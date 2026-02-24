@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'wouter';
 import { trpc } from '../trpc';
 import { Ticket, Plus, ChevronLeft } from 'lucide-react';
 
 export default function MyCoupons() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
 
   // 获取收到的卡券
@@ -37,7 +37,7 @@ export default function MyCoupons() {
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center">
-        <button onClick={() => navigate(-1)} className="mr-3">
+        <button onClick={() => setLocation('/profile')} className="mr-3">
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold flex items-center gap-2">
@@ -76,7 +76,7 @@ export default function MyCoupons() {
       {activeTab === 'sent' && (
         <div className="p-4">
           <button
-            onClick={() => navigate('/coupons/create')}
+            onClick={() => setLocation('/coupons/create')}
             className="w-full bg-[#D32F2F] text-white py-3 rounded-lg flex items-center justify-center gap-2 font-medium"
           >
             <Plus size={20} />
@@ -97,7 +97,7 @@ export default function MyCoupons() {
           coupons.map((coupon: any) => (
             <div
               key={coupon.id}
-              onClick={() => navigate(`/coupons/${coupon.id}`)}
+              onClick={() => setLocation(`/coupons/${coupon.id}`)}
               className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow"
             >
               {/* 卡券标题 */}

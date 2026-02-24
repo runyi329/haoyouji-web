@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'wouter';
 import { trpc } from '../trpc';
 import { ChevronLeft, Users, Check } from 'lucide-react';
 
 export default function CreateCoupon() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [validFrom, setValidFrom] = useState('');
@@ -19,7 +19,7 @@ export default function CreateCoupon() {
   const createMutation = trpc.coupon.create.useMutation({
     onSuccess: () => {
       alert('卡券创建成功！');
-      navigate('/coupons');
+      setLocation('/coupons');
     },
     onError: (error) => {
       alert(`创建失败: ${error.message}`);
@@ -72,7 +72,7 @@ export default function CreateCoupon() {
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center">
-        <button onClick={() => navigate(-1)} className="mr-3">
+        <button onClick={() => setLocation('/coupons')} className="mr-3">
           <ChevronLeft size={24} />
         </button>
         <h1 className="text-xl font-semibold">制作卡券</h1>
