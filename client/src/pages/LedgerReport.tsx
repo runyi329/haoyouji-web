@@ -327,7 +327,35 @@ function ChartViewContent({
   const yearIncome = reportData?.yearlyStats?.income || 0;
   const yearExpense = reportData?.yearlyStats?.expense || 0;
   
-  // 使用最近30天的真实数据
+  // 根据时间维度获取对应的收入/支出数据
+  const getStatsData = () => {
+    if (timeDimension === 'month') {
+      // 自然月：从 monthlyData 中获取对应月份的数据
+      const monthData = monthlyData.find(m => m.month === chartMonth);
+      return {
+        income: monthData?.income || 0,
+        expense: monthData?.expense || 0
+      };
+    } else if (timeDimension === 'year') {
+      // 自然年：使用年度总计
+      return {
+        income: reportData?.yearlyStats?.income || 0,
+        expense: reportData?.yearlyStats?.expense || 0
+      };
+    } else {
+      // 自定义：使用最近的统计数据（后端需要根据自定义时间范围返回）
+      return {
+        income: reportData?.recentStats?.income || 0,
+        expense: reportData?.recentStats?.expense || 0
+      };
+    }
+  };
+  
+  const statsData = getStatsData();
+  const displayIncome = statsData.income;
+  const displayExpense = statsData.expense;
+  
+  // 保留原有的最近30天数据（用于其他地方）
   const recentIncome = reportData?.recentStats?.income || 0;
   const recentExpense = reportData?.recentStats?.expense || 0;
   const daysPassed = reportData?.recentStats?.days || 30;
@@ -705,9 +733,7 @@ function ChartViewContent({
               {timeDimension === 'custom' && `所选时段总收入`}
             </span>
             <span className="text-[var(--status-success)]">
-              {timeDimension === 'month' || timeDimension === 'year' || timeDimension === 'custom' 
-                ? formatAmount(recentIncome) 
-                : formatAmount(avgIncome)}
+              {formatAmount(displayIncome)}
             </span>
           </div>
           <div className="flex justify-between">
@@ -717,9 +743,7 @@ function ChartViewContent({
               {timeDimension === 'custom' && `所选时段总支出`}
             </span>
             <span className="text-[var(--brand-red)]">
-              {timeDimension === 'month' || timeDimension === 'year' || timeDimension === 'custom' 
-                ? formatAmount(recentExpense) 
-                : formatAmount(avgExpense)}
+              {formatAmount(displayExpense)}
             </span>
           </div>
         </div>
