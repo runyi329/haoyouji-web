@@ -2286,9 +2286,12 @@ export async function getTransactionsList(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证用户是否是账本成员
+  // 验证用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -2302,8 +2305,20 @@ export async function getTransactionsList(
     throw new Error("您不是该账本的成员");
   }
   
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    return [];
+  }
+  
   // 构建查询条件
   const conditions = [eq(ledgerRecords.ledgerId, ledgerId)];
+  
+  // 如果权限是"仅自己"，强制只查看自己创建的记录
+  if (userPermission === 'own') {
+    conditions.push(sql`${ledgerRecords.createdBy} = ${userId}`);
+  }
   
   if (options?.startDate) {
     conditions.push(sql`${ledgerRecords.recordDate} >= ${options.startDate}`);
@@ -2523,9 +2538,12 @@ export async function getTransactionDetail(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证用户是否是账本成员
+  // 验证用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -2537,6 +2555,13 @@ export async function getTransactionDetail(
   
   if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    throw new Error("您没有查看账目的权限");
   }
   
   // 获取记账详情
@@ -2576,6 +2601,11 @@ export async function getTransactionDetail(
   }
   
   const transaction = record[0];
+  
+  // 如果权限是"仅自己"，检查该记录是否是自己创建的
+  if (userPermission === 'own' && transaction.createdBy !== userId) {
+    throw new Error("您没有查看该账目的权限");
+  }
   
   // 获取分类信息
   const category = await db
@@ -2741,9 +2771,12 @@ export async function getDeletedTransactions(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证用户是否是账本成员
+  // 验证用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -2756,6 +2789,18 @@ export async function getDeletedTransactions(
   if (membership.length === 0) {
     throw new Error("您不是该账本的成员");
   }
+  
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    return [];
+  }
+  
+  // 构建权限过滤条件
+  const permissionCondition = userPermission === 'own'
+    ? sql`${ledgerRecords.createdBy} = ${userId}`
+    : undefined;
   
   // 获取30天内删除的记录
   const records = await db
@@ -2777,7 +2822,8 @@ export async function getDeletedTransactions(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.deletedAt} IS NOT NULL`,
-        sql`${ledgerRecords.deletedAt} >= DATE_SUB(NOW(), INTERVAL 30 DAY)`
+        sql`${ledgerRecords.deletedAt} >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+        permissionCondition
       )
     )
     .orderBy(desc(ledgerRecords.deletedAt));
