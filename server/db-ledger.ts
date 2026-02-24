@@ -1320,13 +1320,6 @@ export async function updateDefaultPermission(
     case "backup":
       updateData.defaultPermissionBackup = permissionValue;
       break;
-    default:
-      throw new Error(`无效的权限类型: ${permissionType}`);
-  }
-  
-  // 防御性检查：确保 updateData 不为空
-  if (Object.keys(updateData).length === 0) {
-    throw new Error(`未能生成更新数据，permissionType: ${permissionType}, permissionValue: ${permissionValue}`);
   }
   
   await db
