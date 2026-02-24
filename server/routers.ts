@@ -450,11 +450,13 @@ export const appRouter = router({
           const apiUrl = `https://api.trongrid.io/v1/accounts/${walletAddress}/transactions/trc20?limit=20&only_to=true&contract_address=${USDT_CONTRACT}`;
           logs.push(`API URL: ${apiUrl}`);
           
-          const response = await fetch(apiUrl, {
-            headers: {
+          const fetchOpts: RequestInit = {};
+          if (apiKey) {
+            fetchOpts.headers = {
               'TRON-PRO-API-KEY': apiKey
-            }
-          });
+            };
+          }
+          const response = await fetch(apiUrl, fetchOpts);
           
           logs.push(`HTTP状态: ${response.status} ${response.statusText}`);
           
