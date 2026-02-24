@@ -5950,9 +5950,17 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         year: z.number(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getLedgerReport(input.ledgerId, ctx.user.id, input.year);
+        return await dbLedger.getLedgerReport(
+          input.ledgerId, 
+          ctx.user.id, 
+          input.year,
+          input.startDate,
+          input.endDate
+        );
       }),
 
     // 获取日历数据（指定月份的每日收支统计）
