@@ -168,6 +168,12 @@ export const appRouter = router({
         return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network);
       }),
 
+    // 用户提交转账确认
+    submitTransfer: protectedProcedure
+      .input(z.object({ orderNo: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.submitTransferConfirmation(input.orderNo, ctx.user.id);
+      }),
     // 查询充值订单
     getOrder: protectedProcedure
       .input(z.object({ orderNo: z.string() }))

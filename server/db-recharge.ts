@@ -55,6 +55,38 @@ export async function createRechargeOrder(
   };
 }
 
+// 用户提交转账确认（将订单状态从pending改为submitted）
+export async function submitTransferConfirmation(orderNo: string, userId: number) {
+  const db = await getDb();
+  
+  // 查找订单并验证所有权
+  const orders = await db
+    .select()
+    .from(rechargeOrders)
+    .where(
+      and(
+        eq(rechargeOrders.orderNo, orderNo),
+        eq(rechargeOrders.userId, userId),
+        eq(rechargeOrders.status, 'pending')
+      )
+    )
+    .limit(1);
+  
+  if (orders.length === 0) {
+    throw new Error('订单不存在或已处理');
+  }
+  
+  // 更新状态为submitted
+  await db
+    .update(rechargeOrders)
+    .set({ status: 'submitted' })
+    .where(eq(rechargeOrders.id, orders[0].id));
+  
+  console.log(`[Recharge] User ${userId} submitted transfer confirmation for order ${orderNo}`);
+  
+  return { success: true, orderNo, status: 'submitted' };
+}
+
 // 查询充值订单
 export async function getRechargeOrder(orderNo: string) {
   const db = await getDb();
@@ -81,12 +113,13 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
 }
 
 /**
- * 根据金额查找匹配的订单（改进版：精确匹配优先 + 模糊匹配兜底）
+ * 根据金额查找匹配的订单（改进版：submitted优先 + 精确匹配优先 + 模糊匹配兜底）
  * 
- * 匹配策略：
- * 1. 精确匹配（误差 ±0.01 USDT）— 直接自动确认
- * 2. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤3 USDT）— 自动确认，按实际到账金额入账
- * 3. 无法匹配 — 记录未匹配交易，等待管理员手动处理
+ * 匹配策略（按优先级）：
+ * 1. 先匹配submitted（用户已确认转账）的订单，再匹配pending的订单
+ * 2. 精确匹配（误差 ±0.01 USDT）— 直接自动确认
+ * 3. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤3 USDT）— 自动确认，按实际到账金额入账
+ * 4. 无法匹配 — 记录未匹配交易，等待管理员手动处理
  */
 export async function findOrderByAmount(amount: number): Promise<{
   order: any;
@@ -95,52 +128,57 @@ export async function findOrderByAmount(amount: number): Promise<{
 } | null> {
   const db = await getDb();
   
-  // 第一步：精确匹配（误差 ±0.01 USDT）
-  const exactOrders = await db
-    .select()
-    .from(rechargeOrders)
-    .where(
-      and(
-        eq(rechargeOrders.status, 'pending'),
-        sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`
-      )
-    )
-    .limit(1);
+  // 按优先级搜索：先submitted，再pending
+  const statusPriority = ['submitted', 'pending'] as const;
   
-  if (exactOrders.length > 0) {
-    return {
-      order: exactOrders[0],
-      matchType: 'exact',
-      amountDiff: 0
-    };
+  for (const status of statusPriority) {
+    // 精确匹配（误差 ±0.01 USDT）
+    const exactOrders = await db
+      .select()
+      .from(rechargeOrders)
+      .where(
+        and(
+          eq(rechargeOrders.status, status),
+          sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`
+        )
+      )
+      .limit(1);
+    
+    if (exactOrders.length > 0) {
+      console.log(`[Recharge] Exact match found in ${status} orders`);
+      return {
+        order: exactOrders[0],
+        matchType: 'exact',
+        amountDiff: 0
+      };
+    }
+    
+    // 模糊匹配（到账金额略少于订单金额，差额 ≤3 USDT，覆盖手续费场景）
+    const fuzzyOrders = await db
+      .select()
+      .from(rechargeOrders)
+      .where(
+        and(
+          eq(rechargeOrders.status, status),
+          sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
+          sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 3`
+        )
+      )
+      .orderBy(sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) ASC`)
+      .limit(1);
+    
+    if (fuzzyOrders.length > 0) {
+      const orderAmount = parseFloat(fuzzyOrders[0].amount);
+      console.log(`[Recharge] Fuzzy match found in ${status} orders`);
+      return {
+        order: fuzzyOrders[0],
+        matchType: 'fuzzy',
+        amountDiff: parseFloat((orderAmount - amount).toFixed(4))
+      };
+    }
   }
   
-  // 第二步：模糊匹配（到账金额略少于订单金额，差额 ≤3 USDT，覆盖手续费场景）
-  // 条件：订单金额 > 到账金额 且 差额 ≤ 3 USDT
-  // 按差额从小到大排序，选最接近的
-  const fuzzyOrders = await db
-    .select()
-    .from(rechargeOrders)
-    .where(
-      and(
-        eq(rechargeOrders.status, 'pending'),
-        sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
-        sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 3`
-      )
-    )
-    .orderBy(sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) ASC`)
-    .limit(1);
-  
-  if (fuzzyOrders.length > 0) {
-    const orderAmount = parseFloat(fuzzyOrders[0].amount);
-    return {
-      order: fuzzyOrders[0],
-      matchType: 'fuzzy',
-      amountDiff: parseFloat((orderAmount - amount).toFixed(4))
-    };
-  }
-  
-  // 第三步：无法匹配
+  // 无法匹配
   return null;
 }
 
@@ -388,7 +426,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
     .limit(limit);
 }
 
-// 定期清理过期订单
+// 定期清理过期订单（只清理pending状态，submitted状态的不过期，因为用户已确认转账）
 export async function cleanExpiredOrders() {
   const db = await getDb();
   

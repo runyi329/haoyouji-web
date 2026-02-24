@@ -47,6 +47,7 @@ MIGRATIONS=(
   "migrations/add_balance_field.sql"
   "migrations/create_recharge_tables.sql"
   "migrations/create_unmatched_transactions.sql"
+  "migrations/add_submitted_status.sql"
 )
 
 # 执行每个迁移文件
