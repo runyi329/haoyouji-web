@@ -1933,9 +1933,12 @@ export async function getCalendarData(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证请求用户是否是账本成员
+  // 验证请求用户是否是账本成员并获取权限
   const membership = await db
-    .select()
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
     .from(ledgerMembers)
     .where(
       and(
@@ -1949,16 +1952,49 @@ export async function getCalendarData(
     throw new Error("您不是该账本的成员");
   }
   
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看，返回空数据
+    return {
+      monthlyStats: { income: 0, expense: 0 },
+      dailyStats: [],
+    };
+  }
+  
   // 构建日期范围
   const monthStr = String(month).padStart(2, '0');
   const monthStart = `${year}-${monthStr}-01`;
   const lastDay = new Date(year, month, 0).getDate();
   const monthEnd = `${year}-${monthStr}-${lastDay}`;
   
-  // 构建成员筛选条件
-  const memberCondition = memberIds && memberIds.length > 0
-    ? sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
-    : undefined;
+  // 构建成员筛选条件（根据权限进行安全检查）
+  let memberCondition;
+  if (userPermission === 'own') {
+    // 如果权限是"仅自己"，强制只查看自己创建的记录
+    memberCondition = sql`${ledgerRecords.createdBy} = ${requestUserId}`;
+  } else if (userPermission === 'all' && memberIds && memberIds.length > 0) {
+    // 如果权限是"全部"，允许使用 memberIds 筛选
+    // 查询 memberIds 对应的 userId
+    const memberUserIds = await db
+      .select({ userId: ledgerMembers.userId })
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          sql`${ledgerMembers.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+        )
+      );
+    
+    if (memberUserIds.length > 0) {
+      const userIds = memberUserIds.map((m: any) => m.userId);
+      memberCondition = sql`${ledgerRecords.createdBy} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`;
+    } else {
+      memberCondition = sql`1 = 0`;
+    }
+  }
+  // 如果权限是 'all' 且没有指定 memberIds，则 memberCondition 为 undefined
   
   // 获取月度总统计
   const monthlyStatsRaw = await db
@@ -2058,16 +2094,37 @@ export async function getDayRecords(
     return [];
   }
   
-  // 构建成员筛选条件
+  // 构建成员筛选条件（根据权限进行安全检查）
   let memberCondition;
-  if (memberIds && memberIds.length > 0) {
-    // 如果指定了成员ID筛选，使用指定的ID
-    memberCondition = sql`${ledgerRecords.memberId} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`;
-  } else if (userPermission === 'own') {
-    // 如果权限是“仅自己”，只查看自己创建的记录
+  if (userPermission === 'own') {
+    // 如果权限是"仅自己"，强制只查看自己创建的记录，忽略 memberIds 参数
     memberCondition = sql`${ledgerRecords.createdBy} = ${requestUserId}`;
+  } else if (userPermission === 'all') {
+    // 如果权限是"全部"，允许使用 memberIds 筛选
+    if (memberIds && memberIds.length > 0) {
+      // 注意：ledgerRecords 表中没有 memberId 字段，需要通过 createdBy 关联到成员
+      // 这里先查询 memberIds 对应的 userId
+      const memberUserIds = await db
+        .select({ userId: ledgerMembers.userId })
+        .from(ledgerMembers)
+        .where(
+          and(
+            eq(ledgerMembers.ledgerId, ledgerId),
+            sql`${ledgerMembers.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+          )
+        );
+      
+      if (memberUserIds.length > 0) {
+        const userIds = memberUserIds.map((m: any) => m.userId);
+        memberCondition = sql`${ledgerRecords.createdBy} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`;
+      } else {
+        // 如果没有找到对应的成员，返回空结果
+        memberCondition = sql`1 = 0`;
+      }
+    }
+    // 如果没有指定 memberIds，则 memberCondition 为 undefined，查看所有记录
   }
-  // 如果权限是 'all' 且没有指定 memberIds，则 memberCondition 为 undefined，查看所有记录
+  // 如果权限是 'none'，已经在前面返回空数组了
   
   // 获取指定日期的记录
   const records = await db
