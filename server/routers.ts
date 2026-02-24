@@ -555,6 +555,85 @@ export const appRouter = router({
           };
         }
       }),
+    // 管理员手动回滚错误订单
+    adminRollbackOrder: protectedProcedure
+      .input(z.object({ orderNo: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        
+        try {
+          const db = await getDb();
+          
+          // 查找订单
+          const [order] = await db
+            .select()
+            .from(rechargeOrders)
+            .where(eq(rechargeOrders.orderNo, input.orderNo))
+            .limit(1);
+          
+          if (!order) {
+            return { success: false, message: '订单不存在' };
+          }
+          
+          if (order.status !== 'completed') {
+            return { success: false, message: '订单不是已完成状态' };
+          }
+          
+          // 获取实际入账金额（从 balance_transactions 查询）
+          const [balanceTx] = await db.execute(sql`
+            SELECT amount FROM balance_transactions 
+            WHERE user_id = ${order.userId} 
+              AND type = 'recharge' 
+              AND related_id = ${order.id} 
+            ORDER BY created_at DESC LIMIT 1
+          `);
+          
+          const refundAmount = balanceTx && (balanceTx as any)[0]?.amount 
+            ? parseFloat((balanceTx as any)[0].amount) 
+            : parseFloat(order.amount);
+          
+          // 扣除余额
+          await db
+            .update(users)
+            .set({ balance: sql`balance - ${refundAmount}` })
+            .where(eq(users.id, order.userId));
+          
+          // 记录余额变动
+          await db.execute(sql`
+            INSERT INTO balance_transactions (user_id, amount, type, related_id, description, created_at)
+            VALUES (
+              ${order.userId},
+              ${-refundAmount},
+              'adjustment',
+              ${order.id},
+              '回滚错误充值：订单${input.orderNo}被重复匹配',
+              NOW()
+            )
+          `);
+          
+          // 更新订单状态
+          await db
+            .update(rechargeOrders)
+            .set({
+              status: 'pending',
+              txnHash: null,
+              completedAt: null
+            })
+            .where(eq(rechargeOrders.id, order.id));
+          
+          return {
+            success: true,
+            message: `订单${input.orderNo}已回滚，扣除余额${refundAmount} USDT`
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message: error instanceof Error ? error.message : '回滚失败'
+          };
+        }
+      }),
   }),
 
   // 卡券系统
