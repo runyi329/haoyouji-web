@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
 export default function Recharge() {
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
   const [amount, setAmount] = useState<string>("");
   const [network, setNetwork] = useState<"TRC20" | "ERC20" | "BEP20">("TRC20");
   const [order, setOrder] = useState<any>(null);
@@ -180,7 +180,7 @@ export default function Recharge() {
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
-          <button onClick={() => navigate(-1)} className="mr-3">
+            <button onClick={() => window.history.back()} className="mr-3">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-semibold">充值</h1>
