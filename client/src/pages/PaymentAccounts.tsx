@@ -33,7 +33,7 @@ import {
   Loader2,
 } from "lucide-react";
 
-type TabType = "bank" | "wallet";
+type TabType = "bank" | "alipay" | "wechat" | "blockchain";
 
 // 加密货币配置
 const CRYPTOCURRENCIES = [
@@ -417,25 +417,44 @@ export default function PaymentAccounts() {
         <div className="flex border-t border-gray-200">
           <button
             onClick={() => setActiveTab("bank")}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
+            className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
               activeTab === "bank"
                 ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
-            <CreditCard className="w-5 h-5 inline-block mr-1" />
+            <CreditCard className="w-4 h-4 inline-block mr-1" />
             银行卡
           </button>
           <button
-            onClick={() => setActiveTab("wallet")}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === "wallet"
+            onClick={() => setActiveTab("alipay")}
+            className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+              activeTab === "alipay"
                 ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
-            <Wallet className="w-5 h-5 inline-block mr-1" />
-            数字钱包
+            支付宝
+          </button>
+          <button
+            onClick={() => setActiveTab("wechat")}
+            className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+              activeTab === "wechat"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
+                : "text-gray-500"
+            }`}
+          >
+            微信
+          </button>
+          <button
+            onClick={() => setActiveTab("blockchain")}
+            className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
+              activeTab === "blockchain"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
+                : "text-gray-500"
+            }`}
+          >
+            区块链
           </button>
         </div>
       </div>
@@ -555,16 +574,16 @@ export default function PaymentAccounts() {
         </div>
       )}
 
-      {/* 数字钱包列表 */}
-      {activeTab === "wallet" && (
+      {/* 支付宝列表 */}
+      {activeTab === "alipay" && (
         <div className="p-4 space-y-3">
-          {digitalWallets.length === 0 ? (
+          {digitalWallets.filter(w => w.walletType === "alipay").length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
-              <p>暂无数字钱包</p>
+              <p>暂无支付宝账户</p>
             </div>
           ) : (
-            digitalWallets.map((wallet) => (
+            digitalWallets.filter(w => w.walletType === "alipay").map((wallet) => (
               <div
                 key={wallet.id}
                 className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
@@ -572,12 +591,199 @@ export default function PaymentAccounts() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">
-                        {wallet.walletType === "blockchain" && "区块链钱包"}
-                        {wallet.walletType === "alipay" && "支付宝"}
-                        {wallet.walletType === "wechat" && "微信支付"}
-                        {wallet.walletType === "other" && "其他钱包"}
-                      </h3>
+                      <h3 className="font-semibold text-gray-900">支付宝</h3>
+                      {wallet.isDefault === 1 && (
+                        <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
+                          <Star className="w-3 h-3 fill-current" />
+                          默认
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleSetDefaultWallet(wallet.id)}
+                    disabled={wallet.isDefault === 1}
+                    className={`p-1.5 rounded ${
+                      wallet.isDefault === 1
+                        ? "text-[#D32F2F]"
+                        : "text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
+                    }`}
+                  >
+                    <Star className={`w-5 h-5 ${wallet.isDefault === 1 ? "fill-current" : ""}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 mb-3">
+                  {wallet.account && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">账号</span>
+                      <span className="text-sm font-medium">{wallet.account}</span>
+                    </div>
+                  )}
+                  {wallet.accountName && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">姓名</span>
+                      <span className="text-sm font-medium">{wallet.accountName}</span>
+                    </div>
+                  )}
+                  {wallet.notes && (
+                    <div className="flex items-start justify-between">
+                      <span className="text-sm text-gray-600">备注</span>
+                      <span className="text-sm text-gray-500 text-right max-w-[200px]">{wallet.notes}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditWallet(wallet)}
+                    className="flex-1"
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteWallet(wallet.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+
+          <Button
+            onClick={() => {
+              resetWalletForm();
+              setWalletForm({ ...walletForm, walletType: "alipay" });
+              setIsWalletDialogOpen(true);
+            }}
+            className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+          >
+            <Plus className="w-5 h-5 mr-1" />
+            添加支付宝账户
+          </Button>
+        </div>
+      )}
+
+      {/* 微信支付列表 */}
+      {activeTab === "wechat" && (
+        <div className="p-4 space-y-3">
+          {digitalWallets.filter(w => w.walletType === "wechat").length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
+              <p>暂无微信支付账户</p>
+            </div>
+          ) : (
+            digitalWallets.filter(w => w.walletType === "wechat").map((wallet) => (
+              <div
+                key={wallet.id}
+                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900">微信支付</h3>
+                      {wallet.isDefault === 1 && (
+                        <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
+                          <Star className="w-3 h-3 fill-current" />
+                          默认
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleSetDefaultWallet(wallet.id)}
+                    disabled={wallet.isDefault === 1}
+                    className={`p-1.5 rounded ${
+                      wallet.isDefault === 1
+                        ? "text-[#D32F2F]"
+                        : "text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
+                    }`}
+                  >
+                    <Star className={`w-5 h-5 ${wallet.isDefault === 1 ? "fill-current" : ""}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 mb-3">
+                  {wallet.account && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">账号</span>
+                      <span className="text-sm font-medium">{wallet.account}</span>
+                    </div>
+                  )}
+                  {wallet.accountName && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">姓名</span>
+                      <span className="text-sm font-medium">{wallet.accountName}</span>
+                    </div>
+                  )}
+                  {wallet.notes && (
+                    <div className="flex items-start justify-between">
+                      <span className="text-sm text-gray-600">备注</span>
+                      <span className="text-sm text-gray-500 text-right max-w-[200px]">{wallet.notes}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditWallet(wallet)}
+                    className="flex-1"
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteWallet(wallet.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+
+          <Button
+            onClick={() => {
+              resetWalletForm();
+              setWalletForm({ ...walletForm, walletType: "wechat" });
+              setIsWalletDialogOpen(true);
+            }}
+            className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+          >
+            <Plus className="w-5 h-5 mr-1" />
+            添加微信支付账户
+          </Button>
+        </div>
+      )}
+
+      {/* 区块链钱包列表 */}
+      {activeTab === "blockchain" && (
+        <div className="p-4 space-y-3">
+          {digitalWallets.filter(w => w.walletType === "blockchain").length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
+              <p>暂无区块链钱包</p>
+            </div>
+          ) : (
+            digitalWallets.filter(w => w.walletType === "blockchain").map((wallet) => (
+              <div
+                key={wallet.id}
+                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900">区块链钱包</h3>
                       {wallet.isDefault === 1 && (
                         <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
                           <Star className="w-3 h-3 fill-current" />
@@ -684,11 +890,15 @@ export default function PaymentAccounts() {
           )}
 
           <Button
-            onClick={handleAddWallet}
+            onClick={() => {
+              resetWalletForm();
+              setWalletForm({ ...walletForm, walletType: "blockchain" });
+              setIsWalletDialogOpen(true);
+            }}
             className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
           >
             <Plus className="w-5 h-5 mr-1" />
-            添加数字钱包
+            添加区块链钱包
           </Button>
         </div>
       )}
