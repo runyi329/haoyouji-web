@@ -194,6 +194,62 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbRecharge.getUserBalanceHistory(ctx.user.id, input.limit);
       }),
+    // === 管理员功能 ===
+    // 获取所有待处理订单
+    adminGetPendingOrders: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.getAllPendingOrders();
+      }),
+    // 获取所有充值订单
+    adminGetAllOrders: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.getAllOrders(input.limit);
+      }),
+    // 获取未匹配交易列表
+    adminGetUnmatchedTransactions: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.getUnmatchedTransactions();
+      }),
+    // 管理员手动确认充值
+    adminConfirmRecharge: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        txnHash: z.string(),
+        actualAmount: z.number().min(0.01)
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminConfirmRecharge(
+          ctx.user.id, input.orderId, input.txnHash, input.actualAmount
+        );
+      }),
+    // 管理员直接给用户充值
+    adminDirectRecharge: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        amount: z.number().min(0.01),
+        description: z.string().optional()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminDirectRecharge(
+          ctx.user.id, input.userId, input.amount, input.description
+        );
+      }),
   }),
 
   // 卡券系统

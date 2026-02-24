@@ -80,11 +80,23 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
     .limit(limit);
 }
 
-// 根据金额查找匹配的订单（误差范围±0.01 USDT）
-export async function findOrderByAmount(amount: number) {
+/**
+ * 根据金额查找匹配的订单（改进版：精确匹配优先 + 模糊匹配兜底）
+ * 
+ * 匹配策略：
+ * 1. 精确匹配（误差 ±0.01 USDT）— 直接自动确认
+ * 2. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤3 USDT）— 自动确认，按实际到账金额入账
+ * 3. 无法匹配 — 记录未匹配交易，等待管理员手动处理
+ */
+export async function findOrderByAmount(amount: number): Promise<{
+  order: any;
+  matchType: 'exact' | 'fuzzy' | 'none';
+  amountDiff: number;
+} | null> {
   const db = await getDb();
   
-  const orders = await db
+  // 第一步：精确匹配（误差 ±0.01 USDT）
+  const exactOrders = await db
     .select()
     .from(rechargeOrders)
     .where(
@@ -95,11 +107,79 @@ export async function findOrderByAmount(amount: number) {
     )
     .limit(1);
   
-  return orders[0] || null;
+  if (exactOrders.length > 0) {
+    return {
+      order: exactOrders[0],
+      matchType: 'exact',
+      amountDiff: 0
+    };
+  }
+  
+  // 第二步：模糊匹配（到账金额略少于订单金额，差额 ≤3 USDT，覆盖手续费场景）
+  // 条件：订单金额 > 到账金额 且 差额 ≤ 3 USDT
+  // 按差额从小到大排序，选最接近的
+  const fuzzyOrders = await db
+    .select()
+    .from(rechargeOrders)
+    .where(
+      and(
+        eq(rechargeOrders.status, 'pending'),
+        sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
+        sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 3`
+      )
+    )
+    .orderBy(sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) ASC`)
+    .limit(1);
+  
+  if (fuzzyOrders.length > 0) {
+    const orderAmount = parseFloat(fuzzyOrders[0].amount);
+    return {
+      order: fuzzyOrders[0],
+      matchType: 'fuzzy',
+      amountDiff: parseFloat((orderAmount - amount).toFixed(4))
+    };
+  }
+  
+  // 第三步：无法匹配
+  return null;
 }
 
-// 完成充值订单
-export async function completeRechargeOrder(orderId: number, txnHash: string, actualAmount: number) {
+// 记录未匹配的交易（供管理员手动处理）
+export async function recordUnmatchedTransaction(
+  txnHash: string,
+  amount: number,
+  fromAddress: string
+) {
+  const db = await getDb();
+  
+  // 检查是否已记录
+  const existing = await db.execute(
+    sql`SELECT id FROM unmatched_transactions WHERE txn_hash = ${txnHash} LIMIT 1`
+  );
+  
+  if ((existing as any)[0]?.length > 0 || (existing as any)?.length > 0) {
+    return;
+  }
+  
+  try {
+    await db.execute(sql`
+      INSERT INTO unmatched_transactions (txn_hash, amount, from_address, status, created_at)
+      VALUES (${txnHash}, ${amount}, ${fromAddress}, 'pending', NOW())
+    `);
+    console.log(`[Recharge] Recorded unmatched transaction: ${txnHash}, ${amount} USDT`);
+  } catch (error) {
+    // 表可能不存在，忽略错误
+    console.error('[Recharge] Failed to record unmatched transaction:', error);
+  }
+}
+
+// 完成充值订单（改进版：支持按实际到账金额入账）
+export async function completeRechargeOrder(
+  orderId: number,
+  txnHash: string,
+  actualAmount: number,
+  matchType: 'exact' | 'fuzzy' = 'exact'
+) {
   const db = await getDb();
   
   // 更新订单状态
@@ -121,10 +201,127 @@ export async function completeRechargeOrder(orderId: number, txnHash: string, ac
   
   if (order.length === 0) return false;
   
-  // 给用户加余额
-  await addUserBalance(order[0].userId, actualAmount, 'recharge', orderId);
+  // 按实际到账金额入账（而不是订单金额）
+  const creditAmount = actualAmount;
+  const description = matchType === 'fuzzy' 
+    ? `充值到账（订单金额${order[0].amount}，实际到账${actualAmount}，差额为手续费）`
+    : `充值到账`;
+  
+  await addUserBalance(order[0].userId, creditAmount, 'recharge', orderId, description);
   
   return true;
+}
+
+// 管理员手动确认充值（将未匹配交易关联到指定订单或用户）
+export async function adminConfirmRecharge(
+  adminId: number,
+  orderId: number,
+  txnHash: string,
+  actualAmount: number
+) {
+  const db = await getDb();
+  
+  // 检查订单是否存在且状态为pending
+  const order = await db
+    .select()
+    .from(rechargeOrders)
+    .where(
+      and(
+        eq(rechargeOrders.id, orderId),
+        eq(rechargeOrders.status, 'pending')
+      )
+    )
+    .limit(1);
+  
+  if (order.length === 0) {
+    throw new Error('订单不存在或已处理');
+  }
+  
+  // 完成订单
+  await db
+    .update(rechargeOrders)
+    .set({
+      status: 'completed',
+      txnHash,
+      completedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
+    })
+    .where(eq(rechargeOrders.id, orderId));
+  
+  // 按实际到账金额入账
+  const description = `管理员手动确认充值（操作人ID:${adminId}，交易哈希:${txnHash}）`;
+  await addUserBalance(order[0].userId, actualAmount, 'recharge', orderId, description);
+  
+  // 更新未匹配交易状态（如果有）
+  try {
+    await db.execute(sql`
+      UPDATE unmatched_transactions SET status = 'resolved' WHERE txn_hash = ${txnHash}
+    `);
+  } catch (e) {
+    // 忽略
+  }
+  
+  return { success: true, userId: order[0].userId, amount: actualAmount };
+}
+
+// 管理员直接给用户充值（无需链上交易）
+export async function adminDirectRecharge(
+  adminId: number,
+  userId: number,
+  amount: number,
+  description?: string
+) {
+  const desc = description || `管理员手动充值（操作人ID:${adminId}）`;
+  const newBalance = await addUserBalance(userId, amount, 'recharge', undefined, desc);
+  return { success: true, userId, amount, newBalance };
+}
+
+// 获取所有待处理订单（管理员用）
+export async function getAllPendingOrders() {
+  const db = await getDb();
+  
+  return await db
+    .select({
+      id: rechargeOrders.id,
+      userId: rechargeOrders.userId,
+      orderNo: rechargeOrders.orderNo,
+      amount: rechargeOrders.amount,
+      currency: rechargeOrders.currency,
+      network: rechargeOrders.network,
+      status: rechargeOrders.status,
+      createdAt: rechargeOrders.createdAt,
+      expiresAt: rechargeOrders.expiresAt,
+    })
+    .from(rechargeOrders)
+    .where(eq(rechargeOrders.status, 'pending'))
+    .orderBy(sql`${rechargeOrders.createdAt} DESC`);
+}
+
+// 获取所有充值订单（管理员用）
+export async function getAllOrders(limit: number = 50) {
+  const db = await getDb();
+  
+  return await db
+    .select()
+    .from(rechargeOrders)
+    .orderBy(sql`${rechargeOrders.createdAt} DESC`)
+    .limit(limit);
+}
+
+// 获取未匹配交易列表（管理员用）
+export async function getUnmatchedTransactions() {
+  const db = await getDb();
+  
+  try {
+    const result = await db.execute(sql`
+      SELECT * FROM unmatched_transactions 
+      WHERE status = 'pending' 
+      ORDER BY created_at DESC 
+      LIMIT 50
+    `);
+    return (result as any)[0] || [];
+  } catch (e) {
+    return [];
+  }
 }
 
 // 给用户添加余额
