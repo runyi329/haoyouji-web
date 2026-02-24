@@ -371,15 +371,12 @@ export const appRouter = router({
             .where(eq(schema.walletAddresses.enabled, 1));
           
           if (enabledAddresses.length === 0) {
-            results.push('⚠️ 没有启用的收款地址，尝试添加默认地址...');
-            // 添加默认地址
-            await db.insert(schema.walletAddresses).values({
-              address: 'TTHZ7NvpKSMCyU3JNLLN6zZNruysy5emQJ',
-              network: 'TRC20',
-              label: '默认TRC20钱包',
-              enabled: 1,
-            });
-            results.push('✅ 已添加默认收款地址');
+            results.push('❌ 没有启用的收款地址，请在“管理收款地址”中添加');
+            return {
+              success: false,
+              message: '没有启用的收款地址',
+              logs: results,
+            };
           } else {
             results.push(`✅ 找到 ${enabledAddresses.length} 个启用的收款地址`);
           }
@@ -419,6 +416,31 @@ export const appRouter = router({
             success: false,
             message: '修复失败',
             logs: results,
+          };
+        }
+      }),
+    // 管理员手动触发扫描
+    adminTriggerScan: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        
+        try {
+          // 动态导入blockchain-scanner
+          const { scanTRC20Transactions } = await import('./blockchain-scanner');
+          
+          // 执行一次扫描
+          await scanTRC20Transactions();
+          
+          return {
+            success: true,
+            message: '扫描完成',
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message: error instanceof Error ? error.message : '扫描失败',
           };
         }
       }),
