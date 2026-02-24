@@ -1239,3 +1239,51 @@ export const ledgerBackupSettings = mysqlTable("ledger_backup_settings", {
 (table) => [
 	index("ledger_backup_settings_ledger_id_user_id_unique").on(table.ledgerId, table.userId),
 ]);
+
+
+// ==================== 卡券系统表 ====================
+
+// 卡券表
+export const coupons = mysqlTable("coupons", {
+	id: varchar({ length: 36 }).primaryKey().notNull(),
+	creatorId: varchar("creator_id", { length: 36 }).notNull(),
+	title: varchar({ length: 200 }).notNull(),
+	description: text(),
+	templateType: varchar("template_type", { length: 50 }).default('default').notNull(),
+	templateData: json("template_data"),
+	validFrom: timestamp("valid_from", { mode: 'string' }).notNull(),
+	validUntil: timestamp("valid_until", { mode: 'string' }).notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("coupons_creator_id_idx").on(table.creatorId),
+]);
+
+// 卡券接收记录表
+export const couponRecipients = mysqlTable("coupon_recipients", {
+	id: varchar({ length: 36 }).primaryKey().notNull(),
+	couponId: varchar("coupon_id", { length: 36 }).notNull(),
+	recipientId: varchar("recipient_id", { length: 36 }).notNull(),
+	status: mysqlEnum(['unused', 'used']).default('unused').notNull(),
+	receivedAt: timestamp("received_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+},
+(table) => [
+	index("coupon_recipients_coupon_id_idx").on(table.couponId),
+	index("coupon_recipients_recipient_id_idx").on(table.recipientId),
+	index("coupon_recipients_status_idx").on(table.status),
+]);
+
+// 卡券使用/核销记录表
+export const couponUsage = mysqlTable("coupon_usage", {
+	id: varchar({ length: 36 }).primaryKey().notNull(),
+	recipientRecordId: varchar("recipient_record_id", { length: 36 }).notNull(),
+	couponId: varchar("coupon_id", { length: 36 }).notNull(),
+	userId: varchar("user_id", { length: 36 }).notNull(),
+	usedAt: timestamp("used_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	notes: text(),
+},
+(table) => [
+	index("coupon_usage_coupon_id_idx").on(table.couponId),
+	index("coupon_usage_user_id_idx").on(table.userId),
+]);

@@ -43,6 +43,7 @@ import {
   UserPlus,
   MessageCircle,
   Briefcase,
+  Ticket,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -405,6 +406,7 @@ export default function Profile() {
       onClick: () => navigate("/parent/profile/invite")
     },
     { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
+    { id: "my-coupons", icon: Ticket, label: "我的卡券", color: "bg-[#FFF3E0] text-[#FF9800]", badge: null, onClick: () => navigate("/coupons") },
     { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-[#FFEBEE] text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
     { id: "calendar", icon: Calendar, label: "节点成长", color: "bg-[#E8F5E9] text-[#4CAF50]", badge: null, onClick: () => navigate("/work-groups") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },

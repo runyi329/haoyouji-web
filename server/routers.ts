@@ -19,6 +19,7 @@ import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
 import * as dbEquity from "./db-equity";
+import * as dbCoupon from "./db-coupon";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -41,6 +42,68 @@ export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
   partnership: partnershipRouter,
+
+  // 卡券系统
+  coupon: router({
+    // 获取可发送卡券的用户列表
+    getAvailableRecipients: protectedProcedure.query(async ({ ctx }) => {
+      return await dbCoupon.getAvailableRecipients(ctx.user.id);
+    }),
+
+    // 创建并发送卡券
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        validFrom: z.string(),
+        validUntil: z.string(),
+        recipientIds: z.union([z.array(z.string()), z.literal('all')]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbCoupon.createCoupon({
+          ...input,
+          creatorId: ctx.user.id,
+        });
+      }),
+
+    // 获取收到的卡券列表
+    getReceived: protectedProcedure.query(async ({ ctx }) => {
+      return await dbCoupon.getReceivedCoupons(ctx.user.id);
+    }),
+
+    // 获取发出的卡券列表
+    getSent: protectedProcedure.query(async ({ ctx }) => {
+      return await dbCoupon.getSentCoupons(ctx.user.id);
+    }),
+
+    // 获取卡券详情
+    getDetail: protectedProcedure
+      .input(z.object({ couponId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return await dbCoupon.getCouponDetail(input.couponId, ctx.user.id);
+      }),
+
+    // 使用/核销卡券
+    use: protectedProcedure
+      .input(z.object({
+        recipientRecordId: z.string(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbCoupon.useCoupon(
+          input.recipientRecordId,
+          ctx.user.id,
+          input.notes
+        );
+      }),
+
+    // 获取卡券核销记录（仅创建者可见）
+    getUsageRecords: protectedProcedure
+      .input(z.object({ couponId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return await dbCoupon.getCouponUsageRecords(input.couponId, ctx.user.id);
+      }),
+  }),
 
   
   auth: router({
