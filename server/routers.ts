@@ -23,7 +23,7 @@ import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import { getDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
