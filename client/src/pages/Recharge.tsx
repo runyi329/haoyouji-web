@@ -24,8 +24,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
   const balanceQuery = trpc.recharge.getBalance.useQuery();
 
-  // 预设金额选项
-  const presetAmounts = [10, 50, 100, 200, 500, 1000];
+
 
   // 创建充值订单
   const handleCreateOrder = async () => {
@@ -351,53 +350,20 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             min="1"
             step="0.01"
           />
-          
-          {/* 预设金额 */}
-          <div className="grid grid-cols-3 gap-2">
-            {presetAmounts.map((preset) => (
-              <button
-                key={preset}
-                onClick={() => setAmount(preset.toString())}
-                className="py-2 border border-gray-300 rounded-lg hover:border-[#D32F2F] hover:text-[#D32F2F] transition-colors"
-              >
-                {preset} USDT
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* 选择网络 */}
         <div className="bg-white rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-3">选择网络</div>
-          <div className="space-y-2">
-            {(['TRC20', 'ERC20', 'BEP20'] as const).map((net) => (
-              <label
-                key={net}
-                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                  network === net
-                    ? 'border-[#D32F2F] bg-red-50'
-                    : 'border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="network"
-                  value={net}
-                  checked={network === net}
-                  onChange={(e) => setNetwork(e.target.value as any)}
-                  className="mr-3"
-                />
-                <div className="flex-1">
-                  <div className="font-medium">{net}</div>
-                  <div className="text-xs text-gray-500">
-                    {net === 'TRC20' && '推荐 • 快速到账 • 低手续费'}
-                    {net === 'ERC20' && '以太坊网络 • 手续费较高'}
-                    {net === 'BEP20' && 'BSC网络 • 快速低费'}
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value as "TRC20" | "ERC20" | "BEP20")}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:border-[#D32F2F] focus:outline-none transition-colors"
+          >
+            <option value="TRC20">TRC20 - 推荐 • 快速到账 • 低手续费</option>
+            <option value="ERC20">ERC20 - 以太坊网络 • 手续费较高</option>
+            <option value="BEP20">BEP20 - BSC网络 • 快速低费</option>
+          </select>
         </div>
 
         {/* 提交按钮 */}
