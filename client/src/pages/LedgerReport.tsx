@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, ChevronDown, Calendar, List, BarChart3 } from "lucide-react";
@@ -334,6 +334,25 @@ function ChartViewContent({
     },
     {
       enabled: timeDimension === 'custom' && !!customStartDate && !!customEndDate,
+    }
+  );
+  
+  // 当选择自然月时，查询该月的每日数据
+  const monthStartDate = `${chartYear}-${String(chartMonth).padStart(2, '0')}-01`;
+  const monthEndDate = useMemo(() => {
+    const lastDay = new Date(chartYear, chartMonth, 0).getDate();
+    return `${chartYear}-${String(chartMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  }, [chartYear, chartMonth]);
+  
+  const { data: monthReportData } = trpc.ledger.getReport.useQuery(
+    { 
+      ledgerId, 
+      year: chartYear,
+      startDate: monthStartDate,
+      endDate: monthEndDate,
+    },
+    {
+      enabled: timeDimension === 'month',
     }
   );
   
@@ -679,17 +698,40 @@ function ChartViewContent({
           <h3 className="font-medium">收支曲线</h3>
         </div>
         
-        {/* 最近30天每日收支柱状图 */}
+        {/* 收支柱状图 - 根据时间维度自适应 */}
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart 
-              data={dailyData.map((day: any) => ({
-                ...day,
-                displayDate: day.date ? (() => {
-                  const d = new Date(day.date);
-                  return `${d.getMonth() + 1}/${d.getDate()}`;
-                })() : ''
-              }))}
+              data={(() => {
+                if (timeDimension === 'year') {
+                  // 自然年：显示12个月的数据
+                  return monthlyData.map((m: any) => ({
+                    income: m.income,
+                    expense: m.expense,
+                    displayDate: `${m.month}月`
+                  }));
+                } else if (timeDimension === 'month') {
+                  // 自然月：显示该月每一天的数据
+                  const monthData = monthReportData?.dailyStats || [];
+                  return monthData.map((day: any) => ({
+                    ...day,
+                    displayDate: day.date ? (() => {
+                      const d = new Date(day.date);
+                      return `${d.getDate()}日`;
+                    })() : ''
+                  }));
+                } else {
+                  // 自定义：显示日期范围内每一天的数据
+                  const customData = customReportData?.dailyStats || [];
+                  return customData.map((day: any) => ({
+                    ...day,
+                    displayDate: day.date ? (() => {
+                      const d = new Date(day.date);
+                      return `${d.getMonth() + 1}/${d.getDate()}`;
+                    })() : ''
+                  }));
+                }
+              })()}
               margin={{ top: 20, right: 10, left: -10, bottom: 5 }}
               barCategoryGap="5%"
             >
@@ -698,7 +740,7 @@ function ChartViewContent({
                 dataKey="displayDate"
                 tick={{ fontSize: 10, fill: 'var(--text-gray)' }}
                 stroke="var(--text-gray)"
-                interval={4}
+                interval={timeDimension === 'year' ? 0 : (timeDimension === 'month' ? 2 : 4)}
               />
               <YAxis 
                 tick={{ fontSize: 10, fill: 'var(--text-gray)' }}
