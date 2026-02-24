@@ -35,6 +35,15 @@ import {
 
 type TabType = "bank" | "wallet";
 
+// 加密货币配置
+const CRYPTOCURRENCIES = [
+  { code: "USDT", name: "USDT (Tether)", description: "稳定币" },
+  { code: "USDC", name: "USDC (USD Coin)", description: "稳定币" },
+  { code: "BTC", name: "BTC (Bitcoin)", description: "比特币" },
+  { code: "ETH", name: "ETH (Ethereum)", description: "以太币" },
+  { code: "SOL", name: "SOL (Solana)", description: "Solana代币" },
+];
+
 // 区块链网络配置
 const BLOCKCHAIN_NETWORKS = [
   { code: "TRC20", name: "Tron (TRC20)", time: "约1分钟", minAmount: "0.01 USDT" },
@@ -837,14 +846,26 @@ export default function PaymentAccounts() {
 
                 <div className="space-y-2">
                   <Label htmlFor="currency">币种 *</Label>
-                  <Input
-                    id="currency"
+                  <Select
                     value={walletForm.currency}
-                    onChange={(e) =>
-                      setWalletForm({ ...walletForm, currency: e.target.value })
+                    onValueChange={(value) =>
+                      setWalletForm({ ...walletForm, currency: value })
                     }
-                    placeholder="例如：USDT, USDC, ETH, BTC"
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="请选择加密货币" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CRYPTOCURRENCIES.map((crypto) => (
+                        <SelectItem key={crypto.code} value={crypto.code}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{crypto.name}</span>
+                            <span className="text-xs text-gray-500">{crypto.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}
