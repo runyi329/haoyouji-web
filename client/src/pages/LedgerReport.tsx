@@ -70,8 +70,8 @@ export default function LedgerReport() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* 顶部导航区 - 蓝色渐变背景 */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+      {/* 顶部导航区 - 红色背景 */}
+      <div style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* 顶部导航栏：返回 + 账本名称 + Tab切换 */}
         <div className="flex items-center px-4 py-3 gap-3">
           <button 
@@ -437,7 +437,7 @@ function ChartViewContent({
   return (
     <div className="space-y-4">
       {/* 筛选器区域 */}
-      <div className="bg-gradient-to-b from-blue-500 to-blue-600 text-white px-4 py-3">
+      <div style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }} className="px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           {/* 显示选择的时间范围 */}
           <div className="flex items-center gap-1 text-sm">
@@ -1348,7 +1348,7 @@ function CalendarViewContent({
       )}
 
       {/* 蓝色背景区域 */}
-      <div className="bg-gradient-to-b from-blue-500 to-blue-600 text-white pb-4">
+      <div style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }} className="pb-4">
         {/* 月份选择器和切换按钮 */}
         <div className="px-4 py-2 flex items-center justify-between gap-2">
           {/* 月份选择器 */}
@@ -1405,7 +1405,7 @@ function CalendarViewContent({
         </div>
 
         {/* 月度统计 */}
-        <div className="px-4 py-2 bg-blue-400/30 mx-4 rounded grid grid-cols-3 gap-2">
+        <div className="px-4 py-2 mx-4 rounded grid grid-cols-3 gap-2" style={{ backgroundColor: 'rgba(211, 47, 47, 0.3)' }}>
           <div className="text-center">
             <div className="text-xs opacity-80">{currentMonth}月收入</div>
             <div className="text-lg font-semibold">{formatAmount(monthlyStats.income)}</div>

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
-import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Switch } from "@/components/ui/switch";
 import { ChevronRight, ChevronLeft, X, Search, UserPlus, Eye, EyeOff, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -24,11 +23,6 @@ export default function LedgerSettings() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
-
-  // 获取全局主题色
-  const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
-
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
 

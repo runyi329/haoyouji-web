@@ -2,19 +2,13 @@ import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Calendar, Users, Plus } from "lucide-react";
-import { useColorTheme } from "@/contexts/ColorThemeContext";
 
 type ViewType = "balance" | "income" | "expense";
 
 export default function LedgerCalendar() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const ledgerId = parseInt(id || "0");
-  
-  // 获取全局主题色
-  const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
-  
+  const ledgerId = parseInt(id || "0");  
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
@@ -165,27 +159,27 @@ export default function LedgerCalendar() {
         style={{ 
           display: 'flex', 
           alignItems: 'center',
-          backgroundColor: themeColors.primary,
-          color: themeColors.accent1
+          backgroundColor: '#D32F2F',
+          color: '#FFFFFF'
         }}
       >
         <button 
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
-          style={{ color: themeColors.accent1 }}
+          style={{ color: '#FFFFFF' }}
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-center font-medium" style={{ flex: 1, color: themeColors.accent1 }}>账本日历</h1>
+        <h1 className="text-center font-medium" style={{ flex: 1, color: '#FFFFFF' }}>账本日历</h1>
         <div style={{ width: '24px' }} />
       </div>
 
       {/* 主题色背景区域 */}
-      <div className="pb-4" style={{ backgroundColor: themeColors.primary, color: themeColors.accent1 }}>
+      <div className="pb-4" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* 月份选择器和切换按钮 */}
         <div className="px-4 py-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <button 
             onClick={goToNextMonth}
-            style={{ display: 'flex', alignItems: 'center', color: themeColors.accent1 }}
+            style={{ display: 'flex', alignItems: 'center', color: '#FFFFFF' }}
           >
             <Calendar className="w-4 h-4 mr-1" />
             <span>{currentYear}年{currentMonth}月</span>
@@ -197,15 +191,15 @@ export default function LedgerCalendar() {
               className="rounded overflow-hidden" 
               style={{ 
                 display: 'flex',
-                backgroundColor: `${themeColors.accent1}30`
+                backgroundColor: `${'#FFFFFF'}30`
               }}
             >
               <button
                 onClick={() => setViewType("balance")}
                 className="px-3 py-1 text-sm"
                 style={{
-                  backgroundColor: viewType === "balance" ? themeColors.accent1 : 'transparent',
-                  color: viewType === "balance" ? themeColors.primary : themeColors.accent1
+                  backgroundColor: viewType === "balance" ? '#FFFFFF' : 'transparent',
+                  color: viewType === "balance" ? '#D32F2F' : '#FFFFFF'
                 }}
               >
                 结余
@@ -214,8 +208,8 @@ export default function LedgerCalendar() {
                 onClick={() => setViewType("income")}
                 className="px-3 py-1 text-sm"
                 style={{
-                  backgroundColor: viewType === "income" ? themeColors.accent1 : 'transparent',
-                  color: viewType === "income" ? themeColors.primary : themeColors.accent1
+                  backgroundColor: viewType === "income" ? '#FFFFFF' : 'transparent',
+                  color: viewType === "income" ? '#D32F2F' : '#FFFFFF'
                 }}
               >
                 收入
@@ -224,8 +218,8 @@ export default function LedgerCalendar() {
                 onClick={() => setViewType("expense")}
                 className="px-3 py-1 text-sm"
                 style={{
-                  backgroundColor: viewType === "expense" ? themeColors.accent1 : 'transparent',
-                  color: viewType === "expense" ? themeColors.primary : themeColors.accent1
+                  backgroundColor: viewType === "expense" ? '#FFFFFF' : 'transparent',
+                  color: viewType === "expense" ? '#D32F2F' : '#FFFFFF'
                 }}
               >
                 支出
@@ -234,7 +228,7 @@ export default function LedgerCalendar() {
             
             <button 
               className="text-xs px-2 py-1 rounded"
-              style={{ backgroundColor: themeColors.accent2, color: themeColors.accent1 }}
+              style={{ backgroundColor: '#d4a0a0', color: '#FFFFFF' }}
             >
               多账本
             </button>
@@ -248,7 +242,7 @@ export default function LedgerCalendar() {
             display: 'grid', 
             gridTemplateColumns: 'repeat(3, 1fr)', 
             gap: '8px',
-            backgroundColor: `${themeColors.secondary}80`
+            backgroundColor: 'rgba(211, 47, 47, 0.5)'
           }}
         >
           <div className="text-center">
@@ -268,19 +262,19 @@ export default function LedgerCalendar() {
         {/* 日历网格 - 使用更浅的主题色背景 */}
         <div 
           className="mx-4 mt-3 rounded overflow-hidden"
-          style={{ backgroundColor: `${themeColors.primary}40` }}
+          style={{ backgroundColor: `${'#D32F2F'}40` }}
         >
           <table className="w-full border-collapse">
             <thead>
-              <tr style={{ backgroundColor: `${themeColors.secondary}60` }}>
+              <tr style={{ backgroundColor: 'rgba(211, 47, 47, 0.4)' }}>
                 {weekDays.map((day) => (
                   <th 
                     key={day} 
                     className="text-center text-xs py-2 font-normal"
                     style={{ 
-                      color: themeColors.accent1,
+                      color: '#FFFFFF',
                       opacity: 0.9,
-                      borderBottom: `1px solid ${themeColors.primary}30`
+                      borderBottom: `1px solid ${'#D32F2F'}30`
                     }}
                   >
                     {day}
@@ -298,8 +292,8 @@ export default function LedgerCalendar() {
                           key={`empty-${rowIndex}-${colIndex}`}
                           className="h-14"
                           style={{ 
-                            borderBottom: `1px solid ${themeColors.primary}20`,
-                            borderRight: `1px solid ${themeColors.primary}20`
+                            borderBottom: `1px solid ${'#D32F2F'}20`,
+                            borderRight: `1px solid ${'#D32F2F'}20`
                           }}
                         />
                       );
@@ -314,9 +308,9 @@ export default function LedgerCalendar() {
                         key={`day-${day}`}
                         className="h-14 text-center cursor-pointer"
                         style={{ 
-                          borderBottom: `1px solid ${themeColors.primary}20`,
-                          borderRight: `1px solid ${themeColors.primary}20`,
-                          backgroundColor: isSelected ? `${themeColors.accent1}` : 'transparent'
+                          borderBottom: `1px solid ${'#D32F2F'}20`,
+                          borderRight: `1px solid ${'#D32F2F'}20`,
+                          backgroundColor: isSelected ? `${'#FFFFFF'}` : 'transparent'
                         }}
                         onClick={() => setSelectedDate(day)}
                       >
@@ -325,7 +319,7 @@ export default function LedgerCalendar() {
                             className="text-sm"
                             style={{
                               fontWeight: isSelected ? 'bold' : 'normal',
-                              color: isSelected ? themeColors.primary : themeColors.accent1
+                              color: isSelected ? '#D32F2F' : '#FFFFFF'
                             }}
                           >
                             {day}
@@ -335,7 +329,7 @@ export default function LedgerCalendar() {
                             style={{
                               color: isSelected 
                                 ? (dayValue >= 0 ? '#16a34a' : '#ef4444')
-                                : `${themeColors.accent1}90`
+                                : `${'#FFFFFF'}90`
                             }}
                           >
                             {hasData ? dayValue.toFixed(0) : "0"}
@@ -359,7 +353,7 @@ export default function LedgerCalendar() {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between',
-            borderBottom: `2px solid ${themeColors.primary}`
+            borderBottom: `2px solid ${'#D32F2F'}`
           }}
         >
           <span className="text-gray-800">
@@ -385,10 +379,10 @@ export default function LedgerCalendar() {
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    backgroundColor: `${themeColors.primary}20`
+                    backgroundColor: `${'#D32F2F'}20`
                   }}
                 >
-                  <Users className="w-5 h-5" style={{ color: themeColors.primary }} />
+                  <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
                 </div>
                 
                 <div style={{ flex: 1 }}>
@@ -423,8 +417,8 @@ export default function LedgerCalendar() {
           style={{ 
             display: 'flex', 
             alignItems: 'center',
-            backgroundColor: themeColors.primary,
-            color: themeColors.accent1
+            backgroundColor: '#D32F2F',
+            color: '#FFFFFF'
           }}
         >
           <Plus className="w-5 h-5 mr-1" />
