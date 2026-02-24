@@ -21,6 +21,7 @@ import * as dbLedger from "./db-ledger";
 import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
+import * as dbRecharge from "./db-recharge";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
@@ -152,6 +153,46 @@ export const appRouter = router({
       .input(z.object({ walletId: z.string() }))
       .mutation(async ({ ctx, input }) => {
         return await dbPaymentAccounts.setDefaultDigitalWallet(input.walletId, ctx.user.id);
+      }),
+  }),
+
+  // 充值系统
+  recharge: router({
+    // 创建充值订单
+    createOrder: protectedProcedure
+      .input(z.object({
+        amount: z.number().min(1).max(100000),
+        network: z.enum(['TRC20', 'ERC20', 'BEP20']).default('TRC20')
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network);
+      }),
+
+    // 查询充值订单
+    getOrder: protectedProcedure
+      .input(z.object({ orderNo: z.string() }))
+      .query(async ({ input }) => {
+        return await dbRecharge.getRechargeOrder(input.orderNo);
+      }),
+
+    // 获取用户充值订单列表
+    getMyOrders: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserRechargeOrders(ctx.user.id, input.limit);
+      }),
+
+    // 获取用户余额
+    getBalance: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserBalance(ctx.user.id);
+      }),
+
+    // 获取余额变动记录
+    getBalanceHistory: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserBalanceHistory(ctx.user.id, input.limit);
       }),
   }),
 
