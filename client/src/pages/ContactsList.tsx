@@ -213,7 +213,7 @@ export default function ContactsList() {
   }, []);
   
   // 多选模式状态
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(true); // 默认启用多选模式
   
   // 标签区域展开/收起状态
   const [isTagAreaExpanded, setIsTagAreaExpanded] = useState(false);
@@ -1177,26 +1177,8 @@ export default function ContactsList() {
           <div className="mb-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                {/* 多选模式复选框 */}
-                <label className="flex items-center gap-1 sm:gap-2 cursor-pointer">
-                  <span className="text-xs sm:text-sm">多选</span>
-                  <Checkbox
-                    checked={isMultiSelectMode}
-                    onCheckedChange={(checked) => {
-                      setIsMultiSelectMode(checked as boolean);
-                      // 切换模式时，清空当前选中的标签
-                      if (selectedTagIds.length > 0) {
-                        const newUrl = filterType 
-                          ? `/parent/contacts/list?filter=${filterType}`
-                          : '/parent/contacts/list';
-                        setLocation(newUrl);
-                      }
-                    }}
-                    className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                />
-              </label>
-
-            </div>
+                {/* 移除多选复选框，默认启用多选模式 */}
+              </div>
             <button
               onClick={() => setShowTagManagement(true)}
               className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-[#D32F2F]-light transition-all mb-2"
