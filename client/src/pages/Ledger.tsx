@@ -4,7 +4,7 @@ import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -776,20 +776,62 @@ export default function Ledger() {
 
       {/* 底部按钮 */}
       <div className="fixed bottom-0 left-0 right-0 z-50">
-        <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="flex gap-3">
-            <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
-              onClick={() => setShowJoinDialog(true)}
-            >
-              加入他人账本
-            </button>
-            <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark transition-colors shadow-sm"
-              onClick={() => setShowCreateDialog(true)}
-            >
-              创建新的账本
-            </button>
+        <div className="max-w-md mx-auto relative">
+          {/* 加入他人账本弹出面板 */}
+          {showJoinDialog && (
+            <div className="absolute bottom-full mb-2 left-4 right-4 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold text-gray-900">加入他人账本</h3>
+                <button onClick={() => { setShowJoinDialog(false); setJoinSecretKey(""); }} className="p-1 hover:bg-gray-100 rounded-full">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-3">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
+              <div className="mb-3">
+                <label className="text-sm font-medium text-gray-700 mb-1.5 block">账本密钥</label>
+                <Input
+                  placeholder="请输入66位密钥"
+                  value={joinSecretKey}
+                  onChange={(e) => setJoinSecretKey(e.target.value)}
+                  className="font-mono text-xs h-9"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 h-8 border-[#D32F2F] text-[#D32F2F]"
+                  onClick={() => { setShowJoinDialog(false); setJoinSecretKey(""); }}
+                >
+                  取消
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 h-8 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                  onClick={handleJoinConfirm}
+                  disabled={!joinSecretKey.trim() || joinMutation.isPending}
+                >
+                  {joinMutation.isPending ? '加入中...' : '确认加入'}
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="px-4 pb-4 pt-3 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div className="flex gap-3">
+              <button
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
+                onClick={() => setShowJoinDialog(!showJoinDialog)}
+              >
+                加入他人账本
+              </button>
+              <button
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark transition-colors shadow-sm"
+                onClick={() => setShowCreateDialog(true)}
+              >
+                创建新的账本
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1099,43 +1141,7 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
-      {/* 加入他人账本对话框 */}
-      <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-        <DialogContent className="max-w-sm mx-auto top-[38%] translate-y-[-50%]">
-          <DialogTitle>加入他人账本</DialogTitle>
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-gray-500">请输入账本密钥以加入共享账本。密钥可从账本管理员处获取。</p>
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">账本密钥</label>
-              <Input
-                placeholder="请输入66位密钥"
-                value={joinSecretKey}
-                onChange={(e) => setJoinSecretKey(e.target.value)}
-                className="font-mono text-xs"
-              />
-            </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1 border-[#D32F2F] text-[#D32F2F]"
-                onClick={() => {
-                  setShowJoinDialog(false);
-                  setJoinSecretKey("");
-                }}
-              >
-                取消
-              </Button>
-              <Button
-                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
-                onClick={handleJoinConfirm}
-                disabled={!joinSecretKey.trim() || joinMutation.isPending}
-              >
-                {joinMutation.isPending ? '加入中...' : '确认加入'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
     </div>
   );
