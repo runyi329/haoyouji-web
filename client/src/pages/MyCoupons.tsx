@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { trpc } from '../trpc';
+import { trpc } from '@/lib/trpc';
 import { Ticket, Plus, ChevronLeft } from 'lucide-react';
 
 export default function MyCoupons() {
