@@ -192,8 +192,8 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
 
     console.log(`[Scanner] Detected transfer: ${amount} USDT from ${fromAddress} to ${walletAddress.slice(0, 8)}... (tx: ${txnHash})`);
 
-    // 使用改进的匹配算法查找订单
-    const matchResult = await dbRecharge.findOrderByAmount(amount);
+    // 使用改进的匹配算法查找订单（传入txnHash防止重复匹配）
+    const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
 
     if (!matchResult) {
       console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT`);
