@@ -797,7 +797,6 @@ export default function Ledger() {
                     value={joinSecretKey}
                     onChange={(e) => setJoinSecretKey(e.target.value)}
                     className="font-mono text-xs h-9"
-                    autoFocus
                   />
                 </div>
                 <div className="flex gap-2">
