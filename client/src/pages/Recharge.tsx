@@ -4,7 +4,12 @@ import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, Histo
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
-export default function Recharge() {
+interface RechargeProps {
+  hideHeader?: boolean;
+  hideBalance?: boolean;
+}
+
+export default function Recharge({ hideHeader = false, hideBalance = false }: RechargeProps = {}) {
   const [, setLocation] = useLocation();
   const [amount, setAmount] = useState<string>("");
   const [network, setNetwork] = useState<"TRC20" | "ERC20" | "BEP20">("TRC20");
@@ -304,7 +309,7 @@ export default function Recharge() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
-      <div className="bg-white border-b sticky top-0 z-10">
+      {!hideHeader && (<div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
             <button onClick={() => window.history.back()} className="mr-3">
@@ -320,11 +325,11 @@ export default function Recharge() {
             充值记录
           </button>
         </div>
-      </div>
+      </div>)}
 
       <div className="p-4 space-y-4">
         {/* 当前余额 */}
-        <div className="bg-gradient-to-r from-[#D32F2F] to-[#E57373] rounded-lg p-6 text-white">
+        {!hideBalance && (<div className="bg-gradient-to-r from-[#D32F2F] to-[#E57373] rounded-lg p-6 text-white">
           <div className="flex items-center mb-2">
             <Wallet className="w-5 h-5 mr-2" />
             <span className="text-sm opacity-90">当前余额</span>
@@ -332,7 +337,7 @@ export default function Recharge() {
           <div className="text-3xl font-bold">
             {balanceQuery.data?.toFixed(2) || '0.00'} USDT
           </div>
-        </div>
+        </div>)}
 
         {/* 充值金额 */}
         <div className="bg-white rounded-lg p-4">

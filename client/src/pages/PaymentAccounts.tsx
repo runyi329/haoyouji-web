@@ -104,7 +104,11 @@ const getBankConfig = (bankName: string) => {
   return BANK_CONFIGS.default;
 };
 
-export default function PaymentAccounts() {
+interface PaymentAccountsProps {
+  hideHeader?: boolean;
+}
+
+export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsProps = {}) {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>("bank");
   
@@ -401,7 +405,7 @@ export default function PaymentAccounts() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      {!hideHeader && (<div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => navigate("/parent/profile")}
@@ -457,7 +461,7 @@ export default function PaymentAccounts() {
             区块链
           </button>
         </div>
-      </div>
+      </div>)}
 
       {/* 银行卡列表 */}
       {activeTab === "bank" && (
