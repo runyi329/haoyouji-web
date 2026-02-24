@@ -31,35 +31,34 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  MoreHorizontal,
 } from "lucide-react";
 
 type TabType = "bank" | "wallet";
 
-// 银行配置：微信钱包风格
-const BANK_CONFIGS: Record<string, { color: string; logo: string }> = {
-  "工商银行": { color: "#C8524D", logo: "🏦" },
-  "建设银行": { color: "#2B5F9E", logo: "🏦" },
-  "农业银行": { color: "#1E8449", logo: "🌾" },
-  "中国银行": { color: "#C8524D", logo: "🏦" },
-  "招商银行": { color: "#C8524D", logo: "🏦" },
-  "交通银行": { color: "#2B5F9E", logo: "🏦" },
-  "邮储银行": { color: "#2E7D32", logo: "📬" },
-  "民生银行": { color: "#00897B", logo: "🏦" },
-  "中信银行": { color: "#C8524D", logo: "🏦" },
-  "浦发银行": { color: "#1565C0", logo: "🏦" },
-  "兴业银行": { color: "#1976D2", logo: "🏦" },
-  "光大银行": { color: "#7B1FA2", logo: "✨" },
-  "平安银行": { color: "#E65100", logo: "🛡️" },
-  "华夏银行": { color: "#C62828", logo: "🏦" },
-  "广发银行": { color: "#C8524D", logo: "🏦" },
-  "北京银行": { color: "#C8524D", logo: "🏦" },
+// 银行配置：包括品牌色、渐变色和图标
+const BANK_CONFIGS: Record<string, { gradient: string; icon: string; textColor: string }> = {
+  "工商银行": { gradient: "from-red-500 to-red-600", icon: "🏦", textColor: "text-white" },
+  "建设银行": { gradient: "from-blue-500 to-blue-600", icon: "🏦", textColor: "text-white" },
+  "农业银行": { gradient: "from-green-500 to-green-600", icon: "🌾", textColor: "text-white" },
+  "中国银行": { gradient: "from-red-600 to-red-700", icon: "🇨🇳", textColor: "text-white" },
+  "招商银行": { gradient: "from-red-500 to-pink-600", icon: "💳", textColor: "text-white" },
+  "交通银行": { gradient: "from-blue-600 to-blue-700", icon: "🚆", textColor: "text-white" },
+  "邮储银行": { gradient: "from-green-600 to-green-700", icon: "📬", textColor: "text-white" },
+  "民生银行": { gradient: "from-teal-500 to-teal-600", icon: "🏦", textColor: "text-white" },
+  "中信银行": { gradient: "from-red-600 to-red-700", icon: "🏦", textColor: "text-white" },
+  "浦发银行": { gradient: "from-blue-500 to-indigo-600", icon: "🏦", textColor: "text-white" },
+  "兴业银行": { gradient: "from-blue-600 to-blue-700", icon: "🏦", textColor: "text-white" },
+  "光大银行": { gradient: "from-purple-500 to-purple-600", icon: "✨", textColor: "text-white" },
+  "平安银行": { gradient: "from-orange-500 to-orange-600", icon: "🛡️", textColor: "text-white" },
+  "华夏银行": { gradient: "from-red-500 to-red-600", icon: "🏦", textColor: "text-white" },
+  "广发银行": { gradient: "from-red-600 to-pink-600", icon: "🏦", textColor: "text-white" },
   // 默认样式
-  "default": { color: "#757575", logo: "🏦" },
+  "default": { gradient: "from-gray-600 to-gray-700", icon: "🏦", textColor: "text-white" },
 };
 
 // 获取银行配置
 const getBankConfig = (bankName: string) => {
+  // 尝试匹配包含关键字的银行名
   for (const [key, config] of Object.entries(BANK_CONFIGS)) {
     if (bankName.includes(key)) {
       return config;
@@ -332,10 +331,11 @@ export default function PaymentAccounts() {
     setDefaultWalletMutation.mutate({ walletId });
   };
 
-  // 脱敏显示卡号（只显示后4位）
-  const maskCardNumber = (cardNumber: string) => {
-    if (cardNumber.length <= 4) return cardNumber;
-    return cardNumber.slice(-4);
+  // 脱敏显示卡号（显示前4位和后4位）
+  const maskCardNumber = (cardNumber: string, show: boolean) => {
+    if (show) return cardNumber;
+    if (cardNumber.length <= 8) return "****";
+    return `${cardNumber.slice(0, 4)} **** **** ${cardNumber.slice(-4)}`;
   };
 
   // 脱敏显示钱包地址（显示前6位和后4位）
@@ -346,7 +346,7 @@ export default function PaymentAccounts() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
@@ -356,12 +356,8 @@ export default function PaymentAccounts() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-lg font-semibold text-gray-900">
-            {activeTab === "bank" ? "银行卡" : "数字钱包"}
-          </h1>
-          <button className="p-2 -mr-2 hover:bg-gray-100 rounded-full transition-colors">
-            <MoreHorizontal className="w-5 h-5 text-gray-700" />
-          </button>
+          <h1 className="text-lg font-semibold text-gray-900">支付账户管理</h1>
+          <div className="w-9" />
         </div>
 
         {/* 标签页切换 */}
@@ -370,28 +366,30 @@ export default function PaymentAccounts() {
             onClick={() => setActiveTab("bank")}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
               activeTab === "bank"
-                ? "text-[#576B95] border-b-2 border-[#576B95]"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
+            <CreditCard className="w-5 h-5 inline-block mr-1" />
             银行卡
           </button>
           <button
             onClick={() => setActiveTab("wallet")}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
               activeTab === "wallet"
-                ? "text-[#576B95] border-b-2 border-[#576B95]"
+                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
+            <Wallet className="w-5 h-5 inline-block mr-1" />
             数字钱包
           </button>
         </div>
       </div>
 
-      {/* 银行卡列表 - 微信钱包风格 */}
+      {/* 银行卡列表 */}
       {activeTab === "bank" && (
-        <div className="p-4 space-y-3 pb-24">
+        <div className="p-4 space-y-3">
           {bankCards.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <CreditCard className="w-16 h-16 mx-auto mb-3 opacity-30" />
@@ -400,66 +398,113 @@ export default function PaymentAccounts() {
           ) : (
             bankCards.map((card) => {
               const bankConfig = getBankConfig(card.bankName);
-              const last4 = maskCardNumber(card.cardNumber);
-              
               return (
-                <div
-                  key={card.id}
-                  onClick={() => handleEditBankCard(card)}
-                  className="relative overflow-hidden rounded-xl cursor-pointer active:opacity-90 transition-opacity"
-                  style={{ backgroundColor: bankConfig.color }}
-                >
-                  {/* 背景水印 */}
-                  <div 
-                    className="absolute inset-0 flex items-center justify-center opacity-10"
-                    style={{ fontSize: "180px" }}
-                  >
-                    {bankConfig.logo}
+              <div
+                key={card.id}
+                className="relative overflow-hidden rounded-xl shadow-lg"
+              >
+                {/* 渐变背景 */}
+                <div className={`bg-gradient-to-br ${bankConfig.gradient} p-5`}>
+                  {/* 顶部：银行名和默认标记 */}
+                  <div className="flex items-start justify-between mb-6">
+                    <div>
+                      <h3 className={`font-bold text-lg ${bankConfig.textColor}`}>
+                        {card.bankName}
+                      </h3>
+                      <p className={`text-xs ${bankConfig.textColor} opacity-80`}>
+                        {card.cardType === "debit" ? "借记卡" : "信用卡"}
+                      </p>
+                    </div>
+                    {card.isDefault === 1 && (
+                      <span className="flex items-center gap-1 text-xs bg-white/20 backdrop-blur-sm text-white px-2 py-1 rounded-full">
+                        <Star className="w-3 h-3 fill-current" />
+                        默认
+                      </span>
+                    )}
                   </div>
 
-                  {/* 卡片内容 */}
-                  <div className="relative p-5">
-                    {/* 顶部：银行logo和名称 */}
-                    <div className="flex items-center gap-3 mb-8">
-                      <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center text-xl">
-                        {bankConfig.logo}
-                      </div>
-                      <div>
-                        <h3 className="text-white font-medium text-base">
-                          {card.bankName}{card.cardType === "debit" ? "储蓄卡" : "信用卡"}
-                        </h3>
-                        {card.notes && (
-                          <p className="text-white/70 text-xs mt-0.5">{card.notes}</p>
+                  {/* 卡号 */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xl font-mono tracking-wider ${bankConfig.textColor}`}>
+                        {maskCardNumber(card.cardNumber, showCardNumber[card.id])}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setShowCardNumber((prev) => ({ ...prev, [card.id]: !prev[card.id] }))
+                        }
+                        className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        {showCardNumber[card.id] ? (
+                          <EyeOff className={`w-4 h-4 ${bankConfig.textColor}`} />
+                        ) : (
+                          <Eye className={`w-4 h-4 ${bankConfig.textColor}`} />
                         )}
-                      </div>
+                      </button>
                     </div>
+                  </div>
 
-                    {/* 卡号 */}
-                    <div className="text-white text-2xl font-medium tracking-widest">
-                      •••• •••• •••• {last4}
-                    </div>
+                  {/* 持卡人 */}
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs ${bankConfig.textColor} opacity-70`}>持卡人</span>
+                    <span className={`text-sm font-medium ${bankConfig.textColor}`}>{card.cardHolder}</span>
                   </div>
                 </div>
-              );
+
+                {/* 底部操作栏（白色背景） */}
+                <div className="bg-white p-4">
+                  {card.notes && (
+                    <div className="text-sm text-gray-500 mb-3 pb-3 border-b">
+                      备注: {card.notes}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSetDefaultBankCard(card.id)}
+                      disabled={card.isDefault === 1}
+                      className="flex-1"
+                    >
+                      <Star className={`w-4 h-4 mr-1 ${card.isDefault === 1 ? "fill-current" : ""}`} />
+                      {card.isDefault === 1 ? "已设为默认" : "设为默认"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditBankCard(card)}
+                      className="flex-1"
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteBankCard(card.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
             })
           )}
 
-          {/* 添加银行卡按钮 - 固定在底部 */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
-            <Button
-              onClick={handleAddBankCard}
-              className="w-full bg-[#576B95] hover:bg-[#485A8C] text-white h-12 text-base"
-            >
-              <Plus className="w-5 h-5 mr-1" />
-              添加银行卡
-            </Button>
-          </div>
+          <Button
+            onClick={handleAddBankCard}
+            className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+          >
+            <Plus className="w-5 h-5 mr-1" />
+            添加银行卡
+          </Button>
         </div>
       )}
 
       {/* 数字钱包列表 */}
       {activeTab === "wallet" && (
-        <div className="p-4 space-y-3 pb-24">
+        <div className="p-4 space-y-3">
           {digitalWallets.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
@@ -469,8 +514,7 @@ export default function PaymentAccounts() {
             digitalWallets.map((wallet) => (
               <div
                 key={wallet.id}
-                onClick={() => handleEditWallet(wallet)}
-                className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 cursor-pointer active:bg-gray-50 transition-colors"
+                className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -482,48 +526,117 @@ export default function PaymentAccounts() {
                         {wallet.walletType === "other" && "其他钱包"}
                       </h3>
                       {wallet.isDefault === 1 && (
-                        <span className="text-xs bg-[#576B95] text-white px-2 py-0.5 rounded">
+                        <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
+                          <Star className="w-3 h-3 fill-current" />
                           默认
                         </span>
                       )}
                     </div>
                     {wallet.walletType === "blockchain" && wallet.network && (
-                      <p className="text-sm text-gray-500">{wallet.network} · {wallet.currency}</p>
+                      <p className="text-sm text-gray-500">{wallet.network}</p>
                     )}
                   </div>
+                  <button
+                    onClick={() => handleSetDefaultWallet(wallet.id)}
+                    disabled={wallet.isDefault === 1}
+                    className={`p-1.5 rounded ${
+                      wallet.isDefault === 1
+                        ? "text-[#D32F2F]"
+                        : "text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
+                    }`}
+                  >
+                    <Star className={`w-5 h-5 ${wallet.isDefault === 1 ? "fill-current" : ""}`} />
+                  </button>
                 </div>
 
-                <div className="space-y-2">
-                  {wallet.walletType === "blockchain" && wallet.walletAddress && (
-                    <div className="text-sm text-gray-600 font-mono">
-                      {maskWalletAddress(wallet.walletAddress, showWalletAddress[wallet.id])}
-                    </div>
+                <div className="space-y-2 mb-3">
+                  {wallet.walletType === "blockchain" && (
+                    <>
+                      {wallet.currency && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">币种</span>
+                          <span className="text-sm font-medium">{wallet.currency}</span>
+                        </div>
+                      )}
+                      {wallet.walletAddress && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">地址</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono text-right max-w-[200px] truncate">
+                              {maskWalletAddress(wallet.walletAddress, showWalletAddress[wallet.id])}
+                            </span>
+                            <button
+                              onClick={() =>
+                                setShowWalletAddress((prev) => ({
+                                  ...prev,
+                                  [wallet.id]: !prev[wallet.id],
+                                }))
+                              }
+                              className="p-1 hover:bg-gray-100 rounded"
+                            >
+                              {showWalletAddress[wallet.id] ? (
+                                <EyeOff className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <Eye className="w-4 h-4 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   {(wallet.walletType === "alipay" || wallet.walletType === "wechat") && (
                     <>
                       {wallet.account && (
-                        <div className="text-sm text-gray-600">账号: {wallet.account}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">账号</span>
+                          <span className="text-sm">{wallet.account}</span>
+                        </div>
                       )}
                       {wallet.accountName && (
-                        <div className="text-sm text-gray-600">姓名: {wallet.accountName}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">姓名</span>
+                          <span className="text-sm">{wallet.accountName}</span>
+                        </div>
                       )}
                     </>
                   )}
+                  {wallet.notes && (
+                    <div className="text-sm text-gray-500 pt-1 border-t">
+                      备注: {wallet.notes}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditWallet(wallet)}
+                    className="flex-1"
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDeleteWallet(wallet.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             ))
           )}
 
-          {/* 添加数字钱包按钮 - 固定在底部 */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200">
-            <Button
-              onClick={handleAddWallet}
-              className="w-full bg-[#576B95] hover:bg-[#485A8C] text-white h-12 text-base"
-            >
-              <Plus className="w-5 h-5 mr-1" />
-              添加数字钱包
-            </Button>
-          </div>
+          <Button
+            onClick={handleAddWallet}
+            className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+          >
+            <Plus className="w-5 h-5 mr-1" />
+            添加数字钱包
+          </Button>
         </div>
       )}
 
@@ -604,16 +717,7 @@ export default function PaymentAccounts() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            {editingBankCard && (
-              <Button
-                variant="outline"
-                onClick={() => handleDeleteBankCard(editingBankCard.id)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                删除
-              </Button>
-            )}
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setIsBankCardDialogOpen(false)}
@@ -623,12 +727,12 @@ export default function PaymentAccounts() {
             <Button
               onClick={handleSubmitBankCard}
               disabled={addBankCardMutation.isPending || updateBankCardMutation.isPending}
-              className="bg-[#576B95] hover:bg-[#485A8C]"
+              className="bg-[#D32F2F] hover:bg-[#B71C1C]"
             >
               {(addBankCardMutation.isPending || updateBankCardMutation.isPending) && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
-              {editingBankCard ? "保存" : "添加"}
+              {editingBankCard ? "更新" : "添加"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -745,16 +849,7 @@ export default function PaymentAccounts() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
-            {editingWallet && (
-              <Button
-                variant="outline"
-                onClick={() => handleDeleteWallet(editingWallet.id)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                删除
-              </Button>
-            )}
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setIsWalletDialogOpen(false)}
@@ -764,12 +859,12 @@ export default function PaymentAccounts() {
             <Button
               onClick={handleSubmitWallet}
               disabled={addWalletMutation.isPending || updateWalletMutation.isPending}
-              className="bg-[#576B95] hover:bg-[#485A8C]"
+              className="bg-[#D32F2F] hover:bg-[#B71C1C]"
             >
               {(addWalletMutation.isPending || updateWalletMutation.isPending) && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
-              {editingWallet ? "保存" : "添加"}
+              {editingWallet ? "更新" : "添加"}
             </Button>
           </DialogFooter>
         </DialogContent>
