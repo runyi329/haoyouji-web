@@ -1,11 +1,14 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Activity, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, TrendingUp, RefreshCw } from "lucide-react";
+import { ArrowLeft, Activity, Clock, CheckCircle2, XCircle, AlertTriangle, Wallet, TrendingUp, RefreshCw, Wrench } from "lucide-react";
 import { trpc } from "../../lib/trpc";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function RechargeMonitor() {
   const [, setLocation] = useLocation();
   const [refreshKey, setRefresh] = useState(0);
+  const [showFixLogs, setShowFixLogs] = useState(false);
+  const [fixLogs, setFixLogs] = useState<string[]>([]);
 
   const statsQuery = trpc.recharge.adminGetSystemStats.useQuery(undefined, {
     refetchInterval: 30000 // 每30秒自动刷新
@@ -15,6 +18,8 @@ export default function RechargeMonitor() {
   });
   const pendingOrdersQuery = trpc.recharge.adminGetPendingOrders.useQuery();
   const unmatchedQuery = trpc.recharge.adminGetUnmatchedTransactions.useQuery();
+  
+  const fixScannerMutation = trpc.recharge.adminFixScanner.useMutation();
 
   const stats = statsQuery.data;
 
@@ -25,6 +30,29 @@ export default function RechargeMonitor() {
     heartbeatQuery.refetch();
     pendingOrdersQuery.refetch();
     unmatchedQuery.refetch();
+  };
+
+  // 一键修复扫描器
+  const handleFixScanner = async () => {
+    try {
+      toast.loading('正在修复扫描器...');
+      const result = await fixScannerMutation.mutateAsync();
+      
+      setFixLogs(result.logs);
+      setShowFixLogs(true);
+      
+      if (result.success) {
+        toast.success('修复成功！');
+        // 2秒后刷新页面
+        setTimeout(() => {
+          handleRefresh();
+        }, 2000);
+      } else {
+        toast.error('修复失败，请查看详细日志');
+      }
+    } catch (error) {
+      toast.error('修复失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
   };
 
   // 计算扫描器状态
@@ -169,12 +197,24 @@ export default function RechargeMonitor() {
                 ))}
               </div>
             )}
-            <button
-              onClick={() => setLocation('/admin/wallet-addresses')}
-              className="w-full mt-2 py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
-            >
-              管理收款地址
-            </button>
+            <div className="space-y-2 mt-2">
+              {getScannerStatus().status === 'unknown' || getScannerStatus().status === 'stopped' ? (
+                <button
+                  onClick={handleFixScanner}
+                  disabled={fixScannerMutation.isPending}
+                  className="w-full py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Wrench className="w-4 h-4" />
+                  {fixScannerMutation.isPending ? '正在修复...' : '一键修复扫描器'}
+                </button>
+              ) : null}
+              <button
+                onClick={() => setLocation('/admin/wallet-addresses')}
+                className="w-full py-2 text-sm text-[#D32F2F] border border-[#D32F2F] rounded-lg hover:bg-red-50 transition-colors"
+              >
+                管理收款地址
+              </button>
+            </div>
           </div>
         </div>
 
@@ -309,6 +349,48 @@ export default function RechargeMonitor() {
           </button>
         </div>
       </div>
+
+      {/* 修复日志弹窗 */}
+      {showFixLogs && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="font-semibold text-lg">修复日志</h3>
+              <button
+                onClick={() => setShowFixLogs(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              <div className="space-y-2 font-mono text-xs">
+                {fixLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={`p-2 rounded ${
+                      log.includes('✅') ? 'bg-green-50 text-green-800' :
+                      log.includes('⚠️') ? 'bg-yellow-50 text-yellow-800' :
+                      log.includes('❌') ? 'bg-red-50 text-red-800' :
+                      'bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t">
+              <button
+                onClick={() => setShowFixLogs(false)}
+                className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
