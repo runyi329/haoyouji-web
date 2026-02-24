@@ -485,29 +485,31 @@ export default function LedgerSettings() {
       {/* 导入导出功能 */}
       <div className="bg-white mt-3">
         <SettingItem label="表格导入账单" showIcon />
-        <SettingItem label="手动导出表格" showIcon onClick={() => {
-          if (!canBackup) {
-            toast.error("您没有备份该账本的权限，请联系账本管理员");
-            return;
-          }
-          handleOpenExportDialog();
-        }} />
-        <SettingItem label="共享账本自动备份" showIcon onClick={() => {
-          if (!canBackup) {
-            toast.error("您没有备份该账本的权限，请联系账本管理员");
-            return;
-          }
-          if (!user?.email) {
-            toast.error("请先在个人中心填写邮箱地址", {
-              action: {
-                label: "去填写",
-                onClick: () => setLocation("/profile/edit"),
-              },
-            });
-          } else {
-            setShowBackupDialog(true);
-          }
-        }} />
+        <SettingItem 
+          label="手动导出表格" 
+          showIcon={canBackup}
+          value={!canBackup ? "禁用" : undefined}
+          valueColor={!canBackup ? "text-red-500" : "text-gray-500"}
+          onClick={canBackup ? handleOpenExportDialog : undefined} 
+        />
+        <SettingItem 
+          label="共享账本自动备份" 
+          showIcon={canBackup}
+          value={!canBackup ? "禁用" : undefined}
+          valueColor={!canBackup ? "text-red-500" : "text-gray-500"}
+          onClick={canBackup ? () => {
+            if (!user?.email) {
+              toast.error("请先在个人中心填写邮箱地址", {
+                action: {
+                  label: "去填写",
+                  onClick: () => setLocation("/profile/edit"),
+                },
+              });
+            } else {
+              setShowBackupDialog(true);
+            }
+          } : undefined} 
+        />
       </div>
 
 
