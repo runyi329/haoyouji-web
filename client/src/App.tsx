@@ -178,6 +178,7 @@ function Router() {
         <Route path="/admin/recharge/manual-confirm" component={RechargeManualConfirm} />
         <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
         <Route path="/admin/recharge/orders" component={RechargeOrders} />
+        <Route path="/admin/migration" component={lazy(() => import("./pages/AdminMigration"))} />
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />

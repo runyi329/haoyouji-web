@@ -4,7 +4,7 @@ import { getDb } from "./server/db";
 async function runMigration() {
   console.log('========== 执行数据库迁移 ==========\n');
   
-  const sql = readFileSync('./migrations/add_wallet_address_to_recharge_orders.sql', 'utf-8');
+  const sql = readFileSync('./migrations/add-ledger-features.sql', 'utf-8');
   
   console.log('SQL脚本:');
   console.log(sql);

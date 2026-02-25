@@ -7374,6 +7374,32 @@ export const adminFeatureRouter = router({
       });
       return { success: true };
     }),
+  
+  // 执行 pending_type 数据库迁移
+  migratePendingType: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      
+      const { migratePendingType } = await import('./migrate-production');
+      const db = await import('./db').then(m => m.getDb());
+      
+      if (!db) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      }
+      
+      const result = await migratePendingType(db);
+      
+      if (!result.success) {
+        throw new TRPCError({ 
+          code: 'INTERNAL_SERVER_ERROR', 
+          message: `迁移失败: ${result.error}` 
+        });
+      }
+      
+      return result;
+    }),
 });
 
 export type AppRouter = typeof appRouter;
