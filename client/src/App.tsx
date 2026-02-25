@@ -94,6 +94,7 @@ const AddTransaction = lazy(() => import("./pages/AddTransaction"));
 const LedgerCategories = lazy(() => import("./pages/LedgerCategories"));
 const LedgerFeatures = lazy(() => import("./pages/LedgerFeatures"));
 const DeletedRecords = lazy(() => import("./pages/DeletedRecords"));
+const PendingOverview = lazy(() => import("./pages/PendingOverview"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
@@ -231,6 +232,7 @@ function Router() {
         <Route path="/moments" component={Moments} />
         <Route path="/ai" component={AIChat} />
         <Route path="/ledger" component={Ledger} />
+        <Route path="/pending-overview" component={PendingOverview} />
         <Route path="/ledger/create-type" component={CreateLedgerType} />
         <Route path="/ledger/create" component={CreateLedger} />
         <Route path="/ledger/join/:token" component={JoinLedger} />
