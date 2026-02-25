@@ -1492,6 +1492,25 @@ export const appRouter = router({
         return { success: true };
       }),
     
+    // 切换钱包功能开关
+    toggleWalletEnabled: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "super_admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "只有管理员可以操作" });
+        }
+        const db = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        await db.default.update(users)
+          .set({ walletEnabled: input.enabled ? 1 : 0 })
+          .where(eq(users.id, input.userId));
+        return { success: true };
+      }),
+    
     // 获取用户的功能权限
     getUserPermissions: protectedProcedure
       .input(z.object({ userId: z.number() }))
