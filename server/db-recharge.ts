@@ -650,10 +650,23 @@ export async function getSystemStats() {
       )
     );
   
-  // 获取最近10笔订单
+  // 获取最近10笔订单（关联用户表）
   const recentOrders = await db
-    .select()
+    .select({
+      id: rechargeOrders.id,
+      userId: rechargeOrders.userId,
+      orderNo: rechargeOrders.orderNo,
+      amount: rechargeOrders.amount,
+      network: rechargeOrders.network,
+      walletAddress: rechargeOrders.walletAddress,
+      txnHash: rechargeOrders.txnHash,
+      status: rechargeOrders.status,
+      createdAt: rechargeOrders.createdAt,
+      completedAt: rechargeOrders.completedAt,
+      username: users.username,
+    })
     .from(rechargeOrders)
+    .leftJoin(users, eq(rechargeOrders.userId, users.id))
     .orderBy(sql`${rechargeOrders.createdAt} DESC`)
     .limit(10);
   

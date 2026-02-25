@@ -351,6 +351,29 @@ export default function RechargeMonitor() {
               {stats.recentOrders.map((order: any) => {
                 const config = statusConfig[order.status] || statusConfig.pending;
                 const StatusIcon = config.icon;
+                
+                // 获取区块链浏览器链接
+                const getExplorerUrl = (network: string, txnHash: string) => {
+                  if (!txnHash) return null;
+                  
+                  switch (network) {
+                    case 'TRC20':
+                      return `https://tronscan.org/#/transaction/${txnHash}`;
+                    case 'ERC20':
+                      return `https://etherscan.io/tx/${txnHash}`;
+                    case 'BEP20':
+                      return `https://bscscan.com/tx/${txnHash}`;
+                    case 'APTOS':
+                      return `https://explorer.aptoslabs.com/txn/${txnHash}?network=mainnet`;
+                    case 'SOLANA':
+                      return `https://solscan.io/tx/${txnHash}`;
+                    default:
+                      return null;
+                  }
+                };
+                
+                const explorerUrl = getExplorerUrl(order.network, order.txnHash);
+                
                 return (
                   <div key={order.id} className="px-4 py-3">
                     <div className="flex items-center justify-between mb-1.5">
@@ -367,9 +390,30 @@ export default function RechargeMonitor() {
                       <span>订单号: {order.orderNo}</span>
                       <span>{formatDate(order.createdAt)}</span>
                     </div>
+                    {/* 用户信息 */}
+                    {order.username && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        用户: {order.username} (ID: {order.userId})
+                      </div>
+                    )}
+                    {/* 交易哈希和区块链浏览器链接 */}
                     {order.txnHash && (
-                      <div className="text-xs text-gray-400 mt-1 truncate">
-                        交易哈希: {order.txnHash}
+                      <div className="text-xs mt-1">
+                        {explorerUrl ? (
+                          <a 
+                            href={explorerUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[#D32F2F] hover:underline flex items-center"
+                          >
+                            <span className="truncate mr-1">交易哈希: {order.txnHash.slice(0, 10)}...{order.txnHash.slice(-8)}</span>
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 truncate">交易哈希: {order.txnHash}</span>
+                        )}
                       </div>
                     )}
                   </div>
