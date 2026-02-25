@@ -602,8 +602,7 @@ export async function getSystemStats() {
   
   const matchedOrdersCount = Number(matchedStats?.count || 0);
   
-  // 统计今日充值
-  const today = new Date().toISOString().slice(0, 10);
+  // 统计今日充值（使用北京时间 GMT+8）
   const [todayStats] = await db
     .select({
       count: sql<number>`COUNT(*)`,
@@ -613,7 +612,7 @@ export async function getSystemStats() {
     .where(
       and(
         eq(rechargeOrders.status, 'completed'),
-        sql`DATE(${rechargeOrders.completedAt}) = ${today}`
+        sql`DATE(CONVERT_TZ(${rechargeOrders.completedAt}, '+00:00', '+08:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+08:00'))`
       )
     );
   
