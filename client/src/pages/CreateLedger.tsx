@@ -74,10 +74,7 @@ export default function CreateLedger() {
       toast.error("请输入账本名称");
       return;
     }
-    if (!nickname.trim()) {
-      toast.error("请输入您在账本内的昵称");
-      return;
-    }
+    // 昵称为选填，不填时后端使用用户名
 
     // 调用后端API创建账本
     createLedgerMutation.mutate({
@@ -149,13 +146,13 @@ export default function CreateLedger() {
         <div className="bg-white rounded-lg p-3 space-y-2">
           <Label htmlFor="nickname" className="text-sm text-gray-700">
             我在账本内的昵称
-            <span className="text-xs text-gray-500 ml-2">（共享者可见，每个账本昵称可以不同）</span>
+            <span className="text-xs text-gray-500 ml-2">（选填，不填则显示用户名）</span>
           </Label>
           <Input
             id="nickname"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
-            placeholder="请输入您的昵称"
+            placeholder="选填，不填则使用用户名"
             className="h-9 text-sm"
           />
         </div>
