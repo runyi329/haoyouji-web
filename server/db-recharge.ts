@@ -603,6 +603,39 @@ export async function getSystemStats() {
   const matchedOrdersCount = Number(matchedStats?.count || 0);
   
   // 统计今日充值（使用北京时间 GMT+8）
+  // 计算北京时间今天 00:00 对应的 UTC 时间
+  const now = new Date();
+  const utcYear = now.getUTCFullYear();
+  const utcMonth = now.getUTCMonth();
+  const utcDate = now.getUTCDate();
+  const utcHours = now.getUTCHours();
+  
+  // 计算北京时间的日期（UTC+8）
+  let beijingDate = utcDate;
+  let beijingMonth = utcMonth;
+  let beijingYear = utcYear;
+  
+  if (utcHours >= 16) {
+    // UTC 16:00 = 北京 00:00（第二天）
+    beijingDate++;
+    const daysInMonth = new Date(beijingYear, beijingMonth + 1, 0).getDate();
+    if (beijingDate > daysInMonth) {
+      beijingDate = 1;
+      beijingMonth++;
+      if (beijingMonth > 11) {
+        beijingMonth = 0;
+        beijingYear++;
+      }
+    }
+  }
+  
+  // 北京时间今天 00:00（UTC 表示）
+  const beijingTodayStart = new Date(Date.UTC(beijingYear, beijingMonth, beijingDate, -8, 0, 0, 0));
+  const beijingTomorrowStart = new Date(beijingTodayStart.getTime() + 24 * 60 * 60 * 1000);
+  
+  const todayStartUTC = beijingTodayStart.toISOString().slice(0, 19).replace('T', ' ');
+  const todayEndUTC = beijingTomorrowStart.toISOString().slice(0, 19).replace('T', ' ');
+  
   const [todayStats] = await db
     .select({
       count: sql<number>`COUNT(*)`,
@@ -612,7 +645,8 @@ export async function getSystemStats() {
     .where(
       and(
         eq(rechargeOrders.status, 'completed'),
-        sql`DATE(CONVERT_TZ(${rechargeOrders.completedAt}, '+00:00', '+08:00')) = DATE(CONVERT_TZ(NOW(), '+00:00', '+08:00'))`
+        sql`${rechargeOrders.completedAt} >= ${todayStartUTC}`,
+        sql`${rechargeOrders.completedAt} < ${todayEndUTC}`
       )
     );
   
