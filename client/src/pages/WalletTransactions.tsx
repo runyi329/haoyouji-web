@@ -33,6 +33,18 @@ export default function WalletTransactions() {
     }
   };
 
+  // 获取区块链浏览器链接
+  const getBlockchainExplorerUrl = (network: string, txnHash: string) => {
+    const baseUrls: Record<string, string> = {
+      'TRC20': 'https://tronscan.org/#/transaction/',
+      'ERC20': 'https://etherscan.io/tx/',
+      'BEP20': 'https://bscscan.com/tx/',
+      'APTOS': 'https://explorer.aptoslabs.com/txn/',
+      'SOLANA': 'https://solscan.io/tx/',
+    };
+    return baseUrls[network] ? baseUrls[network] + txnHash : null;
+  };
+
   // 获取状态配置
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -203,9 +215,23 @@ export default function WalletTransactions() {
                     </div>
                   )}
                   
-                  {transaction.txnHash && (
-                    <div className="text-xs text-gray-400 mt-1 truncate">
-                      交易哈希: {transaction.txnHash.slice(0, 10)}...{transaction.txnHash.slice(-8)}
+                  {transaction.txnHash && transaction.network && (
+                    <div className="text-xs mt-1">
+                      <span className="text-gray-400">交易哈希: </span>
+                      {getBlockchainExplorerUrl(transaction.network, transaction.txnHash) ? (
+                        <a
+                          href={getBlockchainExplorerUrl(transaction.network, transaction.txnHash)!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#D32F2F] hover:underline"
+                        >
+                          {transaction.txnHash.slice(0, 10)}...{transaction.txnHash.slice(-8)}
+                        </a>
+                      ) : (
+                        <span className="text-gray-600">
+                          {transaction.txnHash.slice(0, 10)}...{transaction.txnHash.slice(-8)}
+                        </span>
+                      )}
                     </div>
                   )}
                   
