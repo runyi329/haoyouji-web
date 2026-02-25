@@ -538,15 +538,16 @@ export const appRouter = router({
         }
         
         try {
-          // 动态导入blockchain-scanner
-          const { scanTRC20Transactions } = await import('./blockchain-scanner');
+          // 动态导入多链扫描器
+          const { scanAllChains } = await import('./multi-chain-scanner');
           
           // 执行一次扫描
-          await scanTRC20Transactions();
+          const results = await scanAllChains();
           
           return {
-            success: true,
-            message: '扫描完成',
+            success: results.success,
+            message: results.success ? '扫描完成' : `扫描完成，但有错误: ${results.errors.join(', ')}`,
+            results,
           };
         } catch (error) {
           return {

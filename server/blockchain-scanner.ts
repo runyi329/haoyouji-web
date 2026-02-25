@@ -230,20 +230,25 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
  * 启动扫描器（不再依赖环境变量，从数据库读取地址）
  */
 export function startScanner() {
-  console.log('[Scanner] Starting blockchain scanner...');
+  console.log('[Scanner] Starting multi-chain blockchain scanner...');
+  console.log('[Scanner] Supported chains: TRC20, APTOS, SOLANA, ERC20, BEP20');
   console.log('[Scanner] Wallet addresses: loaded from database');
   console.log('[Scanner] Scan interval: 60 seconds');
   console.log('[Scanner] Match strategy: exact (±0.01) → fuzzy (≤3 USDT fee tolerance) → record unmatched');
 
-  // 立即执行一次
-  scanTRC20Transactions();
+  // 立即执行一次（异步导入多链扫描器）
+  (async () => {
+    const { scanAllChains } = await import('./multi-chain-scanner');
+    await scanAllChains();
+  })();
 
   // 每分钟扫描一次
   setInterval(async () => {
-    await scanTRC20Transactions();
+    const { scanAllChains } = await import('./multi-chain-scanner');
+    await scanAllChains();
     
     // 更新上次扫描时间
-    lastScanTimestamp = Date.now() - 60 * 1000; // 保留1分钟重叠
+    lastScanTimestamp = Date.now() - 60 * 1000; // 保留１分钟重叠
     
     // 清理过期订单
     await dbRecharge.cleanExpiredOrders();
