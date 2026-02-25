@@ -361,10 +361,10 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             className="w-full p-3 border border-gray-300 rounded-lg focus:border-[#D32F2F] focus:outline-none transition-colors"
           >
             <option value="TRC20">TRC20 - 推荐 • 快速到账 • 低手续费</option>
-            <option value="ERC20">ERC20 - 以太坊网络 • 手续费较高</option>
-            <option value="BEP20">BSC(BEP20) - 币安智能链 • 快速低费</option>
             <option value="APTOS">Aptos - 新一代公链 • 快速安全</option>
+            <option value="ERC20">ERC20 - 以太坊网络 • 手续费较高</option>
             <option value="SOLANA">Solana - 高性能公链 • 极速到账</option>
+            <option value="BEP20">BSC(BEP20) - 币安智能链 • 快速低费</option>
           </select>
         </div>
 
