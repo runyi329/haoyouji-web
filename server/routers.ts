@@ -6256,6 +6256,12 @@ export const appRouter = router({
         return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
       }),
 
+    // 获取用户所有账本中的待结账目汇总
+    getAllPending: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbLedger.getAllPendingTransactions(ctx.user.id);
+      }),
+
     // 获取单个账本详情
     getById: protectedProcedure
       .input(z.object({

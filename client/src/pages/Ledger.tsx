@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -89,6 +89,10 @@ export default function Ledger() {
   // 分别查询使用中和已存档的数量
   const { data: activeLedgers } = trpc.ledger.list.useQuery({ isArchived: false });
   const { data: archivedLedgers } = trpc.ledger.list.useQuery({ isArchived: true });
+
+  // 获取所有待结账目
+  const { data: pendingData } = trpc.ledger.getAllPending.useQuery();
+  const hasPendingTransactions = pendingData && pendingData.length > 0;
 
   // 获取所有账本中的成员名单（去重）
   const allMembers = useMemo(() => {
@@ -547,6 +551,15 @@ export default function Ledger() {
                 </div>
               )}
             </div>
+            {/* 待结算按钮（仅当有待结账目时显示） */}
+            {hasPendingTransactions && (
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => setLocation("/pending-overview")}
+              >
+                <Hourglass className="w-5 h-5 text-blue-600" strokeWidth={2} />
+              </button>
+            )}
           </div>
         </div>
       </div>
