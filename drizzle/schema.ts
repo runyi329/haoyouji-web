@@ -1347,6 +1347,7 @@ export const rechargeOrders = mysqlTable("recharge_orders", {
 	amount: decimal("amount", { precision: 20, scale: 8 }).notNull(), // 带小数的唯一金额
 	currency: varchar({ length: 10 }).default('USDT').notNull(),
 	network: varchar({ length: 20 }).default('TRC20').notNull(),
+	walletAddress: varchar("wallet_address", { length: 255 }), // 收款钱包地址
 	status: mysqlEnum(['pending', 'submitted', 'completed', 'expired', 'cancelled']).default('pending').notNull(),
 	txnHash: varchar("txn_hash", { length: 100 }), // 交易哈希
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
