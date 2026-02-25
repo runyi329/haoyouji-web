@@ -693,3 +693,92 @@ export async function getSystemStats() {
     recentOrders
   };
 }
+
+// ========== 提现功能 ==========
+
+// 用户申请提现
+export async function requestWithdraw(
+  userId: number,
+  amount: number,
+  paymentAccountId: number,
+  remark?: string
+): Promise<{ success: boolean; message: string }> {
+  const db = await getDb();
+
+  // 检查用户余额
+  const user = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user || user.length === 0) {
+    throw new Error('用户不存在');
+  }
+
+  const balance = parseFloat(user[0].balance || '0');
+
+  if (balance < amount) {
+    throw new Error('余额不足');
+  }
+
+  if (amount < 10) {
+    throw new Error('最低提现金额为 10 USDT');
+  }
+
+  // 扣除余额
+  await db
+    .update(users)
+    .set({
+      balance: sql`${users.balance} - ${amount}`,
+    })
+    .where(eq(users.id, userId));
+
+  // 记录余额变动
+  await db.insert(balanceHistory).values({
+    userId,
+    amount: -amount, // 负数表示减少
+    type: 'withdraw',
+    relatedId: paymentAccountId,
+    balance: balance - amount,
+    description: remark || `提现 ${amount} USDT`,
+  });
+
+  return {
+    success: true,
+    message: '提现申请已提交，等待管理员审核',
+  };
+}
+
+// 获取用户提现记录
+export async function getUserWithdrawHistory(userId: number, limit: number = 50) {
+  const db = await getDb();
+
+  return await db
+    .select()
+    .from(balanceHistory)
+    .where(and(eq(balanceHistory.userId, userId), eq(balanceHistory.type, 'withdraw')))
+    .orderBy(sql`${balanceHistory.createdAt} DESC`)
+    .limit(limit);
+}
+
+// 管理员获取所有提现申请
+export async function getAllWithdrawRequests(limit: number = 100) {
+  const db = await getDb();
+
+  return await db
+    .select({
+      id: balanceHistory.id,
+      userId: balanceHistory.userId,
+      username: users.username,
+      amount: balanceHistory.amount,
+      balance: balanceHistory.balance,
+      description: balanceHistory.description,
+      createdAt: balanceHistory.createdAt,
+    })
+    .from(balanceHistory)
+    .leftJoin(users, eq(balanceHistory.userId, users.id))
+    .where(eq(balanceHistory.type, 'withdraw'))
+    .orderBy(sql`${balanceHistory.createdAt} DESC`)
+    .limit(limit);
+}
