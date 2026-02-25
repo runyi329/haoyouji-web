@@ -201,6 +201,30 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         return await dbRecharge.getUserBalanceHistory(ctx.user.id, input.limit);
       }),
+
+    // 用户申请提现
+    requestWithdraw: protectedProcedure
+      .input(z.object({
+        amount: z.number().min(10),
+        paymentAccountId: z.number(),
+        remark: z.string().optional()
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.requestWithdraw(
+          ctx.user.id,
+          input.amount,
+          input.paymentAccountId,
+          input.remark
+        );
+      }),
+
+    // 获取用户提现记录
+    getMyWithdrawHistory: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserWithdrawHistory(ctx.user.id, input.limit);
+      }),
+
     // === 管理员功能 ===
     // 获取所有待处理订单
     adminGetPendingOrders: protectedProcedure
