@@ -7161,6 +7161,229 @@ export const appRouter = router({
         
         return { success: true };
       }),
+
+    // 解析导入数据
+    parseImportData: protectedProcedure
+      .input(z.object({
+        data: z.string(),
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db_instance = await getDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+        // 验证用户是否是该账本成员
+        const member = await db_instance
+          .select()
+          .from(ledgerMembers)
+          .where(
+            and(
+              eq(ledgerMembers.ledgerId, input.ledgerId),
+              eq(ledgerMembers.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        
+        if (member.length === 0) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        }
+
+        // 解析CSV/TSV数据
+        const lines = input.data.split('\n').filter(line => line.trim());
+        const records: any[] = [];
+
+        // 尝试识别分隔符（逗号或制表符）
+        const firstLine = lines[0];
+        const delimiter = firstLine.includes('\t') ? '\t' : ',';
+
+        // 解析每一行
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+
+          // 跳过表头行（包含“交易时间”、“金额”等关键字）
+          if (i === 0 && (line.includes('交易时间') || line.includes('时间') || line.includes('金额') || line.includes('类型'))) {
+            continue;
+          }
+
+          const fields = line.split(delimiter).map(f => f.trim().replace(/^"|"$/g, ''));
+          
+          // 至少需要有日期和金额
+          if (fields.length < 2) continue;
+
+          // 尝试识别各个字段
+          let date = '';
+          let amount = 0;
+          let type: 'income' | 'expense' = 'expense';
+          let category = '其他';
+          let description = '';
+
+          // 微信账单格式：交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号,商户单号,备注
+          // 支付宝账单格式：交易时间,交易分类,交易对方,商品说明,金额,收/支,交易状态
+          
+          for (let j = 0; j < fields.length; j++) {
+            const field = fields[j];
+            
+            // 识别日期（包含 - 或 / 或年月日）
+            if (!date && (field.match(/\d{4}[-\/年]\d{1,2}[-\/月]\d{1,2}/) || field.match(/\d{4}-\d{2}-\d{2}/))) {
+              date = field.replace(/年|月/g, '-').replace(/日/g, '').split(' ')[0];
+            }
+            
+            // 识别金额（数字或带元符号）
+            const amountMatch = field.match(/([+-]?\d+\.?\d*)/);
+            if (amountMatch && parseFloat(amountMatch[1]) > 0) {
+              const parsedAmount = parseFloat(amountMatch[1]);
+              if (parsedAmount > amount) {
+                amount = parsedAmount;
+                // 根据正负号判断收支
+                if (field.startsWith('-') || field.startsWith('－')) {
+                  type = 'expense';
+                } else if (field.startsWith('+') || field.startsWith('＋')) {
+                  type = 'income';
+                }
+              }
+            }
+            
+            // 识别收支类型
+            if (field.includes('支出') || field.includes('付款') || field === '支') {
+              type = 'expense';
+            } else if (field.includes('收入') || field.includes('收款') || field === '收') {
+              type = 'income';
+            }
+            
+            // 识别分类
+            if (field.includes('餐饮') || field.includes('美食')) {
+              category = '餐饮';
+            } else if (field.includes('购物') || field.includes('超市')) {
+              category = '购物';
+            } else if (field.includes('交通') || field.includes('打车') || field.includes('公交')) {
+              category = '交通';
+            } else if (field.includes('娱乐') || field.includes('电影')) {
+              category = '娱乐';
+            } else if (field.includes('医疗') || field.includes('药店')) {
+              category = '医疗';
+            }
+            
+            // 收集备注信息
+            if (j > 2 && field.length > 0 && field.length < 50 && !field.match(/\d{10,}/)) {
+              if (!description) {
+                description = field;
+              }
+            }
+          }
+
+          // 如果没有识别到日期，使用今天
+          if (!date) {
+            const now = new Date();
+            date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          }
+
+          // 如果识别到有效数据，添加到结果
+          if (amount > 0) {
+            records.push({
+              date,
+              type,
+              amount,
+              category,
+              description: description || '导入记录',
+              originalData: line,
+            });
+          }
+        }
+
+        return { records };
+      }),
+
+    // 导入记录
+    importRecords: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        records: z.array(z.object({
+          date: z.string(),
+          type: z.enum(['income', 'expense']),
+          amount: z.number(),
+          category: z.string(),
+          description: z.string(),
+          originalData: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db_instance = await getDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+
+        // 验证用户是否是该账本成员
+        const member = await db_instance
+          .select()
+          .from(ledgerMembers)
+          .where(
+            and(
+              eq(ledgerMembers.ledgerId, input.ledgerId),
+              eq(ledgerMembers.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        
+        if (member.length === 0) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        }
+
+        // 批量插入记录
+        let successCount = 0;
+        for (const record of input.records) {
+          try {
+            // 查找或创建分类
+            let categoryId = null;
+            const existingCategory = await db_instance
+              .select()
+              .from(ledgerCategories)
+              .where(
+                and(
+                  eq(ledgerCategories.ledgerId, input.ledgerId),
+                  eq(ledgerCategories.name, record.category)
+                )
+              )
+              .limit(1);
+            
+            if (existingCategory.length > 0) {
+              categoryId = existingCategory[0].id;
+            } else {
+              // 创建新分类
+              const result = await db_instance
+                .insert(ledgerCategories)
+                .values({
+                  ledgerId: input.ledgerId,
+                  name: record.category,
+                  type: record.type,
+                  icon: '💰',
+                  color: record.type === 'income' ? '#4CAF50' : '#D32F2F',
+                });
+              categoryId = result[0].insertId;
+            }
+
+            // 插入账目记录
+            await db_instance
+              .insert(ledgerRecords)
+              .values({
+                ledgerId: input.ledgerId,
+                userId: ctx.user.id,
+                categoryId: categoryId,
+                amount: record.amount,
+                type: record.type,
+                date: record.date,
+                description: record.description,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            
+            successCount++;
+          } catch (error) {
+            console.error('导入记录失败:', error);
+            // 继续导入其他记录
+          }
+        }
+
+        return { count: successCount };
+      }),
   }),
   
   // 银行列表管理

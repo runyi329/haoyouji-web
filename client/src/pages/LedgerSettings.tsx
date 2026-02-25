@@ -479,7 +479,11 @@ export default function LedgerSettings() {
 
       {/* 导入导出功能 */}
       <div className="bg-white mt-3">
-        <SettingItem label="表格导入账单" showIcon />
+        <SettingItem 
+          label="表格导入账单" 
+          showIcon 
+          onClick={() => setLocation(`/ledger/${ledgerId}/import`)} 
+        />
         <SettingItem 
           label="手动导出表格" 
           showIcon={canBackup}
