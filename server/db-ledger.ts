@@ -170,6 +170,19 @@ export async function createLedger(data: {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
+  // 如果没有提供昵称，获取用户名作为默认昵称
+  let finalNickname = data.memberNickname;
+  if (!finalNickname || !finalNickname.trim()) {
+    const { getDb } = await import("./db");
+    const mainDb = await getDb();
+    const userResult = await mainDb
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, data.createdBy))
+      .limit(1);
+    finalNickname = userResult[0]?.username || null;
+  }
+  
   // 使用原始 SQL 插入账本，避免 Drizzle 类型推断问题
   let newLedgerId: number;
   try {
@@ -202,7 +215,7 @@ export async function createLedger(data: {
     userId: data.createdBy,
     role: "owner",
     memberType: "real",
-    nickname: data.memberNickname || null,
+    nickname: finalNickname,
     permissionView: "all",
     permissionAdd: "all",
     permissionEdit: "all",
