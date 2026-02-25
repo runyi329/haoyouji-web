@@ -89,6 +89,9 @@ const AddTransaction = () => {
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
   
+  // 获取账本信息（用于获取功能开关）
+  const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
+  
   // 获取要编辑的账目详情
   const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
     { ledgerId, transactionId: editTransactionId! },
@@ -105,6 +108,7 @@ const AddTransaction = () => {
   
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
   const [reimbursementStatus, setReimbursementStatus] = useState<'none' | 'pending'>('none');
+  const [pendingType, setPendingType] = useState<'receivable' | 'payable' | null>(null);
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -147,6 +151,11 @@ const AddTransaction = () => {
       // 加载报销状态
       if (editTransaction.reimbursementStatus) {
         setReimbursementStatus(editTransaction.reimbursementStatus as 'none' | 'pending');
+      }
+      
+      // 加载待结类型
+      if (editTransaction.pendingType) {
+        setPendingType(editTransaction.pendingType as 'receivable' | 'payable');
       }
     }
   }, [isEditMode, editTransaction]);
@@ -496,6 +505,7 @@ const AddTransaction = () => {
       description: note || undefined,
       images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
       reimbursementStatus, // 添加报销状态
+      pendingType: pendingType || undefined, // 添加待结类型
     };
     
     // 只有当accountId是有效数字时才添加
@@ -655,24 +665,57 @@ const AddTransaction = () => {
           </div>
         </div>
 
-        {/* 报销状态选择 */}
-        <div className="bg-white mt-1">
-          <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
-            报销状态
+        {/* 报销状态选择 - 根据功能开关显示 */}
+        {ledger?.enableReimbursement === 1 && (
+          <div className="bg-white mt-1">
+            <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
+              报销状态
+            </div>
+            <div className="p-3">
+              <button
+                className={`px-3 py-1.5 rounded text-xs ${
+                  reimbursementStatus === 'pending'
+                    ? "bg-[#1976D2] text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
+              >
+                申请报销
+              </button>
+            </div>
           </div>
-          <div className="p-3">
-            <button
-              className={`px-3 py-1.5 rounded text-xs ${
-                reimbursementStatus === 'pending'
-                  ? "bg-[#1976D2] text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
-              onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
-            >
-              申请报销
-            </button>
+        )}
+
+        {/* 待结功能 - 根据功能开关显示 */}
+        {ledger?.enablePending === 1 && (
+          <div className="bg-white mt-1">
+            <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
+              待结状态
+            </div>
+            <div className="p-3 flex gap-2">
+              <button
+                className={`px-3 py-1.5 rounded text-xs ${
+                  pendingType === 'receivable'
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setPendingType(pendingType === 'receivable' ? null : 'receivable')}
+              >
+                代收
+              </button>
+              <button
+                className={`px-3 py-1.5 rounded text-xs ${
+                  pendingType === 'payable'
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => setPendingType(pendingType === 'payable' ? null : 'payable')}
+              >
+                代付
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 备注输入 */}
         <div className="bg-white mt-1 flex items-stretch">

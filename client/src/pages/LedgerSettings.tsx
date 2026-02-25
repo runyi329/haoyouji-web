@@ -453,6 +453,7 @@ export default function LedgerSettings() {
         <SettingItem label="账本状态(封账)" value="使用中" />
 
 
+        <SettingItem label="账本功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
         <SettingItem label="账本分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
         <SettingItem label="删除账单找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
         <SettingItem label="账本日志" showIcon />
