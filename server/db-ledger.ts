@@ -2278,6 +2278,7 @@ export async function addTransaction(data: {
   memberId?: number; // 为谁记账（默认为自己）
   accountId?: number; // 付款/收款方式
   reimbursementStatus?: 'none' | 'pending' | 'completed'; // 报销状态
+  pendingType?: 'receivable' | 'payable'; // 待结类型（代收/代付）
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -2339,6 +2340,7 @@ export async function addTransaction(data: {
     recordDate: data.transactionDate,
     createdBy: data.userId,
     reimbursementStatus: data.reimbursementStatus || 'none',
+    pendingType: data.pendingType || null,
   };
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
   const result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
@@ -3068,6 +3070,7 @@ export async function updateTransaction(
     memberId?: number;
     accountId?: number;
     reimbursementStatus?: 'none' | 'pending' | 'completed';
+    pendingType?: 'receivable' | 'payable' | null;
   }
 ) {
   const db = await getLedgerDb();
@@ -3116,6 +3119,7 @@ export async function updateTransaction(
   if (data.memberId) updateData.memberId = data.memberId;
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
   if (data.reimbursementStatus !== undefined) updateData.reimbursementStatus = data.reimbursementStatus;
+  if (data.pendingType !== undefined) updateData.pendingType = data.pendingType;
   
   // 加密敏感字段
   const encryptedUpdateData = await encryptFields(db, 'ledger_records', updateData, LEDGER_RECORD_ENCRYPT_FIELDS);
