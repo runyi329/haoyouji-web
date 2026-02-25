@@ -424,6 +424,7 @@ export default function Ledger() {
                                 const displayName = member.nickname || member.username;
                                 setSelectedMember(displayName);
                                 setMemberInput(displayName);
+                                setShowSearchDialog(false); // 选择成员后自动关闭弹窗
                               }}
                             >
                               <span className="text-gray-900">{member.nickname || member.username}</span>
