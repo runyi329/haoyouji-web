@@ -109,7 +109,9 @@ const AddTransaction = () => {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
   const [reimbursementStatus, setReimbursementStatus] = useState<'none' | 'pending'>('none');
   const [pendingType, setPendingType] = useState<'receivable' | 'payable' | null>(null);
-  const [pendingIncludeStats, setPendingIncludeStats] = useState<number>(1); // 0=仅显示不计入，1=显示并计入
+  const [pendingIncludeStats, setPendingIncludeStats] = useState<number>(
+    (ledger as any)?.pendingDefaultIncludeStats ?? 1
+  ); // 0=仅显示不计入，1=显示并计入，默认使用账本设置
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -128,6 +130,13 @@ const AddTransaction = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // 加载编辑数据
+  // 当账本数据加载后，同步默认统计模式（仅在非编辑模式且未选择待结类型时）
+  useEffect(() => {
+    if (!isEditMode && ledger && !pendingType) {
+      setPendingIncludeStats((ledger as any).pendingDefaultIncludeStats ?? 1);
+    }
+  }, [ledger, isEditMode, pendingType]);
+
   useEffect(() => {
     if (isEditMode && editTransaction) {
       setTransactionType(editTransaction.type as TransactionType);

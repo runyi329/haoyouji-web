@@ -25,23 +25,35 @@ const LedgerFeatures = () => {
   });
 
   const handleToggleReimbursement = (enabled: boolean) => {
-    updateFeaturesMutation.mutate({
-      ledgerId,
-      enableReimbursement: enabled,
-    });
+    if (!enabled) {
+      // 关闭报销功能时，后端会检查是否还有待报销的账目
+      updateFeaturesMutation.mutate({
+        ledgerId,
+        enableReimbursement: enabled,
+      }, {
+        onError: (error) => {
+          toast.error(error.message || "无法关闭报销功能");
+          refetch();
+        },
+      });
+    } else {
+      updateFeaturesMutation.mutate({
+        ledgerId,
+        enableReimbursement: enabled,
+      });
+    }
   };
 
   const handleTogglePending = (enabled: boolean) => {
     if (!enabled) {
       // 关闭待结功能时，后端会检查是否还有未结算的账目
-      // 如果有，会抛出错误，前端显示提示
       updateFeaturesMutation.mutate({
         ledgerId,
         enablePending: enabled,
       }, {
         onError: (error) => {
           toast.error(error.message || "无法关闭待结功能");
-          refetch(); // 重新加载以恢复开关状态
+          refetch();
         },
       });
     } else {
@@ -50,6 +62,13 @@ const LedgerFeatures = () => {
         enablePending: enabled,
       });
     }
+  };
+
+  const handleTogglePendingDefaultStats = (includeStats: number) => {
+    updateFeaturesMutation.mutate({
+      ledgerId,
+      pendingDefaultIncludeStats: includeStats,
+    });
   };
 
   if (!ledger) {
@@ -62,6 +81,7 @@ const LedgerFeatures = () => {
 
   const enableReimbursement = ledger.enableReimbursement === 1;
   const enablePending = ledger.enablePending === 1;
+  const pendingDefaultIncludeStats = (ledger as any).pendingDefaultIncludeStats ?? 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -102,6 +122,7 @@ const LedgerFeatures = () => {
 
         {/* 待结功能 */}
         <div className="bg-white rounded-lg p-4 shadow-sm">
+          {/* 第一层：开关 */}
           <div className="flex items-center justify-between mb-2">
             <div>
               <h3 className="font-medium text-gray-900">待结功能</h3>
@@ -116,16 +137,66 @@ const LedgerFeatures = () => {
             />
           </div>
           {enablePending && (
-            <div className="mt-3 p-3 bg-green-50 rounded-lg">
-              <p className="text-xs text-green-800 mb-2">
-                ✓ 待结功能已启用，添加账单时会显示"代收"和"代付"按钮
-              </p>
-              <div className="space-y-1 text-xs text-green-700">
-                <p>• <strong>代收</strong>：标记为代他人收款的项目</p>
-                <p>• <strong>代付</strong>：标记为代他人付款的项目</p>
-                <p className="flex items-center gap-1">• 标记后的项目会在列表中显示 <Hourglass className="w-3.5 h-3.5 text-blue-600 inline" /> 沙漏图标</p>
+            <>
+              <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                <p className="text-xs text-green-800 mb-2">
+                  ✓ 待结功能已启用，添加账单时会显示"代收"和"代付"按钮
+                </p>
+                <div className="space-y-1 text-xs text-green-700">
+                  <p>• <strong>代收</strong>：标记为代他人收款的项目</p>
+                  <p>• <strong>代付</strong>：标记为代他人付款的项目</p>
+                  <p className="flex items-center gap-1">• 标记后的项目会在列表中显示 <Hourglass className="w-3.5 h-3.5 text-blue-600 inline" /> 沙漏图标</p>
+                </div>
               </div>
-            </div>
+
+              {/* 第二层：默认统计模式 */}
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-medium text-gray-800 mb-3">待结账目默认统计模式</p>
+                <div className="space-y-2">
+                  <label 
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${
+                      pendingDefaultIncludeStats === 1 
+                        ? 'bg-blue-50 border border-blue-200' 
+                        : 'bg-white border border-gray-100 hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleTogglePendingDefaultStats(1)}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      pendingDefaultIncludeStats === 1 ? 'border-blue-500' : 'border-gray-300'
+                    }`}>
+                      {pendingDefaultIncludeStats === 1 && (
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">显示并计入统计</p>
+                      <p className="text-xs text-gray-500 mt-0.5">待结账目会显示在列表中，同时计入收支统计</p>
+                    </div>
+                  </label>
+                  <label 
+                    className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-colors ${
+                      pendingDefaultIncludeStats === 0 
+                        ? 'bg-blue-50 border border-blue-200' 
+                        : 'bg-white border border-gray-100 hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleTogglePendingDefaultStats(0)}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      pendingDefaultIncludeStats === 0 ? 'border-blue-500' : 'border-gray-300'
+                    }`}>
+                      {pendingDefaultIncludeStats === 0 && (
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">仅显示不计入统计</p>
+                      <p className="text-xs text-gray-500 mt-0.5">待结账目会显示在列表中，但不计入收支统计，金额显示为灰色</p>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">此设置为添加账目时的默认选项，添加时仍可单独调整</p>
+              </div>
+            </>
           )}
         </div>
 
@@ -134,8 +205,8 @@ const LedgerFeatures = () => {
           <h4 className="font-medium text-yellow-900 mb-2">💡 功能说明</h4>
           <div className="space-y-2 text-sm text-yellow-800">
             <p>• 关闭功能后，相关按钮会在添加账单页面隐藏</p>
+            <p>• 如有未处理的待结或待报销账目，需先处理后才能关闭对应功能</p>
             <p>• 已标记的历史记录不受影响，仍然保留标记</p>
-            <p>• 可以随时开启或关闭功能</p>
           </div>
         </div>
       </div>

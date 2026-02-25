@@ -104,6 +104,16 @@ async function ensureLedgerFeaturesColumns() {
   try {
     const db = await getLedgerDb();
     if (!db) return;
+    // 添加 pending_default_include_stats 字段（账本级别默认统计模式）
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN pending_default_include_stats TINYINT DEFAULT 1 NOT NULL COMMENT '待结默认统计模式（0=仅显示不计入，1=显示并计入）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_default_include_stats error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
     // 创建索引
     await db.execute(sql`CREATE INDEX idx_pending_type ON ledger_records(pending_type)`);
   } catch (e: any) {
@@ -4189,6 +4199,7 @@ export async function updateLedgerFeatures(
   features: {
     enableReimbursement?: boolean;
     enablePending?: boolean;
+    pendingDefaultIncludeStats?: number;
   }
 ): Promise<void> {
   const db = await getLedgerDb();
@@ -4219,6 +4230,35 @@ export async function updateLedgerFeatures(
   // 构建更新对象
   const updateData: any = {};
   if (features.enableReimbursement !== undefined) {
+    // 如果要关闭报销功能，检查是否还有待报销的账目
+    if (features.enableReimbursement === false) {
+      const reimbursementRecords = await db
+        .select({ id: ledgerRecords.id })
+        .from(ledgerRecords)
+        .where(
+          and(
+            eq(ledgerRecords.ledgerId, ledgerId),
+            eq(ledgerRecords.reimbursementStatus, 'pending'),
+            isNull(ledgerRecords.deletedAt)
+          )
+        )
+        .limit(1);
+      
+      if (reimbursementRecords.length > 0) {
+        const countResult = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(ledgerRecords)
+          .where(
+            and(
+              eq(ledgerRecords.ledgerId, ledgerId),
+              eq(ledgerRecords.reimbursementStatus, 'pending'),
+              isNull(ledgerRecords.deletedAt)
+            )
+          );
+        const count = countResult[0]?.count || 0;
+        throw new Error(`当前账本中还有 ${count} 笔待报销账目，请先处理完毕后再关闭报销功能`);
+      }
+    }
     updateData.enableReimbursement = features.enableReimbursement ? 1 : 0;
   }
   if (features.enablePending !== undefined) {
@@ -4253,6 +4293,9 @@ export async function updateLedgerFeatures(
       }
     }
     updateData.enablePending = features.enablePending ? 1 : 0;
+  }
+  if (features.pendingDefaultIncludeStats !== undefined) {
+    updateData.pendingDefaultIncludeStats = features.pendingDefaultIncludeStats;
   }
 
   // 更新账本功能设置
