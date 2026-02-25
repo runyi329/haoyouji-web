@@ -142,6 +142,7 @@ export async function createRechargeOrder(
     amount: uniqueAmount.toString(),
     currency: 'USDT',
     network,
+    walletAddress: wallet.address,
     status: 'pending',
     expiresAt: expiresAt.toISOString().slice(0, 19).replace('T', ' ')
   });
