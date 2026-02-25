@@ -4307,16 +4307,15 @@ export async function updateLedgerFeatures(
   console.log('[updateLedgerFeatures] 账本功能设置已更新:', { ledgerId, features });
 }
 
+
 /**
- * 获取用户所有账本中的待结账目汇总
+ * 获取用户所有账本中的待结账目（按账本分组）
  */
 export async function getAllPendingTransactions(userId: number) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
-  console.log('[getAllPendingTransactions] 获取用户所有待结账目:', { userId });
-
-  // 1. 获取用户所有账本
+  // 1. 获取用户加入的所有未封存账本
   const userLedgers = await db
     .select({
       ledgerId: ledgerMembers.ledgerId,
@@ -4331,32 +4330,15 @@ export async function getAllPendingTransactions(userId: number) {
       )
     );
 
-  console.log('[getAllPendingTransactions] 用户账本列表:', userLedgers);
+  if (userLedgers.length === 0) {
+    return [];
+  }
 
-  // 2. 获取所有账本中的待结账目
-  const result: Array<{
-    ledgerId: number;
-    ledgerName: string;
-    transactions: Array<{
-      id: number;
-      description: string;
-      amount: number;
-      type: string;
-      pendingType: string;
-      pendingIncludeStats: number;
-      recordDate: Date;
-      categoryId: number | null;
-      categoryName: string | null;
-      categoryIcon: string | null;
-      createdBy: number;
-      creatorName: string | null;
-      creatorAvatar: string | null;
-    }>;
-  }> = [];
+  // 2. 逐个账本查询待结账目
+  const result = [];
 
   for (const ledger of userLedgers) {
-    // 获取该账本的待结账目
-    const pendingTransactions = await db
+    const rows = await db
       .select({
         id: ledgerRecords.id,
         description: ledgerRecords.description,
@@ -4384,33 +4366,28 @@ export async function getAllPendingTransactions(userId: number) {
       )
       .orderBy(desc(ledgerRecords.recordDate));
 
-    if (pendingTransactions.length > 0) {
+    if (rows.length > 0) {
       result.push({
         ledgerId: ledger.ledgerId,
         ledgerName: ledger.ledgerName,
-        transactions: pendingTransactions.map(t => ({
-          id: t.id,
-          description: t.description || '',
-          amount: t.amount,
-          type: t.type,
-          pendingType: t.pendingType!,
-          pendingIncludeStats: t.pendingIncludeStats ?? 1,
-          recordDate: t.recordDate,
-          categoryId: t.categoryId,
-          categoryName: t.categoryName,
-          categoryIcon: t.categoryIcon,
-          createdBy: t.createdBy,
-          creatorName: t.creatorName,
-          creatorAvatar: t.creatorAvatar,
+        transactions: rows.map(r => ({
+          id: r.id,
+          description: r.description || "",
+          amount: Number(r.amount),
+          type: r.type as string,
+          pendingType: r.pendingType as string,
+          pendingIncludeStats: r.pendingIncludeStats ?? 1,
+          recordDate: r.recordDate,
+          categoryId: r.categoryId,
+          categoryName: r.categoryName ?? null,
+          categoryIcon: r.categoryIcon ?? null,
+          createdBy: r.createdBy,
+          creatorName: r.creatorName ?? null,
+          creatorAvatar: r.creatorAvatar ?? null,
         })),
       });
     }
   }
-
-  console.log('[getAllPendingTransactions] 待结账目汇总:', {
-    ledgerCount: result.length,
-    totalTransactions: result.reduce((sum, l) => sum + l.transactions.length, 0),
-  });
 
   return result;
 }
