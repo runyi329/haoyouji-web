@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
-import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X, Hourglass } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 import { toast } from "sonner";
@@ -48,6 +48,32 @@ export default function TransactionDetail() {
   const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   
+  // ========== 待结功能状态 ==========
+  const [showSettleDialog, setShowSettleDialog] = useState(false);
+  const [pendingLocalType, setPendingLocalType] = useState<string | null>(null);
+
+  // 结算 mutation
+  const settleMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      setPendingLocalType(null);
+      toast.success('已结算，待结状态已清除');
+      setShowSettleDialog(false);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || '结算失败');
+    },
+  });
+
+  // 确认结算
+  const handleSettle = () => {
+    settleMutation.mutate({
+      recordId: transactionId,
+      pendingType: null,
+      pendingIncludeStats: null,
+    });
+  };
+
   // ========== 报销功能状态（全新实现）==========
   const [showReimbursementForm, setShowReimbursementForm] = useState(false);
   const [rbDialogOpen, setRbDialogOpen] = useState(false);
@@ -63,6 +89,7 @@ export default function TransactionDetail() {
   useEffect(() => {
     if (transaction) {
       setRbLocalStatus(transaction.reimbursementStatus || 'none');
+      setPendingLocalType(transaction.pendingType || null);
     }
   }, [transaction]);
 
@@ -371,6 +398,31 @@ export default function TransactionDetail() {
         )}
         {/* ========== 报销状态显示结束 ========== */}
 
+        {/* ========== 待结状态显示 ========== */}
+        {pendingLocalType && (
+          <div className="flex items-center justify-between py-3 px-4 border-b border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <Hourglass className="w-4 h-4 text-[#1976D2]" />
+              <span className="text-sm text-gray-600">待结状态</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${
+                pendingLocalType === 'receivable' ? 'text-[#4CAF50]' : 'text-[#FF9800]'
+              }`}>
+                {pendingLocalType === 'receivable' ? '代收' : '代付'}
+                {transaction.pendingIncludeStats === 0 ? '（不计入统计）' : '（计入统计）'}
+              </span>
+              <button
+                onClick={() => setShowSettleDialog(true)}
+                className="px-2.5 py-1 text-xs bg-[#1976D2] text-white rounded-md hover:bg-[#1565C0] active:bg-[#0D47A1] transition-colors"
+              >
+                已结算
+              </button>
+            </div>
+          </div>
+        )}
+        {/* ========== 待结状态显示结束 ========== */}
+
         {transaction.images && transaction.images.length > 0 ? (
           <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
             <span className="text-xs text-gray-500">凭证图片</span>
@@ -483,6 +535,30 @@ export default function TransactionDetail() {
           </button>
         </div>
       )}
+
+      {/* 结算确认对话框 */}
+      <Dialog open={showSettleDialog} onOpenChange={setShowSettleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认结算</DialogTitle>
+            <DialogDescription>
+              确认这笔{pendingLocalType === 'receivable' ? '代收' : '代付'}账目已经结算完成吗？结算后待结状态将被清除，沙漏图标也会消失。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowSettleDialog(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={handleSettle}
+              disabled={settleMutation.isPending}
+              className="bg-[#1976D2] hover:bg-[#1565C0] text-white"
+            >
+              {settleMutation.isPending ? '处理中...' : '确认结算'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 审批对话框 */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
