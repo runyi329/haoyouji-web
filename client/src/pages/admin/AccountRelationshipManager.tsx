@@ -142,16 +142,10 @@ export default function AccountRelationshipManager() {
 
   // 角色标签颜色
   const getRoleBadge = (role: string) => {
-    switch (role) {
-      case "super_admin":
-        return <Badge className="bg-[#D32F2F]">超级管理员</Badge>;
-      case "parent":
-        return <Badge className="bg-[#1976D2]">家长</Badge>;
-      case "baby":
-        return <Badge className="bg-pink-500">宝宝</Badge>;
-      default:
-        return <Badge>{role}</Badge>;
+    if (role === "super_admin") {
+      return <Badge className="bg-[#D32F2F]">超级管理员</Badge>;
     }
+    return <Badge className="bg-[#1976D2]">用户</Badge>;
   };
 
   // 获取宝宝档案信息
@@ -511,8 +505,6 @@ export default function AccountRelationshipManager() {
                   <TableHead>用户名</TableHead>
                   <TableHead>姓名</TableHead>
                   <TableHead>角色</TableHead>
-                  <TableHead>关联账户</TableHead>
-                  <TableHead>宝宝档案</TableHead>
                   <TableHead className="text-center">编辑</TableHead>
                   <TableHead className="text-center">钱包功能</TableHead>
                   <TableHead className="text-center">功能权限</TableHead>
@@ -562,93 +554,6 @@ export default function AccountRelationshipManager() {
                         )}
                       </TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Select
-                            value={selectedRelatedUserId?.toString() || "none"}
-                            onValueChange={(value) =>
-                              setSelectedRelatedUserId(value === "none" ? null : parseInt(value))
-                            }
-                          >
-                            <SelectTrigger className="w-[200px]">
-                              <SelectValue placeholder={
-                                user.role === 'baby' ? "选择家长" : "选择宝宝"
-                              } />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">解除关系</SelectItem>
-                              {user.role === 'baby' ? (
-                                // 宝宝：选择家长
-                                users?.filter(u => u.role === 'parent').map((parent) => (
-                                  <SelectItem key={parent.id} value={parent.id.toString()}>
-                                    {parent.name || parent.username}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                // 家长：选择宝宝
-                                users?.filter(u => u.role === 'baby').map((baby) => (
-                                  <SelectItem key={baby.id} value={baby.id.toString()}>
-                                    {baby.name || baby.username}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="text-sm">
-                            {user.role === "super_admin" ? (
-                              <span className="text-gray-400">-</span>
-                            ) : user.role === "parent" ? (
-                              // 家长：显示管理的宝宝列表
-                              (() => {
-                                const kids = getKidsByParent(user.familyId);
-                                return kids.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {kids.map((kid) => (
-                                      <Badge key={kid.id} variant="secondary" className="text-xs">
-                                        {kid.name}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">未绑定宝宝</span>
-                                );
-                              })()
-                            ) : (
-                              // 宝宝：显示所属的家长
-                              (() => {
-                                const parentName = getParentName(user.familyId);
-                                return parentName ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    家长：{parentName}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-gray-400">未绑定家长</span>
-                                );
-                              })()
-                            )}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {kidInfo ? (
-                          <div className="flex items-center gap-2">
-                            {kidInfo.avatar && (
-                              <img
-                                src={kidInfo.avatar}
-                                alt={kidInfo.name}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            )}
-                            <div>
-                              <div className="text-sm font-medium">{kidInfo.name}</div>
-                              <div className="text-xs text-gray-500">⭐ {kidInfo.stars}</div>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-sm">-</span>
-                        )}
-                      </TableCell>
                       {/* 编辑列 */}
                       <TableCell className="text-center">
                         {editingUserInfoId === user.id ? (
