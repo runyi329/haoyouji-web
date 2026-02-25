@@ -2925,12 +2925,12 @@ export async function getDeletedTransactions(
     return [];
   }
   
-  // 构建权限过滤条件
+  // 构建权限过滤条件：显示用户删除的记录，或者用户创建的被删除记录
   const permissionCondition = userPermission === 'own'
-    ? sql`${ledgerRecords.createdBy} = ${userId}`
-    : undefined;
+    ? sql`(${ledgerRecords.deletedBy} = ${userId} OR ${ledgerRecords.createdBy} = ${userId})`
+    : sql`${ledgerRecords.deletedBy} = ${userId}`;
   
-  // 获取30天内删除的记录
+  // 获取60天内删除的记录（从30天改为60天）
   const records = await db
     .select({
       id: ledgerRecords.id,
@@ -2950,7 +2950,7 @@ export async function getDeletedTransactions(
       and(
         eq(ledgerRecords.ledgerId, ledgerId),
         sql`${ledgerRecords.deletedAt} IS NOT NULL`,
-        sql`${ledgerRecords.deletedAt} >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+        sql`${ledgerRecords.deletedAt} >= DATE_SUB(NOW(), INTERVAL 60 DAY)`,
         permissionCondition
       )
     )

@@ -35,7 +35,7 @@ export default function DeletedRecords() {
   const getRemainingDays = (deletedAt: string | Date) => {
     const deleted = new Date(deletedAt);
     const now = new Date();
-    const diffMs = 30 * 24 * 60 * 60 * 1000 - (now.getTime() - deleted.getTime());
+    const diffMs = 60 * 24 * 60 * 60 * 1000 - (now.getTime() - deleted.getTime());
     const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     return Math.max(0, days);
   };
@@ -80,7 +80,7 @@ export default function DeletedRecords() {
       >
         <p>
           <span style={{ color: "var(--brand-red)", fontWeight: "bold" }}>提示：</span>
-          删除的账目将保留 <strong>30天</strong>，超过30天将自动永久删除，无法恢复。
+          删除的账目将保留 <strong>60天</strong>，超过60天将自动永久删除，无法恢复。
         </p>
       </div>
 
@@ -95,7 +95,7 @@ export default function DeletedRecords() {
             <div className="text-4xl mb-3">📋</div>
             <p style={{ color: "var(--text-gray)" }}>暂无已删除的账目记录</p>
             <p className="text-sm mt-1" style={{ color: "var(--text-gray)", opacity: 0.7 }}>
-              删除的账目将在此处保留30天
+              删除的账目将在此处保疑60天
             </p>
           </div>
         ) : (
