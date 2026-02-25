@@ -92,7 +92,7 @@ export default function Ledger() {
 
   // 获取所有待结账目
   const { data: pendingData } = trpc.ledger.getAllPending.useQuery();
-  const hasPendingTransactions = pendingData && pendingData.length > 0;
+  const hasPendingTransactions = (pendingData && pendingData.length > 0);
 
   // 获取所有账本中的成员名单（去重）
   const allMembers = useMemo(() => {
@@ -557,7 +557,7 @@ export default function Ledger() {
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 onClick={() => setLocation("/pending-overview")}
               >
-                <Hourglass className="w-5 h-5 text-blue-600" strokeWidth={2} />
+                <Hourglass className="w-5 h-5 text-[#222222]" strokeWidth={2} />
               </button>
             )}
           </div>
