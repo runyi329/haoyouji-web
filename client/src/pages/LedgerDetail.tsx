@@ -15,6 +15,7 @@ import {
   Plus,
   Search,
   Receipt,
+  Hourglass,
 } from "lucide-react";
 
 export default function LedgerDetail() {
@@ -423,9 +424,7 @@ export default function LedgerDetail() {
                           )}
                           {/* 待结状态图标 */}
                           {record.pendingType && (
-                            <span className="ml-0.5 text-base flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'}>
-                              ⏳
-                            </span>
+                            <Hourglass className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'} />
                           )}
                         </div>
                         {record.description && (
