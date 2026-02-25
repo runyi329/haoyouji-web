@@ -163,7 +163,7 @@ export const appRouter = router({
     createOrder: protectedProcedure
       .input(z.object({
         amount: z.number().min(1).max(100000),
-        network: z.enum(['TRC20', 'ERC20', 'BEP20']).default('TRC20')
+        network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20')
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network);
