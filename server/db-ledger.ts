@@ -2928,7 +2928,7 @@ export async function getDeletedTransactions(
   // 构建权限过滤条件：显示用户删除的记录，或者用户创建的被删除记录
   const permissionCondition = userPermission === 'own'
     ? sql`(${ledgerRecords.deletedBy} = ${userId} OR ${ledgerRecords.createdBy} = ${userId})`
-    : sql`${ledgerRecords.deletedBy} = ${userId}`;
+    : undefined; // 权限为'all'时，显示所有删除记录
   
   // 获取60天内删除的记录（从30天改为60天）
   const records = await db
