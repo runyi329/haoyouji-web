@@ -9,6 +9,9 @@ const USDT_COIN_TYPE = '0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f9
 // 已处理的交易哈希
 const processedTxns = new Set<string>();
 
+// Store地址缓存（地址 -> Store地址）
+const storeAddressCache = new Map<string, string>();
+
 // 扫描统计
 export let scanStats = {
   scannedAddresses: 0,
@@ -54,6 +57,82 @@ export async function scanAptosTransactions() {
 }
 
 /**
+ * 获取地址对应的Primary Fungible Store地址
+ */
+async function getPrimaryStoreAddress(walletAddress: string): Promise<string | null> {
+  // 先检查缓存
+  if (storeAddressCache.has(walletAddress)) {
+    return storeAddressCache.get(walletAddress)!;
+  }
+
+  try {
+    // 方法1：从最近的交易中提取Store地址
+    const txResponse = await fetch(
+      `${APTOS_API_URL}/accounts/${walletAddress}/transactions?limit=5`
+    );
+
+    if (txResponse.ok) {
+      const transactions = await txResponse.json();
+      
+      for (const tx of transactions) {
+        if (tx.events && Array.isArray(tx.events)) {
+          // 查找Withdraw或Deposit事件
+          for (const event of tx.events) {
+            if ((event.type?.includes('Withdraw') || event.type?.includes('Deposit')) && 
+                event.data?.store) {
+              const storeAddress = event.data.store;
+              
+              // 验证这个Store是否属于该地址
+              const isValid = await verifyStoreOwner(storeAddress, walletAddress);
+              if (isValid) {
+                console.log(`[Aptos Scanner] Found Primary Store for ${walletAddress.slice(0, 10)}...: ${storeAddress}`);
+                storeAddressCache.set(walletAddress, storeAddress);
+                return storeAddress;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    console.warn(`[Aptos Scanner] Could not find Primary Store for ${walletAddress.slice(0, 10)}...`);
+    return null;
+    
+  } catch (error) {
+    console.error(`[Aptos Scanner] Error getting Primary Store:`, error);
+    return null;
+  }
+}
+
+/**
+ * 验证Store是否属于指定地址
+ */
+async function verifyStoreOwner(storeAddress: string, expectedOwner: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `${APTOS_API_URL}/accounts/${storeAddress}/resources`
+    );
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const resources = await response.json();
+    const fungibleStore = resources.find((r: any) => 
+      r.type && r.type.includes('FungibleStore')
+    );
+
+    if (fungibleStore && fungibleStore.data && fungibleStore.data.owner) {
+      return fungibleStore.data.owner.toLowerCase() === expectedOwner.toLowerCase();
+    }
+
+    return false;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * 扫描单个Aptos钱包地址
  * 查询过去24小时内转入该地址的USDT交易
  */
@@ -61,31 +140,15 @@ async function scanWalletAddress(walletAddress: string, label: string) {
   try {
     console.log(`[Aptos Scanner] Scanning ${label} (${walletAddress.slice(0, 10)}...)...`);
     
-    // 获取账户资源，检查USDT余额变化
-    const resourceResponse = await fetch(
-      `${APTOS_API_URL}/accounts/${walletAddress}/resources`
-    );
-
-    if (!resourceResponse.ok) {
-      console.error(`[Aptos Scanner] Failed to fetch resources: ${resourceResponse.status}`);
-      return;
-    }
-
-    const resources = await resourceResponse.json();
+    // 1. 获取该地址对应的Primary Fungible Store
+    const storeAddress = await getPrimaryStoreAddress(walletAddress);
     
-    // 查找USDT CoinStore
-    const usdtResource = resources.find((r: any) => 
-      r.type && r.type.includes('CoinStore') && r.type.includes('USDT')
-    );
-
-    if (!usdtResource) {
-      console.log(`[Aptos Scanner] No USDT CoinStore found for ${label}`);
+    if (!storeAddress) {
+      console.warn(`[Aptos Scanner] No Primary Store found for ${label}, skipping...`);
       return;
     }
 
-    console.log(`[Aptos Scanner] Found USDT resource, fetching recent transactions...`);
-
-    // 获取最近的交易
+    // 2. 查询最近的交易
     const txResponse = await fetch(
       `${APTOS_API_URL}/accounts/${walletAddress}/transactions?limit=50`
     );
@@ -105,7 +168,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     // 24小时前的时间戳（微秒）
     const oneDayAgo = Date.now() * 1000 - 24 * 60 * 60 * 1000 * 1000;
 
-    // 处理每笔交易
+    // 3. 处理每笔交易
     for (const tx of transactions) {
       // 只处理24小时内的交易
       if (parseInt(tx.timestamp) < oneDayAgo) {
@@ -113,7 +176,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
       }
 
       if (tx.type === 'user_transaction' && tx.success) {
-        await processAptosTransaction(tx, walletAddress);
+        await processAptosTransaction(tx, walletAddress, storeAddress);
       }
     }
 
@@ -124,9 +187,9 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 
 /**
  * 处理单笔Aptos交易
- * 查找转入目标地址的USDT
+ * 查找转入目标地址Store的USDT
  */
-async function processAptosTransaction(tx: any, walletAddress: string) {
+async function processAptosTransaction(tx: any, walletAddress: string, storeAddress: string) {
   try {
     const txnHash = tx.hash;
     
@@ -135,69 +198,51 @@ async function processAptosTransaction(tx: any, walletAddress: string) {
       return;
     }
 
-    // 检查events中的DepositEvent
+    // 检查events中的Deposit事件
     if (tx.events && Array.isArray(tx.events)) {
       for (const event of tx.events) {
-        // 查找存款事件
-        if (event.type && event.type.includes('DepositEvent')) {
+        // 查找Deposit事件，并且是转入到我们的Store
+        if (event.type && event.type.includes('Deposit')) {
           const eventData = event.data;
           
-          // 检查是否是转入目标地址
-          if (eventData && eventData.account === walletAddress) {
+          // 关键：检查是否是转入到我们的Store
+          if (eventData && eventData.store && 
+              eventData.store.toLowerCase() === storeAddress.toLowerCase()) {
+            
             const amount = extractAmountFromEvent(eventData);
             
             if (amount && amount > 0) {
               scanStats.foundTransactions++;
-              console.log(`[Aptos Scanner] Detected deposit: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${txnHash})`);
+              
+              const timestamp = new Date(parseInt(tx.timestamp) / 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+              console.log(`[Aptos Scanner] 🎯 Detected INCOMING transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${txnHash}, time: ${timestamp})`);
               
               // 匹配订单
               const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
               
               if (matchResult) {
-                scanStats.matchedOrders++;
-                processedTxns.add(txnHash);
-                console.log(`[Aptos Scanner] ✅ Matched order ${matchResult.orderNo}`);
-              } else {
-                scanStats.unmatchedTransactions++;
-                console.log(`[Aptos Scanner] ⚠️  No matching order for amount ${amount}`);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 备用方案：从changes中查找
-    if (tx.changes && Array.isArray(tx.changes)) {
-      for (const change of tx.changes) {
-        if (change.type === 'write_resource' && 
-            change.address === walletAddress &&
-            change.data?.type?.includes('CoinStore') &&
-            change.data?.type?.includes('USDT')) {
-          
-          // 从payload中提取金额
-          const payload = tx.payload;
-          if (payload?.function?.includes('transfer')) {
-            // 检查接收方是否是目标地址
-            const receiver = payload.arguments?.[0];
-            if (receiver === walletAddress) {
-              const amount = extractAmountFromPayload(payload);
-              
-              if (amount && amount > 0 && !processedTxns.has(txnHash)) {
-                scanStats.foundTransactions++;
-                console.log(`[Aptos Scanner] Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${txnHash})`);
+                const { order, matchType, amountDiff } = matchResult;
                 
-                // 匹配订单
-                const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
+                if (matchType === 'exact') {
+                  console.log(`[Aptos Scanner] ✅ Exact match! Order ${order.orderNo}, amount ${amount} USDT`);
+                } else {
+                  console.log(`[Aptos Scanner] 🔄 Fuzzy match! Order ${order.orderNo}, order amount ${order.amount}, actual ${amount} USDT, diff ${amountDiff}`);
+                }
                 
-                if (matchResult) {
+                // 完成订单
+                const success = await dbRecharge.completeRechargeOrder(order.id, txnHash, amount, matchType);
+                
+                if (success) {
+                  console.log(`[Aptos Scanner] ✅ Order ${order.orderNo} completed! User ${order.userId} +${amount} USDT (match: ${matchType})`);
                   scanStats.matchedOrders++;
                   processedTxns.add(txnHash);
-                  console.log(`[Aptos Scanner] ✅ Matched order ${matchResult.orderNo}`);
-                } else {
-                  scanStats.unmatchedTransactions++;
-                  console.log(`[Aptos Scanner] ⚠️  No matching order for amount ${amount}`);
                 }
+              } else {
+                scanStats.unmatchedTransactions++;
+                console.log(`[Aptos Scanner] ⚠️  No matching order for amount ${amount} USDT`);
+                // 记录未匹配交易
+                await dbRecharge.recordUnmatchedTransaction(txnHash, amount, tx.sender || '');
+                processedTxns.add(txnHash);
               }
             }
           }
@@ -219,25 +264,6 @@ function extractAmountFromEvent(eventData: any): number | null {
       // USDT通常是6位小数
       const amount = parseFloat(eventData.amount) / 1e6;
       return amount;
-    }
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
- * 从交易payload中提取金额
- */
-function extractAmountFromPayload(payload: any): number | null {
-  try {
-    // 通常第二个参数是金额
-    if (payload?.arguments && Array.isArray(payload.arguments) && payload.arguments.length >= 2) {
-      const amountArg = payload.arguments[1];
-      if (typeof amountArg === 'string' || typeof amountArg === 'number') {
-        const amount = parseFloat(amountArg.toString()) / 1e6; // USDT通常是6位小数
-        return amount;
-      }
     }
     return null;
   } catch (error) {
