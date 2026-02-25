@@ -6702,7 +6702,7 @@ export const appRouter = router({
         memberId: z.number().optional(),
         accountId: z.number().optional(),
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
-        pendingType: z.enum(['receivable', 'payable']).optional(),
+        pendingType: z.enum(['receivable', 'payable']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.addTransaction({
@@ -6777,7 +6777,7 @@ export const appRouter = router({
         memberId: z.number().optional(),
         accountId: z.number().optional(),
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
-        pendingType: z.enum(['receivable', 'payable']).optional(),
+        pendingType: z.enum(['receivable', 'payable']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { recordId, ...data } = input;
