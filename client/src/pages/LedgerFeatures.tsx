@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Hourglass } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Switch } from "@/components/ui/switch";
@@ -109,7 +109,7 @@ const LedgerFeatures = () => {
               <div className="space-y-1 text-xs text-green-700">
                 <p>• <strong>代收</strong>：标记为代他人收款的项目</p>
                 <p>• <strong>代付</strong>：标记为代他人付款的项目</p>
-                <p>• 标记后的项目会在列表中显示 ⏳ 沙漏图标</p>
+                <p className="flex items-center gap-1">• 标记后的项目会在列表中显示 <Hourglass className="w-3.5 h-3.5 text-blue-600 inline" /> 沙漏图标</p>
               </div>
             </div>
           )}
