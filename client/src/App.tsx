@@ -185,6 +185,7 @@ function Router() {
 
         {/* 钱包相关页面 */}
         <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
+        <Route path="/wallet/transactions" component={lazy(() => import("./pages/WalletTransactions"))} />
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />
