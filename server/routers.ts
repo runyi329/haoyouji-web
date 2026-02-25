@@ -7304,6 +7304,9 @@ export const appRouter = router({
   // 脉动节点合作平台 - 工作群管理
   workGroups: workGroupsRouter,
 
+  // ==================== 管理员功能 ====================
+  adminFeature: adminFeatureRouter,
+
   // ==================== 数据安全（加密管理） ====================
   encryption: router({
     // 获取加密配置列表
