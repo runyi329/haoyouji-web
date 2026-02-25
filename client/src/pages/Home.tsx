@@ -138,7 +138,7 @@ export default function Home() {
   // 获取累计联络次数
   const { data: totalInteractionCount } = trpc.contacts.totalInteractionCount.useQuery();
   
-  // 获取累计标签数量
+  // 获取标签总数
   const { data: totalTagCount } = trpc.contacts.totalTagCount.useQuery();
   
   // 获取累计使用天数
@@ -322,7 +322,7 @@ export default function Home() {
           <Card className="bg-white text-[#222222] p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 text-gray-500">
             <Coins className="w-5 h-5" />
-            <span className="text-sm font-medium">累计标签</span>
+            <span className="text-sm font-medium">标签总数</span>
           </div>
           <div className="flex items-baseline space-x-1">
             {isLoading ? (
