@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Wallet as WalletIcon } from "lucide-react";
+import { ArrowLeft, Wallet as WalletIcon, FileText } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import PaymentAccounts from "./PaymentAccounts";
@@ -37,6 +37,18 @@ export default function Wallet() {
           </div>
           <div className="text-sm opacity-75">USDT</div>
         </div>
+        
+        {/* 交易明细按钮 */}
+        <button
+          onClick={() => setLocation("/wallet/transactions")}
+          className="mt-3 w-full bg-white rounded-lg p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center">
+            <FileText className="w-5 h-5 text-[#D32F2F] mr-3" />
+            <span className="font-medium text-gray-900">交易明细</span>
+          </div>
+          <ArrowLeft className="w-5 h-5 text-gray-400 transform rotate-180" />
+        </button>
       </div>
 
       {/* Tab切换栏 */}
