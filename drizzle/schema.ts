@@ -555,6 +555,7 @@ export const ledgers = mysqlTable("ledgers", {
 	isArchived: tinyint().default(0).notNull(),
 	enableReimbursement: tinyint("enable_reimbursement").default(1).notNull(),
 	enablePending: tinyint("enable_pending").default(0).notNull(),
+	pendingDefaultIncludeStats: tinyint("pending_default_include_stats").default(1).notNull(),
 	defaultPermissionView: mysqlEnum("default_permission_view", ['all','own','none']).default('own').notNull(),
 	defaultPermissionAdd: mysqlEnum("default_permission_add", ['all','own','none']).default('own').notNull(),
 	defaultPermissionEdit: mysqlEnum("default_permission_edit", ['all','own','none']).default('own').notNull(),
