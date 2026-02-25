@@ -911,6 +911,7 @@ export const users = mysqlTable("users", {
 	invitedAt: timestamp('invited_at', { mode: 'string' }),
 	inviteCount: int('invite_count').default(0).notNull(),
 	inviteEnabled: tinyint('invite_enabled').default(0).notNull(),
+	walletEnabled: tinyint('wallet_enabled').default(0).notNull(),
 	highestLevelAchieved: varchar('highest_level_achieved', { length: 50 }).default('partner'),
 	lastViewedSharingAt: timestamp('last_viewed_sharing_at', { mode: 'string' }),
 },
