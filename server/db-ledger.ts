@@ -1,6 +1,6 @@
 import { getLedgerDb } from "./db";
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
-import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, isNotNull, asc } from "drizzle-orm";
 import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
 
 // 账目记录需要加密的字段
@@ -89,6 +89,16 @@ async function ensureLedgerFeaturesColumns() {
   } catch (e: any) {
     if (!e.message?.includes('Duplicate column')) {
       console.error('[ensureLedgerFeaturesColumns] pending_type error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 pending_include_stats 字段
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN pending_include_stats TINYINT DEFAULT 1 COMMENT '待结账目是否计入统计（0=仅显示不计入，1=显示并计入）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_include_stats error:', e.message);
     }
   }
   try {
@@ -2279,6 +2289,7 @@ export async function addTransaction(data: {
   accountId?: number; // 付款/收款方式
   reimbursementStatus?: 'none' | 'pending' | 'completed'; // 报销状态
   pendingType?: 'receivable' | 'payable'; // 待结类型（代收/代付）
+  pendingIncludeStats?: number; // 待结账目是否计入统计（0=仅显示不计入，1=显示并计入）
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -2341,6 +2352,7 @@ export async function addTransaction(data: {
     createdBy: data.userId,
     reimbursementStatus: data.reimbursementStatus || 'none',
     pendingType: data.pendingType || null,
+    pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
   };
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
   const result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
@@ -2451,6 +2463,8 @@ export async function getTransactionsList(
       createdAt: ledgerRecords.createdAt,
       imageUrl: ledgerRecords.imageUrl,
       reimbursementStatus: ledgerRecords.reimbursementStatus,
+      pendingType: ledgerRecords.pendingType,
+      pendingIncludeStats: ledgerRecords.pendingIncludeStats,
     })
     .from(ledgerRecords)
     .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
@@ -2595,16 +2609,23 @@ export async function getTransactionsList(
       createdAt: record.createdAt,
       imageUrl: record.imageUrl,
       reimbursementStatus: record.reimbursementStatus,
+      pendingType: record.pendingType,
+      pendingIncludeStats: record.pendingIncludeStats,
       member: creator ? {
         username: creator.username,
         avatar: creator.avatar,
       } : null,
     });
     
-    if (record.type === 'income') {
-      groupedRecords[date].income += amount;
-    } else {
-      groupedRecords[date].expense += amount;
+    // 待结账目且 pendingIncludeStats === 0 时不计入统计
+    const shouldIncludeInStats = !(record.pendingType && record.pendingIncludeStats === 0);
+    
+    if (shouldIncludeInStats) {
+      if (record.type === 'income') {
+        groupedRecords[date].income += amount;
+      } else {
+        groupedRecords[date].expense += amount;
+      }
     }
   });
   
@@ -2676,6 +2697,8 @@ export async function getTransactionDetail(
       reimbursementVoucherUrl: ledgerRecords.reimbursementVoucherUrl,
       reimbursedAt: ledgerRecords.reimbursedAt,
       reimbursedBy: ledgerRecords.reimbursedBy,
+      pendingType: ledgerRecords.pendingType,
+      pendingIncludeStats: ledgerRecords.pendingIncludeStats,
     })
     .from(ledgerRecords)
     .where(
@@ -2791,6 +2814,8 @@ export async function getTransactionDetail(
     reimbursementVoucherUrl: transaction.reimbursementVoucherUrl || null,
     reimbursedAt: transaction.reimbursedAt || null,
     reimbursedBy: transaction.reimbursedBy || null,
+    pendingType: transaction.pendingType || null,
+    pendingIncludeStats: transaction.pendingIncludeStats ?? null,
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);
@@ -3071,6 +3096,7 @@ export async function updateTransaction(
     accountId?: number;
     reimbursementStatus?: 'none' | 'pending' | 'completed';
     pendingType?: 'receivable' | 'payable' | null;
+    pendingIncludeStats?: number | null;
   }
 ) {
   const db = await getLedgerDb();
@@ -3119,7 +3145,14 @@ export async function updateTransaction(
   if (data.memberId) updateData.memberId = data.memberId;
   if (data.accountId !== undefined) updateData.accountId = data.accountId;
   if (data.reimbursementStatus !== undefined) updateData.reimbursementStatus = data.reimbursementStatus;
-  if (data.pendingType !== undefined) updateData.pendingType = data.pendingType;
+  if (data.pendingType !== undefined) {
+    updateData.pendingType = data.pendingType;
+    // 如果取消待结，同时清除 pendingIncludeStats
+    if (data.pendingType === null) {
+      updateData.pendingIncludeStats = null;
+    }
+  }
+  if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
   
   // 加密敏感字段
   const encryptedUpdateData = await encryptFields(db, 'ledger_records', updateData, LEDGER_RECORD_ENCRYPT_FIELDS);
@@ -4189,6 +4222,36 @@ export async function updateLedgerFeatures(
     updateData.enableReimbursement = features.enableReimbursement ? 1 : 0;
   }
   if (features.enablePending !== undefined) {
+    // 如果要关闭待结功能，检查是否还有未结算的账目
+    if (features.enablePending === false) {
+      const pendingRecords = await db
+        .select({ id: ledgerRecords.id })
+        .from(ledgerRecords)
+        .where(
+          and(
+            eq(ledgerRecords.ledgerId, ledgerId),
+            isNotNull(ledgerRecords.pendingType),
+            isNull(ledgerRecords.deletedAt)
+          )
+        )
+        .limit(1);
+      
+      if (pendingRecords.length > 0) {
+        // 查询具体数量
+        const countResult = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(ledgerRecords)
+          .where(
+            and(
+              eq(ledgerRecords.ledgerId, ledgerId),
+              isNotNull(ledgerRecords.pendingType),
+              isNull(ledgerRecords.deletedAt)
+            )
+          );
+        const count = countResult[0]?.count || 0;
+        throw new Error(`当前账本中还有 ${count} 笔待结账目，请先处理完毕后再关闭待结功能`);
+      }
+    }
     updateData.enablePending = features.enablePending ? 1 : 0;
   }
 

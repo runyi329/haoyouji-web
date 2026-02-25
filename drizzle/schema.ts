@@ -523,6 +523,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	reimbursementNotes: text('reimbursement_notes'),
 	reimbursementVoucherUrl: text('reimbursement_voucher_url'),
 	pendingType: mysqlEnum('pending_type', ['receivable','payable']),
+	pendingIncludeStats: tinyint('pending_include_stats').default(1),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),
