@@ -433,7 +433,11 @@ export default function LedgerDetail() {
                       </div>
 
                       {/* 金额 */}
-                      <div className={`text-sm font-normal flex-shrink-0 ${record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'}`}>
+                      <div className={`text-sm font-normal flex-shrink-0 ${
+                        record.pendingType && record.pendingIncludeStats === 0
+                          ? 'text-gray-400'
+                          : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
+                      }`}>
                         {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
                       </div>
                     </div>

@@ -109,6 +109,7 @@ const AddTransaction = () => {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
   const [reimbursementStatus, setReimbursementStatus] = useState<'none' | 'pending'>('none');
   const [pendingType, setPendingType] = useState<'receivable' | 'payable' | null>(null);
+  const [pendingIncludeStats, setPendingIncludeStats] = useState<number>(1); // 0=仅显示不计入，1=显示并计入
   const [note, setNote] = useState("");
   
   // 日期相关状态
@@ -156,6 +157,7 @@ const AddTransaction = () => {
       // 加载待结类型
       if (editTransaction.pendingType) {
         setPendingType(editTransaction.pendingType as 'receivable' | 'payable');
+        setPendingIncludeStats(editTransaction.pendingIncludeStats ?? 1);
       }
     }
   }, [isEditMode, editTransaction]);
@@ -506,6 +508,7 @@ const AddTransaction = () => {
       images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
       reimbursementStatus, // 添加报销状态
       pendingType: pendingType || undefined, // 添加待结类型
+      pendingIncludeStats: pendingType ? pendingIncludeStats : undefined, // 添加待结统计模式
     };
     
     // 只有当accountId是有效数字时才添加
@@ -692,27 +695,60 @@ const AddTransaction = () => {
             <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
               待结状态
             </div>
-            <div className="p-3 flex gap-2">
-              <button
-                className={`px-3 py-1.5 rounded text-xs ${
-                  pendingType === 'receivable'
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setPendingType(pendingType === 'receivable' ? null : 'receivable')}
-              >
-                代收
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded text-xs ${
-                  pendingType === 'payable'
-                    ? "bg-orange-600 text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-                onClick={() => setPendingType(pendingType === 'payable' ? null : 'payable')}
-              >
-                代付
-              </button>
+            <div className="p-3 flex flex-col gap-3">
+              <div className="flex gap-2">
+                <button
+                  className={`px-3 py-1.5 rounded text-xs ${
+                    pendingType === 'receivable'
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                  onClick={() => {
+                    setPendingType(pendingType === 'receivable' ? null : 'receivable');
+                    if (pendingType === 'receivable') setPendingIncludeStats(1);
+                  }}
+                >
+                  代收
+                </button>
+                <button
+                  className={`px-3 py-1.5 rounded text-xs ${
+                    pendingType === 'payable'
+                      ? "bg-orange-600 text-white"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                  onClick={() => {
+                    setPendingType(pendingType === 'payable' ? null : 'payable');
+                    if (pendingType === 'payable') setPendingIncludeStats(1);
+                  }}
+                >
+                  代付
+                </button>
+              </div>
+              {/* 子选项：仅当选择了代收或代付时显示 */}
+              {pendingType && (
+                <div className="flex gap-2">
+                  <button
+                    className={`px-3 py-1.5 rounded text-xs border ${
+                      pendingIncludeStats === 0
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                    onClick={() => setPendingIncludeStats(0)}
+                  >
+                    仅显示不计入
+                  </button>
+                  <button
+                    className={`px-3 py-1.5 rounded text-xs border ${
+                      pendingIncludeStats === 1
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                    onClick={() => setPendingIncludeStats(1)}
+                  >
+                    显示并计入
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

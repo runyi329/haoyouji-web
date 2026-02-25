@@ -32,10 +32,24 @@ const LedgerFeatures = () => {
   };
 
   const handleTogglePending = (enabled: boolean) => {
-    updateFeaturesMutation.mutate({
-      ledgerId,
-      enablePending: enabled,
-    });
+    if (!enabled) {
+      // 关闭待结功能时，后端会检查是否还有未结算的账目
+      // 如果有，会抛出错误，前端显示提示
+      updateFeaturesMutation.mutate({
+        ledgerId,
+        enablePending: enabled,
+      }, {
+        onError: (error) => {
+          toast.error(error.message || "无法关闭待结功能");
+          refetch(); // 重新加载以恢复开关状态
+        },
+      });
+    } else {
+      updateFeaturesMutation.mutate({
+        ledgerId,
+        enablePending: enabled,
+      });
+    }
   };
 
   if (!ledger) {
