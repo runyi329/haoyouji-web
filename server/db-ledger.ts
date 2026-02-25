@@ -57,6 +57,56 @@ async function ensureBackupPermissionColumn() {
 // 在模块加载时执行迁移
 ensureBackupPermissionColumn().catch(console.error);
 
+// ========== 账本功能字段迁移 ==========
+let _ledgerFeaturesMigrated = false;
+async function ensureLedgerFeaturesColumns() {
+  if (_ledgerFeaturesMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 enable_reimbursement 字段
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN enable_reimbursement TINYINT DEFAULT 1 NOT NULL COMMENT '是否启用报销功能（1=启用，0=禁用）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] enable_reimbursement error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 enable_pending 字段
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN enable_pending TINYINT DEFAULT 0 NOT NULL COMMENT '是否启用待结功能（1=启用，0=禁用）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] enable_pending error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 pending_type 字段
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN pending_type ENUM('receivable', 'payable') DEFAULT NULL COMMENT '待结类型（receivable=代收，payable=代付，NULL=无）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_type error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 创建索引
+    await db.execute(sql`CREATE INDEX idx_pending_type ON ledger_records(pending_type)`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate key')) {
+      console.error('[ensureLedgerFeaturesColumns] idx_pending_type error:', e.message);
+    }
+  }
+  _ledgerFeaturesMigrated = true;
+  console.log('[ensureLedgerFeaturesColumns] 账本功能字段迁移完成');
+}
+// 在模块加载时执行迁移
+ensureLedgerFeaturesColumns().catch(console.error);
+
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
@@ -4090,4 +4140,59 @@ export async function checkBackupPermission(
   
   // 检查备份权限字段
   return membership[0].permissionBackup === 'allow';
+}
+
+
+/**
+ * 更新账本功能设置
+ */
+export async function updateLedgerFeatures(
+  ledgerId: number,
+  userId: number,
+  features: {
+    enableReimbursement?: boolean;
+    enablePending?: boolean;
+  }
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("数据库连接失败");
+
+  // 检查用户是否是账本的owner或admin
+  const membership = await db
+    .select({
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  if (membership[0].role !== 'owner' && membership[0].role !== 'admin') {
+    throw new Error("只有账本创建人或管理员才能修改功能设置");
+  }
+
+  // 构建更新对象
+  const updateData: any = {};
+  if (features.enableReimbursement !== undefined) {
+    updateData.enableReimbursement = features.enableReimbursement ? 1 : 0;
+  }
+  if (features.enablePending !== undefined) {
+    updateData.enablePending = features.enablePending ? 1 : 0;
+  }
+
+  // 更新账本功能设置
+  await db
+    .update(ledgers)
+    .set(updateData)
+    .where(eq(ledgers.id, ledgerId));
+
+  console.log('[updateLedgerFeatures] 账本功能设置已更新:', { ledgerId, features });
 }

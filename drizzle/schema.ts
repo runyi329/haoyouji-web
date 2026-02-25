@@ -522,6 +522,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	reimbursedBy: int('reimbursed_by'),
 	reimbursementNotes: text('reimbursement_notes'),
 	reimbursementVoucherUrl: text('reimbursement_voucher_url'),
+	pendingType: mysqlEnum('pending_type', ['receivable','payable']),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),
@@ -551,6 +552,8 @@ export const ledgers = mysqlTable("ledgers", {
 	// groupId: int("group_id"), // 所属工作群ID，为null表示普通账本 - 临时注释等待数据库迁移
 	isVip: tinyint().default(0).notNull(),
 	isArchived: tinyint().default(0).notNull(),
+	enableReimbursement: tinyint("enable_reimbursement").default(1).notNull(),
+	enablePending: tinyint("enable_pending").default(0).notNull(),
 	defaultPermissionView: mysqlEnum("default_permission_view", ['all','own','none']).default('own').notNull(),
 	defaultPermissionAdd: mysqlEnum("default_permission_add", ['all','own','none']).default('own').notNull(),
 	defaultPermissionEdit: mysqlEnum("default_permission_edit", ['all','own','none']).default('own').notNull(),

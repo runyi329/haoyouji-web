@@ -421,6 +421,12 @@ export default function LedgerDetail() {
                           {record.reimbursementStatus === 'pending' && (
                             <Receipt className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" />
                           )}
+                          {/* 待结状态图标 */}
+                          {record.pendingType && (
+                            <span className="ml-0.5 text-base flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'}>
+                              ⏳
+                            </span>
+                          )}
                         </div>
                         {record.description && (
                           <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>

@@ -6265,6 +6265,29 @@ export const appRouter = router({
         return await dbLedger.getLedgerById(input.ledgerId, ctx.user.id);
       }),
 
+    // 获取账本信息（别名，与getById相同）
+    getLedger: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getLedgerById(input.id, ctx.user.id);
+      }),
+
+    // 更新账本功能设置
+    updateLedgerFeatures: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        enableReimbursement: z.boolean().optional(),
+        enablePending: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.updateLedgerFeatures(input.ledgerId, ctx.user.id, {
+          enableReimbursement: input.enableReimbursement,
+          enablePending: input.enablePending,
+        });
+      }),
+
     // 获取账本成员列表
     getMembers: protectedProcedure
       .input(z.object({
@@ -6679,6 +6702,7 @@ export const appRouter = router({
         memberId: z.number().optional(),
         accountId: z.number().optional(),
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
+        pendingType: z.enum(['receivable', 'payable']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.addTransaction({
@@ -6753,6 +6777,7 @@ export const appRouter = router({
         memberId: z.number().optional(),
         accountId: z.number().optional(),
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
+        pendingType: z.enum(['receivable', 'payable']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { recordId, ...data } = input;
