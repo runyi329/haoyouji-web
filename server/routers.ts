@@ -419,7 +419,7 @@ export const appRouter = router({
           };
         }
       }),
-    // 管理员诊断API：直接调用TronGrid API并返回原始数据
+    // 管理员诊断API：检查所有链的扫描器状态
     adminDiagnose: protectedProcedure
       .mutation(async ({ ctx }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
@@ -429,11 +429,31 @@ export const appRouter = router({
         const logs: string[] = [];
         
         try {
+          logs.push('========== 多链扫描器诊断 ==========');
+          logs.push('');
+          
+          // 检查所有网络的钱包地址
+          const networks = ['TRC20', 'APTOS', 'SOLANA', 'ERC20', 'BEP20'];
+          for (const network of networks) {
+            const wallets = await dbRecharge.getEnabledWalletAddresses(network);
+            logs.push(`${network}: ${wallets.length}个启用地址`);
+            if (wallets.length > 0) {
+              wallets.forEach((w, i) => {
+                logs.push(`  ${i+1}. ${w.label || '未命名'} (${w.address.slice(0, 10)}...)`);
+              });
+            }
+          }
+          logs.push('');
+          
           // 1. 检查环境变量
           const apiKey = process.env.TRONGRID_API_KEY || '';
           logs.push(`TRONGRID_API_KEY: ${apiKey ? '已设置 (' + apiKey.slice(0, 8) + '...)' : '❌ 未设置'}`);
+          logs.push(`ETHERSCAN_API_KEY: ${process.env.ETHERSCAN_API_KEY ? '已设置' : '未设置（可选）'}`);
+          logs.push(`BSCSCAN_API_KEY: ${process.env.BSCSCAN_API_KEY ? '已设置' : '未设置（可选）'}`);
+          logs.push('');
           
-          // 2. 获取启用的钱包地址
+          // 2. 测试TRC20（保留原有逻辑）
+          logs.push('---------- TRC20 测试 ----------');
           const wallets = await dbRecharge.getEnabledWalletAddresses('TRC20');
           logs.push(`启用的TRC20钱包: ${wallets.length}个`);
           
