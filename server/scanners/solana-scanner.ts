@@ -54,13 +54,70 @@ export async function scanSolanaTransactions() {
 }
 
 /**
+ * 获取钱包地址的USDT Token Account
+ */
+async function getTokenAccount(walletAddress: string): Promise<string | null> {
+  try {
+    const response = await fetch(SOLANA_RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getTokenAccountsByOwner',
+        params: [
+          walletAddress,
+          {
+            mint: USDT_MINT_ADDRESS
+          },
+          {
+            encoding: 'jsonParsed'
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error(`[Solana Scanner] Error getting token account:`, data.error);
+      return null;
+    }
+
+    const accounts = data.result?.value || [];
+    
+    if (accounts.length === 0) {
+      console.log(`[Solana Scanner] No USDT token account found for ${walletAddress.slice(0, 10)}...`);
+      return null;
+    }
+
+    // 返回第一个Token Account的地址
+    return accounts[0].pubkey;
+    
+  } catch (error) {
+    console.error(`[Solana Scanner] Error getting token account:`, error);
+    return null;
+  }
+}
+
+/**
  * 扫描单个Solana钱包地址
  */
 async function scanWalletAddress(walletAddress: string, label: string) {
   try {
     console.log(`[Solana Scanner] Scanning ${label} (${walletAddress.slice(0, 10)}...)...`);
     
-    // 获取账户的签名记录
+    // 获取该钱包的USDT Token Account
+    const tokenAccount = await getTokenAccount(walletAddress);
+    
+    if (!tokenAccount) {
+      console.log(`[Solana Scanner] Skipping ${label} - no token account`);
+      return;
+    }
+
+    console.log(`[Solana Scanner] Token Account: ${tokenAccount.slice(0, 10)}...`);
+    
+    // 获取Token Account的签名记录
     const signaturesResponse = await fetch(SOLANA_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -69,7 +126,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
         id: 1,
         method: 'getSignaturesForAddress',
         params: [
-          walletAddress,
+          tokenAccount,
           { limit: 20 }
         ]
       })
@@ -83,11 +140,12 @@ async function scanWalletAddress(walletAddress: string, label: string) {
     }
 
     const signatures = signaturesData.result || [];
+    console.log(`[Solana Scanner] Found ${signatures.length} transactions for ${label}`);
 
     // 获取每个交易的详情
     for (const sig of signatures) {
       if (sig.err === null) { // 只处理成功的交易
-        await processTransaction(sig.signature, walletAddress);
+        await processTransaction(sig.signature, tokenAccount, walletAddress);
       }
     }
 
@@ -99,7 +157,7 @@ async function scanWalletAddress(walletAddress: string, label: string) {
 /**
  * 处理单笔Solana交易
  */
-async function processTransaction(signature: string, walletAddress: string) {
+async function processTransaction(signature: string, tokenAccount: string, walletAddress: string) {
   try {
     // 跳过已处理的交易
     if (processedTxns.has(signature)) {
@@ -132,19 +190,28 @@ async function processTransaction(signature: string, walletAddress: string) {
 
     // 查找SPL Token转账指令
     for (const instruction of instructions) {
+      // 修复：正确的逻辑运算符优先级
       if (instruction.program === 'spl-token' && 
-          instruction.parsed?.type === 'transfer' ||
-          instruction.parsed?.type === 'transferChecked') {
+          (instruction.parsed?.type === 'transfer' || 
+           instruction.parsed?.type === 'transferChecked')) {
         
         const info = instruction.parsed.info;
         
-        // 检查是否是USDT转账到我们的地址
-        if (info.destination && info.destination === walletAddress) {
-          const amount = parseFloat(info.tokenAmount?.uiAmount || info.amount) / (info.decimals ? Math.pow(10, info.decimals) : 1e6);
+        // 检查是否是转入到我们的Token Account
+        if (info.destination && info.destination === tokenAccount) {
+          // 解析金额
+          let amount = 0;
+          if (info.tokenAmount?.uiAmount) {
+            amount = parseFloat(info.tokenAmount.uiAmount);
+          } else if (info.amount && info.decimals !== undefined) {
+            amount = parseFloat(info.amount) / Math.pow(10, info.decimals);
+          } else if (info.amount) {
+            amount = parseFloat(info.amount) / 1e6; // USDT默认6位小数
+          }
           
           if (amount > 0) {
             scanStats.foundTransactions++;
-            console.log(`[Solana Scanner] Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${signature})`);
+            console.log(`[Solana Scanner] ✅ Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${signature.slice(0, 10)}...)`);
             
             // 匹配订单
             const matchResult = await dbRecharge.findOrderByAmount(amount, signature);
@@ -155,6 +222,7 @@ async function processTransaction(signature: string, walletAddress: string) {
               console.log(`[Solana Scanner] ✅ Matched order ${matchResult.orderNo}`);
             } else {
               scanStats.unmatchedTransactions++;
+              console.log(`[Solana Scanner] ⚠️  No matching order found for ${amount} USDT`);
             }
           }
         }
