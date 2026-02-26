@@ -184,25 +184,19 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [isLiulifan, needsAttentionCount, hasPlayedSound]);
-
   const banners = [
     {
       id: 1,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/shared-ledger.webp",
-      title: "共享账本试用版上线"
-    },
-    {
-      id: 2,
       image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/friend-share.webp",
       title: "好友共享"
     },
     {
-      id: 3,
+      id: 2,
       image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/decentral.webp",
       title: "去中心化人脉管理"
     },
     {
-      id: 4,
+      id: 3,
       image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.webp",
       title: "AI社交"
     }

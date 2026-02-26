@@ -27,11 +27,6 @@ export default function LedgerOverview() {
       image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/shared-ledger.webp",
       title: "共享账本试用版上线"
     },
-    {
-      id: 2,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/friend-share.webp",
-      title: "好友共享"
-    },
   ];
 
   return (
