@@ -37,6 +37,22 @@
 
   <body>
     <div id="root"></div>
+    
+    <!-- 微信环境检测和适配 -->
+    <script>
+      (function() {
+        var ua = navigator.userAgent.toLowerCase();
+        var isWeChat = ua.indexOf('micromessenger') > -1;
+        var isWeChatMiniProgram = ua.indexOf('miniprogram') > -1 || window.__wxjs_environment === 'miniprogram';
+        
+        if (isWeChat || isWeChatMiniProgram) {
+          // 微信环境，缩小85%
+          document.documentElement.style.fontSize = '85%';
+          document.body.classList.add('wechat-env');
+        }
+      })();
+    </script>
+    
     <script type="module" src="/src/main.tsx"></script>
     <script
       defer
