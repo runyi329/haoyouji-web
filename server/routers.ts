@@ -816,6 +816,7 @@ export const appRouter = router({
         
         return {
           success: true,
+          token: sessionToken,  // 返回token供前端存储到localStorage
           user: {
             id: user.id,
             username: user.username,
@@ -904,6 +905,7 @@ export const appRouter = router({
         
         return {
           success: true,
+          token: sessionToken,  // 返回token供前端存储到localStorage
           user: {
             id: user.id,
             username: user.username,
@@ -993,6 +995,7 @@ export const appRouter = router({
         
         return {
           success: true,
+          token: sessionToken,  // 返回token供前端存储到localStorage
           user: {
             id: user.id,
             username: user.username,

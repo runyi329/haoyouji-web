@@ -36,6 +36,13 @@ export function useAuth(options?: UseAuthOptions) {
       }
       throw error;
     } finally {
+      // 清除 localStorage 中的 token
+      try {
+        localStorage.removeItem('auth-token');
+        console.log('[Logout] Token removed from localStorage');
+      } catch (e) {
+        console.warn('[Logout] Failed to remove token from localStorage:', e);
+      }
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
     }

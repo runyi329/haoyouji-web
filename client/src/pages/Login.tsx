@@ -74,6 +74,15 @@ export default function Login() {
   const loginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("登录成功！");
+      // 将token存储到localStorage作为备用（防止Cookie被微信清除）
+      if (data.token) {
+        try {
+          localStorage.setItem('auth-token', data.token);
+          console.log('[Login] Token saved to localStorage');
+        } catch (e) {
+          console.warn('[Login] Failed to save token to localStorage:', e);
+        }
+      }
       utils.auth.me.invalidate();
       setTimeout(() => {
         window.location.href = "/";
@@ -87,6 +96,15 @@ export default function Login() {
   const registerMutation = trpc.auth.registerWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("注册成功！");
+      // 将token存储到localStorage作为备用
+      if (data.token) {
+        try {
+          localStorage.setItem('auth-token', data.token);
+          console.log('[Register] Token saved to localStorage');
+        } catch (e) {
+          console.warn('[Register] Failed to save token to localStorage:', e);
+        }
+      }
       utils.auth.me.invalidate();
       setTimeout(() => {
         window.location.href = "/";
