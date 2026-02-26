@@ -115,8 +115,8 @@ export default function Login() {
     },
   });
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
+  // 登录处理 - 只通过按钮点击触发
+  const handleLogin = () => {
     if (!loginUsername || !loginPassword) {
       toast.error("请填写用户名和密码");
       return;
@@ -131,8 +131,12 @@ export default function Login() {
     });
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
+  // 注册处理 - 只通过按钮点击触发
+  const handleRegister = () => {
+    // 防止重复提交
+    if (registerMutation.isPending) {
+      return;
+    }
     if (!regUsername || !regPassword) {
       toast.error("请填写用户名和密码");
       return;
@@ -161,6 +165,14 @@ export default function Login() {
     });
   };
 
+  // 阻止所有输入框的回车键提交行为
+  const preventEnterSubmit = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
       {/* 主内容区域 */}
@@ -171,6 +183,7 @@ export default function Login() {
             {/* Tab切换 */}
             <div className="flex mb-6">
               <button
+                type="button"
                 onClick={() => setActiveTab("login")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
                   activeTab === "login" ? "text-gray-800" : "text-gray-400"
@@ -182,6 +195,7 @@ export default function Login() {
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab("register")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
                   activeTab === "register" ? "text-gray-800" : "text-gray-400"
@@ -194,9 +208,9 @@ export default function Login() {
               </button>
             </div>
 
-            {/* 登录表单 */}
+            {/* 登录区域 - 使用div而非form，防止自动提交 */}
             {activeTab === "login" && (
-              <form onSubmit={handleLogin} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} className="space-y-4">
+              <div className="space-y-4">
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -207,6 +221,8 @@ export default function Login() {
                     placeholder="请输入用户名"
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                 </div>
@@ -221,6 +237,8 @@ export default function Login() {
                     placeholder="请输入密码"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                   <button
@@ -234,7 +252,8 @@ export default function Login() {
 
                 {/* 登录按钮 */}
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleLogin}
                   disabled={loginMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     loginUsername && loginPassword && agreedToTerms
@@ -271,12 +290,12 @@ export default function Login() {
                     </Link>
                   </p>
                 </div>
-              </form>
+              </div>
             )}
 
-            {/* 注册表单 */}
+            {/* 注册区域 - 使用div而非form，彻底防止自动提交 */}
             {activeTab === "register" && (
-              <form onSubmit={handleRegister} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} className="space-y-4">
+              <div className="space-y-4">
                 {/* 用户名输入框 */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2">
@@ -287,6 +306,8 @@ export default function Login() {
                     placeholder="请输入用户名"
                     value={regUsername}
                     onChange={(e) => setRegUsername(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                 </div>
@@ -298,6 +319,8 @@ export default function Login() {
                     placeholder="昵称（可选）"
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                 </div>
@@ -309,6 +332,8 @@ export default function Login() {
                     placeholder="邀请码（可选）"
                     value={regInviteCode}
                     onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     maxLength={6}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors font-mono"
                   />
@@ -324,6 +349,8 @@ export default function Login() {
                     placeholder="请输入密码"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                   <button
@@ -345,13 +372,16 @@ export default function Login() {
                     placeholder="确认密码"
                     value={regConfirmPassword}
                     onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    onKeyDown={preventEnterSubmit}
+                    autoComplete="off"
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors"
                   />
                 </div>
 
-                {/* 注册按钮 */}
+                {/* 注册按钮 - 使用type="button"，只通过onClick触发 */}
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleRegister}
                   disabled={registerMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                     regUsername && regPassword && regConfirmPassword && regName && agreedToTerms
@@ -388,7 +418,7 @@ export default function Login() {
                     </Link>
                   </p>
                 </div>
-              </form>
+              </div>
             )}
           </div>
 
