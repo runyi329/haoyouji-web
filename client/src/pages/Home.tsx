@@ -31,6 +31,7 @@ import {
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import "@/styles/level-text.css";
+import BottomNav from "@/components/BottomNav";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -486,25 +487,7 @@ export default function Home() {
       )}
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-divider px-6 py-4 flex justify-around items-center z-50 max-w-md mx-auto shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div className="flex flex-col items-center space-y-1 text-[#D32F2F]">
-          <Users className="w-7 h-7" />
-          <span className="text-xs font-bold">人脉</span>
-        </div>
-        
-        <a href={`${BASE_URL}/parent/contacts/add`}>
-          <div className="w-12 h-12 bg-[#D32F2F] rounded-full -mt-8 flex items-center justify-center shadow-lg border-4 border-white cursor-pointer hover:bg-[#D32F2F]-dark transition-colors">
-            <Plus className="w-6 h-6 text-white" />
-          </div>
-        </a>
-        
-        <Link href="/ledger">
-          <a className="flex flex-col items-center space-y-1 text-[#D32F2F] hover:text-[#B71C1C] transition-colors">
-            <Wallet className="w-7 h-7" />
-            <span className="text-xs font-medium">钱脉</span>
-          </a>
-        </Link>
-      </div>
+      <BottomNav />
     </div>
   );
 }

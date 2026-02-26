@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { pinyin } from "pinyin-pro";
+import BottomNav from "@/components/BottomNav";
 
 
 export default function Ledger() {
@@ -787,8 +788,7 @@ export default function Ledger() {
         )}
       </div>
 
-      {/* 底部按钮 */}
-      {/* 加入他人账本弹出面板 - 独立于底部按钮 */}
+      {/* 加入他人账本弹出面板 */}
       {showJoinDialog && (
         <>
           {/* 透明遮罩层，点击关闭 */}
@@ -836,25 +836,11 @@ export default function Ledger() {
         </>
       )}
 
-      {/* 底部按钮 - 始终固定在底部 */}
-      <div className="fixed bottom-0 left-0 right-0 z-50">
-        <div className="max-w-md mx-auto px-4 pb-4 pt-3 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="flex gap-3">
-            <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F]-light text-[#D32F2F] hover:bg-[#FFEBEE] transition-colors shadow-sm"
-              onClick={() => setShowJoinDialog(!showJoinDialog)}
-            >
-              加入他人账本
-            </button>
-            <button
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark transition-colors shadow-sm"
-              onClick={() => setShowCreateDialog(true)}
-            >
-              创建新的账本
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* 统一底部导航栏 */}
+      <BottomNav 
+        onJoinLedger={() => setShowJoinDialog(!showJoinDialog)}
+        onCreateLedger={() => setShowCreateDialog(true)}
+      />
 
       {/* 创建账本对话框 */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
