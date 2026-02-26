@@ -23,9 +23,9 @@ import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import { getDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
@@ -6417,6 +6417,83 @@ export const appRouter = router({
 
   // 账本管理
   ledger: router({
+    // 获取全站最近活动动态（公开API，用于首页滚动排行榜）
+    recentActivity: publicProcedure
+      .query(async () => {
+        const database = await db.getDb();
+        
+        // 获取最近新建的账本（最近30条）
+        const recentLedgers = await database
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            createdAt: ledgers.createdAt,
+            username: users.username,
+          })
+          .from(ledgers)
+          .leftJoin(users, eq(ledgers.createdBy, users.id))
+          .orderBy(desc(ledgers.createdAt))
+          .limit(30);
+        
+        // 获取最近新增的账目（最近30条）
+        const recentRecords = await database
+          .select({
+            id: ledgerRecords.id,
+            ledgerId: ledgerRecords.ledgerId,
+            type: ledgerRecords.type,
+            createdAt: ledgerRecords.createdAt,
+            username: users.username,
+            ledgerName: ledgers.name,
+          })
+          .from(ledgerRecords)
+          .leftJoin(users, eq(ledgerRecords.createdBy, users.id))
+          .leftJoin(ledgers, eq(ledgerRecords.ledgerId, ledgers.id))
+          .where(isNull(ledgerRecords.deletedAt))
+          .orderBy(desc(ledgerRecords.createdAt))
+          .limit(30);
+        
+        // 用户名脱敏处理
+        const maskUsername = (username: string | null) => {
+          if (!username) return '***';
+          if (username.length <= 1) return username[0] + '**';
+          if (username.length <= 2) return username[0] + '*';
+          if (username.length <= 4) return username[0] + '*'.repeat(username.length - 2) + username[username.length - 1];
+          return username[0] + username[1] + '*'.repeat(username.length - 4) + username.slice(-2);
+        };
+        
+        // 合并并按时间排序
+        const activities: Array<{
+          type: 'new_ledger' | 'new_record';
+          username: string;
+          detail: string;
+          createdAt: string;
+        }> = [];
+        
+        for (const l of recentLedgers) {
+          activities.push({
+            type: 'new_ledger',
+            username: maskUsername(l.username),
+            detail: '新建了一个账本',
+            createdAt: l.createdAt || '',
+          });
+        }
+        
+        for (const r of recentRecords) {
+          const actionText = r.type === 'income' ? '新增了一条收入' : '新增了一条支出';
+          activities.push({
+            type: 'new_record',
+            username: maskUsername(r.username),
+            detail: actionText,
+            createdAt: r.createdAt || '',
+          });
+        }
+        
+        // 按时间倒序排列，取前50条
+        activities.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        return activities.slice(0, 50);
+      }),
+
     // 获取账本统计数据
     stats: protectedProcedure
       .query(async ({ ctx }) => {
