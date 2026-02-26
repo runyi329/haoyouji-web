@@ -844,14 +844,14 @@ export default function Ledger() {
 
       {/* 创建账本对话框 */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="w-[85%] rounded-lg p-0 gap-0" showCloseButton={false}>
+        <DialogContent className="w-[85%] rounded-xl p-0 gap-0" showCloseButton={false}>
           <DialogTitle className="sr-only">创建账本</DialogTitle>
           <button
             onClick={() => {
               setShowCreateDialog(false);
               setLocation("/ledger/create-type");
             }}
-            className="w-full text-center py-3.5 text-[#1976D2] font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
+            className="w-full text-center py-4 text-[#D32F2F] font-semibold border-b border-gray-100 hover:bg-[#FFF3F3] transition-colors text-[15px]"
           >
             新建全新账本
           </button>
@@ -860,13 +860,13 @@ export default function Ledger() {
               setShowCreateDialog(false);
               setShowCopyDialog(true);
             }}
-            className="w-full text-center py-3.5 text-[#1976D2] font-medium border-b border-divider hover:bg-[#FAF3ED] transition-colors"
+            className="w-full text-center py-4 text-[#D32F2F] font-semibold border-b border-gray-100 hover:bg-[#FFF3F3] transition-colors text-[15px]"
           >
             复制已有账本
           </button>
           <button
             onClick={() => setShowCreateDialog(false)}
-            className="w-full text-center py-3.5 text-[#757575] font-medium hover:bg-[#FAF3ED] transition-colors"
+            className="w-full text-center py-4 text-gray-600 font-medium hover:bg-gray-50 transition-colors text-[15px]"
           >
             取消
           </button>
