@@ -3,6 +3,31 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as dbPosterFavorites from "./db-poster-favorites";
 import { uploadImageToCOS } from "./cos-upload";
+import { composePosterWithQR } from "./poster-compose";
+
+// 海报模板配置（硬编码，后续可以改为数据库管理）
+// templateUrl 会在第一次上传后更新
+const POSTER_TEMPLATES: Record<string, {
+  title: string;
+  description: string;
+  category: string;
+  series: string;
+  templateUrl: string;  // COS上的模板URL
+  qrConfig: { x: number; y: number; size: number };
+}> = {
+  'invite-ledger': {
+    title: '共享账本邀请海报',
+    description: '脉动共享账本试用版正式上线',
+    category: 'invite',
+    series: '邀请好友',
+    templateUrl: '', // 需要先上传模板
+    qrConfig: {
+      x: 530,   // 压缩版750宽度下的位置
+      y: 1130,
+      size: 140,
+    },
+  },
+};
 
 /**
  * 海报收藏 tRPC 路由
@@ -38,7 +63,7 @@ export const posterFavoritesRouter = router({
       return { poster };
     }),
 
-  // 创建海报收藏
+  // 创建海报收藏（上传图片到COS）
   createPoster: protectedProcedure
     .input(z.object({
       title: z.string().min(1).max(255),
@@ -86,6 +111,85 @@ export const posterFavoritesRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: `创建失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        });
+      }
+    }),
+
+  // 上传海报模板到COS（管理员功能）
+  uploadTemplate: protectedProcedure
+    .input(z.object({
+      imageData: z.string(), // base64图片数据
+      filename: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        console.log('[海报模板] 开始上传模板...');
+        const url = await uploadImageToCOS(
+          input.imageData, 
+          'posters',
+          input.filename ? `posters/templates/${input.filename}` : undefined
+        );
+        console.log('[海报模板] 上传成功:', url);
+        return { success: true, url };
+      } catch (error) {
+        console.error('[海报模板] 上传失败:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `上传失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        });
+      }
+    }),
+
+  // 获取用户的合成海报（带二维码）
+  // 前端调用此API获取已合成好的海报URL
+  getComposedPoster: protectedProcedure
+    .input(z.object({
+      templateId: z.string(),
+      templateUrl: z.string(), // 模板图片URL
+      qrX: z.number(),
+      qrY: z.number(),
+      qrSize: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user!.id;
+      const username = ctx.user!.username;
+      
+      try {
+        // 获取用户邀请码
+        const { getDb } = await import('./db');
+        const { users } = await import('../drizzle/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        const db = await getDb();
+        const [user] = await db
+          .select({ inviteCode: users.inviteCode })
+          .from(users)
+          .where(eq(users.id, userId));
+        
+        if (!user?.inviteCode) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: '用户没有邀请码',
+          });
+        }
+        
+        // 合成海报
+        const composedUrl = await composePosterWithQR(
+          input.templateUrl,
+          user.inviteCode,
+          { x: input.qrX, y: input.qrY, size: input.qrSize }
+        );
+        
+        return {
+          success: true,
+          composedUrl,
+          inviteCode: user.inviteCode,
+        };
+      } catch (error) {
+        console.error('[合成海报] 失败:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `合成失败: ${error instanceof Error ? error.message : '未知错误'}`,
         });
       }
     }),

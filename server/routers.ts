@@ -31,6 +31,7 @@ import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
 import { workGroupsRouter } from "./work-groups-api";
 import { partnershipRouter } from "./partnership-router";
+import { posterFavoritesRouter } from "./poster-favorites-router";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -7561,6 +7562,9 @@ export const appRouter = router({
   
   // 邀请功能权限管理 (管理员)
   invitePermission: invitePermissionRouter,
+
+  // 海报收藏管理
+  posterFavorites: posterFavoritesRouter,
 
   // 脉动节点合作平台 - 工作群管理
   workGroups: workGroupsRouter,
