@@ -7,6 +7,8 @@ import sharp from 'sharp';
 import QRCode from 'qrcode';
 import { uploadImageToCOS } from './cos-upload';
 
+// 使用node-fetch的全局fetch（Node 18+内置）
+
 /**
  * 为用户合成带二维码的海报
  * @param templateUrl 海报模板URL（COS上的）
