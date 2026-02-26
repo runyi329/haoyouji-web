@@ -4261,17 +4261,19 @@ export const appRouter = router({
     .input(z.object({
       name: z.string().optional(),
       title: z.string().optional(), // 昵称
+      phone: z.string().optional(), // 手机号
+      email: z.string().optional(), // 邮箱
       excludeId: z.number().optional(), // 编辑模式下排除当前联系人
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
-      const { name, title: nickname, excludeId } = input;
-      const duplicates: { type: string; matchedName: string; matchedTitle: string | null; contactId: number }[] = [];
+      const { name, title: nickname, phone, email, excludeId } = input;
+      const duplicates: { type: string; matchedName: string; matchedTitle: string | null; matchedValue?: string; contactId: number }[] = [];
       
-      if (!name && !nickname) return { duplicates };
+      if (!name && !nickname && !phone && !email) return { duplicates };
       
       const db = await (await import('./db')).getDb();
-      const { contacts } = await import('../drizzle/schema');
+      const { contacts, contactFieldValues, contactFieldCategories } = await import('../drizzle/schema');
       const { eq, and, ne, or, sql } = await import('drizzle-orm');
       
       // 查询当前用户的所有联系人（排除当前编辑的）
@@ -4281,21 +4283,25 @@ export const appRouter = router({
       }
       
       const allContacts = await db
-        .select({ id: contacts.id, name: contacts.name, title: contacts.title })
+        .select({ id: contacts.id, name: contacts.name, title: contacts.title, phone: contacts.phone })
         .from(contacts)
         .where(and(...conditions));
       
       const trimmedName = name?.trim().toLowerCase();
       const trimmedNickname = nickname?.trim().toLowerCase();
+      const trimmedPhone = phone?.trim().replace(/\s+/g, ''); // 移除空格
+      const trimmedEmail = email?.trim().toLowerCase();
       
+      // 检查姓名和昵称重复
       for (const c of allContacts) {
         const cName = c.name?.trim().toLowerCase();
         const cTitle = c.title?.trim().toLowerCase();
+        const cPhone = c.phone?.trim().replace(/\s+/g, '');
         
         // 1. 姓名与姓名重复
         if (trimmedName && cName && trimmedName === cName) {
           duplicates.push({ type: 'name_name', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
-          continue; // 已匹配，跳过后续检查避免重复
+          continue;
         }
         
         // 2. 昵称与昵称重复
@@ -4314,6 +4320,75 @@ export const appRouter = router({
         if (trimmedNickname && cName && trimmedNickname === cName) {
           duplicates.push({ type: 'title_name', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
           continue;
+        }
+        
+        // 5. 手机号重复（contacts表中的phone字段）
+        if (trimmedPhone && cPhone && trimmedPhone === cPhone) {
+          duplicates.push({ type: 'phone_phone', matchedName: c.name, matchedTitle: c.title, matchedValue: c.phone || undefined, contactId: c.id });
+          continue;
+        }
+      }
+      
+      // 检查手机号和邮箱在扩展字段中的重复
+      if (trimmedPhone || trimmedEmail) {
+        const fieldValues = await db
+          .select({
+            contactId: contactFieldValues.contactId,
+            categoryName: contactFieldCategories.name,
+            value: contactFieldValues.value,
+          })
+          .from(contactFieldValues)
+          .innerJoin(contactFieldCategories, eq(contactFieldValues.categoryId, contactFieldCategories.id))
+          .innerJoin(contacts, eq(contactFieldValues.contactId, contacts.id))
+          .where(
+            and(
+              eq(contacts.parentUserId, userId),
+              excludeId ? ne(contacts.id, excludeId) : sql`1=1`,
+              or(
+                eq(contactFieldCategories.name, '手机'),
+                eq(contactFieldCategories.name, '邮箱')
+              )
+            )
+          );
+        
+        for (const fv of fieldValues) {
+          // 手机号是JSON数组格式
+          if (fv.categoryName === '手机' && trimmedPhone) {
+            try {
+              const phones = JSON.parse(fv.value);
+              if (Array.isArray(phones)) {
+                for (const p of phones) {
+                  const normalizedP = p.trim().replace(/\s+/g, '');
+                  if (normalizedP === trimmedPhone) {
+                    const contact = allContacts.find(c => c.id === fv.contactId);
+                    if (contact && !duplicates.find(d => d.contactId === contact.id && d.type === 'phone_phone')) {
+                      duplicates.push({ type: 'phone_phone', matchedName: contact.name, matchedTitle: contact.title, matchedValue: p, contactId: contact.id });
+                    }
+                    break;
+                  }
+                }
+              }
+            } catch {}
+          }
+          
+          // 邮箱也JSON数组格式
+          if (fv.categoryName === '邮箱' && trimmedEmail) {
+            try {
+              const emails = JSON.parse(fv.value);
+              if (Array.isArray(emails)) {
+                for (const e of emails) {
+                  const normalizedE = e.trim().toLowerCase();
+                  if (normalizedE === trimmedEmail) {
+                    const contact = allContacts.find(c => c.id === fv.contactId);
+                    if (contact && !duplicates.find(d => d.contactId === contact.id && d.type === 'email_email')) {
+                      duplicates.push({ type: 'email_email', matchedName: contact.name, matchedTitle: contact.title, matchedValue: e, contactId: contact.id });
+                    }
+                    break;
+                  }
+                }
+              }
+            } catch {}
+          }
         }
       }
       
