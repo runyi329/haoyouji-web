@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, Plus, ChevronDown, Pencil } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, ChevronDown, Pencil, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { FieldCategorySelector } from "@/components/FieldCategorySelector";
@@ -1082,6 +1082,52 @@ export default function AddContact() {
     { enabled: searchQuery.length > 0 && !isEditMode } // 只在添加模式下启用
   );
   
+  // 重名检测：防抖状态
+  const [debouncedName, setDebouncedName] = useState("");
+  const [debouncedTitle, setDebouncedTitle] = useState("");
+  
+  // 姓名防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedName(name), 500);
+    return () => clearTimeout(timer);
+  }, [name]);
+  
+  // 昵称防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedTitle(title), 500);
+    return () => clearTimeout(timer);
+  }, [title]);
+  
+  // 重名检测查询
+  const { data: duplicateResult } = trpc.contacts.checkDuplicateName.useQuery(
+    {
+      name: debouncedName || undefined,
+      title: debouncedTitle || undefined,
+      excludeId: isEditMode ? contactId ?? undefined : undefined,
+    },
+    { enabled: (debouncedName.length > 0 || debouncedTitle.length > 0) }
+  );
+  
+  // 解析重名提示信息
+  const duplicateWarnings = useMemo(() => {
+    if (!duplicateResult?.duplicates || duplicateResult.duplicates.length === 0) return [];
+    return duplicateResult.duplicates.map((d: any) => {
+      const displayName = d.matchedTitle ? `${d.matchedName}（昵称：${d.matchedTitle}）` : d.matchedName;
+      switch (d.type) {
+        case 'name_name':
+          return { text: `姓名与已有人脉「${displayName}」的姓名重复`, contactId: d.contactId, field: 'name' };
+        case 'title_title':
+          return { text: `昵称与已有人脉「${displayName}」的昵称重复`, contactId: d.contactId, field: 'title' };
+        case 'name_title':
+          return { text: `姓名与已有人脉「${displayName}」的昵称重复`, contactId: d.contactId, field: 'name' };
+        case 'title_name':
+          return { text: `昵称与已有人脉「${displayName}」的姓名重复`, contactId: d.contactId, field: 'title' };
+        default:
+          return { text: `与已有人脉「${displayName}」存在重名`, contactId: d.contactId, field: 'name' };
+      }
+    });
+  }, [duplicateResult]);
+  
   // 处理姓名输入变化
   const handleNameChange = (value: string) => {
     setName(value);
@@ -1571,6 +1617,25 @@ export default function AddContact() {
                 />
               </div>
             </div>
+
+            {/* 重名警告提示 */}
+            {duplicateWarnings.length > 0 && (
+              <div className="space-y-1.5">
+                {duplicateWarnings.map((warning: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
+                    onClick={() => setLocation(`/parent/contacts/${warning.contactId}`)}
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-amber-700">{warning.text}</p>
+                      <p className="text-xs text-amber-500 mt-0.5">点击查看该人脉</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* 第二行：性别 + 地区 */}
             <div className="grid grid-cols-2 gap-4">

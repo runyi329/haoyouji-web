@@ -4256,6 +4256,70 @@ export const appRouter = router({
       };
     }),
 
+  // 重名检测：检查姓名和昵称的各种交叉重复
+  checkDuplicateName: protectedProcedure
+    .input(z.object({
+      name: z.string().optional(),
+      title: z.string().optional(), // 昵称
+      excludeId: z.number().optional(), // 编辑模式下排除当前联系人
+    }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user.id;
+      const { name, title: nickname, excludeId } = input;
+      const duplicates: { type: string; matchedName: string; matchedTitle: string | null; contactId: number }[] = [];
+      
+      if (!name && !nickname) return { duplicates };
+      
+      const db = await (await import('./db')).getDb();
+      const { contacts } = await import('../drizzle/schema');
+      const { eq, and, ne, or, sql } = await import('drizzle-orm');
+      
+      // 查询当前用户的所有联系人（排除当前编辑的）
+      const conditions = [eq(contacts.parentUserId, userId)];
+      if (excludeId) {
+        conditions.push(ne(contacts.id, excludeId));
+      }
+      
+      const allContacts = await db
+        .select({ id: contacts.id, name: contacts.name, title: contacts.title })
+        .from(contacts)
+        .where(and(...conditions));
+      
+      const trimmedName = name?.trim().toLowerCase();
+      const trimmedNickname = nickname?.trim().toLowerCase();
+      
+      for (const c of allContacts) {
+        const cName = c.name?.trim().toLowerCase();
+        const cTitle = c.title?.trim().toLowerCase();
+        
+        // 1. 姓名与姓名重复
+        if (trimmedName && cName && trimmedName === cName) {
+          duplicates.push({ type: 'name_name', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
+          continue; // 已匹配，跳过后续检查避免重复
+        }
+        
+        // 2. 昵称与昵称重复
+        if (trimmedNickname && cTitle && trimmedNickname === cTitle) {
+          duplicates.push({ type: 'title_title', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
+          continue;
+        }
+        
+        // 3. 姓名与已有昵称重复
+        if (trimmedName && cTitle && trimmedName === cTitle) {
+          duplicates.push({ type: 'name_title', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
+          continue;
+        }
+        
+        // 4. 昵称与已有姓名重复
+        if (trimmedNickname && cName && trimmedNickname === cName) {
+          duplicates.push({ type: 'title_name', matchedName: c.name, matchedTitle: c.title, contactId: c.id });
+          continue;
+        }
+      }
+      
+      return { duplicates };
+    }),
+
   // 创建人脉
   create: protectedProcedure
     .input(z.object({
