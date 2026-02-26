@@ -281,6 +281,27 @@ export async function getContactsByParent(parentUserId: number, searchQuery?: st
     );
   }
   
+  // 获取关联用户的username
+  const contactIds = baseContacts.map(c => c.id);
+  const linkedUsernames: Record<number, string> = {};
+  
+  if (contactIds.length > 0) {
+    const linkedUsers = await db
+      .select({
+        contactId: contacts.id,
+        username: users.username,
+      })
+      .from(contacts)
+      .leftJoin(users, eq(contacts.linkedUserId, users.id))
+      .where(inArray(contacts.id, contactIds));
+    
+    for (const row of linkedUsers) {
+      if (row.contactId && row.username) {
+        linkedUsernames[row.contactId] = row.username;
+      }
+    }
+  }
+  
   // 为每个人脉添加上次联络日期和距今天数
   const contactsWithInteractionInfo = await Promise.all(
     baseContacts.map(async (contact) => {
@@ -291,6 +312,7 @@ export async function getContactsByParent(parentUserId: number, searchQuery?: st
       
       return {
         ...contact,
+        username: linkedUsernames[contact.id] || null,
         lastInteractionDate: lastInteraction,
         daysSinceLastInteraction,
       };
@@ -3362,7 +3384,28 @@ export async function getContactsByParentPaginated(
     console.log('[getContactsByParentPaginated] 第一个联系人:', baseContacts[0]?.name, JSON.stringify(baseContacts[0]).substring(0, 200));
   }
   
-  // 3. 为每个人脉添加上次联络日期、距今天数和活跃时间段标记
+  // 3. 获取关联用户的username
+  const contactIds = baseContacts.map(c => c.id);
+  const linkedUsernames: Record<number, string> = {};
+  
+  if (contactIds.length > 0) {
+    const linkedUsers = await db
+      .select({
+        contactId: contacts.id,
+        username: users.username,
+      })
+      .from(contacts)
+      .leftJoin(users, eq(contacts.linkedUserId, users.id))
+      .where(inArray(contacts.id, contactIds));
+    
+    for (const row of linkedUsers) {
+      if (row.contactId && row.username) {
+        linkedUsernames[row.contactId] = row.username;
+      }
+    }
+  }
+  
+  // 4. 为每个人脉添加上次联络日期、距今天数和活跃时间段标记
   // 获取时间范围（基于北京时间）
   const startOfTodayTimestamp = getBeijingTodayStart();
   const startOfWeekTimestamp = getBeijingThisWeekStart();
@@ -3410,6 +3453,7 @@ export async function getContactsByParentPaginated(
       
       return {
         ...contact,
+        username: linkedUsernames[contact.id] || null,
         lastInteractionDate: lastInteraction,
         daysSinceLastInteraction,
         hasInteractionToday,
