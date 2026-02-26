@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Download, X, Share2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { trpc } from '../lib/trpc';
+import QRCode from 'qrcode';
 
 // 硬编码的海报数据
 const POSTERS = [
@@ -86,31 +87,93 @@ export default function PosterFavorites() {
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
   const [invitePoster, setInvitePoster] = useState<any>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // 自动获取邀请海报
-  const { data: invitePosterData, isLoading } = trpc.profileFeatures.generateInvitePoster.useQuery(
-    undefined,
-    {
-      refetchOnWindowFocus: false,
-      refetchOnMount: true,
-    }
-  );
+  // 获取用户信息（包含邀请码）
+  const { data: inviteData } = trpc.invite.getInviteInfo.useQuery();
 
-  // 当邀请海报数据加载完成时，更新状态
+  // 生成带二维码的海报
+  const generatePosterWithQR = async (inviteCode: string) => {
+    if (!canvasRef.current) return null;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // 设置画布尺寸为海报尺寸
+    canvas.width = 1080;
+    canvas.height = 1920;
+
+    // 加载海报模板
+    const posterImg = new Image();
+    posterImg.crossOrigin = 'anonymous';
+    
+    return new Promise<string>((resolve, reject) => {
+      posterImg.onload = async () => {
+        // 绘制海报背景
+        ctx.drawImage(posterImg, 0, 0, 1080, 1920);
+
+        // 生成二维码
+        const inviteLink = `https://jiangyuchen.cn/login?invite=${inviteCode}`;
+        try {
+          const qrDataUrl = await QRCode.toDataURL(inviteLink, {
+            width: 180,
+            margin: 0,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          });
+
+          // 加载二维码图片
+          const qrImg = new Image();
+          qrImg.onload = () => {
+            // 在指定位置绘制二维码 (右下角白色方框区域)
+            // 位置：X=630, Y=1230, 尺寸：180x180
+            ctx.drawImage(qrImg, 630, 1230, 180, 180);
+
+            // 转换为图片URL
+            const finalImageUrl = canvas.toDataURL('image/png');
+            resolve(finalImageUrl);
+          };
+          qrImg.onerror = reject;
+          qrImg.src = qrDataUrl;
+        } catch (error) {
+          reject(error);
+        }
+      };
+      posterImg.onerror = reject;
+      posterImg.src = '/assets/invite_poster_template.png';
+    });
+  };
+
+  // 当获取到邀请码后，生成海报
   useEffect(() => {
-    if (invitePosterData?.posterPath) {
-      setInvitePoster({
-        id: 'invite',
-        title: '我的邀请海报',
-        description: '带有您专属邀请二维码的海报',
-        category: 'invite',
-        series: '邀请好友',
-        url: invitePosterData.posterPath,
-        thumbnailUrl: invitePosterData.posterPath,
-        tags: ['邀请', '二维码', '专属']
-      });
+    if (inviteData?.inviteCode && !invitePoster && !isGenerating) {
+      setIsGenerating(true);
+      generatePosterWithQR(inviteData.inviteCode)
+        .then((posterUrl) => {
+          if (posterUrl) {
+            setInvitePoster({
+              id: 'invite',
+              title: '我的邀请海报',
+              description: '带有您专属邀请二维码的海报',
+              category: 'invite',
+              series: '邀请好友',
+              url: posterUrl,
+              thumbnailUrl: posterUrl,
+              tags: ['邀请', '二维码', '专属']
+            });
+          }
+          setIsGenerating(false);
+        })
+        .catch((error) => {
+          console.error('Failed to generate poster:', error);
+          setIsGenerating(false);
+        });
     }
-  }, [invitePosterData]);
+  }, [inviteData, invitePoster, isGenerating]);
 
   // 合并邀请海报和其他海报
   const allPosters = invitePoster ? [invitePoster, ...POSTERS] : POSTERS;
@@ -120,19 +183,11 @@ export default function PosterFavorites() {
     ? allPosters 
     : allPosters.filter(p => p.category === selectedCategory);
 
-  // 下载海报
-  const handleDownload = (poster: any) => {
-    const link = document.createElement('a');
-    link.href = poster.url;
-    link.download = `${poster.title}.png`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+      {/* 隐藏的Canvas用于生成海报 */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       {/* 顶部导航栏 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
@@ -159,15 +214,6 @@ export default function PosterFavorites() {
           ))}
         </select>
       </div>
-
-      {/* 加载提示 */}
-      {isLoading && !invitePoster && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-4 border-b">
-          <div className="text-center text-gray-500 text-sm">
-            正在生成您的专属邀请海报...
-          </div>
-        </div>
-      )}
 
       {/* 海报网格 */}
       <div className="p-4">
@@ -269,8 +315,6 @@ export default function PosterFavorites() {
               }}
             />
           </div>
-
-
         </div>
       )}
     </div>
