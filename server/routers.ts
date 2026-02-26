@@ -6275,6 +6275,25 @@ export const appRouter = router({
 
   // 账本管理
   ledger: router({
+    // 获取账本统计数据
+    stats: protectedProcedure
+      .query(async ({ ctx }) => {
+        const ledgers = await dbLedger.getUserLedgers(ctx.user.id, false);
+        const totalLedgers = ledgers.length;
+        
+        // 计算账目总数（所有账本的账目数之和）
+        let totalEntries = 0;
+        for (const ledger of ledgers) {
+          const entries = await dbLedger.getLedgerTransactions(ledger.id, ctx.user.id);
+          totalEntries += entries.length;
+        }
+        
+        return {
+          totalLedgers,
+          totalEntries,
+        };
+      }),
+
     // 获取用户的所有账本
     list: protectedProcedure
       .input(z.object({

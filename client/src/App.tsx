@@ -89,6 +89,7 @@ const AIManagement = lazy(() => import("./pages/AIManagement"));
 const Moments = lazy(() => import("./pages/Moments"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Ledger = lazy(() => import("./pages/Ledger"));
+const LedgerOverview = lazy(() => import("./pages/LedgerOverview"));
 const LedgerDetail = lazy(() => import("./pages/LedgerDetail"));
 const AddTransaction = lazy(() => import("./pages/AddTransaction"));
 const LedgerCategories = lazy(() => import("./pages/LedgerCategories"));
@@ -232,7 +233,8 @@ function Router() {
         {/* 底部导航栏页面 */}
         <Route path="/moments" component={Moments} />
         <Route path="/ai" component={AIChat} />
-        <Route path="/ledger" component={Ledger} />
+        <Route path="/ledger" component={LedgerOverview} />
+        <Route path="/ledger/list" component={Ledger} />
         <Route path="/pending-overview" component={PendingOverview} />
         <Route path="/ledger/create-type" component={CreateLedgerType} />
         <Route path="/ledger/create" component={CreateLedger} />
