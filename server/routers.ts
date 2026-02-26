@@ -6262,6 +6262,14 @@ export const appRouter = router({
         await saveUserFavoriteFeatures(ctx.user.id, input.featureIds);
         return { success: true };
       }),
+    
+    // 生成邀请海报
+    generateInvitePoster: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { generateInvitePoster } = await import('./db-poster');
+        const posterPath = await generateInvitePoster(ctx.user.id, ctx.user.username);
+        return { posterPath };
+      }),
   }),
 
   // 账本管理
