@@ -218,7 +218,7 @@ export default function Home() {
 
   const metricsRight = [
     { name: "本周新增", value: stats?.newThisWeek ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=thisWeek` },
-    { name: "账目总数", value: stats?.totalLedgerEntries ?? 0, unit: "条", href: `/ledger` },
+    { name: "共享总数", value: stats?.sharingToMeCount ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=shared` },
     { name: "我的积分", value: user?.points ?? 0, unit: "分", href: `${BASE_URL}/parent/points` },
     { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", href: `${BASE_URL}/parent/profile/invite` },
   ];

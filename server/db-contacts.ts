@@ -1403,30 +1403,22 @@ export async function getContactStats(parentUserId: number) {
   });
   
   console.log('[getContactStats] 统计结果:', { totalContacts, newThisWeek, newThisMonth, newThisYear });
-  // 获取用户参与的所有账本的账目总数
-  let totalLedgerEntries = 0;
+  // 获取有多少人共享联系人给当前用户（去重sharerId）
+  let sharingToMeCount = 0;
   try {
-    // 先获取用户参与的所有账本ID
-    const userLedgers = await db
-      .select({ ledgerId: ledgerMembers.ledgerId })
-      .from(ledgerMembers)
-      .where(eq(ledgerMembers.userId, parentUserId));
-    
-    const ledgerIds = userLedgers.map(l => l.ledgerId);
-    console.log('[getContactStats] 用户参与的账本IDs:', ledgerIds, '用户ID:', parentUserId);
-    
-    if (ledgerIds.length > 0) {
-      // 统计这些账本中的所有未删除的账目记录数
-      const ledgerEntriesResult = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(ledgerRecords)
-        .where(and(inArray(ledgerRecords.ledgerId, ledgerIds), isNull(ledgerRecords.deletedAt)));
-      
-      totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
-    }
-    console.log('[getContactStats] 账目总数:', totalLedgerEntries, '用户ID:', parentUserId);
+    const sharingToMeResult = await db
+      .select({ count: sql<number>`count(distinct ${contactSharingConnections.sharerId})` })
+      .from(contactSharingConnections)
+      .where(
+        and(
+          eq(contactSharingConnections.receiverId, parentUserId),
+          eq(contactSharingConnections.status, 'active')
+        )
+      );
+    sharingToMeCount = Number(sharingToMeResult[0]?.count || 0);
+    console.log('[getContactStats] 共享给我的人数:', sharingToMeCount, '用户ID:', parentUserId);
   } catch (error) {
-    console.error('[获取账目总数失败]', error);
+    console.error('[获取共享给我的人数失败]', error);
   }
 
   return {
@@ -1442,7 +1434,7 @@ export async function getContactStats(parentUserId: number) {
     todayActive,
     dormantCount,
     companyCount,
-    totalLedgerEntries,
+    sharingToMeCount,
     tagDistribution: tagDistResult
   };
   })();
