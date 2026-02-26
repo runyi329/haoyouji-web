@@ -143,23 +143,32 @@ export default function LedgerDetail() {
     balance: 0,
   };
   
+  // 判断是否有日期筛选：如果有则使用筛选范围，否则使用statsPeriod
+  const hasDateFilter = filters.startDate || filters.endDate;
+  
   if (transactionsData) {
     transactionsData.forEach((day: any) => {
       let shouldInclude = false;
       
-      switch (statsPeriod) {
-        case 'day':
-          shouldInclude = day.date === today;
-          break;
-        case 'week':
-          shouldInclude = day.date >= weekStart && day.date <= today;
-          break;
-        case 'month':
-          shouldInclude = day.date.startsWith(currentMonth);
-          break;
-        case 'year':
-          shouldInclude = day.date.startsWith(currentYear);
-          break;
+      if (hasDateFilter) {
+        // 有日期筛选时，统计所有返回的数据（后端已经按筛选范围过滤）
+        shouldInclude = true;
+      } else {
+        // 没有日期筛选时，按statsPeriod统计
+        switch (statsPeriod) {
+          case 'day':
+            shouldInclude = day.date === today;
+            break;
+          case 'week':
+            shouldInclude = day.date >= weekStart && day.date <= today;
+            break;
+          case 'month':
+            shouldInclude = day.date.startsWith(currentMonth);
+            break;
+          case 'year':
+            shouldInclude = day.date.startsWith(currentYear);
+            break;
+        }
       }
       
       if (shouldInclude) {
@@ -250,10 +259,10 @@ export default function LedgerDetail() {
             <div className="relative">
               <div className="text-xs opacity-90 flex items-center justify-center gap-1">
                 <span>
-                  {statsPeriod === 'day' && '今日'}
-                  {statsPeriod === 'week' && '本周'}
-                  {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                  {statsPeriod === 'year' && '今年'}
+                  {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                  {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                  {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                  {!hasDateFilter && statsPeriod === 'year' && '今年'}
                   总收入
                 </span>
                 <button 
@@ -311,20 +320,20 @@ export default function LedgerDetail() {
             </div>
             <div>
               <div className="text-xs opacity-90">
-                {statsPeriod === 'day' && '今日'}
-                {statsPeriod === 'week' && '本周'}
-                {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                {statsPeriod === 'year' && '今年'}
+                {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                {!hasDateFilter && statsPeriod === 'year' && '今年'}
                 总结余
               </div>
               <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
             </div>
             <div>
               <div className="text-xs opacity-90">
-                {statsPeriod === 'day' && '今日'}
-                {statsPeriod === 'week' && '本周'}
-                {statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                {statsPeriod === 'year' && '今年'}
+                {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                {!hasDateFilter && statsPeriod === 'year' && '今年'}
                 总支出
               </div>
               <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
