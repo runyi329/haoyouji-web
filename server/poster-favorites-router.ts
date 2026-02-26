@@ -162,7 +162,7 @@ export const posterFavoritesRouter = router({
         
         const db = await getDb();
         const [user] = await db
-          .select({ inviteCode: users.inviteCode })
+          .select({ inviteCode: users.inviteCode, name: users.name })
           .from(users)
           .where(eq(users.id, userId));
         
@@ -173,11 +173,15 @@ export const posterFavoritesRouter = router({
           });
         }
         
-        // 合成海报
+        // 使用昵称（name）优先，没有则用用户名（username）
+        const displayName = user.name || username;
+        
+        // 合成海报（传入用户名用于显示邀请人）
         const composedUrl = await composePosterWithQR(
           input.templateUrl,
           user.inviteCode,
-          { x: input.qrX, y: input.qrY, size: input.qrSize }
+          { x: input.qrX, y: input.qrY, size: input.qrSize },
+          displayName
         );
         
         return {
