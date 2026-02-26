@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Download, X } from 'lucide-react';
+import { ArrowLeft, Download, X, Share2 } from 'lucide-react';
 import { useLocation } from 'wouter';
+import { trpc } from '../lib/trpc';
 
 // 硬编码的海报数据
 const POSTERS = [
@@ -83,6 +84,37 @@ export default function PosterFavorites() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // 生成邀请海报
+  const generatePosterMutation = trpc.profileFeatures.generateInvitePoster.useQuery(
+    undefined,
+    {
+      enabled: false, // 手动触发
+    }
+  );
+
+  const handleGenerateInvitePoster = async () => {
+    try {
+      setIsGenerating(true);
+      const result = await generatePosterMutation.refetch();
+      if (result.data?.posterPath) {
+        // 下载海报
+        const link = document.createElement('a');
+        link.href = result.data.posterPath;
+        link.download = '邀请海报.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert('海报生成成功！');
+      }
+    } catch (error) {
+      console.error('Failed to generate poster:', error);
+      alert('海报生成失败，请稍后重试');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // 筛选海报
   const filteredPosters = selectedCategory === 'all' 
@@ -127,6 +159,21 @@ export default function PosterFavorites() {
             <option key={cat.value} value={cat.value}>{cat.label}</option>
           ))}
         </select>
+      </div>
+
+      {/* 生成邀请海报按钮 */}
+      <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-4 border-b">
+        <button
+          onClick={handleGenerateInvitePoster}
+          disabled={isGenerating}
+          className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 hover:from-red-700 hover:to-red-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Share2 className="w-5 h-5" />
+          {isGenerating ? '正在生成中...' : '生成我的邀请海报'}
+        </button>
+        <p className="text-xs text-gray-500 text-center mt-2">
+          生成带有您专属邀请二维码的海报，分享给好友
+        </p>
       </div>
 
       {/* 海报网格 */}
