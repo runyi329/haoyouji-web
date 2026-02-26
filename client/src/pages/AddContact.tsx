@@ -1085,6 +1085,8 @@ export default function AddContact() {
   // 重名检测：防抖状态
   const [debouncedName, setDebouncedName] = useState("");
   const [debouncedTitle, setDebouncedTitle] = useState("");
+  const [debouncedPhone, setDebouncedPhone] = useState("");
+  const [debouncedEmail, setDebouncedEmail] = useState("");
   
   // 姓名防抖
   useEffect(() => {
@@ -1098,14 +1100,32 @@ export default function AddContact() {
     return () => clearTimeout(timer);
   }, [title]);
   
+  // 手机号防抖：监听extendedFields中的手机字段
+  useEffect(() => {
+    const phoneField = extendedFields.find(f => f.categoryName === '手机');
+    const phoneValue = phoneField?.value || '';
+    const timer = setTimeout(() => setDebouncedPhone(phoneValue), 500);
+    return () => clearTimeout(timer);
+  }, [extendedFields]);
+  
+  // 邮箱防抖：监听extendedFields中的邮箱字段
+  useEffect(() => {
+    const emailField = extendedFields.find(f => f.categoryName === '邮箱');
+    const emailValue = emailField?.value || '';
+    const timer = setTimeout(() => setDebouncedEmail(emailValue), 500);
+    return () => clearTimeout(timer);
+  }, [extendedFields]);
+  
   // 重名检测查询
   const { data: duplicateResult } = trpc.contacts.checkDuplicateName.useQuery(
     {
       name: debouncedName || undefined,
       title: debouncedTitle || undefined,
+      phone: debouncedPhone || undefined,
+      email: debouncedEmail || undefined,
       excludeId: isEditMode ? contactId ?? undefined : undefined,
     },
-    { enabled: (debouncedName.length > 0 || debouncedTitle.length > 0) }
+    { enabled: (debouncedName.length > 0 || debouncedTitle.length > 0 || debouncedPhone.length > 0 || debouncedEmail.length > 0) }
   );
   
   // 解析重名提示信息
@@ -1122,8 +1142,12 @@ export default function AddContact() {
           return { text: `姓名与已有人脉「${displayName}」的昵称重复`, contactId: d.contactId, field: 'name' };
         case 'title_name':
           return { text: `昵称与已有人脉「${displayName}」的姓名重复`, contactId: d.contactId, field: 'title' };
+        case 'phone_phone':
+          return { text: `手机号「${d.matchedValue || ''}」与已有人脉「${displayName}」重复`, contactId: d.contactId, field: 'phone' };
+        case 'email_email':
+          return { text: `邮箱「${d.matchedValue || ''}」与已有人脉「${displayName}」重复`, contactId: d.contactId, field: 'email' };
         default:
-          return { text: `与已有人脉「${displayName}」存在重名`, contactId: d.contactId, field: 'name' };
+          return { text: `与已有人脉「${displayName}」存在重复`, contactId: d.contactId, field: 'name' };
       }
     });
   }, [duplicateResult]);
@@ -1624,13 +1648,13 @@ export default function AddContact() {
                 {duplicateWarnings.map((warning: any, idx: number) => (
                   <div
                     key={idx}
-                    className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
+                    className="flex items-start gap-2 p-2.5 bg-[#FFF5F5] border border-[#FFCDD2] rounded-lg cursor-pointer hover:bg-[#FFEBEE] transition-colors"
                     onClick={() => setLocation(`/parent/contacts/${warning.contactId}`)}
                   >
-                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-[#D32F2F] flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-amber-700">{warning.text}</p>
-                      <p className="text-xs text-amber-500 mt-0.5">点击查看该人脉</p>
+                      <p className="text-xs text-[#D32F2F]">{warning.text}</p>
+                      <p className="text-xs text-[#E57373] mt-0.5">点击查看该人脉</p>
                     </div>
                   </div>
                 ))}
