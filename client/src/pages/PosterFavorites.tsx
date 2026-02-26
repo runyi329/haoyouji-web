@@ -20,6 +20,9 @@ interface PosterTemplate {
   };
 }
 
+// COS域名前缀
+const COS_BASE = 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com';
+
 // 所有海报模板（静态配置）
 // 有qrConfig的海报会自动通过后端合成用户专属二维码
 const POSTER_TEMPLATES: PosterTemplate[] = [
@@ -29,12 +32,12 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '脉动共享账本试用版正式上线',
     category: 'invite',
     series: '邀请好友',
-    templateUrl: '', // 将在COS上传后填入
+    templateUrl: `${COS_BASE}/posters/templates/invite-ledger-template.jpg`,
     tags: ['邀请', '二维码', '专属'],
     qrConfig: {
-      x: 530,
-      y: 1130,
-      size: 140,
+      x: 565,
+      y: 1115,
+      size: 130,
     },
   },
   {
@@ -43,7 +46,52 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的老婆赚钱 → KTV看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/shared-ledger.webp',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/BIdmlhaAMFmWlZUX.png',
+    tags: ['营销', '宣传', '脉动网'],
+  },
+  {
+    id: 'marketing-didi',
+    title: '滴滴版宣传海报',
+    description: '用别人的汽车赚钱 → 滴滴看到了',
+    category: 'marketing',
+    series: '脉动网宣传系列',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/DoomGMXoSjZsKEqJ.png',
+    tags: ['营销', '宣传', '脉动网'],
+  },
+  {
+    id: 'marketing-douyin',
+    title: '抖音版宣传海报',
+    description: '用别人的才艺赚钱 → 抖音看到了',
+    category: 'marketing',
+    series: '脉动网宣传系列',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/QSPiOfWTShXrGIVA.png',
+    tags: ['营销', '宣传', '脉动网'],
+  },
+  {
+    id: 'marketing-meituan',
+    title: '美团版宣传海报',
+    description: '用别人的厨房赚钱 → 美团看到了',
+    category: 'marketing',
+    series: '脉动网宣传系列',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/PLMlWEvujJloqzez.png',
+    tags: ['营销', '宣传', '脉动网'],
+  },
+  {
+    id: 'marketing-bank',
+    title: '银行版宣传海报',
+    description: '用别人的金钱赚钱 → 银行看到了',
+    category: 'marketing',
+    series: '脉动网宣传系列',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/NKpRvVPDdxJHWlqe.png',
+    tags: ['营销', '宣传', '脉动网'],
+  },
+  {
+    id: 'marketing-insurance',
+    title: '保险版宣传海报',
+    description: '用别人的生命赚钱 → 保险看到了',
+    category: 'marketing',
+    series: '脉动网宣传系列',
+    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hJkCQwvjpIMuwwlz.png',
     tags: ['营销', '宣传', '脉动网'],
   },
 ];
@@ -73,7 +121,6 @@ export default function PosterFavorites() {
   const postersNeedingQR = POSTER_TEMPLATES.filter(p => p.qrConfig && p.templateUrl);
 
   // 为每个需要二维码的海报调用后端合成API
-  // 使用第一个需要合成的海报作为示例
   const firstQRPoster = postersNeedingQR[0];
   const { data: composedData } = trpc.posterFavorites.getComposedPoster.useQuery(
     {
@@ -112,19 +159,18 @@ export default function PosterFavorites() {
   const isPosterReady = (poster: PosterTemplate): boolean => {
     if (!poster.templateUrl) return false;
     if (poster.qrConfig) {
-      // 需要二维码的海报，等合成完成后才显示
       return !!composedUrls[poster.id];
     }
     return true;
   };
 
   // 筛选海报
-  const allPosters = POSTER_TEMPLATES.filter(p => p.templateUrl); // 只显示有URL的
+  const allPosters = POSTER_TEMPLATES.filter(p => p.templateUrl);
   const filteredPosters = selectedCategory === 'all'
     ? allPosters
     : allPosters.filter(p => p.category === selectedCategory);
 
-  // 构建显示列表（包含URL信息）
+  // 构建显示列表
   const displayPosters = filteredPosters.map(p => ({
     ...p,
     displayUrl: getPosterDisplayUrl(p),
