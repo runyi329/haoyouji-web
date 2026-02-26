@@ -1416,11 +1416,11 @@ export async function getContactStats(parentUserId: number) {
     console.log('[getContactStats] 用户参与的账本IDs:', ledgerIds, '用户ID:', parentUserId);
     
     if (ledgerIds.length > 0) {
-      // 统计这些账本中的所有账目记录数
+      // 统计这些账本中的所有未删除的账目记录数
       const ledgerEntriesResult = await db
         .select({ count: sql<number>`count(*)` })
         .from(ledgerRecords)
-        .where(inArray(ledgerRecords.ledgerId, ledgerIds));
+        .where(and(inArray(ledgerRecords.ledgerId, ledgerIds), isNull(ledgerRecords.deletedAt)));
       
       totalLedgerEntries = Number(ledgerEntriesResult[0]?.count || 0);
     }

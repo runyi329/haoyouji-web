@@ -6278,12 +6278,14 @@ export const appRouter = router({
     // 获取账本统计数据
     stats: protectedProcedure
       .query(async ({ ctx }) => {
-        // getUserLedgers 已经返回每个账本的 recordCount
-        const ledgers = await dbLedger.getUserLedgers(ctx.user.id, false);
-        const totalLedgers = ledgers.length;
+        // 获取未封存和已封存的账本，统一统计
+        const activeLedgers = await dbLedger.getUserLedgers(ctx.user.id, false);
+        const archivedLedgers = await dbLedger.getUserLedgers(ctx.user.id, true);
+        const allLedgers = [...activeLedgers, ...archivedLedgers];
+        const totalLedgers = allLedgers.length;
         
-        // 直接累加每个账本的 recordCount 得到账目总数
-        const totalEntries = ledgers.reduce((sum: number, l: any) => sum + (l.recordCount || 0), 0);
+        // 累加每个账本的 recordCount（已排除删除的账目）
+        const totalEntries = allLedgers.reduce((sum: number, l: any) => sum + (l.recordCount || 0), 0);
         
         return {
           totalLedgers,
