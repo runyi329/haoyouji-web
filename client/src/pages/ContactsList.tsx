@@ -1300,6 +1300,11 @@ export default function ContactsList() {
                               <span className="text-xs sm:text-sm text-muted-foreground truncate">{contact.title}</span>
                             )}
                           </div>
+                          {contact.username && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              @{contact.username}
+                            </div>
+                          )}
                           {(company || position) && (
                             <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
                               {company && <span>{company}</span>}
