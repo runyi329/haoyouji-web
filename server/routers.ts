@@ -6283,9 +6283,18 @@ export const appRouter = router({
         
         // 计算账目总数（所有账本的账目数之和）
         let totalEntries = 0;
-        for (const ledger of ledgers) {
-          const entries = await dbLedger.getLedgerTransactions(ledger.id, ctx.user.id);
-          totalEntries += entries.length;
+        if (ledgers.length > 0) {
+          const db = await getLedgerDb();
+          if (!db) throw new Error("Ledger database connection failed");
+          
+          const ledgerIds = ledgers.map((l: any) => l.id);
+          const entriesCount = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(transactions)
+            .where(sql`${transactions.ledgerId} IN (${sql.join(ledgerIds, sql`, `)})`)
+            .then(rows => rows[0]?.count || 0);
+          
+          totalEntries = entriesCount;
         }
         
         return {
