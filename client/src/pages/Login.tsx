@@ -141,8 +141,8 @@ export default function Login() {
       toast.error("请填写用户名和密码");
       return;
     }
-    if (regUsername.length < 2 || regUsername.length > 20) {
-      toast.error("用户名长度必须在2-20个字符之间");
+    if (regUsername.length < 1 || regUsername.length > 20) {
+      toast.error("用户名长度必须在1-20个字符之间");
       return;
     }
     if (regPassword !== regConfirmPassword) {

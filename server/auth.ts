@@ -148,10 +148,10 @@ export async function registerWithPassword(
   }
 
   // 验证用户名格式
-  if (username.length < 3 || username.length > 20) {
+  if (username.length < 1 || username.length > 20) {
     return {
       success: false,
-      error: "用户名长度需要在3-20个字符之间",
+      error: "用户名长度需要在1-20个字符之间",
     };
   }
 

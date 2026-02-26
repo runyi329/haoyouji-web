@@ -228,8 +228,8 @@ export default function Admin() {
   };
   
   const handleEditUser = (userId: number) => {
-    if (!editUsername || editUsername.length < 3) {
-      toast.error("用户名长度至少3个字符");
+    if (!editUsername || editUsername.length < 1) {
+      toast.error("用户名长度至少1个字符");
       return;
     }
     updateUserMutation.mutate({

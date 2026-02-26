@@ -53,8 +53,8 @@ export default function Register() {
   }, [inviteCodeFromUrl]);
 
   const handleRegister = () => {
-    if (!username || username.length < 3) {
-      toast.error("用户名至少3个字符");
+    if (!username || username.length < 1) {
+      toast.error("用户名至少1个字符");
       return;
     }
     if (!password || password.length < 6) {
