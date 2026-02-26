@@ -20,11 +20,11 @@ const POSTER_TEMPLATES: Record<string, {
     description: '脉动共享账本试用版正式上线',
     category: 'invite',
     series: '邀请好友',
-    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/templates/invite-ledger-template.jpg',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/templates/invite-ledger-template-v2.jpg',
     qrConfig: {
-      x: 565,   // 压缩版750宽度下的位置
-      y: 1115,
-      size: 130,
+      x: 557,   // 品红色占位符自动检测，此为降级坐标
+      y: 1135,
+      size: 121,
     },
   },
 };

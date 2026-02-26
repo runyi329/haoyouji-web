@@ -32,12 +32,12 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '脉动共享账本试用版正式上线',
     category: 'invite',
     series: '邀请好友',
-    templateUrl: `${COS_BASE}/posters/templates/invite-ledger-template.jpg`,
+    templateUrl: `${COS_BASE}/posters/templates/invite-ledger-template-v2.jpg`,
     tags: ['邀请', '二维码', '专属'],
     qrConfig: {
-      x: 565,
-      y: 1115,
-      size: 130,
+      x: 557,
+      y: 1135,
+      size: 121,
     },
   },
   {
