@@ -62,8 +62,16 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        // 从 localStorage 读取 token 作为备用（防止 Cookie 被微信清除）
+        const token = localStorage.getItem('auth-token');
+        const headers = new Headers(init?.headers);
+        if (token && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${token}`);
+        }
+        
         return globalThis.fetch(input, {
           ...(init ?? {}),
+          headers,
           credentials: "include",
         });
       },

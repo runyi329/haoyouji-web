@@ -106,9 +106,19 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // Regular authentication flow
+    // 优先尝试从 Cookie 读取 token
     const cookies = this.parseCookies(req.headers.cookie);
-    const sessionCookie = cookies.get(COOKIE_NAME);
+    let sessionCookie = cookies.get(COOKIE_NAME);
+    
+    // 如果 Cookie 中没有 token，尝试从 Authorization header 读取（备用方案）
+    if (!sessionCookie) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        sessionCookie = authHeader.substring(7); // 移除 "Bearer " 前缀
+        console.log('[Auth] Using token from Authorization header (Cookie fallback)');
+      }
+    }
+    
     const session = await this.verifySession(sessionCookie);
 
     if (!session) {
