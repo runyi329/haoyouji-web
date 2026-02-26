@@ -85,7 +85,7 @@ export default function InviteCode() {
   const copyFullInviteText = () => {
     if (!inviteInfo) return;
     
-    const inviteText = `🎉 邀请您加入好友记\n\n我的专属邀请码: ${inviteInfo.inviteCode}\n\n点击链接注册: ${inviteInfo.inviteLink}\n\n使用邀请码注册,一起管理人脉关系!`;
+    const inviteText = `🎉 邀请您加入脉动网\n\n我的专属邀请码: ${inviteInfo.inviteCode}\n\n点击链接注册: ${inviteInfo.inviteLink}\n\n使用邀请码注册,一起管理人脉关系!`;
     
     navigator.clipboard.writeText(inviteText);
     toast.success(

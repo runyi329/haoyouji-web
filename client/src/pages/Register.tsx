@@ -88,7 +88,7 @@ export default function Register() {
             <CardTitle className="text-2xl">注册账号</CardTitle>
           </div>
           <CardDescription>
-            创建您的好友记账号,开始管理人脉关系
+            创建您的脉动网账号,开始管理人脉关系
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
