@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Users, Wallet, Plus, X } from "lucide-react";
+import { Users, Wallet, Plus } from "lucide-react";
 
 interface BottomNavProps {
   /** 
@@ -53,46 +53,47 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
       {/* 钱脉加号弹出菜单 */}
       {showLedgerMenu && (
-        <div className="fixed left-0 right-0 z-50" style={{ bottom: '80px' }}>
-          <div className="max-w-md mx-auto px-6">
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-              <button
-                className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors border-b border-gray-100"
-                onClick={() => {
-                  setShowLedgerMenu(false);
-                  if (onJoinLedger) {
-                    onJoinLedger();
-                  }
-                }}
-              >
-                <div className="w-9 h-9 rounded-full bg-[#FFF3E0] flex items-center justify-center">
-                  <Users className="w-4.5 h-4.5 text-[#E65100]" />
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-semibold text-gray-900">加入他人账本</div>
-                  <div className="text-xs text-gray-500">通过密钥加入共享账本</div>
-                </div>
-              </button>
-              <button
-                className="w-full flex items-center gap-3 px-5 py-4 hover:bg-gray-50 transition-colors"
-                onClick={() => {
-                  setShowLedgerMenu(false);
-                  if (onCreateLedger) {
-                    onCreateLedger();
-                  } else {
-                    setLocation('/ledger/create-type');
-                  }
-                }}
-              >
-                <div className="w-9 h-9 rounded-full bg-[#E8F5E9] flex items-center justify-center">
-                  <Plus className="w-4.5 h-4.5 text-[#2E7D32]" />
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-semibold text-gray-900">创建新的账本</div>
-                  <div className="text-xs text-gray-500">创建属于你的共享账本</div>
-                </div>
-              </button>
-            </div>
+        <div className="fixed left-0 right-0 z-50 flex justify-center" style={{ bottom: '80px' }}>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden" style={{ width: 'auto', minWidth: '260px', maxWidth: '320px' }}>
+            {/* 创建新账本 - 放在上面 */}
+            <button
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-[#FFF3F3] transition-colors border-b border-gray-100"
+              onClick={() => {
+                setShowLedgerMenu(false);
+                if (onCreateLedger) {
+                  onCreateLedger();
+                } else {
+                  setLocation('/ledger/create-type');
+                }
+              }}
+            >
+              <div className="w-9 h-9 rounded-full bg-[#FFEBEE] flex items-center justify-center flex-shrink-0">
+                <Plus className="w-5 h-5 text-[#D32F2F]" />
+              </div>
+              <div className="text-left flex-1">
+                <div className="text-sm font-semibold text-gray-900">创建新的账本</div>
+                <div className="text-xs text-gray-500">创建属于你的共享账本</div>
+              </div>
+            </button>
+            
+            {/* 加入他人账本 - 放在下面 */}
+            <button
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-[#FFF3F3] transition-colors"
+              onClick={() => {
+                setShowLedgerMenu(false);
+                if (onJoinLedger) {
+                  onJoinLedger();
+                }
+              }}
+            >
+              <div className="w-9 h-9 rounded-full bg-[#FFEBEE] flex items-center justify-center flex-shrink-0">
+                <Users className="w-5 h-5 text-[#D32F2F]" />
+              </div>
+              <div className="text-left flex-1">
+                <div className="text-sm font-semibold text-gray-900">加入他人账本</div>
+                <div className="text-xs text-gray-500">通过密钥加入共享账本</div>
+              </div>
+            </button>
           </div>
         </div>
       )}
