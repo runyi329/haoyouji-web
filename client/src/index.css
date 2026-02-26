@@ -209,6 +209,16 @@
     @apply cursor-pointer;
   }
   
+  /* 微信环境适配 */
+  body.wechat-env {
+    font-size: 85%;
+  }
+  
+  /* 微信环境下的特殊调整 */
+  body.wechat-env * {
+    /* 继承父元素的字体大小 */
+  }
+  
   /* 优雅的滚动条 */
   ::-webkit-scrollbar {
     width: 8px;
