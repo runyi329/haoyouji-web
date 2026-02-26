@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Download, X, Share2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { trpc } from '../lib/trpc';
@@ -69,6 +69,7 @@ const POSTERS = [
 
 const CATEGORIES = [
   { value: 'all', label: '全部' },
+  { value: 'invite', label: '邀请海报' },
   { value: 'marketing', label: '营销类' },
   { value: 'product', label: '产品教程' },
   { value: 'target', label: '特定对象' },
@@ -80,49 +81,47 @@ const CATEGORIES = [
 export default function PosterFavorites() {
   const [, navigate] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [previewPoster, setPreviewPoster] = useState<typeof POSTERS[0] | null>(null);
+  const [previewPoster, setPreviewPoster] = useState<any>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [invitePoster, setInvitePoster] = useState<any>(null);
 
-  // 生成邀请海报
-  const generatePosterMutation = trpc.profileFeatures.generateInvitePoster.useQuery(
+  // 自动获取邀请海报
+  const { data: invitePosterData, isLoading } = trpc.profileFeatures.generateInvitePoster.useQuery(
     undefined,
     {
-      enabled: false, // 手动触发
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
     }
   );
 
-  const handleGenerateInvitePoster = async () => {
-    try {
-      setIsGenerating(true);
-      const result = await generatePosterMutation.refetch();
-      if (result.data?.posterPath) {
-        // 下载海报
-        const link = document.createElement('a');
-        link.href = result.data.posterPath;
-        link.download = '邀请海报.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        alert('海报生成成功！');
-      }
-    } catch (error) {
-      console.error('Failed to generate poster:', error);
-      alert('海报生成失败，请稍后重试');
-    } finally {
-      setIsGenerating(false);
+  // 当邀请海报数据加载完成时，更新状态
+  useEffect(() => {
+    if (invitePosterData?.posterPath) {
+      setInvitePoster({
+        id: 'invite',
+        title: '我的邀请海报',
+        description: '带有您专属邀请二维码的海报',
+        category: 'invite',
+        series: '邀请好友',
+        url: invitePosterData.posterPath,
+        thumbnailUrl: invitePosterData.posterPath,
+        tags: ['邀请', '二维码', '专属']
+      });
     }
-  };
+  }, [invitePosterData]);
+
+  // 合并邀请海报和其他海报
+  const allPosters = invitePoster ? [invitePoster, ...POSTERS] : POSTERS;
 
   // 筛选海报
   const filteredPosters = selectedCategory === 'all' 
-    ? POSTERS 
-    : POSTERS.filter(p => p.category === selectedCategory);
+    ? allPosters 
+    : allPosters.filter(p => p.category === selectedCategory);
 
   // 下载海报
-  const handleDownload = (poster: typeof POSTERS[0]) => {
+  const handleDownload = (poster: any) => {
     const link = document.createElement('a');
     link.href = poster.url;
     link.download = `${poster.title}.png`;
@@ -161,20 +160,14 @@ export default function PosterFavorites() {
         </select>
       </div>
 
-      {/* 生成邀请海报按钮 */}
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-4 border-b">
-        <button
-          onClick={handleGenerateInvitePoster}
-          disabled={isGenerating}
-          className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 hover:from-red-700 hover:to-red-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Share2 className="w-5 h-5" />
-          {isGenerating ? '正在生成中...' : '生成我的邀请海报'}
-        </button>
-        <p className="text-xs text-gray-500 text-center mt-2">
-          生成带有您专属邀请二维码的海报，分享给好友
-        </p>
-      </div>
+      {/* 加载提示 */}
+      {isLoading && !invitePoster && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 px-4 py-4 border-b">
+          <div className="text-center text-gray-500 text-sm">
+            正在生成您的专属邀请海报...
+          </div>
+        </div>
+      )}
 
       {/* 海报网格 */}
       <div className="p-4">
@@ -196,6 +189,11 @@ export default function PosterFavorites() {
                 }}
               >
                 <div className="aspect-[9/16] bg-gray-100 relative">
+                  {poster.id === 'invite' && (
+                    <div className="absolute top-2 right-2 z-10 bg-red-600 text-white text-xs px-2 py-1 rounded-full">
+                      专属
+                    </div>
+                  )}
                   <img
                     src={poster.thumbnailUrl}
                     alt={poster.title}
