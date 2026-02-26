@@ -459,7 +459,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="bg-[#FAF3ED] pb-8 max-w-md mx-auto relative shadow-2xl">
+    <div className="profile-container bg-[#FAF3ED] pb-8 max-w-md mx-auto relative shadow-2xl">
       {/* 顶部用户信息卡片 */}
       <div className="bg-gradient-to-br from-[#A80000] to-[#d44] px-4 pt-10 pb-6 relative">
         {/* 返回首页箭头 */}
