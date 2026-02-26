@@ -214,6 +214,11 @@
     font-size: 85%;
   }
   
+  /* 微信环境下个人中心页面底部留白更小 */
+  body.wechat-env .profile-container {
+    padding-bottom: 1rem !important;
+  }
+  
   /* 微信环境下的特殊调整 */
   body.wechat-env * {
     /* 继承父元素的字体大小 */
