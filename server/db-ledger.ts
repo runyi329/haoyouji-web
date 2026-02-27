@@ -3001,6 +3001,18 @@ export async function getDeletedTransactions(
     if (v instanceof Date) return v.toISOString();
     return String(v);
   };
+  // 辅助函数：将日期格式化为YYYY-MM-DD
+  const toDateStr = (v: any) => {
+    if (!v) return null;
+    if (v instanceof Date) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, '0');
+      const d = String(v.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    // 如果已经是字符串，截取前10位（YYYY-MM-DD）
+    return String(v).substring(0, 10);
+  };
   
   // 格式化结果（确保所有字段都是可序列化的基本类型）
   const formattedRecords = records.map((r: any) => ({
@@ -3009,11 +3021,11 @@ export async function getDeletedTransactions(
     amount: r.amount ? String(r.amount) : '0',
     categoryId: r.categoryId,
     description: r.description || '',
-    date: toStr(r.recordDate),
+    date: toDateStr(r.recordDate),
     createdBy: r.createdBy,
     createdAt: toStr(r.createdAt),
     imageUrl: r.imageUrl || null,
-    deletedAt: toStr(r.deleted_at),
+    deletedAt: toDateStr(r.deleted_at),
     deletedBy: r.deleted_by,
     categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
     createdByName: usersMap[r.createdBy] || '未知',
