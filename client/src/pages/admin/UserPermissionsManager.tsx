@@ -50,7 +50,7 @@ export default function UserPermissionsManager() {
   const getPermissionStatus = (featureKey: string): boolean => {
     if (!userPermissions) {
       // 这些新功能默认关闭
-      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
       return !defaultOffFeatures.includes(featureKey);
     }
     const perm = userPermissions.find((p) => p.featureKey === featureKey);
@@ -58,7 +58,7 @@ export default function UserPermissionsManager() {
       return perm.isEnabled;
     }
     // 没有记录时，这些新功能默认关闭
-    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
     return !defaultOffFeatures.includes(featureKey);
   };
   

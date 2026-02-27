@@ -1179,6 +1179,7 @@ export const appRouter = router({
           'node-growth': true,
           'my-points': true,
           'ai-assistant': true,
+          'wallet': true,
         };
       }
       
@@ -1187,7 +1188,7 @@ export const appRouter = router({
       const permissions = await dbPermissions.getUserPermissions(userId);
       
       const result: Record<string, boolean> = {};
-      const featureKeys = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      const featureKeys = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
       
       for (const key of featureKeys) {
         const perm = permissions.find(p => p.featureKey === key);

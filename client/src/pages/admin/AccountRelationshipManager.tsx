@@ -78,7 +78,7 @@ function FeaturePermissionSwitch({
   const getPermissionStatus = (): boolean => {
     if (!userPermissions) {
       // 这些新功能默认关闭
-      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
       return !defaultOffFeatures.includes(featureKey);
     }
     const perm = userPermissions.find((p) => p.featureKey === featureKey);
@@ -86,7 +86,7 @@ function FeaturePermissionSwitch({
       return perm.isEnabled;
     }
     // 没有记录时，这些新功能默认关闭
-    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
     return !defaultOffFeatures.includes(featureKey);
   };
   
@@ -794,17 +794,17 @@ export default function AccountRelationshipManager() {
 
       {/* 功能权限管理对话框 - 使用新的树形组件 */}
       <Dialog open={featureManagementParentId !== null} onOpenChange={(open) => !open && handleCloseFeatureManagement()}>
-        <DialogContent className="max-w-5xl h-[90vh] sm:h-[85vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>
               功能权限管理 - {managedParent?.name || '未命名'}
             </DialogTitle>
           </DialogHeader>
           
           {managedParent && managedParent.familyId && (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="space-y-4">
               {/* 家长信息 */}
-              <Card className="p-3 bg-gradient-to-r from-red-50 to-rose-50 mb-4 flex-shrink-0">
+              <Card className="p-3 bg-gradient-to-r from-red-50 to-rose-50">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center">
                     <UserCircle className="w-5 h-5 text-white" />
@@ -817,7 +817,7 @@ export default function AccountRelationshipManager() {
               </Card>
 
               {/* 个人中心功能开关 */}
-              <Card className="p-4 mb-4 flex-shrink-0">
+              <Card className="p-4">
                 <h4 className="font-semibold mb-3 text-sm">个人中心功能开关</h4>
                 <div className="space-y-3">
                   <FeaturePermissionSwitch 
@@ -844,16 +844,14 @@ export default function AccountRelationshipManager() {
                     label="AI助手"
                     description="AI智能助手功能"
                   />
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="wallet"
+                    label="我的钱包"
+                    description="钱包功能和余额管理"
+                  />
                 </div>
               </Card>
-
-              {/* 使用新的树形权限管理组件 */}
-              <div className="flex-1 overflow-hidden">
-                <FeatureTreeManager 
-                  familyId={managedParent.familyId} 
-                  onClose={handleCloseFeatureManagement}
-                />
-              </div>
             </div>
           )}
         </DialogContent>
