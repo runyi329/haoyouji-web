@@ -413,7 +413,7 @@ export default function LedgerSettings() {
           onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
         />
 
-        <SettingItem label="账目锁定" value="不限制" />
+
         {/* 只有账本创建人(owner)和管理员(admin)才能看到成员记账审批 */}
         {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
           <SettingItem 
