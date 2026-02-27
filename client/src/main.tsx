@@ -65,8 +65,12 @@ const trpcClient = trpc.createClient({
         // 从 localStorage 读取 token 作为备用（防止 Cookie 被微信清除）
         const token = localStorage.getItem('auth-token');
         const headers = new Headers(init?.headers);
-        if (token && !headers.has('Authorization')) {
+        
+        // 始终添加 Authorization header（如果有token）
+        // 这样即使 Cookie 失效，服务端也能通过 Authorization header 验证
+        if (token) {
           headers.set('Authorization', `Bearer ${token}`);
+          console.log('[tRPC] Using token from localStorage');
         }
         
         return globalThis.fetch(input, {

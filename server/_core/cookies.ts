@@ -24,25 +24,27 @@ function isSecureRequest(req: Request) {
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
-
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
-
+  // 检测是否是微信环境（微信浏览器或小程序）
+  const userAgent = req.headers['user-agent'] || '';
+  const isWeChat = /MicroMessenger/i.test(userAgent);
+  const isSecure = isSecureRequest(req);
+  
+  // 微信环境下使用更宽松的Cookie设置
+  if (isWeChat) {
+    console.log('[Cookie] WeChat environment detected, using relaxed cookie settings');
+    return {
+      httpOnly: false,  // 微信环境下允许JS访问，增强兼容性
+      path: "/",
+      sameSite: "lax",  // 微信环境下使用lax更稳定
+      secure: isSecure,  // 根据协议动态设置
+    };
+  }
+  
+  // 非微信环境使用严格设置
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",  // 修改为none以支持跨域请求
+    sameSite: "none",  // 支持跨域请求
     secure: true,  // sameSite=none必须配合secure=true使用
   };
 }
