@@ -52,6 +52,7 @@ MIGRATIONS=(
   "migrations/fix_wallet_addresses_duplicates.sql"
   "migrations/add_txn_hash_and_fix_duplicate.sql"
   "drizzle/migrations/add_require_image_to_ledgers.sql"
+  "drizzle/migrations/add_soft_delete.sql"
 )
 
 # 执行每个迁移文件
