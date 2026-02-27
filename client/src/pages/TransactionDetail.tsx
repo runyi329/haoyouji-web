@@ -48,6 +48,9 @@ export default function TransactionDetail() {
   const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   
+  // ========== 删除确认对话框状态 ==========
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   // ========== 待结功能状态 ==========
   const [showSettleDialog, setShowSettleDialog] = useState(false);
   const [pendingLocalType, setPendingLocalType] = useState<string | null>(null);
@@ -523,11 +526,7 @@ export default function TransactionDetail() {
             修改账目
           </button>
           <button 
-            onClick={() => {
-              if (confirm('确定要删除这条账目吗？')) {
-                deleteMutation.mutate({ recordId: transactionId });
-              }
-            }}
+            onClick={() => setShowDeleteDialog(true)}
             className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
             style={{ backgroundColor: themeColors.primary }}
           >
@@ -535,6 +534,33 @@ export default function TransactionDetail() {
           </button>
         </div>
       )}
+
+      {/* 删除确认对话框 */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+            <DialogDescription>
+              确定要删除这条账目吗？删除后可在“删除账单找回”中恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowDeleteDialog(false);
+                deleteMutation.mutate({ recordId: transactionId });
+              }}
+              disabled={deleteMutation.isPending}
+              className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+            >
+              {deleteMutation.isPending ? '删除中...' : '确认删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 结算确认对话框 */}
       <Dialog open={showSettleDialog} onOpenChange={setShowSettleDialog}>
