@@ -37,8 +37,14 @@ export async function hasFeaturePermission(userId: number, featureKey: string): 
     )
     .limit(1);
   
-  // 如果没有记录,默认允许访问(向后兼容)
+  // 如果没有记录，根据功能类型决定默认值
   if (result.length === 0) {
+    // 这些新功能默认关闭
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    if (defaultOffFeatures.includes(featureKey)) {
+      return false;
+    }
+    // 其他功能默认开启(向后兼容)
     return true;
   }
   
@@ -109,5 +115,9 @@ export function getAllFeatures() {
     { key: "social", name: "社交", description: "社交功能" },
     { key: "exercise", name: "锻炼计数", description: "健康锻炼记录系统" },
     { key: "reading", name: "阅读", description: "阅读故事功能" },
+    { key: "my-equity", name: "我的股权", description: "查看和管理个人股权" },
+    { key: "node-growth", name: "节点成长", description: "节点成长跟踪和管理" },
+    { key: "my-points", name: "我的积分", description: "积分系统和奖励" },
+    { key: "ai-assistant", name: "AI助手", description: "AI智能助手功能" },
   ];
 }
