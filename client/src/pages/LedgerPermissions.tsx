@@ -97,14 +97,14 @@ const LedgerPermissions = () => {
   };
 
   // 选择权限
-  const selectPermission = (permission: Permission) => {
+  const selectPermission = (permission: Permission | BackupPermission) => {
     if (permissionMenu.memberId && permissionMenu.permissionType) {
       if (permissionMenu.memberId === 'default') {
         // 更新默认权限
         updateDefaultPermissionMutation.mutate({
           ledgerId,
           permissionType: permissionMenu.permissionType,
-          permissionValue: permission,
+          permissionValue: permission as any,
         });
       } else {
         // 更新成员权限
@@ -112,7 +112,7 @@ const LedgerPermissions = () => {
           ledgerId,
           memberId: permissionMenu.memberId,
           permissionType: permissionMenu.permissionType,
-          permissionValue: permission,
+          permissionValue: permission as any,
         });
       }
     }
@@ -407,7 +407,7 @@ const LedgerPermissions = () => {
               // 备份权限菜单：只有允许/不允许
               <>
                 <button
-                  onClick={() => selectPermission("allow" as any)}
+                  onClick={() => selectPermission("allow")}
                   className="w-full px-4 py-3 text-sm text-[#4CAF50] font-medium text-center border-b border-gray-100 last:border-b-0 active:bg-gray-50"
                 >
                   允许

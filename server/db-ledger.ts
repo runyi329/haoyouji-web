@@ -1353,24 +1353,32 @@ export async function updateMemberPermission(
   }
   
   // 根据权限类型更新对应字段
+  console.log('[updateMemberPermission] Input:', { ledgerId, memberId, permissionType, permissionValue });
+  
+  // 确保 permissionValue 是字符串
+  const valueStr = String(permissionValue);
+  console.log('[updateMemberPermission] Value as string:', valueStr);
+  
   const updateData: any = {};
   switch (permissionType) {
     case "view":
-      updateData.permissionView = permissionValue;
+      updateData.permissionView = valueStr;
       break;
     case "add":
-      updateData.permissionAdd = permissionValue;
+      updateData.permissionAdd = valueStr;
       break;
     case "edit":
-      updateData.permissionEdit = permissionValue;
+      updateData.permissionEdit = valueStr;
       break;
     case "delete":
-      updateData.permissionDelete = permissionValue;
+      updateData.permissionDelete = valueStr;
       break;
     case "backup":
-      updateData.permissionBackup = permissionValue;
+      updateData.permissionBackup = valueStr;
       break;
   }
+  
+  console.log('[updateMemberPermission] Update data:', updateData);
   
   await db
     .update(ledgerMembers)
@@ -1406,27 +1414,35 @@ export async function updateDefaultPermission(
   if (ledger[0].createdBy !== requestUserId) {
     throw new Error("只有账本创建者可以修改默认权限设置");
   }
-    // 根据权限类型更新对应字段
+  // 根据权限类型更新对应字段
+  console.log('[updateDefaultPermission] Input:', { ledgerId, permissionType, permissionValue });
+  
+  // 确保 permissionValue 是字符串
+  const valueStr = String(permissionValue);
+  console.log('[updateDefaultPermission] Value as string:', valueStr);
+  
   const updateData: any = {};
   switch (permissionType) {
     case "view":
-      updateData.defaultPermissionView = permissionValue;
+      updateData.defaultPermissionView = valueStr;
       break;
     case "add":
-      updateData.defaultPermissionAdd = permissionValue;
+      updateData.defaultPermissionAdd = valueStr;
       break;
     case "edit":
-      updateData.defaultPermissionEdit = permissionValue;
+      updateData.defaultPermissionEdit = valueStr;
       break;
     case "delete":
-      updateData.defaultPermissionDelete = permissionValue;
+      updateData.defaultPermissionDelete = valueStr;
       break;
     case "backup":
-      updateData.defaultPermissionBackup = permissionValue;
+      updateData.defaultPermissionBackup = valueStr;
       break;
     default:
       throw new Error(`无效的权限类型: ${permissionType}`);
   }
+  
+  console.log('[updateDefaultPermission] Update data:', updateData);
   
   // 防御性检查：确保 updateData 不为空
   if (Object.keys(updateData).length === 0) {
