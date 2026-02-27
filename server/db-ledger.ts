@@ -2995,18 +2995,25 @@ export async function getDeletedTransactions(
     });
   }
   
-  // 格式化结果
+  // 辅助函数：将Date对象转为字符串
+  const toStr = (v: any) => {
+    if (!v) return null;
+    if (v instanceof Date) return v.toISOString();
+    return String(v);
+  };
+  
+  // 格式化结果（确保所有字段都是可序列化的基本类型）
   const formattedRecords = records.map((r: any) => ({
     id: r.id,
     type: r.type,
-    amount: r.amount,
+    amount: r.amount ? String(r.amount) : '0',
     categoryId: r.categoryId,
-    description: r.description,
-    date: r.recordDate,
+    description: r.description || '',
+    date: toStr(r.recordDate),
     createdBy: r.createdBy,
-    createdAt: r.createdAt,
-    imageUrl: r.imageUrl,
-    deletedAt: r.deleted_at,
+    createdAt: toStr(r.createdAt),
+    imageUrl: r.imageUrl || null,
+    deletedAt: toStr(r.deleted_at),
     deletedBy: r.deleted_by,
     categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
     createdByName: usersMap[r.createdBy] || '未知',
