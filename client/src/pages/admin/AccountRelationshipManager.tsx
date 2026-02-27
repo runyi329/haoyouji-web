@@ -41,6 +41,81 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 /**
+ * 功能权限开关组件
+ */
+function FeaturePermissionSwitch({ 
+  userId, 
+  featureKey, 
+  label, 
+  description 
+}: { 
+  userId: number; 
+  featureKey: string; 
+  label: string; 
+  description: string; 
+}) {
+  const utils = trpc.useUtils();
+  
+  // 获取用户权限
+  const { data: userPermissions } = trpc.admin.getUserPermissions.useQuery(
+    { userId },
+    { enabled: !!userId }
+  );
+  
+  // 设置权限mutation
+  const setPermissionsMutation = trpc.admin.setUserPermissions.useMutation({
+    onSuccess: () => {
+      toast.success(`${label}权限设置成功`);
+      utils.admin.getUserPermissions.invalidate({ userId });
+      utils.auth.getMyFeaturePermissions.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+  
+  // 获取当前权限状态
+  const getPermissionStatus = (): boolean => {
+    if (!userPermissions) {
+      // 这些新功能默认关闭
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      return !defaultOffFeatures.includes(featureKey);
+    }
+    const perm = userPermissions.find((p) => p.featureKey === featureKey);
+    if (perm) {
+      return perm.isEnabled;
+    }
+    // 没有记录时，这些新功能默认关闭
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    return !defaultOffFeatures.includes(featureKey);
+  };
+  
+  const isEnabled = getPermissionStatus();
+  
+  // 切换权限
+  const togglePermission = async () => {
+    await setPermissionsMutation.mutateAsync({
+      userId,
+      permissions: [{ featureKey, isEnabled: !isEnabled }],
+    });
+  };
+  
+  return (
+    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+      <div className="flex-1">
+        <div className="font-medium text-sm">{label}</div>
+        <div className="text-xs text-muted-foreground">{description}</div>
+      </div>
+      <Switch
+        checked={isEnabled}
+        onCheckedChange={togglePermission}
+        disabled={setPermissionsMutation.isPending}
+      />
+    </div>
+  );
+}
+
+/**
  * 账户关系管理组件
  * 
  * 功能说明：
@@ -738,6 +813,37 @@ export default function AccountRelationshipManager() {
                     <div className="font-bold">{managedParent.name || managedParent.username}</div>
                     <div className="text-sm text-muted-foreground">家庭 ID: {managedParent.familyId}</div>
                   </div>
+                </div>
+              </Card>
+
+              {/* 个人中心功能开关 */}
+              <Card className="p-4 mb-4 flex-shrink-0">
+                <h4 className="font-semibold mb-3 text-sm">个人中心功能开关</h4>
+                <div className="space-y-3">
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="my-equity"
+                    label="我的股权"
+                    description="查看和管理个人股权"
+                  />
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="node-growth"
+                    label="节点成长"
+                    description="节点成长跟踪和管理"
+                  />
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="my-points"
+                    label="我的积分"
+                    description="积分系统和奖励"
+                  />
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="ai-assistant"
+                    label="AI助手"
+                    description="AI智能助手功能"
+                  />
                 </div>
               </Card>
 
