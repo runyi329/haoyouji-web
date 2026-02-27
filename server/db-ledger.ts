@@ -2894,13 +2894,15 @@ export async function deleteTransaction(
   }
   
   // 软删除：设置 deletedAt 和 deletedBy
-  await db
+  console.log('[deleteTransaction] 执行软删除:', { recordId, userId, ledgerId: record[0].ledgerId });
+  const updateResult = await db
     .update(ledgerRecords)
     .set({
       deletedAt: sql`NOW()`,
       deletedBy: userId,
     } as any)
     .where(eq(ledgerRecords.id, recordId));
+  console.log('[deleteTransaction] 软删除结果:', JSON.stringify(updateResult));
   
   return { success: true };
 }
@@ -2971,6 +2973,7 @@ export async function getDeletedTransactions(
       )
     )
     .orderBy(desc(ledgerRecords.deletedAt));
+  console.log('[getDeletedTransactions] 查询结果:', { ledgerId, userId, recordCount: records.length, userPermission });
   
   // 获取分类信息
   const categoryIds = new Set<number>();
