@@ -1,4 +1,4 @@
-import { getLedgerDb } from "./db";
+import { getLedgerDb, getDbConnection } from "./db";
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, isNotNull, asc } from "drizzle-orm";
 import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
@@ -2859,24 +2859,26 @@ export async function deleteTransaction(
   recordId: number,
   userId: number
 ) {
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
   
-  // 获取记录信息（使用原始SQL确保兼容性）
-  const [recordRows] = await db.execute(
-    sql`SELECT id, ledger_id, created_by FROM ledger_records WHERE id = ${recordId} AND deleted_at IS NULL LIMIT 1`
+  // 获取记录信息（使用原始mysql2连接）
+  const [recordRows] = await conn.execute(
+    'SELECT id, ledger_id, created_by FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    [recordId]
   ) as any;
   
   if (!recordRows || recordRows.length === 0) {
     throw new Error("记录不存在");
   }
   const record = recordRows[0];
-  const ledgerId = record.ledger_id || record.ledgerId;
-  console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.created_by || record.createdBy });
+  const ledgerId = record.ledger_id;
+  console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.created_by });
   
   // 验证用户是否是账本成员
-  const [memberRows] = await db.execute(
-    sql`SELECT id FROM ledger_members WHERE ledger_id = ${ledgerId} AND user_id = ${userId} LIMIT 1`
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
+    [ledgerId, userId]
   ) as any;
   
   if (!memberRows || memberRows.length === 0) {
@@ -2884,15 +2886,17 @@ export async function deleteTransaction(
   }
   
   // 软删除：使用原始SQL直接更新 deleted_at 和 deleted_by
-  console.log('[deleteTransaction] 执行软删除 SQL:', { recordId, userId });
-  await db.execute(
-    sql`UPDATE ledger_records SET deleted_at = NOW(), deleted_by = ${userId} WHERE id = ${recordId}`
+  console.log('[deleteTransaction] 执行软删除:', { recordId, userId });
+  await conn.execute(
+    'UPDATE ledger_records SET deleted_at = NOW(), deleted_by = ? WHERE id = ?',
+    [userId, recordId]
   );
   console.log('[deleteTransaction] 软删除成功');
   
   // 验证删除是否成功
-  const [verifyRows] = await db.execute(
-    sql`SELECT id, deleted_at, deleted_by FROM ledger_records WHERE id = ${recordId}`
+  const [verifyRows] = await conn.execute(
+    'SELECT id, deleted_at, deleted_by FROM ledger_records WHERE id = ?',
+    [recordId]
   ) as any;
   console.log('[deleteTransaction] 验证结果:', verifyRows?.[0]);
   
@@ -2906,21 +2910,23 @@ export async function getDeletedTransactions(
   ledgerId: number,
   userId: number
 ) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
   const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
   
   console.log('[getDeletedTransactions] 开始查询:', { ledgerId, userId });
   
   // 验证用户是否是账本成员并获取权限
-  const [memberRows] = await db.execute(
-    sql`SELECT permission_view, role FROM ledger_members WHERE ledger_id = ${ledgerId} AND user_id = ${userId} LIMIT 1`
+  const [memberRows] = await conn.execute(
+    'SELECT permission_view, role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
+    [ledgerId, userId]
   ) as any;
   
   if (!memberRows || memberRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
   
-  const userPermission = memberRows[0].permission_view || memberRows[0].permissionView;
+  const userPermission = memberRows[0].permission_view;
   console.log('[getDeletedTransactions] 用户权限:', userPermission);
   
   // 检查查看权限
@@ -2928,21 +2934,23 @@ export async function getDeletedTransactions(
     return [];
   }
   
-  // 使用原始SQL查询已删除的记录
+  // 使用原始mysql2连接查询已删除的记录
   let records: any[];
   if (userPermission === 'own') {
-    const [rows] = await db.execute(
-      sql`SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ${ledgerId} AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ${userId} OR created_by = ${userId}) ORDER BY deleted_at DESC`
+    const [rows] = await conn.execute(
+      'SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR created_by = ?) ORDER BY deleted_at DESC',
+      [ledgerId, userId, userId]
     ) as any;
     records = rows || [];
   } else {
-    const [rows] = await db.execute(
-      sql`SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ${ledgerId} AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC`
+    const [rows] = await conn.execute(
+      'SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
+      [ledgerId]
     ) as any;
     records = rows || [];
   }
   
-  console.log('[getDeletedTransactions] 原始SQL查询结果:', { recordCount: records?.length || 0 });
+  console.log('[getDeletedTransactions] 查询结果:', { recordCount: records?.length || 0 });
   
   if (!records || records.length === 0) {
     return [];
@@ -2951,14 +2959,16 @@ export async function getDeletedTransactions(
   // 获取分类信息
   const categoryIds = new Set<number>();
   records.forEach((r: any) => {
-    const catId = r.category_id || r.categoryId;
-    if (catId) categoryIds.add(catId);
+    if (r.category_id) categoryIds.add(r.category_id);
   });
   
   let categoriesMap: Record<number, string> = {};
   if (categoryIds.size > 0) {
-    const [catRows] = await db.execute(
-      sql`SELECT id, name FROM ledger_categories WHERE id IN (${sql.join([...categoryIds].map(id => sql`${id}`), sql`, `)})`
+    const catIdArr = [...categoryIds];
+    const placeholders = catIdArr.map(() => '?').join(',');
+    const [catRows] = await conn.execute(
+      `SELECT id, name FROM ledger_categories WHERE id IN (${placeholders})`,
+      catIdArr
     ) as any;
     (catRows || []).forEach((c: any) => {
       categoriesMap[c.id] = c.name;
@@ -2966,55 +2976,50 @@ export async function getDeletedTransactions(
   }
   
   // 获取用户信息（删除人和创建人）
-  const userIds = new Set<number>();
+  const userIdSet = new Set<number>();
   records.forEach((r: any) => {
-    const deletedBy = r.deleted_by || r.deletedBy;
-    const createdBy = r.created_by || r.createdBy;
-    if (deletedBy) userIds.add(deletedBy);
-    if (createdBy) userIds.add(createdBy);
+    if (r.deleted_by) userIdSet.add(r.deleted_by);
+    if (r.created_by) userIdSet.add(r.created_by);
   });
   
   let usersMap: Record<number, string> = {};
-  if (userIds.size > 0) {
-    const [userRows] = await db.execute(
-      sql`SELECT id, username, name FROM users WHERE id IN (${sql.join([...userIds].map(id => sql`${id}`), sql`, `)})`
+  if (userIdSet.size > 0) {
+    const userIdArr = [...userIdSet];
+    const placeholders = userIdArr.map(() => '?').join(',');
+    const [userRows] = await conn.execute(
+      `SELECT id, username, name FROM users WHERE id IN (${placeholders})`,
+      userIdArr
     ) as any;
     (userRows || []).forEach((u: any) => {
       usersMap[u.id] = u.name || u.username || '未知';
     });
   }
   
-  // 解密并格式化结果
-  const formattedRecords = records.map((r: any) => {
-    const catId = r.category_id || r.categoryId;
-    const createdBy = r.created_by || r.createdBy;
-    const deletedBy = r.deleted_by || r.deletedBy;
-    const deletedAt = r.deleted_at || r.deletedAt;
-    const createdAt = r.created_at || r.createdAt;
-    const recordDate = r.record_date || r.date;
-    const imageUrl = r.image_url || r.imageUrl;
-    return {
-      id: r.id,
-      type: r.type,
-      amount: r.amount,
-      categoryId: catId,
-      description: r.description,
-      date: recordDate,
-      createdBy: createdBy,
-      createdAt: createdAt,
-      imageUrl: imageUrl,
-      deletedAt: deletedAt,
-      deletedBy: deletedBy,
-      categoryName: catId ? (categoriesMap[catId] || '未分类') : '未分类',
-      createdByName: usersMap[createdBy] || '未知',
-      deletedByName: deletedBy ? (usersMap[deletedBy] || '未知') : '未知',
-    };
-  });
+  // 格式化结果
+  const formattedRecords = records.map((r: any) => ({
+    id: r.id,
+    type: r.type,
+    amount: r.amount,
+    categoryId: r.category_id,
+    description: r.description,
+    date: r.record_date,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    imageUrl: r.image_url,
+    deletedAt: r.deleted_at,
+    deletedBy: r.deleted_by,
+    categoryName: r.category_id ? (categoriesMap[r.category_id] || '未分类') : '未分类',
+    createdByName: usersMap[r.created_by] || '未知',
+    deletedByName: r.deleted_by ? (usersMap[r.deleted_by] || '未知') : '未知',
+  }));
   
   // 解密敏感字段
-  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', formattedRecords, LEDGER_RECORD_ENCRYPT_FIELDS);
+  if (db) {
+    const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', formattedRecords, LEDGER_RECORD_ENCRYPT_FIELDS);
+    return decryptedRecords;
+  }
   
-  return decryptedRecords;
+  return formattedRecords;
 }
 
 /**
@@ -3024,12 +3029,13 @@ export async function restoreTransaction(
   recordId: number,
   userId: number
 ) {
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
   
-  // 获取记录信息（使用原始SQL）
-  const [recordRows] = await db.execute(
-    sql`SELECT id, ledger_id, deleted_at FROM ledger_records WHERE id = ${recordId} LIMIT 1`
+  // 获取记录信息
+  const [recordRows] = await conn.execute(
+    'SELECT id, ledger_id, deleted_at FROM ledger_records WHERE id = ? LIMIT 1',
+    [recordId]
   ) as any;
   
   if (!recordRows || recordRows.length === 0) {
@@ -3037,15 +3043,13 @@ export async function restoreTransaction(
   }
   
   const record = recordRows[0];
-  const deletedAt = record.deleted_at || record.deletedAt;
-  const ledgerId = record.ledger_id || record.ledgerId;
   
-  if (!deletedAt) {
+  if (!record.deleted_at) {
     throw new Error("该记录未被删除");
   }
   
   // 检查是否超过60天
-  const deletedDate = new Date(deletedAt);
+  const deletedDate = new Date(record.deleted_at);
   const now = new Date();
   const diffDays = (now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24);
   if (diffDays > 60) {
@@ -3053,17 +3057,19 @@ export async function restoreTransaction(
   }
   
   // 验证用户是否是账本成员
-  const [memberRows] = await db.execute(
-    sql`SELECT id FROM ledger_members WHERE ledger_id = ${ledgerId} AND user_id = ${userId} LIMIT 1`
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
+    [record.ledger_id, userId]
   ) as any;
   
   if (!memberRows || memberRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
   
-  // 恢复记录：使用原始SQL清除 deleted_at 和 deleted_by
-  await db.execute(
-    sql`UPDATE ledger_records SET deleted_at = NULL, deleted_by = NULL WHERE id = ${recordId}`
+  // 恢复记录：清除 deleted_at 和 deleted_by
+  await conn.execute(
+    'UPDATE ledger_records SET deleted_at = NULL, deleted_by = NULL WHERE id = ?',
+    [recordId]
   );
   
   console.log('[restoreTransaction] 恢复成功:', { recordId });
@@ -3074,11 +3080,11 @@ export async function restoreTransaction(
  * 清理超过60天的已删除记录（永久删除）
  */
 export async function purgeExpiredDeletedRecords() {
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
   
-  await db.execute(
-    sql`DELETE FROM ledger_records WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 60 DAY)`
+  await conn.execute(
+    'DELETE FROM ledger_records WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 60 DAY)'
   );
   
   return { success: true };
