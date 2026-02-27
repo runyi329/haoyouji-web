@@ -1,12 +1,23 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "../lib/trpc";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Button } from "../components/ui/button";
 
 export default function DeletedRecords() {
   const params = useParams<{ id: string }>();
   const ledgerId = Number(params.id);
   const [, setLocation] = useLocation();
   const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [pendingRestoreId, setPendingRestoreId] = useState<number | null>(null);
 
   const { data: records, isPending, refetch } = trpc.ledger.getDeletedTransactions.useQuery(
     { ledgerId },
@@ -25,9 +36,16 @@ export default function DeletedRecords() {
   });
 
   const handleRestore = (recordId: number) => {
-    if (confirm("确认恢复这条账目记录？恢复后将重新出现在账本中。")) {
-      setRestoringId(recordId);
-      restoreMutation.mutate({ recordId });
+    setPendingRestoreId(recordId);
+    setShowRestoreDialog(true);
+  };
+
+  const confirmRestore = () => {
+    if (pendingRestoreId !== null) {
+      setShowRestoreDialog(false);
+      setRestoringId(pendingRestoreId);
+      restoreMutation.mutate({ recordId: pendingRestoreId });
+      setPendingRestoreId(null);
     }
   };
 
@@ -95,7 +113,7 @@ export default function DeletedRecords() {
             <div className="text-4xl mb-3">📋</div>
             <p style={{ color: "var(--text-gray)" }}>暂无已删除的账目记录</p>
             <p className="text-sm mt-1" style={{ color: "var(--text-gray)", opacity: 0.7 }}>
-              删除的账目将在此处保疑60天
+              删除的账目将在此处保留60天
             </p>
           </div>
         ) : (
@@ -226,6 +244,30 @@ export default function DeletedRecords() {
           </div>
         )}
       </div>
+
+      {/* 恢复确认对话框 */}
+      <Dialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认恢复</DialogTitle>
+            <DialogDescription>
+              确认恢复这条账目记录？恢复后将重新出现在账本中。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowRestoreDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={confirmRestore}
+              className="text-white"
+              style={{ backgroundColor: "var(--status-success)" }}
+            >
+              确认恢复
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
