@@ -40,7 +40,7 @@ export async function hasFeaturePermission(userId: number, featureKey: string): 
   // 如果没有记录，根据功能类型决定默认值
   if (result.length === 0) {
     // 这些新功能默认关闭
-    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
     if (defaultOffFeatures.includes(featureKey)) {
       return false;
     }
