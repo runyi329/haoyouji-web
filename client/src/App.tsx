@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { useTokenPersistence } from "@/hooks/useTokenPersistence";
 
 
 // HMR 热更新提示音模块
@@ -284,6 +285,9 @@ function Router() {
 function App() {
   // 版本检测（临时强制更新机制）
   useVersionCheck();
+  
+  // Token持久化（确保微信环境下登录状态不丢失）
+  useTokenPersistence();
 
   // 解锁音频上下文（移动端需要用户交互后才能播放音频）
   useEffect(() => {

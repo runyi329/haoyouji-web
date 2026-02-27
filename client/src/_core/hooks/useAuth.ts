@@ -16,6 +16,8 @@ export function useAuth(options?: UseAuthOptions) {
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
+    // 微信环境下增加重试机制
+    retryDelay: 1000,
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
