@@ -48,9 +48,18 @@ export default function UserPermissionsManager() {
   
   // 获取用户当前的权限状态
   const getPermissionStatus = (featureKey: string): boolean => {
-    if (!userPermissions) return true; // 默认启用
+    if (!userPermissions) {
+      // 这些新功能默认关闭
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      return !defaultOffFeatures.includes(featureKey);
+    }
     const perm = userPermissions.find((p) => p.featureKey === featureKey);
-    return perm ? perm.isEnabled : true; // 没有记录默认启用
+    if (perm) {
+      return perm.isEnabled;
+    }
+    // 没有记录时，这些新功能默认关闭
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+    return !defaultOffFeatures.includes(featureKey);
   };
   
   // 切换权限

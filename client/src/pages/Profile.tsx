@@ -189,6 +189,13 @@ export default function Profile() {
     staleTime: 30000,
   });
 
+  // 获取用户功能权限
+  const { data: featurePermissions } = trpc.auth.getMyFeaturePermissions.useQuery(undefined, {
+    enabled: !!user,
+    retry: 1,
+    staleTime: 30000,
+  });
+
   // 保存功能顺序配置
   const saveFavoritesMutation = trpc.profileFeatures.saveFavorites.useMutation({
     onSuccess: () => {
@@ -403,7 +410,7 @@ export default function Profile() {
   const displayAvatar = avatarPreview || user.avatar || "/default-avatar.png";
 
   // 定义所有可用的功能项（带颜色）
-  const allFeatures: FeatureItem[] = [
+  const allFeaturesBase: FeatureItem[] = [
     { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-[#E3F2FD] text-[#2196F3]", badge: null, onClick: () => navigate("/parent/profile/edit") },
     { id: "invite-friends", icon: UserPlus, label: "邀请好友", color: "bg-[#FFF3E0] text-[#FF9800]", badge: null, onClick: () => navigate("/parent/profile/invite") },
     { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
@@ -414,6 +421,25 @@ export default function Profile() {
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
     { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
+
+  // 根据权限过滤功能
+  const allFeatures = allFeaturesBase.filter(feature => {
+    // 映射feature id到permission key
+    const permissionMap: Record<string, string> = {
+      'my-equity': 'my-equity',
+      'calendar': 'node-growth',
+      'points': 'my-points',
+      'ai-assistant': 'ai-assistant',
+    };
+    
+    const permKey = permissionMap[feature.id];
+    if (permKey && featurePermissions) {
+      return featurePermissions[permKey] === true;
+    }
+    
+    // 其他功能默认显示
+    return true;
+  });
 
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [

@@ -1166,6 +1166,41 @@ export const appRouter = router({
         
         throw new TRPCError({ code: "FORBIDDEN", message: "无权使用一键登录功能" });
       }),
+    
+    // 获取当前用户的功能权限
+    getMyFeaturePermissions: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user.id;
+      const userRole = ctx.user.role;
+      
+      // 超级管理员拥有所有权限
+      if (userRole === 'super_admin') {
+        return {
+          'my-equity': true,
+          'node-growth': true,
+          'my-points': true,
+          'ai-assistant': true,
+        };
+      }
+      
+      // 普通用户查询数据库
+      const dbPermissions = await import('./db-permissions');
+      const permissions = await dbPermissions.getUserPermissions(userId);
+      
+      const result: Record<string, boolean> = {};
+      const featureKeys = ['my-equity', 'node-growth', 'my-points', 'ai-assistant'];
+      
+      for (const key of featureKeys) {
+        const perm = permissions.find(p => p.featureKey === key);
+        if (perm) {
+          result[key] = perm.isEnabled;
+        } else {
+          // 默认关闭
+          result[key] = false;
+        }
+      }
+      
+      return result;
+    }),
   }),
 
   // 通用文件上传API
