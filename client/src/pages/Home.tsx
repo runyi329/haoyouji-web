@@ -5,7 +5,6 @@ import {
   Users, 
   MapPin, 
   Handshake, 
-  BarChart2, 
   RefreshCw, 
   Plus,
   Wallet,
@@ -207,7 +206,6 @@ export default function Home() {
   const features = [
     { name: "地域", icon: MapPin, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/contacts/map` },
     { name: "共享", icon: Handshake, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/contacts/sharing` },
-    { name: "数据", icon: BarChart2, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/contacts/data-comparison` },
     { name: "资产", icon: Coins, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/asset-report` },
   ];
 
