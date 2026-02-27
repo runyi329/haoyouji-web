@@ -4216,6 +4216,7 @@ export async function updateLedgerFeatures(
     enableReimbursement?: boolean;
     enablePending?: boolean;
     pendingDefaultIncludeStats?: number;
+    requireImage?: boolean;
   }
 ): Promise<void> {
   const db = await getLedgerDb();
@@ -4312,6 +4313,9 @@ export async function updateLedgerFeatures(
   }
   if (features.pendingDefaultIncludeStats !== undefined) {
     updateData.pendingDefaultIncludeStats = features.pendingDefaultIncludeStats;
+  }
+  if (features.requireImage !== undefined) {
+    updateData.requireImage = features.requireImage ? 1 : 0;
   }
 
   // 更新账本功能设置

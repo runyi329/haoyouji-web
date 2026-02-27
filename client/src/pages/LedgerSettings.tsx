@@ -45,7 +45,6 @@ export default function LedgerSettings() {
   })();
 
   // shareCategories 已移除，功能整合到成员权限设置中
-  const [requireImage, setRequireImage] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any>(null);
   const [showRemovePicker, setShowRemovePicker] = useState(false);
@@ -415,16 +414,6 @@ export default function LedgerSettings() {
         />
 
         <SettingItem label="账目锁定" value="不限制" />
-        <SettingItem 
-          label="记账必须上传图片" 
-          rightContent={
-            <Switch 
-              checked={requireImage} 
-              onCheckedChange={setRequireImage}
-            />
-          }
-          hasHelp
-        />
         {/* 只有账本创建人(owner)和管理员(admin)才能看到成员记账审批 */}
         {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
           <SettingItem 

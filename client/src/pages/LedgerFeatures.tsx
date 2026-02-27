@@ -64,6 +64,13 @@ const LedgerFeatures = () => {
     }
   };
 
+  const handleToggleRequireImage = (enabled: boolean) => {
+    updateFeaturesMutation.mutate({
+      ledgerId,
+      requireImage: enabled,
+    });
+  };
+
   if (!ledger) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -74,6 +81,7 @@ const LedgerFeatures = () => {
 
   const enableReimbursement = ledger.enableReimbursement === 1;
   const enablePending = ledger.enablePending === 1;
+  const requireImage = ledger.requireImage === 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -130,14 +138,38 @@ const LedgerFeatures = () => {
           {enablePending && (
             <div className="mt-3 p-3 bg-green-50 rounded-lg">
               <p className="text-xs text-green-800 mb-2">
-                ✓ 待结功能已启用，添加账单时会显示"代收"和"代付"按钮
+                ✓ 待结功能已启用，添加账单时会显示“代收”和“代付”按钮
               </p>
               <div className="space-y-1 text-xs text-green-700">
                 <p>• <strong>代收</strong>：标记为代他人收款的项目</p>
                 <p>• <strong>代付</strong>：标记为代他人付款的项目</p>
-                <p>• 每笔账目可单独选择"仅显示不计入"或"显示并计入"统计</p>
+                <p>• 每笔账目可单独选择“仅显示不计入”或“显示并计入”统计</p>
                 <p className="flex items-center gap-1">• 标记后的项目会在列表中显示 <Hourglass className="w-3.5 h-3.5 text-blue-600 inline" /> 沙漏图标</p>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* 记账必须上传图片 */}
+        <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="font-medium text-gray-900">记账必须上传图片</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                开启后，添加账单时必须上传图片才能保存
+              </p>
+            </div>
+            <Switch
+              checked={requireImage}
+              onCheckedChange={handleToggleRequireImage}
+              disabled={updateFeaturesMutation.isPending}
+            />
+          </div>
+          {requireImage && (
+            <div className="mt-3 p-3 bg-purple-50 rounded-lg">
+              <p className="text-xs text-purple-800">
+                ✓ 图片上传已设为必填，添加账单时必须上传至少一张图片
+              </p>
             </div>
           )}
         </div>
