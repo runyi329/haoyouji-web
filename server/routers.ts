@@ -6589,12 +6589,14 @@ export const appRouter = router({
         enableReimbursement: z.boolean().optional(),
         enablePending: z.boolean().optional(),
         pendingDefaultIncludeStats: z.number().min(0).max(1).optional(),
+        requireImage: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.updateLedgerFeatures(input.ledgerId, ctx.user.id, {
           enableReimbursement: input.enableReimbursement,
           enablePending: input.enablePending,
           pendingDefaultIncludeStats: input.pendingDefaultIncludeStats,
+          requireImage: input.requireImage,
         });
       }),
 
