@@ -2864,7 +2864,7 @@ export async function deleteTransaction(
   
   // 获取记录信息（使用原始mysql2连接）
   const [recordRows] = await conn.execute(
-    'SELECT id, ledger_id, created_by FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    'SELECT id, ledgerId, createdBy FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
     [recordId]
   ) as any;
   
@@ -2872,12 +2872,12 @@ export async function deleteTransaction(
     throw new Error("记录不存在");
   }
   const record = recordRows[0];
-  const ledgerId = record.ledger_id;
-  console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.created_by });
+  const ledgerId = record.ledgerId;
+  console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.createdBy });
   
   // 验证用户是否是账本成员
   const [memberRows] = await conn.execute(
-    'SELECT id FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
     [ledgerId, userId]
   ) as any;
   
@@ -2918,7 +2918,7 @@ export async function getDeletedTransactions(
   
   // 验证用户是否是账本成员并获取权限
   const [memberRows] = await conn.execute(
-    'SELECT permission_view, role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
+    'SELECT permission_view, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
     [ledgerId, userId]
   ) as any;
   
@@ -2938,13 +2938,13 @@ export async function getDeletedTransactions(
   let records: any[];
   if (userPermission === 'own') {
     const [rows] = await conn.execute(
-      'SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR created_by = ?) ORDER BY deleted_at DESC',
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR createdBy = ?) ORDER BY deleted_at DESC',
       [ledgerId, userId, userId]
     ) as any;
     records = rows || [];
   } else {
     const [rows] = await conn.execute(
-      'SELECT id, type, amount, category_id, description, record_date, created_by, created_at, image_url, deleted_at, deleted_by FROM ledger_records WHERE ledger_id = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
       [ledgerId]
     ) as any;
     records = rows || [];
@@ -2959,7 +2959,7 @@ export async function getDeletedTransactions(
   // 获取分类信息
   const categoryIds = new Set<number>();
   records.forEach((r: any) => {
-    if (r.category_id) categoryIds.add(r.category_id);
+    if (r.categoryId) categoryIds.add(r.categoryId);
   });
   
   let categoriesMap: Record<number, string> = {};
@@ -2979,7 +2979,7 @@ export async function getDeletedTransactions(
   const userIdSet = new Set<number>();
   records.forEach((r: any) => {
     if (r.deleted_by) userIdSet.add(r.deleted_by);
-    if (r.created_by) userIdSet.add(r.created_by);
+    if (r.createdBy) userIdSet.add(r.createdBy);
   });
   
   let usersMap: Record<number, string> = {};
@@ -3000,16 +3000,16 @@ export async function getDeletedTransactions(
     id: r.id,
     type: r.type,
     amount: r.amount,
-    categoryId: r.category_id,
+    categoryId: r.categoryId,
     description: r.description,
-    date: r.record_date,
-    createdBy: r.created_by,
-    createdAt: r.created_at,
-    imageUrl: r.image_url,
+    date: r.recordDate,
+    createdBy: r.createdBy,
+    createdAt: r.createdAt,
+    imageUrl: r.imageUrl,
     deletedAt: r.deleted_at,
     deletedBy: r.deleted_by,
-    categoryName: r.category_id ? (categoriesMap[r.category_id] || '未分类') : '未分类',
-    createdByName: usersMap[r.created_by] || '未知',
+    categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
+    createdByName: usersMap[r.createdBy] || '未知',
     deletedByName: r.deleted_by ? (usersMap[r.deleted_by] || '未知') : '未知',
   }));
   
@@ -3034,7 +3034,7 @@ export async function restoreTransaction(
   
   // 获取记录信息
   const [recordRows] = await conn.execute(
-    'SELECT id, ledger_id, deleted_at FROM ledger_records WHERE id = ? LIMIT 1',
+    'SELECT id, ledgerId, deleted_at FROM ledger_records WHERE id = ? LIMIT 1',
     [recordId]
   ) as any;
   
@@ -3058,8 +3058,8 @@ export async function restoreTransaction(
   
   // 验证用户是否是账本成员
   const [memberRows] = await conn.execute(
-    'SELECT id FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1',
-    [record.ledger_id, userId]
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [record.ledgerId, userId]
   ) as any;
   
   if (!memberRows || memberRows.length === 0) {
