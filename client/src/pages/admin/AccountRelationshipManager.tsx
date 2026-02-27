@@ -173,16 +173,6 @@ export default function AccountRelationshipManager() {
     });
   };
 
-  // 切换钱包功能开关
-  const toggleWalletMutation = trpc.admin.toggleWalletEnabled.useMutation({
-    onSuccess: () => {
-      toast.success("钱包功能状态已更新！");
-      utils.admin.getUsers.invalidate();
-    },
-    onError: (error) => {
-      toast.error(error.message || "更新失败");
-    },
-  });
 
   // 更新用户关系
   const updateUserRelationMutation = trpc.admin.updateUserRelation.useMutation({
@@ -580,7 +570,6 @@ export default function AccountRelationshipManager() {
                   <TableHead>姓名</TableHead>
                   <TableHead>角色</TableHead>
                   <TableHead className="text-center">编辑</TableHead>
-                  <TableHead className="text-center">钱包功能</TableHead>
                   <TableHead className="text-center">功能权限</TableHead>
                   <TableHead className="text-center">一键登录</TableHead>
                   <TableHead className="text-center">删除</TableHead>
@@ -657,21 +646,6 @@ export default function AccountRelationshipManager() {
                           >
                             <Edit2 className="w-4 h-4" />
                           </Button>
-                        )}
-                      </TableCell>
-                      
-                      {/* 钱包功能列 */}
-                      <TableCell className="text-center">
-                        {user.role === "parent" && (
-                          <Switch
-                            checked={user.walletEnabled === 1}
-                            onCheckedChange={(checked) => {
-                              toggleWalletMutation.mutate({
-                                userId: user.id,
-                                enabled: checked,
-                              });
-                            }}
-                          />
                         )}
                       </TableCell>
                       
