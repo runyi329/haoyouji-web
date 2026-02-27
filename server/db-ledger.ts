@@ -2938,13 +2938,13 @@ export async function getDeletedTransactions(
   let records: any[];
   if (userPermission === 'own') {
     const [rows] = await conn.execute(
-      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR createdBy = ?) ORDER BY deleted_at DESC',
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by, reimbursement_status, pending_type, pending_include_stats FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR createdBy = ?) ORDER BY deleted_at DESC',
       [ledgerId, userId, userId]
     ) as any;
     records = rows || [];
   } else {
     const [rows] = await conn.execute(
-      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by, reimbursement_status, pending_type, pending_include_stats FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
       [ledgerId]
     ) as any;
     records = rows || [];
@@ -2983,15 +2983,17 @@ export async function getDeletedTransactions(
   });
   
   let usersMap: Record<number, string> = {};
+  let avatarsMap: Record<number, string | null> = {};
   if (userIdSet.size > 0) {
     const userIdArr = [...userIdSet];
     const placeholders = userIdArr.map(() => '?').join(',');
     const [userRows] = await conn.execute(
-      `SELECT id, username, name FROM users WHERE id IN (${placeholders})`,
+      `SELECT id, username, name, avatar FROM users WHERE id IN (${placeholders})`,
       userIdArr
     ) as any;
     (userRows || []).forEach((u: any) => {
       usersMap[u.id] = u.name || u.username || '未知';
+      avatarsMap[u.id] = u.avatar || null;
     });
   }
   
@@ -3029,7 +3031,11 @@ export async function getDeletedTransactions(
     deletedBy: r.deleted_by,
     categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
     createdByName: usersMap[r.createdBy] || '未知',
+    createdByAvatar: avatarsMap[r.createdBy] || null,
     deletedByName: r.deleted_by ? (usersMap[r.deleted_by] || '未知') : '未知',
+    reimbursementStatus: r.reimbursement_status || 'none',
+    pendingType: r.pending_type || null,
+    pendingIncludeStats: r.pending_include_stats ?? 1,
   }));
   
   // 解密敏感字段
