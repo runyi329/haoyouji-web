@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Users, Baby, UserCircle, Edit2, Check, X, LogIn, Trash2, Info, Settings, ArrowLeft, ChevronRight, Palette, Search, Filter } from "lucide-react";
+import { Users, Baby, UserCircle, Edit2, Check, X, LogIn, Trash2, Info, Settings, ArrowLeft, ChevronRight, Search, Filter } from "lucide-react";
 import { FeatureTreeManager } from "@/components/FeatureTreeManager";
 import {
   Dialog,
@@ -133,7 +133,6 @@ export default function AccountRelationshipManager() {
   const [editName, setEditName] = useState("");
   const [featureManagementParentId, setFeatureManagementParentId] = useState<number | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
-  const [viConfigParentId, setViConfigParentId] = useState<number | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState<string>("");
 
@@ -583,7 +582,6 @@ export default function AccountRelationshipManager() {
                   <TableHead className="text-center">编辑</TableHead>
                   <TableHead className="text-center">钱包功能</TableHead>
                   <TableHead className="text-center">功能权限</TableHead>
-                  <TableHead className="text-center">VI配置</TableHead>
                   <TableHead className="text-center">一键登录</TableHead>
                   <TableHead className="text-center">删除</TableHead>
                 </TableRow>
@@ -687,20 +685,6 @@ export default function AccountRelationshipManager() {
                             title="功能权限"
                           >
                             <Settings className="w-4 h-4 text-[#D32F2F]" />
-                          </Button>
-                        )}
-                      </TableCell>
-                      
-                      {/* VI配置列 - 仅家长角色显示 */}
-                      <TableCell className="text-center">
-                        {user.role === "parent" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setViConfigParentId(user.id)}
-                            title="VI配置"
-                          >
-                            <Palette className="w-4 h-4 text-pink-500" />
                           </Button>
                         )}
                       </TableCell>
@@ -857,27 +841,6 @@ export default function AccountRelationshipManager() {
         </DialogContent>
       </Dialog>
 
-      {/* VI配置对话框 */}
-      <Dialog open={viConfigParentId !== null} onOpenChange={(open) => !open && setViConfigParentId(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>VI配置 - {users?.find(u => u.id === viConfigParentId)?.name || '未命名'}</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-6 py-4">
-            <div className="text-center p-8 bg-muted/30 rounded-lg">
-              <Palette className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">等待VI方案上传</h3>
-              <p className="text-sm text-muted-foreground">
-                请上传完整的VI设计方案，包括主题色、Logo、字体等视觉元素。
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                功能框架已预留，等待填充具体配置选项。
-              </p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
