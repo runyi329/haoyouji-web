@@ -439,7 +439,7 @@ export default function LedgerSettings() {
 
       {/* 账本管理 */}
       <div className="bg-white mt-3">
-        <SettingItem label="账本状态(封账)" value="使用中" />
+
 
 
         <SettingItem label="账本功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
