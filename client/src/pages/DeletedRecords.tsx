@@ -19,9 +19,9 @@ export default function DeletedRecords() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [pendingRestoreId, setPendingRestoreId] = useState<number | null>(null);
 
-  const { data: records, isPending, refetch } = trpc.ledger.getDeletedTransactions.useQuery(
+  const { data: records, isPending, isError, error, refetch } = trpc.ledger.getDeletedTransactions.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId && !isNaN(ledgerId) && ledgerId > 0 }
   );
 
   const restoreMutation = trpc.ledger.restoreTransaction.useMutation({
@@ -29,9 +29,9 @@ export default function DeletedRecords() {
       setRestoringId(null);
       refetch();
     },
-    onError: (error: any) => {
+    onError: (err: any) => {
       setRestoringId(null);
-      alert(error.message || "恢复失败");
+      alert(err.message || "恢复失败");
     },
   });
 
@@ -49,8 +49,9 @@ export default function DeletedRecords() {
     }
   };
 
-  // 计算剩余天数
+  // 计算剩余天数（60天保留期）
   const getRemainingDays = (deletedAt: string | Date) => {
+    if (!deletedAt) return 0;
     const deleted = new Date(deletedAt);
     const now = new Date();
     const diffMs = 60 * 24 * 60 * 60 * 1000 - (now.getTime() - deleted.getTime());
@@ -60,13 +61,16 @@ export default function DeletedRecords() {
 
   // 格式化金额
   const formatAmount = (amount: number | string) => {
+    if (!amount) return "0.00";
     const num = typeof amount === "string" ? parseFloat(amount) : amount;
-    return num.toFixed(2);
+    return isNaN(num) ? "0.00" : num.toFixed(2);
   };
 
   // 格式化日期
   const formatDate = (date: string | Date) => {
+    if (!date) return "未知";
     const d = new Date(date);
+    if (isNaN(d.getTime())) return "未知";
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
@@ -107,6 +111,21 @@ export default function DeletedRecords() {
         {isPending ? (
           <div className="text-center py-12" style={{ color: "var(--text-gray)" }}>
             加载中...
+          </div>
+        ) : isError ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-3">⚠️</div>
+            <p style={{ color: "var(--brand-red)" }}>加载失败</p>
+            <p className="text-sm mt-1" style={{ color: "var(--text-gray)" }}>
+              {(error as any)?.message || "请稍后重试"}
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="mt-3 px-4 py-2 rounded-lg text-sm text-white"
+              style={{ backgroundColor: "var(--brand-red)" }}
+            >
+              重新加载
+            </button>
           </div>
         ) : !records || records.length === 0 ? (
           <div className="text-center py-12">
@@ -164,7 +183,7 @@ export default function DeletedRecords() {
                         className="text-sm font-medium"
                         style={{ color: "var(--text-black)" }}
                       >
-                        {record.categoryName}
+                        {record.categoryName || "未分类"}
                       </span>
                     </div>
                     <span
@@ -197,8 +216,8 @@ export default function DeletedRecords() {
                     style={{ color: "var(--text-gray)" }}
                   >
                     <div className="flex items-center gap-3">
-                      <span>记账日期：{record.date}</span>
-                      <span>记录人：{record.createdByName}</span>
+                      <span>记账日期：{record.date || "未知"}</span>
+                      <span>记录人：{record.createdByName || "未知"}</span>
                     </div>
                   </div>
 
@@ -208,7 +227,7 @@ export default function DeletedRecords() {
                     style={{ borderTop: "1px solid var(--border-gray)" }}
                   >
                     <div className="text-xs" style={{ color: "var(--text-gray)" }}>
-                      <span>删除人：{record.deletedByName}</span>
+                      <span>删除人：{record.deletedByName || "未知"}</span>
                       <span className="mx-2">·</span>
                       <span>删除于：{formatDate(record.deletedAt)}</span>
                       <span className="mx-2">·</span>
