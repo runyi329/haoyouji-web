@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus, Pencil, ClipboardPaste } from "lucide-react";
+import { Trash2, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 // 扩展信息字段值
@@ -420,7 +420,7 @@ export function MultiAddressFieldV2({
       {/* 粘贴并识别区域 */}
       <div className="relative">
         <textarea
-          className="w-full min-h-[60px] px-3 py-2 pr-28 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
+          className="w-full min-h-[60px] px-3 py-2 pr-20 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
           placeholder="粘贴收件人信息，自动识别姓名、电话、地址…"
           value={recognizeText}
           onChange={(e) => setRecognizeText(e.target.value)}
@@ -429,10 +429,9 @@ export function MultiAddressFieldV2({
           type="button"
           onClick={handleRecognize}
           disabled={!recognizeText.trim()}
-          className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="absolute bottom-2 right-2 px-2 py-1 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <ClipboardPaste className="w-3 h-3" />
-          粘贴并识别
+          粘贴识别
         </button>
       </div>
       {/* 输入区 */}
@@ -573,7 +572,7 @@ export function MultiBankFieldV2({
       {/* 粘贴并识别区域 */}
       <div className="relative">
         <textarea
-          className="w-full min-h-[60px] px-3 py-2 pr-28 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
+          className="w-full min-h-[60px] px-3 py-2 pr-20 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
           placeholder="粘贴银行账号信息，自动识别账户名、开户行、账号…"
           value={recognizeText}
           onChange={(e) => setRecognizeText(e.target.value)}
@@ -582,10 +581,9 @@ export function MultiBankFieldV2({
           type="button"
           onClick={handleRecognize}
           disabled={!recognizeText.trim()}
-          className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="absolute bottom-2 right-2 px-2 py-1 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          <ClipboardPaste className="w-3 h-3" />
-          粘贴并识别
+          粘贴识别
         </button>
       </div>
       {/* 输入区 */}
