@@ -209,25 +209,44 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         }
       }
       
-      // 将当前用户排在第一位，然后只厖4个
-      const members = membersRaw
-        .map((m: any) => ({
-          ...m,
-          avatar: (m.memberType === 'ai' && m.userId === 0) ? currentUserAvatarForLedger : m.avatar,
-          username: (m.memberType === 'ai' && m.userId === 0) ? currentUserUsernameForLedger : m.username,
-        }))
-        .sort((a: any, b: any) => {
-          if (a.userId === userId) return -1;
-          if (b.userId === userId) return 1;
-          return 0;
-        })
-        .slice(0, 4); // 最多显示4个成员头像像
+      // 将当前用户排在第一位，AI分身紧跟对应真人后面
+      const mappedMembers = membersRaw.map((m: any) => ({
+        ...m,
+        avatar: (m.memberType === 'ai' && m.userId === 0) ? currentUserAvatarForLedger : m.avatar,
+        username: (m.memberType === 'ai' && m.userId === 0) ? currentUserUsernameForLedger : m.username,
+      }));
+      
+      // 分离真人和AI分身
+      const realMembersForLedger = mappedMembers.filter((m: any) => m.memberType !== 'ai');
+      const aiMembersForLedger = mappedMembers.filter((m: any) => m.memberType === 'ai');
+      
+      // 真人按当前用户优先排序
+      realMembersForLedger.sort((a: any, b: any) => {
+        if (a.userId === userId) return -1;
+        if (b.userId === userId) return 1;
+        return 0;
+      });
+      
+      // AI分身插入到对应真人后面
+      const sortedMembersForLedger: any[] = [];
+      for (const real of realMembersForLedger) {
+        sortedMembersForLedger.push(real);
+        const correspondingAI = aiMembersForLedger.find((ai: any) => ai.userId === real.userId);
+        if (correspondingAI) {
+          sortedMembersForLedger.push(correspondingAI);
+        }
+      }
+      // 孤立的AI分身追加到末尾
+      for (const ai of aiMembersForLedger) {
+        if (!sortedMembersForLedger.includes(ai)) {
+          sortedMembersForLedger.push(ai);
+        }
+      }
+      
+      const members = sortedMembersForLedger.slice(0, 4); // 最多显示4个成员头像
 
-      const memberCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(ledgerMembers)
-        .where(eq(ledgerMembers.ledgerId, ledger.id))
-        .then((rows: any[]) => rows[0]?.count || 0);
+      // memberCount 排除AI分身，只计算真实成员数量
+      const memberCount = membersRaw.filter((m: any) => m.memberType !== 'ai').length;
 
       // 获取账目数量
       const recordCount = await db
@@ -1130,12 +1149,39 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
     isCurrentUser: member.userId === userId
   }));
   
-  // 将当前用户排在第一位
-  const sortedMembers = membersWithCurrentFlag.sort((a, b) => {
+  // 排序规则：
+  // 1. 当前用户（真人）排在第一位
+  // 2. AI分身紧跟其对应真人后面（按userId匹配）
+  // 3. 其他真人成员按加入时间排列
+  // 4. AI分身不出现在真人列表末尾
+  
+  // 先分离真人和AI分身
+  const realMembers = membersWithCurrentFlag.filter(m => m.memberType !== 'ai');
+  const aiMembers = membersWithCurrentFlag.filter(m => m.memberType === 'ai');
+  
+  // 真人按「当前用户优先」排序
+  realMembers.sort((a, b) => {
     if (a.isCurrentUser) return -1;
     if (b.isCurrentUser) return 1;
     return 0;
   });
+  
+  // 将AI分身插入到对应真人后面
+  const sortedMembers: typeof membersWithCurrentFlag = [];
+  for (const real of realMembers) {
+    sortedMembers.push(real);
+    // 找到该真人对应的AI分身（同userId，memberType='ai'）
+    const correspondingAI = aiMembers.find(ai => ai.userId === real.userId);
+    if (correspondingAI) {
+      sortedMembers.push(correspondingAI);
+    }
+  }
+  // 如果有孤立的AI分身（找不到对应真人），追加到末尾
+  for (const ai of aiMembers) {
+    if (!sortedMembers.includes(ai)) {
+      sortedMembers.push(ai);
+    }
+  }
   
   return sortedMembers;
 }
