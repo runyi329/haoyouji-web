@@ -3214,7 +3214,38 @@ export async function updateTransaction(
   
   if (data.categoryId && data.categoryId !== decryptedOldRecord.categoryId) {
     updateData.categoryId = data.categoryId;
-    logChanges.push({ fieldName: '分类', oldValue: String(decryptedOldRecord.categoryId), newValue: String(data.categoryId) });
+    // 查询旧分类名称
+    let oldCategoryName = String(decryptedOldRecord.categoryId);
+    let newCategoryName = String(data.categoryId);
+    try {
+      if (decryptedOldRecord.categoryId) {
+        const oldCat = await db.select({ name: ledgerCategories.name, parentId: ledgerCategories.parentId })
+          .from(ledgerCategories).where(eq(ledgerCategories.id, decryptedOldRecord.categoryId)).limit(1);
+        if (oldCat.length > 0) {
+          if (oldCat[0].parentId) {
+            const parentCat = await db.select({ name: ledgerCategories.name })
+              .from(ledgerCategories).where(eq(ledgerCategories.id, oldCat[0].parentId)).limit(1);
+            oldCategoryName = parentCat.length > 0 ? `${parentCat[0].name}/${oldCat[0].name}` : oldCat[0].name;
+          } else {
+            oldCategoryName = oldCat[0].name;
+          }
+        }
+      }
+      const newCat = await db.select({ name: ledgerCategories.name, parentId: ledgerCategories.parentId })
+        .from(ledgerCategories).where(eq(ledgerCategories.id, data.categoryId)).limit(1);
+      if (newCat.length > 0) {
+        if (newCat[0].parentId) {
+          const parentCat = await db.select({ name: ledgerCategories.name })
+            .from(ledgerCategories).where(eq(ledgerCategories.id, newCat[0].parentId)).limit(1);
+          newCategoryName = parentCat.length > 0 ? `${parentCat[0].name}/${newCat[0].name}` : newCat[0].name;
+        } else {
+          newCategoryName = newCat[0].name;
+        }
+      }
+    } catch (e) {
+      console.error('[updateTransaction] 查询分类名称失败:', e);
+    }
+    logChanges.push({ fieldName: '分类', oldValue: oldCategoryName, newValue: newCategoryName });
   } else if (data.categoryId) {
     updateData.categoryId = data.categoryId;
   }
