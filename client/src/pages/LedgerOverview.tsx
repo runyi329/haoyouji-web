@@ -1,6 +1,12 @@
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
-import { Notebook, Receipt, Loader2 } from "lucide-react";
+import {
+  Notebook, Receipt, Loader2,
+  PenLine, Coins, Image, BarChart2, RefreshCw, Layers, HardDrive, Users,
+  Calendar, Tag, Shield, Bell, Search, Filter, Download, Upload,
+  Lock, Zap, Star, Globe, Clock, FileText, Settings, ChevronRight,
+  MessageSquare, CheckCircle, Wallet, TrendingUp, BookOpen, SlidersHorizontal,
+} from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 import {
   Carousel,
@@ -17,64 +23,38 @@ function formatNumber(num: number): string {
   return num.toLocaleString("zh-CN");
 }
 
-// 功能更新列表（按时间倒序，最新在前）
+// 功能更新列表（30条，按时间倒序）
 const FEATURE_UPDATES = [
-  {
-    id: 1,
-    icon: "✏️",
-    title: "支持修改记录查询",
-    desc: "账目详情页可查看完整修改历史，记录每次变更内容",
-    date: "2026-02",
-  },
-  {
-    id: 2,
-    icon: "💱",
-    title: "支持多币种记账",
-    desc: "新增 USD、USDT 等外币币种，支持跨币种账目管理",
-    date: "2026-02",
-  },
-  {
-    id: 3,
-    icon: "📸",
-    title: "图片账单功能",
-    desc: "账目支持上传图片凭证，方便留存报销单据",
-    date: "2026-01",
-  },
-  {
-    id: 4,
-    icon: "📊",
-    title: "数据报表与日历视图",
-    desc: "支持按月/年统计收支报表，日历视图直观查看每日账目",
-    date: "2026-01",
-  },
-  {
-    id: 5,
-    icon: "🔄",
-    title: "报销流程管理",
-    desc: "支持申请报销、审批通过/拒绝完整流程，附凭证上传",
-    date: "2026-01",
-  },
-  {
-    id: 6,
-    icon: "🗂️",
-    title: "三级分类体系",
-    desc: "支持自定义三级分类，账目归类更精细灵活",
-    date: "2025-12",
-  },
-  {
-    id: 7,
-    icon: "💾",
-    title: "定期备份功能",
-    desc: "账本数据定期自动备份，保障数据安全",
-    date: "2025-12",
-  },
-  {
-    id: 8,
-    icon: "👥",
-    title: "多人协作共享",
-    desc: "支持邀请成员加入账本，多人实时协作记账",
-    date: "2025-11",
-  },
+  { id: 1,  Icon: PenLine,         title: "支持修改记录查询",     desc: "账目详情页可查看完整修改历史，记录每次变更内容",     date: "2026-02" },
+  { id: 2,  Icon: Coins,           title: "支持多币种记账",       desc: "新增 USD、USDT 等外币币种，支持跨币种账目管理",     date: "2026-02" },
+  { id: 3,  Icon: PenLine,         title: "金额输入支持光标定位", desc: "点击金额任意位置可定位光标，自由修改数字",           date: "2026-02" },
+  { id: 4,  Icon: Image,           title: "图片账单功能",         desc: "账目支持上传图片凭证，方便留存报销单据",             date: "2026-01" },
+  { id: 5,  Icon: BarChart2,       title: "数据报表",             desc: "支持按月/年统计收支报表，直观掌握财务状况",         date: "2026-01" },
+  { id: 6,  Icon: Calendar,        title: "日历视图",             desc: "日历视图直观查看每日账目，支持按日期跳转",         date: "2026-01" },
+  { id: 7,  Icon: RefreshCw,       title: "报销流程管理",         desc: "支持申请报销、审批通过/拒绝完整流程，附凭证上传",   date: "2026-01" },
+  { id: 8,  Icon: Layers,          title: "三级分类体系",         desc: "支持自定义三级分类，账目归类更精细灵活",           date: "2025-12" },
+  { id: 9,  Icon: HardDrive,       title: "定期备份功能",         desc: "账本数据定期自动备份，保障数据安全",               date: "2025-12" },
+  { id: 10, Icon: Users,           title: "多人协作共享",         desc: "支持邀请成员加入账本，多人实时协作记账",           date: "2025-11" },
+  { id: 11, Icon: Shield,          title: "审批权限管理",         desc: "账本管理员可设置账目审批流程，规范团队记账",       date: "2025-11" },
+  { id: 12, Icon: Tag,             title: "自定义标签",           desc: "账目支持添加自定义标签，方便分类查询",             date: "2025-11" },
+  { id: 13, Icon: Bell,            title: "待结账目提醒",         desc: "代收/代付账目沙漏提醒，避免遗漏待结算项目",       date: "2025-11" },
+  { id: 14, Icon: Search,          title: "账目搜索过滤",         desc: "支持按金额、分类、成员、日期多维度筛选账目",       date: "2025-10" },
+  { id: 15, Icon: Filter,          title: "账本排序筛选",         desc: "账本列表支持按成员数、账目数、日期排序",           date: "2025-10" },
+  { id: 16, Icon: Download,        title: "数据导出",             desc: "支持将账目数据导出为 Excel 表格",                  date: "2025-10" },
+  { id: 17, Icon: Upload,          title: "数据导入",             desc: "支持从 Excel 批量导入历史账目数据",                date: "2025-10" },
+  { id: 18, Icon: Lock,            title: "账本权限控制",         desc: "支持设置成员角色权限，区分管理员与普通成员",       date: "2025-09" },
+  { id: 19, Icon: Zap,             title: "快速记账",             desc: "首页一键快速添加账目，减少操作步骤",               date: "2025-09" },
+  { id: 20, Icon: Star,            title: "常用分类置顶",         desc: "最近使用的分类自动置顶，提升记账效率",             date: "2025-09" },
+  { id: 21, Icon: Globe,           title: "账本封面自定义",       desc: "支持为账本设置封面图片，个性化管理",               date: "2025-08" },
+  { id: 22, Icon: Clock,           title: "账目时间轴",           desc: "按时间线展示账目流水，历史记录一目了然",           date: "2025-08" },
+  { id: 23, Icon: FileText,        title: "账目备注",             desc: "每条账目支持添加文字备注，记录详细说明",           date: "2025-08" },
+  { id: 24, Icon: Settings,        title: "账本设置",             desc: "支持修改账本名称、货币单位、封面等基本信息",       date: "2025-07" },
+  { id: 25, Icon: ChevronRight,    title: "账目详情页",           desc: "点击账目可查看完整详情，包括创建人、时间等信息",   date: "2025-07" },
+  { id: 26, Icon: MessageSquare,   title: "账目评论",             desc: "成员可对账目发表评论，方便团队沟通确认",           date: "2025-07" },
+  { id: 27, Icon: CheckCircle,     title: "账目审核状态",         desc: "账目支持待审核/已通过/已拒绝状态流转",             date: "2025-06" },
+  { id: 28, Icon: Wallet,          title: "多账本管理",           desc: "支持创建并管理多个独立账本，场景分类清晰",         date: "2025-06" },
+  { id: 29, Icon: TrendingUp,      title: "收支趋势图",           desc: "可视化展示月度收支趋势，掌握财务走向",             date: "2025-05" },
+  { id: 30, Icon: BookOpen,        title: "共享账本上线",         desc: "好友记账正式发布，开启多人协作共享账本新时代",     date: "2025-05" },
 ];
 
 export default function LedgerOverview() {
@@ -178,7 +158,7 @@ export default function LedgerOverview() {
         </Card>
       </div>
 
-      {/* 滚动排行榜 - 最近活动动态（3条高度） */}
+      {/* 滚动排行榜 - 最近活动动态（3条高度，不暂停） */}
       {recentActivities && recentActivities.length > 0 && (
         <div className="px-4 mt-3">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -190,7 +170,7 @@ export default function LedgerOverview() {
               </div>
               <span className="text-xs text-gray-400">全站用户活动</span>
             </div>
-            {/* 滚动区域 - 固定3条高度 */}
+            {/* 滚动区域 - 固定3条高度，始终滚动不暂停 */}
             <div className="relative overflow-hidden" style={{ height: `${activityBoxHeight}px` }}>
               <style>{`
                 @keyframes scrollUpActivity {
@@ -200,14 +180,13 @@ export default function LedgerOverview() {
                 .scroll-activity {
                   animation: scrollUpActivity ${Math.max(15, (recentActivities?.length || 10) * 2)}s linear infinite;
                 }
-                .scroll-activity:hover {
-                  animation-play-state: paused;
-                }
               `}</style>
               <div className="scroll-activity">
                 {/* 复制两份实现无缝滚动 */}
                 {[...recentActivities, ...recentActivities].map((activity, index) => {
-                  const time = new Date(activity.createdAt.replace(' ', 'T') + '+08:00');
+                  const raw = activity.createdAt || '';
+                  const timeStr_raw = raw.includes('T') ? raw : raw.replace(' ', 'T') + '+08:00';
+                  const time = new Date(timeStr_raw);
                   const now = new Date();
                   const diffMs = now.getTime() - time.getTime();
                   const diffMin = Math.floor(diffMs / 60000);
@@ -232,13 +211,9 @@ export default function LedgerOverview() {
                         isLedger ? 'bg-[#FFF5F5] text-[#D32F2F]' : 'bg-[#FFF8E1] text-[#F59E0B]'
                       }`}>
                         {isLedger ? (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          </svg>
+                          <Notebook className="w-3.5 h-3.5" strokeWidth={2} />
                         ) : (
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                          </svg>
+                          <Receipt className="w-3.5 h-3.5" strokeWidth={2} />
                         )}
                       </div>
                       <div className="ml-3 flex-1 min-w-0">
@@ -257,7 +232,7 @@ export default function LedgerOverview() {
         </div>
       )}
 
-      {/* 功能更新滚动展示区（3条高度） */}
+      {/* 功能更新滚动展示区（3条高度，30条内容循环，不暂停） */}
       <div className="px-4 mt-3">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {/* 标题栏 */}
@@ -268,7 +243,7 @@ export default function LedgerOverview() {
             </div>
             <span className="text-xs text-gray-400">持续迭代升级</span>
           </div>
-          {/* 滚动区域 - 固定3条高度 */}
+          {/* 滚动区域 - 固定3条高度，始终滚动不暂停 */}
           <div className="relative overflow-hidden" style={{ height: `${featureBoxHeight}px` }}>
             <style>{`
               @keyframes scrollUpFeature {
@@ -278,28 +253,28 @@ export default function LedgerOverview() {
               .scroll-feature {
                 animation: scrollUpFeature ${FEATURE_UPDATES.length * 3}s linear infinite;
               }
-              .scroll-feature:hover {
-                animation-play-state: paused;
-              }
             `}</style>
             <div className="scroll-feature">
               {/* 复制两份实现无缝滚动 */}
-              {[...FEATURE_UPDATES, ...FEATURE_UPDATES].map((feature, index) => (
-                <div
-                  key={`feature-${index}`}
-                  className="flex items-center px-4 border-b border-gray-50 last:border-b-0"
-                  style={{ height: `${FEATURE_ROW_HEIGHT}px` }}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#FFF8E1] flex items-center justify-center flex-shrink-0 text-base">
-                    {feature.icon}
+              {[...FEATURE_UPDATES, ...FEATURE_UPDATES].map((feature, index) => {
+                const { Icon } = feature;
+                return (
+                  <div
+                    key={`feature-${index}`}
+                    className="flex items-center px-4 border-b border-gray-50 last:border-b-0"
+                    style={{ height: `${FEATURE_ROW_HEIGHT}px` }}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#FFF8E1] flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4 h-4 text-[#F59E0B]" strokeWidth={1.8} />
+                    </div>
+                    <div className="ml-3 flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#333] truncate">{feature.title}</p>
+                      <p className="text-xs text-gray-400 truncate">{feature.desc}</p>
+                    </div>
+                    <span className="text-xs text-gray-300 flex-shrink-0 ml-2">{feature.date}</span>
                   </div>
-                  <div className="ml-3 flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#333] truncate">{feature.title}</p>
-                    <p className="text-xs text-gray-400 truncate">{feature.desc}</p>
-                  </div>
-                  <span className="text-xs text-gray-300 flex-shrink-0 ml-2">{feature.date}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
