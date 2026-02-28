@@ -115,7 +115,7 @@ const LedgerAIEmployees = () => {
   // 处理添加AI分身
   const handleAdd = () => {
     const userName = currentUser?.username || "用户";
-    const aiName = newName.trim() || `AI${userName}`;
+    const aiName = newName.trim() || userName;
     addAIEmployeeMutation.mutate({
       ledgerId,
       avatarType: "user_avatar",
@@ -237,7 +237,7 @@ const LedgerAIEmployees = () => {
           <button
             onClick={() => {
               const userName = currentUser?.username || "用户";
-              setNewName(`AI${userName}`);
+              setNewName(userName);
               setShowAddForm(true);
             }}
             className="flex items-center gap-1 text-xs text-[#D32F2F] font-medium px-3 py-1.5 bg-red-50 rounded-full"
@@ -280,7 +280,7 @@ const LedgerAIEmployees = () => {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2 ml-14">
-              默认名称为 AI + 您的用户名，您也可以自定义名称
+              默认使用您的用户名，您也可以自定义名称
             </p>
           </div>
         )}
