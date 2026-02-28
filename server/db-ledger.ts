@@ -1,6 +1,6 @@
 import { getLedgerDb, getDbConnection } from "./db";
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
-import { eq, and, desc, sql, isNull, isNotNull, asc } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, isNotNull, asc, ne } from "drizzle-orm";
 import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
 
 // 账目记录需要加密的字段
@@ -1596,6 +1596,83 @@ export async function addAIEmployee(
   });
   
   return { success: true };
+}
+
+/**
+ * 开关AI分身：开启则自动创建，关闭则删除
+ */
+export async function toggleAIEmployee(
+  ledgerId: number,
+  enabled: boolean,
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId),
+        ne(ledgerMembers.memberType, 'ai')
+      )
+    )
+    .limit(1);
+
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  // 查找该用户已有的AI分身
+  const existingAI = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai'),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+
+  if (enabled) {
+    // 开启：如果还没有AI分身则创建
+    if (existingAI.length === 0) {
+      // 获取用户名称
+      const userInfo = await db
+        .select({ username: users.username })
+        .from(users)
+        .where(eq(users.id, requestUserId))
+        .limit(1);
+      const nickname = userInfo[0]?.username || 'AI分身';
+
+      await db.insert(ledgerMembers).values({
+        ledgerId,
+        userId: requestUserId,
+        role: 'member',
+        memberType: 'ai',
+        avatarType: 'user',
+        nickname,
+        permissionView: 'all',
+        permissionAdd: 'all',
+        permissionEdit: 'own',
+        permissionDelete: 'own',
+      });
+    }
+    return { success: true, enabled: true };
+  } else {
+    // 关闭：如果有AI分身则删除
+    if (existingAI.length > 0) {
+      await db
+        .delete(ledgerMembers)
+        .where(eq(ledgerMembers.id, existingAI[0].id));
+    }
+    return { success: true, enabled: false };
+  }
 }
 
 /**
