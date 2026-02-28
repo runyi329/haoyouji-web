@@ -93,10 +93,10 @@ export default function EditLedgerName() {
               onChange={(e) => setNewName(e.target.value)}
               placeholder="请输入账本名称"
               className="text-base"
-              maxLength={20}
+              maxLength={50}
             />
             <div className="text-xs text-gray-400 text-right">
-              {newName.length}/20
+              {newName.length}/50
             </div>
           </div>
           
