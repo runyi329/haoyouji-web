@@ -168,10 +168,10 @@ export async function parseTaskWithAI(
 
   // 获取账本分类列表供AI参考
   const [categoryRows] = await conn.execute(
-    `SELECT id, name, type, parent_id 
+    `SELECT id, name, type, parentId 
      FROM ledger_categories 
-     WHERE (ledgerId = ? OR ledgerId = 0) AND is_deleted = 0
-     ORDER BY sort_order ASC, id ASC`,
+     WHERE (ledgerId = ? OR ledgerId = 0)
+     ORDER BY sortOrder ASC, id ASC`,
     [ledgerId]
   ) as any;
 
@@ -354,7 +354,7 @@ async function executeTask(
           // 如果没有匹配到分类，使用"其他"分类
           const [otherCat] = await conn.execute(
             `SELECT id FROM ledger_categories 
-             WHERE (ledgerId = ? OR ledgerId = 0) AND name = '其他' AND type = ? AND is_deleted = 0 
+             WHERE (ledgerId = ? OR ledgerId = 0) AND name = '其他' AND type = ? 
              LIMIT 1`,
             [ledgerId, action.transaction_type || 'expense']
           ) as any;
@@ -503,10 +503,10 @@ export async function getTaskLogs(
  * 构建分类树
  */
 function buildCategoryTree(categories: any[]): any[] {
-  const parentCategories = categories.filter(c => !c.parent_id);
+  const parentCategories = categories.filter(c => !c.parentId);
   return parentCategories.map(parent => ({
     ...parent,
-    children: categories.filter(c => c.parent_id === parent.id),
+    children: categories.filter(c => c.parentId === parent.id),
   }));
 }
 
@@ -523,7 +523,7 @@ function findCategoryByName(
   let match = categories.find(c => {
     const nameMatch = c.name === name;
     const typeMatch = !type || c.type === type;
-    const parentMatch = parentId !== undefined ? c.parent_id === parentId : true;
+    const parentMatch = parentId !== undefined ? c.parentId === parentId : true;
     return nameMatch && typeMatch && parentMatch;
   });
 
@@ -533,7 +533,7 @@ function findCategoryByName(
   match = categories.find(c => {
     const nameMatch = c.name.includes(name) || name.includes(c.name);
     const typeMatch = !type || c.type === type;
-    const parentMatch = parentId !== undefined ? c.parent_id === parentId : !c.parent_id;
+    const parentMatch = parentId !== undefined ? c.parentId === parentId : !c.parentId;
     return nameMatch && typeMatch && parentMatch;
   });
 
