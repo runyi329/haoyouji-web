@@ -1661,6 +1661,10 @@ export async function toggleAIEmployee(
         permissionAdd: 'all',
         permissionEdit: 'own',
         permissionDelete: 'own',
+        permissionBackup: 'allow',
+        canEdit: 1,
+        canDelete: 0,
+        canInvite: 0,
       });
     }
     return { success: true, enabled: true };
