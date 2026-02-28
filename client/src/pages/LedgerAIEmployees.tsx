@@ -428,7 +428,10 @@ const LedgerAIEmployees = () => {
                               </div>
                               <div className="flex-1">
                                 <p className="text-sm text-gray-700">
-                                  {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
+                                  {action.transaction_type === 'income' ? '收入' : '支出'}{' '}
+                                  {action.amount_min !== undefined && action.amount_max !== undefined
+                                    ? `¥${action.amount_min}-${action.amount_max}（随机）`
+                                    : `¥${action.amount}`}
                                 </p>
                                 <p className="text-xs text-gray-400 mt-0.5">
                                   分类：{action.category_name || '其他'}
@@ -548,7 +551,10 @@ const LedgerAIEmployees = () => {
                                 {i + 1}
                               </div>
                               <span>
-                                {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
+                                {action.transaction_type === 'income' ? '收入' : '支出'}{' '}
+                                {action.amount_min !== undefined && action.amount_max !== undefined
+                                  ? `¥${action.amount_min}-${action.amount_max}（随机）`
+                                  : `¥${action.amount}`}
                                 {action.category_name ? ` · ${action.category_name}` : ''}
                               </span>
                             </div>
