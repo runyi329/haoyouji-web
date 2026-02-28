@@ -1,14 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Bot, Play, Pause, Square,
-  MessageSquare, Clock, CheckCircle, AlertCircle, Loader2,
-  Sparkles, Send, HelpCircle, XCircle, ChevronDown, ChevronUp
+  Clock, CheckCircle, AlertCircle, Loader2,
+  Sparkles, Send, HelpCircle, ChevronDown, ChevronUp,
+  Trash2, RefreshCw
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-// 任务状态映射
 const TASK_STATUS: Record<string, { label: string; color: string; bgColor: string; Icon: any }> = {
   draft:     { label: "草稿",   color: "#9E9E9E", bgColor: "#F5F5F5", Icon: AlertCircle },
   pending:   { label: "待确认", color: "#F57C00", bgColor: "#FFF3E0", Icon: Clock },
@@ -18,7 +18,6 @@ const TASK_STATUS: Record<string, { label: string; color: string; bgColor: strin
   completed: { label: "已完成", color: "#1976D2", bgColor: "#E3F2FD", Icon: CheckCircle },
 };
 
-// 频率标签
 const SCHEDULE_LABELS: Record<string, string> = {
   once: "一次性",
   every_minute: "每分钟",
@@ -31,39 +30,22 @@ const SCHEDULE_LABELS: Record<string, string> = {
   monthly: "每月",
 };
 
-// AI头像组件（用户真实头像 + 底部AI标识）
-function AIAvatar({ avatarUrl, name, size = 48 }: { avatarUrl?: string | null; name: string; size?: number }) {
+function AIAvatar({ avatarUrl, name, size = 36 }: { avatarUrl?: string | null; name: string; size?: number }) {
   const initial = name.replace(/^AI/, "").charAt(0) || "A";
-  const tagH = Math.max(14, size * 0.3);
-  const tagFont = Math.max(8, size * 0.2);
+  const tagH = Math.max(12, size * 0.3);
+  const tagFont = Math.max(7, size * 0.2);
   return (
-    <div className="relative inline-block" style={{ width: size, height: size }}>
+    <div className="relative inline-block flex-shrink-0" style={{ width: size, height: size }}>
       {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="w-full h-full rounded-full object-cover"
-        />
+        <img src={avatarUrl} alt={name} className="w-full h-full rounded-full object-cover" />
       ) : (
-        <div
-          className="w-full h-full rounded-full flex items-center justify-center text-white font-bold bg-gray-400"
-          style={{ fontSize: size * 0.38 }}
-        >
+        <div className="w-full h-full rounded-full flex items-center justify-center text-white font-bold bg-gray-400" style={{ fontSize: size * 0.38 }}>
           {initial}
         </div>
       )}
       <div
         className="absolute left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#D32F2F] to-[#FF5252] text-white rounded-full flex items-center justify-center font-bold shadow"
-        style={{
-          bottom: -tagH / 4,
-          height: tagH,
-          minWidth: tagH * 1.6,
-          fontSize: tagFont,
-          padding: "0 4px",
-          lineHeight: 1,
-          letterSpacing: 0.5,
-          border: "2px solid white",
-        }}
+        style={{ bottom: -tagH / 4, height: tagH, minWidth: tagH * 1.6, fontSize: tagFont, padding: "0 3px", lineHeight: 1, border: "1.5px solid white" }}
       >
         AI
       </div>
@@ -71,22 +53,62 @@ function AIAvatar({ avatarUrl, name, size = 48 }: { avatarUrl?: string | null; n
   );
 }
 
-// 开关组件
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
-      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-        checked ? "bg-[#D32F2F]" : "bg-gray-200"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none ${checked ? "bg-[#D32F2F]" : "bg-gray-200"} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
-      <span
-        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
+      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-6" : "translate-x-1"}`} />
     </button>
+  );
+}
+
+function ChatBubble({ msg, userAvatar, userName, aiAvatar, aiName }: {
+  msg: { role: string; content: string; created_at?: string };
+  userAvatar?: string | null;
+  userName: string;
+  aiAvatar?: string | null;
+  aiName: string;
+}) {
+  const isUser = msg.role === "user";
+  const timeStr = msg.created_at
+    ? new Date(msg.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  if (isUser) {
+    return (
+      <div className="flex items-end gap-2 justify-end">
+        <div className="flex flex-col items-end gap-1 max-w-[75%]">
+          {timeStr && <span className="text-[10px] text-gray-400 px-1">{timeStr}</span>}
+          <div className="bg-[#D32F2F] text-white rounded-2xl rounded-br-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm whitespace-pre-wrap">
+            {msg.content}
+          </div>
+        </div>
+        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-200">
+          {userAvatar ? (
+            <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs font-bold">
+              {userName.charAt(0)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-end gap-2 justify-start">
+      <AIAvatar avatarUrl={aiAvatar} name={aiName} size={32} />
+      <div className="flex flex-col items-start gap-1 max-w-[75%]">
+        {timeStr && <span className="text-[10px] text-gray-400 px-1">{timeStr}</span>}
+        <div className="bg-white text-gray-800 rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm border border-gray-100 whitespace-pre-wrap">
+          {msg.content}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -95,513 +117,337 @@ const LedgerAIEmployees = () => {
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
 
-  // 状态
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [taskInput, setTaskInput] = useState("");
-  const [parsedTask, setParsedTask] = useState<any>(null);
+  const [messageInput, setMessageInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+  const [localMessages, setLocalMessages] = useState<Array<{ role: string; content: string; created_at?: string }>>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 获取当前用户信息
   const { data: currentUser } = trpc.auth.me.useQuery();
+  const { data: aiEmployees = [], refetch } = trpc.ledger.getAIEmployees.useQuery({ ledgerId });
+  const { data: tasks = [], refetch: refetchTasks } = trpc.ledger.getAIEmployeeTasks.useQuery({ ledgerId });
+  const { data: conversationHistory = [] } = trpc.ledger.getAIConversationHistory.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
 
-  // 获取已添加的AI分身列表
-  const { data: aiEmployees = [], refetch } = trpc.ledger.getAIEmployees.useQuery({
-    ledgerId,
-  });
+  useEffect(() => {
+    if ((conversationHistory as any[]).length > 0 && localMessages.length === 0) {
+      setLocalMessages(conversationHistory as any);
+    }
+  }, [conversationHistory]);
 
-  // 获取AI分身任务列表
-  const { data: tasks = [], refetch: refetchTasks } = trpc.ledger.getAIEmployeeTasks.useQuery({
-    ledgerId,
-  });
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [localMessages]);
 
-  // 当前用户是否已开启AI分身
   // eslint-disable-next-line eqeqeq
-  const myAI = aiEmployees.find((e: any) => e.userId == currentUser?.id);
+  const myAI = (aiEmployees as any[]).find((e: any) => e.userId == currentUser?.id);
   const isEnabled = !!myAI;
 
-  // 开关AI分身
   const toggleMutation = trpc.ledger.toggleAIEmployee.useMutation({
     onSuccess: (data: any) => {
-      if (data.enabled) {
-        toast.success("AI分身已开启");
-      } else {
-        toast.success("AI分身已关闭");
-      }
+      toast.success(data.enabled ? "AI分身已开启" : "AI分身已关闭");
       refetch();
     },
-    onError: (error: any) => {
-      toast.error(error.message || "操作失败");
-    },
+    onError: (error: any) => { toast.error(error.message || "操作失败"); },
   });
 
-  // 解析任务（调用DeepSeek API）
-  const parseMutation = trpc.ledger.parseAIEmployeeTask.useMutation({
+  const chatMutation = trpc.ledger.chatWithAIEmployee.useMutation({
     onSuccess: (data: any) => {
-      if (data.success && data.parsed) {
-        setParsedTask(data.parsed);
-        toast.success("任务方案已生成");
+      setLocalMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.reply,
+        created_at: new Date().toISOString(),
+      }]);
+      if (data.taskCreated) {
+        refetchTasks();
+        toast.success("任务已创建");
       }
     },
     onError: (error: any) => {
-      toast.error(error.message || "任务解析失败，请重试");
+      toast.error(error.message || "AI助理暂时无法响应，请稍后重试");
+      setLocalMessages(prev => prev.slice(0, -1));
     },
   });
 
-  // 确认并创建任务
-  const createTaskMutation = trpc.ledger.createAIEmployeeTask.useMutation({
+  const clearHistoryMutation = trpc.ledger.clearAIConversationHistory.useMutation({
     onSuccess: () => {
-      toast.success("任务已创建并开始执行");
-      setParsedTask(null);
-      setTaskInput("");
-      setShowTaskForm(false);
-      refetchTasks();
+      setLocalMessages([]);
+      toast.success("对话已清空");
     },
-    onError: (error: any) => {
-      toast.error(error.message || "任务创建失败");
-    },
+    onError: (error: any) => { toast.error(error.message || "清空失败"); },
   });
 
-  // 更新任务状态
   const updateStatusMutation = trpc.ledger.updateAIEmployeeTaskStatus.useMutation({
-    onSuccess: () => {
-      toast.success("任务状态已更新");
-      refetchTasks();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "操作失败");
-    },
+    onSuccess: () => { toast.success("任务状态已更新"); refetchTasks(); },
+    onError: (error: any) => { toast.error(error.message || "操作失败"); },
   });
 
   const handleToggle = (enabled: boolean) => {
     toggleMutation.mutate({ ledgerId, enabled });
   };
 
-  // 调用DeepSeek解析任务
-  const handleParseTask = async () => {
-    if (!taskInput.trim()) {
-      toast.error("请输入任务描述");
-      return;
-    }
-    setParsedTask(null);
-    parseMutation.mutate({
-      ledgerId,
-      taskDescription: taskInput.trim(),
-    });
+  const handleSendMessage = () => {
+    if (!messageInput.trim() || chatMutation.isPending) return;
+    const userMsg = messageInput.trim();
+    setMessageInput("");
+    setLocalMessages(prev => [...prev, {
+      role: "user",
+      content: userMsg,
+      created_at: new Date().toISOString(),
+    }]);
+    chatMutation.mutate({ ledgerId, message: userMsg });
   };
 
-  // 确认并创建任务
-  const handleConfirmTask = () => {
-    if (!parsedTask) return;
-    createTaskMutation.mutate({
-      ledgerId,
-      taskDescription: taskInput.trim(),
-      parsedPlan: parsedTask,
-    });
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   const displayName = myAI?.nickname || myAI?.username || currentUser?.username || "AI分身";
-  const displayAvatar = myAI?.avatarUrl || currentUser?.avatar;
+  const displayAvatar = myAI?.avatarUrl || (currentUser as any)?.avatar;
+  const showWelcome = localMessages.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#F9F9F9] pb-20">
+    <div className="min-h-screen bg-[#F9F9F9] flex flex-col">
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#D32F2F] to-[#B71C1C] text-white sticky top-0 z-10">
         <div className="flex items-center h-14 px-4">
-          <button
-            onClick={() => setLocation(`/ledger/${id}/settings`)}
-            className="p-2 -ml-2"
-          >
+          <button onClick={() => setLocation(`/ledger/${id}/settings`)} className="p-2 -ml-2">
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <h1 className="flex-1 text-center text-base font-medium">AI 分身</h1>
-          <div className="w-9" />
+          <button onClick={() => setShowHelp(!showHelp)} className="p-2 -mr-2 text-white/80 hover:text-white">
+            <HelpCircle className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* 主开关卡片 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#D32F2F]" />
-            <h3 className="text-sm font-semibold text-gray-900">我的 AI 分身</h3>
-            <button
-              onClick={() => setShowHelp(!showHelp)}
-              className="ml-0.5 text-gray-400 hover:text-[#D32F2F] transition-colors"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
-          </div>
-          <Toggle
-            checked={isEnabled}
-            onChange={handleToggle}
-            disabled={toggleMutation.isPending}
-          />
-        </div>
-
-        {showHelp && (
-          <div className="px-5 py-4 bg-red-50/40 border-b border-red-100">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D32F2F] to-[#FF5252] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Bot className="w-5 h-5 text-white" />
+      {/* 帮助说明 */}
+      {showHelp && (
+        <div className="mx-4 mt-3 bg-red-50 border border-red-100 rounded-2xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#D32F2F] to-[#FF5252] flex items-center justify-center flex-shrink-0">
+              <Bot className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-gray-800 mb-1">什么是 AI 分身？</p>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                AI 分身可以理解您的自然语言指令，自动帮您记账。支持补录历史账目、创建新分类、设置定期任务等。直接用中文描述需求，AI 会主动确认后再执行。
+              </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-500">💬 "帮我记昨天的餐费50元"</p>
+                <p className="text-xs text-gray-500">💬 "从上周一开始每天记一笔100元房租"</p>
+                <p className="text-xs text-gray-500">💬 "帮我创建养生保健分类，记一笔300元"</p>
               </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  开启 AI 分身后，系统将以您的身份创建一个 AI 成员加入账本。
-                  AI 分身可接受自然语言指令，由 DeepSeek 大模型驱动，自动执行记账任务。
-                </p>
-              </div>
-              <button onClick={() => setShowHelp(false)} className="text-gray-400 text-xs mt-0.5">×</button>
             </div>
-          </div>
-        )}
-
-        {isEnabled ? (
-          <div className="px-5 py-4">
-            <div className="flex items-center gap-4">
-              <AIAvatar avatarUrl={displayAvatar} name={displayName} size={52} />
-              <div className="flex-1">
-                <p className="text-base font-semibold text-gray-900">{displayName}</p>
-                <p className="text-xs text-gray-400 mt-0.5">AI 分身成员 · 已加入账本</p>
-              </div>
-              <button
-                onClick={() => setShowTaskForm(true)}
-                className="flex items-center gap-1.5 text-xs text-[#1976D2] px-3 py-2 bg-blue-50 rounded-full font-medium"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                布置任务
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="py-12 text-center">
-            <Bot className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">AI 分身未开启</p>
-            <p className="text-xs text-gray-300 mt-1">开启后将自动创建您的 AI 分身</p>
-          </div>
-        )}
-      </div>
-
-      {/* AI任务布置面板 */}
-      {showTaskForm && isEnabled && (
-        <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden border border-blue-100">
-          <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-50 to-white border-b border-blue-100">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[#1976D2]" />
-              <h3 className="text-sm font-semibold text-gray-900">布置任务</h3>
-            </div>
-            <button
-              onClick={() => {
-                setShowTaskForm(false);
-                setParsedTask(null);
-                setTaskInput("");
-              }}
-              className="text-xs text-gray-400"
-            >
-              关闭
-            </button>
-          </div>
-
-          <div className="p-5">
-            <p className="text-xs text-gray-500 mb-3">
-              用自然语言描述您希望 AI 分身执行的记账任务，DeepSeek 将为您解析并生成执行方案。
-            </p>
-
-            {/* 示例提示 */}
-            <div className="mb-3 flex flex-wrap gap-2">
-              {[
-                "每日从账本扣除50元生活费",
-                "每周一记录500元工资收入",
-                "每月1日记录3000元房租支出",
-                "记一笔200元的餐饮支出",
-              ].map((example) => (
-                <button
-                  key={example}
-                  onClick={() => setTaskInput(example)}
-                  className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1.5 rounded-full hover:bg-gray-200 transition-colors"
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-
-            {/* 输入框 */}
-            <div className="relative">
-              <textarea
-                ref={textareaRef}
-                value={taskInput}
-                onChange={(e) => setTaskInput(e.target.value)}
-                placeholder="例如：每天从账本中扣除50元作为日常开支..."
-                rows={3}
-                className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-[#1976D2] resize-none bg-gray-50"
-              />
-              <button
-                onClick={handleParseTask}
-                disabled={parseMutation.isPending || !taskInput.trim()}
-                className="absolute right-2 bottom-2 p-2 bg-[#1976D2] text-white rounded-lg disabled:opacity-40 transition-colors"
-              >
-                {parseMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-
-            {/* AI解析中 */}
-            {parseMutation.isPending && (
-              <div className="mt-4 flex items-center gap-3 p-4 bg-blue-50 rounded-xl">
-                <Loader2 className="w-5 h-5 text-[#1976D2] animate-spin" />
-                <div>
-                  <p className="text-sm font-medium text-[#1976D2]">DeepSeek 正在解析您的任务...</p>
-                  <p className="text-xs text-blue-400 mt-0.5">正在理解任务意图并生成执行方案</p>
-                </div>
-              </div>
-            )}
-
-            {/* 解析结果 */}
-            {parsedTask && !parseMutation.isPending && (
-              parsedTask.rejected ? (
-                /* AI拒绝执行的任务 */
-                <div className="mt-4 border border-orange-200 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-orange-50 border-b border-orange-200">
-                    <div className="flex items-center gap-2">
-                      <XCircle className="w-4 h-4 text-orange-600" />
-                      <span className="text-sm font-medium text-orange-800">无法执行该任务</span>
-                    </div>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <p className="text-sm text-gray-700">{parsedTask.summary}</p>
-                    {parsedTask.reject_reason && (
-                      <div className="bg-orange-50 p-3 rounded-lg">
-                        <p className="text-xs text-orange-700">
-                          <span className="font-medium">提示：</span>{parsedTask.reject_reason}
-                        </p>
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-400">
-                      AI 分身只能在账本中添加收入或支出记录，无法执行其他操作。
-                    </p>
-                    <button
-                      onClick={() => setParsedTask(null)}
-                      className="w-full py-2.5 text-sm text-gray-500 bg-gray-100 rounded-xl"
-                    >
-                      重新描述任务
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* 正常任务方案 */
-                <div className="mt-4 border border-green-200 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-green-50 border-b border-green-200">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-800">任务方案已生成</span>
-                    </div>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">任务概要</p>
-                      <p className="text-sm text-gray-900 font-medium">{parsedTask.summary}</p>
-                    </div>
-                    <div className="flex gap-4">
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">执行频率</p>
-                        <span className="inline-block text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">
-                          {SCHEDULE_LABELS[parsedTask.schedule_type] || parsedTask.schedule_type}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">执行时间</p>
-                        <p className="text-sm text-gray-700">{parsedTask.schedule_detail}</p>
-                      </div>
-                    </div>
-                    {parsedTask.actions?.length > 0 && (
-                      <div>
-                        <p className="text-xs text-gray-400 mb-1">执行动作</p>
-                        <div className="space-y-2">
-                          {parsedTask.actions.map((action: any, i: number) => (
-                            <div key={i} className="flex items-start gap-2 bg-gray-50 p-3 rounded-lg">
-                              <div className="w-5 h-5 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
-                                {i + 1}
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm text-gray-700">
-                                  {action.transaction_type === 'income' ? '收入' : '支出'}{' '}
-                                  {action.amount_min !== undefined && action.amount_max !== undefined
-                                    ? `¥${action.amount_min}-${action.amount_max}（随机）`
-                                    : `¥${action.amount}`}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  分类：{action.category_name || '其他'}
-                                  {action.description ? ` · ${action.description}` : ''}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        onClick={handleConfirmTask}
-                        disabled={createTaskMutation.isPending}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#388E3C] text-white text-sm font-medium rounded-xl disabled:opacity-50"
-                      >
-                        {createTaskMutation.isPending ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Play className="w-4 h-4" />
-                        )}
-                        {parsedTask.schedule_type === 'once' ? '确认并立即执行' : '确认并开始工作'}
-                      </button>
-                      <button
-                        onClick={() => setParsedTask(null)}
-                        className="px-4 py-2.5 text-sm text-gray-500 bg-gray-100 rounded-xl"
-                      >
-                        重新描述
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            )}
           </div>
         </div>
       )}
 
-      {/* AI任务列表 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      {/* 主开关 */}
+      <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-[#F57C00]" />
-            <h3 className="text-sm font-semibold text-gray-900">任务列表</h3>
-            {tasks.length > 0 && (
-              <span className="text-xs text-gray-400">({tasks.length})</span>
-            )}
+            <Sparkles className="w-4 h-4 text-[#D32F2F]" />
+            <span className="text-sm font-semibold text-gray-900">我的 AI 分身</span>
+            {isEnabled && <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">运行中</span>}
           </div>
+          <Toggle checked={isEnabled} onChange={handleToggle} disabled={toggleMutation.isPending} />
+        </div>
+      </div>
+
+      {/* 对话区域 */}
+      <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm flex flex-col" style={{ minHeight: "320px" }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <AIAvatar avatarUrl={displayAvatar} name={displayName} size={28} />
+            <span className="text-sm font-medium text-gray-800">{displayName}</span>
+          </div>
+          {localMessages.length > 0 && (
+            <button
+              onClick={() => clearHistoryMutation.mutate({ ledgerId })}
+              disabled={clearHistoryMutation.isPending}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              清空
+            </button>
+          )}
         </div>
 
-        {tasks.length > 0 ? (
+        {/* 消息列表 */}
+        <div className="flex-1 px-4 py-4 space-y-4 overflow-y-auto" style={{ maxHeight: "400px" }}>
+          {showWelcome ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D32F2F] to-[#FF5252] flex items-center justify-center mb-3 shadow-md">
+                <Bot className="w-7 h-7 text-white" />
+              </div>
+              <p className="text-sm font-medium text-gray-700 mb-1">你好！我是你的 AI 分身</p>
+              <p className="text-xs text-gray-400 leading-relaxed max-w-[220px]">用自然语言告诉我你想记什么账，我来帮你处理</p>
+              <div className="mt-4 space-y-2 w-full max-w-[260px]">
+                {["帮我记昨天的餐费50元", "从上周一开始每天记100元房租", "帮我创建养生保健分类"].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => setMessageInput(example)}
+                    className="w-full text-left text-xs text-gray-600 bg-gray-50 hover:bg-red-50 hover:text-[#D32F2F] px-3 py-2 rounded-xl transition-colors border border-gray-100"
+                  >
+                    💬 {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {localMessages.map((msg, i) => (
+                <ChatBubble
+                  key={i}
+                  msg={msg}
+                  userAvatar={displayAvatar}
+                  userName={displayName}
+                  aiAvatar={displayAvatar}
+                  aiName={displayName}
+                />
+              ))}
+              {chatMutation.isPending && (
+                <div className="flex items-end gap-2 justify-start">
+                  <AIAvatar avatarUrl={displayAvatar} name={displayName} size={32} />
+                  <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm border border-gray-100">
+                    <div className="flex gap-1 items-center">
+                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* 输入框 */}
+        <div className="px-3 pb-3 pt-2 border-t border-gray-100">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isEnabled ? "描述你想记的账..." : "请先开启 AI 分身"}
+              disabled={!isEnabled || chatMutation.isPending}
+              rows={1}
+              className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D32F2F] focus:ring-1 focus:ring-[#D32F2F]/20 disabled:bg-gray-50 disabled:text-gray-400 leading-relaxed"
+              style={{ maxHeight: "100px", overflowY: "auto" }}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!messageInput.trim() || !isEnabled || chatMutation.isPending}
+              className="w-10 h-10 rounded-xl bg-[#D32F2F] text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 transition-opacity"
+            >
+              {chatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5 px-1">按 Enter 发送，Shift+Enter 换行</p>
+        </div>
+      </div>
+
+      {/* 任务日志区 */}
+      <div className="mx-4 mt-3 mb-8 bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-gray-500" />
+            <h3 className="text-sm font-semibold text-gray-900">任务日志</h3>
+            {(tasks as any[]).length > 0 && (
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{(tasks as any[]).length}</span>
+            )}
+          </div>
+          <button onClick={() => refetchTasks()} className="text-gray-400 hover:text-gray-600">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {(tasks as any[]).length > 0 ? (
           <div className="divide-y divide-gray-50">
-            {tasks.map((task: any) => {
-              const statusInfo = TASK_STATUS[task.status] || TASK_STATUS.draft;
-              const StatusIcon = statusInfo.Icon;
+            {(tasks as any[]).map((task: any) => {
+              const status = TASK_STATUS[task.status] || TASK_STATUS.draft;
+              const StatusIcon = status.Icon;
               const isExpanded = expandedTaskId === task.id;
-              const plan = task.parsed_plan;
+              let plan: any = null;
+              try { plan = typeof task.parsed_plan === "string" ? JSON.parse(task.parsed_plan) : task.parsed_plan; } catch {}
 
               return (
-                <div key={task.id} className="px-5 py-4">
-                  {/* 任务头部 */}
-                  <div
-                    className="flex items-start gap-3 cursor-pointer"
-                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ backgroundColor: statusInfo.bgColor }}
-                    >
-                      <StatusIcon className="w-4 h-4" style={{ color: statusInfo.color }} />
+                <div
+                  key={task.id}
+                  className="px-5 py-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                  onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: status.bgColor }}>
+                      <StatusIcon className="w-3.5 h-3.5" style={{ color: status.color }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {plan?.summary || task.task_description}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span
-                          className="inline-block text-xs px-1.5 py-0.5 rounded font-medium"
-                          style={{ backgroundColor: statusInfo.bgColor, color: statusInfo.color }}
-                        >
-                          {statusInfo.label}
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: status.color, backgroundColor: status.bgColor }}>
+                          {status.label}
                         </span>
-                        <span className="text-xs text-gray-400">
-                          {SCHEDULE_LABELS[task.schedule_type] || task.schedule_type}
-                        </span>
-                        {task.execution_count > 0 && (
-                          <span className="text-xs text-gray-400">
-                            · 已执行 {task.execution_count} 次
-                          </span>
+                        {plan?.schedule_type && (
+                          <span className="text-xs text-gray-400">{SCHEDULE_LABELS[plan.schedule_type] || plan.schedule_type}</span>
                         )}
                       </div>
+                      <p className="text-sm text-gray-800 font-medium truncate">{plan?.summary || task.task_description}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(task.created_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
                     </div>
-                    {isExpanded ? (
-                      <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
-                    )}
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />}
                   </div>
 
-                  {/* 展开详情 */}
                   {isExpanded && (
-                    <div className="mt-3 ml-11 space-y-3">
-                      {/* 原始描述 */}
-                      <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="mt-3 ml-10 space-y-3">
+                      <div className="p-3 bg-gray-50 rounded-xl">
                         <p className="text-xs text-gray-400 mb-1">原始描述</p>
                         <p className="text-sm text-gray-700">{task.task_description}</p>
                       </div>
-
-                      {/* 执行动作 */}
                       {plan?.actions && (
                         <div>
                           <p className="text-xs text-gray-400 mb-1.5">执行动作</p>
                           {plan.actions.map((action: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-                              <div className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px]">
-                                {i + 1}
-                              </div>
+                              <div className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px] flex-shrink-0">{i + 1}</div>
                               <span>
-                                {action.transaction_type === 'income' ? '收入' : '支出'}{' '}
+                                {action.transaction_type === "income" ? "收入" : "支出"}{" "}
                                 {action.amount_min !== undefined && action.amount_max !== undefined
                                   ? `¥${action.amount_min}-${action.amount_max}（随机）`
                                   : `¥${action.amount}`}
-                                {action.category_name ? ` · ${action.category_name}` : ''}
+                                {action.category_name ? ` · ${action.category_name}` : ""}
+                                {action.record_date ? ` · ${action.record_date}` : ""}
                               </span>
                             </div>
                           ))}
                         </div>
                       )}
-
-                      {/* 时间信息 */}
                       <div className="flex gap-4 text-xs text-gray-400">
-                        <span>创建：{new Date(task.created_at).toLocaleString('zh-CN')}</span>
-                        {task.last_executed_at && (
-                          <span>上次执行：{new Date(task.last_executed_at).toLocaleString('zh-CN')}</span>
-                        )}
+                        <span>创建：{new Date(task.created_at).toLocaleString("zh-CN")}</span>
+                        {task.last_executed_at && <span>上次执行：{new Date(task.last_executed_at).toLocaleString("zh-CN")}</span>}
                       </div>
-
-                      {/* 操作按钮 */}
-                      {(task.status === 'running' || task.status === 'paused') && (
+                      {(task.status === "running" || task.status === "paused") && (
                         <div className="flex gap-2 pt-1">
-                          {task.status === 'running' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateStatusMutation.mutate({ taskId: task.id, status: 'paused' });
-                              }}
-                              className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg"
-                            >
+                          {task.status === "running" && (
+                            <button onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ taskId: task.id, status: "paused" }); }} className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg">
                               <Pause className="w-3 h-3" /> 暂停
                             </button>
                           )}
-                          {task.status === 'paused' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateStatusMutation.mutate({ taskId: task.id, status: 'running' });
-                              }}
-                              className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-lg"
-                            >
+                          {task.status === "paused" && (
+                            <button onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ taskId: task.id, status: "running" }); }} className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
                               <Play className="w-3 h-3" /> 继续
                             </button>
                           )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateStatusMutation.mutate({ taskId: task.id, status: 'stopped' });
-                            }}
-                            className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg"
-                          >
+                          <button onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ taskId: task.id, status: "stopped" }); }} className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">
                             <Square className="w-3 h-3" /> 停止
                           </button>
                         </div>
@@ -613,20 +459,12 @@ const LedgerAIEmployees = () => {
             })}
           </div>
         ) : (
-          <div className="py-12 text-center">
-            <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">暂无进行中的任务</p>
-            <p className="text-xs text-gray-300 mt-1">给 AI 分身布置任务后将在这里显示</p>
+          <div className="py-10 text-center">
+            <Clock className="w-9 h-9 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-400">暂无任务记录</p>
+            <p className="text-xs text-gray-300 mt-1">AI 执行任务后将在这里显示</p>
           </div>
         )}
-      </div>
-
-      {/* 底部说明 */}
-      <div className="mx-4 mt-4 mb-8 px-1">
-        <p className="text-xs text-gray-400 leading-relaxed">
-          AI 分身由 DeepSeek 大模型驱动，可理解自然语言指令并自动执行记账任务。
-          任务执行过程中，您可以随时暂停或停止。所有操作记录可在修改记录中查看。
-        </p>
       </div>
     </div>
   );

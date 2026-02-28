@@ -7132,7 +7132,42 @@ export const appRouter = router({
         );
       }),
 
-    // 获取报表数据
+    // AI分身：多轮对话（新版）
+    chatWithAIEmployee: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        message: z.string().min(1).max(1000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbAIEmployee.chatWithAIEmployee(
+          input.ledgerId,
+          ctx.user.id,
+          input.message
+        );
+      }),
+    // AI分身：获取对话历史
+    getAIConversationHistory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbAIEmployee.getAIConversationHistory(
+          input.ledgerId,
+          ctx.user.id
+        );
+      }),
+    // AI分身：清空对话历史
+    clearAIConversationHistory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbAIEmployee.clearAIConversationHistory(
+          input.ledgerId,
+          ctx.user.id
+        );
+      }),
+        // 获取报表数据
     getReport: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
