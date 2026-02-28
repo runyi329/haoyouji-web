@@ -102,6 +102,17 @@ async function cleanDuplicateAIMembers() {
         console.log(`[cleanDuplicateAI] 清理账本${dup.ledgerId}用户${dup.userId}的${dup.cnt - 1}条重复AI分身`);
       }
     }
+    // 额外清理userId=0的孤立AI分身（旧版本遗留数据）
+    const [legacyAI] = await conn.execute(
+      `SELECT id, ledgerId FROM ledger_members WHERE member_type = 'ai' AND userId = 0`
+    ) as any;
+    if (legacyAI && legacyAI.length > 0) {
+      const legacyIds = legacyAI.map((r: any) => r.id);
+      await conn.execute(
+        `DELETE FROM ledger_members WHERE id IN (${legacyIds.join(',')})`
+      );
+      console.log(`[cleanDuplicateAI] 清理${legacyAI.length}条userId=0的旧版AI分身`);
+    }
   } catch (e: any) {
     console.error('[cleanDuplicateAI] error:', e.message);
   }
@@ -1730,10 +1741,10 @@ export async function toggleAIEmployee(
       ) as any;
       const nickname = userRows?.[0]?.username || 'AI分身';
 
-      // 先清理可能存在的所有旧AI分身记录（防止重复）
+      // 先清理可能存在的所有旧AI分身记录（防止重复，同时清理userId=0的旧数据）
       await conn.execute(
-        'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ?',
-        [ledgerId, requestUserId, 'ai']
+        'DELETE FROM ledger_members WHERE ledgerId = ? AND member_type = ? AND (userId = ? OR userId = 0)',
+        [ledgerId, 'ai', requestUserId]
       );
 
       // 使用原生SQL插入，只包含数据库实际存在的列
@@ -1762,9 +1773,10 @@ export async function toggleAIEmployee(
     return { success: true, enabled: true };
   } else {
     // 关闭：删除该用户在该账本的所有AI分身（确保彻底清理）
+    // 同时清理userId=requestUserId和userId=0的旧数据
     await conn.execute(
-      'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ?',
-      [ledgerId, requestUserId, 'ai']
+      'DELETE FROM ledger_members WHERE ledgerId = ? AND member_type = ? AND (userId = ? OR userId = 0)',
+      [ledgerId, 'ai', requestUserId]
     );
     return { success: true, enabled: false };
   }
