@@ -3228,6 +3228,7 @@ export async function updateTransaction(
     .where(eq(ledgerRecords.id, recordId));
   
   // 写入修改日志
+  console.log('[updateTransaction] 准备写入日志, logChanges数量:', logChanges.length, 'recordId:', recordId, 'ledgerId:', record[0].ledgerId, 'userId:', userId);
   for (const change of logChanges) {
     await insertRecordLog({
       recordId,
@@ -4479,8 +4480,12 @@ export async function insertRecordLog(params: {
   note?: string;
 }) {
   try {
+    console.log('[insertRecordLog] 开始写入日志:', JSON.stringify(params));
     const conn = await getDbConnection();
-    if (!conn) return;
+    if (!conn) {
+      console.error('[insertRecordLog] 数据库连接失败');
+      return;
+    }
     await conn.execute(
       `INSERT INTO ledger_record_logs (record_id, ledger_id, operator_id, action, field_name, old_value, new_value, note)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -480,6 +480,11 @@ const AddTransaction = () => {
     onSuccess: () => {
       toast.success("账目修改成功！");
       utils.ledger.getTransactions.invalidate({ ledgerId });
+      if (editTransactionId) {
+        utils.ledger.getTransactionDetail.invalidate({ ledgerId, transactionId: editTransactionId });
+        utils.ledger.getRecordLogCount.invalidate({ recordId: editTransactionId, ledgerId });
+      }
+      utils.ledger.getById.invalidate({ ledgerId });
       setLocation(`/ledger/${id}`);
     },
     onError: (error) => {
