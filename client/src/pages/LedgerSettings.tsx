@@ -444,7 +444,19 @@ export default function LedgerSettings() {
       <div className="bg-white mt-3">
         <SettingItem 
           label="账本结算币种" 
-          value="人民币 🇨🇳" 
+          value={(() => {
+            const currencyMap: Record<string, string> = {
+              CNY: '人民币 🇨🇳',
+              USD: '美元 🇺🇸',
+              EUR: '欧元 🇪🇺',
+              GBP: '英镑 🇬🇧',
+              JPY: '日元 🇯🇵',
+              HKD: '港币 🇭🇰',
+              USDT: 'USDT 💵',
+            };
+            const code = ledgerData?.currency || 'CNY';
+            return currencyMap[code] || code;
+          })()}
           hasHelp 
         />
       </div>
