@@ -53,6 +53,7 @@ MIGRATIONS=(
   "migrations/add_txn_hash_and_fix_duplicate.sql"
   "drizzle/migrations/add_require_image_to_ledgers.sql"
   "drizzle/migrations/add_soft_delete.sql"
+  "drizzle/migrations/create_record_logs.sql"
 )
 
 # 执行每个迁移文件

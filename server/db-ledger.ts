@@ -2900,6 +2900,15 @@ export async function deleteTransaction(
   ) as any;
   console.log('[deleteTransaction] 验证结果:', verifyRows?.[0]);
   
+  // 写入修改日志
+  await insertRecordLog({
+    recordId,
+    ledgerId,
+    operatorId: userId,
+    action: 'delete',
+    note: '删除账目',
+  });
+  
   return { success: true };
 }
 
@@ -3098,6 +3107,16 @@ export async function restoreTransaction(
   );
   
   console.log('[restoreTransaction] 恢复成功:', { recordId });
+  
+  // 写入修改日志
+  await insertRecordLog({
+    recordId,
+    ledgerId: record.ledgerId,
+    operatorId: userId,
+    action: 'restore',
+    note: '恢复已删除账目',
+  });
+  
   return { success: true };
 }
 
@@ -3172,21 +3191,29 @@ export async function updateTransaction(
   
   // 构建更新数据
   const updateData: any = {};
-  if (data.type) updateData.type = data.type;
-  if (data.amount !== undefined) updateData.amount = data.amount.toString();
-  if (data.categoryId) updateData.categoryId = data.categoryId;
-  if (data.subcategoryId !== undefined) updateData.subcategoryId = data.subcategoryId;
-  if (data.description !== undefined) updateData.description = data.description;
-  if (data.transactionDate) updateData.recordDate = data.transactionDate;
-  if (data.images && data.images.length > 0) updateData.imageUrl = data.images[0]; // 只支持单张图片
-  if (data.memberId) updateData.memberId = data.memberId;
-  if (data.accountId !== undefined) updateData.accountId = data.accountId;
-  if (data.reimbursementStatus !== undefined) updateData.reimbursementStatus = data.reimbursementStatus;
+  const logChanges: Array<{ fieldName: string; oldValue: string | null; newValue: string | null }> = [];
+  
+  if (data.type) { updateData.type = data.type; logChanges.push({ fieldName: '类型', oldValue: null, newValue: data.type === 'income' ? '收入' : '支出' }); }
+  if (data.amount !== undefined) { updateData.amount = data.amount.toString(); logChanges.push({ fieldName: '金额', oldValue: null, newValue: String(data.amount) }); }
+  if (data.categoryId) { updateData.categoryId = data.categoryId; logChanges.push({ fieldName: '分类', oldValue: null, newValue: String(data.categoryId) }); }
+  if (data.subcategoryId !== undefined) { updateData.subcategoryId = data.subcategoryId; }
+  if (data.description !== undefined) { updateData.description = data.description; logChanges.push({ fieldName: '备注', oldValue: null, newValue: data.description || '无' }); }
+  if (data.transactionDate) { updateData.recordDate = data.transactionDate; logChanges.push({ fieldName: '日期', oldValue: null, newValue: data.transactionDate }); }
+  if (data.images && data.images.length > 0) { updateData.imageUrl = data.images[0]; logChanges.push({ fieldName: '凭证图片', oldValue: null, newValue: '已更新' }); }
+  if (data.memberId) { updateData.memberId = data.memberId; logChanges.push({ fieldName: '支出人', oldValue: null, newValue: String(data.memberId) }); }
+  if (data.accountId !== undefined) { updateData.accountId = data.accountId; logChanges.push({ fieldName: '账户', oldValue: null, newValue: data.accountId ? String(data.accountId) : '无' }); }
+  if (data.reimbursementStatus !== undefined) {
+    updateData.reimbursementStatus = data.reimbursementStatus;
+    const statusMap: Record<string, string> = { none: '无报销', pending: '待报销', completed: '已报销' };
+    logChanges.push({ fieldName: '报销状态', oldValue: null, newValue: statusMap[data.reimbursementStatus] || data.reimbursementStatus });
+  }
   if (data.pendingType !== undefined) {
     updateData.pendingType = data.pendingType;
-    // 如果取消待结，同时清除 pendingIncludeStats
     if (data.pendingType === null) {
       updateData.pendingIncludeStats = null;
+      logChanges.push({ fieldName: '待结状态', oldValue: null, newValue: '取消待结' });
+    } else {
+      logChanges.push({ fieldName: '待结状态', oldValue: null, newValue: data.pendingType === 'receivable' ? '代收' : '代付' });
     }
   }
   if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
@@ -3199,6 +3226,19 @@ export async function updateTransaction(
     .update(ledgerRecords)
     .set(encryptedUpdateData)
     .where(eq(ledgerRecords.id, recordId));
+  
+  // 写入修改日志
+  for (const change of logChanges) {
+    await insertRecordLog({
+      recordId,
+      ledgerId: record[0].ledgerId,
+      operatorId: userId,
+      action: 'edit',
+      fieldName: change.fieldName,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+    });
+  }
   
   return { success: true };
 }
@@ -4421,4 +4461,124 @@ export async function getAllPendingTransactions(userId: number) {
   }
 
   return result;
+}
+
+// ==================== 账目修改记录日志 ====================
+
+/**
+ * 写入账目修改日志（单条字段变更）
+ */
+export async function insertRecordLog(params: {
+  recordId: number;
+  ledgerId: number;
+  operatorId: number;
+  action: string;
+  fieldName?: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  note?: string;
+}) {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute(
+      `INSERT INTO ledger_record_logs (record_id, ledger_id, operator_id, action, field_name, old_value, new_value, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        params.recordId,
+        params.ledgerId,
+        params.operatorId,
+        params.action,
+        params.fieldName ?? null,
+        params.oldValue ?? null,
+        params.newValue ?? null,
+        params.note ?? null,
+      ]
+    );
+  } catch (e: any) {
+    console.error('[insertRecordLog] 写入日志失败:', e.message);
+  }
+}
+
+/**
+ * 查询账目的修改记录日志
+ */
+export async function getRecordLogs(
+  recordId: number,
+  ledgerId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (member.length === 0) throw new Error("您不是该账本的成员");
+
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+
+  const [rows] = await conn.execute(
+    `SELECT l.id, l.record_id, l.ledger_id, l.operator_id, l.action, l.field_name, l.old_value, l.new_value, l.note, l.created_at,
+            u.username as operator_name, u.avatar as operator_avatar
+     FROM ledger_record_logs l
+     LEFT JOIN users u ON l.operator_id = u.id
+     WHERE l.record_id = ? AND l.ledger_id = ?
+     ORDER BY l.created_at DESC`,
+    [recordId, ledgerId]
+  ) as any[];
+
+  return (rows as any[]).map((r: any) => ({
+    id: r.id,
+    recordId: r.record_id,
+    ledgerId: r.ledger_id,
+    operatorId: r.operator_id,
+    operatorName: r.operator_name || '未知用户',
+    operatorAvatar: r.operator_avatar || null,
+    action: r.action,
+    fieldName: r.field_name,
+    oldValue: r.old_value,
+    newValue: r.new_value,
+    note: r.note,
+    createdAt: r.created_at instanceof Date
+      ? r.created_at.toISOString().replace('T', ' ').substring(0, 19)
+      : String(r.created_at),
+  }));
+}
+
+/**
+ * 获取账目的修改记录条数
+ */
+export async function getRecordLogCount(
+  recordId: number,
+  ledgerId: number,
+  userId: number
+): Promise<number> {
+  try {
+    const db = await getLedgerDb();
+    if (!db) return 0;
+
+    const member = await db
+      .select()
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (member.length === 0) return 0;
+
+    const conn = await getDbConnection();
+    if (!conn) return 0;
+
+    const [rows] = await conn.execute(
+      `SELECT COUNT(*) as cnt FROM ledger_record_logs WHERE record_id = ? AND ledger_id = ?`,
+      [recordId, ledgerId]
+    ) as any[];
+
+    return Number((rows as any[])[0]?.cnt ?? 0);
+  } catch (e: any) {
+    console.error('[getRecordLogCount] 错误:', e.message);
+    return 0;
+  }
 }
