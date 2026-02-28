@@ -6928,7 +6928,21 @@ export const appRouter = router({
         return await dbLedger.getAIEmployees(input.ledgerId, ctx.user.id);
       }),
 
-    // 添加AI雇员
+    // 开关AI分身（开启则自动创建，关闭则删除）
+    toggleAIEmployee: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.toggleAIEmployee(
+          input.ledgerId,
+          input.enabled,
+          ctx.user.id
+        );
+      }),
+
+    // 保留旧接口兼容
     addAIEmployee: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
