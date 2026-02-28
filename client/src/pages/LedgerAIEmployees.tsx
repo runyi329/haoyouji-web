@@ -86,9 +86,9 @@ const LedgerAIEmployees = () => {
   });
 
   // 获取AI任务列表
-  const { data: aiTasks = [], refetch: refetchTasks } = trpc.ledger.getAITasks?.useQuery?.({
-    ledgerId,
-  }) ?? { data: [], refetch: () => {} };
+  // getAITasks 路由暂未实现，使用空数组占位
+  const aiTasks: any[] = [];
+  const refetchTasks = () => {};
 
   // 添加AI分身
   const addAIEmployeeMutation = trpc.ledger.addAIEmployee.useMutation({
