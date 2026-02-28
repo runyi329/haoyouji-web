@@ -205,6 +205,7 @@ export default function LedgerDetail() {
             {membersData && Array.isArray(membersData) && membersData.length > 0 && membersData.slice(0, 5).map((member, index) => (
               <div
                 key={member.userId}
+                className="relative"
                 style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
               >
                 <UserAvatar
@@ -213,6 +214,22 @@ export default function LedgerDetail() {
                   nickname={member.nickname}
                   size="md"
                 />
+                {(member as any).memberType === 'ai' && (
+                  <div 
+                    className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-white font-bold border border-white"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #D32F2F, #FF5252)', 
+                      fontSize: '7px', 
+                      padding: '0px 3px', 
+                      borderRadius: '6px',
+                      lineHeight: '11px',
+                      letterSpacing: '0.5px',
+                      zIndex: 10
+                    }}
+                  >
+                    AI
+                  </div>
+                )}
               </div>
             ))}
             {/* 显示更多按钮 */}

@@ -349,7 +349,21 @@ export default function LedgerSettings() {
                     创建人
                   </div>
                 )}
-
+                {(member as any).memberType === 'ai' && (
+                  <div 
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/3 text-white font-bold shadow-sm border-2 border-white"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #D32F2F, #FF5252)', 
+                      fontSize: '9px', 
+                      padding: '1px 6px', 
+                      borderRadius: '8px',
+                      lineHeight: '14px',
+                      letterSpacing: '1px'
+                    }}
+                  >
+                    AI
+                  </div>
+                )}
               </div>
               <div className="text-sm text-gray-900 mt-1">
                 {member.nickname || member.username || "用户"}
