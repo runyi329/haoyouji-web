@@ -582,8 +582,25 @@ const AddTransaction = () => {
 
       {/* 金额显示 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
-        <div className="text-5xl font-light text-[#222222]">
-          {amount || "0.00"}
+        <div className="flex items-baseline justify-between">
+          <div className="text-5xl font-light text-[#222222]">
+            {amount || "0.00"}
+          </div>
+          <div className="text-sm font-medium text-gray-400">
+            {(() => {
+              const currencyMap: Record<string, string> = {
+                CNY: "元",
+                USD: "USD",
+                JPY: "JPY",
+                EUR: "EUR",
+                HKD: "HKD",
+                GBP: "GBP",
+                USDT: "USDT",
+              };
+              const currency = (ledger as any)?.currency || "CNY";
+              return currencyMap[currency] || currency;
+            })()} 
+          </div>
         </div>
       </div>
 
