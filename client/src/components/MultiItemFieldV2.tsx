@@ -118,17 +118,16 @@ function parseBankText(text: string): { accountName: string; bankName: string; a
   if (accountWithSpaces) {
     accountNumber = accountWithSpaces[1].replace(/[\s\-]/g, '');
   } else {
-    // 直接匹配15-19位连续数字（银行卡号通常15-19位）
     const directMatch = raw.match(/(?<![0-9])\d{15,19}(?![0-9])/);
     accountNumber = directMatch ? directMatch[0] : '';
   }
 
   // 去除账号后的剩余文本
   let rest = raw.replace(accountWithSpaces ? accountWithSpaces[0] : accountNumber, '')
-               .replace(/[，,、；;|｜\t]+/g, ' ')
+               .replace(/[，,、；;|｜\t\n]+/g, ' ')
                .replace(/\s+/g, ' ').trim();
 
-  // 2. 去除常见标签词（更完整）
+  // 2. 去除常见标签词
   rest = rest.replace(/账户名[：:]\s*/g, '').replace(/户名[：:]\s*/g, '')
              .replace(/账户[：:]\s*/g, '').replace(/姓名[：:]\s*/g, '')
              .replace(/收款人[：:]\s*/g, '').replace(/开户行[：:]\s*/g, '')
@@ -136,47 +135,61 @@ function parseBankText(text: string): { accountName: string; bankName: string; a
              .replace(/银行[：:]\s*/g, '').replace(/账号[：:]\s*/g, '')
              .replace(/卡号[：:]\s*/g, '').trim();
 
-  // 3. 核心策略：
-  //    a) 先从rest中提取包含"银行"关键词的部分作为开户行
-  //    b) 剩余的短文本（2-4个汉字）作为账户名
-
+  // 3. 核心策略：先处理"银行词+账户名"无空格的情况
+  //    如"工商银行胡永煜" → 工商银行 + 胡永煜
   const bankKeywords = /银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商/;
 
-  const parts = rest.split(/\s+/).filter(Boolean);
   let bankName = '';
   let accountName = '';
 
-  // 先找出所有包含银行关键词的部分
-  const bankParts = parts.filter(p => bankKeywords.test(p));
-  const nonBankParts = parts.filter(p => !bankKeywords.test(p));
+  // 策略a：检查是否是"银行词+账户名"无空格的格式
+  // 匹配：银行关键词 + 2-4个汉字（末尾）
+  const bankWithNameMatch = rest.match(/^(.*?)(银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商)([\u4e00-\u9fa5]{2,4})(.*)$/);
 
-  if (bankParts.length > 0) {
-    // 有明确的银行词
-    bankName = bankParts.join('');
-    // 从非银行部分中找短文本（2-4个汉字）作为账户名
-    const shortNameParts = nonBankParts.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
-    if (shortNameParts.length > 0) {
-      accountName = shortNameParts[0];
-    } else {
-      // 没有短文本，取第一个非银行部分
-      accountName = nonBankParts[0] || '';
+  if (bankWithNameMatch) {
+    // 无空格场景：银行词 + 账户名
+    const prefix = bankWithNameMatch[1];
+    const bankKeyword = bankWithNameMatch[2];
+    const nameAfterBank = bankWithNameMatch[3];
+    const suffix = bankWithNameMatch[4];
+
+    // 组合银行名
+    bankName = (prefix + bankKeyword).trim();
+    accountName = nameAfterBank;
+
+    // 如果suffix还有内容，可能是额外的银行名信息
+    if (suffix.trim()) {
+      bankName = bankName + suffix;
     }
   } else {
-    // 没有明确的银行词，按长度区分：短的是账户名，长的是银行名
-    if (parts.length >= 2) {
-      const sorted = [...parts].sort((a, b) => a.length - b.length);
-      // 最短的2-4字作为账户名
-      const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
-      if (nameCandidates.length > 0) {
-        accountName = nameCandidates[0];
-        bankName = parts.filter(p => p !== accountName).join('');
+    // 策略b：有空格分隔的情况
+    const parts = rest.split(/\s+/).filter(Boolean);
+
+    const bankParts = parts.filter(p => bankKeywords.test(p));
+    const nonBankParts = parts.filter(p => !bankKeywords.test(p));
+
+    if (bankParts.length > 0) {
+      bankName = bankParts.join('');
+      const shortNameParts = nonBankParts.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
+      if (shortNameParts.length > 0) {
+        accountName = shortNameParts[0];
       } else {
-        // 都不符合，第一个作为账户名
-        accountName = parts[0];
-        bankName = parts.slice(1).join('');
+        accountName = nonBankParts[0] || '';
       }
     } else {
-      accountName = parts[0] || '';
+      if (parts.length >= 2) {
+        const sorted = [...parts].sort((a, b) => a.length - b.length);
+        const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
+        if (nameCandidates.length > 0) {
+          accountName = nameCandidates[0];
+          bankName = parts.filter(p => p !== accountName).join('');
+        } else {
+          accountName = parts[0];
+          bankName = parts.slice(1).join('');
+        }
+      } else {
+        accountName = parts[0] || '';
+      }
     }
   }
 
