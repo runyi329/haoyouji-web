@@ -77,6 +77,38 @@ async function dropUniqueKeyConstraint() {
 // 在模块加载时执行迁移
 dropUniqueKeyConstraint().catch(console.error);
 
+// ========== 清理重复AI分身记录 ==========
+let _duplicateAICleaned = false;
+async function cleanDuplicateAIMembers() {
+  if (_duplicateAICleaned) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 查找所有重复的AI分身（同一个ledgerId+userId有多条member_type='ai'的记录）
+    const [duplicates] = await conn.execute(
+      `SELECT ledgerId, userId, COUNT(*) as cnt, MIN(id) as keepId 
+       FROM ledger_members 
+       WHERE member_type = 'ai' 
+       GROUP BY ledgerId, userId 
+       HAVING cnt > 1`
+    ) as any;
+    
+    if (duplicates && duplicates.length > 0) {
+      for (const dup of duplicates) {
+        await conn.execute(
+          'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? AND id != ?',
+          [dup.ledgerId, dup.userId, 'ai', dup.keepId]
+        );
+        console.log(`[cleanDuplicateAI] 清理账本${dup.ledgerId}用户${dup.userId}的${dup.cnt - 1}条重复AI分身`);
+      }
+    }
+  } catch (e: any) {
+    console.error('[cleanDuplicateAI] error:', e.message);
+  }
+  _duplicateAICleaned = true;
+}
+cleanDuplicateAIMembers().catch(console.error);
+
 // ========== 账本功能字段迁移 ==========
 let _ledgerFeaturesMigrated = false;
 async function ensureLedgerFeaturesColumns() {
@@ -1698,6 +1730,12 @@ export async function toggleAIEmployee(
       ) as any;
       const nickname = userRows?.[0]?.username || 'AI分身';
 
+      // 先清理可能存在的所有旧AI分身记录（防止重复）
+      await conn.execute(
+        'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ?',
+        [ledgerId, requestUserId, 'ai']
+      );
+
       // 使用原生SQL插入，只包含数据库实际存在的列
       await conn.execute(
         `INSERT INTO ledger_members 
@@ -1707,16 +1745,27 @@ export async function toggleAIEmployee(
          VALUES (?, ?, 'member', ?, 'ai', 'user', 'all', 'all', 'own', 'own', 1, 0, 0)`,
         [ledgerId, requestUserId, nickname]
       );
+    } else {
+      // 已有AI分身，清理重复的，只保留第一个
+      const [allAiRows] = await conn.execute(
+        'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? ORDER BY id ASC',
+        [ledgerId, requestUserId, 'ai']
+      ) as any;
+      if (allAiRows && allAiRows.length > 1) {
+        // 删除除第一个以外的所有重复AI分身
+        const idsToDelete = allAiRows.slice(1).map((r: any) => r.id);
+        await conn.execute(
+          `DELETE FROM ledger_members WHERE id IN (${idsToDelete.join(',')})`,
+        );
+      }
     }
     return { success: true, enabled: true };
   } else {
-    // 关闭：如果有AI分身则删除
-    if (hasAI) {
-      await conn.execute(
-        'DELETE FROM ledger_members WHERE id = ?',
-        [aiRows[0].id]
-      );
-    }
+    // 关闭：删除该用户在该账本的所有AI分身（确保彻底清理）
+    await conn.execute(
+      'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ?',
+      [ledgerId, requestUserId, 'ai']
+    );
     return { success: true, enabled: false };
   }
 }
