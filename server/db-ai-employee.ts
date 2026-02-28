@@ -90,6 +90,38 @@ async function ensureAIEmployeeTables() {
 // 模块加载时执行迁移
 ensureAIEmployeeTables().catch(console.error);
 
+// ==================== 对话历史表迁移 ====================
+
+let _aiConversationTableMigrated = false;
+async function ensureAIConversationTable() {
+  if (_aiConversationTableMigrated) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS ai_employee_conversations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledger_id INT NOT NULL COMMENT '账本ID',
+        user_id INT NOT NULL COMMENT '用户ID',
+        role ENUM('user','assistant') NOT NULL COMMENT '角色',
+        content TEXT NOT NULL COMMENT '消息内容',
+        action_data JSON COMMENT '待执行的动作数据（assistant消息才有）',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ledger_user (ledger_id, user_id),
+        INDEX idx_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      COMMENT='AI分身对话历史'
+    `);
+    console.log('[AI Employee] 对话历史表迁移完成');
+  } catch (e: any) {
+    if (!e.message?.includes('already exists')) {
+      console.error('[AI Employee] 对话历史表迁移错误:', e.message);
+    }
+  }
+  _aiConversationTableMigrated = true;
+}
+ensureAIConversationTable().catch(console.error);
+
 // ==================== AI分身专用提示词 ====================
 
 /**
@@ -97,121 +129,105 @@ ensureAIEmployeeTables().catch(console.error);
  * AI分身专注于记账任务解析，不涉及人脉管理
  */
 function buildAIEmployeeSystemPrompt(categories: any[], today?: string): string {
-  // 构建分类列表供AI参考
   const categoryList = categories.map(c => {
     const subcats = c.children?.map((s: any) => s.name).join('、') || '';
     return `  - ${c.name}（${c.type === 'expense' ? '支出' : '收入'}）${subcats ? `，子分类：${subcats}` : ''}`;
   }).join('\n');
 
   const todayStr = today || new Date().toISOString().split('T')[0];
-  // 计算常用相对日期
   const todayDate = new Date(todayStr);
   const yesterday = new Date(todayDate); yesterday.setDate(todayDate.getDate() - 1);
   const dayBeforeYesterday = new Date(todayDate); dayBeforeYesterday.setDate(todayDate.getDate() - 2);
   const yesterdayStr = yesterday.toISOString().split('T')[0];
   const dayBeforeYesterdayStr = dayBeforeYesterday.toISOString().split('T')[0];
+  const weekdays = ['日','一','二','三','四','五','六'];
 
-  return `你是一个智能记账助手（AI分身），专门帮助用户在账本中自动记账。
+  return `你是一个智能记账助手（AI分身），专门帮助用户在账本中记账。你可以进行多轮对话，理解用户意图后再执行。
 
-## 当前日期信息（非常重要！）
-- 今天是：${todayStr}（${['日','一','二','三','四','五','六'][todayDate.getDay()]}）
-- 昨天是：${yesterdayStr}
-- 前天是：${dayBeforeYesterdayStr}
-- 计算规则："X天前" = 今天日期减去X天，"上周X" = 找到上一个星期X的日期
+## 当前日期信息
+- 今天：${todayStr}（周${weekdays[todayDate.getDay()]}）
+- 昨天：${yesterdayStr}
+- 前天：${dayBeforeYesterdayStr}
 
-## ❗❗❗ 最高优先级规则（绝对不可违反）
+## 你能做的事
+1. 在账本中添加收入或支出记录（add_transaction）
+2. 创建新的记账分类（create_category）
 
-### 你只能做的事：
-- 在账本中添加收入或支出记录（add_transaction）
-- 这是你唯一的能力，不存在其他操作类型
+## 你绝对不能做的事
+- 删除或修改已有记录、分类、成员
+- 管理人脉/联系人
+- 修改账本设置或成员
+- 访问外部网站
 
-### 你绝对不能做的事（即使用户要求也必须拒绝）：
-- ✘ 添加、修改、删除人脉/联系人
-- ✘ 修改账本设置、分类、成员
-- ✘ 删除或修改已有的记账记录
-- ✘ 发送消息、通知、邮件
-- ✘ 访问外部网站或API
-- ✘ 执行任何与“在账本中记录收入/支出”无关的操作
+## 当前账本分类
+${categoryList || '（暂无分类）'}
 
-### 当用户要求你做不允许的事时：
-输出以下JSON：
+## 输出格式（必须严格遵守，只输出JSON）
+
+当还在对话/询问阶段时：
 \`\`\`json
 {
-  "summary": "抱歉，AI分身只能在账本中添加收入或支出记录，无法执行其他操作",
-  "schedule_type": "once",
-  "schedule_detail": "无法执行",
-  "actions": [],
-  "rejected": true,
-  "reject_reason": "请描述您希望记录的具体收入或支出信息"
+  "reply": "对用户说的话（自然语言，友好简洁）",
+  "action": null
 }
 \`\`\`
 
-## 你的职责
-用户会用自然语言描述他们想要自动执行的记账任务，你需要将其解析为结构化的JSON方案。
-
-## 当前账本可用的分类
-${categoryList || '（暂无分类数据）'}
-
-## 输出格式要求
-你必须严格按照以下JSON格式输出，不要输出任何其他内容：
-
+当用户明确确认执行时：
 \`\`\`json
 {
-  "summary": "任务概要描述（一句话）",
-  "schedule_type": "once|every_minute|every_5_minutes|every_10_minutes|every_30_minutes|every_hour|daily|weekly|monthly",
-  "schedule_detail": "执行时间描述，如'每分钟执行一次'、'每5分钟执行一次'、'每小时执行一次'、'每天09:00'、'每周一'、'每月1日'、'立即执行一次'",
-  "actions": [
-    {
-      "type": "add_transaction",
-      "transaction_type": "income|expense",
-      "amount": 数字金额（固定金额时使用）,
-      "amount_min": 最小金额（随机范围时使用，如“1-5元”→amount_min:1）,
-      "amount_max": 最大金额（随机范围时使用，如“1-5元”→amount_max:5）,
-      "category_name": "分类名称（从上面的分类中选择最匹配的）",
-      "subcategory_name": "子分类名称（可选，如果有匹配的子分类）",
-      "description": "备注说明",
-      "record_date": "账目日期，格式YYYY-MM-DD（仅当用户指定了非今天的日期时填写，如'昨天'、'3天前'、'上周一'等；如果是今天或未指定日期则不填此字段）"
+  "reply": "执行结果说明",
+  "action": {
+    "type": "confirm_and_execute",
+    "plan": {
+      "summary": "任务概要",
+      "schedule_type": "once|daily|weekly|monthly|every_minute|every_5_minutes|every_10_minutes|every_30_minutes|every_hour",
+      "schedule_detail": "执行时间描述",
+      "actions": [
+        {
+          "type": "add_transaction",
+          "transaction_type": "income|expense",
+          "amount": 数字,
+          "category_name": "分类名",
+          "description": "备注",
+          "record_date": "YYYY-MM-DD（仅历史日期时填写）"
+        }
+      ]
     }
-  ]
+  }
 }
 \`\`\`
 
-## 解析规则
-1. 金额：
-   - 固定金额：从描述中提取具体数字，如“50元”←50，“三百”→300，使用amount字段
-   - 随机范围金额：如“1-5元”、“10到50元”、“随机金额”，必须使用amount_min和amount_max字段，不要设置amount！
-   - 示例：“每分钟支出1-5元”→{amount_min:1, amount_max:5}，不要写成{amount:3}
-2. 收支类型：根据语义判断，“扣除/花费/支出/消费/付款”→expense，“收入/工资/进账/到账”→income
-3. 分类匹配：根据描述内容匹配最合适的分类，如“午餐”→餐饮，“房租”→住房，“工资”→工资薪水
-4. 频率：
-   - "每分钟/每一分钟/每隔一分钟"→every_minute
-   - "每5分钟/每隔5分钟"→every_5_minutes
-   - "每10分钟/每隔10分钟"→every_10_minutes
-   - "每30分钟/每半小时"→every_30_minutes
-   - "每小时/每一小时/每隔一小时"→every_hour
-   - "每天/每日/日常"→daily
-   - "每周/每周一/周末"→weekly  
-   - "每月/月初/月底/每月X号"→monthly
-   - 没有提到频率或"一次性"→once
-   - 特别注意：用户说"每X分钟"时，必须选择对应的分钟级别频率，不要选择daily
-5. **历史日期补录（重要！）**：
-   - 当用户说"从昨天开始记"、"补录3天前的账"、"上周一到今天每天记一笔"等，需要为每一天生成一个独立的action，并在每个action中设置对应的 record_date 字段
+创建分类时在 plan.actions 中加入：
+\`\`\`json
+{
+  "type": "create_category",
+  "category_type": "expense|income",
+  "category_name": "分类名称"
+}
+\`\`\`
+
+## 对话规则
+
+1. **分类不存在时**：主动询问用户选择：
+   - 选项1：帮您创建新分类"XXX"
+   - 选项2：归入现有分类"XXX"
+   - 选项3：写入备注，分类选"其他"
+
+2. **确认机制**：理解用户意图后，先用自然语言复述任务请用户确认，action 设为 null；用户说"确认"/"对"/"好的"/"执行"等词后，才将 action 设为 confirm_and_execute
+
+3. **历史日期**：
    - "昨天" → record_date: "${yesterdayStr}"
    - "前天" → record_date: "${dayBeforeYesterdayStr}"
-   - "X天前" → record_date: 今天(${todayStr})减去X天的日期
-   - "从X天前到今天" → 生成X+1个action，每个action的record_date分别对应那几天
-   - 示例："补录昨天和前天各一笔50元餐费" → 生成2个action，record_date分别为"${yesterdayStr}"和"${dayBeforeYesterdayStr}"
-   - 如果是今天的账或周期性任务（daily/weekly/monthly），不需要设置record_date
-6. 如果描述不清晰，尽量做出合理推断
-7. 一条描述可能包含多个操作（如"每天记录50元午餐和20元交通"→2个action）
+   - "X天前" → 今天减X天
+   - "从X天前到今天" → 生成多个action，每个对应一天
 
-## 注意事项
+4. **金额**：固定金额用 amount，随机范围用 amount_min + amount_max
+
+5. **回复风格**：自然、友好、简洁，像一个贴心的财务助手
+
+## 注意
 - 只输出JSON，不要有任何额外文字
-- 金额必须是正数
-- actions数组中的type字段只允许填写 "add_transaction"，不允许其他任何值
-- category_name 必须从可用分类中选择
-- 如果找不到匹配的分类，使用“其他”
-- 再次强调：你只能帮用户在账本中添加账目记录，不能做任何其他事情`;
+- 金额必须是正数`;
 }
 
 // ==================== 核心功能 ====================
@@ -842,3 +858,229 @@ export async function restoreActiveTimers() {
 setTimeout(() => {
   restoreActiveTimers().catch(console.error);
 }, 5000); // 延迟5秒等待数据库连接就绪
+
+// ==================== 多轮对话 API ====================
+
+/**
+ * 获取账本的对话历史（最近20条）
+ */
+export async function getAIConversationHistory(
+  ledgerId: number,
+  userId: number
+): Promise<Array<{ role: string; content: string; action_data: any; created_at: string }>> {
+  await ensureAIConversationTable();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+
+  const [rows] = await conn.execute(
+    `SELECT role, content, action_data, created_at 
+     FROM ai_employee_conversations 
+     WHERE ledger_id = ? AND user_id = ?
+     ORDER BY created_at DESC 
+     LIMIT 20`,
+    [ledgerId, userId]
+  ) as any;
+
+  return (rows || []).reverse();
+}
+
+/**
+ * 清空账本的对话历史
+ */
+export async function clearAIConversationHistory(
+  ledgerId: number,
+  userId: number
+): Promise<void> {
+  await ensureAIConversationTable();
+  const conn = await getDbConnection();
+  if (!conn) return;
+
+  await conn.execute(
+    'DELETE FROM ai_employee_conversations WHERE ledger_id = ? AND user_id = ?',
+    [ledgerId, userId]
+  );
+}
+
+/**
+ * 多轮对话：发送消息给AI，获取回复，如果用户确认则执行任务
+ */
+export async function chatWithAIEmployee(
+  ledgerId: number,
+  userId: number,
+  userMessage: string
+): Promise<{
+  reply: string;
+  action: any;
+  taskCreated?: { taskId: number; summary: string };
+}> {
+  await ensureAIConversationTable();
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error("DEEPSEEK_API_KEY 未配置");
+
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+
+  // 验证成员
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, userId]
+  ) as any;
+  if (!memberRows || memberRows.length === 0) throw new Error("您不是该账本的成员");
+
+  // 获取分类
+  const [categoryRows] = await conn.execute(
+    `SELECT id, name, type, parentId FROM ledger_categories 
+     WHERE (ledgerId = ? OR ledgerId = 0) ORDER BY sortOrder ASC, id ASC`,
+    [ledgerId]
+  ) as any;
+  const categories = buildCategoryTree(categoryRows || []);
+
+  // 获取历史对话（最近20条）
+  const [historyRows] = await conn.execute(
+    `SELECT role, content FROM ai_employee_conversations 
+     WHERE ledger_id = ? AND user_id = ?
+     ORDER BY created_at DESC LIMIT 20`,
+    [ledgerId, userId]
+  ) as any;
+  const history = (historyRows || []).reverse();
+
+  // 构建消息列表
+  const todayStr = new Date().toISOString().split('T')[0];
+  const systemPrompt = buildAIEmployeeSystemPrompt(categories, todayStr);
+  const messages: any[] = [
+    { role: 'system', content: systemPrompt },
+    ...history.map((h: any) => ({ role: h.role, content: h.content })),
+    { role: 'user', content: userMessage }
+  ];
+
+  // 保存用户消息
+  await conn.execute(
+    'INSERT INTO ai_employee_conversations (ledger_id, user_id, role, content) VALUES (?, ?, ?, ?)',
+    [ledgerId, userId, 'user', userMessage]
+  );
+
+  // 调用 DeepSeek
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  let aiReply = '';
+  let parsedAction: any = null;
+
+  try {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages,
+        temperature: 0.7,
+        max_tokens: 1500,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`AI服务暂时不可用 (${response.status})`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+
+    // 解析JSON响应
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        aiReply = parsed.reply || content;
+        parsedAction = parsed.action || null;
+      } catch {
+        aiReply = content;
+      }
+    } else {
+      aiReply = content;
+    }
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') throw new Error("AI请求超时，请稍后重试");
+    throw error;
+  }
+
+  // 保存AI回复
+  await conn.execute(
+    'INSERT INTO ai_employee_conversations (ledger_id, user_id, role, content, action_data) VALUES (?, ?, ?, ?, ?)',
+    [ledgerId, userId, 'assistant', aiReply, parsedAction ? JSON.stringify(parsedAction) : null]
+  );
+
+  // 如果有执行动作，处理分类创建和记账
+  let taskCreated: { taskId: number; summary: string } | undefined;
+
+  if (parsedAction?.type === 'confirm_and_execute' && parsedAction?.plan) {
+    const plan = parsedAction.plan;
+
+    // 先处理 create_category 动作
+    for (const action of (plan.actions || [])) {
+      if (action.type === 'create_category') {
+        try {
+          // 检查分类是否已存在
+          const [existCat] = await conn.execute(
+            `SELECT id FROM ledger_categories WHERE ledgerId = ? AND name = ? AND type = ? LIMIT 1`,
+            [ledgerId, action.category_name, action.category_type || 'expense']
+          ) as any;
+
+          if (!existCat || existCat.length === 0) {
+            await conn.execute(
+              `INSERT INTO ledger_categories (ledgerId, name, type, sortOrder) VALUES (?, ?, ?, 999)`,
+              [ledgerId, action.category_name, action.category_type || 'expense']
+            );
+            console.log(`[AI Chat] 创建分类: ${action.category_name}`);
+          }
+
+          // 重新获取分类列表（包含新创建的）
+          const [newCatRows] = await conn.execute(
+            `SELECT id, name, type FROM ledger_categories WHERE ledgerId = ? AND name = ? LIMIT 1`,
+            [ledgerId, action.category_name]
+          ) as any;
+
+          if (newCatRows?.[0]) {
+            // 将后续 add_transaction 中的 category_name 匹配到新分类ID
+            for (const txAction of (plan.actions || [])) {
+              if (txAction.type === 'add_transaction' && txAction.category_name === action.category_name) {
+                txAction.category_id = newCatRows[0].id;
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error('[AI Chat] 创建分类失败:', e.message);
+        }
+      }
+    }
+
+    // 重新匹配分类ID（针对 add_transaction）
+    const [freshCategoryRows] = await conn.execute(
+      `SELECT id, name, type, parentId FROM ledger_categories 
+       WHERE (ledgerId = ? OR ledgerId = 0) ORDER BY sortOrder ASC, id ASC`,
+      [ledgerId]
+    ) as any;
+
+    for (const action of (plan.actions || [])) {
+      if (action.type === 'add_transaction' && action.category_name && !action.category_id) {
+        const matched = findCategoryByName(freshCategoryRows || [], action.category_name, action.transaction_type);
+        if (matched) {
+          action.category_id = matched.id;
+          action.category_name = matched.name;
+        }
+      }
+    }
+
+    // 创建任务并执行
+    const result = await createAIEmployeeTask(ledgerId, userId, userMessage, plan);
+    taskCreated = { taskId: result.taskId, summary: plan.summary };
+  }
+
+  return { reply: aiReply, action: parsedAction, taskCreated };
+}
