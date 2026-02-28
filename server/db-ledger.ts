@@ -57,6 +57,26 @@ async function ensureBackupPermissionColumn() {
 // 在模块加载时执行迁移
 ensureBackupPermissionColumn().catch(console.error);
 
+// ========== 删除ledger_members的UNIQUE KEY约束（支持同一用户拥有real和ai两条记录） ==========
+let _uniqueKeyDropped = false;
+async function dropUniqueKeyConstraint() {
+  if (_uniqueKeyDropped) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute('ALTER TABLE ledger_members DROP INDEX unique_ledger_user');
+    console.log('[dropUniqueKeyConstraint] unique_ledger_user 索引已删除');
+  } catch (e: any) {
+    // 索引不存在时忽略错误
+    if (!e.message?.includes("check that it exists") && !e.message?.includes("Can't DROP")) {
+      console.error('[dropUniqueKeyConstraint] error:', e.message);
+    }
+  }
+  _uniqueKeyDropped = true;
+}
+// 在模块加载时执行迁移
+dropUniqueKeyConstraint().catch(console.error);
+
 // ========== 账本功能字段迁移 ==========
 let _ledgerFeaturesMigrated = false;
 async function ensureLedgerFeaturesColumns() {
