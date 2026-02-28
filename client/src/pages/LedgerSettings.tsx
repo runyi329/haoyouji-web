@@ -324,7 +324,7 @@ export default function LedgerSettings() {
       {/* 成员管理区域 */}
       <div className="bg-white mt-3">
         <div className="px-4 py-3 text-sm text-gray-500">
-          {members?.length || 0}个共享成员
+          {members?.filter((m: any) => m.memberType !== 'ai').length || 0}个共享成员
         </div>
         
         {/* 成员列表 */}
