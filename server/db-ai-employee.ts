@@ -150,7 +150,9 @@ ${categoryList || '（暂无分类数据）'}
     {
       "type": "add_transaction",
       "transaction_type": "income|expense",
-      "amount": 数字金额,
+      "amount": 数字金额（固定金额时使用）,
+      "amount_min": 最小金额（随机范围时使用，如“1-5元”→amount_min:1）,
+      "amount_max": 最大金额（随机范围时使用，如“1-5元”→amount_max:5）,
       "category_name": "分类名称（从上面的分类中选择最匹配的）",
       "subcategory_name": "子分类名称（可选，如果有匹配的子分类）",
       "description": "备注说明"
@@ -160,7 +162,10 @@ ${categoryList || '（暂无分类数据）'}
 \`\`\`
 
 ## 解析规则
-1. 金额：从描述中提取具体数字，如“50元”→50，“三百”→300
+1. 金额：
+   - 固定金额：从描述中提取具体数字，如“50元”←50，“三百”→300，使用amount字段
+   - 随机范围金额：如“1-5元”、“10到50元”、“随机金额”，必须使用amount_min和amount_max字段，不要设置amount！
+   - 示例：“每分钟支出1-5元”→{amount_min:1, amount_max:5}，不要写成{amount:3}
 2. 收支类型：根据语义判断，“扣除/花费/支出/消费/付款”→expense，“收入/工资/进账/到账”→income
 3. 分类匹配：根据描述内容匹配最合适的分类，如“午餐”→餐饮，“房租”→住房，“工资”→工资薪水
 4. 频率：
@@ -429,6 +434,17 @@ async function executeTask(
         // 获取今天的日期
         const today = new Date().toISOString().split('T')[0];
 
+        // 计算实际金额：支持随机范围
+        let actualAmount: number;
+        if (action.amount_min !== undefined && action.amount_max !== undefined) {
+          // 随机范围金额：在[min, max]之间生成随机整数
+          const min = Math.ceil(Number(action.amount_min));
+          const max = Math.floor(Number(action.amount_max));
+          actualAmount = Math.floor(Math.random() * (max - min + 1)) + min;
+        } else {
+          actualAmount = Number(action.amount) || 0;
+        }
+
         // 插入记账记录
         const [insertResult] = await conn.execute(
           `INSERT INTO ledger_records 
@@ -437,7 +453,7 @@ async function executeTask(
           [
             ledgerId,
             action.transaction_type || 'expense',
-            action.amount,
+            actualAmount,
             categoryId,
             action.description || `AI分身自动记账：${parsedPlan.summary}`,
             today,
@@ -454,12 +470,12 @@ async function executeTask(
             taskId,
             ledgerId,
             JSON.stringify(action),
-            `成功添加${action.transaction_type === 'income' ? '收入' : '支出'}记录 ¥${action.amount}`,
+            `成功添加${action.transaction_type === 'income' ? '收入' : '支出'}记录 ¥${actualAmount}${action.amount_min !== undefined ? `（随机范围${action.amount_min}-${action.amount_max}）` : ''}`,
             insertResult.insertId,
           ]
         );
 
-        console.log(`[AI Employee] 任务${taskId}: 成功记账 ¥${action.amount} (${action.transaction_type})`);
+        console.log(`[AI Employee] 任务${taskId}: 成功记账 ¥${actualAmount} (${action.transaction_type})${action.amount_min !== undefined ? ` [随机范围${action.amount_min}-${action.amount_max}]` : ''}`);
       } catch (error: any) {
         // 记录失败日志
         await conn.execute(
