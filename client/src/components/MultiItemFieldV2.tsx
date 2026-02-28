@@ -112,15 +112,14 @@ function extractName(text: string): string {
 function parseBankText(text: string): { accountName: string; bankName: string; accountNumber: string } {
   const raw = text.trim();
 
-  // 1. 提取银行账号（16-19位数字，可能有空格分隔）
-  // 先尝试带空格的格式（如 6222 0212 3456 7890）
+  // 1. 提取银行账号（15-19位数字，可能有空格分隔）
   const accountWithSpaces = raw.match(/\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4,7})\b/);
   let accountNumber = '';
   if (accountWithSpaces) {
     accountNumber = accountWithSpaces[1].replace(/[\s\-]/g, '');
   } else {
-    // 直接匹配16-19位连续数字
-    const directMatch = raw.match(/(?<![0-9])\d{16,19}(?![0-9])/);
+    // 直接匹配15-19位连续数字（银行卡号通常15-19位）
+    const directMatch = raw.match(/(?<![0-9])\d{15,19}(?![0-9])/);
     accountNumber = directMatch ? directMatch[0] : '';
   }
 
@@ -129,46 +128,65 @@ function parseBankText(text: string): { accountName: string; bankName: string; a
                .replace(/[，,、；;|｜\t]+/g, ' ')
                .replace(/\s+/g, ' ').trim();
 
-  // 2. 去除常见标签词
-  rest = rest.replace(/户名[：:]\s*/g, '').replace(/账户名[：:]\s*/g, '')
-             .replace(/姓名[：:]\s*/g, '').replace(/收款人[：:]\s*/g, '')
-             .replace(/开户行[：:]\s*/g, '').replace(/开户银行[：:]\s*/g, '')
+  // 2. 去除常见标签词（更完整）
+  rest = rest.replace(/账户名[：:]\s*/g, '').replace(/户名[：:]\s*/g, '')
+             .replace(/账户[：:]\s*/g, '').replace(/姓名[：:]\s*/g, '')
+             .replace(/收款人[：:]\s*/g, '').replace(/开户行[：:]\s*/g, '')
+             .replace(/开户银行[：:]\s*/g, '').replace(/行名[：:]\s*/g, '')
              .replace(/银行[：:]\s*/g, '').replace(/账号[：:]\s*/g, '')
              .replace(/卡号[：:]\s*/g, '').trim();
 
-  // 3. 识别银行名称（包含"银行"关键词的文本段）
+  // 3. 核心策略：
+  //    a) 先从rest中提取包含"银行"关键词的部分作为开户行
+  //    b) 剩余的短文本（2-4个汉字）作为账户名
+
   const bankKeywords = /银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商/;
-  
+
   const parts = rest.split(/\s+/).filter(Boolean);
   let bankName = '';
   let accountName = '';
-  const bankParts: string[] = [];
-  const nameParts: string[] = [];
 
-  for (const part of parts) {
-    if (bankKeywords.test(part)) {
-      bankParts.push(part);
+  // 先找出所有包含银行关键词的部分
+  const bankParts = parts.filter(p => bankKeywords.test(p));
+  const nonBankParts = parts.filter(p => !bankKeywords.test(p));
+
+  if (bankParts.length > 0) {
+    // 有明确的银行词
+    bankName = bankParts.join('');
+    // 从非银行部分中找短文本（2-4个汉字）作为账户名
+    const shortNameParts = nonBankParts.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
+    if (shortNameParts.length > 0) {
+      accountName = shortNameParts[0];
     } else {
-      nameParts.push(part);
+      // 没有短文本，取第一个非银行部分
+      accountName = nonBankParts[0] || '';
+    }
+  } else {
+    // 没有明确的银行词，按长度区分：短的是账户名，长的是银行名
+    if (parts.length >= 2) {
+      const sorted = [...parts].sort((a, b) => a.length - b.length);
+      // 最短的2-4字作为账户名
+      const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
+      if (nameCandidates.length > 0) {
+        accountName = nameCandidates[0];
+        bankName = parts.filter(p => p !== accountName).join('');
+      } else {
+        // 都不符合，第一个作为账户名
+        accountName = parts[0];
+        bankName = parts.slice(1).join('');
+      }
+    } else {
+      accountName = parts[0] || '';
     }
   }
 
-  // 如果没有明显的银行关键词，尝试按长度区分：长的是银行名，短的是账户名
-  if (bankParts.length === 0 && nameParts.length >= 2) {
-    const sorted = [...nameParts].sort((a, b) => b.length - a.length);
-    bankName = sorted[0]; // 最长的可能是银行名
-    accountName = sorted.slice(1).join('');
-  } else {
-    bankName = bankParts.join('');
-    accountName = nameParts.join('');
-  }
-
-  // 4. 清理账户名
+  // 4. 清理账户名和银行名
   accountName = accountName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•]/g, '').trim();
+  bankName = bankName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•]/g, '').trim();
 
   return {
     accountName,
-    bankName: bankName.trim(),
+    bankName,
     accountNumber,
   };
 }
