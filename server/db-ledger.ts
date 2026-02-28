@@ -1503,49 +1503,32 @@ export async function updateDefaultPermission(
  * 获取账本的AI雇员列表
  */
 export async function getAIEmployees(ledgerId: number, requestUserId: number) {
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
+  // 使用原生SQL查询，避免Drizzle ORM列映射问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
   
   // 验证请求用户是否是账本成员
-  const membership = await db
-    .select()
-    .from(ledgerMembers)
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, requestUserId)
-      )
-    )
-    .limit(1);
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, requestUserId]
+  ) as any;
   
-  if (membership.length === 0) {
+  if (!memberRows || memberRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
   
   // 获取所有AI分身，并join users表获取用户头像
-  const aiEmployees = await db
-    .select({
-      id: ledgerMembers.id,
-      ledgerId: ledgerMembers.ledgerId,
-      userId: ledgerMembers.userId,
-      role: ledgerMembers.role,
-      nickname: ledgerMembers.nickname,
-      memberType: ledgerMembers.memberType,
-      avatarType: ledgerMembers.avatarType,
-      createdAt: ledgerMembers.createdAt,
-      avatarUrl: users.avatar,
-      username: users.username,
-    })
-    .from(ledgerMembers)
-    .leftJoin(users, eq(ledgerMembers.userId, users.id))
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.memberType, 'ai')
-      )
-    );
+  const [aiRows] = await conn.execute(
+    `SELECT m.id, m.ledgerId, m.userId, m.role, m.nickname, 
+            m.member_type as memberType, m.avatar_type as avatarType, m.createdAt,
+            u.avatar as avatarUrl, u.username
+     FROM ledger_members m
+     LEFT JOIN users u ON m.userId = u.id
+     WHERE m.ledgerId = ? AND m.member_type = 'ai'`,
+    [ledgerId]
+  ) as any;
   
-  return aiEmployees;
+  return aiRows || [];
 }
 
 /**
@@ -1593,103 +1576,80 @@ export async function addAIEmployee(
     throw new Error("该虚拟成员已添加");
   }
   
-  // 添加AI分身，使用创建者的真实userId，这样可以通过leftJoin查到用户的真实头像
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId: requestUserId, // 使用创建者的真实userId
-    role: 'member',
-    memberType: 'ai',
-    avatarType,
-    nickname,
-    permissionView: 'all',
-    permissionAdd: 'all',
-    permissionEdit: 'own',
-    permissionDelete: 'own',
-    permissionBackup: 'allow',
-    canEdit: 1,
-    canDelete: 0,
-    canInvite: 0,
-  });
+  // 添加AI分身，使用原生SQL绕过Drizzle ORM的列映射问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  await conn.execute(
+    `INSERT INTO ledger_members 
+     (ledgerId, userId, role, nickname, member_type, avatar_type, 
+      permission_view, permission_add, permission_edit, permission_delete, 
+      canEdit, canDelete, canInvite) 
+     VALUES (?, ?, 'member', ?, 'ai', ?, 'all', 'all', 'own', 'own', 1, 0, 0)`,
+    [ledgerId, requestUserId, nickname, avatarType]
+  );
   
   return { success: true };
 }
 
 /**
  * 开关AI分身：开启则自动创建，关闭则删除
+ * 使用原生SQL绕过Drizzle ORM的列映射问题和UNIQUE KEY约束
  */
 export async function toggleAIEmployee(
   ledgerId: number,
   enabled: boolean,
   requestUserId: number
 ) {
-  const db = await getLedgerDb();
-  if (!db) throw new Error("Ledger database connection failed");
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
 
-  // 验证请求用户是否是账本成员
-  const membership = await db
-    .select()
-    .from(ledgerMembers)
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, requestUserId),
-        ne(ledgerMembers.memberType, 'ai')
-      )
-    )
-    .limit(1);
+  // 验证请求用户是否是账本成员（非 AI 成员）
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? LIMIT 1',
+    [ledgerId, requestUserId, 'real']
+  ) as any;
 
-  if (membership.length === 0) {
+  if (!memberRows || memberRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
 
   // 查找该用户已有的AI分身
-  const existingAI = await db
-    .select()
-    .from(ledgerMembers)
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.memberType, 'ai'),
-        eq(ledgerMembers.userId, requestUserId)
-      )
-    )
-    .limit(1);
+  const [aiRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? LIMIT 1',
+    [ledgerId, requestUserId, 'ai']
+  ) as any;
+
+  const hasAI = aiRows && aiRows.length > 0;
 
   if (enabled) {
     // 开启：如果还没有AI分身则创建
-    if (existingAI.length === 0) {
+    if (!hasAI) {
       // 获取用户名称
-      const userInfo = await db
-        .select({ username: users.username })
-        .from(users)
-        .where(eq(users.id, requestUserId))
-        .limit(1);
-      const nickname = userInfo[0]?.username || 'AI分身';
+      const [userRows] = await conn.execute(
+        'SELECT username FROM users WHERE id = ? LIMIT 1',
+        [requestUserId]
+      ) as any;
+      const nickname = userRows?.[0]?.username || 'AI分身';
 
-      await db.insert(ledgerMembers).values({
-        ledgerId,
-        userId: requestUserId,
-        role: 'member',
-        memberType: 'ai',
-        avatarType: 'user',
-        nickname,
-        permissionView: 'all',
-        permissionAdd: 'all',
-        permissionEdit: 'own',
-        permissionDelete: 'own',
-        permissionBackup: 'allow',
-        canEdit: 1,
-        canDelete: 0,
-        canInvite: 0,
-      });
+      // 使用原生SQL插入，只包含数据库实际存在的列
+      await conn.execute(
+        `INSERT INTO ledger_members 
+         (ledgerId, userId, role, nickname, member_type, avatar_type, 
+          permission_view, permission_add, permission_edit, permission_delete, 
+          canEdit, canDelete, canInvite) 
+         VALUES (?, ?, 'member', ?, 'ai', 'user', 'all', 'all', 'own', 'own', 1, 0, 0)`,
+        [ledgerId, requestUserId, nickname]
+      );
     }
     return { success: true, enabled: true };
   } else {
     // 关闭：如果有AI分身则删除
-    if (existingAI.length > 0) {
-      await db
-        .delete(ledgerMembers)
-        .where(eq(ledgerMembers.id, existingAI[0].id));
+    if (hasAI) {
+      await conn.execute(
+        'DELETE FROM ledger_members WHERE id = ?',
+        [aiRows[0].id]
+      );
     }
     return { success: true, enabled: false };
   }
