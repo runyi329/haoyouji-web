@@ -3158,20 +3158,21 @@ export async function updateTransaction(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 获取记录信息
-  const record = await db
-    .select({
-      id: ledgerRecords.id,
-      ledgerId: ledgerRecords.ledgerId,
-      createdBy: ledgerRecords.createdBy,
-    })
+  // 获取完整的旧记录信息（用于对比变更）
+  const oldRecords = await db
+    .select()
     .from(ledgerRecords)
     .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
     .limit(1);
   
-  if (record.length === 0) {
+  if (oldRecords.length === 0) {
     throw new Error("记录不存在");
   }
+  
+  const oldRecord = oldRecords[0] as any;
+  
+  // 解密旧记录的敏感字段
+  const decryptedOldRecord = await decryptFields(db, 'ledger_records', oldRecord, LEDGER_RECORD_ENCRYPT_FIELDS);
   
   // 验证用户是否是账本成员
   const membership = await db
@@ -3179,7 +3180,7 @@ export async function updateTransaction(
     .from(ledgerMembers)
     .where(
       and(
-        eq(ledgerMembers.ledgerId, record[0].ledgerId),
+        eq(ledgerMembers.ledgerId, oldRecord.ledgerId),
         eq(ledgerMembers.userId, userId)
       )
     )
@@ -3189,31 +3190,90 @@ export async function updateTransaction(
     throw new Error("您不是该账本的成员");
   }
   
-  // 构建更新数据
+  // 构建更新数据，并对比旧值只记录真正变化的字段
   const updateData: any = {};
   const logChanges: Array<{ fieldName: string; oldValue: string | null; newValue: string | null }> = [];
   
-  if (data.type) { updateData.type = data.type; logChanges.push({ fieldName: '类型', oldValue: null, newValue: data.type === 'income' ? '收入' : '支出' }); }
-  if (data.amount !== undefined) { updateData.amount = data.amount.toString(); logChanges.push({ fieldName: '金额', oldValue: null, newValue: String(data.amount) }); }
-  if (data.categoryId) { updateData.categoryId = data.categoryId; logChanges.push({ fieldName: '分类', oldValue: null, newValue: String(data.categoryId) }); }
-  if (data.subcategoryId !== undefined) { updateData.subcategoryId = data.subcategoryId; }
-  if (data.description !== undefined) { updateData.description = data.description; logChanges.push({ fieldName: '备注', oldValue: null, newValue: data.description || '无' }); }
-  if (data.transactionDate) { updateData.recordDate = data.transactionDate; logChanges.push({ fieldName: '日期', oldValue: null, newValue: data.transactionDate }); }
-  if (data.images && data.images.length > 0) { updateData.imageUrl = data.images[0]; logChanges.push({ fieldName: '凭证图片', oldValue: null, newValue: '已更新' }); }
-  if (data.memberId) { updateData.memberId = data.memberId; logChanges.push({ fieldName: '支出人', oldValue: null, newValue: String(data.memberId) }); }
-  if (data.accountId !== undefined) { updateData.accountId = data.accountId; logChanges.push({ fieldName: '账户', oldValue: null, newValue: data.accountId ? String(data.accountId) : '无' }); }
-  if (data.reimbursementStatus !== undefined) {
-    updateData.reimbursementStatus = data.reimbursementStatus;
-    const statusMap: Record<string, string> = { none: '无报销', pending: '待报销', completed: '已报销' };
-    logChanges.push({ fieldName: '报销状态', oldValue: null, newValue: statusMap[data.reimbursementStatus] || data.reimbursementStatus });
+  const typeLabel = (t: string) => t === 'income' ? '收入' : '支出';
+  const reimbursementLabel = (s: string) => ({ none: '无报销', pending: '待报销', completed: '已报销' }[s] || s);
+  const pendingLabel = (t: string | null) => t === 'receivable' ? '代收' : t === 'payable' ? '代付' : '无';
+  
+  if (data.type && data.type !== decryptedOldRecord.type) {
+    updateData.type = data.type;
+    logChanges.push({ fieldName: '类型', oldValue: typeLabel(decryptedOldRecord.type), newValue: typeLabel(data.type) });
+  } else if (data.type) {
+    updateData.type = data.type; // 仍然更新，但不记录日志
   }
+  
+  if (data.amount !== undefined && String(data.amount) !== String(parseFloat(decryptedOldRecord.amount))) {
+    updateData.amount = data.amount.toString();
+    logChanges.push({ fieldName: '金额', oldValue: String(parseFloat(decryptedOldRecord.amount)), newValue: String(data.amount) });
+  } else if (data.amount !== undefined) {
+    updateData.amount = data.amount.toString();
+  }
+  
+  if (data.categoryId && data.categoryId !== decryptedOldRecord.categoryId) {
+    updateData.categoryId = data.categoryId;
+    logChanges.push({ fieldName: '分类', oldValue: String(decryptedOldRecord.categoryId), newValue: String(data.categoryId) });
+  } else if (data.categoryId) {
+    updateData.categoryId = data.categoryId;
+  }
+  
+  if (data.subcategoryId !== undefined) { updateData.subcategoryId = data.subcategoryId; }
+  
+  if (data.description !== undefined && (data.description || '') !== (decryptedOldRecord.description || '')) {
+    updateData.description = data.description;
+    logChanges.push({ fieldName: '备注', oldValue: decryptedOldRecord.description || '无', newValue: data.description || '无' });
+  } else if (data.description !== undefined) {
+    updateData.description = data.description;
+  }
+  
+  if (data.transactionDate && data.transactionDate !== decryptedOldRecord.recordDate) {
+    updateData.recordDate = data.transactionDate;
+    logChanges.push({ fieldName: '日期', oldValue: decryptedOldRecord.recordDate, newValue: data.transactionDate });
+  } else if (data.transactionDate) {
+    updateData.recordDate = data.transactionDate;
+  }
+  
+  if (data.images && data.images.length > 0 && data.images[0] !== decryptedOldRecord.imageUrl) {
+    updateData.imageUrl = data.images[0];
+    logChanges.push({ fieldName: '凭证图片', oldValue: decryptedOldRecord.imageUrl ? '有' : '无', newValue: '已更新' });
+  } else if (data.images && data.images.length > 0) {
+    updateData.imageUrl = data.images[0];
+  }
+  
+  if (data.memberId && data.memberId !== decryptedOldRecord.memberId) {
+    updateData.memberId = data.memberId;
+    logChanges.push({ fieldName: '支出人', oldValue: String(decryptedOldRecord.memberId || '无'), newValue: String(data.memberId) });
+  } else if (data.memberId) {
+    updateData.memberId = data.memberId;
+  }
+  
+  if (data.accountId !== undefined && data.accountId !== decryptedOldRecord.accountId) {
+    updateData.accountId = data.accountId;
+    logChanges.push({ fieldName: '账户', oldValue: decryptedOldRecord.accountId ? String(decryptedOldRecord.accountId) : '无', newValue: data.accountId ? String(data.accountId) : '无' });
+  } else if (data.accountId !== undefined) {
+    updateData.accountId = data.accountId;
+  }
+  
+  if (data.reimbursementStatus !== undefined && data.reimbursementStatus !== decryptedOldRecord.reimbursementStatus) {
+    updateData.reimbursementStatus = data.reimbursementStatus;
+    logChanges.push({ fieldName: '报销状态', oldValue: reimbursementLabel(decryptedOldRecord.reimbursementStatus), newValue: reimbursementLabel(data.reimbursementStatus) });
+  } else if (data.reimbursementStatus !== undefined) {
+    updateData.reimbursementStatus = data.reimbursementStatus;
+  }
+  
   if (data.pendingType !== undefined) {
-    updateData.pendingType = data.pendingType;
-    if (data.pendingType === null) {
-      updateData.pendingIncludeStats = null;
-      logChanges.push({ fieldName: '待结状态', oldValue: null, newValue: '取消待结' });
+    const oldPending = decryptedOldRecord.pendingType || null;
+    const newPending = data.pendingType || null;
+    if (newPending !== oldPending) {
+      updateData.pendingType = data.pendingType;
+      if (data.pendingType === null) {
+        updateData.pendingIncludeStats = null;
+      }
+      logChanges.push({ fieldName: '待结状态', oldValue: pendingLabel(oldPending), newValue: pendingLabel(newPending) });
     } else {
-      logChanges.push({ fieldName: '待结状态', oldValue: null, newValue: data.pendingType === 'receivable' ? '代收' : '代付' });
+      updateData.pendingType = data.pendingType;
     }
   }
   if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
@@ -3227,18 +3287,22 @@ export async function updateTransaction(
     .set(encryptedUpdateData)
     .where(eq(ledgerRecords.id, recordId));
   
-  // 写入修改日志
-  console.log('[updateTransaction] 准备写入日志, logChanges数量:', logChanges.length, 'recordId:', recordId, 'ledgerId:', record[0].ledgerId, 'userId:', userId);
-  for (const change of logChanges) {
-    await insertRecordLog({
-      recordId,
-      ledgerId: record[0].ledgerId,
-      operatorId: userId,
-      action: 'edit',
-      fieldName: change.fieldName,
-      oldValue: change.oldValue,
-      newValue: change.newValue,
-    });
+  // 只有真正有变化的字段才写入修改日志
+  if (logChanges.length > 0) {
+    console.log('[updateTransaction] 准备写入日志, logChanges数量:', logChanges.length, 'recordId:', recordId, 'ledgerId:', oldRecord.ledgerId, 'userId:', userId);
+    for (const change of logChanges) {
+      await insertRecordLog({
+        recordId,
+        ledgerId: oldRecord.ledgerId,
+        operatorId: userId,
+        action: 'edit',
+        fieldName: change.fieldName,
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+      });
+    }
+  } else {
+    console.log('[updateTransaction] 没有字段变化，不写入日志');
   }
   
   return { success: true };
@@ -4487,8 +4551,8 @@ export async function insertRecordLog(params: {
       return;
     }
     await conn.execute(
-      `INSERT INTO ledger_record_logs (record_id, ledger_id, operator_id, action, field_name, old_value, new_value, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO ledger_record_logs (record_id, ledger_id, operator_id, action, field_name, old_value, new_value, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+08:00'))`,
       [
         params.recordId,
         params.ledgerId,
@@ -4536,22 +4600,31 @@ export async function getRecordLogs(
     [recordId, ledgerId]
   ) as any[];
 
-  return (rows as any[]).map((r: any) => ({
-    id: r.id,
-    recordId: r.record_id,
-    ledgerId: r.ledger_id,
-    operatorId: r.operator_id,
-    operatorName: r.operator_name || '未知用户',
-    operatorAvatar: r.operator_avatar || null,
-    action: r.action,
-    fieldName: r.field_name,
-    oldValue: r.old_value,
-    newValue: r.new_value,
-    note: r.note,
-    createdAt: r.created_at instanceof Date
-      ? r.created_at.toISOString().replace('T', ' ').substring(0, 19)
-      : String(r.created_at),
-  }));
+  return (rows as any[]).map((r: any) => {
+    // created_at 已经是北京时间，直接格式化为字符串，不要用 toISOString()（会转换为UTC）
+    let createdAtStr = '';
+    if (r.created_at instanceof Date) {
+      const d = r.created_at;
+      // 数据库返回的Date对象可能被mysql2解析为本地时间，直接取各分量
+      createdAtStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    } else {
+      createdAtStr = String(r.created_at);
+    }
+    return {
+      id: r.id,
+      recordId: r.record_id,
+      ledgerId: r.ledger_id,
+      operatorId: r.operator_id,
+      operatorName: r.operator_name || '未知用户',
+      operatorAvatar: r.operator_avatar || null,
+      action: r.action,
+      fieldName: r.field_name,
+      oldValue: r.old_value,
+      newValue: r.new_value,
+      note: r.note,
+      createdAt: createdAtStr,
+    };
+  });
 }
 
 /**
