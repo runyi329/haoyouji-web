@@ -99,8 +99,9 @@ const LedgerAIEmployees = () => {
     ledgerId,
   });
 
-  // 当前用户是否已开启AI分身
-  const myAI = aiEmployees.find((e: any) => e.userId === currentUser?.id);
+  // 当前用户是否已开启AI分身（用宿松比较防止number/string类型不匹配）
+  // eslint-disable-next-line eqeqeq
+  const myAI = aiEmployees.find((e: any) => e.userId == currentUser?.id);
   const isEnabled = !!myAI;
 
   // 开关AI分身
@@ -187,7 +188,8 @@ const LedgerAIEmployees = () => {
     setShowTaskForm(false);
   };
 
-  const displayName = myAI?.nickname || currentUser?.username || "AI分身";
+  const displayName = myAI?.nickname || myAI?.username || currentUser?.username || "AI分身";
+  const displayAvatar = myAI?.avatarUrl || currentUser?.avatar;
 
   return (
     <div className="min-h-screen bg-[#F9F9F9] pb-20">
@@ -248,7 +250,7 @@ const LedgerAIEmployees = () => {
         {isEnabled ? (
           <div className="px-5 py-4">
             <div className="flex items-center gap-4">
-              <AIAvatar avatarUrl={currentUser?.avatar} name={displayName} size={52} />
+              <AIAvatar avatarUrl={displayAvatar} name={displayName} size={52} />
               <div className="flex-1">
                 <p className="text-base font-semibold text-gray-900">{displayName}</p>
                 <p className="text-xs text-gray-400 mt-0.5">AI 分身成员 · 已加入账本</p>
