@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus, Pencil, ClipboardPaste, Loader2 } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { Trash2, Plus, Pencil, ClipboardPaste } from "lucide-react";
 import { toast } from "sonner";
 
 // 扩展信息字段值
@@ -13,6 +12,163 @@ interface ExtendedFieldValue {
   value: string;
   _deleted?: boolean; // 标记为待删除
 }
+
+// ==================== 本地规则解析函数 ====================
+
+/**
+ * 解析快递地址文本（纯正则，无需AI）
+ * 支持格式：
+ *   "张三 13800138000 广东省深圳市南山区xx路xx号"
+ *   "广东省深圳市南山区xx路xx号 张三 13800138000"
+ *   "收件人：张三  手机：13800138000  地址：广东省..."
+ *   "张三，13800138000，广东省深圳市..."
+ */
+function parseAddressText(text: string): { name: string; phone: string; address: string } {
+  const raw = text.trim();
+
+  // 1. 提取手机号（11位，1[3-9]开头）
+  const phoneMatch = raw.match(/(?<![0-9])1[3-9]\d{9}(?![0-9])/);
+  const phone = phoneMatch ? phoneMatch[0] : '';
+
+  // 去除手机号后的剩余文本
+  let rest = raw.replace(phone, '').replace(/[，,、；;|｜\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // 2. 去除常见标签词
+  rest = rest.replace(/收件人[：:]\s*/g, '').replace(/姓名[：:]\s*/g, '')
+             .replace(/手机[：:]\s*/g, '').replace(/电话[：:]\s*/g, '')
+             .replace(/地址[：:]\s*/g, '').replace(/详细地址[：:]\s*/g, '').trim();
+
+  // 3. 识别省市区关键词，以此为分割点
+  const addressKeywords = /省|市|区|县|自治区|特别行政区|街道|镇|乡|路|街|巷|弄|号|楼|室|单元|栋|幢|座|园|小区/;
+
+  let name = '';
+  let address = '';
+
+  // 找到地址开始的位置（第一个包含省市区等关键词的词组）
+  const parts = rest.split(/\s+/);
+  let addressStartIdx = -1;
+  for (let i = 0; i < parts.length; i++) {
+    if (addressKeywords.test(parts[i]) && parts[i].length > 1) {
+      // 向前找到最长的地址前缀（如"广东省"可能被分割）
+      addressStartIdx = i;
+      // 如果前一个词也含关键词（如"广东省深圳市"被分为两段），合并
+      if (i > 0 && addressKeywords.test(parts[i - 1])) {
+        addressStartIdx = i - 1;
+      }
+      break;
+    }
+  }
+
+  if (addressStartIdx >= 0) {
+    // 地址前面的短文本作为姓名
+    const nameParts = parts.slice(0, addressStartIdx).join('');
+    name = extractName(nameParts);
+    address = parts.slice(addressStartIdx).join('');
+  } else {
+    // 没找到地址关键词，尝试按长度分割：短的是姓名，长的是地址
+    if (parts.length >= 2) {
+      // 找最短的词作为姓名候选
+      const sorted = [...parts].sort((a, b) => a.length - b.length);
+      const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 8 && /[\u4e00-\u9fa5]/.test(p));
+      if (nameCandidates.length > 0) {
+        name = nameCandidates[0];
+        address = parts.filter(p => p !== name).join('');
+      } else {
+        address = rest;
+      }
+    } else {
+      address = rest;
+    }
+  }
+
+  // 4. 清理姓名中的多余字符
+  name = name.replace(/[^\u4e00-\u9fa5a-zA-Z·•]/g, '').trim();
+
+  return { name, phone, address: address.trim() };
+}
+
+/** 从文本中提取人名（2-8个汉字/字母） */
+function extractName(text: string): string {
+  const cleaned = text.replace(/[^\u4e00-\u9fa5a-zA-Z·•]/g, '').trim();
+  // 人名通常2-6个字
+  if (cleaned.length >= 2 && cleaned.length <= 8) return cleaned;
+  // 尝试提取汉字序列
+  const match = cleaned.match(/[\u4e00-\u9fa5·]{2,6}/);
+  return match ? match[0] : cleaned.slice(0, 6);
+}
+
+/**
+ * 解析银行账号文本（纯正则，无需AI）
+ * 支持格式：
+ *   "户名：张三  开户行：中国工商银行深圳南山支行  账号：6222021234567890"
+ *   "张三 工商银行 6222021234567890"
+ *   "6222021234567890 张三 工商银行深圳支行"
+ */
+function parseBankText(text: string): { accountName: string; bankName: string; accountNumber: string } {
+  const raw = text.trim();
+
+  // 1. 提取银行账号（16-19位数字，可能有空格分隔）
+  // 先尝试带空格的格式（如 6222 0212 3456 7890）
+  const accountWithSpaces = raw.match(/\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4,7})\b/);
+  let accountNumber = '';
+  if (accountWithSpaces) {
+    accountNumber = accountWithSpaces[1].replace(/[\s\-]/g, '');
+  } else {
+    // 直接匹配16-19位连续数字
+    const directMatch = raw.match(/(?<![0-9])\d{16,19}(?![0-9])/);
+    accountNumber = directMatch ? directMatch[0] : '';
+  }
+
+  // 去除账号后的剩余文本
+  let rest = raw.replace(accountWithSpaces ? accountWithSpaces[0] : accountNumber, '')
+               .replace(/[，,、；;|｜\t]+/g, ' ')
+               .replace(/\s+/g, ' ').trim();
+
+  // 2. 去除常见标签词
+  rest = rest.replace(/户名[：:]\s*/g, '').replace(/账户名[：:]\s*/g, '')
+             .replace(/姓名[：:]\s*/g, '').replace(/收款人[：:]\s*/g, '')
+             .replace(/开户行[：:]\s*/g, '').replace(/开户银行[：:]\s*/g, '')
+             .replace(/银行[：:]\s*/g, '').replace(/账号[：:]\s*/g, '')
+             .replace(/卡号[：:]\s*/g, '').trim();
+
+  // 3. 识别银行名称（包含"银行"关键词的文本段）
+  const bankKeywords = /银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商/;
+  
+  const parts = rest.split(/\s+/).filter(Boolean);
+  let bankName = '';
+  let accountName = '';
+  const bankParts: string[] = [];
+  const nameParts: string[] = [];
+
+  for (const part of parts) {
+    if (bankKeywords.test(part)) {
+      bankParts.push(part);
+    } else {
+      nameParts.push(part);
+    }
+  }
+
+  // 如果没有明显的银行关键词，尝试按长度区分：长的是银行名，短的是账户名
+  if (bankParts.length === 0 && nameParts.length >= 2) {
+    const sorted = [...nameParts].sort((a, b) => b.length - a.length);
+    bankName = sorted[0]; // 最长的可能是银行名
+    accountName = sorted.slice(1).join('');
+  } else {
+    bankName = bankParts.join('');
+    accountName = nameParts.join('');
+  }
+
+  // 4. 清理账户名
+  accountName = accountName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•]/g, '').trim();
+
+  return {
+    accountName,
+    bankName: bankName.trim(),
+    accountNumber,
+  };
+}
+
+// ==================== 组件 ====================
 
 // 多条目字段组件V2（每个条目单独存储为一条记录）
 export function MultiItemFieldV2({
@@ -44,10 +200,8 @@ export function MultiItemFieldV2({
     const trimmedValue = newValue.trim();
     
     if (editingId !== null) {
-      // 编辑模式：更新指定条目
       setExtendedFields(prev => prev.map(f => {
         if (f.categoryName === categoryName && !f._deleted) {
-          // 通过id或临时标识匹配
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
           if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
             return { ...f, value: trimmedValue };
@@ -57,7 +211,6 @@ export function MultiItemFieldV2({
       }));
       setEditingId(null);
     } else {
-      // 添加模式：添加新条目（作为新的独立记录）
       setExtendedFields(prev => [...prev, {
         categoryId: getCategoryId(categoryName),
         categoryName,
@@ -68,42 +221,28 @@ export function MultiItemFieldV2({
     setNewValue('');
   };
   
-  // 编辑条目
   const handleEdit = (index: number) => {
     const item = items[index];
     setNewValue(item.value);
-    // 使用id或临时标识
     setEditingId(item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
-  // 取消编辑
   const handleCancelEdit = () => {
     setNewValue('');
     setEditingId(null);
   };
   
-  // 删除条目 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    
     if (item.id) {
-      // 已保存的条目：标记为待删除，保存时会调用删除API
-      setExtendedFields(prev => prev.map(f => 
-        f === item ? { ...f, _deleted: true } : f
-      ));
+      setExtendedFields(prev => prev.map(f => f === item ? { ...f, _deleted: true } : f));
     } else {
-      // 未保存的条目：直接从状态中移除
       setExtendedFields(prev => prev.filter(f => f !== item));
     }
-    
-    // 如果删除的是正在编辑的条目，取消编辑状态
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    if (editingId === itemId) {
-      handleCancelEdit();
-    }
+    if (editingId === itemId) handleCancelEdit();
   };
   
-  // 检查当前是否正在编辑某个条目
   const isEditing = (index: number) => {
     const item = items[index];
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
@@ -113,33 +252,21 @@ export function MultiItemFieldV2({
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">{label}</label>
-      {/* 已保存的条目列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => (
             <div key={item.id || `temp_${index}`} className={`flex items-center gap-2 p-2 rounded-md border ${isEditing(index) ? 'bg-[#F5F5F5] border-blue-300' : 'bg-gray-50 border-transparent'}`}>
               <span className="flex-1 text-sm">{item.value}</span>
-              <button
-                type="button"
-                onClick={() => handleEdit(index)}
-                className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
-                title="编辑"
-              >
+              <button type="button" onClick={() => handleEdit(index)} className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded" title="编辑">
                 <Pencil className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(index)}
-                className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
-                title="删除"
-              >
+              <button type="button" onClick={() => handleDelete(index)} className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded" title="删除">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           ))}
         </div>
       )}
-      {/* 添加/编辑输入区 */}
       <div className="flex gap-2">
         {multiline ? (
           <textarea
@@ -159,12 +286,8 @@ export function MultiItemFieldV2({
         )}
         {editingId !== null ? (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
-              保存
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
-              取消
-            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">保存</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>取消</Button>
           </>
         ) : (
           <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
@@ -195,128 +318,78 @@ export function MultiAddressFieldV2({
   const [newAddress, setNewAddress] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [recognizeText, setRecognizeText] = useState('');
-  const [isRecognizing, setIsRecognizing] = useState(false);
 
-  const recognizeAddressMutation = trpc.contacts.recognizeAddress.useMutation();
-
-  // 获取当前类别的所有地址（排除已标记删除的）
   const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
-  // 解析地址值
   const parseAddress = (value: string): {name: string, phone: string, address: string} => {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return { name: '', phone: '', address: value };
-    }
+    try { return JSON.parse(value); } catch { return { name: '', phone: '', address: value }; }
   };
 
-  // 粘贴并识别
-  const handleRecognize = async () => {
+  // 本地规则解析（无需AI，即时响应）
+  const handleRecognize = () => {
     if (!recognizeText.trim()) {
       toast.error('请先粘贴收件人信息');
       return;
     }
-    setIsRecognizing(true);
-    try {
-      const result = await recognizeAddressMutation.mutateAsync({ text: recognizeText.trim() });
-      setNewName(result.name);
-      setNewPhone(result.phone);
-      setNewAddress(result.address);
-      setRecognizeText('');
-      if (!result.name && !result.phone && !result.address) {
-        toast.error('未能识别出有效信息，请手动填写各字段');
-      } else {
-        toast.success('识别成功，请确认并点击 + 保存');
-      }
-    } catch (err: any) {
-      toast.error(err.message || '识别失败，请手动填写');
-    } finally {
-      setIsRecognizing(false);
+    const result = parseAddressText(recognizeText.trim());
+    setNewName(result.name);
+    setNewPhone(result.phone);
+    setNewAddress(result.address);
+    setRecognizeText('');
+    if (!result.name && !result.phone && !result.address) {
+      toast.error('未能识别出有效信息，请手动填写');
+    } else {
+      toast.success('识别完成，请确认后点击 + 保存');
     }
   };
   
-  // 添加新地址或保存编辑
   const handleAdd = () => {
     if (!newName.trim() && !newPhone.trim() && !newAddress.trim()) return;
     const newItem = { name: newName.trim(), phone: newPhone.trim(), address: newAddress.trim() };
     const valueStr = JSON.stringify(newItem);
-    
     if (editingId !== null) {
-      // 编辑模式：更新指定条目
       setExtendedFields(prev => prev.map(f => {
         if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
-          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
-            return { ...f, value: valueStr };
-          }
+          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) return { ...f, value: valueStr };
         }
         return f;
       }));
       setEditingId(null);
     } else {
-      // 添加模式：添加新条目（作为新的独立记录）
-      setExtendedFields(prev => [...prev, {
-        categoryId: getCategoryId(categoryName),
-        categoryName,
-        value: valueStr
-      }]);
+      setExtendedFields(prev => [...prev, { categoryId: getCategoryId(categoryName), categoryName, value: valueStr }]);
     }
-    
-    setNewName('');
-    setNewPhone('');
-    setNewAddress('');
+    setNewName(''); setNewPhone(''); setNewAddress('');
   };
   
-  // 编辑地址
   const handleEdit = (index: number) => {
     const item = items[index];
     const parsed = parseAddress(item.value);
-    setNewName(parsed.name);
-    setNewPhone(parsed.phone);
-    setNewAddress(parsed.address);
+    setNewName(parsed.name); setNewPhone(parsed.phone); setNewAddress(parsed.address);
     setEditingId(item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setNewName('');
-    setNewPhone('');
-    setNewAddress('');
-    setEditingId(null);
-  };
+  const handleCancelEdit = () => { setNewName(''); setNewPhone(''); setNewAddress(''); setEditingId(null); };
   
-  // 删除地址 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    
     if (item.id) {
-      // 已保存的条目：标记为待删除
-      setExtendedFields(prev => prev.map(f => 
-        f === item ? { ...f, _deleted: true } : f
-      ));
+      setExtendedFields(prev => prev.map(f => f === item ? { ...f, _deleted: true } : f));
     } else {
-      // 未保存的条目：直接从状态中移除
       setExtendedFields(prev => prev.filter(f => f !== item));
     }
-    
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    if (editingId === itemId) {
-      handleCancelEdit();
-    }
+    if (editingId === itemId) handleCancelEdit();
   };
   
-  // 检查当前是否正在编辑某个条目
   const isEditing = (index: number) => {
     const item = items[index];
-    const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    return editingId === itemId;
+    return editingId === (item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">{label}</label>
-      {/* 已保存的地址列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
@@ -330,22 +403,8 @@ export function MultiAddressFieldV2({
                     <div><span className="text-gray-500">地址：</span>{parsed.address}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(index)}
-                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(index)}
-                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => handleEdit(index)} className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded" title="编辑"><Pencil className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleDelete(index)} className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded" title="删除"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -364,18 +423,14 @@ export function MultiAddressFieldV2({
         <button
           type="button"
           onClick={handleRecognize}
-          disabled={isRecognizing || !recognizeText.trim()}
+          disabled={!recognizeText.trim()}
           className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isRecognizing ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <ClipboardPaste className="w-3 h-3" />
-          )}
+          <ClipboardPaste className="w-3 h-3" />
           粘贴并识别
         </button>
       </div>
-      {/* 添加/编辑输入区 */}
+      {/* 输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="收件人" value={newName} onChange={(e) => setNewName(e.target.value)} />
@@ -385,17 +440,11 @@ export function MultiAddressFieldV2({
           <Input className="flex-1" placeholder="详细地址" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
-                保存
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
-                取消
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">保存</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>取消</Button>
             </>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-              <Plus className="w-4 h-4" />
-            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}><Plus className="w-4 h-4" /></Button>
           )}
         </div>
       </div>
@@ -422,124 +471,78 @@ export function MultiBankFieldV2({
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [recognizeText, setRecognizeText] = useState('');
-  const [isRecognizing, setIsRecognizing] = useState(false);
 
-  const recognizeBankMutation = trpc.contacts.recognizeBank.useMutation();
-
-  // 获取当前类别的所有银行账号（排除已标记删除的）
   const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
-  // 解析银行账号值
   const parseBank = (value: string): {accountName: string, bankName: string, accountNumber: string} => {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return { accountName: '', bankName: '', accountNumber: value };
-    }
+    try { return JSON.parse(value); } catch { return { accountName: '', bankName: '', accountNumber: value }; }
   };
 
-  // 粘贴并识别
-  const handleRecognize = async () => {
+  // 本地规则解析（无需AI，即时响应）
+  const handleRecognize = () => {
     if (!recognizeText.trim()) {
       toast.error('请先粘贴银行账号信息');
       return;
     }
-    setIsRecognizing(true);
-    try {
-      const result = await recognizeBankMutation.mutateAsync({ text: recognizeText.trim() });
-      setNewAccountName(result.accountName);
-      setNewBankName(result.bankName);
-      setNewAccountNumber(result.accountNumber);
-      setRecognizeText('');
-      if (!result.accountName && !result.bankName && !result.accountNumber) {
-        toast.error('未能识别出有效信息，请手动填写各字段');
-      } else {
-        toast.success('识别成功，请确认并点击 + 保存');
-      }
-    } catch (err: any) {
-      toast.error(err.message || '识别失败，请手动填写');
-    } finally {
-      setIsRecognizing(false);
+    const result = parseBankText(recognizeText.trim());
+    setNewAccountName(result.accountName);
+    setNewBankName(result.bankName);
+    setNewAccountNumber(result.accountNumber);
+    setRecognizeText('');
+    if (!result.accountName && !result.bankName && !result.accountNumber) {
+      toast.error('未能识别出有效信息，请手动填写');
+    } else {
+      toast.success('识别完成，请确认后点击 + 保存');
     }
   };
   
-  // 添加新银行账号或保存编辑
   const handleAdd = () => {
     if (!newAccountName.trim() && !newBankName.trim() && !newAccountNumber.trim()) return;
     const newItem = { accountName: newAccountName.trim(), bankName: newBankName.trim(), accountNumber: newAccountNumber.trim() };
     const valueStr = JSON.stringify(newItem);
-    
     if (editingId !== null) {
       setExtendedFields(prev => prev.map(f => {
         if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
-          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
-            return { ...f, value: valueStr };
-          }
+          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) return { ...f, value: valueStr };
         }
         return f;
       }));
       setEditingId(null);
     } else {
-      setExtendedFields(prev => [...prev, {
-        categoryId: getCategoryId(categoryName),
-        categoryName,
-        value: valueStr
-      }]);
+      setExtendedFields(prev => [...prev, { categoryId: getCategoryId(categoryName), categoryName, value: valueStr }]);
     }
-    
-    setNewAccountName('');
-    setNewBankName('');
-    setNewAccountNumber('');
+    setNewAccountName(''); setNewBankName(''); setNewAccountNumber('');
   };
   
-  // 编辑银行账号
   const handleEdit = (index: number) => {
     const item = items[index];
     const parsed = parseBank(item.value);
-    setNewAccountName(parsed.accountName);
-    setNewBankName(parsed.bankName);
-    setNewAccountNumber(parsed.accountNumber);
+    setNewAccountName(parsed.accountName); setNewBankName(parsed.bankName); setNewAccountNumber(parsed.accountNumber);
     setEditingId(item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setNewAccountName('');
-    setNewBankName('');
-    setNewAccountNumber('');
-    setEditingId(null);
-  };
+  const handleCancelEdit = () => { setNewAccountName(''); setNewBankName(''); setNewAccountNumber(''); setEditingId(null); };
   
-  // 删除银行账号 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    
     if (item.id) {
-      setExtendedFields(prev => prev.map(f => 
-        f === item ? { ...f, _deleted: true } : f
-      ));
+      setExtendedFields(prev => prev.map(f => f === item ? { ...f, _deleted: true } : f));
     } else {
       setExtendedFields(prev => prev.filter(f => f !== item));
     }
-    
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    if (editingId === itemId) {
-      handleCancelEdit();
-    }
+    if (editingId === itemId) handleCancelEdit();
   };
   
-  // 检查当前是否正在编辑某个条目
   const isEditing = (index: number) => {
     const item = items[index];
-    const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    return editingId === itemId;
+    return editingId === (item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">{label}</label>
-      {/* 已保存的银行账号列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
@@ -553,22 +556,8 @@ export function MultiBankFieldV2({
                     <div><span className="text-gray-500">账号：</span>{parsed.accountNumber}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(index)}
-                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(index)}
-                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => handleEdit(index)} className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded" title="编辑"><Pencil className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleDelete(index)} className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded" title="删除"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -587,18 +576,14 @@ export function MultiBankFieldV2({
         <button
           type="button"
           onClick={handleRecognize}
-          disabled={isRecognizing || !recognizeText.trim()}
+          disabled={!recognizeText.trim()}
           className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isRecognizing ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <ClipboardPaste className="w-3 h-3" />
-          )}
+          <ClipboardPaste className="w-3 h-3" />
           粘贴并识别
         </button>
       </div>
-      {/* 添加/编辑输入区 */}
+      {/* 输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="账户名" value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} />
@@ -608,17 +593,11 @@ export function MultiBankFieldV2({
           <Input className="flex-1" placeholder="银行账号" value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} />
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
-                保存
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
-                取消
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">保存</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>取消</Button>
             </>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-              <Plus className="w-4 h-4" />
-            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}><Plus className="w-4 h-4" /></Button>
           )}
         </div>
       </div>
@@ -644,92 +623,59 @@ export function MultiInvoiceFieldV2({
   const [newTaxNumber, setNewTaxNumber] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
   
-  // 获取当前类别的所有开票信息（排除已标记删除的）
   const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
-  // 解析开票信息值
   const parseInvoice = (value: string): {companyName: string, taxNumber: string} => {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return { companyName: value, taxNumber: '' };
-    }
+    try { return JSON.parse(value); } catch { return { companyName: value, taxNumber: '' }; }
   };
   
-  // 添加新开票信息或保存编辑
   const handleAdd = () => {
     if (!newCompanyName.trim() && !newTaxNumber.trim()) return;
     const newItem = { companyName: newCompanyName.trim(), taxNumber: newTaxNumber.trim() };
     const valueStr = JSON.stringify(newItem);
-    
     if (editingId !== null) {
       setExtendedFields(prev => prev.map(f => {
         if (f.categoryName === categoryName && !f._deleted) {
           const itemId = f.id || `temp_${prev.indexOf(f)}`;
-          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) {
-            return { ...f, value: valueStr };
-          }
+          if (itemId === editingId || `temp_${prev.indexOf(f)}` === editingId) return { ...f, value: valueStr };
         }
         return f;
       }));
       setEditingId(null);
     } else {
-      setExtendedFields(prev => [...prev, {
-        categoryId: getCategoryId(categoryName),
-        categoryName,
-        value: valueStr
-      }]);
+      setExtendedFields(prev => [...prev, { categoryId: getCategoryId(categoryName), categoryName, value: valueStr }]);
     }
-    
-    setNewCompanyName('');
-    setNewTaxNumber('');
+    setNewCompanyName(''); setNewTaxNumber('');
   };
   
-  // 编辑开票信息
   const handleEdit = (index: number) => {
     const item = items[index];
     const parsed = parseInvoice(item.value);
-    setNewCompanyName(parsed.companyName);
-    setNewTaxNumber(parsed.taxNumber);
+    setNewCompanyName(parsed.companyName); setNewTaxNumber(parsed.taxNumber);
     setEditingId(item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
-  // 取消编辑
-  const handleCancelEdit = () => {
-    setNewCompanyName('');
-    setNewTaxNumber('');
-    setEditingId(null);
-  };
+  const handleCancelEdit = () => { setNewCompanyName(''); setNewTaxNumber(''); setEditingId(null); };
   
-  // 删除开票信息 - 如果有id则标记为待删除，否则直接移除
   const handleDelete = (index: number) => {
     const item = items[index];
-    
     if (item.id) {
-      setExtendedFields(prev => prev.map(f => 
-        f === item ? { ...f, _deleted: true } : f
-      ));
+      setExtendedFields(prev => prev.map(f => f === item ? { ...f, _deleted: true } : f));
     } else {
       setExtendedFields(prev => prev.filter(f => f !== item));
     }
-    
     const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    if (editingId === itemId) {
-      handleCancelEdit();
-    }
+    if (editingId === itemId) handleCancelEdit();
   };
   
-  // 检查当前是否正在编辑某个条目
   const isEditing = (index: number) => {
     const item = items[index];
-    const itemId = item.id || `temp_${extendedFields.indexOf(item)}`;
-    return editingId === itemId;
+    return editingId === (item.id || `temp_${extendedFields.indexOf(item)}`);
   };
   
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">{label}</label>
-      {/* 已保存的开票信息列表 */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((item, index) => {
@@ -742,22 +688,8 @@ export function MultiInvoiceFieldV2({
                     <div><span className="text-gray-500">税号：</span>{parsed.taxNumber}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(index)}
-                      className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded"
-                      title="编辑"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(index)}
-                      className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button type="button" onClick={() => handleEdit(index)} className="p-1 text-[#1976D2] hover:bg-[#F5F5F5] rounded" title="编辑"><Pencil className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleDelete(index)} className="p-1 text-[#D32F2F] hover:bg-[#FFEBEE] rounded" title="删除"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -765,7 +697,6 @@ export function MultiInvoiceFieldV2({
           })}
         </div>
       )}
-      {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
           <Input className="flex-1" placeholder="公司名称" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} />
@@ -774,17 +705,11 @@ export function MultiInvoiceFieldV2({
         <div className="justify-end gap-2 flex">
           {editingId !== null ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">
-                保存
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>
-                取消
-              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">保存</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit}>取消</Button>
             </>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={handleAdd}>
-              <Plus className="w-4 h-4" />
-            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleAdd}><Plus className="w-4 h-4" /></Button>
           )}
         </div>
       </div>
