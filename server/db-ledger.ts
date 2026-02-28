@@ -173,14 +173,35 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         .leftJoin(users, eq(ledgerMembers.userId, users.id))
         .where(eq(ledgerMembers.ledgerId, ledger.id));
       
-      // 将当前用户排在第一位，然后只取前4个
+      // 对于AI分身且userId=0的旧数据，查询当前用户头像作为补唇
+      const hasLegacyAI = membersRaw.some((m: any) => m.memberType === 'ai' && m.userId === 0);
+      let currentUserAvatarForLedger: string | null = null;
+      let currentUserUsernameForLedger: string | null = null;
+      if (hasLegacyAI) {
+        const currentUserInfo = await db
+          .select({ avatar: users.avatar, username: users.username })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (currentUserInfo.length > 0) {
+          currentUserAvatarForLedger = currentUserInfo[0].avatar;
+          currentUserUsernameForLedger = currentUserInfo[0].username;
+        }
+      }
+      
+      // 将当前用户排在第一位，然后只厖4个
       const members = membersRaw
-        .sort((a, b) => {
+        .map((m: any) => ({
+          ...m,
+          avatar: (m.memberType === 'ai' && m.userId === 0) ? currentUserAvatarForLedger : m.avatar,
+          username: (m.memberType === 'ai' && m.userId === 0) ? currentUserUsernameForLedger : m.username,
+        }))
+        .sort((a: any, b: any) => {
           if (a.userId === userId) return -1;
           if (b.userId === userId) return 1;
           return 0;
         })
-        .slice(0, 4); // 最多显示4个成员头像
+        .slice(0, 4); // 最多显示4个成员头像像
 
       const memberCount = await db
         .select({ count: sql<number>`count(*)` })
@@ -1064,9 +1085,28 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
   
   console.log("[getLedgerMembers] 成员列表:", members);
   
+  // 对于AI分身且userId=0的旧数据，查询请求者的头像作为补唇
+  let currentUserAvatar: string | null = null;
+  let currentUserUsername: string | null = null;
+  const hasLegacyAI = members.some(m => m.memberType === 'ai' && m.userId === 0);
+  if (hasLegacyAI) {
+    const currentUserInfo = await db
+      .select({ avatar: users.avatar, username: users.username })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (currentUserInfo.length > 0) {
+      currentUserAvatar = currentUserInfo[0].avatar;
+      currentUserUsername = currentUserInfo[0].username;
+    }
+  }
+  
   // 标记当前用户
   const membersWithCurrentFlag = members.map(member => ({
     ...member,
+    // AI分身且userId=0时，用请求者的头像和用户名补唇
+    avatar: (member.memberType === 'ai' && member.userId === 0) ? currentUserAvatar : member.avatar,
+    username: (member.memberType === 'ai' && member.userId === 0) ? currentUserUsername : member.username,
     isCurrentUser: member.userId === userId
   }));
   
@@ -1541,10 +1581,10 @@ export async function addAIEmployee(
     throw new Error("该虚拟成员已添加");
   }
   
-  // 添加AI雇员
+  // 添加AI分身，使用创建者的真实userId，这样可以通过leftJoin查到用户的真实头像
   await db.insert(ledgerMembers).values({
     ledgerId,
-    userId: 0, // AI雇员的userId为0
+    userId: requestUserId, // 使用创建者的真实userId
     role: 'member',
     memberType: 'ai',
     avatarType,
