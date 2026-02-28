@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, Plus, Pencil } from "lucide-react";
+import { Trash2, Plus, Pencil, ClipboardPaste, Loader2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "@/hooks/use-toast";
 
 // 扩展信息字段值
 interface ExtendedFieldValue {
@@ -192,7 +194,11 @@ export function MultiAddressFieldV2({
   const [newPhone, setNewPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
-  
+  const [recognizeText, setRecognizeText] = useState('');
+  const [isRecognizing, setIsRecognizing] = useState(false);
+
+  const recognizeAddressMutation = trpc.contacts.recognizeAddress.useMutation();
+
   // 获取当前类别的所有地址（排除已标记删除的）
   const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
@@ -202,6 +208,31 @@ export function MultiAddressFieldV2({
       return JSON.parse(value);
     } catch {
       return { name: '', phone: '', address: value };
+    }
+  };
+
+  // 粘贴并识别
+  const handleRecognize = async () => {
+    if (!recognizeText.trim()) {
+      toast({ title: '请先粘贴收件人信息', variant: 'destructive' });
+      return;
+    }
+    setIsRecognizing(true);
+    try {
+      const result = await recognizeAddressMutation.mutateAsync({ text: recognizeText.trim() });
+      setNewName(result.name);
+      setNewPhone(result.phone);
+      setNewAddress(result.address);
+      setRecognizeText('');
+      if (!result.name && !result.phone && !result.address) {
+        toast({ title: '未能识别出有效信息', description: '请手动填写各字段', variant: 'destructive' });
+      } else {
+        toast({ title: '识别成功', description: '请确认并点击 + 保存' });
+      }
+    } catch (err: any) {
+      toast({ title: '识别失败', description: err.message || '请手动填写', variant: 'destructive' });
+    } finally {
+      setIsRecognizing(false);
     }
   };
   
@@ -322,6 +353,28 @@ export function MultiAddressFieldV2({
           })}
         </div>
       )}
+      {/* 粘贴并识别区域 */}
+      <div className="relative">
+        <textarea
+          className="w-full min-h-[60px] px-3 py-2 pr-28 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
+          placeholder="粘贴收件人信息，自动识别姓名、电话、地址…"
+          value={recognizeText}
+          onChange={(e) => setRecognizeText(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={handleRecognize}
+          disabled={isRecognizing || !recognizeText.trim()}
+          className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isRecognizing ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <ClipboardPaste className="w-3 h-3" />
+          )}
+          粘贴并识别
+        </button>
+      </div>
       {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
@@ -368,7 +421,11 @@ export function MultiBankFieldV2({
   const [newBankName, setNewBankName] = useState('');
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [editingId, setEditingId] = useState<number | string | null>(null);
-  
+  const [recognizeText, setRecognizeText] = useState('');
+  const [isRecognizing, setIsRecognizing] = useState(false);
+
+  const recognizeBankMutation = trpc.contacts.recognizeBank.useMutation();
+
   // 获取当前类别的所有银行账号（排除已标记删除的）
   const items = extendedFields.filter(f => f.categoryName === categoryName && !f._deleted);
   
@@ -378,6 +435,31 @@ export function MultiBankFieldV2({
       return JSON.parse(value);
     } catch {
       return { accountName: '', bankName: '', accountNumber: value };
+    }
+  };
+
+  // 粘贴并识别
+  const handleRecognize = async () => {
+    if (!recognizeText.trim()) {
+      toast({ title: '请先粘贴银行账号信息', variant: 'destructive' });
+      return;
+    }
+    setIsRecognizing(true);
+    try {
+      const result = await recognizeBankMutation.mutateAsync({ text: recognizeText.trim() });
+      setNewAccountName(result.accountName);
+      setNewBankName(result.bankName);
+      setNewAccountNumber(result.accountNumber);
+      setRecognizeText('');
+      if (!result.accountName && !result.bankName && !result.accountNumber) {
+        toast({ title: '未能识别出有效信息', description: '请手动填写各字段', variant: 'destructive' });
+      } else {
+        toast({ title: '识别成功', description: '请确认并点击 + 保存' });
+      }
+    } catch (err: any) {
+      toast({ title: '识别失败', description: err.message || '请手动填写', variant: 'destructive' });
+    } finally {
+      setIsRecognizing(false);
     }
   };
   
@@ -494,6 +576,28 @@ export function MultiBankFieldV2({
           })}
         </div>
       )}
+      {/* 粘贴并识别区域 */}
+      <div className="relative">
+        <textarea
+          className="w-full min-h-[60px] px-3 py-2 pr-28 border border-dashed border-gray-300 rounded-md text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white resize-none placeholder:text-gray-400"
+          placeholder="粘贴银行账号信息，自动识别账户名、开户行、账号…"
+          value={recognizeText}
+          onChange={(e) => setRecognizeText(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={handleRecognize}
+          disabled={isRecognizing || !recognizeText.trim()}
+          className="absolute bottom-2 right-2 flex items-center gap-1 px-3 py-1.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isRecognizing ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <ClipboardPaste className="w-3 h-3" />
+          )}
+          粘贴并识别
+        </button>
+      </div>
       {/* 添加/编辑输入区 */}
       <div className="p-3 border rounded-md space-y-2 bg-white">
         <div className="flex gap-2">
@@ -667,7 +771,7 @@ export function MultiInvoiceFieldV2({
           <Input className="flex-1" placeholder="公司名称" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} />
           <Input className="flex-1" placeholder="税号" value={newTaxNumber} onChange={(e) => setNewTaxNumber(e.target.value)} />
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="justify-end gap-2 flex">
           {editingId !== null ? (
             <>
               <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="text-[#1976D2]">

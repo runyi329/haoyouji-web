@@ -4577,7 +4577,98 @@ export const appRouter = router({
       
       return allContacts;
     }),
-
+  // 智能识别快递地址（调用DeepSeek API解析文本）
+  recognizeAddress: protectedProcedure
+    .input(z.object({
+      text: z.string().min(1).max(1000),
+    }))
+    .mutation(async ({ input }) => {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI服务未配置' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: '你是一个快递地址解析助手。用户会粘贴一段包含收件人信息的文本，请从中提取：收件人姓名、联系电话、详细地址。以JSON格式返回，格式为：{"name":"收件人姓名","phone":"联系电话","address":"详细地址"}。如果某个字段无法识别则返回空字符串。只返回JSON，不要其他内容。'
+              },
+              { role: 'user', content: input.text }
+            ],
+            temperature: 0.1,
+            max_tokens: 300,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI服务暂时不可用' });
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '{}';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+        return {
+          name: String(parsed.name || ''),
+          phone: String(parsed.phone || ''),
+          address: String(parsed.address || ''),
+        };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') throw new TRPCError({ code: 'TIMEOUT', message: 'AI识别超时，请重试' });
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI识别失败，请手动填写' });
+      }
+    }),
+  // 智能识别银行账号（调用DeepSeek API解析文本）
+  recognizeBank: protectedProcedure
+    .input(z.object({
+      text: z.string().min(1).max(1000),
+    }))
+    .mutation(async ({ input }) => {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI服务未配置' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: '你是一个银行账号解析助手。用户会粘贴一段包含银行账号信息的文本，请从中提取：账户名（户名/姓名）、开户行（银行名称及支行）、银行账号（卡号/账号）。以JSON格式返回，格式为：{"accountName":"账户名","bankName":"开户行","accountNumber":"银行账号"}。如果某个字段无法识别则返回空字符串。只返回JSON，不要其他内容。'
+              },
+              { role: 'user', content: input.text }
+            ],
+            temperature: 0.1,
+            max_tokens: 300,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!response.ok) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI服务暂时不可用' });
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '{}';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+        return {
+          accountName: String(parsed.accountName || ''),
+          bankName: String(parsed.bankName || ''),
+          accountNumber: String(parsed.accountNumber || ''),
+        };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') throw new TRPCError({ code: 'TIMEOUT', message: 'AI识别超时，请重试' });
+        if (err instanceof TRPCError) throw err;
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI识别失败，请手动填写' });
+      }
+    }),
   // 自定义字段管理
   customFields: router({
     // 获取人脉的自定义字段
