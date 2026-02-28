@@ -585,13 +585,26 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 金额显示 */}
+      {/* 金额输入 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
-        <div className="inline-flex items-end">
-          <div className="text-5xl font-light text-[#222222]">
-            {amount || "0.00"}
-          </div>
-          <div className="text-sm font-medium text-gray-400 mb-1 ml-1">
+        <div className="inline-flex items-end w-full">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={amount || ""}
+            placeholder="0.00"
+            onChange={(e) => {
+              const val = e.target.value;
+              // 只允许数字和小数点
+              if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
+                setAmount(val);
+              }
+            }}
+            className="text-5xl font-light text-[#222222] bg-transparent border-none outline-none w-0 flex-1 placeholder-gray-300"
+            style={{ caretColor: '#D32F2F' }}
+            autoComplete="off"
+          />
+          <div className="text-sm font-medium text-gray-400 mb-1 ml-1 flex-shrink-0">
             {(() => {
               const currencyMap: Record<string, string> = {
                 CNY: "元",
@@ -888,62 +901,13 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 数字键盘 - 固定在底部，缩小高度 */}
-      <div className="flex-shrink-0 bg-gray-100 grid grid-cols-4 gap-px border-t z-50">
-        {["7", "8", "9", "-"].map((key) => (
-          <button
-            key={key}
-            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
-            onClick={() => {
-              if (key !== "-") handleNumberInput(key);
-            }}
-          >
-            {key}
-          </button>
-        ))}
-        {["4", "5", "6", "+"].map((key) => (
-          <button
-            key={key}
-            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
-            onClick={() => {
-              if (key !== "+") handleNumberInput(key);
-            }}
-          >
-            {key}
-          </button>
-        ))}
-        {["1", "2", "3"].map((key) => (
-          <button
-            key={key}
-            className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
-            onClick={() => handleNumberInput(key)}
-          >
-            {key}
-          </button>
-        ))}
+      {/* 底部保存按钮 */}
+      <div className="flex-shrink-0 p-3 bg-white border-t">
         <button
-          className="bg-[#D32F2F] text-white p-3 text-base font-semibold row-span-2 active:bg-[#D32F2F]-dark"
+          className="w-full bg-[#D32F2F] text-white py-3 rounded-lg text-base font-semibold active:bg-[#B71C1C]"
           onClick={handleSave}
         >
           保存
-        </button>
-        <button
-          className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
-          onClick={() => handleNumberInput(".")}
-        >
-          .
-        </button>
-        <button
-          className="bg-white p-3 text-xl font-light text-[#222222] active:bg-gray-200"
-          onClick={() => handleNumberInput("0")}
-        >
-          0
-        </button>
-        <button
-          className="bg-white p-3 text-lg text-[#222222] active:bg-gray-200 flex items-center justify-center"
-          onClick={handleDelete}
-        >
-          ⌫
         </button>
       </div>
 
