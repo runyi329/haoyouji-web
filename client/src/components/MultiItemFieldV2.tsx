@@ -17,11 +17,11 @@ interface ExtendedFieldValue {
 
 /**
  * 解析快递地址文本（纯正则，无需AI）
- * 支持格式：
- *   "张三 13800138000 广东省深圳市南山区xx路xx号"
- *   "广东省深圳市南山区xx路xx号 张三 13800138000"
- *   "收件人：张三  手机：13800138000  地址：广东省..."
- *   "张三，13800138000，广东省深圳市..."
+ * 支持多种格式：
+ *   "张三 13800138000 广东省深圳市南山区xx路xx号"  （姓名在前）
+ *   "广东省深圳市南山区xx路xx号 张三 13800138000"  （姓名在中间）
+ *   "上海市静安区长兴路168弄4号2101室胡永煜\n13127919173"  （姓名在地址末尾）
+ *   "收件人：张三  手机：13800138000  地址：广东省..."  （带标签）
  */
 function parseAddressText(text: string): { name: string; phone: string; address: string } {
   const raw = text.trim();
@@ -30,54 +30,59 @@ function parseAddressText(text: string): { name: string; phone: string; address:
   const phoneMatch = raw.match(/(?<![0-9])1[3-9]\d{9}(?![0-9])/);
   const phone = phoneMatch ? phoneMatch[0] : '';
 
-  // 去除手机号后的剩余文本
-  let rest = raw.replace(phone, '').replace(/[，,、；;|｜\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // 去除手机号后的剩余文本，统一分隔符（换行也转为空格）
+  let rest = raw.replace(phone, '').replace(/[，,、；;|｜\t\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   // 2. 去除常见标签词
   rest = rest.replace(/收件人[：:]\s*/g, '').replace(/姓名[：:]\s*/g, '')
              .replace(/手机[：:]\s*/g, '').replace(/电话[：:]\s*/g, '')
              .replace(/地址[：:]\s*/g, '').replace(/详细地址[：:]\s*/g, '').trim();
 
-  // 3. 识别省市区关键词，以此为分割点
-  const addressKeywords = /省|市|区|县|自治区|特别行政区|街道|镇|乡|路|街|巷|弄|号|楼|室|单元|栋|幢|座|园|小区/;
-
   let name = '';
   let address = '';
 
-  // 找到地址开始的位置（第一个包含省市区等关键词的词组）
-  const parts = rest.split(/\s+/);
-  let addressStartIdx = -1;
-  for (let i = 0; i < parts.length; i++) {
-    if (addressKeywords.test(parts[i]) && parts[i].length > 1) {
-      // 向前找到最长的地址前缀（如"广东省"可能被分割）
-      addressStartIdx = i;
-      // 如果前一个词也含关键词（如"广东省深圳市"被分为两段），合并
-      if (i > 0 && addressKeywords.test(parts[i - 1])) {
-        addressStartIdx = i - 1;
-      }
-      break;
-    }
-  }
+  // 3. 策略a：地址终止词（室/号/层/楼/单元/栋/幢）后紧跟2-6个汉字 → 姓名在地址末尾
+  const endPattern = /[室号层楼单元栋幢]([\u4e00-\u9fa5]{2,6})\s*$/;
+  const endMatch = rest.match(endPattern);
 
-  if (addressStartIdx >= 0) {
-    // 地址前面的短文本作为姓名
-    const nameParts = parts.slice(0, addressStartIdx).join('');
-    name = extractName(nameParts);
-    address = parts.slice(addressStartIdx).join('');
+  if (endMatch) {
+    name = endMatch[1];
+    address = rest.slice(0, rest.lastIndexOf(endMatch[1])).trim();
   } else {
-    // 没找到地址关键词，尝试按长度分割：短的是姓名，长的是地址
-    if (parts.length >= 2) {
-      // 找最短的词作为姓名候选
-      const sorted = [...parts].sort((a, b) => a.length - b.length);
-      const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 8 && /[\u4e00-\u9fa5]/.test(p));
-      if (nameCandidates.length > 0) {
-        name = nameCandidates[0];
-        address = parts.filter(p => p !== name).join('');
+    // 策略b：按空格分割，地址关键词前的短文本是姓名
+    const parts = rest.split(/\s+/).filter(Boolean);
+    const addrKeyword = /[省市区县路街巷弄号楼室栋幢]/;
+    let addrStartIdx = -1;
+    for (let i = 0; i < parts.length; i++) {
+      if (addrKeyword.test(parts[i]) && parts[i].length > 1) { addrStartIdx = i; break; }
+    }
+
+    if (addrStartIdx > 0) {
+      const beforeAddr = parts.slice(0, addrStartIdx).join('');
+      if (beforeAddr.length >= 2 && beforeAddr.length <= 8 && /[\u4e00-\u9fa5]/.test(beforeAddr)) {
+        name = beforeAddr;
+        address = parts.slice(addrStartIdx).join('');
       } else {
         address = rest;
       }
+    } else if (addrStartIdx === 0) {
+      address = parts.join('');
+      // 再次尝试地址末尾姓名（有空格分隔的情况）
+      const trailMatch = address.match(/[室号层楼单元栋幢]([\u4e00-\u9fa5]{2,6})$/);
+      if (trailMatch) {
+        name = trailMatch[1];
+        address = address.slice(0, address.lastIndexOf(trailMatch[1])).trim();
+      }
     } else {
-      address = rest;
+      // 没有地址关键词，按长度区分：短的是姓名，长的是地址
+      if (parts.length >= 2) {
+        const sorted = [...parts].sort((a, b) => a.length - b.length);
+        const nc = sorted.filter(p => p.length >= 2 && p.length <= 8 && /[\u4e00-\u9fa5]/.test(p));
+        if (nc.length > 0) { name = nc[0]; address = parts.filter(p => p !== nc[0]).join(''); }
+        else { address = rest; }
+      } else {
+        address = rest;
+      }
     }
   }
 
