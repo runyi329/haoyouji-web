@@ -96,14 +96,28 @@ ensureAIEmployeeTables().catch(console.error);
  * 构建AI分身的系统提示词（独立于AI助理）
  * AI分身专注于记账任务解析，不涉及人脉管理
  */
-function buildAIEmployeeSystemPrompt(categories: any[]): string {
+function buildAIEmployeeSystemPrompt(categories: any[], today?: string): string {
   // 构建分类列表供AI参考
   const categoryList = categories.map(c => {
     const subcats = c.children?.map((s: any) => s.name).join('、') || '';
     return `  - ${c.name}（${c.type === 'expense' ? '支出' : '收入'}）${subcats ? `，子分类：${subcats}` : ''}`;
   }).join('\n');
 
+  const todayStr = today || new Date().toISOString().split('T')[0];
+  // 计算常用相对日期
+  const todayDate = new Date(todayStr);
+  const yesterday = new Date(todayDate); yesterday.setDate(todayDate.getDate() - 1);
+  const dayBeforeYesterday = new Date(todayDate); dayBeforeYesterday.setDate(todayDate.getDate() - 2);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const dayBeforeYesterdayStr = dayBeforeYesterday.toISOString().split('T')[0];
+
   return `你是一个智能记账助手（AI分身），专门帮助用户在账本中自动记账。
+
+## 当前日期信息（非常重要！）
+- 今天是：${todayStr}（${['日','一','二','三','四','五','六'][todayDate.getDay()]}）
+- 昨天是：${yesterdayStr}
+- 前天是：${dayBeforeYesterdayStr}
+- 计算规则："X天前" = 今天日期减去X天，"上周X" = 找到上一个星期X的日期
 
 ## ❗❗❗ 最高优先级规则（绝对不可违反）
 
@@ -155,7 +169,8 @@ ${categoryList || '（暂无分类数据）'}
       "amount_max": 最大金额（随机范围时使用，如“1-5元”→amount_max:5）,
       "category_name": "分类名称（从上面的分类中选择最匹配的）",
       "subcategory_name": "子分类名称（可选，如果有匹配的子分类）",
-      "description": "备注说明"
+      "description": "备注说明",
+      "record_date": "账目日期，格式YYYY-MM-DD（仅当用户指定了非今天的日期时填写，如'昨天'、'3天前'、'上周一'等；如果是今天或未指定日期则不填此字段）"
     }
   ]
 }
@@ -179,8 +194,16 @@ ${categoryList || '（暂无分类数据）'}
    - "每月/月初/月底/每月X号"→monthly
    - 没有提到频率或"一次性"→once
    - 特别注意：用户说"每X分钟"时，必须选择对应的分钟级别频率，不要选择daily
-5. 如果描述不清晰，尽量做出合理推断
-6. 一条描述可能包含多个操作（如“每天记录50元午餐和20元交通”→2个action）
+5. **历史日期补录（重要！）**：
+   - 当用户说"从昨天开始记"、"补录3天前的账"、"上周一到今天每天记一笔"等，需要为每一天生成一个独立的action，并在每个action中设置对应的 record_date 字段
+   - "昨天" → record_date: "${yesterdayStr}"
+   - "前天" → record_date: "${dayBeforeYesterdayStr}"
+   - "X天前" → record_date: 今天(${todayStr})减去X天的日期
+   - "从X天前到今天" → 生成X+1个action，每个action的record_date分别对应那几天
+   - 示例："补录昨天和前天各一笔50元餐费" → 生成2个action，record_date分别为"${yesterdayStr}"和"${dayBeforeYesterdayStr}"
+   - 如果是今天的账或周期性任务（daily/weekly/monthly），不需要设置record_date
+6. 如果描述不清晰，尽量做出合理推断
+7. 一条描述可能包含多个操作（如"每天记录50元午餐和20元交通"→2个action）
 
 ## 注意事项
 - 只输出JSON，不要有任何额外文字
@@ -236,7 +259,9 @@ export async function parseTaskWithAI(
   const categories = buildCategoryTree(categoryRows || []);
 
   // 构建提示词
-  const systemPrompt = buildAIEmployeeSystemPrompt(categories);
+  // 传入今天的日期，让AI能正确解析相对日期（昨天、3天前等）
+  const todayForPrompt = new Date().toISOString().split('T')[0];
+  const systemPrompt = buildAIEmployeeSystemPrompt(categories, todayForPrompt);
 
   // 调用DeepSeek API
   const controller = new AbortController();
@@ -432,9 +457,9 @@ async function executeTask(
         }
 
         // 获取今天的日期
-        const today = new Date().toISOString().split('T')[0];
-
-        // 计算实际金额：支持随机范围
+        // 使用action中指定的日期，如果没有则用今天（支持补录历史账目）
+        const today = action.record_date || new Date().toISOString().split('T')[0];
+        // 计算实际金额：支持随机范围围
         let actualAmount: number;
         if (action.amount_min !== undefined && action.amount_max !== undefined) {
           // 随机范围金额：在[min, max]之间生成随机整数
