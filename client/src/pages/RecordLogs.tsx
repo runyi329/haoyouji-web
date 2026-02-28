@@ -57,7 +57,9 @@ export default function RecordLogs() {
   const formatTime = (timeStr: string) => {
     if (!timeStr) return '';
     try {
-      const d = new Date(timeStr);
+      // 后端返回的是北京时间字符串（如 "2026-02-28 11:30:00"）
+      // 需要明确指定为中国时区解析
+      const d = new Date(timeStr.replace(' ', 'T') + '+08:00');
       const now = new Date();
       const diffMs = now.getTime() - d.getTime();
       const diffMins = Math.floor(diffMs / 60000);
