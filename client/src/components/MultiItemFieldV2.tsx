@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Plus, Pencil, ClipboardPaste, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // 扩展信息字段值
 interface ExtendedFieldValue {
@@ -214,7 +214,7 @@ export function MultiAddressFieldV2({
   // 粘贴并识别
   const handleRecognize = async () => {
     if (!recognizeText.trim()) {
-      toast({ title: '请先粘贴收件人信息', variant: 'destructive' });
+      toast.error('请先粘贴收件人信息');
       return;
     }
     setIsRecognizing(true);
@@ -225,12 +225,12 @@ export function MultiAddressFieldV2({
       setNewAddress(result.address);
       setRecognizeText('');
       if (!result.name && !result.phone && !result.address) {
-        toast({ title: '未能识别出有效信息', description: '请手动填写各字段', variant: 'destructive' });
+        toast.error('未能识别出有效信息，请手动填写各字段');
       } else {
-        toast({ title: '识别成功', description: '请确认并点击 + 保存' });
+        toast.success('识别成功，请确认并点击 + 保存');
       }
     } catch (err: any) {
-      toast({ title: '识别失败', description: err.message || '请手动填写', variant: 'destructive' });
+      toast.error(err.message || '识别失败，请手动填写');
     } finally {
       setIsRecognizing(false);
     }
@@ -441,7 +441,7 @@ export function MultiBankFieldV2({
   // 粘贴并识别
   const handleRecognize = async () => {
     if (!recognizeText.trim()) {
-      toast({ title: '请先粘贴银行账号信息', variant: 'destructive' });
+      toast.error('请先粘贴银行账号信息');
       return;
     }
     setIsRecognizing(true);
@@ -452,12 +452,12 @@ export function MultiBankFieldV2({
       setNewAccountNumber(result.accountNumber);
       setRecognizeText('');
       if (!result.accountName && !result.bankName && !result.accountNumber) {
-        toast({ title: '未能识别出有效信息', description: '请手动填写各字段', variant: 'destructive' });
+        toast.error('未能识别出有效信息，请手动填写各字段');
       } else {
-        toast({ title: '识别成功', description: '请确认并点击 + 保存' });
+        toast.success('识别成功，请确认并点击 + 保存');
       }
     } catch (err: any) {
-      toast({ title: '识别失败', description: err.message || '请手动填写', variant: 'destructive' });
+      toast.error(err.message || '识别失败，请手动填写');
     } finally {
       setIsRecognizing(false);
     }
