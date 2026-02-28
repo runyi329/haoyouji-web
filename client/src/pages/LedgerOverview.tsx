@@ -17,6 +17,66 @@ function formatNumber(num: number): string {
   return num.toLocaleString("zh-CN");
 }
 
+// 功能更新列表（按时间倒序，最新在前）
+const FEATURE_UPDATES = [
+  {
+    id: 1,
+    icon: "✏️",
+    title: "支持修改记录查询",
+    desc: "账目详情页可查看完整修改历史，记录每次变更内容",
+    date: "2026-02",
+  },
+  {
+    id: 2,
+    icon: "💱",
+    title: "支持多币种记账",
+    desc: "新增 USD、USDT 等外币币种，支持跨币种账目管理",
+    date: "2026-02",
+  },
+  {
+    id: 3,
+    icon: "📸",
+    title: "图片账单功能",
+    desc: "账目支持上传图片凭证，方便留存报销单据",
+    date: "2026-01",
+  },
+  {
+    id: 4,
+    icon: "📊",
+    title: "数据报表与日历视图",
+    desc: "支持按月/年统计收支报表，日历视图直观查看每日账目",
+    date: "2026-01",
+  },
+  {
+    id: 5,
+    icon: "🔄",
+    title: "报销流程管理",
+    desc: "支持申请报销、审批通过/拒绝完整流程，附凭证上传",
+    date: "2026-01",
+  },
+  {
+    id: 6,
+    icon: "🗂️",
+    title: "三级分类体系",
+    desc: "支持自定义三级分类，账目归类更精细灵活",
+    date: "2025-12",
+  },
+  {
+    id: 7,
+    icon: "💾",
+    title: "定期备份功能",
+    desc: "账本数据定期自动备份，保障数据安全",
+    date: "2025-12",
+  },
+  {
+    id: 8,
+    icon: "👥",
+    title: "多人协作共享",
+    desc: "支持邀请成员加入账本，多人实时协作记账",
+    date: "2025-11",
+  },
+];
+
 export default function LedgerOverview() {
   // 获取账本统计数据
   const { data: ledgerStats, isLoading } = trpc.ledger.stats.useQuery();
@@ -34,6 +94,15 @@ export default function LedgerOverview() {
       title: "共享账本试用版上线"
     },
   ];
+
+  // 每条活动行高约48px，3条 = 144px
+  const ACTIVITY_ROW_HEIGHT = 48;
+  const VISIBLE_ROWS = 3;
+  const activityBoxHeight = ACTIVITY_ROW_HEIGHT * VISIBLE_ROWS;
+
+  // 功能更新行高约56px，3条 = 168px
+  const FEATURE_ROW_HEIGHT = 56;
+  const featureBoxHeight = FEATURE_ROW_HEIGHT * VISIBLE_ROWS;
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
@@ -109,7 +178,7 @@ export default function LedgerOverview() {
         </Card>
       </div>
 
-      {/* 滚动排行榜 - 最近活动动态 */}
+      {/* 滚动排行榜 - 最近活动动态（3条高度） */}
       {recentActivities && recentActivities.length > 0 && (
         <div className="px-4 mt-3">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
@@ -121,24 +190,24 @@ export default function LedgerOverview() {
               </div>
               <span className="text-xs text-gray-400">全站用户活动</span>
             </div>
-            {/* 滚动区域 */}
-            <div className="relative overflow-hidden" style={{ height: '240px' }}>
+            {/* 滚动区域 - 固定3条高度 */}
+            <div className="relative overflow-hidden" style={{ height: `${activityBoxHeight}px` }}>
               <style>{`
-                @keyframes scrollUp {
+                @keyframes scrollUpActivity {
                   0% { transform: translateY(0); }
                   100% { transform: translateY(-50%); }
                 }
-                .scroll-container {
-                  animation: scrollUp ${Math.max(20, (recentActivities?.length || 10) * 1.5)}s linear infinite;
+                .scroll-activity {
+                  animation: scrollUpActivity ${Math.max(15, (recentActivities?.length || 10) * 2)}s linear infinite;
                 }
-                .scroll-container:hover {
+                .scroll-activity:hover {
                   animation-play-state: paused;
                 }
               `}</style>
-              <div className="scroll-container">
+              <div className="scroll-activity">
                 {/* 复制两份实现无缝滚动 */}
                 {[...recentActivities, ...recentActivities].map((activity, index) => {
-                  const time = new Date(activity.createdAt);
+                  const time = new Date(activity.createdAt.replace(' ', 'T') + '+08:00');
                   const now = new Date();
                   const diffMs = now.getTime() - time.getTime();
                   const diffMin = Math.floor(diffMs / 60000);
@@ -155,8 +224,9 @@ export default function LedgerOverview() {
                   
                   return (
                     <div
-                      key={`${activity.type}-${index}`}
-                      className="flex items-center px-4 py-2.5 border-b border-gray-50 last:border-b-0"
+                      key={`activity-${index}`}
+                      className="flex items-center px-4 border-b border-gray-50 last:border-b-0"
+                      style={{ height: `${ACTIVITY_ROW_HEIGHT}px` }}
                     >
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
                         isLedger ? 'bg-[#FFF5F5] text-[#D32F2F]' : 'bg-[#FFF8E1] text-[#F59E0B]'
@@ -186,6 +256,54 @@ export default function LedgerOverview() {
           </div>
         </div>
       )}
+
+      {/* 功能更新滚动展示区（3条高度） */}
+      <div className="px-4 mt-3">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {/* 标题栏 */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+            <div className="flex items-center space-x-2">
+              <span className="w-1.5 h-4 bg-[#F59E0B] rounded-full"></span>
+              <span className="text-sm font-semibold text-[#333]">功能更新</span>
+            </div>
+            <span className="text-xs text-gray-400">持续迭代升级</span>
+          </div>
+          {/* 滚动区域 - 固定3条高度 */}
+          <div className="relative overflow-hidden" style={{ height: `${featureBoxHeight}px` }}>
+            <style>{`
+              @keyframes scrollUpFeature {
+                0% { transform: translateY(0); }
+                100% { transform: translateY(-50%); }
+              }
+              .scroll-feature {
+                animation: scrollUpFeature ${FEATURE_UPDATES.length * 3}s linear infinite;
+              }
+              .scroll-feature:hover {
+                animation-play-state: paused;
+              }
+            `}</style>
+            <div className="scroll-feature">
+              {/* 复制两份实现无缝滚动 */}
+              {[...FEATURE_UPDATES, ...FEATURE_UPDATES].map((feature, index) => (
+                <div
+                  key={`feature-${index}`}
+                  className="flex items-center px-4 border-b border-gray-50 last:border-b-0"
+                  style={{ height: `${FEATURE_ROW_HEIGHT}px` }}
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#FFF8E1] flex items-center justify-center flex-shrink-0 text-base">
+                    {feature.icon}
+                  </div>
+                  <div className="ml-3 flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[#333] truncate">{feature.title}</p>
+                    <p className="text-xs text-gray-400 truncate">{feature.desc}</p>
+                  </div>
+                  <span className="text-xs text-gray-300 flex-shrink-0 ml-2">{feature.date}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Bottom Navigation */}
       <BottomNav />
