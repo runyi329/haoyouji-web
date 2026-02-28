@@ -460,7 +460,7 @@ export function MultiAddressFieldV2({
           type="button"
           onClick={handleRecognize}
           disabled={!recognizeText.trim()}
-          className="absolute bottom-2 right-2 px-2 py-1 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           粘贴识别
         </button>
@@ -612,7 +612,7 @@ export function MultiBankFieldV2({
           type="button"
           onClick={handleRecognize}
           disabled={!recognizeText.trim()}
-          className="absolute bottom-2 right-2 px-2 py-1 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-[#E53935] text-white text-xs font-medium rounded-full shadow-sm hover:bg-[#C62828] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           粘贴识别
         </button>
