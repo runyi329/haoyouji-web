@@ -165,6 +165,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         .select({
           userId: ledgerMembers.userId,
           role: ledgerMembers.role,
+          memberType: ledgerMembers.memberType,
           username: users.username,
           avatar: users.avatar,
         })
@@ -1052,6 +1053,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
       canDelete: ledgerMembers.canDelete,
       canInvite: ledgerMembers.canInvite,
       createdAt: ledgerMembers.createdAt,
+      memberType: ledgerMembers.memberType,
       username: users.username,
       avatar: users.avatar,
     })

@@ -663,14 +663,29 @@ export default function Ledger() {
                           {(ledger.members || []).slice(0, 3).map((member, index) => (
                             <div 
                               key={member.userId} 
-                              className="ring-1 ring-white rounded-full overflow-hidden" 
+                              className="ring-1 ring-white rounded-full relative" 
                               style={{ zIndex: 3 - index, width: '20px', height: '20px' }}
                             >
                               <img
                                 src={member.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${member.username}`}
-                                alt={member.nickname || member.username}
-                                className="w-full h-full object-cover"
+                                alt={member.nickname || member.username || ''}
+                                className="w-full h-full object-cover rounded-full"
                               />
+                              {(member as any).memberType === 'ai' && (
+                                <div 
+                                  className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-white font-bold border border-white"
+                                  style={{ 
+                                    background: 'linear-gradient(135deg, #D32F2F, #FF5252)', 
+                                    fontSize: '5px', 
+                                    padding: '0px 2px', 
+                                    borderRadius: '4px',
+                                    lineHeight: '8px',
+                                    letterSpacing: '0.5px'
+                                  }}
+                                >
+                                  AI
+                                </div>
+                              )}
                             </div>
                           ))}
                           {(ledger.memberCount || 0) > 3 && (
