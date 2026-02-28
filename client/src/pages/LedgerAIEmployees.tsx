@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
+import { HelpCircle } from "lucide-react";
 import {
   ArrowLeft, Bot, Plus, Trash2, Play, Pause, Square,
   MessageSquare, Clock, CheckCircle, AlertCircle, Loader2,
@@ -73,6 +74,7 @@ const LedgerAIEmployees = () => {
   const [aiParsing, setAiParsing] = useState(false);
   const [parsedTask, setParsedTask] = useState<any>(null);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 获取当前用户信息
@@ -208,23 +210,7 @@ const LedgerAIEmployees = () => {
         </div>
       </div>
 
-      {/* 功能介绍卡片 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl p-5 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#D32F2F] to-[#FF5252] flex items-center justify-center flex-shrink-0">
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex-1">
-            <h2 className="text-base font-semibold text-gray-900 mb-1">AI 分身</h2>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              为您的账本创建AI分身，它可以作为记账成员参与收支记录，
-              更可以接受自然语言指令，自动执行定时记账、周期扣款等任务。
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 我的AI分身 */}
+      {/* 我的AI分身（合并容器） */}
       <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -233,6 +219,13 @@ const LedgerAIEmployees = () => {
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
               {aiEmployees.length}
             </span>
+            {/* 问号按钮 */}
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="ml-0.5 text-gray-400 hover:text-[#D32F2F] transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
           </div>
           <button
             onClick={() => {
@@ -246,6 +239,23 @@ const LedgerAIEmployees = () => {
             添加分身
           </button>
         </div>
+
+        {/* 问号展开说明 */}
+        {showHelp && (
+          <div className="px-5 py-4 bg-red-50/40 border-b border-red-100">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D32F2F] to-[#FF5252] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  为您的账本创建 AI 分身，它可以作为记账成员参与收支记录，更可以接受自然语言指令，自动执行定时记账、周期扣款等任务。
+                </p>
+              </div>
+              <button onClick={() => setShowHelp(false)} className="text-gray-400 text-xs mt-0.5">×</button>
+            </div>
+          </div>
+        )}
 
         {/* 添加表单 */}
         {showAddForm && (
