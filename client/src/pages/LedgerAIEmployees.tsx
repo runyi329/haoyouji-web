@@ -3,19 +3,27 @@ import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Bot, Play, Pause, Square,
   MessageSquare, Clock, CheckCircle, AlertCircle, Loader2,
-  Sparkles, Send, HelpCircle
+  Sparkles, Send, HelpCircle, XCircle, ChevronDown, ChevronUp
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 // 任务状态映射
-const TASK_STATUS: Record<string, { label: string; color: string; Icon: any }> = {
-  draft:    { label: "草稿",   color: "#9E9E9E", Icon: AlertCircle },
-  pending:  { label: "待确认", color: "#F57C00", Icon: Clock },
-  running:  { label: "运行中", color: "#388E3C", Icon: Play },
-  paused:   { label: "已暂停", color: "#F57C00", Icon: Pause },
-  stopped:  { label: "已停止", color: "#9E9E9E", Icon: Square },
-  completed:{ label: "已完成", color: "#1976D2", Icon: CheckCircle },
+const TASK_STATUS: Record<string, { label: string; color: string; bgColor: string; Icon: any }> = {
+  draft:     { label: "草稿",   color: "#9E9E9E", bgColor: "#F5F5F5", Icon: AlertCircle },
+  pending:   { label: "待确认", color: "#F57C00", bgColor: "#FFF3E0", Icon: Clock },
+  running:   { label: "运行中", color: "#388E3C", bgColor: "#E8F5E9", Icon: Play },
+  paused:    { label: "已暂停", color: "#F57C00", bgColor: "#FFF3E0", Icon: Pause },
+  stopped:   { label: "已停止", color: "#9E9E9E", bgColor: "#F5F5F5", Icon: Square },
+  completed: { label: "已完成", color: "#1976D2", bgColor: "#E3F2FD", Icon: CheckCircle },
+};
+
+// 频率标签
+const SCHEDULE_LABELS: Record<string, string> = {
+  once: "一次性",
+  daily: "每日",
+  weekly: "每周",
+  monthly: "每月",
 };
 
 // AI头像组件（用户真实头像 + 底部AI标识）
@@ -39,7 +47,6 @@ function AIAvatar({ avatarUrl, name, size = 48 }: { avatarUrl?: string | null; n
           {initial}
         </div>
       )}
-      {/* AI标识 - 底部居中 */}
       <div
         className="absolute left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#D32F2F] to-[#FF5252] text-white rounded-full flex items-center justify-center font-bold shadow"
         style={{
@@ -86,9 +93,9 @@ const LedgerAIEmployees = () => {
   // 状态
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [taskInput, setTaskInput] = useState("");
-  const [aiParsing, setAiParsing] = useState(false);
   const [parsedTask, setParsedTask] = useState<any>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 获取当前用户信息
@@ -99,7 +106,12 @@ const LedgerAIEmployees = () => {
     ledgerId,
   });
 
-  // 当前用户是否已开启AI分身（用宿松比较防止number/string类型不匹配）
+  // 获取AI分身任务列表
+  const { data: tasks = [], refetch: refetchTasks } = trpc.ledger.getAIEmployeeTasks.useQuery({
+    ledgerId,
+  });
+
+  // 当前用户是否已开启AI分身
   // eslint-disable-next-line eqeqeq
   const myAI = aiEmployees.find((e: any) => e.userId == currentUser?.id);
   const isEnabled = !!myAI;
@@ -119,73 +131,69 @@ const LedgerAIEmployees = () => {
     },
   });
 
+  // 解析任务（调用DeepSeek API）
+  const parseMutation = trpc.ledger.parseAIEmployeeTask.useMutation({
+    onSuccess: (data: any) => {
+      if (data.success && data.parsed) {
+        setParsedTask(data.parsed);
+        toast.success("任务方案已生成");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "任务解析失败，请重试");
+    },
+  });
+
+  // 确认并创建任务
+  const createTaskMutation = trpc.ledger.createAIEmployeeTask.useMutation({
+    onSuccess: () => {
+      toast.success("任务已创建并开始执行");
+      setParsedTask(null);
+      setTaskInput("");
+      setShowTaskForm(false);
+      refetchTasks();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "任务创建失败");
+    },
+  });
+
+  // 更新任务状态
+  const updateStatusMutation = trpc.ledger.updateAIEmployeeTaskStatus.useMutation({
+    onSuccess: () => {
+      toast.success("任务状态已更新");
+      refetchTasks();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "操作失败");
+    },
+  });
+
   const handleToggle = (enabled: boolean) => {
     toggleMutation.mutate({ ledgerId, enabled });
   };
 
-  // 模拟DeepSeek解析任务
+  // 调用DeepSeek解析任务
   const handleParseTask = async () => {
     if (!taskInput.trim()) {
       toast.error("请输入任务描述");
       return;
     }
-    setAiParsing(true);
     setParsedTask(null);
-
-    setTimeout(() => {
-      const input = taskInput.trim();
-      let parsed: any = {
-        summary: "",
-        actions: [],
-        schedule: "",
-        confirmed: false,
-      };
-
-      if (input.includes("每日") || input.includes("每天")) {
-        const amountMatch = input.match(/(\d+(?:\.\d+)?)/);
-        const amount = amountMatch ? amountMatch[1] : "100";
-        parsed.summary = `每日自动记账任务`;
-        parsed.schedule = "每天执行";
-        parsed.actions = [
-          { type: "add_transaction", desc: `自动添加一笔 ¥${amount} 的支出记录`, params: { amount, type: "expense" } }
-        ];
-        if (input.includes("扣除") || input.includes("扣款")) {
-          parsed.actions[0].desc = `自动扣除 ¥${amount}`;
-        }
-      } else if (input.includes("每周")) {
-        parsed.summary = `每周自动记账任务`;
-        parsed.schedule = "每周一执行";
-        const amountMatch = input.match(/(\d+(?:\.\d+)?)/);
-        const amount = amountMatch ? amountMatch[1] : "500";
-        parsed.actions = [
-          { type: "add_transaction", desc: `每周自动添加 ¥${amount} 的记录`, params: { amount } }
-        ];
-      } else if (input.includes("每月") || input.includes("月底") || input.includes("月初")) {
-        parsed.summary = `每月自动记账任务`;
-        parsed.schedule = "每月1日执行";
-        const amountMatch = input.match(/(\d+(?:\.\d+)?)/);
-        const amount = amountMatch ? amountMatch[1] : "3000";
-        parsed.actions = [
-          { type: "add_transaction", desc: `每月自动添加 ¥${amount} 的记录`, params: { amount } }
-        ];
-      } else {
-        parsed.summary = `自定义任务`;
-        parsed.schedule = "按需执行";
-        parsed.actions = [
-          { type: "custom", desc: input, params: {} }
-        ];
-      }
-
-      setParsedTask(parsed);
-      setAiParsing(false);
-    }, 2000);
+    parseMutation.mutate({
+      ledgerId,
+      taskDescription: taskInput.trim(),
+    });
   };
 
+  // 确认并创建任务
   const handleConfirmTask = () => {
-    toast.success("任务已启动，AI分身将按计划执行");
-    setParsedTask(null);
-    setTaskInput("");
-    setShowTaskForm(false);
+    if (!parsedTask) return;
+    createTaskMutation.mutate({
+      ledgerId,
+      taskDescription: taskInput.trim(),
+      parsedPlan: parsedTask,
+    });
   };
 
   const displayName = myAI?.nickname || myAI?.username || currentUser?.username || "AI分身";
@@ -209,7 +217,6 @@ const LedgerAIEmployees = () => {
 
       {/* 主开关卡片 */}
       <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
-        {/* 标题行 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#D32F2F]" />
@@ -228,7 +235,6 @@ const LedgerAIEmployees = () => {
           />
         </div>
 
-        {/* 帮助说明 */}
         {showHelp && (
           <div className="px-5 py-4 bg-red-50/40 border-b border-red-100">
             <div className="flex items-start gap-3">
@@ -238,7 +244,7 @@ const LedgerAIEmployees = () => {
               <div className="flex-1">
                 <p className="text-sm text-gray-600 leading-relaxed">
                   开启 AI 分身后，系统将以您的身份创建一个 AI 成员加入账本。
-                  AI 分身可接受自然语言指令，自动执行定时记账、周期扣款等任务。
+                  AI 分身可接受自然语言指令，由 DeepSeek 大模型驱动，自动执行记账任务。
                 </p>
               </div>
               <button onClick={() => setShowHelp(false)} className="text-gray-400 text-xs mt-0.5">×</button>
@@ -246,7 +252,6 @@ const LedgerAIEmployees = () => {
           </div>
         )}
 
-        {/* 开启状态：显示AI分身卡片 */}
         {isEnabled ? (
           <div className="px-5 py-4">
             <div className="flex items-center gap-4">
@@ -265,7 +270,6 @@ const LedgerAIEmployees = () => {
             </div>
           </div>
         ) : (
-          /* 关闭状态：空状态提示 */
           <div className="py-12 text-center">
             <Bot className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-400">AI 分身未开启</p>
@@ -296,7 +300,7 @@ const LedgerAIEmployees = () => {
 
           <div className="p-5">
             <p className="text-xs text-gray-500 mb-3">
-              用自然语言描述您希望 AI 分身执行的任务，DeepSeek 将为您解析并生成执行方案。
+              用自然语言描述您希望 AI 分身执行的记账任务，DeepSeek 将为您解析并生成执行方案。
             </p>
 
             {/* 示例提示 */}
@@ -305,6 +309,7 @@ const LedgerAIEmployees = () => {
                 "每日从账本扣除50元生活费",
                 "每周一记录500元工资收入",
                 "每月1日记录3000元房租支出",
+                "记一笔200元的餐饮支出",
               ].map((example) => (
                 <button
                   key={example}
@@ -328,10 +333,10 @@ const LedgerAIEmployees = () => {
               />
               <button
                 onClick={handleParseTask}
-                disabled={aiParsing || !taskInput.trim()}
+                disabled={parseMutation.isPending || !taskInput.trim()}
                 className="absolute right-2 bottom-2 p-2 bg-[#1976D2] text-white rounded-lg disabled:opacity-40 transition-colors"
               >
-                {aiParsing ? (
+                {parseMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
@@ -340,7 +345,7 @@ const LedgerAIEmployees = () => {
             </div>
 
             {/* AI解析中 */}
-            {aiParsing && (
+            {parseMutation.isPending && (
               <div className="mt-4 flex items-center gap-3 p-4 bg-blue-50 rounded-xl">
                 <Loader2 className="w-5 h-5 text-[#1976D2] animate-spin" />
                 <div>
@@ -351,7 +356,7 @@ const LedgerAIEmployees = () => {
             )}
 
             {/* 解析结果 */}
-            {parsedTask && !aiParsing && (
+            {parsedTask && !parseMutation.isPending && (
               <div className="mt-4 border border-green-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-green-50 border-b border-green-200">
                   <div className="flex items-center gap-2">
@@ -364,9 +369,17 @@ const LedgerAIEmployees = () => {
                     <p className="text-xs text-gray-400 mb-1">任务概要</p>
                     <p className="text-sm text-gray-900 font-medium">{parsedTask.summary}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">执行计划</p>
-                    <p className="text-sm text-gray-700">{parsedTask.schedule}</p>
+                  <div className="flex gap-4">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">执行频率</p>
+                      <span className="inline-block text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">
+                        {SCHEDULE_LABELS[parsedTask.schedule_type] || parsedTask.schedule_type}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">执行时间</p>
+                      <p className="text-sm text-gray-700">{parsedTask.schedule_detail}</p>
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-gray-400 mb-1">执行动作</p>
@@ -376,7 +389,15 @@ const LedgerAIEmployees = () => {
                           <div className="w-5 h-5 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
                             {i + 1}
                           </div>
-                          <p className="text-sm text-gray-700">{action.desc}</p>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-700">
+                              {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              分类：{action.category_name || '其他'}
+                              {action.description ? ` · ${action.description}` : ''}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -384,10 +405,15 @@ const LedgerAIEmployees = () => {
                   <div className="flex gap-3 pt-2">
                     <button
                       onClick={handleConfirmTask}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#388E3C] text-white text-sm font-medium rounded-xl"
+                      disabled={createTaskMutation.isPending}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#388E3C] text-white text-sm font-medium rounded-xl disabled:opacity-50"
                     >
-                      <Play className="w-4 h-4" />
-                      确认并开始工作
+                      {createTaskMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      {parsedTask.schedule_type === 'once' ? '确认并立即执行' : '确认并开始工作'}
                     </button>
                     <button
                       onClick={() => setParsedTask(null)}
@@ -409,13 +435,145 @@ const LedgerAIEmployees = () => {
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#F57C00]" />
             <h3 className="text-sm font-semibold text-gray-900">任务列表</h3>
+            {tasks.length > 0 && (
+              <span className="text-xs text-gray-400">({tasks.length})</span>
+            )}
           </div>
         </div>
-        <div className="py-12 text-center">
-          <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">暂无进行中的任务</p>
-          <p className="text-xs text-gray-300 mt-1">给 AI 分身布置任务后将在这里显示</p>
-        </div>
+
+        {tasks.length > 0 ? (
+          <div className="divide-y divide-gray-50">
+            {tasks.map((task: any) => {
+              const statusInfo = TASK_STATUS[task.status] || TASK_STATUS.draft;
+              const StatusIcon = statusInfo.Icon;
+              const isExpanded = expandedTaskId === task.id;
+              const plan = task.parsed_plan;
+
+              return (
+                <div key={task.id} className="px-5 py-4">
+                  {/* 任务头部 */}
+                  <div
+                    className="flex items-start gap-3 cursor-pointer"
+                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                      style={{ backgroundColor: statusInfo.bgColor }}
+                    >
+                      <StatusIcon className="w-4 h-4" style={{ color: statusInfo.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {plan?.summary || task.task_description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span
+                          className="inline-block text-xs px-1.5 py-0.5 rounded font-medium"
+                          style={{ backgroundColor: statusInfo.bgColor, color: statusInfo.color }}
+                        >
+                          {statusInfo.label}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {SCHEDULE_LABELS[task.schedule_type] || task.schedule_type}
+                        </span>
+                        {task.execution_count > 0 && (
+                          <span className="text-xs text-gray-400">
+                            · 已执行 {task.execution_count} 次
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />
+                    )}
+                  </div>
+
+                  {/* 展开详情 */}
+                  {isExpanded && (
+                    <div className="mt-3 ml-11 space-y-3">
+                      {/* 原始描述 */}
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-400 mb-1">原始描述</p>
+                        <p className="text-sm text-gray-700">{task.task_description}</p>
+                      </div>
+
+                      {/* 执行动作 */}
+                      {plan?.actions && (
+                        <div>
+                          <p className="text-xs text-gray-400 mb-1.5">执行动作</p>
+                          {plan.actions.map((action: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                              <div className="w-4 h-4 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-[10px]">
+                                {i + 1}
+                              </div>
+                              <span>
+                                {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
+                                {action.category_name ? ` · ${action.category_name}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 时间信息 */}
+                      <div className="flex gap-4 text-xs text-gray-400">
+                        <span>创建：{new Date(task.created_at).toLocaleString('zh-CN')}</span>
+                        {task.last_executed_at && (
+                          <span>上次执行：{new Date(task.last_executed_at).toLocaleString('zh-CN')}</span>
+                        )}
+                      </div>
+
+                      {/* 操作按钮 */}
+                      {(task.status === 'running' || task.status === 'paused') && (
+                        <div className="flex gap-2 pt-1">
+                          {task.status === 'running' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateStatusMutation.mutate({ taskId: task.id, status: 'paused' });
+                              }}
+                              className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg"
+                            >
+                              <Pause className="w-3 h-3" /> 暂停
+                            </button>
+                          )}
+                          {task.status === 'paused' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateStatusMutation.mutate({ taskId: task.id, status: 'running' });
+                              }}
+                              className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-lg"
+                            >
+                              <Play className="w-3 h-3" /> 继续
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateStatusMutation.mutate({ taskId: task.id, status: 'stopped' });
+                            }}
+                            className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg"
+                          >
+                            <Square className="w-3 h-3" /> 停止
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-12 text-center">
+            <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-400">暂无进行中的任务</p>
+            <p className="text-xs text-gray-300 mt-1">给 AI 分身布置任务后将在这里显示</p>
+          </div>
+        )}
       </div>
 
       {/* 底部说明 */}
