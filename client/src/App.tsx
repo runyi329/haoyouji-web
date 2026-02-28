@@ -106,6 +106,7 @@ const EditNickname = lazy(() => import("./pages/EditNickname"));
 const LedgerInvite = lazy(() => import("./pages/LedgerInvite"));
 const JoinLedger = lazy(() => import("./pages/JoinLedger"));
 const TransactionDetail = lazy(() => import("./pages/TransactionDetail"));
+const RecordLogs = lazy(() => import("./pages/RecordLogs"));
 const LedgerFilter = lazy(() => import("./pages/LedgerFilter"));
 const LedgerPermissions = lazy(() => import("./pages/LedgerPermissions"));
 const LedgerApprovalSettings = lazy(() => import("./pages/LedgerApprovalSettings"));
@@ -260,6 +261,7 @@ function Router() {
         <Route path="/ledger/:id/features" component={LedgerFeatures} />
         <Route path="/ledger/:id/deleted-records" component={DeletedRecords} />
         <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
+        <Route path="/ledger/:ledgerId/transaction/:transactionId/logs" component={RecordLogs} />
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />

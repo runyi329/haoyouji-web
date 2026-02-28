@@ -227,6 +227,13 @@ export default function TransactionDetail() {
 
   // 获取tRPC utils用于缓存失效
   const utils = trpc.useUtils();
+
+  // 获取修改记录条数
+  const { data: logCountData } = trpc.ledger.getRecordLogCount.useQuery({
+    recordId: transactionId,
+    ledgerId,
+  });
+  const logCount = logCountData?.count ?? 0;
   
   // 删除mutation
   const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
@@ -478,6 +485,19 @@ export default function TransactionDetail() {
           label="入账状态" 
           value={getApprovalStatusText()}
           highlight={transaction.approvalStatus === 'pending'}
+        />
+        <DetailItem
+          label="修改记录"
+          rightContent={
+            <span
+              className="flex items-center gap-1 cursor-pointer"
+              style={{ color: themeColors.primary }}
+              onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${transactionId}/logs`)}
+            >
+              <span className="text-sm">{logCount > 0 ? `${logCount}条记录` : '暂无记录'}</span>
+              <ChevronRight size={14} />
+            </span>
+          }
         />
       </div>
 

@@ -7076,6 +7076,25 @@ export const appRouter = router({
         return await dbLedger.purgeExpiredDeletedRecords();
       }),
 
+    // 获取账目修改记录日志
+    getRecordLogs: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbLedger.getRecordLogs(input.recordId, input.ledgerId, ctx.user.id);
+      }),
+    // 获取账目修改记录条数
+    getRecordLogCount: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const count = await dbLedger.getRecordLogCount(input.recordId, input.ledgerId, ctx.user.id);
+        return { count };
+      }),
     // 更新记账记录
     updateTransaction: protectedProcedure
       .input(z.object({
