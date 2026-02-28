@@ -60,6 +60,23 @@ async function ensureAIEmployeeTables() {
       COMMENT='AI分身任务执行日志'
     `);
 
+    // 修复旧表：如果schedule_type是ENUM类型，改为VARCHAR(30)
+    try {
+      const [cols] = await conn.execute(
+        `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_employee_tasks' AND COLUMN_NAME = 'schedule_type'`
+      ) as any;
+      const colType: string = cols?.[0]?.COLUMN_TYPE || '';
+      if (colType.toLowerCase().startsWith('enum')) {
+        await conn.execute(
+          `ALTER TABLE ai_employee_tasks MODIFY COLUMN schedule_type VARCHAR(30) DEFAULT 'once' COMMENT '执行频率(once/every_minute/every_5_minutes/every_10_minutes/every_30_minutes/every_hour/daily/weekly/monthly)'`
+        );
+        console.log('[AI Employee] 已将schedule_type从ENUM改为VARCHAR(30)');
+      }
+    } catch (alterErr: any) {
+      console.error('[AI Employee] ALTER TABLE schedule_type失败:', alterErr.message);
+    }
+
     console.log('[AI Employee] 任务表迁移完成');
   } catch (e: any) {
     // 表已存在时忽略
