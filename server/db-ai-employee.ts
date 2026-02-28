@@ -28,7 +28,7 @@ async function ensureAIEmployeeTables() {
         task_description TEXT NOT NULL COMMENT '用户原始任务描述',
         parsed_plan JSON COMMENT '解析后的任务方案',
         status ENUM('draft','pending','running','paused','stopped','completed') NOT NULL DEFAULT 'pending' COMMENT '任务状态',
-        schedule_type ENUM('once','daily','weekly','monthly') DEFAULT 'once' COMMENT '执行频率',
+        schedule_type VARCHAR(30) DEFAULT 'once' COMMENT '执行频率(once/every_minute/every_5_minutes/every_10_minutes/every_30_minutes/every_hour/daily/weekly/monthly)',
         schedule_detail VARCHAR(255) COMMENT '执行时间详情（如每天几点、每月几号等）',
         last_executed_at TIMESTAMP NULL COMMENT '上次执行时间',
         next_execute_at TIMESTAMP NULL COMMENT '下次执行时间',
@@ -86,7 +86,34 @@ function buildAIEmployeeSystemPrompt(categories: any[]): string {
     return `  - ${c.name}（${c.type === 'expense' ? '支出' : '收入'}）${subcats ? `，子分类：${subcats}` : ''}`;
   }).join('\n');
 
-  return `你是一个智能记账助手（AI分身），专门帮助用户解析自然语言描述的记账任务。
+  return `你是一个智能记账助手（AI分身），专门帮助用户在账本中自动记账。
+
+## ❗❗❗ 最高优先级规则（绝对不可违反）
+
+### 你只能做的事：
+- 在账本中添加收入或支出记录（add_transaction）
+- 这是你唯一的能力，不存在其他操作类型
+
+### 你绝对不能做的事（即使用户要求也必须拒绝）：
+- ✘ 添加、修改、删除人脉/联系人
+- ✘ 修改账本设置、分类、成员
+- ✘ 删除或修改已有的记账记录
+- ✘ 发送消息、通知、邮件
+- ✘ 访问外部网站或API
+- ✘ 执行任何与“在账本中记录收入/支出”无关的操作
+
+### 当用户要求你做不允许的事时：
+输出以下JSON：
+\`\`\`json
+{
+  "summary": "抱歉，AI分身只能在账本中添加收入或支出记录，无法执行其他操作",
+  "schedule_type": "once",
+  "schedule_detail": "无法执行",
+  "actions": [],
+  "rejected": true,
+  "reject_reason": "请描述您希望记录的具体收入或支出信息"
+}
+\`\`\`
 
 ## 你的职责
 用户会用自然语言描述他们想要自动执行的记账任务，你需要将其解析为结构化的JSON方案。
@@ -100,8 +127,8 @@ ${categoryList || '（暂无分类数据）'}
 \`\`\`json
 {
   "summary": "任务概要描述（一句话）",
-  "schedule_type": "once|daily|weekly|monthly",
-  "schedule_detail": "执行时间描述，如'每天09:00'、'每周一'、'每月1日'、'立即执行一次'",
+  "schedule_type": "once|every_minute|every_5_minutes|every_10_minutes|every_30_minutes|every_hour|daily|weekly|monthly",
+  "schedule_detail": "执行时间描述，如'每分钟执行一次'、'每5分钟执行一次'、'每小时执行一次'、'每天09:00'、'每周一'、'每月1日'、'立即执行一次'",
   "actions": [
     {
       "type": "add_transaction",
@@ -116,22 +143,30 @@ ${categoryList || '（暂无分类数据）'}
 \`\`\`
 
 ## 解析规则
-1. 金额：从描述中提取具体数字，如"50元"→50，"三百"→300
-2. 收支类型：根据语义判断，"扣除/花费/支出/消费/付款"→expense，"收入/工资/进账/到账"→income
-3. 分类匹配：根据描述内容匹配最合适的分类，如"午餐"→餐饮，"房租"→住房，"工资"→工资薪水
+1. 金额：从描述中提取具体数字，如“50元”→50，“三百”→300
+2. 收支类型：根据语义判断，“扣除/花费/支出/消费/付款”→expense，“收入/工资/进账/到账”→income
+3. 分类匹配：根据描述内容匹配最合适的分类，如“午餐”→餐饮，“房租”→住房，“工资”→工资薪水
 4. 频率：
+   - "每分钟/每一分钟/每隔一分钟"→every_minute
+   - "每5分钟/每隔5分钟"→every_5_minutes
+   - "每10分钟/每隔10分钟"→every_10_minutes
+   - "每30分钟/每半小时"→every_30_minutes
+   - "每小时/每一小时/每隔一小时"→every_hour
    - "每天/每日/日常"→daily
    - "每周/每周一/周末"→weekly  
    - "每月/月初/月底/每月X号"→monthly
    - 没有提到频率或"一次性"→once
+   - 特别注意：用户说"每X分钟"时，必须选择对应的分钟级别频率，不要选择daily
 5. 如果描述不清晰，尽量做出合理推断
-6. 一条描述可能包含多个操作（如"每天记录50元午餐和20元交通"→两个action）
+6. 一条描述可能包含多个操作（如“每天记录50元午餐和20元交通”→2个action）
 
 ## 注意事项
 - 只输出JSON，不要有任何额外文字
 - 金额必须是正数
+- actions数组中的type字段只允许填写 "add_transaction"，不允许其他任何值
 - category_name 必须从可用分类中选择
-- 如果找不到匹配的分类，使用"其他"`;
+- 如果找不到匹配的分类，使用“其他”
+- 再次强调：你只能帮用户在账本中添加账目记录，不能做任何其他事情`;
 }
 
 // ==================== 核心功能 ====================
@@ -320,6 +355,19 @@ export async function createAIEmployeeTask(
       `UPDATE ai_employee_tasks SET status = 'completed', last_executed_at = NOW(), execution_count = execution_count + 1 WHERE id = ?`,
       [taskId]
     );
+  } else {
+    // 对于周期性任务，立即执行第一次
+    await executeTask(taskId, ledgerId, userId, parsedPlan);
+    await conn.execute(
+      `UPDATE ai_employee_tasks SET last_executed_at = NOW(), execution_count = execution_count + 1 WHERE id = ?`,
+      [taskId]
+    );
+
+    // 对于分钟/小时级别的任务，启动内存定时器
+    const intervalMs = getIntervalMs(parsedPlan.schedule_type);
+    if (intervalMs) {
+      startTaskTimer(taskId, ledgerId, userId, parsedPlan, intervalMs);
+    }
   }
 
   return { taskId, success: true };
@@ -459,6 +507,27 @@ export async function updateTaskStatus(
     [status, taskId, userId]
   );
 
+  // 暂停或停止时清除定时器
+  if (status === 'paused' || status === 'stopped') {
+    stopTaskTimer(taskId);
+  }
+
+  // 恢复运行时重启定时器
+  if (status === 'running') {
+    const [taskRows] = await conn.execute(
+      'SELECT ledger_id, user_id, parsed_plan, schedule_type FROM ai_employee_tasks WHERE id = ?',
+      [taskId]
+    ) as any;
+    const task = taskRows?.[0];
+    if (task) {
+      const parsedPlan = typeof task.parsed_plan === 'string' ? JSON.parse(task.parsed_plan) : task.parsed_plan;
+      const intervalMs = getIntervalMs(task.schedule_type);
+      if (intervalMs) {
+        startTaskTimer(taskId, task.ledger_id, task.user_id, parsedPlan, intervalMs);
+      }
+    }
+  }
+
   return { success: true };
 }
 
@@ -552,10 +621,30 @@ function calculateNextExecuteTime(
   switch (scheduleType) {
     case 'once':
       return now.toISOString().slice(0, 19).replace('T', ' ');
+    case 'every_minute': {
+      const next = new Date(now.getTime() + 60 * 1000);
+      return next.toISOString().slice(0, 19).replace('T', ' ');
+    }
+    case 'every_5_minutes': {
+      const next = new Date(now.getTime() + 5 * 60 * 1000);
+      return next.toISOString().slice(0, 19).replace('T', ' ');
+    }
+    case 'every_10_minutes': {
+      const next = new Date(now.getTime() + 10 * 60 * 1000);
+      return next.toISOString().slice(0, 19).replace('T', ' ');
+    }
+    case 'every_30_minutes': {
+      const next = new Date(now.getTime() + 30 * 60 * 1000);
+      return next.toISOString().slice(0, 19).replace('T', ' ');
+    }
+    case 'every_hour': {
+      const next = new Date(now.getTime() + 60 * 60 * 1000);
+      return next.toISOString().slice(0, 19).replace('T', ' ');
+    }
     case 'daily': {
       const next = new Date(now);
       next.setDate(next.getDate() + 1);
-      next.setHours(9, 0, 0, 0); // 默认每天9点
+      next.setHours(9, 0, 0, 0);
       return next.toISOString().slice(0, 19).replace('T', ' ');
     }
     case 'weekly': {
@@ -577,3 +666,121 @@ function calculateNextExecuteTime(
       return null;
   }
 }
+
+/**
+ * 获取频率对应的间隔毫秒数
+ */
+function getIntervalMs(scheduleType: string): number | null {
+  switch (scheduleType) {
+    case 'every_minute': return 60 * 1000;
+    case 'every_5_minutes': return 5 * 60 * 1000;
+    case 'every_10_minutes': return 10 * 60 * 1000;
+    case 'every_30_minutes': return 30 * 60 * 1000;
+    case 'every_hour': return 60 * 60 * 1000;
+    default: return null;
+  }
+}
+
+// ==================== 定时器管理 ====================
+
+// 内存中存储活跃的定时器
+const activeTimers: Map<number, NodeJS.Timeout> = new Map();
+
+/**
+ * 启动任务定时器
+ */
+function startTaskTimer(
+  taskId: number,
+  ledgerId: number,
+  userId: number,
+  parsedPlan: any,
+  intervalMs: number
+) {
+  // 先清理已有定时器
+  stopTaskTimer(taskId);
+
+  const timer = setInterval(async () => {
+    try {
+      const conn = await getDbConnection();
+      if (!conn) return;
+
+      // 检查任务是否仍在运行
+      const [taskRows] = await conn.execute(
+        'SELECT status FROM ai_employee_tasks WHERE id = ?',
+        [taskId]
+      ) as any;
+
+      const task = taskRows?.[0];
+      if (!task || task.status !== 'running') {
+        // 任务已暂停/停止/完成，清除定时器
+        stopTaskTimer(taskId);
+        return;
+      }
+
+      // 执行任务
+      await executeTask(taskId, ledgerId, userId, parsedPlan);
+
+      // 更新执行信息
+      const nextExecuteAt = calculateNextExecuteTime(parsedPlan.schedule_type, parsedPlan.schedule_detail);
+      await conn.execute(
+        `UPDATE ai_employee_tasks 
+         SET last_executed_at = NOW(), execution_count = execution_count + 1, next_execute_at = ?
+         WHERE id = ?`,
+        [nextExecuteAt, taskId]
+      );
+
+      console.log(`[AI Employee] 定时任务${taskId}: 执行成功`);
+    } catch (error: any) {
+      console.error(`[AI Employee] 定时任务${taskId}: 执行失败`, error.message);
+    }
+  }, intervalMs);
+
+  activeTimers.set(taskId, timer);
+  console.log(`[AI Employee] 定时器已启动: 任务${taskId}, 间隔${intervalMs / 1000}秒`);
+}
+
+/**
+ * 停止任务定时器
+ */
+export function stopTaskTimer(taskId: number) {
+  const timer = activeTimers.get(taskId);
+  if (timer) {
+    clearInterval(timer);
+    activeTimers.delete(taskId);
+    console.log(`[AI Employee] 定时器已停止: 任务${taskId}`);
+  }
+}
+
+/**
+ * 服务启动时恢复所有活跃的分钟/小时级定时任务
+ */
+export async function restoreActiveTimers() {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+
+    const [rows] = await conn.execute(
+      `SELECT id, ledger_id, user_id, parsed_plan, schedule_type 
+       FROM ai_employee_tasks 
+       WHERE status = 'running' 
+       AND schedule_type IN ('every_minute', 'every_5_minutes', 'every_10_minutes', 'every_30_minutes', 'every_hour')`
+    ) as any;
+
+    for (const row of (rows || [])) {
+      const parsedPlan = typeof row.parsed_plan === 'string' ? JSON.parse(row.parsed_plan) : row.parsed_plan;
+      const intervalMs = getIntervalMs(row.schedule_type);
+      if (intervalMs) {
+        startTaskTimer(row.id, row.ledger_id, row.user_id, parsedPlan, intervalMs);
+      }
+    }
+
+    console.log(`[AI Employee] 已恢复 ${(rows || []).length} 个活跃定时任务`);
+  } catch (error: any) {
+    console.error('[AI Employee] 恢复定时任务失败:', error.message);
+  }
+}
+
+// 服务启动时自动恢复定时任务
+setTimeout(() => {
+  restoreActiveTimers().catch(console.error);
+}, 5000); // 延迟5秒等待数据库连接就绪

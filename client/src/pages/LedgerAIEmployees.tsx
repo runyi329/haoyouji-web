@@ -21,6 +21,11 @@ const TASK_STATUS: Record<string, { label: string; color: string; bgColor: strin
 // 频率标签
 const SCHEDULE_LABELS: Record<string, string> = {
   once: "一次性",
+  every_minute: "每分钟",
+  every_5_minutes: "每5分钟",
+  every_10_minutes: "每10分钟",
+  every_30_minutes: "每30分钟",
+  every_hour: "每小时",
   daily: "每日",
   weekly: "每周",
   monthly: "每月",
@@ -357,73 +362,107 @@ const LedgerAIEmployees = () => {
 
             {/* 解析结果 */}
             {parsedTask && !parseMutation.isPending && (
-              <div className="mt-4 border border-green-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-green-50 border-b border-green-200">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-sm font-medium text-green-800">任务方案已生成</span>
-                  </div>
-                </div>
-                <div className="p-4 space-y-3">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">任务概要</p>
-                    <p className="text-sm text-gray-900 font-medium">{parsedTask.summary}</p>
-                  </div>
-                  <div className="flex gap-4">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">执行频率</p>
-                      <span className="inline-block text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">
-                        {SCHEDULE_LABELS[parsedTask.schedule_type] || parsedTask.schedule_type}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1">执行时间</p>
-                      <p className="text-sm text-gray-700">{parsedTask.schedule_detail}</p>
+              parsedTask.rejected ? (
+                /* AI拒绝执行的任务 */
+                <div className="mt-4 border border-orange-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-orange-50 border-b border-orange-200">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-medium text-orange-800">无法执行该任务</span>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">执行动作</p>
-                    <div className="space-y-2">
-                      {parsedTask.actions.map((action: any, i: number) => (
-                        <div key={i} className="flex items-start gap-2 bg-gray-50 p-3 rounded-lg">
-                          <div className="w-5 h-5 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
-                            {i + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-gray-700">
-                              {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              分类：{action.category_name || '其他'}
-                              {action.description ? ` · ${action.description}` : ''}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      onClick={handleConfirmTask}
-                      disabled={createTaskMutation.isPending}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#388E3C] text-white text-sm font-medium rounded-xl disabled:opacity-50"
-                    >
-                      {createTaskMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Play className="w-4 h-4" />
-                      )}
-                      {parsedTask.schedule_type === 'once' ? '确认并立即执行' : '确认并开始工作'}
-                    </button>
+                  <div className="p-4 space-y-3">
+                    <p className="text-sm text-gray-700">{parsedTask.summary}</p>
+                    {parsedTask.reject_reason && (
+                      <div className="bg-orange-50 p-3 rounded-lg">
+                        <p className="text-xs text-orange-700">
+                          <span className="font-medium">提示：</span>{parsedTask.reject_reason}
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400">
+                      AI 分身只能在账本中添加收入或支出记录，无法执行其他操作。
+                    </p>
                     <button
                       onClick={() => setParsedTask(null)}
-                      className="px-4 py-2.5 text-sm text-gray-500 bg-gray-100 rounded-xl"
+                      className="w-full py-2.5 text-sm text-gray-500 bg-gray-100 rounded-xl"
                     >
-                      重新描述
+                      重新描述任务
                     </button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* 正常任务方案 */
+                <div className="mt-4 border border-green-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-green-50 border-b border-green-200">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-800">任务方案已生成</span>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1">任务概要</p>
+                      <p className="text-sm text-gray-900 font-medium">{parsedTask.summary}</p>
+                    </div>
+                    <div className="flex gap-4">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">执行频率</p>
+                        <span className="inline-block text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">
+                          {SCHEDULE_LABELS[parsedTask.schedule_type] || parsedTask.schedule_type}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">执行时间</p>
+                        <p className="text-sm text-gray-700">{parsedTask.schedule_detail}</p>
+                      </div>
+                    </div>
+                    {parsedTask.actions?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400 mb-1">执行动作</p>
+                        <div className="space-y-2">
+                          {parsedTask.actions.map((action: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 bg-gray-50 p-3 rounded-lg">
+                              <div className="w-5 h-5 rounded-full bg-[#1976D2] text-white flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                                {i + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm text-gray-700">
+                                  {action.transaction_type === 'income' ? '收入' : '支出'} ¥{action.amount}
+                                </p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  分类：{action.category_name || '其他'}
+                                  {action.description ? ` · ${action.description}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={handleConfirmTask}
+                        disabled={createTaskMutation.isPending}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#388E3C] text-white text-sm font-medium rounded-xl disabled:opacity-50"
+                      >
+                        {createTaskMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
+                        {parsedTask.schedule_type === 'once' ? '确认并立即执行' : '确认并开始工作'}
+                      </button>
+                      <button
+                        onClick={() => setParsedTask(null)}
+                        className="px-4 py-2.5 text-sm text-gray-500 bg-gray-100 rounded-xl"
+                      >
+                        重新描述
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
             )}
           </div>
         </div>
