@@ -401,7 +401,7 @@ export default function LedgerSettings() {
 
 
         <SettingItem 
-          label="AI雇员" 
+          label="AI 分身" 
           showIcon 
           hasHelp 
           onClick={() => setLocation(`/ledger/${ledgerId}/ai-employees`)}
