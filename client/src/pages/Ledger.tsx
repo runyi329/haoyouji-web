@@ -100,12 +100,12 @@ export default function Ledger() {
     const memberMap = new Map<string, { username: string; nickname?: string }>();
     ledgers?.forEach(ledger => {
       ledger.members?.forEach(m => {
-        if (!memberMap.has(m.username)) {
+        if (m.username && !memberMap.has(m.username)) {
           memberMap.set(m.username, { username: m.username, nickname: m.nickname });
         }
       });
     });
-    return Array.from(memberMap.values()).sort((a, b) => a.username.localeCompare(b.username));
+    return Array.from(memberMap.values()).sort((a, b) => (a.username || '').localeCompare(b.username || ''));
   }, [ledgers]);
 
   // 根据输入匹配成员（支持拼音首字母）
@@ -147,6 +147,7 @@ export default function Ledger() {
       const searchTerm = selectedMember.toLowerCase();
       result = result.filter(ledger => 
         ledger.members?.some(m => {
+          if (!m.username) return false;
           const username = m.username.toLowerCase();
           // 直接匹配
           if (username.includes(searchTerm)) return true;
