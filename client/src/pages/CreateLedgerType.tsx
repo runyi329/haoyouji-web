@@ -24,7 +24,7 @@ const ledgerTypes = [
     name: "装修账本",
     description: "各项目的预算情况，一目了然",
     icon: Hammer,
-    color: "bg-[#F5F5F5] text-[#1976D2]",
+    color: "bg-[#FFEBEE] text-[#D32F2F]",
   },
   {
     id: "business",
@@ -69,7 +69,7 @@ export default function CreateLedgerType() {
   return (
     <div className="min-h-screen bg-gray-50 pb-4">
       {/* 顶部导航栏 */}
-      <div className="bg-[#1976D2] text-white px-3 py-2.5 flex items-center">
+      <div className="text-white px-3 py-2.5 flex items-center" style={{ backgroundColor: 'var(--brand-red, #D32F2F)' }}>
         <button
           onClick={() => setLocation("/ledger")}
           className="p-1 -ml-1"
@@ -111,7 +111,7 @@ export default function CreateLedgerType() {
               {/* 选择圆圈 */}
               <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 ${
                 selectedType === type.id
-                  ? "border-[#1976D2] bg-[#1976D2]"
+                  ? "border-[#D32F2F] bg-[#D32F2F]"
                   : "border-gray-300"
               }`}>
                 {selectedType === type.id && (
