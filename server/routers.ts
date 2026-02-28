@@ -22,6 +22,7 @@ import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
+import * as dbAIEmployee from "./db-ai-employee";
 import { getDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
@@ -6968,6 +6969,74 @@ export const appRouter = router({
         return await dbLedger.removeAIEmployee(
           input.ledgerId,
           input.employeeId,
+          ctx.user.id
+        );
+      }),
+
+    // AI分身：解析任务（调用DeepSeek API）
+    parseAIEmployeeTask: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        taskDescription: z.string().min(1).max(500),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbAIEmployee.parseTaskWithAI(
+          input.ledgerId,
+          ctx.user.id,
+          input.taskDescription
+        );
+      }),
+
+    // AI分身：确认并创建任务
+    createAIEmployeeTask: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        taskDescription: z.string(),
+        parsedPlan: z.any(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbAIEmployee.createAIEmployeeTask(
+          input.ledgerId,
+          ctx.user.id,
+          input.taskDescription,
+          input.parsedPlan
+        );
+      }),
+
+    // AI分身：获取任务列表
+    getAIEmployeeTasks: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbAIEmployee.getAIEmployeeTasks(
+          input.ledgerId,
+          ctx.user.id
+        );
+      }),
+
+    // AI分身：更新任务状态
+    updateAIEmployeeTaskStatus: protectedProcedure
+      .input(z.object({
+        taskId: z.number(),
+        status: z.enum(['running', 'paused', 'stopped']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbAIEmployee.updateTaskStatus(
+          input.taskId,
+          ctx.user.id,
+          input.status
+        );
+      }),
+
+    // AI分身：获取任务执行日志
+    getAIEmployeeTaskLogs: protectedProcedure
+      .input(z.object({
+        taskId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbAIEmployee.getTaskLogs(
+          input.taskId,
           ctx.user.id
         );
       }),
