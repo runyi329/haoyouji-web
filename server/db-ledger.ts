@@ -1522,10 +1522,22 @@ export async function getAIEmployees(ledgerId: number, requestUserId: number) {
     throw new Error("您不是该账本的成员");
   }
   
-  // 获取所有AI雇员
+  // 获取所有AI分身，并join users表获取用户头像
   const aiEmployees = await db
-    .select()
+    .select({
+      id: ledgerMembers.id,
+      ledgerId: ledgerMembers.ledgerId,
+      userId: ledgerMembers.userId,
+      role: ledgerMembers.role,
+      nickname: ledgerMembers.nickname,
+      memberType: ledgerMembers.memberType,
+      avatarType: ledgerMembers.avatarType,
+      createdAt: ledgerMembers.createdAt,
+      avatarUrl: users.avatar,
+      username: users.username,
+    })
     .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
     .where(
       and(
         eq(ledgerMembers.ledgerId, ledgerId),
@@ -1593,6 +1605,10 @@ export async function addAIEmployee(
     permissionAdd: 'all',
     permissionEdit: 'own',
     permissionDelete: 'own',
+    permissionBackup: 'allow',
+    canEdit: 1,
+    canDelete: 0,
+    canInvite: 0,
   });
   
   return { success: true };
