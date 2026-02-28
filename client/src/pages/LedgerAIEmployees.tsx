@@ -8,12 +8,6 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-// AI分身默认头像颜色方案（专业线条风格）
-const AI_COLORS = [
-  "#D32F2F", "#1976D2", "#388E3C", "#F57C00",
-  "#7B1FA2", "#00796B", "#C2185B", "#455A64",
-];
-
 // 任务状态映射
 const TASK_STATUS: Record<string, { label: string; color: string; Icon: any }> = {
   draft:    { label: "草稿",   color: "#9E9E9E", Icon: AlertCircle },
@@ -24,20 +18,40 @@ const TASK_STATUS: Record<string, { label: string; color: string; Icon: any }> =
   completed:{ label: "已完成", color: "#1976D2", Icon: CheckCircle },
 };
 
-// AI头像组件（带AI标签）
-function AIAvatar({ name, color, size = 48 }: { name: string; color: string; size?: number }) {
+// AI头像组件（用户真实头像 + 底部AI标识）
+function AIAvatar({ avatarUrl, name, size = 48 }: { avatarUrl?: string | null; name: string; size?: number }) {
   const initial = name.replace(/^AI/, "").charAt(0) || "A";
+  const tagH = Math.max(14, size * 0.3);
+  const tagFont = Math.max(8, size * 0.2);
   return (
     <div className="relative inline-block" style={{ width: size, height: size }}>
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full rounded-full object-cover"
+        />
+      ) : (
+        <div
+          className="w-full h-full rounded-full flex items-center justify-center text-white font-bold bg-gray-400"
+          style={{ fontSize: size * 0.38 }}
+        >
+          {initial}
+        </div>
+      )}
+      {/* AI标识 - 底部居中 */}
       <div
-        className="w-full h-full rounded-full flex items-center justify-center text-white font-bold"
-        style={{ backgroundColor: color, fontSize: size * 0.38 }}
-      >
-        {initial}
-      </div>
-      <div
-        className="absolute -top-1 -left-1 bg-gradient-to-r from-[#D32F2F] to-[#FF5252] text-white rounded-md flex items-center justify-center font-bold shadow-sm"
-        style={{ fontSize: Math.max(8, size * 0.18), padding: "1px 3px", lineHeight: 1.2 }}
+        className="absolute left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#D32F2F] to-[#FF5252] text-white rounded-full flex items-center justify-center font-bold shadow"
+        style={{
+          bottom: -tagH / 4,
+          height: tagH,
+          minWidth: tagH * 1.6,
+          fontSize: tagFont,
+          padding: "0 4px",
+          lineHeight: 1,
+          letterSpacing: 0.5,
+          border: "2px solid white",
+        }}
       >
         AI
       </div>
@@ -102,10 +116,9 @@ const LedgerAIEmployees = () => {
   const handleAdd = () => {
     const userName = currentUser?.username || "用户";
     const aiName = newName.trim() || `AI${userName}`;
-    const colorIndex = aiEmployees.length % AI_COLORS.length;
     addAIEmployeeMutation.mutate({
       ledgerId,
-      avatarType: `color_${colorIndex}`,
+      avatarType: "user_avatar",
       nickname: aiName,
     });
   };
@@ -239,8 +252,8 @@ const LedgerAIEmployees = () => {
           <div className="px-5 py-4 bg-red-50/50 border-b border-gray-100">
             <div className="flex items-center gap-3">
               <AIAvatar
+                avatarUrl={currentUser?.avatar}
                 name={newName || "AI"}
-                color={AI_COLORS[aiEmployees.length % AI_COLORS.length]}
                 size={44}
               />
               <div className="flex-1">
@@ -282,13 +295,11 @@ const LedgerAIEmployees = () => {
         ) : (
           <div className="divide-y divide-gray-50">
             {aiEmployees.map((employee: any, index: number) => {
-              const colorIndex = index % AI_COLORS.length;
-              const color = AI_COLORS[colorIndex];
               const displayName = employee.nickname || "AI分身";
               return (
                 <div key={employee.id} className="flex items-center justify-between px-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <AIAvatar name={displayName} color={color} size={44} />
+                    <AIAvatar avatarUrl={currentUser?.avatar} name={displayName} size={44} />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{displayName}</p>
                       <p className="text-xs text-gray-400 mt-0.5">AI 分身成员</p>
