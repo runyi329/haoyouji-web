@@ -268,6 +268,7 @@ export default function SentiaBuy() {
   const currentIdx = stepOrder.indexOf(step);
 
   return (
+    <>
     <div style={{
       minHeight: "100vh",
       background: BNB.bg,
@@ -962,5 +963,6 @@ export default function SentiaBuy() {
         </div>
       </div>
     )}
+    </>
   );
 }
