@@ -114,9 +114,9 @@ function parseBankText(text: string): { accountName: string; bankName: string; a
 
   // ===== 策略0：优先使用标签提取（户名/账户名/开户行/账号等） =====
   // 标签值截止于：换行、下一个标签词
-  const labelAccountName = raw.match(/(?:户名|账户名|账户|收款人|姓名)[：:]\s*(.+?)(?=\s*(?:开户行|开户银行|行名|账号|卡号)[：:]|[\n，,；;]|$)/i);
-  const labelBankName = raw.match(/(?:开户行|开户银行|行名)[：:]\s*(.+?)(?=\s*(?:户名|账户名|账户|收款人|姓名|账号|卡号)[：:]|[\n，,；;]|$)/i);
-  const labelAccountNumber = raw.match(/(?:账号|卡号)[：:]\s*([\d\s]+?)(?=\s*(?:户名|账户名|账户|收款人|姓名|开户行|开户银行|行名)[：:]|[\n，,；;]|$)/i);
+  const labelAccountName = raw.match(/(?:户名|账户名|账户|收款人|姓名)[：:]?\s*(.+?)(?=\s*(?:开户行|开户银行|行名|账号|卡号)[：:]?\s*\d|[\n，,；;]|$)/i);
+  const labelBankName = raw.match(/(?:开户行|开户银行|行名)[：:]?\s*(.+?)(?=\s*(?:户名|账户名|账户|收款人|姓名|账号|卡号)[：:]|[\n，,；;]|$)/i);
+  const labelAccountNumber = raw.match(/(?:账号|卡号)[：:]?\s*([\d\s]{10,}?)(?=\s*(?:户名|账户名|账户|收款人|姓名|开户行|开户银行|行名)[：:]|[\n，,；;]|$)/i);
 
   if (labelAccountName || labelBankName || labelAccountNumber) {
     return {
@@ -532,7 +532,7 @@ export function MultiBankFieldV2({
     setNewAccountName(result.accountName);
     setNewBankName(result.bankName);
     setNewAccountNumber(result.accountNumber);
-    setRecognizeText('');
+    // 保留粘贴框内容，不清空
     if (!result.accountName && !result.bankName && !result.accountNumber) {
       toast.error('未能识别出有效信息，请手动填写');
     } else {
