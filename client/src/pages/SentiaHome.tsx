@@ -158,7 +158,7 @@ export default function SentiaHome() {
               { label: "发行总量", value: "10 亿", sub: "1,000,000,000 SNT" },
               { label: "所属赛道", value: "AI 产品", sub: "Artificial Intelligence" },
               { label: "上线交易所", value: "币安", sub: "Binance · 2025 Q2" },
-              { label: "合伙人价格", value: "$0.04", sub: "USDT / SNT" },
+              { label: "私募价格", value: "$0.04", sub: "USDT / SNT" },
               { label: "预期上线", value: "2025 年 6 月底", sub: "TGE · Binance" },
             ].map((item, i) => (
               <div key={i} style={{
@@ -168,7 +168,7 @@ export default function SentiaHome() {
               }}>
                 <span style={{ fontSize: 13, color: BNB.textSecondary }}>{item.label}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: item.label === "合伙人价格" ? BNB.yellow : BNB.text }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: item.label === "私募价格" ? BNB.yellow : BNB.text }}>
                     {item.value}
                   </div>
                   <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>{item.sub}</div>
@@ -367,13 +367,13 @@ export default function SentiaHome() {
         textAlign: "center",
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 6, letterSpacing: 0.5 }}>合伙人专属价格</div>
+          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 6, letterSpacing: 0.5 }}>私募价格</div>
           <div style={{
             fontSize: 52, fontWeight: 800,
             color: BNB.yellow,
             marginBottom: 4, letterSpacing: -1,
           }}>$0.04</div>
-          <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 28 }}>USDT / SNT · 限时合伙人价</div>
+          <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 28 }}>USDT / SNT · 私募阶段</div>
           <button
             onClick={() => navigate("/sentia/buy")}
             style={{
