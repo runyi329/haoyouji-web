@@ -194,7 +194,8 @@ export default function Profile() {
   const { data: featurePermissions } = trpc.auth.getMyFeaturePermissions.useQuery(undefined, {
     enabled: !!user,
     retry: 1,
-    staleTime: 30000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   // 保存功能顺序配置
