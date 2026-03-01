@@ -359,6 +359,149 @@ export default function SentiaHome() {
         </div>
       </section>
 
+      {/* ===== 应用场景滚动标签 ===== */}
+      <section style={{ padding: "40px 0 0", background: BNB.bg, overflow: "hidden" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", padding: "0 16px", marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase" }}>AI 能力场景</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, lineHeight: 1.3 }}>Sentia Agent 能做什么</div>
+        </div>
+        <div style={{ overflow: "hidden", marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 10, width: "max-content",
+            animation: "scrollLeft 28s linear infinite" }}>
+            {["共享人脉匹配", "智能名片管理", "关系图谱分析", "共享账本记账",
+              "节点共享奖励", "商机自动匹配", "社交信用评分", "链上身份认证",
+              "共享人脉匹配", "智能名片管理", "关系图谱分析", "共享账本记账",
+              "节点共享奖励", "商机自动匹配", "社交信用评分", "链上身份认证",
+            ].map((tag, i) => (
+              <span key={i} style={{
+                background: BNB.card, border: `1px solid ${BNB.divider}`,
+                borderRadius: 20, padding: "7px 18px",
+                fontSize: 13, color: BNB.textSecondary, whiteSpace: "nowrap", fontWeight: 500,
+              }}>{tag}</span>
+            ))}
+          </div>
+        </div>
+        <div style={{ overflow: "hidden", marginBottom: 40 }}>
+          <div style={{ display: "flex", gap: 10, width: "max-content",
+            animation: "scrollRight 32s linear infinite" }}>
+            {["DeFi 资产管理", "跨链划转", "DAO 治理投票", "AI 投资顾问",
+              "人脉价值量化", "隐私社交证明", "多链钱包聚合", "智能合约执行",
+              "DeFi 资产管理", "跨链划转", "DAO 治理投票", "AI 投资顾问",
+              "人脉价值量化", "隐私社交证明", "多链钱包聚合", "智能合约执行",
+            ].map((tag, i) => (
+              <span key={i} style={{
+                background: BNB.card, border: `1px solid ${BNB.yellowBorder}`,
+                borderRadius: 20, padding: "7px 18px",
+                fontSize: 13, color: BNB.yellow, whiteSpace: "nowrap", fontWeight: 500,
+              }}>{tag}</span>
+            ))}
+          </div>
+        </div>
+        <style>{`
+          @keyframes scrollLeft { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+          @keyframes scrollRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        `}</style>
+      </section>
+
+      {/* ===== 核心架构特性 4 宫格 ===== */}
+      <section style={{ padding: "40px 16px", background: BNB.bg }}>
+        <div style={{ maxWidth: 480, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>核心架构</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>为 AI 社交而生的底层协议</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              {
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                ),
+                title: "共享人脉图谱",
+                desc: "基于 ZKP 的链上社交关系网络，AI 自动匹配高价值商业连接，人脉价值通过 SNT 结算可量化。",
+              },
+              {
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                    <path d="M8 21h8M12 17v4M7 8h10M7 12h6"/>
+                  </svg>
+                ),
+                title: "共享账本系统",
+                desc: "去中心化多方共享记账协议，团队账本实时同步，所有记录上链存证，不可篡改。",
+              },
+              {
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                ),
+                title: "AI 代理执行层",
+                desc: "LLM 驱动的任务链引擎，Agent 自主完成人脉维护、账单催收、商机跟进等复杂工作流。",
+              },
+              {
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                  </svg>
+                ),
+                title: "节点共享奖励",
+                desc: "每个用户都是网络节点，共享人脉、贡献数据、推广生态均可获得 SNT 奖励，形成正向飞轮。",
+              },
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: BNB.card,
+                border: `1px solid ${BNB.divider}`,
+                borderRadius: 8, padding: "18px 16px",
+              }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: 6,
+                  background: BNB.yellowDim,
+                  border: `1px solid ${BNB.yellowBorder}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  marginBottom: 12,
+                }}>{item.icon}</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: BNB.text, marginBottom: 6 }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: BNB.textSecondary, lineHeight: 1.65 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== 生态数据统计 ===== */}
+      <section style={{
+        padding: "40px 16px",
+        background: "#131722",
+        borderTop: `1px solid ${BNB.divider}`,
+        borderBottom: `1px solid ${BNB.divider}`,
+      }}>
+        <div style={{ maxWidth: 480, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>生态数据</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>SNT 生态正在快速成长</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            {[
+              { label: "私募参与人数", value: "12,000+", sub: "来自 38 个国家和地区" },
+              { label: "SNT 已分配", value: "480M", sub: "占总供应量 48%" },
+              { label: "共享节点数量", value: "3,200+", sub: "活跃共享节点" },
+              { label: "目标上线时间", value: "2025 Q3", sub: "Binance 智能链" },
+            ].map((stat, i) => (
+              <div key={i} style={{
+                background: BNB.card,
+                border: `1px solid ${BNB.divider}`,
+                padding: "22px 18px",
+                borderRadius: i === 0 ? "8px 0 0 0" : i === 1 ? "0 8px 0 0" : i === 2 ? "0 0 0 8px" : "0 0 8px 0",
+              }}>
+                <div style={{ fontSize: 11, color: BNB.textMuted, fontWeight: 600, letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" }}>{stat.label}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: BNB.yellow, marginBottom: 4, letterSpacing: -0.5 }}>{stat.value}</div>
+                <div style={{ fontSize: 12, color: BNB.textSecondary }}>{stat.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* 底部 CTA */}
       <section style={{
         padding: "32px 20px 48px",
