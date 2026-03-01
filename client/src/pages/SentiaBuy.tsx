@@ -689,28 +689,15 @@ export default function SentiaBuy() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <h2 style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>我的订单</h2>
               <div style={{ display: "flex", gap: 8 }}>
-                {totalSNT !== null && totalSNT > 0 && (
-                  <button
-                    onClick={() => {
-                      setShowWithdrawModal(true);
-                      setWithdrawMsg(null);
-                      setWithdrawAmount("");
-                      if (savedBscAddress) {
-                        setWithdrawMode("withdraw");
-                      } else {
-                        setNewBscAddress("");
-                        setBindConfirmed(false);
-                        setWithdrawMode("bind");
-                      }
-                    }}
+                <button
+                    onClick={() => alert("提现功能即将开放，敬请期待")}
                     style={{
                       background: "transparent",
-                      border: `1px solid ${BNB.yellow}`,
+                      border: `1px solid ${BNB.cardBorder}`,
                       borderRadius: 4, padding: "6px 12px",
-                      color: BNB.yellow, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      color: BNB.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
                     }}
-                  >提现 SNT</button>
-                )}
+                  >提现至钱包</button>
                 <button onClick={() => setStep("buy")} style={{
                   background: BNB.yellow, border: "none", borderRadius: 4,
                   padding: "6px 14px", color: "#0B0E11", fontSize: 12, cursor: "pointer", fontWeight: 600,
