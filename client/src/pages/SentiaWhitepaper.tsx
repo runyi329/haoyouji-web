@@ -163,7 +163,7 @@ export default function SentiaWhitepaper() {
     document.title = "";
     return () => { document.title = prev; };
   }, []);
-  const [lang, setLang] = useState<Lang>("zh");
+  const [lang, setLang] = useState<Lang>("en");
   const [activeSection, setActiveSection] = useState("abstract");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const contentRef = useRef<HTMLDivElement>(null);

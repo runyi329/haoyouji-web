@@ -8,7 +8,7 @@ import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.png";
-const ARCH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-architecture-JytKdDgdamwyKmCB9WsXzP.webp";
+const ARCH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-architecture-en-Y5rojCok9dBL7NaQP6LCAo.webp";
 
 const C = {
   bg: "#080B10",

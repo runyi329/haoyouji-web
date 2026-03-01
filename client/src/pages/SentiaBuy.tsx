@@ -78,8 +78,173 @@ const btnSecondary: React.CSSProperties = {
   color: BNB.text, fontWeight: 500, fontSize: 14, cursor: "pointer",
 };
 
+type Lang = "en" | "zh";
+
+const T = {
+  en: {
+    back: "Back", whitepaper: "Whitepaper", myOrders: "My Orders",
+    login: "Login", buy: "Buy", pay: "Pay", done: "Done",
+    welcome: "Welcome Back", createAccount: "Create Account",
+    loginSub: "Sign in to participate in SNT presale",
+    registerSub: "Register to join the Sentia presale",
+    username: "Username", usernamePh: "Enter username",
+    password: "Password", passwordPh: "Enter password",
+    inviteCode: "Invite Code (optional)", inviteCodePh: "Enter invite code",
+    processing: "Processing...", loginBtn: "Sign In",
+    registerBtn: "Register & Join Presale",
+    noAccount: "No account? Register free", hasAccount: "Already have an account? Sign in",
+    loginFail: "Invalid username or password", registerFail: "Registration failed, please try again",
+    myHoldings: "My Holdings", recharge: "Buy", withdraw: "Withdraw", transfer: "Transfer",
+    totalReceived: "Total Received",
+    partnerPrice: "Partner Price",
+    buyAmount: "Purchase Amount (SNT)",
+    payUsdt: "USDT to Pay", getSNT: "SNT to Receive",
+    selectNetwork: "Select Payment Network",
+    trc20: "TRC20 — Recommended · Fast · Low Fee",
+    aptos: "Aptos — Next-gen Chain · Fast & Secure",
+    erc20: "ERC20 — Ethereum · Higher Gas Fee",
+    solana: "Solana — High Performance · Ultra Fast",
+    bep20: "BSC (BEP20) — Binance Smart Chain · Fast & Low Fee",
+    creatingOrder: "Creating Order...", nextPay: "Next: Pay",
+    minAmount: "Minimum purchase is 1 USDT, please increase quantity",
+    createOrderFail: "Failed to create order, please try again",
+    agreement: "By purchasing you agree to the Sentia Presale Agreement",
+    payIn: "Please complete payment within", orderExpires: "Order expires in 30 minutes",
+    orderExpired: "Order Expired", orderExpiredSub: "Please go back and create a new order",
+    amountDue: "Amount Due", willReceive: "You will receive",
+    scanPay: "Scan to Pay", receiveAddress: "Receive Address",
+    orderNo: "Order No.", copied: "Copied", copy: "Copy",
+    notes: "Important Notes",
+    note1: (amt: string) => `Transfer exactly ${amt} USDT, system records actual received amount`,
+    note2: (net: string) => `Use ${net} network only, assets cannot be recovered if wrong network`,
+    note3: "After transfer, click the button below to confirm",
+    note4: "SNT tokens will be calculated at $0.04/SNT after confirmation",
+    submitting: "Submitting...", confirmTransfer: "I've Transferred, Confirm",
+    backModify: "Back to Modify", submitFail: "Submission failed, please try again",
+    submitted: "Transfer Confirmed",
+    submittedSub: "System is scanning on-chain transaction\nSNT tokens will be recorded after confirmation",
+    payAmount: "Payment Amount", estimatedSNT: "Estimated SNT", network: "Network",
+    viewOrders: "View My Orders", backHome: "Back to Sentia",
+    myOrdersTitle: "My Orders", withdrawWallet: "Withdraw to Wallet", continueBuy: "Buy More",
+    loading: "Loading...", noOrders: "No order records", buyNow: "Buy SNT Now",
+    received: "Received", estimated: "Estimated",
+    clickToPay: "Click to view payment address / QR code",
+    transferTitle: "SNT Transfer", availableBalance: "Available Balance",
+    enterUsername: "Enter recipient username", searchMin: "Search username (min 2 chars)",
+    searching: "Searching...", noUser: "No user found", search: "Search",
+    transferAmount: "Transfer Amount (SNT)", transferAmountPh: "Enter SNT amount",
+    available: "Available", remark: "Remark (optional)", remarkPh: "Optional note",
+    change: "Change", transferring: "Transferring...", confirmTransferBtn: "Confirm Transfer",
+    transferSuccess: (amt: string, user: string) => `Successfully transferred ${amt} SNT to @${user}`,
+    transferFail: "Transfer failed, please try again",
+    withdrawTitle: "Withdraw SNT", withdrawable: "Withdrawable",
+    withdrawAmount: "Withdraw Amount (SNT)", withdrawAmountPh: "Enter SNT amount",
+    withdrawNote: "Withdrawal requests are manually reviewed, expected 1-3 business days",
+    enterValidAmt: "Please enter a valid withdrawal amount",
+    exceedsBalance: "Withdrawal amount cannot exceed available balance",
+    withdrawSubmitting: "Submitting...", confirmWithdraw: "Confirm Withdrawal Request",
+    withdrawSuccess: (amt: string, addr: string) => `Withdrawal request submitted! ${amt} SNT will be sent to ${addr}`,
+    withdrawFail: "Submission failed, please try again",
+    warning: "IMPORTANT: Must use personal wallet address",
+    warningText: "Before listing on Binance exchange, DO NOT use Binance, OKX or other exchange deposit addresses. Must use personal wallet (e.g. MetaMask, Trust Wallet, Binance Web3 Wallet) BEP20 address. Sending to exchange will result in permanent loss of assets.",
+    confirmCheck: "I understand the above risks. The address I'm binding is a",
+    confirmCheckBold: "personal wallet BEP20 address",
+    confirmCheckEnd: ", not an exchange deposit address",
+    bscAddress: "BSC Wallet Address (starts with 0x, 42 chars)",
+    bscAddressPh: "Enter BNB Smart Chain (BEP20) address",
+    bindNote: "This address will be used for all future withdrawals. Click 'Change' to update.",
+    invalidAddress: "Please enter a valid BEP20 address (starts with 0x, 42 chars)",
+    binding: "Binding...", confirmBind: "Confirm Bind",
+    bindSuccess: "Wallet address bound successfully!",
+    bindFail: "Binding failed, please try again",
+    cancel: "Cancel",
+    switchLang: "切换中文",
+  },
+  zh: {
+    back: "返回", whitepaper: "白皮书", myOrders: "我的订单",
+    login: "登录", buy: "购买", pay: "支付", done: "完成",
+    welcome: "欢迎回来", createAccount: "创建账户",
+    loginSub: "登录您的账户参与 SNT 预售",
+    registerSub: "注册后即可参与 Sentia 预售",
+    username: "用户名", usernamePh: "请输入用户名",
+    password: "密码", passwordPh: "请输入密码",
+    inviteCode: "邀请码（选填）", inviteCodePh: "请输入邀请码",
+    processing: "处理中...", loginBtn: "登录",
+    registerBtn: "注册并参与预售",
+    noAccount: "没有账户？免费注册", hasAccount: "已有账户？立即登录",
+    loginFail: "用户名或密码错误", registerFail: "注册失败，请重试",
+    myHoldings: "我的持仓", recharge: "充值", withdraw: "提现", transfer: "划转",
+    totalReceived: "累计已到账",
+    partnerPrice: "合伙人价",
+    buyAmount: "购买数量（SNT）",
+    payUsdt: "需支付 USDT", getSNT: "获得 SNT",
+    selectNetwork: "选择支付网络",
+    trc20: "TRC20 — 推荐 · 快速到账 · 低手续费",
+    aptos: "Aptos — 新一代公链 · 快速安全",
+    erc20: "ERC20 — 以太坊网络 · 手续费较高",
+    solana: "Solana — 高性能公链 · 极速到账",
+    bep20: "BSC (BEP20) — 币安智能链 · 快速低费",
+    creatingOrder: "创建订单中...", nextPay: "下一步：支付",
+    minAmount: "购买金额不能低于 1 USDT，请增加购买数量",
+    createOrderFail: "创建订单失败，请重试",
+    agreement: "购买即视为同意《Sentia 预售协议》",
+    payIn: "请在", orderExpires: "订单将在 30 分钟后自动过期",
+    orderExpired: "订单已过期", orderExpiredSub: "请返回重新创建订单",
+    amountDue: "应付金额", willReceive: "到账后将获得",
+    scanPay: "扫码支付", receiveAddress: "收款地址",
+    orderNo: "订单号", copied: "已复制", copy: "复制",
+    notes: "注意事项",
+    note1: (amt: string) => `请转账 ${amt} USDT，系统按实际到账金额入账`,
+    note2: (net: string) => `请选择 ${net} 网络，否则资产将无法找回`,
+    note3: "转账完成后，请点击下方按钮提交确认",
+    note4: "到账后将按 $0.04/SNT 自动换算为 SNT 代币",
+    submitting: "提交中...", confirmTransfer: "我已完成转账，提交确认",
+    backModify: "返回修改数量", submitFail: "提交失败，请重试",
+    submitted: "转账确认已提交",
+    submittedSub: "系统正在扫描链上交易\n确认到账后将自动记录您的 SNT 代币",
+    payAmount: "支付金额", estimatedSNT: "预计获得", network: "网络",
+    viewOrders: "查看我的订单", backHome: "返回 Sentia 首页",
+    myOrdersTitle: "我的订单", withdrawWallet: "提现至钱包", continueBuy: "继续购买",
+    loading: "加载中...", noOrders: "暂无订单记录", buyNow: "立即购买 SNT",
+    received: "已到账", estimated: "预计",
+    clickToPay: "点击查看支付地址 / 二维码，继续完成转账",
+    transferTitle: "SNT 划转", availableBalance: "可划转余额",
+    enterUsername: "输入对方用户名", searchMin: "搜索用户名（至少 2 个字符）",
+    searching: "搜索中...", noUser: "未找到用户", search: "搜索",
+    transferAmount: "划转数量（SNT）", transferAmountPh: "输入划转 SNT 数量",
+    available: "可划转", remark: "备注（可选）", remarkPh: "可选备注",
+    change: "更换", transferring: "划转中...", confirmTransferBtn: "确认划转",
+    transferSuccess: (amt: string, user: string) => `成功划转 ${amt} SNT 给 @${user}`,
+    transferFail: "划转失败，请重试",
+    withdrawTitle: "提现 SNT", withdrawable: "可提现",
+    withdrawAmount: "提现数量（SNT）", withdrawAmountPh: "输入提现 SNT 数量",
+    withdrawNote: "提现申请提交后由人工审核，预计 1–3 个工作日到账",
+    enterValidAmt: "请输入有效的提现数量",
+    exceedsBalance: "提现数量不能超过可用持仓",
+    withdrawSubmitting: "提交中...", confirmWithdraw: "确认提现申请",
+    withdrawSuccess: (amt: string, addr: string) => `提现申请已提交！${amt} SNT 将发送至 ${addr}`,
+    withdrawFail: "提交失败，请稍后重试",
+    warning: "重要提示：必须使用个人钱包地址",
+    warningText: "未上币安交易所之前，严禁填写币安、OKX 等交易所充币地址或平台账号。必须使用个人钱包（如 MetaMask、Trust Wallet、Binance Web3 Wallet 等）的 BEP20 地址。转账至交易所将导致资产永久丢失。",
+    confirmCheck: "我已了解上述风险，我将要绑定的是",
+    confirmCheckBold: "个人钱包的 BEP20 地址",
+    confirmCheckEnd: "，不是交易所充币地址",
+    bscAddress: "BSC 钱包地址（0x 开头，42 位）",
+    bscAddressPh: "输入 BNB Smart Chain (BEP20) 地址",
+    bindNote: "绑定后每次提现将自动使用此地址，可点击"更换"修改",
+    invalidAddress: "请输入有效的 BEP20 地址（0x 开头，42 位）",
+    binding: "绑定中...", confirmBind: "确认绑定",
+    bindSuccess: "钱包地址绑定成功！",
+    bindFail: "绑定失败，请重试",
+    cancel: "取消",
+    switchLang: "Switch to English",
+  },
+};
+
 export default function SentiaBuy() {
   const [, navigate] = useLocation();
+  const [lang, setLang] = useState<Lang>("en");
+  const t = T[lang];
   useEffect(() => {
     const prev = document.title;
     document.title = "";
@@ -224,7 +389,7 @@ export default function SentiaBuy() {
       if (token) saveToken(token);
       setStep("buy");
     } catch (err: any) {
-      setAuthError(err.message || (isRegister ? "注册失败，请重试" : "用户名或密码错误"));
+      setAuthError(err.message || (isRegister ? t.registerFail : t.loginFail));
     } finally {
       setAuthLoading(false);
     }
@@ -234,7 +399,7 @@ export default function SentiaBuy() {
   const handleCreateOrder = async () => {
     const amount = parseFloat(usdtCost);
     if (isNaN(amount) || amount < 1) {
-      alert("购买金额不能低于 1 USDT，请增加购买数量");
+      alert(t.minAmount);
       return;
     }
     try {
@@ -248,7 +413,7 @@ export default function SentiaBuy() {
       setTimeLeft(Math.floor((expiresAt - Date.now()) / 1000));
       setStep("pay");
     } catch (err: any) {
-      alert(err.message || "创建订单失败，请重试");
+      alert(err.message || t.createOrderFail);
     }
   };
 
@@ -260,7 +425,7 @@ export default function SentiaBuy() {
       await submitTransferMutation.mutateAsync({ orderNo: order.orderNo });
       setStep("submitted");
     } catch (err: any) {
-      alert(err.message || "提交失败，请重试");
+      alert(err.message || t.submitFail);
     } finally {
       setSubmitting(false);
     }
@@ -268,11 +433,11 @@ export default function SentiaBuy() {
 
   // 订单状态标签
   const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    pending:   { label: "待支付", color: BNB.yellow,  bg: BNB.yellowDim, border: BNB.yellowBorder },
-    submitted: { label: "确认中", color: BNB.blue,    bg: BNB.blueDim,   border: BNB.blueBorder },
-    completed: { label: "已到账", color: BNB.green,   bg: BNB.greenDim,  border: BNB.greenBorder },
-    expired:   { label: "已过期", color: BNB.textMuted, bg: "rgba(255,255,255,0.04)", border: BNB.divider },
-    cancelled: { label: "已取消", color: BNB.red,     bg: BNB.redDim,    border: BNB.redBorder },
+    pending:   { label: lang === "en" ? "Pending" : "待支付", color: BNB.yellow,  bg: BNB.yellowDim, border: BNB.yellowBorder },
+    submitted: { label: lang === "en" ? "Confirming" : "确认中", color: BNB.blue,    bg: BNB.blueDim,   border: BNB.blueBorder },
+    completed: { label: lang === "en" ? "Completed" : "已到账", color: BNB.green,   bg: BNB.greenDim,  border: BNB.greenBorder },
+    expired:   { label: lang === "en" ? "Expired" : "已过期", color: BNB.textMuted, bg: "rgba(255,255,255,0.04)", border: BNB.divider },
+    cancelled: { label: lang === "en" ? "Cancelled" : "已取消", color: BNB.red,     bg: BNB.redDim,    border: BNB.redBorder },
   };
 
   const formatDate = (d: string) => {
@@ -308,7 +473,7 @@ export default function SentiaBuy() {
           background: "transparent", border: "none", color: BNB.textSecondary, cursor: "pointer", fontSize: 13,
           display: "flex", alignItems: "center", gap: 6, padding: 0,
         }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>&#8592;</span> 返回首页
+          <span style={{ fontSize: 16, lineHeight: 1 }}>&#8592;</span> {t.back}
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <img src={SENTIA_ICON} alt="SNT" style={{ width: 22, height: 22, borderRadius: "50%" }} />
@@ -320,12 +485,12 @@ export default function SentiaBuy() {
           <button onClick={() => navigate("/sentia/whitepaper")} style={{
             background: "transparent", border: `1px solid ${BNB.cardBorder}`, borderRadius: 4,
             padding: "6px 12px", color: BNB.textSecondary, fontSize: 12, cursor: "pointer",
-          }}>白皮书</button>
+          }}>{t.whitepaper}</button>
           {step !== "login" && (
             <button onClick={() => setStep("orders")} style={{
               background: "transparent", border: `1px solid ${BNB.cardBorder}`, borderRadius: 4,
               padding: "6px 12px", color: BNB.textSecondary, fontSize: 12, cursor: "pointer",
-            }}>我的订单</button>
+            }}>{t.myOrders}</button>
           )}
         </div>
       </nav>
@@ -336,10 +501,10 @@ export default function SentiaBuy() {
         {step !== "orders" && (
           <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
             {[
-              { key: "login", label: "登录" },
-              { key: "buy",   label: "购买" },
-              { key: "pay",   label: "支付" },
-              { key: "submitted", label: "完成" },
+              { key: "login",     label: t.login },
+              { key: "buy",       label: t.buy },
+              { key: "pay",       label: t.pay },
+              { key: "submitted", label: t.done },
             ].map((s, i) => {
               const thisIdx = stepOrder.indexOf(s.key);
               const isDone = currentIdx > thisIdx;
@@ -379,33 +544,33 @@ export default function SentiaBuy() {
             <div style={{ textAlign: "center", marginBottom: 24 }}>
               <img src={SENTIA_ICON} alt="SNT" style={{ width: 52, height: 52, borderRadius: "50%", marginBottom: 14 }} />
               <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, color: BNB.text }}>
-                {isRegister ? "创建账户" : "欢迎回来"}
+                {isRegister ? t.createAccount : t.welcome}
               </h2>
               <p style={{ fontSize: 13, color: BNB.textSecondary }}>
-                {isRegister ? "注册后即可参与 Sentia 预售" : "登录您的账户参与 SNT 预售"}
+                {isRegister ? t.registerSub : t.loginSub}
               </p>
             </div>
 
             <form onSubmit={handleAuth} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>用户名</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>{t.username}</label>
                 <input
-                  type="text" placeholder="请输入用户名" required value={username}
+                  type="text" placeholder={t.usernamePh} required value={username}
                   onChange={e => setUsername(e.target.value)} style={inputStyle}
                 />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>密码</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>{t.password}</label>
                 <input
-                  type="password" placeholder="请输入密码" required value={password}
+                  type="password" placeholder={t.passwordPh} required value={password}
                   onChange={e => setPassword(e.target.value)} style={inputStyle}
                 />
               </div>
               {isRegister && (
                 <div>
-                  <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>邀请码（选填）</label>
+                  <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>{t.inviteCode}</label>
                   <input
-                    type="text" placeholder="请输入邀请码" value={inviteCode}
+                    type="text" placeholder={t.inviteCodePh} value={inviteCode}
                     onChange={e => setInviteCode(e.target.value)} style={inputStyle}
                   />
                 </div>
@@ -416,14 +581,14 @@ export default function SentiaBuy() {
                 </div>
               )}
               <button type="submit" disabled={authLoading} style={{ ...btnPrimary, opacity: authLoading ? 0.7 : 1, marginTop: 4 }}>
-                {authLoading ? "处理中..." : isRegister ? "注册并参与预售" : "登录"}
+                {authLoading ? t.processing : isRegister ? t.registerBtn : t.loginBtn}
               </button>
             </form>
 
             <div style={{ textAlign: "center", marginTop: 16 }}>
               <button onClick={() => { setIsRegister(!isRegister); setAuthError(""); }}
                 style={{ background: "none", border: "none", color: BNB.yellow, fontSize: 13, cursor: "pointer" }}>
-                {isRegister ? "已有账户？立即登录" : "没有账户？免费注册"}
+                {isRegister ? t.hasAccount : t.noAccount}
               </button>
             </div>
           </div>
@@ -441,12 +606,12 @@ export default function SentiaBuy() {
               }}>
                 {/* 标题行：左侧「我的持仓」，右侧三个操作按钮 */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, color: BNB.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>我的持仓</div>
+                  <div style={{ fontSize: 11, color: BNB.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>{t.myHoldings}</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[
-                      { label: "充值", onClick: () => setStep("buy"), primary: true },
-                      { label: "提现", onClick: () => alert("提现功能即将开放，敬请期待"), primary: false },
-                      { label: "划转", onClick: () => { setShowTransferModal(true); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }, primary: false },
+                      { label: t.recharge, onClick: () => setStep("buy"), primary: true },
+                      { label: t.withdraw, onClick: () => setShowWithdrawModal(true), primary: false },
+                      { label: t.transfer, onClick: () => { setShowTransferModal(true); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }, primary: false },
                     ].map((btn, i) => (
                       <button key={i} onClick={btn.onClick} style={{
                         background: btn.primary ? BNB.yellow : "transparent",
@@ -462,7 +627,7 @@ export default function SentiaBuy() {
                 </div>
                 {/* SNT 数字 */}
                 <div>
-                  <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>累计已到账</div>
+                  <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>{t.totalReceived}</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                     <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
                       {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
@@ -485,12 +650,12 @@ export default function SentiaBuy() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 2 }}>合伙人价</div>
+                  <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 2 }}>{t.partnerPrice}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: BNB.yellow }}>1 SNT = $0.04</div>
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>购买数量（SNT）</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>{t.buyAmount}</label>
                 <input
                   type="number" value={sntAmount} onChange={e => setSntAmount(e.target.value)}
                   min="100" step="100"
@@ -518,19 +683,19 @@ export default function SentiaBuy() {
                 borderRadius: 4, padding: "12px 14px", marginBottom: 16,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>需支付 USDT</span>
+                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>{t.payUsdt}</span>
                   <span style={{ fontWeight: 700, color: BNB.yellow }}>${usdtCost}</span>
                 </div>
                 <div style={{ height: 1, background: BNB.divider, marginBottom: 8 }} />
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>获得 SNT</span>
+                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>{t.getSNT}</span>
                   <span style={{ fontWeight: 700, color: BNB.text }}>{parseFloat(sntAmount).toLocaleString()} SNT</span>
                 </div>
               </div>
 
               {/* 选择网络 */}
               <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>选择支付网络</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>{t.selectNetwork}</label>
                 <select
                   value={network}
                   onChange={e => setNetwork(e.target.value as typeof network)}
@@ -540,11 +705,11 @@ export default function SentiaBuy() {
                     cursor: "pointer",
                   }}
                 >
-                  <option value="TRC20" style={{ background: BNB.card }}>TRC20 — 推荐 · 快速到账 · 低手续费</option>
-                  <option value="APTOS" style={{ background: BNB.card }}>Aptos — 新一代公链 · 快速安全</option>
-                  <option value="ERC20" style={{ background: BNB.card }}>ERC20 — 以太坊网络 · 手续费较高</option>
-                  <option value="SOLANA" style={{ background: BNB.card }}>Solana — 高性能公链 · 极速到账</option>
-                  <option value="BEP20" style={{ background: BNB.card }}>BSC (BEP20) — 币安智能链 · 快速低费</option>
+                  <option value="TRC20" style={{ background: BNB.card }}>{t.trc20}</option>
+                  <option value="APTOS" style={{ background: BNB.card }}>{t.aptos}</option>
+                  <option value="ERC20" style={{ background: BNB.card }}>{t.erc20}</option>
+                  <option value="SOLANA" style={{ background: BNB.card }}>{t.solana}</option>
+                  <option value="BEP20" style={{ background: BNB.card }}>{t.bep20}</option>
                 </select>
               </div>
 
@@ -553,10 +718,10 @@ export default function SentiaBuy() {
                 disabled={createOrderMutation.isPending || !sntAmount || parseFloat(sntAmount) < 100}
                 style={{ ...btnPrimary, opacity: createOrderMutation.isPending ? 0.7 : 1 }}
               >
-                {createOrderMutation.isPending ? "创建订单中..." : `下一步：支付 $${usdtCost} USDT`}
+                {createOrderMutation.isPending ? t.creatingOrder : `${t.nextPay} $${usdtCost} USDT`}
               </button>
               <div style={{ textAlign: "center", fontSize: 11, color: BNB.textMuted, marginTop: 10 }}>
-                购买即视为同意《Sentia 预售协议》
+                {t.agreement}
               </div>
             </div>
           </div>
@@ -574,8 +739,8 @@ export default function SentiaBuy() {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.yellow }}>请在 {formatTime(timeLeft)} 内完成支付</div>
-                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>订单将在 30 分钟后自动过期</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.yellow }}>{t.payIn} {formatTime(timeLeft)}</div>
+                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>{t.orderExpires}</div>
                 </div>
               </div>
             ) : (
@@ -586,26 +751,26 @@ export default function SentiaBuy() {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.red }}>订单已过期</div>
-                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>请返回重新创建订单</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.red }}>{t.orderExpired}</div>
+                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>{t.orderExpiredSub}</div>
                 </div>
               </div>
             )}
 
             {/* 应付金额 */}
             <div style={{ ...cardStyle, textAlign: "center" }}>
-              <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 6 }}>应付金额</div>
+              <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 6 }}>{t.amountDue}</div>
               <div style={{ fontSize: 42, fontWeight: 800, color: BNB.yellow, marginBottom: 4 }}>{order.amount}</div>
               <div style={{ fontSize: 14, color: BNB.textSecondary }}>USDT ({order.network})</div>
               <div style={{ marginTop: 10, fontSize: 13, color: BNB.green }}>
-                到账后将获得 <strong>{toSNT(order.amount)} SNT</strong>
+                {t.willReceive} <strong>{toSNT(order.amount)} SNT</strong>
               </div>
             </div>
 
             {/* 二维码 + 收款地址 */}
             <div style={cardStyle}>
               <div style={{ textAlign: "center", marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 12 }}>扫码支付</div>
+                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 12 }}>{t.scanPay}</div>
                 {qrCode && (
                   <div style={{ display: "inline-block", padding: 12, background: "#fff", borderRadius: 4 }}>
                     <img src={qrCode} alt="QR Code" style={{ width: 160, height: 160, display: "block" }} />
@@ -615,7 +780,7 @@ export default function SentiaBuy() {
 
               {/* 收款地址 */}
               <div>
-                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 8 }}>收款地址</div>
+                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 8 }}>{t.receiveAddress}</div>
                 <div style={{ display: "flex", alignItems: "center", background: BNB.bg, borderRadius: 4, padding: "10px 12px", border: `1px solid ${BNB.divider}` }}>
                   <div style={{ flex: 1, fontFamily: "monospace", fontSize: 12, wordBreak: "break-all", color: BNB.text, marginRight: 8 }}>
                     {order.walletAddress}
@@ -627,26 +792,26 @@ export default function SentiaBuy() {
                     borderRadius: 4, padding: "5px 10px", cursor: "pointer",
                     color: copied ? BNB.green : BNB.yellow, fontSize: 12, fontWeight: 600,
                   }}>
-                    {copied ? "已复制" : "复制"}
+                    {copied ? t.copied : t.copy}
                   </button>
                 </div>
               </div>
 
               {/* 订单号 */}
               <div style={{ marginTop: 12, fontSize: 12, color: BNB.textMuted }}>
-                订单号：<span style={{ fontFamily: "monospace", color: BNB.textSecondary }}>{order.orderNo}</span>
+                {t.orderNo}：<span style={{ fontFamily: "monospace", color: BNB.textSecondary }}>{order.orderNo}</span>
               </div>
             </div>
 
             {/* 重要提示 */}
             <div style={{ background: BNB.yellowDim, border: `1px solid ${BNB.yellowBorder}`, borderRadius: 4, padding: "14px 16px" }}>
-              <div style={{ fontWeight: 600, color: BNB.yellow, marginBottom: 8, fontSize: 13 }}>注意事项</div>
+              <div style={{ fontWeight: 600, color: BNB.yellow, marginBottom: 8, fontSize: 13 }}>{t.notes}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  `请转账 ${order.amount} USDT，系统按实际到账金额入账`,
-                  `请选择 ${order.network} 网络，否则资产将无法找回`,
-                  "转账完成后，请点击下方按钮提交确认",
-                  "到账后将按 $0.04/SNT 自动换算为 SNT 代币",
+                  t.note1(order.amount),
+                  t.note2(order.network),
+                  t.note3,
+                  t.note4,
                 ].map((tip, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: "#D4A017", lineHeight: 1.5 }}>
                     <span style={{ color: BNB.yellow, flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
@@ -662,11 +827,11 @@ export default function SentiaBuy() {
               disabled={submitting || timeLeft <= 0}
               style={{ ...btnPrimary, opacity: (submitting || timeLeft <= 0) ? 0.5 : 1, fontSize: 15, padding: "14px" }}
             >
-              {submitting ? "提交中..." : "我已完成转账，提交确认"}
+              {submitting ? t.submitting : t.confirmTransfer}
             </button>
 
             <button onClick={() => setStep("buy")} style={btnSecondary}>
-              返回修改数量
+              {t.backModify}
             </button>
           </div>
         )}
@@ -684,18 +849,18 @@ export default function SentiaBuy() {
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: BNB.text }}>转账确认已提交</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: BNB.text }}>{t.submitted}</h2>
             <p style={{ fontSize: 13, color: BNB.textSecondary, lineHeight: 1.7, marginBottom: 24 }}>
-              系统正在扫描链上交易<br />确认到账后将自动记录您的 SNT 代币
+              {t.submittedSub.split("\n").map((line, i) => <span key={i}>{line}{i === 0 && <br />}</span>)}
             </p>
 
             {/* 订单摘要 */}
             <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
               {[
-                { label: "支付金额", value: `${order.amount} USDT`, color: BNB.yellow },
-                { label: "预计获得", value: `${toSNT(order.amount)} SNT`, color: BNB.green },
-                { label: "网络", value: order.network, color: BNB.text },
-                { label: "订单号", value: order.orderNo, color: BNB.textSecondary, mono: true },
+                { label: t.payAmount, value: `${order.amount} USDT`, color: BNB.yellow },
+                { label: t.estimatedSNT, value: `${toSNT(order.amount)} SNT`, color: BNB.green },
+                { label: t.network, value: order.network, color: BNB.text },
+                { label: t.orderNo, value: order.orderNo, color: BNB.textSecondary, mono: true },
               ].map((row, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: i < 3 ? 10 : 0 }}>
                   <span style={{ fontSize: 13, color: BNB.textSecondary }}>{row.label}</span>
@@ -707,8 +872,8 @@ export default function SentiaBuy() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={() => setStep("orders")} style={btnPrimary}>查看我的订单</button>
-              <button onClick={() => navigate("/sentia")} style={btnSecondary}>返回 Sentia 首页</button>
+              <button onClick={() => setStep("orders")} style={btnPrimary}>{t.viewOrders}</button>
+              <button onClick={() => navigate("/sentia")} style={btnSecondary}>{t.backHome}</button>
             </div>
           </div>
         )}
@@ -717,26 +882,26 @@ export default function SentiaBuy() {
         {step === "orders" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>我的订单</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>{t.myOrdersTitle}</h2>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
-                    onClick={() => alert("提现功能即将开放，敬请期待")}
+                    onClick={() => setShowWithdrawModal(true)}
                     style={{
                       background: "transparent",
                       border: `1px solid ${BNB.cardBorder}`,
                       borderRadius: 4, padding: "6px 12px",
                       color: BNB.textSecondary, fontSize: 12, fontWeight: 600, cursor: "pointer",
                     }}
-                  >提现至钱包</button>
+                  >{t.withdrawWallet}</button>
                 <button onClick={() => setStep("buy")} style={{
                   background: BNB.yellow, border: "none", borderRadius: 4,
                   padding: "6px 14px", color: "#0B0E11", fontSize: 12, cursor: "pointer", fontWeight: 600,
-                }}>继续购买</button>
+                }}>{t.continueBuy}</button>
               </div>
             </div>
 
             {ordersQuery.isLoading ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: BNB.textMuted }}>加载中...</div>
+              <div style={{ textAlign: "center", padding: "40px 0", color: BNB.textMuted }}>{t.loading}</div>
             ) : !ordersQuery.data || ordersQuery.data.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ width: 48, height: 48, borderRadius: "50%", background: BNB.bg, border: `1px solid ${BNB.divider}`, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -744,8 +909,8 @@ export default function SentiaBuy() {
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                   </svg>
                 </div>
-                <div style={{ color: BNB.textSecondary, marginBottom: 16 }}>暂无订单记录</div>
-                <button onClick={() => setStep("buy")} style={{ ...btnPrimary, maxWidth: 200, margin: "0 auto" }}>立即购买 SNT</button>
+                <div style={{ color: BNB.textSecondary, marginBottom: 16 }}>{t.noOrders}</div>
+                <button onClick={() => setStep("buy")} style={{ ...btnPrimary, maxWidth: 200, margin: "0 auto" }}>{t.buyNow}</button>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -767,7 +932,7 @@ export default function SentiaBuy() {
                       <div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: BNB.yellow }}>{o.amount} USDT</div>
                         <div style={{ fontSize: 12, color: BNB.textSecondary, marginTop: 3 }}>
-                          {o.status === "completed" ? "已到账" : "预计"} {toSNT(o.amount)} SNT
+                          {o.status === "completed" ? t.received : t.estimated} {toSNT(o.amount)} SNT
                         </div>
                       </div>
                       <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, borderRadius: 2, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
@@ -791,7 +956,7 @@ export default function SentiaBuy() {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="2">
                           <circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/>
                         </svg>
-                        点击查看支付地址 / 二维码，继续完成转账
+                        {t.clickToPay}
                       </div>
                     )}
                   </div>
@@ -813,13 +978,13 @@ export default function SentiaBuy() {
       >
         <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 440, background: BNB.card, borderRadius: "12px 12px 0 0", padding: "24px 20px 40px", maxHeight: "90vh", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>SNT 划转</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>{t.transferTitle}</div>
             <button onClick={() => { setShowTransferModal(false); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: BNB.textMuted, fontSize: 22, lineHeight: 1, padding: 4 }}>×</button>
           </div>
 
           {/* 可划转余额 */}
           <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "12px 14px", marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>可划转余额</div>
+            <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>{t.availableBalance}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: BNB.yellow }}>
               {totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} <span style={{ fontSize: 13, fontWeight: 600, color: BNB.textMuted }}>SNT</span>
             </div>
@@ -828,11 +993,11 @@ export default function SentiaBuy() {
           {/* 搜索用户 */}
           {!transferTarget ? (
             <>
-              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>输入对方用户名</div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.enterUsername}</div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <input
                   style={{ ...inputStyle, paddingRight: 80 }}
-                  placeholder="搜索用户名（至少 2 个字符）"
+                  placeholder={t.searchMin}
                   value={transferKeyword}
                   onChange={e => { setTransferKeyword(e.target.value); setTransferSearchEnabled(false); }}
                   onKeyDown={e => { if (e.key === "Enter") setTransferSearchEnabled(true); }}
@@ -840,13 +1005,13 @@ export default function SentiaBuy() {
                 <button
                   onClick={() => setTransferSearchEnabled(true)}
                   style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: BNB.yellow, border: "none", borderRadius: 3, padding: "5px 12px", color: "#0B0E11", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
-                >搜索</button>
+                >{t.search}</button>
               </div>
               {/* 搜索结果 */}
-              {searchUsersQuery.isFetching && <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>搜索中...</div>}
+              {searchUsersQuery.isFetching && <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>{t.searching}</div>}
               {searchUsersQuery.data && !searchUsersQuery.isFetching && (
                 searchUsersQuery.data.length === 0
-                  ? <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>未找到用户</div>
+                  ? <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>{t.noUser}</div>
                   : <div style={{ border: `1px solid ${BNB.divider}`, borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
                       {(searchUsersQuery.data as any[]).map((u: any) => (
                         <div key={u.id} onClick={() => { setTransferTarget(u); setTransferMsg(null); }}
@@ -880,20 +1045,20 @@ export default function SentiaBuy() {
                 <button onClick={() => { setTransferTarget(null); setTransferMsg(null); }} style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer" }}>更换</button>
               </div>
 
-              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>划转数量（SNT）</div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.transferAmount}</div>
               <input
                 style={{ ...inputStyle, fontSize: 20, fontWeight: 700, marginBottom: 4 }}
                 type="number"
-                placeholder="输入划转 SNT 数量"
+                placeholder={t.transferAmountPh}
                 value={transferAmount}
                 onChange={e => setTransferAmount(e.target.value)}
               />
-              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 12 }}>可划转：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT</div>
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 12 }}>{t.available}：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT</div>
 
-              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>备注（可选）</div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.remark}</div>
               <input
                 style={{ ...inputStyle, marginBottom: 16 }}
-                placeholder="输入备注"
+                placeholder={t.remarkPh}
                 value={transferRemark}
                 onChange={e => setTransferRemark(e.target.value)}
               />
@@ -906,23 +1071,23 @@ export default function SentiaBuy() {
                 disabled={transferLoading || !transferAmount || parseFloat(transferAmount) <= 0}
                 onClick={async () => {
                   const amt = parseFloat(transferAmount);
-                  if (!amt || amt <= 0) { setTransferMsg({ type: "err", text: "请输入有效的划转数量" }); return; }
-                  if (totalSNT !== null && amt > totalSNT) { setTransferMsg({ type: "err", text: "SNT 余额不足" }); return; }
+                  if (!amt || amt <= 0) { setTransferMsg({ type: "err", text: t.enterValidAmt }); return; }
+                  if (totalSNT !== null && amt > totalSNT) { setTransferMsg({ type: "err", text: t.exceedsBalance }); return; }
                   setTransferLoading(true);
                   try {
                     await transferSNTMutation.mutateAsync({ toUserId: transferTarget!.id, sntAmount: amt, remark: transferRemark || undefined });
-                    setTransferMsg({ type: "ok", text: `成功划转 ${amt.toLocaleString()} SNT 至 @${transferTarget!.username}` });
+                    setTransferMsg({ type: "ok", text: t.transferSuccess(amt.toLocaleString(), transferTarget!.username) });
                     setTransferAmount("");
                     setTransferRemark("");
                     ordersQuery.refetch();
                   } catch (err: any) {
-                    setTransferMsg({ type: "err", text: err?.message || "划转失败，请重试" });
+                    setTransferMsg({ type: "err", text: err?.message || t.transferFail });
                   } finally {
                     setTransferLoading(false);
                   }
                 }}
                 style={{ ...btnPrimary, opacity: (!transferAmount || parseFloat(transferAmount) <= 0 || transferLoading) ? 0.5 : 1 }}
-              >{transferLoading ? "划转中..." : "确认划转"}</button>
+              >{transferLoading ? t.transferring : t.confirmTransferBtn}</button>
             </>
           )}
         </div>
@@ -953,7 +1118,7 @@ export default function SentiaBuy() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>
-                {withdrawMode === "withdraw" ? "提现 SNT" : "绑定 BSC 钱包"}
+                {withdrawMode === "withdraw" ? t.withdrawTitle : t.bscAddress.split("（")[0]}
               </div>
               <div style={{ fontSize: 12, color: BNB.textMuted, marginTop: 2 }}>网络：BNB Smart Chain (BEP20)</div>
             </div>
@@ -981,27 +1146,26 @@ export default function SentiaBuy() {
               <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "12px 14px", marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>提现至（已绑定地址）</div>
+                    <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>{t.withdrawable} (Bound)</div>
                     <div style={{ fontSize: 12, color: BNB.text, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>{savedBscAddress}</div>
                   </div>
                   <button
-                    onClick={() => { setNewBscAddress(""); setBindConfirmed(false); setWithdrawMsg(null); setWithdrawMode("bind"); }}
-                    style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}
-                  >更换</button>
+                    onClick={() => { setNewBscAddress(""); setBindConfirmed(false); setWithdrawMsg(null); setWithdrawMode("bind"                           style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}
+                  >{t.change}</button>button>
                 </div>
               </div>
-              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>提现数量（SNT）</div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.withdrawAmount}</div>
               <input
                 style={{ ...inputStyle, marginBottom: 4 }}
                 type="number"
-                placeholder="输入提现 SNT 数量"
+                placeholder={t.withdrawAmountPh}
                 value={withdrawAmount}
                 onChange={e => setWithdrawAmount(e.target.value)}
               />
               <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>
-                可提现：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT
+                {t.withdrawable}：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT
               </div>
-              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>提现申请提交后由人工审核，预计 1–3 个工作日到账</div>
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>{t.withdrawNote}</div>
               {withdrawMsg && (
                 <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? BNB.green : BNB.red, marginBottom: 12 }}>{withdrawMsg.text}</div>
               )}
@@ -1009,8 +1173,8 @@ export default function SentiaBuy() {
                 disabled={withdrawLoading || !withdrawAmount}
                 onClick={async () => {
                   const amt = parseFloat(withdrawAmount);
-                  if (!amt || amt <= 0) { setWithdrawMsg({ type: "err", text: "请输入有效的提现数量" }); return; }
-                  if (totalSNT !== null && amt > totalSNT) { setWithdrawMsg({ type: "err", text: "提现数量不能超过可用持仓" }); return; }
+                  if (!amt || amt <= 0) { setWithdrawMsg({ type: "err", text: t.enterValidAmt }); return; }
+                  if (totalSNT !== null && amt > totalSNT) { setWithdrawMsg({ type: "err", text: t.exceedsBalance }); return; }
                   setWithdrawLoading(true);
                   try {
                     await requestWithdrawMutation.mutateAsync({
@@ -1018,16 +1182,16 @@ export default function SentiaBuy() {
                       paymentAccountId: 0,
                       remark: `SNT提现至BSC:${savedBscAddress}`,
                     });
-                    setWithdrawMsg({ type: "ok", text: `提现申请已提交！${amt.toLocaleString()} SNT 将发送至 ${savedBscAddress!.slice(0, 8)}...${savedBscAddress!.slice(-6)}` });
+                    setWithdrawMsg({ type: "ok", text: t.withdrawSuccess(amt.toLocaleString(), `${savedBscAddress!.slice(0, 8)}...${savedBscAddress!.slice(-6)}`) });
                     setWithdrawAmount("");
                   } catch (err: any) {
-                    setWithdrawMsg({ type: "err", text: err?.message || "提交失败，请稍后重试" });
+                    setWithdrawMsg({ type: "err", text: err?.message || t.withdrawFail });
                   } finally {
                     setWithdrawLoading(false);
                   }
                 }}
                 style={{ ...btnPrimary, opacity: (!withdrawAmount || withdrawLoading) ? 0.5 : 1 }}
-              >{withdrawLoading ? "提交中..." : "确认提现申请"}</button>
+              >{withdrawLoading ? t.withdrawSubmitting : t.confirmWithdraw}</button>
             </>
           )}
 
@@ -1045,12 +1209,8 @@ export default function SentiaBuy() {
                     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                   </svg>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: BNB.red, marginBottom: 6 }}>重要提示：必须使用个人钱包地址</div>
-                    <div style={{ fontSize: 12, color: "#EAECEF", lineHeight: 1.7 }}>
-                      未上币安交易所之前，<strong style={{ color: BNB.red }}>严禁填写币安、OKX 等交易所充币地址或平台账号</strong>。
-                      必须使用个人钱包（如 MetaMask、Trust Wallet、Binance Web3 Wallet 等）的 BEP20 地址。
-                      转账至交易所将导致资产永久丢失。
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: BNB.red, marginBottom: 6 }}>{t.warning}</div>
+                    <div style={{ fontSize: 12, color: "#EAECEF", lineHeight: 1.7 }}>{t.warningText}</div>
                   </div>
                 </div>
               </div>
@@ -1063,17 +1223,17 @@ export default function SentiaBuy() {
                   style={{ marginTop: 2, accentColor: BNB.yellow, width: 16, height: 16, flexShrink: 0 }}
                 />
                 <span style={{ fontSize: 12, color: BNB.textSecondary, lineHeight: 1.6 }}>
-                  我已了解上述风险，我将要绑定的是<strong style={{ color: BNB.text }}>个人钱包的 BEP20 地址</strong>，不是交易所充币地址
+                  {t.confirmCheck} <strong style={{ color: BNB.text }}>{t.confirmCheckBold}</strong>{t.confirmCheckEnd}
                 </span>
               </label>
-              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>BSC 钱包地址（0x 开头，42 位）</div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.bscAddress}</div>
               <input
                 style={{ ...inputStyle, marginBottom: 8 }}
-                placeholder="输入 BNB Smart Chain (BEP20) 地址"
+                placeholder={t.bscAddressPh}
                 value={newBscAddress}
                 onChange={e => setNewBscAddress(e.target.value)}
               />
-              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>绑定后每次提现将自动使用此地址，可点击“更换”修改</div>
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>{t.bindNote}</div>
               {withdrawMsg && (
                 <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? BNB.green : BNB.red, marginBottom: 12 }}>{withdrawMsg.text}</div>
               )}
@@ -1082,14 +1242,14 @@ export default function SentiaBuy() {
                   <button
                     onClick={() => { setWithdrawMode("withdraw"); setWithdrawMsg(null); }}
                     style={{ ...btnSecondary, flex: 1 }}
-                  >取消</button>
+                  >{t.cancel}</button>
                 )}
                 <button
                   disabled={withdrawLoading || !newBscAddress.trim() || !bindConfirmed}
                   onClick={async () => {
                     const addr = newBscAddress.trim();
                     if (!addr.startsWith("0x") || addr.length !== 42) {
-                      setWithdrawMsg({ type: "err", text: "请输入有效的 BEP20 地址（0x 开头，42 位）" });
+                      setWithdrawMsg({ type: "err", text: t.invalidAddress });
                       return;
                     }
                     setWithdrawLoading(true);
@@ -1102,15 +1262,15 @@ export default function SentiaBuy() {
                       });
                       await bscWalletsQuery.refetch();
                       setWithdrawMode("withdraw");
-                      setWithdrawMsg({ type: "ok", text: "钱包地址绑定成功！" });
+                      setWithdrawMsg({ type: "ok", text: t.bindSuccess });
                     } catch (err: any) {
-                      setWithdrawMsg({ type: "err", text: err?.message || "绑定失败，请重试" });
+                      setWithdrawMsg({ type: "err", text: err?.message || t.bindFail });
                     } finally {
                       setWithdrawLoading(false);
                     }
                   }}
                   style={{ ...btnPrimary, flex: 2, opacity: (!newBscAddress.trim() || !bindConfirmed || withdrawLoading) ? 0.5 : 1 }}
-                >{withdrawLoading ? "绑定中..." : "确认绑定"}</button>
+                >{withdrawLoading ? t.binding : t.confirmBind}</button>
               </div>
             </>
           )}
