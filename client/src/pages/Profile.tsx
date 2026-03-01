@@ -502,18 +502,32 @@ export default function Profile() {
         <div className="flex items-center gap-4">
           {/* 头像 */}
           <div className="relative group flex-shrink-0">
-            <img
-              src={displayAvatar}
-              alt="用户头像"
-              className="w-16 h-16 rounded-full object-cover"
-            />
-            <button
-              onClick={handleAvatarClick}
-              disabled={isUploading}
-              className="absolute bottom-0 right-0 bg-white text-[#D32F2F] rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
-            >
-              <Camera className="w-3 h-3" />
-            </button>
+            {(avatarPreview || user.avatar) ? (
+              <>
+                <img
+                  src={avatarPreview || user.avatar!}
+                  alt="用户头像"
+                  className="w-16 h-16 rounded-full object-cover"
+                />
+                <button
+                  onClick={handleAvatarClick}
+                  disabled={isUploading}
+                  className="absolute bottom-0 right-0 bg-white text-[#D32F2F] rounded-full p-1 shadow-md transition-all group-hover:scale-110 disabled:opacity-50"
+                >
+                  <Camera className="w-3 h-3" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleAvatarClick}
+                disabled={isUploading}
+                className="w-16 h-16 rounded-full border-2 border-white border-opacity-80 flex flex-col items-center justify-center gap-0.5 transition-all group-hover:border-opacity-100 disabled:opacity-50"
+                style={{ background: 'rgba(255,255,255,0.08)' }}
+              >
+                <Camera className="w-4 h-4 text-white opacity-90" />
+                <span className="text-white text-[9px] leading-tight opacity-90 text-center px-1">上传头像</span>
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
