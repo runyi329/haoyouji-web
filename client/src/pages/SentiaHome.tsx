@@ -51,17 +51,29 @@ export default function SentiaHome() {
             SENTIA
           </span>
         </div>
-        <button
-          onClick={() => navigate("/sentia/buy")}
-          style={{
-            background: BNB.yellow,
-            border: "none", borderRadius: 4, padding: "8px 18px",
-            color: "#0B0E11", fontWeight: 700, fontSize: 13, cursor: "pointer",
-            letterSpacing: 0.3,
-          }}
-        >
-          立即参与
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => navigate("/sentia/whitepaper")}
+            style={{
+              background: "transparent",
+              border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "7px 14px",
+              color: BNB.textSecondary, fontWeight: 500, fontSize: 13, cursor: "pointer",
+            }}
+          >
+            白皮书
+          </button>
+          <button
+            onClick={() => navigate("/sentia/buy")}
+            style={{
+              background: BNB.yellow,
+              border: "none", borderRadius: 4, padding: "8px 18px",
+              color: "#0B0E11", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              letterSpacing: 0.3,
+            }}
+          >
+            立即参与
+          </button>
+        </div>
       </nav>
 
       {/* Hero 区 */}
@@ -118,9 +130,7 @@ export default function SentiaHome() {
               立即参与预售
             </button>
             <button
-              onClick={() => {
-                document.getElementById("whitepaper")?.scrollIntoView({ behavior: "smooth" });
-              }}
+              onClick={() => navigate("/sentia/whitepaper")}
               style={{
                 background: "transparent",
                 border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "13px 32px",
