@@ -190,6 +190,7 @@ function Router() {
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
         <Route path="/coupons/create" component={lazy(() => import("./pages/CreateCoupon"))} />
         <Route path="/coupons/:id" component={lazy(() => import("./pages/CouponDetail"))} />
+        <Route path="/membership" component={lazy(() => import("./pages/MemberShip"))} />
 
         {/* 钱包相关页面 */}
         <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
