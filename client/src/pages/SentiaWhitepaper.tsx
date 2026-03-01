@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { SECTIONS, TABLE_OF_CONTENTS, WHITEPAPER_VERSION, WHITEPAPER_DATE } from "./SentiaWhitepaperData";
 
-const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
+const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.png";
 
 type Lang = "zh" | "en";
 
