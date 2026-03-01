@@ -163,7 +163,7 @@ export default function SentiaBuy() {
   };
 
   // SNT 数量（根据 USDT 实际到账额换算）
-  const toSNT = (usdt: string | number) => (parseFloat(String(usdt)) / SNT_PRICE).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const toSNT = (usdt: string | number) => (parseFloat(String(usdt)) / SNT_PRICE).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 
   return (
     <div style={{
