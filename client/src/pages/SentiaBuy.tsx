@@ -1,7 +1,8 @@
 /**
  * Sentia (SNT) 买币页 / 定向邀请页
- * 设计风格：深空科技美学 × Web3 Premium
- * 步骤：登录/注册 → 填写购买数量 → USDT 支付（嫁接钱包充值流程）→ 完成
+ * 设计风格：币安设计语言
+ * 色系：#0B0E11（深黑底）+ #F0B90B（金黄主色）+ #1E2026（卡片背景）
+ * 无 emoji，方角/小圆角按钮，专业交易所风格
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -13,28 +14,50 @@ const SNT_PRICE = 0.04; // USDT per SNT
 
 type Step = "login" | "buy" | "pay" | "submitted" | "orders";
 
-// ---- 样式常量 ----
+// 币安色系常量
+const BNB = {
+  bg: "#0B0E11",
+  card: "#1E2026",
+  cardBorder: "#2B2F36",
+  yellow: "#F0B90B",
+  yellowDim: "rgba(240,185,11,0.12)",
+  yellowBorder: "rgba(240,185,11,0.35)",
+  text: "#EAECEF",
+  textSecondary: "#848E9C",
+  textMuted: "#5E6673",
+  green: "#0ECB81",
+  greenDim: "rgba(14,203,129,0.1)",
+  greenBorder: "rgba(14,203,129,0.3)",
+  red: "#F6465D",
+  redDim: "rgba(246,70,93,0.1)",
+  redBorder: "rgba(246,70,93,0.3)",
+  blue: "#1890FF",
+  blueDim: "rgba(24,144,255,0.1)",
+  blueBorder: "rgba(24,144,255,0.3)",
+  divider: "#2B2F36",
+};
+
+// 样式常量
 const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "12px 14px", borderRadius: 10,
-  background: "rgba(255,255,255,0.06)", border: "1px solid rgba(124,58,237,0.3)",
-  color: "#F8FAFC", fontSize: 14, outline: "none", boxSizing: "border-box",
+  width: "100%", padding: "11px 14px", borderRadius: 4,
+  background: BNB.bg, border: `1px solid ${BNB.cardBorder}`,
+  color: BNB.text, fontSize: 14, outline: "none", boxSizing: "border-box",
 };
 const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(124,58,237,0.25)",
-  borderRadius: 20, padding: "24px 20px",
-  backdropFilter: "blur(10px)",
+  background: BNB.card,
+  border: `1px solid ${BNB.divider}`,
+  borderRadius: 6, padding: "20px 18px",
 };
 const btnPrimary: React.CSSProperties = {
-  width: "100%", background: "linear-gradient(135deg, #7C3AED, #A855F7)",
-  border: "none", borderRadius: 12, padding: "14px",
-  color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer",
-  boxShadow: "0 0 20px rgba(124,58,237,0.4)",
+  width: "100%", background: BNB.yellow,
+  border: "none", borderRadius: 4, padding: "13px",
+  color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
+  letterSpacing: 0.3,
 };
 const btnSecondary: React.CSSProperties = {
   width: "100%", background: "transparent",
-  border: "1px solid rgba(124,58,237,0.3)", borderRadius: 12, padding: "14px",
-  color: "#A855F7", fontWeight: 600, fontSize: 15, cursor: "pointer",
+  border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "13px",
+  color: BNB.text, fontWeight: 500, fontSize: 14, cursor: "pointer",
 };
 
 export default function SentiaBuy() {
@@ -52,7 +75,7 @@ export default function SentiaBuy() {
   // 购买数量
   const [sntAmount, setSntAmount] = useState("1000");
 
-  // USDT 支付（嫁接充值流程）
+  // USDT 支付
   const [network, setNetwork] = useState<"TRC20" | "ERC20" | "BEP20" | "APTOS" | "SOLANA">("TRC20");
   const [order, setOrder] = useState<any>(null);
   const [qrCode, setQrCode] = useState<string>("");
@@ -60,14 +83,7 @@ export default function SentiaBuy() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // 从历史订单恢复支付（点击确认中/待支付订单）
-  const getOrderQuery = trpc.recharge.getOrder.useQuery(
-    { orderNo: order?.orderNo || "" },
-    { enabled: false }
-  );
-
   const handleResumeOrder = async (o: any) => {
-    // 恢复订单数据到 pay 步骤
     setOrder(o);
     if (o.walletAddress) {
       try {
@@ -75,7 +91,6 @@ export default function SentiaBuy() {
         setQrCode(qr);
       } catch {}
     }
-    // 计算剩余时间
     if (o.expiresAt) {
       const remaining = Math.floor((new Date(o.expiresAt).getTime() - Date.now()) / 1000);
       setTimeLeft(remaining > 0 ? remaining : 0);
@@ -93,7 +108,7 @@ export default function SentiaBuy() {
     { enabled: step === "orders" || step === "buy" }
   );
 
-  // 累计持仓：所有已到账订单的 USDT 之和 / SNT_PRICE
+  // 累计持仓
   const totalSNT = (() => {
     if (!ordersQuery.data) return null;
     const completedUSDT = ordersQuery.data
@@ -102,7 +117,6 @@ export default function SentiaBuy() {
     return completedUSDT / SNT_PRICE;
   })();
 
-  // 待确认中的 SNT
   const pendingSNT = (() => {
     if (!ordersQuery.data) return null;
     const pendingUSDT = ordersQuery.data
@@ -127,7 +141,6 @@ export default function SentiaBuy() {
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // 复制
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -153,7 +166,7 @@ export default function SentiaBuy() {
     }
   };
 
-  // 创建充值订单（以 USDT 金额为准）
+  // 创建充值订单
   const handleCreateOrder = async () => {
     const amount = parseFloat(usdtCost);
     if (isNaN(amount) || amount < 1) {
@@ -190,12 +203,12 @@ export default function SentiaBuy() {
   };
 
   // 订单状态标签
-  const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-    pending:   { label: "待支付", color: "#F59E0B", bg: "rgba(245,158,11,0.15)" },
-    submitted: { label: "确认中", color: "#60A5FA", bg: "rgba(96,165,250,0.15)" },
-    completed: { label: "已到账", color: "#34D399", bg: "rgba(52,211,153,0.15)" },
-    expired:   { label: "已过期", color: "#94A3B8", bg: "rgba(148,163,184,0.1)" },
-    cancelled: { label: "已取消", color: "#F87171", bg: "rgba(248,113,113,0.15)" },
+  const statusConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    pending:   { label: "待支付", color: BNB.yellow,  bg: BNB.yellowDim, border: BNB.yellowBorder },
+    submitted: { label: "确认中", color: BNB.blue,    bg: BNB.blueDim,   border: BNB.blueBorder },
+    completed: { label: "已到账", color: BNB.green,   bg: BNB.greenDim,  border: BNB.greenBorder },
+    expired:   { label: "已过期", color: BNB.textMuted, bg: "rgba(255,255,255,0.04)", border: BNB.divider },
+    cancelled: { label: "已取消", color: BNB.red,     bg: BNB.redDim,    border: BNB.redBorder },
   };
 
   const formatDate = (d: string) => {
@@ -203,77 +216,87 @@ export default function SentiaBuy() {
     return `${(dt.getMonth()+1).toString().padStart(2,"0")}-${dt.getDate().toString().padStart(2,"0")} ${dt.getHours().toString().padStart(2,"0")}:${dt.getMinutes().toString().padStart(2,"0")}`;
   };
 
-  // SNT 数量（根据 USDT 实际到账额换算）
-  const toSNT = (usdt: string | number) => (parseFloat(String(usdt)) / SNT_PRICE).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const toSNT = (usdt: string | number) =>
+    (parseFloat(String(usdt)) / SNT_PRICE).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+  const stepOrder = ["login", "buy", "pay", "submitted"];
+  const currentIdx = stepOrder.indexOf(step);
 
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #0A0A1A 0%, #0F0A2E 40%, #1A0A3E 70%, #0A0A1A 100%)",
-      color: "#F8FAFC", fontFamily: "'Inter', sans-serif", position: "relative",
+      background: BNB.bg,
+      color: BNB.text,
+      fontFamily: "'Inter', 'SF Pro Display', -apple-system, sans-serif",
     }}>
-      {/* 背景光晕 */}
-      <div style={{
-        position: "fixed", top: -150, left: "50%", transform: "translateX(-50%)",
-        width: 500, height: 500,
-        background: "radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)",
-        pointerEvents: "none", zIndex: 0,
-      }} />
 
       {/* 导航栏 */}
       <nav style={{
         position: "sticky", top: 0, zIndex: 100,
-        background: "rgba(10,10,26,0.9)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(124,58,237,0.2)",
-        padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: BNB.bg,
+        borderBottom: `1px solid ${BNB.divider}`,
+        padding: "0 20px",
+        height: 56,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <button onClick={() => navigate("/sentia")} style={{
-          background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14,
-          display: "flex", alignItems: "center", gap: 6,
-        }}>← 返回首页</button>
+          background: "transparent", border: "none", color: BNB.textSecondary, cursor: "pointer", fontSize: 13,
+          display: "flex", alignItems: "center", gap: 6, padding: 0,
+        }}>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>&#8592;</span> 返回首页
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <img src={SENTIA_ICON} alt="SNT" style={{ width: 24, height: 24, borderRadius: "50%" }} />
-          <span style={{ fontWeight: 700, fontSize: 15, background: "linear-gradient(90deg, #A855F7, #F59E0B)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          <img src={SENTIA_ICON} alt="SNT" style={{ width: 22, height: 22, borderRadius: "50%" }} />
+          <span style={{ fontWeight: 700, fontSize: 14, color: BNB.yellow, letterSpacing: 1 }}>
             SENTIA
           </span>
         </div>
         {step !== "login" && (
           <button onClick={() => setStep("orders")} style={{
-            background: "transparent", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 8,
-            padding: "6px 12px", color: "#A855F7", fontSize: 12, cursor: "pointer",
+            background: "transparent", border: `1px solid ${BNB.cardBorder}`, borderRadius: 4,
+            padding: "6px 12px", color: BNB.textSecondary, fontSize: 12, cursor: "pointer",
           }}>我的订单</button>
         )}
+        {step === "login" && <div style={{ width: 60 }} />}
       </nav>
 
-      <div style={{ position: "relative", zIndex: 1, padding: "24px 16px 60px", maxWidth: 420, margin: "0 auto" }}>
+      <div style={{ padding: "24px 16px 60px", maxWidth: 440, margin: "0 auto" }}>
 
         {/* 步骤指示器 */}
         {step !== "orders" && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
             {[
-              { key: "login", label: "登录/注册" },
-              { key: "buy",   label: "购买 SNT" },
-              { key: "pay",   label: "USDT 支付" },
+              { key: "login", label: "登录" },
+              { key: "buy",   label: "购买" },
+              { key: "pay",   label: "支付" },
               { key: "submitted", label: "完成" },
             ].map((s, i) => {
-              const stepOrder = ["login", "buy", "pay", "submitted"];
-              const currentIdx = stepOrder.indexOf(step);
               const thisIdx = stepOrder.indexOf(s.key);
               const isDone = currentIdx > thisIdx;
               const isActive = step === s.key;
               return (
-                <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{
-                    width: 26, height: 26, borderRadius: "50%",
-                    background: isDone ? "rgba(124,58,237,0.4)" : isActive ? "linear-gradient(135deg, #7C3AED, #A855F7)" : "rgba(255,255,255,0.08)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 700, color: "#fff",
-                    boxShadow: isActive ? "0 0 12px rgba(124,58,237,0.6)" : "none",
-                  }}>
-                    {isDone ? "✓" : i + 1}
+                <div key={s.key} style={{ display: "flex", alignItems: "center", flex: i < 3 ? 1 : "none" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      background: isDone ? BNB.yellow : isActive ? BNB.yellow : BNB.card,
+                      border: `2px solid ${isDone || isActive ? BNB.yellow : BNB.cardBorder}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 700,
+                      color: isDone || isActive ? "#0B0E11" : BNB.textMuted,
+                    }}>
+                      {isDone ? "✓" : i + 1}
+                    </div>
+                    <span style={{ fontSize: 10, color: isActive ? BNB.yellow : isDone ? BNB.textSecondary : BNB.textMuted, whiteSpace: "nowrap" }}>
+                      {s.label}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 11, color: isActive ? "#A855F7" : isDone ? "#7C3AED" : "#475569" }}>{s.label}</span>
-                  {i < 3 && <div style={{ width: 16, height: 1, background: "rgba(124,58,237,0.25)" }} />}
+                  {i < 3 && (
+                    <div style={{
+                      flex: 1, height: 2, margin: "0 4px", marginBottom: 16,
+                      background: isDone ? BNB.yellow : BNB.divider,
+                    }} />
+                  )}
                 </div>
               );
             })}
@@ -284,23 +307,25 @@ export default function SentiaBuy() {
         {step === "login" && (
           <div style={cardStyle}>
             <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <img src={SENTIA_ICON} alt="SNT" style={{ width: 56, height: 56, borderRadius: "50%", marginBottom: 12, boxShadow: "0 0 20px rgba(124,58,237,0.5)" }} />
-              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>{isRegister ? "创建账户" : "欢迎回来"}</h2>
-              <p style={{ fontSize: 13, color: "#94A3B8" }}>
+              <img src={SENTIA_ICON} alt="SNT" style={{ width: 52, height: 52, borderRadius: "50%", marginBottom: 14 }} />
+              <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 6, color: BNB.text }}>
+                {isRegister ? "创建账户" : "欢迎回来"}
+              </h2>
+              <p style={{ fontSize: 13, color: BNB.textSecondary }}>
                 {isRegister ? "注册后即可参与 Sentia 预售" : "登录您的账户参与 SNT 预售"}
               </p>
             </div>
 
             <form onSubmit={handleAuth} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label style={{ fontSize: 12, color: "#94A3B8", display: "block", marginBottom: 6 }}>用户名</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>用户名</label>
                 <input
                   type="text" placeholder="请输入用户名" required value={username}
                   onChange={e => setUsername(e.target.value)} style={inputStyle}
                 />
               </div>
               <div>
-                <label style={{ fontSize: 12, color: "#94A3B8", display: "block", marginBottom: 6 }}>密码</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>密码</label>
                 <input
                   type="password" placeholder="请输入密码" required value={password}
                   onChange={e => setPassword(e.target.value)} style={inputStyle}
@@ -308,7 +333,7 @@ export default function SentiaBuy() {
               </div>
               {isRegister && (
                 <div>
-                  <label style={{ fontSize: 12, color: "#94A3B8", display: "block", marginBottom: 6 }}>邀请码（选填）</label>
+                  <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 6 }}>邀请码（选填）</label>
                   <input
                     type="text" placeholder="请输入邀请码" value={inviteCode}
                     onChange={e => setInviteCode(e.target.value)} style={inputStyle}
@@ -316,18 +341,18 @@ export default function SentiaBuy() {
                 </div>
               )}
               {authError && (
-                <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#F87171" }}>
+                <div style={{ background: BNB.redDim, border: `1px solid ${BNB.redBorder}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: BNB.red }}>
                   {authError}
                 </div>
               )}
-              <button type="submit" disabled={authLoading} style={{ ...btnPrimary, opacity: authLoading ? 0.7 : 1 }}>
+              <button type="submit" disabled={authLoading} style={{ ...btnPrimary, opacity: authLoading ? 0.7 : 1, marginTop: 4 }}>
                 {authLoading ? "处理中..." : isRegister ? "注册并参与预售" : "登录"}
               </button>
             </form>
 
             <div style={{ textAlign: "center", marginTop: 16 }}>
               <button onClick={() => { setIsRegister(!isRegister); setAuthError(""); }}
-                style={{ background: "none", border: "none", color: "#A855F7", fontSize: 13, cursor: "pointer" }}>
+                style={{ background: "none", border: "none", color: BNB.yellow, fontSize: 13, cursor: "pointer" }}>
                 {isRegister ? "已有账户？立即登录" : "没有账户？免费注册"}
               </button>
             </div>
@@ -336,29 +361,32 @@ export default function SentiaBuy() {
 
         {/* ===== 步骤二：填写购买数量 ===== */}
         {step === "buy" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* 持仓卡 */}
             {ordersQuery.data && (totalSNT! > 0 || pendingSNT! > 0) && (
               <div style={{
-                background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(168,85,247,0.1))",
-                border: "1px solid rgba(245,158,11,0.3)", borderRadius: 16, padding: "16px 20px",
+                background: BNB.card,
+                border: `1px solid ${BNB.yellowBorder}`,
+                borderRadius: 6, padding: "16px 18px",
               }}>
-                <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10, fontWeight: 600 }}>🏆 我的持仓</div>
+                <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 10, fontWeight: 600, letterSpacing: 0.5 }}>
+                  我的持仓
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                   <div>
-                    <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>累计已到账</div>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>
+                    <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>累计已到账</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
                       {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                     </div>
-                    <div style={{ fontSize: 11, color: "#64748B" }}>SNT</div>
+                    <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>SNT</div>
                   </div>
                   {pendingSNT! > 0 && (
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>确认中</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#60A5FA" }}>
+                      <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>确认中</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: BNB.blue }}>
                         +{pendingSNT!.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                       </div>
-                      <div style={{ fontSize: 11, color: "#64748B" }}>SNT</div>
+                      <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>SNT</div>
                     </div>
                   )}
                 </div>
@@ -367,37 +395,39 @@ export default function SentiaBuy() {
 
             {/* 价格卡 */}
             <div style={{
-              background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(168,85,247,0.1))",
-              border: "1px solid rgba(124,58,237,0.3)", borderRadius: 16, padding: "16px 20px",
+              background: BNB.card,
+              border: `1px solid ${BNB.divider}`,
+              borderRadius: 6, padding: "16px 18px",
               display: "flex", justifyContent: "space-between", alignItems: "center",
             }}>
               <div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>合伙人专属价格</div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>$0.04</div>
-                <div style={{ fontSize: 11, color: "#64748B" }}>USDT / SNT</div>
+                <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4, letterSpacing: 0.5 }}>合伙人专属价格</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: BNB.yellow }}>$0.04</div>
+                <div style={{ fontSize: 11, color: BNB.textSecondary, marginTop: 2 }}>USDT / SNT</div>
               </div>
-              <img src={SENTIA_ICON} alt="SNT" style={{ width: 56, height: 56, borderRadius: "50%", boxShadow: "0 0 20px rgba(124,58,237,0.5)" }} />
+              <img src={SENTIA_ICON} alt="SNT" style={{ width: 52, height: 52, borderRadius: "50%" }} />
             </div>
 
             {/* 购买表单 */}
             <div style={cardStyle}>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: "#94A3B8", display: "block", marginBottom: 8 }}>购买数量（SNT）</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>购买数量（SNT）</label>
                 <input
                   type="number" value={sntAmount} onChange={e => setSntAmount(e.target.value)}
                   min="100" step="100"
                   style={{ ...inputStyle, fontSize: 22, fontWeight: 700 }}
                 />
                 {/* 快捷选择 */}
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                   {["500", "1000", "5000", "10000", "50000"].map(v => (
                     <button key={v} type="button" onClick={() => setSntAmount(v)} style={{
-                      padding: "6px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer",
-                      background: sntAmount === v ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.06)",
-                      border: `1px solid ${sntAmount === v ? "#A855F7" : "rgba(124,58,237,0.2)"}`,
-                      color: sntAmount === v ? "#A855F7" : "#94A3B8",
+                      padding: "5px 12px", borderRadius: 4, fontSize: 12, cursor: "pointer",
+                      background: sntAmount === v ? BNB.yellowDim : "transparent",
+                      border: `1px solid ${sntAmount === v ? BNB.yellow : BNB.cardBorder}`,
+                      color: sntAmount === v ? BNB.yellow : BNB.textSecondary,
+                      fontWeight: sntAmount === v ? 600 : 400,
                     }}>
-                      {parseInt(v) >= 1000 ? `${parseInt(v)/1000}k` : v}
+                      {parseInt(v) >= 1000 ? `${parseInt(v)/1000}K` : v}
                     </button>
                   ))}
                 </div>
@@ -405,38 +435,37 @@ export default function SentiaBuy() {
 
               {/* 费用计算 */}
               <div style={{
-                background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)",
-                borderRadius: 12, padding: "14px 16px", marginBottom: 16,
+                background: BNB.bg, border: `1px solid ${BNB.divider}`,
+                borderRadius: 4, padding: "12px 14px", marginBottom: 16,
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, color: "#94A3B8" }}>需支付 USDT</span>
-                  <span style={{ fontWeight: 700, color: "#F59E0B" }}>${usdtCost}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>需支付 USDT</span>
+                  <span style={{ fontWeight: 700, color: BNB.yellow }}>${usdtCost}</span>
                 </div>
+                <div style={{ height: 1, background: BNB.divider, marginBottom: 8 }} />
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, color: "#94A3B8" }}>获得 SNT</span>
-                  <span style={{ fontWeight: 700, color: "#A855F7" }}>{parseFloat(sntAmount).toLocaleString()} SNT</span>
+                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>获得 SNT</span>
+                  <span style={{ fontWeight: 700, color: BNB.text }}>{parseFloat(sntAmount).toLocaleString()} SNT</span>
                 </div>
               </div>
 
               {/* 选择网络 */}
               <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, color: "#94A3B8", display: "block", marginBottom: 8 }}>选择支付网络</label>
+                <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>选择支付网络</label>
                 <select
                   value={network}
                   onChange={e => setNetwork(e.target.value as typeof network)}
                   style={{
                     ...inputStyle,
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(124,58,237,0.3)",
-                    color: "#F8FAFC",
                     appearance: "none",
+                    cursor: "pointer",
                   }}
                 >
-                  <option value="TRC20" style={{ background: "#1A0A3E" }}>TRC20 — 推荐 · 快速到账 · 低手续费</option>
-                  <option value="APTOS" style={{ background: "#1A0A3E" }}>Aptos — 新一代公链 · 快速安全</option>
-                  <option value="ERC20" style={{ background: "#1A0A3E" }}>ERC20 — 以太坊网络 · 手续费较高</option>
-                  <option value="SOLANA" style={{ background: "#1A0A3E" }}>Solana — 高性能公链 · 极速到账</option>
-                  <option value="BEP20" style={{ background: "#1A0A3E" }}>BSC (BEP20) — 币安智能链 · 快速低费</option>
+                  <option value="TRC20" style={{ background: BNB.card }}>TRC20 — 推荐 · 快速到账 · 低手续费</option>
+                  <option value="APTOS" style={{ background: BNB.card }}>Aptos — 新一代公链 · 快速安全</option>
+                  <option value="ERC20" style={{ background: BNB.card }}>ERC20 — 以太坊网络 · 手续费较高</option>
+                  <option value="SOLANA" style={{ background: BNB.card }}>Solana — 高性能公链 · 极速到账</option>
+                  <option value="BEP20" style={{ background: BNB.card }}>BSC (BEP20) — 币安智能链 · 快速低费</option>
                 </select>
               </div>
 
@@ -447,67 +476,77 @@ export default function SentiaBuy() {
               >
                 {createOrderMutation.isPending ? "创建订单中..." : `下一步：支付 $${usdtCost} USDT`}
               </button>
-              <div style={{ textAlign: "center", fontSize: 11, color: "#475569", marginTop: 10 }}>
+              <div style={{ textAlign: "center", fontSize: 11, color: BNB.textMuted, marginTop: 10 }}>
                 购买即视为同意《Sentia 预售协议》
               </div>
             </div>
           </div>
         )}
 
-        {/* ===== 步骤三：USDT 支付（嫁接充值流程）===== */}
+        {/* ===== 步骤三：USDT 支付 ===== */}
         {step === "pay" && order && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* 倒计时 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* 倒计时提示 */}
             {timeLeft > 0 ? (
-              <div style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 20 }}>⏱</span>
+              <div style={{ background: BNB.yellowDim, border: `1px solid ${BNB.yellowBorder}`, borderRadius: 4, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 4, background: BNB.yellowDim, border: `1px solid ${BNB.yellowBorder}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#F59E0B" }}>请在 {formatTime(timeLeft)} 内完成支付</div>
-                  <div style={{ fontSize: 12, color: "#94A3B8" }}>订单将在30分钟后自动过期</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.yellow }}>请在 {formatTime(timeLeft)} 内完成支付</div>
+                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>订单将在 30 分钟后自动过期</div>
                 </div>
               </div>
             ) : (
-              <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 20 }}>⚠️</span>
+              <div style={{ background: BNB.redDim, border: `1px solid ${BNB.redBorder}`, borderRadius: 4, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 4, background: BNB.redDim, border: `1px solid ${BNB.redBorder}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={BNB.red} strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#F87171" }}>订单已过期</div>
-                  <div style={{ fontSize: 12, color: "#94A3B8" }}>请返回重新创建订单</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: BNB.red }}>订单已过期</div>
+                  <div style={{ fontSize: 12, color: BNB.textSecondary }}>请返回重新创建订单</div>
                 </div>
               </div>
             )}
 
             {/* 应付金额 */}
             <div style={{ ...cardStyle, textAlign: "center" }}>
-              <div style={{ fontSize: 13, color: "#94A3B8", marginBottom: 6 }}>应付金额</div>
-              <div style={{ fontSize: 40, fontWeight: 900, color: "#F59E0B", marginBottom: 4 }}>{order.amount}</div>
-              <div style={{ fontSize: 14, color: "#94A3B8" }}>USDT ({order.network})</div>
-              <div style={{ marginTop: 8, fontSize: 13, color: "#A855F7" }}>
+              <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 6 }}>应付金额</div>
+              <div style={{ fontSize: 42, fontWeight: 800, color: BNB.yellow, marginBottom: 4 }}>{order.amount}</div>
+              <div style={{ fontSize: 14, color: BNB.textSecondary }}>USDT ({order.network})</div>
+              <div style={{ marginTop: 10, fontSize: 13, color: BNB.green }}>
                 到账后将获得 <strong>{toSNT(order.amount)} SNT</strong>
               </div>
             </div>
 
-            {/* 二维码 */}
+            {/* 二维码 + 收款地址 */}
             <div style={cardStyle}>
-              <div style={{ textAlign: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12 }}>扫码支付</div>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 12 }}>扫码支付</div>
                 {qrCode && (
-                  <div style={{ display: "inline-block", padding: 12, background: "#fff", borderRadius: 12 }}>
+                  <div style={{ display: "inline-block", padding: 12, background: "#fff", borderRadius: 4 }}>
                     <img src={qrCode} alt="QR Code" style={{ width: 160, height: 160, display: "block" }} />
                   </div>
                 )}
               </div>
 
               {/* 收款地址 */}
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8 }}>收款地址</div>
-                <div style={{ display: "flex", alignItems: "center", background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 12px", border: "1px solid rgba(124,58,237,0.2)" }}>
-                  <div style={{ flex: 1, fontFamily: "monospace", fontSize: 12, wordBreak: "break-all", color: "#CBD5E1", marginRight: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: BNB.textSecondary, marginBottom: 8 }}>收款地址</div>
+                <div style={{ display: "flex", alignItems: "center", background: BNB.bg, borderRadius: 4, padding: "10px 12px", border: `1px solid ${BNB.divider}` }}>
+                  <div style={{ flex: 1, fontFamily: "monospace", fontSize: 12, wordBreak: "break-all", color: BNB.text, marginRight: 8 }}>
                     {order.walletAddress}
                   </div>
                   <button onClick={() => copyToClipboard(order.walletAddress)} style={{
-                    flexShrink: 0, background: copied ? "rgba(52,211,153,0.2)" : "rgba(124,58,237,0.2)",
-                    border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer",
-                    color: copied ? "#34D399" : "#A855F7", fontSize: 12, fontWeight: 600,
+                    flexShrink: 0,
+                    background: copied ? BNB.greenDim : BNB.yellowDim,
+                    border: `1px solid ${copied ? BNB.greenBorder : BNB.yellowBorder}`,
+                    borderRadius: 4, padding: "5px 10px", cursor: "pointer",
+                    color: copied ? BNB.green : BNB.yellow, fontSize: 12, fontWeight: 600,
                   }}>
                     {copied ? "已复制" : "复制"}
                   </button>
@@ -515,33 +554,40 @@ export default function SentiaBuy() {
               </div>
 
               {/* 订单号 */}
-              <div style={{ marginTop: 12, fontSize: 12, color: "#64748B" }}>
-                订单号：<span style={{ fontFamily: "monospace", color: "#94A3B8" }}>{order.orderNo}</span>
+              <div style={{ marginTop: 12, fontSize: 12, color: BNB.textMuted }}>
+                订单号：<span style={{ fontFamily: "monospace", color: BNB.textSecondary }}>{order.orderNo}</span>
               </div>
             </div>
 
             {/* 重要提示 */}
-            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 12, padding: "14px 16px" }}>
-              <div style={{ fontWeight: 600, color: "#F59E0B", marginBottom: 8 }}>⚠️ 重要提示</div>
-              <ul style={{ fontSize: 12, color: "#D97706", lineHeight: 1.8, paddingLeft: 0, listStyle: "none", margin: 0 }}>
-                <li>• 请转账 <strong>{order.amount} USDT</strong>，系统按实际到账金额入账</li>
-                <li>• 请选择 <strong>{order.network}</strong> 网络，否则资产将无法找回</li>
-                <li>• 转账完成后，请点击下方按钮提交确认</li>
-                <li>• 到账后将按 $0.04/SNT 自动换算为 SNT 代币</li>
-              </ul>
+            <div style={{ background: BNB.yellowDim, border: `1px solid ${BNB.yellowBorder}`, borderRadius: 4, padding: "14px 16px" }}>
+              <div style={{ fontWeight: 600, color: BNB.yellow, marginBottom: 8, fontSize: 13 }}>注意事项</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  `请转账 ${order.amount} USDT，系统按实际到账金额入账`,
+                  `请选择 ${order.network} 网络，否则资产将无法找回`,
+                  "转账完成后，请点击下方按钮提交确认",
+                  "到账后将按 $0.04/SNT 自动换算为 SNT 代币",
+                ].map((tip, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: "#D4A017", lineHeight: 1.5 }}>
+                    <span style={{ color: BNB.yellow, flexShrink: 0, fontWeight: 700 }}>{i + 1}.</span>
+                    <span>{tip}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* 提交确认按钮 */}
             <button
               onClick={handleSubmitTransfer}
               disabled={submitting || timeLeft <= 0}
-              style={{ ...btnPrimary, opacity: (submitting || timeLeft <= 0) ? 0.5 : 1, fontSize: 16, padding: "16px" }}
+              style={{ ...btnPrimary, opacity: (submitting || timeLeft <= 0) ? 0.5 : 1, fontSize: 15, padding: "14px" }}
             >
-              {submitting ? "提交中..." : "✅ 我已成功转账，提交确认"}
+              {submitting ? "提交中..." : "我已完成转账，提交确认"}
             </button>
 
             <button onClick={() => setStep("buy")} style={btnSecondary}>
-              ← 返回修改数量
+              返回修改数量
             </button>
           </div>
         )}
@@ -550,34 +596,35 @@ export default function SentiaBuy() {
         {step === "submitted" && order && (
           <div style={{ ...cardStyle, textAlign: "center" }}>
             <div style={{
-              width: 80, height: 80, borderRadius: "50%", margin: "0 auto 20px",
-              background: "linear-gradient(135deg, #7C3AED, #A855F7)",
+              width: 72, height: 72, borderRadius: "50%", margin: "0 auto 20px",
+              background: BNB.greenDim,
+              border: `2px solid ${BNB.greenBorder}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 36, boxShadow: "0 0 30px rgba(124,58,237,0.5)",
-            }}>🎉</div>
-            <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>转账确认已提交！</h2>
-            <p style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.7, marginBottom: 24 }}>
+            }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={BNB.green} strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: BNB.text }}>转账确认已提交</h2>
+            <p style={{ fontSize: 13, color: BNB.textSecondary, lineHeight: 1.7, marginBottom: 24 }}>
               系统正在扫描链上交易<br />确认到账后将自动记录您的 SNT 代币
             </p>
 
             {/* 订单摘要 */}
-            <div style={{ background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)", borderRadius: 12, padding: "16px", marginBottom: 24, textAlign: "left" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: "#94A3B8" }}>支付金额</span>
-                <span style={{ fontWeight: 700, color: "#F59E0B" }}>{order.amount} USDT</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: "#94A3B8" }}>预计获得</span>
-                <span style={{ fontWeight: 700, color: "#A855F7" }}>{toSNT(order.amount)} SNT</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: "#94A3B8" }}>网络</span>
-                <span style={{ color: "#CBD5E1" }}>{order.network}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, color: "#94A3B8" }}>订单号</span>
-                <span style={{ fontFamily: "monospace", fontSize: 12, color: "#64748B" }}>{order.orderNo}</span>
-              </div>
+            <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+              {[
+                { label: "支付金额", value: `${order.amount} USDT`, color: BNB.yellow },
+                { label: "预计获得", value: `${toSNT(order.amount)} SNT`, color: BNB.green },
+                { label: "网络", value: order.network, color: BNB.text },
+                { label: "订单号", value: order.orderNo, color: BNB.textSecondary, mono: true },
+              ].map((row, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: i < 3 ? 10 : 0 }}>
+                  <span style={{ fontSize: 13, color: BNB.textSecondary }}>{row.label}</span>
+                  <span style={{ fontWeight: 600, color: row.color, fontFamily: row.mono ? "monospace" : undefined, fontSize: row.mono ? 11 : 13 }}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -589,71 +636,71 @@ export default function SentiaBuy() {
 
         {/* ===== 我的订单 ===== */}
         {step === "orders" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700 }}>我的订单</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>我的订单</h2>
               <button onClick={() => setStep("buy")} style={{
-                background: "transparent", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 8,
-                padding: "6px 12px", color: "#A855F7", fontSize: 12, cursor: "pointer",
-              }}>+ 继续购买</button>
+                background: BNB.yellow, border: "none", borderRadius: 4,
+                padding: "6px 14px", color: "#0B0E11", fontSize: 12, cursor: "pointer", fontWeight: 600,
+              }}>继续购买</button>
             </div>
 
             {ordersQuery.isLoading ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "#64748B" }}>加载中...</div>
+              <div style={{ textAlign: "center", padding: "40px 0", color: BNB.textMuted }}>加载中...</div>
             ) : !ordersQuery.data || ordersQuery.data.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: "40px 24px" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                <div style={{ color: "#64748B" }}>暂无订单记录</div>
-                <button onClick={() => setStep("buy")} style={{ ...btnPrimary, marginTop: 20 }}>立即购买 SNT</button>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: BNB.bg, border: `1px solid ${BNB.divider}`, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={BNB.textMuted} strokeWidth="1.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div style={{ color: BNB.textSecondary, marginBottom: 16 }}>暂无订单记录</div>
+                <button onClick={() => setStep("buy")} style={{ ...btnPrimary, maxWidth: 200, margin: "0 auto" }}>立即购买 SNT</button>
               </div>
             ) : (
               ordersQuery.data.map((o: any) => {
                 const cfg = statusConfig[o.status] || statusConfig.pending;
+                const isClickable = o.status === "pending" || o.status === "submitted";
                 return (
                   <div
                     key={o.id}
-                    onClick={() => {
-                      if (o.status === "pending" || o.status === "submitted") {
-                        handleResumeOrder(o);
-                      }
-                    }}
+                    onClick={() => { if (isClickable) handleResumeOrder(o); }}
                     style={{
-                      background: "rgba(255,255,255,0.03)",
-                      border: (o.status === "pending" || o.status === "submitted")
-                        ? "1px solid rgba(96,165,250,0.4)"
-                        : "1px solid rgba(124,58,237,0.2)",
-                      borderRadius: 14, padding: "16px 18px",
-                      cursor: (o.status === "pending" || o.status === "submitted") ? "pointer" : "default",
-                      transition: "border-color 0.2s",
+                      background: BNB.card,
+                      border: isClickable ? `1px solid ${BNB.yellowBorder}` : `1px solid ${BNB.divider}`,
+                      borderRadius: 6, padding: "14px 16px",
+                      cursor: isClickable ? "pointer" : "default",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: "#F59E0B" }}>{o.amount} USDT</div>
-                        <div style={{ fontSize: 13, color: "#A855F7", marginTop: 2 }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: BNB.yellow }}>{o.amount} USDT</div>
+                        <div style={{ fontSize: 12, color: BNB.textSecondary, marginTop: 3 }}>
                           {o.status === "completed" ? "已到账" : "预计"} {toSNT(o.amount)} SNT
                         </div>
                       </div>
-                      <span style={{ background: cfg.bg, color: cfg.color, borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+                      <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, borderRadius: 2, padding: "3px 10px", fontSize: 11, fontWeight: 600 }}>
                         {cfg.label}
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#475569", display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 12, color: BNB.textMuted, display: "flex", justifyContent: "space-between" }}>
                       <span>{o.network}</span>
                       <span>{formatDate(o.createdAt)}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: "#374151", marginTop: 4, fontFamily: "monospace" }}>
+                    <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 4, fontFamily: "monospace" }}>
                       {o.orderNo}
                     </div>
                     {o.txnHash && (
-                      <div style={{ fontSize: 11, color: "#374151", marginTop: 4, fontFamily: "monospace", wordBreak: "break-all" }}>
+                      <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 4, fontFamily: "monospace", wordBreak: "break-all" }}>
                         TxHash: {o.txnHash}
                       </div>
                     )}
-                    {(o.status === "pending" || o.status === "submitted") && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(96,165,250,0.15)", fontSize: 12, color: "#60A5FA", display: "flex", alignItems: "center", gap: 4 }}>
-                        <span>👆</span>
-                        <span>点击查看支付地址 / 二维码，继续完成转账</span>
+                    {isClickable && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BNB.divider}`, fontSize: 12, color: BNB.yellow, display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/>
+                        </svg>
+                        点击查看支付地址 / 二维码，继续完成转账
                       </div>
                     )}
                   </div>
