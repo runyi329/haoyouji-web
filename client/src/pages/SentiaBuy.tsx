@@ -231,7 +231,7 @@ const T = {
     confirmCheckEnd: "，不是交易所充币地址",
     bscAddress: "BSC 钱包地址（0x 开头，42 位）",
     bscAddressPh: "输入 BNB Smart Chain (BEP20) 地址",
-    bindNote: "绑定后每次提现将自动使用此地址，可点击"更换"修改",
+    bindNote: "绑定后每次提现将自动使用此地址，可点击\"更换\"修改",
     invalidAddress: "请输入有效的 BEP20 地址（0x 开头，42 位）",
     binding: "绑定中...", confirmBind: "确认绑定",
     bindSuccess: "钱包地址绑定成功！",
@@ -1150,8 +1150,9 @@ export default function SentiaBuy() {
                     <div style={{ fontSize: 12, color: BNB.text, fontFamily: "monospace", wordBreak: "break-all", lineHeight: 1.6 }}>{savedBscAddress}</div>
                   </div>
                   <button
-                    onClick={() => { setNewBscAddress(""); setBindConfirmed(false); setWithdrawMsg(null); setWithdrawMode("bind"                           style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}
-                  >{t.change}</button>button>
+                    onClick={() => { setNewBscAddress(""); setBindConfirmed(false); setWithdrawMsg(null); setWithdrawMode("bind"); }}
+                    style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}
+                  >{t.change}</button>
                 </div>
               </div>
               <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>{t.withdrawAmount}</div>
