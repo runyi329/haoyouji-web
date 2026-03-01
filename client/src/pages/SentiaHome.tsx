@@ -1,192 +1,335 @@
 /**
- * Sentia (SNT) 官网首页
- * 设计风格：币安设计语言
- * 色系：#0B0E11（深黑底）+ #F0B90B（金黄主色）+ #1E2026（卡片背景）
- * 无 emoji，方角/小圆角按钮，专业交易所风格
+ * Sentia (SNT) — Official Website
+ * Design: International Web3 project, inspired by Celestia / EigenLayer / Aptos
+ * Palette: #080B10 (deep black) + #F5A623 (amber) + #0E1117 (card bg)
+ * Language: English-first, no emoji, minimal, technical
  */
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.png";
+const ARCH_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-architecture-JytKdDgdamwyKmCB9WsXzP.webp";
 
-// 币安色系常量
-const BNB = {
-  bg: "#0B0E11",
-  card: "#1E2026",
-  cardBorder: "#2B2F36",
-  yellow: "#F0B90B",
-  yellowDim: "rgba(240,185,11,0.12)",
-  yellowBorder: "rgba(240,185,11,0.35)",
-  text: "#EAECEF",
-  textSecondary: "#848E9C",
-  textMuted: "#5E6673",
-  green: "#0ECB81",
-  red: "#F6465D",
-  divider: "#2B2F36",
+const C = {
+  bg: "#080B10",
+  surface: "#0E1117",
+  border: "#1C2030",
+  amber: "#F5A623",
+  amberDim: "rgba(245,166,35,0.10)",
+  amberBorder: "rgba(245,166,35,0.28)",
+  text: "#E8EAF0",
+  sub: "#7A8099",
+  muted: "#3D4460",
+  green: "#22C55E",
 };
 
 export default function SentiaHome() {
   const [, navigate] = useLocation();
+
   useEffect(() => {
     const prev = document.title;
     document.title = "";
     return () => { document.title = prev; };
   }, []);
+
   return (
     <div style={{
       minHeight: "100vh",
-      background: BNB.bg,
-      color: BNB.text,
+      background: C.bg,
+      color: C.text,
       fontFamily: "'Inter', 'SF Pro Display', -apple-system, sans-serif",
       overflowX: "hidden",
     }}>
 
-      {/* 导航栏 */}
+      {/* NAV */}
       <nav style={{
         position: "sticky", top: 0, zIndex: 100,
-        background: BNB.bg,
-        borderBottom: `1px solid ${BNB.divider}`,
-        padding: "0 20px",
-        height: 56,
+        background: "rgba(8,11,16,0.92)",
+        backdropFilter: "blur(12px)",
+        borderBottom: `1px solid ${C.border}`,
+        padding: "0 24px",
+        height: 58,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src={SENTIA_ICON} alt="SNT" style={{ width: 28, height: 28, borderRadius: "50%" }} />
-          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: 1.5, color: BNB.yellow }}>
-            SENTIA
-          </span>
+          <img src={SENTIA_ICON} alt="SNT" style={{ width: 26, height: 26, borderRadius: "50%" }} />
+          <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: 2, color: C.amber }}>SENTIA</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={() => navigate("/sentia/whitepaper")}
+            style={{
+              background: "transparent",
+              border: `1px solid ${C.border}`,
+              borderRadius: 4, padding: "7px 14px",
+              color: C.sub, fontSize: 13, cursor: "pointer", fontWeight: 500,
+            }}
+          >
+            Docs
+          </button>
           <button
             onClick={() => navigate("/sentia/buy")}
             style={{
-              background: BNB.yellow,
-              border: "none", borderRadius: 4, padding: "8px 18px",
-              color: "#0B0E11", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              background: C.amber,
+              border: "none", borderRadius: 4, padding: "7px 16px",
+              color: "#080B10", fontWeight: 700, fontSize: 13, cursor: "pointer",
               letterSpacing: 0.3,
+              display: "flex", alignItems: "center", gap: 6,
             }}
           >
-            立即参与
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            Join Private Sale
           </button>
         </div>
       </nav>
 
-      {/* Hero 区 */}
+      {/* HERO */}
       <section style={{
-        padding: "52px 20px 44px",
-        borderBottom: `1px solid ${BNB.divider}`,
-        background: `linear-gradient(180deg, #131722 0%, ${BNB.bg} 100%)`,
+        padding: "72px 24px 64px",
+        background: `radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245,166,35,0.06) 0%, transparent 70%), ${C.bg}`,
+        borderBottom: `1px solid ${C.border}`,
+        textAlign: "center",
       }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: C.amberDim,
+            border: `1px solid ${C.amberBorder}`,
+            borderRadius: 20, padding: "4px 14px", marginBottom: 28,
+            fontSize: 11, color: C.amber, letterSpacing: 1.8, fontWeight: 600,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block" }} />
+            PRIVATE SALE · LIVE
+          </div>
 
-          {/* 图标 + 标题横排组合 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-            <img
-              src={SENTIA_ICON}
-              alt="Sentia Token"
-              style={{
-                width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
-                boxShadow: `0 0 0 1px ${BNB.cardBorder}, 0 8px 32px rgba(0,0,0,0.5)`,
-              }}
-            />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 20 }}>
+            <img src={SENTIA_ICON} alt="SNT" style={{ width: 64, height: 64, borderRadius: "50%", boxShadow: `0 0 0 1px ${C.border}, 0 12px 40px rgba(0,0,0,0.6)` }} />
             <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.1, color: BNB.text, letterSpacing: -0.5 }}>SENTIA</div>
-              <div style={{ fontSize: 13, fontWeight: 400, color: BNB.textSecondary, marginTop: 5, lineHeight: 1.4 }}>
-                AI 驱动的下一代区块链生态系统
-              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1, color: C.text, lineHeight: 1 }}>SENTIA</div>
+              <div style={{ fontSize: 13, color: C.sub, letterSpacing: 0.5, marginTop: 4 }}>SNT Protocol</div>
             </div>
           </div>
 
-          <div style={{
-            display: "inline-block",
-            background: BNB.yellowDim,
-            border: `1px solid ${BNB.yellowBorder}`,
-            borderRadius: 2, padding: "3px 12px", marginBottom: 16,
-            fontSize: 11, color: BNB.yellow, letterSpacing: 2, fontWeight: 600,
-          }}>
-            AI TRACK · BINANCE LISTING
-          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 600, color: C.text, lineHeight: 1.5, marginBottom: 14, maxWidth: 480, margin: "0 auto 14px" }}>
+            Decentralized AI Intelligence Layer<br />
+            <span style={{ color: C.sub, fontWeight: 400, fontSize: 16 }}>for the Next-Generation Web3 Ecosystem</span>
+          </h1>
 
-          <p style={{ fontSize: 14, color: BNB.textSecondary, lineHeight: 1.75, maxWidth: 320, margin: "0 auto 28px", textAlign: "center" }}>
-            重新定义人工智能与 Web3 的边界，构建去中心化智能决策网络
+          <p style={{ fontSize: 14, color: C.sub, lineHeight: 1.8, maxWidth: 400, margin: "0 auto 36px" }}>
+            Sentia bridges on-chain consensus with federated AI inference,
+            enabling verifiable, permissionless intelligence across distributed networks.
           </p>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", width: "100%", maxWidth: 360 }}>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <button
               onClick={() => navigate("/sentia/buy")}
               style={{
-                flex: 1,
-                background: BNB.yellow,
-                border: "none", borderRadius: 4, padding: "13px 0",
-                color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
+                background: C.amber,
+                border: "none", borderRadius: 4, padding: "13px 28px",
+                color: "#080B10", fontWeight: 700, fontSize: 15, cursor: "pointer",
+                letterSpacing: 0.2,
               }}
             >
-              立即参与
+              Join Private Sale
             </button>
             <button
               onClick={() => {
-                const el = document.getElementById("tokenomics");
+                const el = document.getElementById("architecture");
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               }}
               style={{
-                flex: 1,
                 background: "transparent",
-                border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "13px 0",
-                color: BNB.text, fontWeight: 500, fontSize: 15, cursor: "pointer",
+                border: `1px solid ${C.border}`, borderRadius: 4, padding: "13px 28px",
+                color: C.text, fontWeight: 500, fontSize: 15, cursor: "pointer",
               }}
             >
-              了解项目
+              Explore Architecture
             </button>
           </div>
-          {/* 白皮书小文字链接 */}
+
           <button
             onClick={() => navigate("/sentia/whitepaper")}
             style={{
-              marginTop: 16,
+              marginTop: 18,
               background: "transparent", border: "none", cursor: "pointer",
-              color: BNB.textSecondary, fontSize: 13, display: "flex", alignItems: "center", gap: 4,
+              color: C.sub, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5,
+              letterSpacing: 0.3,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <path d="M3 2h6l2 2v8H3V2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
               <path d="M5 6h4M5 8h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
-            阅读技术白皮书
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            Read Technical Whitepaper
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
               <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
         </div>
       </section>
 
-      {/* 代币核心数据 */}
-      <section style={{ padding: "32px 16px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
+      {/* STATS BAR */}
+      <section style={{
+        padding: "0 24px",
+        background: C.surface,
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", display: "flex", overflowX: "auto" }}>
+          {[
+            { label: "Total Supply", value: "1,000,000,000", unit: "SNT" },
+            { label: "Network", value: "BNB Chain", unit: "BEP-20" },
+            { label: "Consensus", value: "PoS + AI", unit: "Layer" },
+            { label: "Private Sale", value: "20%", unit: "Allocation" },
+          ].map((s, i) => (
+            <div key={i} style={{
+              flex: "0 0 auto",
+              padding: "18px 24px",
+              borderRight: i < 3 ? `1px solid ${C.border}` : "none",
+              minWidth: 140,
+            }}>
+              <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.3 }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{s.unit}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ARCHITECTURE */}
+      <section id="architecture" style={{ padding: "64px 24px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          <div style={{ marginBottom: 36 }}>
+            <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+              Technical Architecture
+            </div>
+            <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, lineHeight: 1.25, marginBottom: 12 }}>
+              Three-Layer Protocol Stack
+            </h2>
+            <p style={{ fontSize: 14, color: C.sub, lineHeight: 1.8, maxWidth: 480 }}>
+              Sentia separates AI inference, consensus validation, and data availability
+              into distinct layers — enabling modular scalability and verifiable computation.
+            </p>
+          </div>
           <div style={{
-            background: BNB.card,
-            border: `1px solid ${BNB.divider}`,
-            borderRadius: 6,
+            borderRadius: 8,
             overflow: "hidden",
+            border: `1px solid ${C.border}`,
+            background: C.surface,
+          }}>
+            <img
+              src={ARCH_IMG}
+              alt="Sentia Architecture"
+              style={{ width: "100%", display: "block" }}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 16 }}>
+            {[
+              { label: "AI Inference Layer", desc: "Federated learning nodes process inference requests with ZK-proof verification", color: "#F5A623" },
+              { label: "Consensus Layer", desc: "PoS validators finalize state transitions and AI output commitments", color: "#60A5FA" },
+              { label: "Data Layer", desc: "Sharded storage with erasure coding ensures persistent data availability", color: "#34D399" },
+            ].map((l, i) => (
+              <div key={i} style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6, padding: "14px",
+                borderTop: `2px solid ${l.color}`,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: l.color, marginBottom: 6 }}>{l.label}</div>
+                <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.6 }}>{l.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* KEY FEATURES */}
+      <section style={{
+        padding: "64px 24px",
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+            Core Properties
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, marginBottom: 36, lineHeight: 1.25 }}>
+            Built for Verifiable Intelligence
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {[
+              {
+                icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+                title: "ZK-Verified Inference",
+                desc: "Every AI output is accompanied by a zero-knowledge proof, making results cryptographically verifiable on-chain.",
+              },
+              {
+                icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>,
+                title: "Federated Learning Nodes",
+                desc: "Distributed AI nodes collaborate without sharing raw data, preserving privacy while enabling collective intelligence.",
+              },
+              {
+                icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>,
+                title: "Modular Architecture",
+                desc: "Execution, consensus, and data availability are decoupled — each layer upgradeable independently.",
+              },
+              {
+                icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                title: "Permissionless Participation",
+                desc: "Anyone can operate a node, stake SNT, and earn rewards — no whitelisting, no gatekeepers.",
+              },
+            ].map((f, i) => (
+              <div key={i} style={{
+                background: C.bg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8, padding: "20px 18px",
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 6,
+                  background: C.amberDim, border: `1px solid ${C.amberBorder}`,
+                  display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14,
+                }}>{f.icon}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 8 }}>{f.title}</div>
+                <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.7 }}>{f.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TOKEN PARAMETERS */}
+      <section id="tokenomics" style={{ padding: "64px 24px" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+            Token Parameters
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, marginBottom: 32, lineHeight: 1.25 }}>
+            SNT Token Overview
+          </h2>
+          <div style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8, overflow: "hidden",
           }}>
             {[
-              { label: "代币名称", value: "Sentia", sub: "SNT" },
-              { label: "发行总量", value: "1,000,000,000", sub: "固定总量，不增发" },
-              { label: "所属赛道", value: "AI 基础设施", sub: "Artificial Intelligence" },
-              { label: "底层网络", value: "BNB Chain", sub: "BEP-20 标准" },
-              { label: "共识机制", value: "PoS + AI", sub: "AI 增强共识层" },
-              { label: "开源协议", value: "计划中", sub: "GitHub 待公开" },
-            ].map((item, i) => (
+              { label: "Token Name", value: "Sentia", sub: "SNT" },
+              { label: "Total Supply", value: "1,000,000,000", sub: "Fixed, non-inflationary" },
+              { label: "Sector", value: "AI Infrastructure", sub: "Artificial Intelligence · Web3" },
+              { label: "Network", value: "BNB Chain", sub: "BEP-20 Standard" },
+              { label: "Consensus", value: "PoS + AI", sub: "AI-Enhanced Consensus Layer" },
+              { label: "Open Source", value: "Planned", sub: "GitHub repository pending" },
+            ].map((item, i, arr) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "14px 18px",
-                borderBottom: i < 5 ? `1px solid ${BNB.divider}` : "none",
+                padding: "16px 20px",
+                borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none",
               }}>
-                <span style={{ fontSize: 13, color: BNB.textSecondary }}>{item.label}</span>
+                <span style={{ fontSize: 13, color: C.sub }}>{item.label}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: BNB.text }}>
-                    {item.value}
-                  </div>
-                  <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>{item.sub}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{item.value}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{item.sub}</div>
                 </div>
               </div>
             ))}
@@ -194,373 +337,127 @@ export default function SentiaHome() {
         </div>
       </section>
 
-      {/* 释放规则 */}
-      <section style={{ padding: "0 16px 32px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: BNB.text, letterSpacing: 0.5 }}>
-            代币释放规则
+      {/* ROADMAP */}
+      <section style={{
+        padding: "64px 24px",
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+            Roadmap
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: C.text, marginBottom: 36, lineHeight: 1.25 }}>
+            Development Milestones
           </h2>
-          <div style={{
-            background: BNB.card,
-            border: `1px solid ${BNB.divider}`,
-            borderRadius: 6, padding: "20px 18px",
-          }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[
+              { phase: "Phase 01", title: "Foundation", status: "Completed", items: ["Protocol design & whitepaper", "Core team formation", "Private sale initiation"] },
+              { phase: "Phase 02", title: "Infrastructure", status: "In Progress", items: ["Testnet deployment", "AI node client v0.1", "Smart contract audit"] },
+              { phase: "Phase 03", title: "Ecosystem", status: "Upcoming", items: ["Mainnet launch", "Developer SDK release", "Strategic partnerships"] },
+              { phase: "Phase 04", title: "Expansion", status: "Planned", items: ["Cross-chain bridge", "Governance module", "Exchange listing"] },
+            ].map((r, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 20,
+                paddingBottom: i < 3 ? 32 : 0,
+                position: "relative",
+              }}>
+                {i < 3 && (
+                  <div style={{
+                    position: "absolute", left: 15, top: 32, bottom: 0,
+                    width: 1, background: C.border,
+                  }} />
+                )}
                 <div style={{
-                  width: 48, height: 48, borderRadius: 4, flexShrink: 0,
-                  background: BNB.yellowDim,
-                  border: `1px solid ${BNB.yellowBorder}`,
+                  width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                  background: r.status === "Completed" ? C.amber : r.status === "In Progress" ? C.amberDim : C.bg,
+                  border: `2px solid ${r.status === "Completed" ? C.amber : r.status === "In Progress" ? C.amber : C.border}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 15, fontWeight: 800, color: BNB.yellow,
-                }}>10%</div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: BNB.text }}>TGE 即时释放</div>
-                  <div style={{ fontSize: 12, color: BNB.textSecondary, marginTop: 3 }}>上线当日立即解锁 10% 代币</div>
+                  zIndex: 1,
+                }}>
+                  {r.status === "Completed" && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="#080B10" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {r.status === "In Progress" && (
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber }} />
+                  )}
+                </div>
+                <div style={{ paddingTop: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, color: C.sub, fontWeight: 600, letterSpacing: 1 }}>{r.phase}</span>
+                    <span style={{
+                      fontSize: 10, padding: "2px 8px", borderRadius: 10,
+                      background: r.status === "Completed" ? "rgba(34,197,94,0.12)" : r.status === "In Progress" ? C.amberDim : C.surface,
+                      color: r.status === "Completed" ? C.green : r.status === "In Progress" ? C.amber : C.muted,
+                      border: `1px solid ${r.status === "Completed" ? "rgba(34,197,94,0.3)" : r.status === "In Progress" ? C.amberBorder : C.border}`,
+                      fontWeight: 600,
+                    }}>{r.status}</span>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>{r.title}</div>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {r.items.map((item, j) => (
+                      <li key={j} style={{ fontSize: 13, color: C.sub, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.muted, flexShrink: 0 }} />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
-              <div style={{ height: 1, background: BNB.divider }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 4, flexShrink: 0,
-                  background: "rgba(14,203,129,0.1)",
-                  border: "1px solid rgba(14,203,129,0.3)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 15, fontWeight: 800, color: BNB.green,
-                }}>90%</div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: BNB.text }}>锁仓 3 个月后线性释放</div>
-                  <div style={{ fontSize: 12, color: BNB.textSecondary, marginTop: 3 }}>分 12 个月均匀释放，每月解锁 7.5%</div>
-                </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer style={{
+        borderTop: `1px solid ${C.border}`,
+        padding: "32px 24px",
+        background: C.bg,
+      }}>
+        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 24, marginBottom: 28 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <img src={SENTIA_ICON} alt="SNT" style={{ width: 20, height: 20, borderRadius: "50%" }} />
+                <span style={{ fontWeight: 700, color: C.amber, letterSpacing: 1.5, fontSize: 14 }}>SENTIA</span>
               </div>
-              {/* 进度条 */}
+              <div style={{ fontSize: 12, color: C.muted, maxWidth: 220, lineHeight: 1.6 }}>
+                Decentralized AI Intelligence Layer for Web3
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 32 }}>
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: BNB.textMuted, marginBottom: 6 }}>
-                  <span>TGE</span><span>锁仓 3 个月</span><span>线性释放 12 个月</span>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, letterSpacing: 1, marginBottom: 10, textTransform: "uppercase" }}>Resources</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[
+                    { label: "Whitepaper", action: () => navigate("/sentia/whitepaper") },
+                    { label: "Private Sale", action: () => navigate("/sentia/buy") },
+                  ].map((l, i) => (
+                    <button key={i} onClick={l.action} style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: C.sub, fontSize: 13, textAlign: "left", padding: 0,
+                    }}>{l.label}</button>
+                  ))}
                 </div>
-                <div style={{ height: 6, borderRadius: 2, background: BNB.divider, overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: "10%", background: BNB.yellow }} />
-                  <div style={{ width: "20%", background: "#2B2F36" }} />
-                  <div style={{ width: "70%", background: BNB.green }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700, letterSpacing: 1, marginBottom: 10, textTransform: "uppercase" }}>Protocol</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {["BNB Chain", "BEP-20", "PoS + AI"].map((l, i) => (
+                    <span key={i} style={{ color: C.muted, fontSize: 13 }}>{l}</span>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* 白皮书 / 项目介绍 */}
-      <section id="whitepaper" style={{ padding: "0 16px 32px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: BNB.text, letterSpacing: 0.5 }}>
-            关于 Sentia
-          </h2>
-          <div style={{
-            background: BNB.card,
-            border: `1px solid ${BNB.divider}`,
-            borderRadius: 6, overflow: "hidden",
-          }}>
-            {[
-              {
-                icon: "AI",
-                title: "AI 原生架构",
-                desc: "Sentia 构建于新一代 AI 推理层之上，将大语言模型与区块链共识机制深度融合，实现去中心化的智能决策网络。",
-              },
-              {
-                icon: "CC",
-                title: "跨链互操作",
-                desc: "原生支持以太坊、BNB Chain 等主流公链，通过 SNT 代币作为跨链价值传输媒介，打通多链生态壁垒。",
-              },
-              {
-                icon: "VC",
-                title: "价值捕获机制",
-                desc: "平台产生的 AI 服务费用将用于回购销毁 SNT，形成持续的通缩压力，为长期持有者创造价值。",
-              },
-              {
-                icon: "DAO",
-                title: "全球社区治理",
-                desc: "SNT 持有者通过 DAO 机制参与协议升级、资金分配等核心决策，实现真正的去中心化自治。",
-              },
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: "flex", gap: 14, padding: "18px",
-                borderBottom: i < 3 ? `1px solid ${BNB.divider}` : "none",
-              }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 4, flexShrink: 0,
-                  background: BNB.yellowDim,
-                  border: `1px solid ${BNB.yellowBorder}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: 800, color: BNB.yellow, letterSpacing: 0.5,
-                }}>{item.icon}</div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: BNB.text, marginBottom: 5 }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: BNB.textSecondary, lineHeight: 1.65 }}>{item.desc}</div>
-                </div>
-              </div>
-            ))}
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 12, color: C.muted }}>© 2025 Sentia Protocol. All rights reserved.</div>
+            <div style={{ fontSize: 12, color: C.muted }}>This is not investment advice. Digital assets carry risk.</div>
           </div>
-        </div>
-      </section>
-
-      {/* 路线图 */}
-      <section style={{ padding: "0 16px 32px" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: BNB.text, letterSpacing: 0.5 }}>
-            发展路线图
-          </h2>
-          <div style={{
-            background: BNB.card,
-            border: `1px solid ${BNB.divider}`,
-            borderRadius: 6, overflow: "hidden",
-          }}>
-            {[
-              { phase: "Q1 2025", title: "项目启动", items: ["核心团队组建", "白皮书发布", "私募轮开启"], done: true },
-              { phase: "Q2 2025", title: "生态建设", items: ["技术主网测试", "社区运营启动", "战略合作洽谈"], done: false, current: true },
-              { phase: "Q3 2025", title: "产品落地", items: ["AI 推理节点上线", "跨链桥接部署", "首批 DApp 接入"], done: false },
-              { phase: "Q4 2025", title: "全球扩张", items: ["DAO 治理启动", "多链生态完善", "全球社区建设"], done: false },
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: "flex", gap: 0,
-                borderBottom: i < 3 ? `1px solid ${BNB.divider}` : "none",
-              }}>
-                {/* 左侧状态条 */}
-                <div style={{
-                  width: 4, flexShrink: 0,
-                  background: item.done ? BNB.yellow : item.current ? BNB.green : BNB.divider,
-                }} />
-                {/* 内容 */}
-                <div style={{ padding: "16px 16px 16px 14px", flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, color: item.current ? BNB.green : item.done ? BNB.yellow : BNB.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>
-                      {item.phase}
-                    </span>
-                    {item.current && (
-                      <span style={{
-                        background: "rgba(14,203,129,0.12)", color: BNB.green,
-                        border: "1px solid rgba(14,203,129,0.3)",
-                        borderRadius: 2, padding: "1px 6px", fontSize: 10, fontWeight: 600,
-                      }}>进行中</span>
-                    )}
-                    {item.done && (
-                      <span style={{
-                        background: BNB.yellowDim, color: BNB.yellow,
-                        border: `1px solid ${BNB.yellowBorder}`,
-                        borderRadius: 2, padding: "1px 6px", fontSize: 10, fontWeight: 600,
-                      }}>已完成</span>
-                    )}
-                  </div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: BNB.text, marginBottom: 8 }}>{item.title}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {item.items.map((it, j) => (
-                      <div key={j} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: BNB.textSecondary }}>
-                        <span style={{
-                          width: 14, height: 14, borderRadius: 2, flexShrink: 0,
-                          background: item.done ? BNB.yellowDim : item.current ? "rgba(14,203,129,0.1)" : "rgba(255,255,255,0.04)",
-                          border: `1px solid ${item.done ? BNB.yellowBorder : item.current ? "rgba(14,203,129,0.3)" : BNB.divider}`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 9, color: item.done ? BNB.yellow : item.current ? BNB.green : BNB.textMuted,
-                        }}>
-                          {item.done ? "✓" : ""}
-                        </span>
-                        {it}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== 应用场景滚动标签 ===== */}
-      <section style={{ padding: "40px 0 0", background: BNB.bg, overflow: "hidden" }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", padding: "0 16px", marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase" }}>AI 能力场景</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, lineHeight: 1.3 }}>Sentia Agent 能做什么</div>
-        </div>
-        <div style={{ overflow: "hidden", marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 10, width: "max-content",
-            animation: "scrollLeft 28s linear infinite" }}>
-            {["共享人脉匹配", "智能名片管理", "关系图谱分析", "共享账本记账",
-              "节点共享奖励", "商机自动匹配", "社交信用评分", "链上身份认证",
-              "共享人脉匹配", "智能名片管理", "关系图谱分析", "共享账本记账",
-              "节点共享奖励", "商机自动匹配", "社交信用评分", "链上身份认证",
-            ].map((tag, i) => (
-              <span key={i} style={{
-                background: BNB.card, border: `1px solid ${BNB.divider}`,
-                borderRadius: 20, padding: "7px 18px",
-                fontSize: 13, color: BNB.textSecondary, whiteSpace: "nowrap", fontWeight: 500,
-              }}>{tag}</span>
-            ))}
-          </div>
-        </div>
-        <div style={{ overflow: "hidden", marginBottom: 40 }}>
-          <div style={{ display: "flex", gap: 10, width: "max-content",
-            animation: "scrollRight 32s linear infinite" }}>
-            {["DeFi 资产管理", "跨链划转", "DAO 治理投票", "AI 投资顾问",
-              "人脉价值量化", "隐私社交证明", "多链钱包聚合", "智能合约执行",
-              "DeFi 资产管理", "跨链划转", "DAO 治理投票", "AI 投资顾问",
-              "人脉价值量化", "隐私社交证明", "多链钱包聚合", "智能合约执行",
-            ].map((tag, i) => (
-              <span key={i} style={{
-                background: BNB.card, border: `1px solid ${BNB.yellowBorder}`,
-                borderRadius: 20, padding: "7px 18px",
-                fontSize: 13, color: BNB.yellow, whiteSpace: "nowrap", fontWeight: 500,
-              }}>{tag}</span>
-            ))}
-          </div>
-        </div>
-        <style>{`
-          @keyframes scrollLeft { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-          @keyframes scrollRight { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-        `}</style>
-      </section>
-
-      {/* ===== 核心架构特性 4 宫格 ===== */}
-      <section style={{ padding: "40px 16px", background: BNB.bg }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>核心架构</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>为 AI 社交而生的底层协议</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[
-              {
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                  </svg>
-                ),
-                title: "共享人脉图谱",
-                desc: "基于 ZKP 的链上社交关系网络，AI 自动匹配高价值商业连接，人脉价值通过 SNT 结算可量化。",
-              },
-              {
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
-                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                    <path d="M8 21h8M12 17v4M7 8h10M7 12h6"/>
-                  </svg>
-                ),
-                title: "共享账本系统",
-                desc: "去中心化多方共享记账协议，团队账本实时同步，所有记录上链存证，不可篡改。",
-              },
-              {
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                  </svg>
-                ),
-                title: "AI 代理执行层",
-                desc: "LLM 驱动的任务链引擎，Agent 自主完成人脉维护、账单催收、商机跟进等复杂工作流。",
-              },
-              {
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="1.8">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 6v6l4 2"/>
-                  </svg>
-                ),
-                title: "节点共享奖励",
-                desc: "每个用户都是网络节点，共享人脉、贡献数据、推广生态均可获得 SNT 奖励，形成正向飞轮。",
-              },
-            ].map((item, i) => (
-              <div key={i} style={{
-                background: BNB.card,
-                border: `1px solid ${BNB.divider}`,
-                borderRadius: 8, padding: "18px 16px",
-              }}>
-                <div style={{
-                  width: 38, height: 38, borderRadius: 6,
-                  background: BNB.yellowDim,
-                  border: `1px solid ${BNB.yellowBorder}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: 12,
-                }}>{item.icon}</div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: BNB.text, marginBottom: 6 }}>{item.title}</div>
-                <div style={{ fontSize: 12, color: BNB.textSecondary, lineHeight: 1.65 }}>{item.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== 生态数据统计 ===== */}
-      <section style={{
-        padding: "40px 16px",
-        background: "#131722",
-        borderTop: `1px solid ${BNB.divider}`,
-        borderBottom: `1px solid ${BNB.divider}`,
-      }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>代币信息</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>SNT 基本参数</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-            {[
-              { label: "私募轮状态", value: "进行中", sub: "定向邀请制，名额有限" },
-              { label: "代币总供应量", value: "1,000,000,000", sub: "固定总量，不增发" },
-              { label: "私募比例", value: "20%", sub: "200,000,000 SNT" },
-              { label: "底层网络", value: "BNB Chain", sub: "BEP-20 标准" },
-            ].map((stat, i) => (
-              <div key={i} style={{
-                background: BNB.card,
-                border: `1px solid ${BNB.divider}`,
-                padding: "22px 18px",
-                borderRadius: i === 0 ? "8px 0 0 0" : i === 1 ? "0 8px 0 0" : i === 2 ? "0 0 0 8px" : "0 0 8px 0",
-              }}>
-                <div style={{ fontSize: 11, color: BNB.textMuted, fontWeight: 600, letterSpacing: 0.8, marginBottom: 8, textTransform: "uppercase" }}>{stat.label}</div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: BNB.yellow, marginBottom: 4, letterSpacing: -0.5 }}>{stat.value}</div>
-                <div style={{ fontSize: 12, color: BNB.textSecondary }}>{stat.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 底部 CTA */}
-      <section style={{
-        padding: "40px 20px 52px",
-        borderTop: `1px solid ${BNB.divider}`,
-        background: "#131722",
-        textAlign: "center",
-      }}>
-        <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: BNB.text, marginBottom: 12, lineHeight: 1.3 }}>
-            加入 Sentia 生态
-          </div>
-          <div style={{ fontSize: 14, color: BNB.textSecondary, marginBottom: 28, lineHeight: 1.7, maxWidth: 320, margin: "0 auto 28px" }}>
-            阅读白皮书，了解 Sentia 如何将 AI 与区块链融合，构建下一代去中心化智能网络
-          </div>
-          <button
-            onClick={() => navigate("/sentia/whitepaper")}
-            style={{
-              background: BNB.yellow,
-              border: "none", borderRadius: 4, padding: "15px 0",
-              color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
-              width: "100%", maxWidth: 320,
-              letterSpacing: 0.3,
-            }}
-          >
-            阅读技术白皮书
-          </button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer style={{
-        borderTop: `1px solid ${BNB.divider}`,
-        padding: "20px 24px",
-        textAlign: "center",
-        fontSize: 12, color: BNB.textMuted,
-        background: BNB.bg,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-          <img src={SENTIA_ICON} alt="SNT" style={{ width: 18, height: 18, borderRadius: "50%" }} />
-          <span style={{ fontWeight: 700, color: BNB.yellow, letterSpacing: 1 }}>SENTIA</span>
-        </div>
-        <div style={{ color: BNB.textMuted }}>© 2025 Sentia Protocol. All rights reserved.</div>
-        <div style={{ marginTop: 4, color: BNB.textMuted }}>
-          本内容不构成投资建议，数字资产投资存在风险
         </div>
       </footer>
     </div>
