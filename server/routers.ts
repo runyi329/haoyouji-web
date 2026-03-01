@@ -1194,7 +1194,7 @@ export const appRouter = router({
       for (const key of featureKeys) {
         const perm = permissions.find(p => p.featureKey === key);
         if (perm) {
-          result[key] = perm.isEnabled;
+          result[key] = perm.isEnabled === true || perm.isEnabled === 1;
         } else {
           // 默认关闭
           result[key] = false;
