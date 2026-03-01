@@ -3,10 +3,9 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Wallet as WalletIcon, FileText } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
-import PaymentAccounts from "./PaymentAccounts";
 import Withdraw from "./Withdraw";
 
-type TabType = "recharge" | "withdraw" | "accounts";
+type TabType = "recharge" | "withdraw";
 
 export default function Wallet() {
   const [, setLocation] = useLocation();
@@ -75,16 +74,7 @@ export default function Wallet() {
           >
             提现
           </button>
-          <button
-            onClick={() => setActiveTab("accounts")}
-            className={`flex-1 py-3 text-center font-medium transition-colors ${
-              activeTab === "accounts"
-                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
-                : "text-gray-500"
-            }`}
-          >
-            收款账户
-          </button>
+
         </div>
       </div>
 
@@ -100,11 +90,7 @@ export default function Wallet() {
             <Withdraw hideHeader />
           </div>
         )}
-        {activeTab === "accounts" && (
-          <div className="p-4">
-            <PaymentAccounts hideHeader />
-          </div>
-        )}
+
       </div>
     </div>
   );
