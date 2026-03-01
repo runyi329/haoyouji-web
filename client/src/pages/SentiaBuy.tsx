@@ -423,24 +423,15 @@ export default function SentiaBuy() {
                 <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 10, fontWeight: 600, letterSpacing: 0.5 }}>
                   我的持仓
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-                  <div>
+                <div>
                     <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>累计已到账</div>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
-                      {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                    </div>
-                    <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>SNT</div>
-                  </div>
-                  {pendingSNT! > 0 && (
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>确认中</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: BNB.blue }}>
-                        +{pendingSNT!.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                      <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
+                        {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                       </div>
-                      <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>SNT</div>
+                      <div style={{ fontSize: 13, color: BNB.textMuted, fontWeight: 600 }}>SNT</div>
                     </div>
-                  )}
-                </div>
+                  </div>
               </div>
             )}
 
