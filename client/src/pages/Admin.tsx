@@ -337,6 +337,10 @@ export default function Admin() {
               <Wallet className="w-4 h-4 mr-1 hidden sm:inline" />
               充值监控
             </TabsTrigger>
+            <TabsTrigger value="sentia" className="text-xs sm:text-sm">
+              <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
+              Sentia
+            </TabsTrigger>
           </TabsList>
 
 
@@ -1001,6 +1005,48 @@ export default function Admin() {
                 <Wallet className="w-4 h-4 mr-2" />
                 进入监控页面
               </Button>
+            </Card>
+          </TabsContent>
+
+          {/* Sentia 数字货币子站 */}
+          <TabsContent value="sentia">
+            <Card className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <img
+                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png"
+                  alt="Sentia"
+                  className="w-10 h-10 rounded-full"
+                />
+                <div>
+                  <h2 className="text-xl font-bold">Sentia (SNT) 数字货币</h2>
+                  <p className="text-sm text-gray-500">AI 赛道 · 发行总量 10 亿枚 · 合伙人价 $0.04</p>
+                </div>
+              </div>
+              <p className="text-gray-600 mb-6">
+                预期上线时间：2026年6月底（币安）。以下为测试链接，可分享给合伙人预览页面效果。
+              </p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => setLocation('/sentia')}
+                  className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                >
+                  <Coins className="w-4 h-4 mr-2" />
+                  查看 Sentia 官网首页
+                </Button>
+                <Button
+                  onClick={() => setLocation('/sentia/buy')}
+                  variant="outline"
+                  className="border-[#7C3AED] text-[#7C3AED]"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  查看买币页（定向邀请）
+                </Button>
+              </div>
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-700">
+                  💡 分享链接：将 <strong>/sentia</strong> 或 <strong>/sentia/buy</strong> 路径附在域名后即可分享给合伙人，无需登录即可访问。
+                </p>
+              </div>
             </Card>
           </TabsContent>
         </Tabs>
