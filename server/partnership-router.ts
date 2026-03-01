@@ -11,7 +11,10 @@ import {
   contactSharingConnections,
   contactInteractions,
   contactTags,
-  personalContactTags
+  personalContactTags,
+  ledgers,
+  ledgerMembers,
+  ledgerRecords
 } from "../drizzle/schema";
 import { eq, and, inArray, like, or, sql, asc } from "drizzle-orm";
 import { mysqlTable, int, varchar, text, timestamp } from "drizzle-orm/mysql-core";
@@ -237,6 +240,34 @@ export const partnershipRouter = router({
           interactionsCount = interactionsResult[0]?.count || 0;
         }
 
+        // 查询账本数（用户参与的所有账本，包括自己创建的和别人加入的）
+        const ledgerCountResult = await db
+          .select({ count: sql<number>`count(distinct ${ledgerMembers.ledgerId})` })
+          .from(ledgerMembers)
+          .where(eq(ledgerMembers.userId, member.id));
+        const ledgerCount = ledgerCountResult[0]?.count || 0;
+
+        // 查询账目数（用户参与的所有账本中的账目总数）
+        const memberLedgerIds = await db
+          .select({ ledgerId: ledgerMembers.ledgerId })
+          .from(ledgerMembers)
+          .where(eq(ledgerMembers.userId, member.id));
+        
+        let recordCount = 0;
+        if (memberLedgerIds.length > 0) {
+          const ledgerIdList = memberLedgerIds.map(l => l.ledgerId);
+          const recordCountResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(ledgerRecords)
+            .where(
+              and(
+                inArray(ledgerRecords.ledgerId, ledgerIdList),
+                sql`${ledgerRecords.deletedAt} IS NULL`
+              )
+            );
+          recordCount = recordCountResult[0]?.count || 0;
+        }
+
         return {
           ...member,
           workGroups,
@@ -245,6 +276,8 @@ export const partnershipRouter = router({
           totalContactsCount,
           tagsCount,
           interactionsCount,
+          ledgerCount,
+          recordCount,
         };
       }));
 

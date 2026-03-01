@@ -168,8 +168,8 @@ export default function WorkGroupMembers() {
                   </div>
                 </div>
 
-                {/* 第二行：统计数据（紧凑的横向布局，5个徽章） */}
-                <div className="grid grid-cols-5 gap-1.5">
+                {/* 第二行：统计数据（紧凑的横向布局，7个徽章） */}
+                <div className="grid grid-cols-7 gap-1">
                   {/* 我的 */}
                   <div 
                     className="flex flex-col items-center px-1.5 py-1 rounded"
@@ -242,7 +242,7 @@ export default function WorkGroupMembers() {
                   
                   {/* 联络数 */}
                   <div 
-                    className="flex flex-col items-center px-1.5 py-1 rounded"
+                    className="flex flex-col items-center px-1 py-1 rounded"
                     style={{ backgroundColor: 'var(--bg-cream)' }}
                   >
                     <div className="flex items-center gap-0.5 mb-0.5">
@@ -256,6 +256,44 @@ export default function WorkGroupMembers() {
                       style={{ color: 'var(--brand-gold)' }}
                     >
                       {member.interactionsCount || 0}
+                    </span>
+                  </div>
+
+                  {/* 账本数 */}
+                  <div 
+                    className="flex flex-col items-center px-1 py-1 rounded"
+                    style={{ backgroundColor: 'color-mix(in srgb, #6366F1 10%, white)' }}
+                  >
+                    <div className="flex items-center gap-0.5 mb-0.5">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#6366F1' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>账本</span>
+                    </div>
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: '#6366F1' }}
+                    >
+                      {member.ledgerCount || 0}
+                    </span>
+                  </div>
+
+                  {/* 账目数 */}
+                  <div 
+                    className="flex flex-col items-center px-1 py-1 rounded"
+                    style={{ backgroundColor: 'color-mix(in srgb, #0EA5E9 10%, white)' }}
+                  >
+                    <div className="flex items-center gap-0.5 mb-0.5">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#0EA5E9' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>账目</span>
+                    </div>
+                    <span 
+                      className="text-sm font-semibold leading-none"
+                      style={{ color: '#0EA5E9' }}
+                    >
+                      {member.recordCount || 0}
                     </span>
                   </div>
                 </div>
