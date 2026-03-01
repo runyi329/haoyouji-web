@@ -434,7 +434,7 @@ export default function SentiaBuy() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 2 }}>合伙人价</div>
+                  <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 2 }}>私募价</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: BNB.yellow }}>1 SNT = $0.04</div>
                 </div>
               </div>
