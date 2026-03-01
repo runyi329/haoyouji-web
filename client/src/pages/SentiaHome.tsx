@@ -4,6 +4,7 @@
  * 色系：#0B0E11（深黑底）+ #F0B90B（金黄主色）+ #1E2026（卡片背景）
  * 无 emoji，方角/小圆角按钮，专业交易所风格
  */
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.png";
@@ -26,7 +27,11 @@ const BNB = {
 
 export default function SentiaHome() {
   const [, navigate] = useLocation();
-
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "";
+    return () => { document.title = prev; };
+  }, []);
   return (
     <div style={{
       minHeight: "100vh",

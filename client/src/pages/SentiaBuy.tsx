@@ -80,6 +80,11 @@ const btnSecondary: React.CSSProperties = {
 
 export default function SentiaBuy() {
   const [, navigate] = useLocation();
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "";
+    return () => { document.title = prev; };
+  }, []);
   // 若本次浏览器会话已登录，直接进入购买步骤
   const [step, setStep] = useState<Step>(() => hasSessionToken() ? "buy" : "login");
   const [isRegister, setIsRegister] = useState(false);
