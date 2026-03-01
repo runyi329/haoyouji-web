@@ -58,16 +58,6 @@ export default function SentiaHome() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
-            onClick={() => navigate("/sentia/whitepaper")}
-            style={{
-              background: "transparent",
-              border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "7px 14px",
-              color: BNB.textSecondary, fontWeight: 500, fontSize: 13, cursor: "pointer",
-            }}
-          >
-            白皮书
-          </button>
-          <button
             onClick={() => navigate("/sentia/buy")}
             style={{
               background: BNB.yellow,
@@ -123,7 +113,7 @@ export default function SentiaHome() {
 
           <div style={{ display: "flex", gap: 10, justifyContent: "center", width: "100%", maxWidth: 360 }}>
             <button
-              onClick={() => navigate("/sentia/whitepaper")}
+              onClick={() => navigate("/sentia/buy")}
               style={{
                 flex: 1,
                 background: BNB.yellow,
@@ -131,11 +121,11 @@ export default function SentiaHome() {
                 color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
               }}
             >
-              查看白皮书
+              立即参与
             </button>
             <button
               onClick={() => {
-                const el = document.getElementById("whitepaper");
+                const el = document.getElementById("tokenomics");
                 if (el) el.scrollIntoView({ behavior: "smooth" });
               }}
               style={{
@@ -148,6 +138,24 @@ export default function SentiaHome() {
               了解项目
             </button>
           </div>
+          {/* 白皮书小文字链接 */}
+          <button
+            onClick={() => navigate("/sentia/whitepaper")}
+            style={{
+              marginTop: 16,
+              background: "transparent", border: "none", cursor: "pointer",
+              color: BNB.textSecondary, fontSize: 13, display: "flex", alignItems: "center", gap: 4,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M3 2h6l2 2v8H3V2z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+              <path d="M5 6h4M5 8h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            阅读技术白皮书
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
       </section>
 
