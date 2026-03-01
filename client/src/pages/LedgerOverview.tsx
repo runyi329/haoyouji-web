@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import {
   Notebook, Receipt, Loader2,
@@ -15,6 +16,10 @@ import {
 } from "@/components/ui/carousel";
 import { trpc } from "@/lib/trpc";
 import BottomNav from "@/components/BottomNav";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { X } from "lucide-react";
 
 function formatNumber(num: number): string {
   if (num >= 10000) {
@@ -58,6 +63,28 @@ const FEATURE_UPDATES = [
 ];
 
 export default function LedgerOverview() {
+  const [, setLocation] = useLocation();
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [joinSecretKey, setJoinSecretKey] = useState("");
+
+  const joinMutation = trpc.ledger.joinBySecretKey.useMutation({
+    onSuccess: (data) => {
+      toast.success('成功加入账本！');
+      setShowJoinDialog(false);
+      setJoinSecretKey("");
+      setLocation(`/ledger/${data.ledgerId}`);
+    },
+    onError: (err) => {
+      toast.error(err.message || '加入失败，请检查密钥是否正确');
+    },
+  });
+
+  const handleJoinConfirm = () => {
+    if (joinSecretKey.trim()) {
+      joinMutation.mutate({ secretKey: joinSecretKey.trim() });
+    }
+  };
+
   // 获取账本统计数据
   const { data: ledgerStats, isLoading } = trpc.ledger.stats.useQuery();
   
@@ -280,8 +307,58 @@ export default function LedgerOverview() {
         </div>
       </div>
 
+      {/* 加入他人账本弹出面板 */}
+      {showJoinDialog && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setShowJoinDialog(false); setJoinSecretKey(""); }} />
+          <div className="fixed left-0 right-0 z-50" style={{ bottom: '70px' }}>
+            <div className="max-w-md mx-auto px-4">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold text-gray-900">加入他人账本</h3>
+                  <button onClick={() => { setShowJoinDialog(false); setJoinSecretKey(""); }} className="p-1 hover:bg-gray-100 rounded-full">
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mb-3">请输入密钥（66位）以加入共享账本。密钥可从账本管理员处获取。</p>
+                <div className="mb-3">
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">账本密钥</label>
+                  <Input
+                    placeholder="请输入密钥"
+                    value={joinSecretKey}
+                    onChange={(e) => setJoinSecretKey(e.target.value)}
+                    className="font-mono text-xs h-9"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-8 border-[#D32F2F] text-[#D32F2F]"
+                    onClick={() => { setShowJoinDialog(false); setJoinSecretKey(""); }}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 h-8 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                    onClick={handleJoinConfirm}
+                    disabled={!joinSecretKey.trim() || joinMutation.isPending}
+                  >
+                    {joinMutation.isPending ? '加入中...' : '确认加入'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Bottom Navigation */}
-      <BottomNav />
+      <BottomNav
+        onJoinLedger={() => setShowJoinDialog(!showJoinDialog)}
+        onCreateLedger={() => setLocation('/ledger/create-type')}
+      />
     </div>
   );
 }
