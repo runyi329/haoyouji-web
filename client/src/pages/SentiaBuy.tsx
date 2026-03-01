@@ -66,9 +66,27 @@ export default function SentiaBuy() {
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
   const ordersQuery = trpc.recharge.getMyOrders.useQuery(
-    { limit: 30 },
-    { enabled: step === "orders" }
+    { limit: 100 },
+    { enabled: step === "orders" || step === "buy" }
   );
+
+  // 累计持仓：所有已到账订单的 USDT 之和 / SNT_PRICE
+  const totalSNT = (() => {
+    if (!ordersQuery.data) return null;
+    const completedUSDT = ordersQuery.data
+      .filter((o: any) => o.status === "completed")
+      .reduce((sum: number, o: any) => sum + parseFloat(String(o.amount)), 0);
+    return completedUSDT / SNT_PRICE;
+  })();
+
+  // 待确认中的 SNT
+  const pendingSNT = (() => {
+    if (!ordersQuery.data) return null;
+    const pendingUSDT = ordersQuery.data
+      .filter((o: any) => o.status === "submitted" || o.status === "pending")
+      .reduce((sum: number, o: any) => sum + parseFloat(String(o.amount)), 0);
+    return pendingUSDT / SNT_PRICE;
+  })();
 
   const usdtCost = (parseFloat(sntAmount) * SNT_PRICE).toFixed(2);
 
@@ -296,6 +314,34 @@ export default function SentiaBuy() {
         {/* ===== 步骤二：填写购买数量 ===== */}
         {step === "buy" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* 持仓卡 */}
+            {ordersQuery.data && (totalSNT! > 0 || pendingSNT! > 0) && (
+              <div style={{
+                background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(168,85,247,0.1))",
+                border: "1px solid rgba(245,158,11,0.3)", borderRadius: 16, padding: "16px 20px",
+              }}>
+                <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 10, fontWeight: 600 }}>🏆 我的持仓</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>累计已到账</div>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>
+                      {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748B" }}>SNT</div>
+                  </div>
+                  {pendingSNT! > 0 && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>确认中</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: "#60A5FA" }}>
+                        +{pendingSNT!.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#64748B" }}>SNT</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 价格卡 */}
             <div style={{
               background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(168,85,247,0.1))",
