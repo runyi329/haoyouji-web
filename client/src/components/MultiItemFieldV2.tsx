@@ -112,13 +112,27 @@ function extractName(text: string): string {
 function parseBankText(text: string): { accountName: string; bankName: string; accountNumber: string } {
   const raw = text.trim();
 
-  // 1. 提取银行账号（15-19位数字，可能有空格分隔）
+  // ===== 策略0：优先使用标签提取（户名/账户名/开户行/账号等） =====
+  // 标签值截止于：换行、下一个标签词
+  const labelAccountName = raw.match(/(?:户名|账户名|账户|收款人|姓名)[：:]\s*(.+?)(?=\s*(?:开户行|开户银行|行名|账号|卡号)[：:]|[\n，,；;]|$)/i);
+  const labelBankName = raw.match(/(?:开户行|开户银行|行名)[：:]\s*(.+?)(?=\s*(?:户名|账户名|账户|收款人|姓名|账号|卡号)[：:]|[\n，,；;]|$)/i);
+  const labelAccountNumber = raw.match(/(?:账号|卡号)[：:]\s*([\d\s]+?)(?=\s*(?:户名|账户名|账户|收款人|姓名|开户行|开户银行|行名)[：:]|[\n，,；;]|$)/i);
+
+  if (labelAccountName || labelBankName || labelAccountNumber) {
+    return {
+      accountName: labelAccountName ? labelAccountName[1].trim() : '',
+      bankName: labelBankName ? labelBankName[1].trim() : '',
+      accountNumber: labelAccountNumber ? labelAccountNumber[1].replace(/\s/g, '').trim() : '',
+    };
+  }
+
+  // ===== 策略1：无标签格式，提取账号（10-25位数字） =====
   const accountWithSpaces = raw.match(/\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4,7})\b/);
   let accountNumber = '';
   if (accountWithSpaces) {
     accountNumber = accountWithSpaces[1].replace(/[\s\-]/g, '');
   } else {
-    const directMatch = raw.match(/(?<![0-9])\d{15,19}(?![0-9])/);
+    const directMatch = raw.match(/(?<![0-9])\d{10,25}(?![0-9])/);
     accountNumber = directMatch ? directMatch[0] : '';
   }
 
@@ -127,81 +141,76 @@ function parseBankText(text: string): { accountName: string; bankName: string; a
                .replace(/[，,、；;|｜\t\n]+/g, ' ')
                .replace(/\s+/g, ' ').trim();
 
-  // 2. 去除常见标签词
-  rest = rest.replace(/账户名[：:]\s*/g, '').replace(/户名[：:]\s*/g, '')
-             .replace(/账户[：:]\s*/g, '').replace(/姓名[：:]\s*/g, '')
-             .replace(/收款人[：:]\s*/g, '').replace(/开户行[：:]\s*/g, '')
-             .replace(/开户银行[：:]\s*/g, '').replace(/行名[：:]\s*/g, '')
-             .replace(/银行[：:]\s*/g, '').replace(/账号[：:]\s*/g, '')
-             .replace(/卡号[：:]\s*/g, '').trim();
-
-  // 3. 核心策略：先处理"银行词+账户名"无空格的情况
-  //    如"工商银行胡永煜" → 工商银行 + 胡永煜
+  // 2. 银行关键词
   const bankKeywords = /银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商/;
+  const bankSuffix = /[支分]行|营业部|办事处/;
 
   let bankName = '';
   let accountName = '';
 
-  // 策略a：检查是否是"银行词+账户名"无空格的格式
-  // 匹配：银行关键词 + 2-4个汉字（末尾）
-  const bankWithNameMatch = rest.match(/^(.*?)(银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商)([\u4e00-\u9fa5]{2,4})(.*)$/);
+  // 3. 按空格分割
+  const parts = rest.split(/\s+/).filter(Boolean);
 
-  if (bankWithNameMatch) {
-    // 无空格场景：银行词 + 账户名
-    const prefix = bankWithNameMatch[1];
-    const bankKeyword = bankWithNameMatch[2];
-    const nameAfterBank = bankWithNameMatch[3];
-    const suffix = bankWithNameMatch[4];
+  if (parts.length === 0) {
+    return { accountName: '', bankName: '', accountNumber };
+  }
 
-    // 组合银行名
-    bankName = (prefix + bankKeyword).trim();
-    accountName = nameAfterBank;
+  const isBankPart = (p: string) => bankKeywords.test(p) || bankSuffix.test(p);
 
-    // 如果suffix还有内容，可能是额外的银行名信息
-    if (suffix.trim()) {
-      bankName = bankName + suffix;
+  const bankParts: string[] = [];
+  const nonBankParts: string[] = [];
+
+  for (const p of parts) {
+    if (isBankPart(p)) {
+      bankParts.push(p);
+    } else {
+      nonBankParts.push(p);
+    }
+  }
+
+  if (bankParts.length > 0) {
+    const processedBankParts: string[] = [];
+    for (const bp of bankParts) {
+      if (/(?:支行|分行|营业部|办事处)$/.test(bp)) {
+        processedBankParts.push(bp);
+      } else {
+        const splitMatch = bp.match(/^(.*?(?:银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商))([\u4e00-\u9fa5]{2,6})$/);
+        if (splitMatch) {
+          processedBankParts.push(splitMatch[1]);
+          nonBankParts.push(splitMatch[2]);
+        } else {
+          processedBankParts.push(bp);
+        }
+      }
+    }
+    bankName = processedBankParts.join('');
+    if (nonBankParts.length > 0) {
+      accountName = nonBankParts.join(' ');
     }
   } else {
-    // 策略b：有空格分隔的情况
-    const parts = rest.split(/\s+/).filter(Boolean);
-
-    const bankParts = parts.filter(p => bankKeywords.test(p));
-    const nonBankParts = parts.filter(p => !bankKeywords.test(p));
-
-    if (bankParts.length > 0) {
-      bankName = bankParts.join('');
-      const shortNameParts = nonBankParts.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
-      if (shortNameParts.length > 0) {
-        accountName = shortNameParts[0];
-      } else {
-        accountName = nonBankParts[0] || '';
-      }
+    const bankInlineMatch = rest.match(/^(.*?)((?:[\u4e00-\u9fa5]*(?:银行|信用社|农商行|农信社|邮储|建行|工行|农行|中行|交行|招行|浦发|民生|光大|华夏|广发|兴业|平安|中信|浙商|渤海|恒丰|徽商))(?:[\u4e00-\u9fa5]*?(?:支行|分行|营业部|办事处))?)([\u4e00-\u9fa5]*)$/);
+    if (bankInlineMatch) {
+      const before = bankInlineMatch[1].trim();
+      bankName = bankInlineMatch[2].trim();
+      const after = bankInlineMatch[3].trim();
+      const nameParts = [before, after].filter(Boolean);
+      accountName = nameParts.join(' ');
     } else {
       if (parts.length >= 2) {
         const sorted = [...parts].sort((a, b) => a.length - b.length);
-        const nameCandidates = sorted.filter(p => p.length >= 2 && p.length <= 4 && /[\u4e00-\u9fa5]/.test(p));
-        if (nameCandidates.length > 0) {
-          accountName = nameCandidates[0];
-          bankName = parts.filter(p => p !== accountName).join('');
-        } else {
-          accountName = parts[0];
-          bankName = parts.slice(1).join('');
-        }
+        accountName = sorted[0];
+        bankName = sorted.slice(1).join('');
       } else {
         accountName = parts[0] || '';
       }
     }
   }
 
-  // 4. 清理账户名和银行名
-  accountName = accountName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•]/g, '').trim();
-  bankName = bankName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•]/g, '').trim();
+  // 4. 清理
+  accountName = accountName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•()（）]/g, '').trim();
+  bankName = bankName.replace(/[^\u4e00-\u9fa5a-zA-Z0-9·•()（）]/g, '').trim();
 
-  return {
-    accountName,
-    bankName,
-    accountNumber,
-  };
+  return { accountName, bankName, accountNumber };
 }
 
 // ==================== 组件 ====================
