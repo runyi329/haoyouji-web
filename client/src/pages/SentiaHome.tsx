@@ -154,11 +154,11 @@ export default function SentiaHome() {
           }}>
             {[
               { label: "代币名称", value: "Sentia", sub: "SNT" },
-              { label: "发行总量", value: "10 亿", sub: "1,000,000,000 SNT" },
-              { label: "所属赛道", value: "AI 产品", sub: "Artificial Intelligence" },
-              { label: "上线交易所", value: "币安", sub: "Binance · 2025 Q2" },
-              { label: "私募价格", value: "$0.04", sub: "USDT / SNT" },
-              { label: "预期上线", value: "2025 年 6 月底", sub: "TGE · Binance" },
+              { label: "发行总量", value: "10 亿枚", sub: "1,000,000,000 SNT" },
+              { label: "所属赛道", value: "AI 基础设施", sub: "Artificial Intelligence" },
+              { label: "底层网络", value: "BNB Chain", sub: "BEP-20 标准" },
+              { label: "私募阶段", value: "进行中", sub: "定向邀请制" },
+              { label: "TGE 计划", value: "2025 年", sub: "具体时间待公告" },
             ].map((item, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -299,8 +299,8 @@ export default function SentiaHome() {
             borderRadius: 6, overflow: "hidden",
           }}>
             {[
-              { phase: "Q1 2025", title: "项目启动", items: ["核心团队组建", "白皮书发布", "合伙人私募开启"], done: true },
-              { phase: "Q2 2025", title: "生态建设", items: ["技术主网测试", "社区运营启动", "币安上线 · 6 月底"], done: false, current: true },
+              { phase: "Q1 2025", title: "项目启动", items: ["核心团队组建", "白皮书发布", "私募轮开启"], done: true },
+              { phase: "Q2 2025", title: "生态建设", items: ["技术主网测试", "社区运营启动", "战略合作洽谈"], done: false, current: true },
               { phase: "Q3 2025", title: "产品落地", items: ["AI 推理节点上线", "跨链桥接部署", "首批 DApp 接入"], done: false },
               { phase: "Q4 2025", title: "全球扩张", items: ["DAO 治理启动", "多链生态完善", "全球社区建设"], done: false },
             ].map((item, i) => (
@@ -477,14 +477,14 @@ export default function SentiaHome() {
         borderBottom: `1px solid ${BNB.divider}`,
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>生态数据</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>SNT 生态正在快速成长</div>
+          <div style={{ fontSize: 11, color: BNB.yellow, fontWeight: 700, letterSpacing: 1.5, marginBottom: 8, textTransform: "uppercase", textAlign: "center" }}>代币信息</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: BNB.text, textAlign: "center", marginBottom: 28, lineHeight: 1.3 }}>SNT 基本参数</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
             {[
-              { label: "私募参与人数", value: "12,000+", sub: "来自 38 个国家和地区" },
-              { label: "SNT 已分配", value: "480M", sub: "占总供应量 48%" },
-              { label: "共享节点数量", value: "3,200+", sub: "活跃共享节点" },
-              { label: "目标上线时间", value: "2025 Q3", sub: "Binance 智能链" },
+              { label: "私募轮状态", value: "进行中", sub: "定向邀请制，名额有限" },
+              { label: "代币总供应量", value: "1,000,000,000", sub: "固定总量，不增发" },
+              { label: "私募比例", value: "20%", sub: "200,000,000 SNT" },
+              { label: "底层网络", value: "BNB Chain", sub: "BEP-20 标准" },
             ].map((stat, i) => (
               <div key={i} style={{
                 background: BNB.card,
@@ -503,19 +503,16 @@ export default function SentiaHome() {
 
       {/* 底部 CTA */}
       <section style={{
-        padding: "32px 20px 48px",
+        padding: "40px 20px 52px",
         borderTop: `1px solid ${BNB.divider}`,
         background: "#131722",
         textAlign: "center",
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 6, letterSpacing: 0.5 }}>私募价格</div>
-          <div style={{
-            fontSize: 52, fontWeight: 800,
-            color: BNB.yellow,
-            marginBottom: 4, letterSpacing: -1,
-          }}>$0.04</div>
-          <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 28 }}>USDT / SNT · 私募阶段</div>
+          <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 8, lineHeight: 1.6 }}>
+            Sentia 私募轮现已开放，定向邀请制参与
+          </div>
+          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 28 }}>SNT · BEP-20 · BNB Chain</div>
           <button
             onClick={() => navigate("/sentia/buy")}
             style={{
@@ -526,10 +523,10 @@ export default function SentiaHome() {
               letterSpacing: 0.3,
             }}
           >
-            立即参与预售
+            申请参与私募
           </button>
           <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 14 }}>
-            预计上线时间：2025 年 6 月底 · Binance
+            私募名额有限 · 需持有邀请码
           </div>
         </div>
       </section>
@@ -548,7 +545,7 @@ export default function SentiaHome() {
         </div>
         <div style={{ color: BNB.textMuted }}>© 2025 Sentia Protocol. All rights reserved.</div>
         <div style={{ marginTop: 4, color: BNB.textMuted }}>
-          本页面仅供合伙人参考，不构成投资建议
+          本内容不构成投资建议，数字资产投资存在风险
         </div>
       </footer>
     </div>
