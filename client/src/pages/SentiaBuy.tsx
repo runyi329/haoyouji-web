@@ -60,6 +60,29 @@ export default function SentiaBuy() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
 
+  // 从历史订单恢复支付（点击确认中/待支付订单）
+  const getOrderQuery = trpc.recharge.getOrder.useQuery(
+    { orderNo: order?.orderNo || "" },
+    { enabled: false }
+  );
+
+  const handleResumeOrder = async (o: any) => {
+    // 恢复订单数据到 pay 步骤
+    setOrder(o);
+    if (o.walletAddress) {
+      try {
+        const qr = await QRCode.toDataURL(o.walletAddress);
+        setQrCode(qr);
+      } catch {}
+    }
+    // 计算剩余时间
+    if (o.expiresAt) {
+      const remaining = Math.floor((new Date(o.expiresAt).getTime() - Date.now()) / 1000);
+      setTimeLeft(remaining > 0 ? remaining : 0);
+    }
+    setStep("pay");
+  };
+
   // tRPC mutations
   const loginMutation = trpc.auth.loginWithPassword.useMutation();
   const registerMutation = trpc.auth.registerWithPassword.useMutation();
@@ -587,10 +610,23 @@ export default function SentiaBuy() {
               ordersQuery.data.map((o: any) => {
                 const cfg = statusConfig[o.status] || statusConfig.pending;
                 return (
-                  <div key={o.id} style={{
-                    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(124,58,237,0.2)",
-                    borderRadius: 14, padding: "16px 18px",
-                  }}>
+                  <div
+                    key={o.id}
+                    onClick={() => {
+                      if (o.status === "pending" || o.status === "submitted") {
+                        handleResumeOrder(o);
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255,255,255,0.03)",
+                      border: (o.status === "pending" || o.status === "submitted")
+                        ? "1px solid rgba(96,165,250,0.4)"
+                        : "1px solid rgba(124,58,237,0.2)",
+                      borderRadius: 14, padding: "16px 18px",
+                      cursor: (o.status === "pending" || o.status === "submitted") ? "pointer" : "default",
+                      transition: "border-color 0.2s",
+                    }}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 18, fontWeight: 800, color: "#F59E0B" }}>{o.amount} USDT</div>
@@ -612,6 +648,12 @@ export default function SentiaBuy() {
                     {o.txnHash && (
                       <div style={{ fontSize: 11, color: "#374151", marginTop: 4, fontFamily: "monospace", wordBreak: "break-all" }}>
                         TxHash: {o.txnHash}
+                      </div>
+                    )}
+                    {(o.status === "pending" || o.status === "submitted") && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(96,165,250,0.15)", fontSize: 12, color: "#60A5FA", display: "flex", alignItems: "center", gap: 4 }}>
+                        <span>👆</span>
+                        <span>点击查看支付地址 / 二维码，继续完成转账</span>
                       </div>
                     )}
                   </div>
