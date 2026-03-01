@@ -158,6 +158,11 @@ function renderTable(lines: string[], key: number) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SentiaWhitepaper() {
   const [, navigate] = useLocation();
+  useEffect(() => {
+    const prev = document.title;
+    document.title = "";
+    return () => { document.title = prev; };
+  }, []);
   const [lang, setLang] = useState<Lang>("zh");
   const [activeSection, setActiveSection] = useState("abstract");
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
