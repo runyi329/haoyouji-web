@@ -78,53 +78,52 @@ export default function SentiaHome() {
 
       {/* Hero 区 */}
       <section style={{
-        padding: "48px 20px 40px",
+        padding: "52px 20px 44px",
         borderBottom: `1px solid ${BNB.divider}`,
         background: `linear-gradient(180deg, #131722 0%, ${BNB.bg} 100%)`,
       }}>
-        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center" }}>
-          <img
-            src={SENTIA_ICON}
-            alt="Sentia Token"
-            style={{
-              width: 88, height: 88, borderRadius: "50%",
-              marginBottom: 20,
-              boxShadow: `0 0 0 1px ${BNB.cardBorder}, 0 8px 32px rgba(0,0,0,0.5)`,
-            }}
-          />
+        <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+
+          {/* 图标 + 标题横排组合 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+            <img
+              src={SENTIA_ICON}
+              alt="Sentia Token"
+              style={{
+                width: 72, height: 72, borderRadius: "50%", flexShrink: 0,
+                boxShadow: `0 0 0 1px ${BNB.cardBorder}, 0 8px 32px rgba(0,0,0,0.5)`,
+              }}
+            />
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.1, color: BNB.text, letterSpacing: -0.5 }}>SENTIA</div>
+              <div style={{ fontSize: 13, fontWeight: 400, color: BNB.textSecondary, marginTop: 5, lineHeight: 1.4 }}>
+                AI 驱动的下一代区块链生态系统
+              </div>
+            </div>
+          </div>
 
           <div style={{
             display: "inline-block",
             background: BNB.yellowDim,
             border: `1px solid ${BNB.yellowBorder}`,
-            borderRadius: 2, padding: "3px 12px", marginBottom: 18,
+            borderRadius: 2, padding: "3px 12px", marginBottom: 16,
             fontSize: 11, color: BNB.yellow, letterSpacing: 2, fontWeight: 600,
           }}>
             AI TRACK · BINANCE LISTING
           </div>
 
-          <h1 style={{
-            fontSize: 38, fontWeight: 800, lineHeight: 1.15, marginBottom: 14,
-            color: BNB.text, letterSpacing: -0.5,
-          }}>
-            SENTIA
-            <span style={{ display: "block", fontSize: 16, fontWeight: 400, color: BNB.textSecondary, letterSpacing: 0, marginTop: 8 }}>
-              AI 驱动的下一代区块链生态系统
-            </span>
-          </h1>
-
-          <p style={{ fontSize: 14, color: BNB.textSecondary, lineHeight: 1.75, maxWidth: 340, margin: "0 auto 32px" }}>
+          <p style={{ fontSize: 14, color: BNB.textSecondary, lineHeight: 1.75, maxWidth: 320, margin: "0 auto 28px", textAlign: "center" }}>
             重新定义人工智能与 Web3 的边界，构建去中心化智能决策网络
           </p>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", width: "100%", maxWidth: 360 }}>
             <button
               onClick={() => navigate("/sentia/buy")}
               style={{
+                flex: 1,
                 background: BNB.yellow,
-                border: "none", borderRadius: 4, padding: "13px 32px",
+                border: "none", borderRadius: 4, padding: "13px 0",
                 color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
-                minWidth: 160,
               }}
             >
               立即参与预售
@@ -132,10 +131,10 @@ export default function SentiaHome() {
             <button
               onClick={() => navigate("/sentia/whitepaper")}
               style={{
+                flex: 1,
                 background: "transparent",
-                border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "13px 32px",
+                border: `1px solid ${BNB.cardBorder}`, borderRadius: 4, padding: "13px 0",
                 color: BNB.text, fontWeight: 500, fontSize: 15, cursor: "pointer",
-                minWidth: 160,
               }}
             >
               查看白皮书
