@@ -227,6 +227,41 @@ export const appRouter = router({
         return await dbRecharge.getUserWithdrawHistory(ctx.user.id, input.limit);
       }),
 
+    // SNT 划转：搜索用户
+    searchUserForTransfer: protectedProcedure
+      .input(z.object({ keyword: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        const { searchUsersByUsername } = await import('./db-point-system');
+        const userList = await searchUsersByUsername(input.keyword);
+        return (userList as any[])
+          .filter((u: any) => u.id !== ctx.user.id)
+          .slice(0, 10)
+          .map((u: any) => ({ id: u.id, username: u.username, name: u.name }));
+      }),
+
+    // SNT 划转：执行划转
+    transferSNT: protectedProcedure
+      .input(z.object({
+        toUserId: z.number(),
+        sntAmount: z.number().positive(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.transferSNT(
+          ctx.user.id,
+          input.toUserId,
+          input.sntAmount,
+          input.remark
+        );
+      }),
+
+    // SNT 划转：获取划转记录
+    getMySntTransfers: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserSntTransfers(ctx.user.id, input.limit);
+      }),
+
     // === 管理员功能 ===
     // 获取所有待处理订单
     adminGetPendingOrders: protectedProcedure

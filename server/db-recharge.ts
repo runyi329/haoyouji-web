@@ -1,5 +1,5 @@
 import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { getDb } from "./db";
+import { getDb, getDbConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 
 // 生成唯一的充值金额（原金额 + 0.0001-0.9999的随机数）
@@ -781,4 +781,90 @@ export async function getAllWithdrawRequests(limit: number = 100) {
     .where(eq(balanceHistory.type, 'withdraw'))
     .orderBy(sql`${balanceHistory.createdAt} DESC`)
     .limit(limit);
+}
+
+// ========== SNT 会员间划转 ==========
+
+// 确保 snt_transfers 表存在（自动建表）
+async function ensureSntTransfersTable() {
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS \`snt_transfers\` (
+      \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+      \`from_user_id\` int NOT NULL,
+      \`to_user_id\` int NOT NULL,
+      \`snt_amount\` decimal(20, 4) NOT NULL,
+      \`remark\` varchar(200),
+      \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      INDEX \`snt_transfers_from_user_idx\` (\`from_user_id\`),
+      INDEX \`snt_transfers_to_user_idx\` (\`to_user_id\`)
+    )
+  `);
+}
+
+// 获取用户 SNT 净持仓（充值到账 - 划转出 + 划转入）
+export async function getUserSntBalance(userId: number): Promise<number> {
+  await ensureSntTransfersTable();
+  const conn = await getDbConnection();
+  if (!conn) return 0;
+  const [rechargeRows]: any = await conn.execute(
+    `SELECT COALESCE(SUM(amount), 0) as total FROM recharge_orders WHERE user_id = ? AND status = 'completed'`,
+    [userId]
+  );
+  const rechargedSNT = parseFloat(rechargeRows[0]?.total || '0') / 0.04;
+  const [outRows]: any = await conn.execute(
+    `SELECT COALESCE(SUM(snt_amount), 0) as total FROM snt_transfers WHERE from_user_id = ?`,
+    [userId]
+  );
+  const transferOut = parseFloat(outRows[0]?.total || '0');
+  const [inRows]: any = await conn.execute(
+    `SELECT COALESCE(SUM(snt_amount), 0) as total FROM snt_transfers WHERE to_user_id = ?`,
+    [userId]
+  );
+  const transferIn = parseFloat(inRows[0]?.total || '0');
+  return Math.max(0, rechargedSNT - transferOut + transferIn);
+}
+
+// 执行 SNT 划转
+export async function transferSNT(
+  fromUserId: number,
+  toUserId: number,
+  sntAmount: number,
+  remark?: string
+): Promise<{ success: boolean; message: string }> {
+  await ensureSntTransfersTable();
+  if (sntAmount <= 0) throw new Error('划转数量必须大于 0');
+  if (fromUserId === toUserId) throw new Error('不能划转给自己');
+  const balance = await getUserSntBalance(fromUserId);
+  if (balance < sntAmount) {
+    throw new Error(`SNT 余额不足，当前可划转：${balance.toFixed(4)} SNT`);
+  }
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  await conn.execute(
+    `INSERT INTO snt_transfers (from_user_id, to_user_id, snt_amount, remark) VALUES (?, ?, ?, ?)`,
+    [fromUserId, toUserId, sntAmount.toFixed(4), remark || null]
+  );
+  return { success: true, message: `成功划转 ${sntAmount} SNT` };
+}
+
+// 获取用户划转记录（转入 + 转出）
+export async function getUserSntTransfers(userId: number, limit: number = 20) {
+  await ensureSntTransfersTable();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows]: any = await conn.execute(
+    `SELECT t.*, 
+      u_from.username as from_username, u_from.name as from_name,
+      u_to.username as to_username, u_to.name as to_name
+     FROM snt_transfers t
+     LEFT JOIN users u_from ON t.from_user_id = u_from.id
+     LEFT JOIN users u_to ON t.to_user_id = u_to.id
+     WHERE t.from_user_id = ? OR t.to_user_id = ?
+     ORDER BY t.created_at DESC
+     LIMIT ?`,
+    [userId, userId, limit]
+  );
+  return rows;
 }

@@ -143,6 +143,20 @@ export default function SentiaBuy() {
   );
   const addBscWalletMutation = trpc.paymentAccounts.addDigitalWallet.useMutation();
   const requestWithdrawMutation = trpc.recharge.requestWithdraw.useMutation();
+  // 划转弹窗状态
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferKeyword, setTransferKeyword] = useState("");
+  const [transferTarget, setTransferTarget] = useState<{ id: number; username: string; name?: string } | null>(null);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferRemark, setTransferRemark] = useState("");
+  const [transferMsg, setTransferMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferSearchEnabled, setTransferSearchEnabled] = useState(false);
+  const searchUsersQuery = trpc.recharge.searchUserForTransfer.useQuery(
+    { keyword: transferKeyword },
+    { enabled: transferSearchEnabled && transferKeyword.length >= 2 }
+  );
+  const transferSNTMutation = trpc.recharge.transferSNT.useMutation();
   // 取第一个 BEP20 钱包地址
   const savedBscAddress: string | null = (bscWalletsQuery.data as any[])
     ?.find((w: any) => w.walletType === "blockchain" && w.network === "BEP20")
@@ -432,6 +446,26 @@ export default function SentiaBuy() {
                       <div style={{ fontSize: 13, color: BNB.textMuted, fontWeight: 600 }}>SNT</div>
                     </div>
                   </div>
+                {/* 三个操作按钮 */}
+                <div style={{ display: "flex", gap: 8, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BNB.divider}` }}>
+                  {[
+                    { label: "充値", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>, onClick: () => setStep("buy"), primary: true },
+                    { label: "提现", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 11 12 6 7 11"/><line x1="12" y1="18" x2="12" y2="6"/></svg>, onClick: () => alert("提现功能即将开放，敬请期待"), primary: false },
+                    { label: "划转", icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>, onClick: () => { setShowTransferModal(true); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }, primary: false },
+                  ].map((btn, i) => (
+                    <button key={i} onClick={btn.onClick} style={{
+                      flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                      background: btn.primary ? BNB.yellowDim : "transparent",
+                      border: `1px solid ${btn.primary ? BNB.yellowBorder : BNB.cardBorder}`,
+                      borderRadius: 4, padding: "8px 4px",
+                      color: btn.primary ? BNB.yellow : BNB.textSecondary,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}>
+                      {btn.icon}
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -710,7 +744,8 @@ export default function SentiaBuy() {
                 <button onClick={() => setStep("buy")} style={{ ...btnPrimary, maxWidth: 200, margin: "0 auto" }}>立即购买 SNT</button>
               </div>
             ) : (
-              ordersQuery.data.map((o: any) => {
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {ordersQuery.data.map((o: any) => {
                 const cfg = statusConfig[o.status] || statusConfig.pending;
                 const isClickable = o.status === "pending" || o.status === "submitted";
                 return (
@@ -757,7 +792,8 @@ export default function SentiaBuy() {
                     )}
                   </div>
                 );
-              })
+              })}
+              </div>
             )}
           </div>
         )}
@@ -765,8 +801,131 @@ export default function SentiaBuy() {
       </div>
     </div>
 
-    {/* ===== 提现弹窗 ===== */}
-    {showWithdrawModal && (
+    {/* ===== 划转弹窗 ===== */}
+    {showTransferModal && (
+      <div
+        onClick={() => { setShowTransferModal(false); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }}
+        style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      >
+        <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 440, background: BNB.card, borderRadius: "12px 12px 0 0", padding: "24px 20px 40px", maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>SNT 划转</div>
+            <button onClick={() => { setShowTransferModal(false); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: BNB.textMuted, fontSize: 22, lineHeight: 1, padding: 4 }}>×</button>
+          </div>
+
+          {/* 可划转余额 */}
+          <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "12px 14px", marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>可划转余额</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: BNB.yellow }}>
+              {totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} <span style={{ fontSize: 13, fontWeight: 600, color: BNB.textMuted }}>SNT</span>
+            </div>
+          </div>
+
+          {/* 搜索用户 */}
+          {!transferTarget ? (
+            <>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>输入对方用户名</div>
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <input
+                  style={{ ...inputStyle, paddingRight: 80 }}
+                  placeholder="搜索用户名（至少 2 个字符）"
+                  value={transferKeyword}
+                  onChange={e => { setTransferKeyword(e.target.value); setTransferSearchEnabled(false); }}
+                  onKeyDown={e => { if (e.key === "Enter") setTransferSearchEnabled(true); }}
+                />
+                <button
+                  onClick={() => setTransferSearchEnabled(true)}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: BNB.yellow, border: "none", borderRadius: 3, padding: "5px 12px", color: "#0B0E11", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                >搜索</button>
+              </div>
+              {/* 搜索结果 */}
+              {searchUsersQuery.isFetching && <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>搜索中...</div>}
+              {searchUsersQuery.data && !searchUsersQuery.isFetching && (
+                searchUsersQuery.data.length === 0
+                  ? <div style={{ fontSize: 12, color: BNB.textMuted, padding: "8px 0" }}>未找到用户</div>
+                  : <div style={{ border: `1px solid ${BNB.divider}`, borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
+                      {(searchUsersQuery.data as any[]).map((u: any) => (
+                        <div key={u.id} onClick={() => { setTransferTarget(u); setTransferMsg(null); }}
+                          style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${BNB.divider}`, background: BNB.bg, display: "flex", alignItems: "center", gap: 10 }}
+                        >
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: BNB.yellowDim, border: `1px solid ${BNB.yellowBorder}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: BNB.yellow }}>{(u.name || u.username).charAt(0).toUpperCase()}</span>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: BNB.text }}>{u.name || u.username}</div>
+                            <div style={{ fontSize: 11, color: BNB.textMuted }}>@{u.username}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* 已选择用户 */}
+              <div style={{ background: BNB.bg, border: `1px solid ${BNB.greenBorder}`, borderRadius: 4, padding: "12px 14px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: BNB.greenDim, border: `1px solid ${BNB.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: BNB.green }}>{(transferTarget.name || transferTarget.username).charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: BNB.text }}>{transferTarget.name || transferTarget.username}</div>
+                    <div style={{ fontSize: 11, color: BNB.textMuted }}>@{transferTarget.username}</div>
+                  </div>
+                </div>
+                <button onClick={() => { setTransferTarget(null); setTransferMsg(null); }} style={{ background: "none", border: `1px solid ${BNB.cardBorder}`, borderRadius: 3, padding: "4px 10px", color: BNB.textSecondary, fontSize: 11, cursor: "pointer" }}>更换</button>
+              </div>
+
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>划转数量（SNT）</div>
+              <input
+                style={{ ...inputStyle, fontSize: 20, fontWeight: 700, marginBottom: 4 }}
+                type="number"
+                placeholder="输入划转 SNT 数量"
+                value={transferAmount}
+                onChange={e => setTransferAmount(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 12 }}>可划转：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT</div>
+
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>备注（可选）</div>
+              <input
+                style={{ ...inputStyle, marginBottom: 16 }}
+                placeholder="输入备注"
+                value={transferRemark}
+                onChange={e => setTransferRemark(e.target.value)}
+              />
+
+              {transferMsg && (
+                <div style={{ fontSize: 12, color: transferMsg.type === "ok" ? BNB.green : BNB.red, marginBottom: 12, padding: "8px 12px", background: transferMsg.type === "ok" ? BNB.greenDim : BNB.redDim, borderRadius: 4, border: `1px solid ${transferMsg.type === "ok" ? BNB.greenBorder : BNB.redBorder}` }}>{transferMsg.text}</div>
+              )}
+
+              <button
+                disabled={transferLoading || !transferAmount || parseFloat(transferAmount) <= 0}
+                onClick={async () => {
+                  const amt = parseFloat(transferAmount);
+                  if (!amt || amt <= 0) { setTransferMsg({ type: "err", text: "请输入有效的划转数量" }); return; }
+                  if (totalSNT !== null && amt > totalSNT) { setTransferMsg({ type: "err", text: "SNT 余额不足" }); return; }
+                  setTransferLoading(true);
+                  try {
+                    await transferSNTMutation.mutateAsync({ toUserId: transferTarget!.id, sntAmount: amt, remark: transferRemark || undefined });
+                    setTransferMsg({ type: "ok", text: `成功划转 ${amt.toLocaleString()} SNT 至 @${transferTarget!.username}` });
+                    setTransferAmount("");
+                    setTransferRemark("");
+                    ordersQuery.refetch();
+                  } catch (err: any) {
+                    setTransferMsg({ type: "err", text: err?.message || "划转失败，请重试" });
+                  } finally {
+                    setTransferLoading(false);
+                  }
+                }}
+                style={{ ...btnPrimary, opacity: (!transferAmount || parseFloat(transferAmount) <= 0 || transferLoading) ? 0.5 : 1 }}
+              >{transferLoading ? "划转中..." : "确认划转"}</button>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* ===== 提现弹窗 ===== */}  {showWithdrawModal && (
       <div
         onClick={() => setShowWithdrawModal(false)}
         style={{
