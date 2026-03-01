@@ -117,6 +117,14 @@ export default function SentiaBuy() {
     setStep("pay");
   };
 
+  // 提现弹窗状态
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<"wallet" | "amount">("wallet");
+  const [bscAddress, setBscAddress] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawMsg, setWithdrawMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+
   // tRPC mutations
   const loginMutation = trpc.auth.loginWithPassword.useMutation();
   const registerMutation = trpc.auth.registerWithPassword.useMutation();
@@ -126,6 +134,13 @@ export default function SentiaBuy() {
     { limit: 100 },
     { enabled: step === "orders" || step === "buy" }
   );
+  // 获取已绑定的 BSC 钱包（blockchain + BEP20）
+  const bscWalletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery(
+    undefined,
+    { enabled: showWithdrawModal }
+  );
+  const addBscWalletMutation = trpc.paymentAccounts.addDigitalWallet.useMutation();
+  const requestWithdrawMutation = trpc.recharge.requestWithdraw.useMutation();
 
   // 累计持仓
   const totalSNT = (() => {
@@ -247,6 +262,7 @@ export default function SentiaBuy() {
   const currentIdx = stepOrder.indexOf(step);
 
   return (
+    <>
     <div style={{
       minHeight: "100vh",
       background: BNB.bg,
@@ -673,6 +689,28 @@ export default function SentiaBuy() {
               }}>继续购买</button>
             </div>
 
+            {/* 提现按钮区 */}
+            {totalSNT !== null && totalSNT > 0 && (
+              <div style={{ marginBottom: 4 }}>
+                <button
+                  onClick={() => { setShowWithdrawModal(true); setWithdrawStep("wallet"); setWithdrawMsg(null); }}
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${BNB.yellow}`,
+                    borderRadius: 4, padding: "8px 18px",
+                    color: BNB.yellow, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={BNB.yellow} strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  提现至钱包
+                </button>
+              </div>
+            )}
             {ordersQuery.isLoading ? (
               <div style={{ textAlign: "center", padding: "40px 0", color: BNB.textMuted }}>加载中...</div>
             ) : !ordersQuery.data || ordersQuery.data.length === 0 ? (
@@ -740,5 +778,166 @@ export default function SentiaBuy() {
 
       </div>
     </div>
+
+    {/* ===== 提现弹窗 ===== */}
+    {showWithdrawModal && (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        zIndex: 1000, padding: "0 0 0 0",
+      }} onClick={(e) => { if (e.target === e.currentTarget) setShowWithdrawModal(false); }}>
+        <div style={{
+          background: BNB.card, borderRadius: "12px 12px 0 0",
+          border: `1px solid ${BNB.divider}`, padding: "24px 20px 32px",
+          width: "100%", maxWidth: 480,
+        }}>
+          {/* 弹窗标题 */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: BNB.text }}>提现 SNT</div>
+              <div style={{ fontSize: 12, color: BNB.textMuted, marginTop: 2 }}>网络：BNB Smart Chain (BEP20)</div>
+            </div>
+            <button onClick={() => setShowWithdrawModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: BNB.textMuted, fontSize: 20, lineHeight: 1 }}>×</button>
+          </div>
+
+          {/* 网络标签 */}
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "rgba(240,185,11,0.1)", border: `1px solid ${BNB.yellowBorder}`,
+            borderRadius: 4, padding: "5px 12px", marginBottom: 20,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 32 32" fill="#F0B90B">
+              <circle cx="16" cy="16" r="16"/>
+              <path d="M12.1 14.3l3.9-3.9 3.9 3.9 2.3-2.3L16 7.8l-6.2 6.2 2.3 2.3zM7.8 16l2.3-2.3 2.3 2.3-2.3 2.3L7.8 16zm4.3 1.7l3.9 3.9 3.9-3.9 2.3 2.3L16 26.2l-6.2-6.2 2.3-2.3zm9.8-4l2.3 2.3-2.3 2.3-2.3-2.3 2.3-2.3zM18.3 16l-2.3 2.3-2.3-2.3 2.3-2.3 2.3 2.3z" fill="#0B0E11"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 600, color: BNB.yellow }}>BNB Smart Chain · BEP20</span>
+          </div>
+
+          {withdrawStep === "wallet" && (
+            <>
+              {/* 已绑定的 BSC 钱包 */}
+              {bscWalletsQuery.data && bscWalletsQuery.data.filter((w: any) => w.walletType === "blockchain" && w.network === "BEP20").length > 0 ? (
+                <>
+                  <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 10 }}>已绑定的 BSC 钱包</div>
+                  {bscWalletsQuery.data
+                    .filter((w: any) => w.walletType === "blockchain" && w.network === "BEP20")
+                    .map((w: any) => (
+                      <div key={w.id} style={{
+                        background: BNB.bg, border: `1px solid ${BNB.divider}`,
+                        borderRadius: 4, padding: "12px 14px", marginBottom: 8,
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 3 }}>{w.notes || "BSC 钱包"}</div>
+                          <div style={{ fontSize: 12, color: BNB.text, fontFamily: "monospace", wordBreak: "break-all" }}>{w.walletAddress}</div>
+                        </div>
+                        <button
+                          onClick={() => { setBscAddress(w.walletAddress); setWithdrawStep("amount"); setWithdrawMsg(null); }}
+                          style={{ background: BNB.yellow, border: "none", borderRadius: 3, padding: "6px 12px", color: "#0B0E11", fontSize: 12, fontWeight: 600, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}
+                        >选择</button>
+                      </div>
+                    ))
+                  }
+                  <div style={{ borderTop: `1px solid ${BNB.divider}`, margin: "16px 0" }} />
+                </>
+              ) : null}
+
+              {/* 绑定新 BSC 钱包 */}
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 8 }}>绑定新 BSC 钱包地址</div>
+              <input
+                style={{ ...inputStyle, marginBottom: 8 }}
+                placeholder="输入 BNB Smart Chain (BEP20) 地址，0x 开头"
+                value={bscAddress}
+                onChange={e => setBscAddress(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>请确保地址为 BEP20 格式，转账至错误网络将导致资产永久丢失</div>
+              {withdrawMsg && (
+                <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? BNB.green : BNB.red, marginBottom: 12 }}>{withdrawMsg.text}</div>
+              )}
+              <button
+                disabled={withdrawLoading || !bscAddress.trim()}
+                onClick={async () => {
+                  const addr = bscAddress.trim();
+                  if (!addr.startsWith("0x") || addr.length !== 42) {
+                    setWithdrawMsg({ type: "err", text: "请输入有效的 BEP20 地址（0x 开头，42位）" });
+                    return;
+                  }
+                  setWithdrawLoading(true);
+                  try {
+                    await addBscWalletMutation.mutateAsync({
+                      walletType: "blockchain",
+                      network: "BEP20",
+                      walletAddress: addr,
+                      notes: "BSC 提现钱包",
+                    });
+                    bscWalletsQuery.refetch();
+                    setWithdrawStep("amount");
+                    setWithdrawMsg(null);
+                  } catch (err: any) {
+                    setWithdrawMsg({ type: "err", text: err?.message || "绑定失败，请重试" });
+                  } finally {
+                    setWithdrawLoading(false);
+                  }
+                }}
+                style={{ ...btnPrimary, opacity: (!bscAddress.trim() || withdrawLoading) ? 0.5 : 1 }}
+              >{withdrawLoading ? "绑定中..." : "绑定并继续"}</button>
+            </>
+          )}
+
+          {withdrawStep === "amount" && (
+            <>
+              <div style={{ background: BNB.bg, border: `1px solid ${BNB.divider}`, borderRadius: 4, padding: "10px 14px", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 3 }}>提现至</div>
+                <div style={{ fontSize: 12, color: BNB.text, fontFamily: "monospace", wordBreak: "break-all" }}>{bscAddress}</div>
+              </div>
+              <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 6 }}>提现数量（SNT）</div>
+              <input
+                style={{ ...inputStyle, marginBottom: 4 }}
+                type="number"
+                placeholder="输入提现 SNT 数量"
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4 }}>
+                可提现：{totalSNT !== null ? totalSNT.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) : "--"} SNT
+              </div>
+              <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 16 }}>提现申请提交后由人工审核，预计 1-3 个工作日到账</div>
+              {withdrawMsg && (
+                <div style={{ fontSize: 12, color: withdrawMsg.type === "ok" ? BNB.green : BNB.red, marginBottom: 12 }}>{withdrawMsg.text}</div>
+              )}
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => { setWithdrawStep("wallet"); setWithdrawMsg(null); }} style={{ ...btnSecondary, flex: 1 }}>返回</button>
+                <button
+                  disabled={withdrawLoading || !withdrawAmount}
+                  onClick={async () => {
+                    const amt = parseFloat(withdrawAmount);
+                    if (!amt || amt <= 0) { setWithdrawMsg({ type: "err", text: "请输入有效的提现数量" }); return; }
+                    if (totalSNT !== null && amt > totalSNT) { setWithdrawMsg({ type: "err", text: "提现数量不能超过可用持仓" }); return; }
+                    setWithdrawLoading(true);
+                    try {
+                      // 提现申请：amount 字段存 SNT 数量，remark 记录 BSC 地址
+                      await requestWithdrawMutation.mutateAsync({
+                        amount: amt,
+                        paymentAccountId: 0,
+                        remark: `SNT提现至BSC:${bscAddress}`,
+                      });
+                      setWithdrawMsg({ type: "ok", text: `提现申请已提交！${amt.toLocaleString()} SNT 将发送至 ${bscAddress.slice(0, 8)}...${bscAddress.slice(-6)}` });
+                      setWithdrawAmount("");
+                      ordersQuery.refetch();
+                    } catch (err: any) {
+                      setWithdrawMsg({ type: "err", text: err?.message || "提交失败，请稍后重试" });
+                    } finally {
+                      setWithdrawLoading(false);
+                    }
+                  }}
+                  style={{ ...btnPrimary, flex: 2, opacity: (!withdrawAmount || withdrawLoading) ? 0.5 : 1 }}
+                >{withdrawLoading ? "提交中..." : "确认提现申请"}</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
