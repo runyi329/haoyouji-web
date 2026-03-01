@@ -275,13 +275,18 @@ export default function SentiaBuy() {
             SENTIA
           </span>
         </div>
-        {step !== "login" && (
-          <button onClick={() => setStep("orders")} style={{
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={() => navigate("/sentia/whitepaper")} style={{
             background: "transparent", border: `1px solid ${BNB.cardBorder}`, borderRadius: 4,
             padding: "6px 12px", color: BNB.textSecondary, fontSize: 12, cursor: "pointer",
-          }}>我的订单</button>
-        )}
-        {step === "login" && <div style={{ width: 60 }} />}
+          }}>白皮书</button>
+          {step !== "login" && (
+            <button onClick={() => setStep("orders")} style={{
+              background: "transparent", border: `1px solid ${BNB.cardBorder}`, borderRadius: 4,
+              padding: "6px 12px", color: BNB.textSecondary, fontSize: 12, cursor: "pointer",
+            }}>我的订单</button>
+          )}
+        </div>
       </nav>
 
       <div style={{ padding: "24px 16px 60px", maxWidth: 440, margin: "0 auto" }}>
