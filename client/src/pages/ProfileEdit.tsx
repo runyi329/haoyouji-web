@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, CreditCard } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
 
 export default function ProfileEdit() {
   const [isEditing, setIsEditing] = useState(false);
+  const [, navigate] = useLocation();
   
   // 表单数据
   const [formData, setFormData] = useState({
@@ -156,6 +157,22 @@ export default function ProfileEdit() {
                 <p className="text-xs text-[#D32F2F] mt-1">建议填写邮箱，用于接收账本备份</p>
               )}
             </div>
+          </div>
+
+          {/* 收款账户入口 */}
+          <div className="mt-6 pt-6 border-t border-gray-100">
+            <button
+              onClick={() => navigate("/payment-accounts")}
+              className="w-full flex items-center justify-between py-3 px-1 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-[#FFF3E0] rounded-full flex items-center justify-center mr-3">
+                  <CreditCard className="w-4 h-4 text-[#FF9800]" />
+                </div>
+                <span className="text-base font-medium text-gray-900">收款账户</span>
+              </div>
+              <ArrowLeft className="w-5 h-5 text-gray-400 transform rotate-180" />
+            </button>
           </div>
 
           {/* 按钮区域 */}
