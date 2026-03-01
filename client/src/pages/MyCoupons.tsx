@@ -5,7 +5,7 @@ import { Ticket, Plus, ChevronLeft } from 'lucide-react';
 
 export default function MyCoupons() {
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
+  const [activeTab, setActiveTab] = useState<'received' | 'sent' | 'products'>('received');
 
   // 获取收到的卡券
   const { data: receivedCoupons, isLoading: receivedLoading } = trpc.coupon.getReceived.useQuery(
@@ -69,8 +69,31 @@ export default function MyCoupons() {
           >
             我发出的
           </button>
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              activeTab === 'products'
+                ? 'text-[#D32F2F] border-b-2 border-[#D32F2F]'
+                : 'text-gray-500'
+            }`}
+          >
+            我的商品
+          </button>
         </div>
       </div>
+
+      {/* 我的商品内容 */}
+      {activeTab === 'products' && (
+        <div className="p-4">
+          <button
+            onClick={() => setLocation('/membership')}
+            className="w-full bg-[#D32F2F] text-white py-3 rounded-lg flex items-center justify-center gap-2 font-medium"
+          >
+            <Plus size={20} />
+            查看会员产品
+          </button>
+        </div>
+      )}
 
       {/* 制作卡券按钮（仅在"我发出的"tab显示） */}
       {activeTab === 'sent' && (
