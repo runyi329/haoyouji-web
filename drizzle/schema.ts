@@ -1433,3 +1433,38 @@ export const scannerHeartbeat = mysqlTable("scanner_heartbeat", {
 
 export type ScannerHeartbeat = typeof scannerHeartbeat.$inferSelect;
 export type InsertScannerHeartbeat = typeof scannerHeartbeat.$inferInsert;
+
+// ── SNT 提现功能 ──────────────────────────────────────────────────────────────
+
+// 用户 BSC 钱包绑定表（每个用户只允许绑定一个 BEP20 地址）
+export const userBscWallets = mysqlTable("user_bsc_wallets", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull().unique(),
+	bscAddress: varchar("bsc_address", { length: 100 }).notNull(), // BNB Smart Chain BEP20 地址
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("user_bsc_wallets_user_id_idx").on(table.userId),
+]);
+export type UserBscWallet = typeof userBscWallets.$inferSelect;
+export type InsertUserBscWallet = typeof userBscWallets.$inferInsert;
+
+// SNT 提现申请表
+export const sntWithdrawals = mysqlTable("snt_withdrawals", {
+	id: int().autoincrement().notNull().primaryKey(),
+	userId: int("user_id").notNull(),
+	sntAmount: decimal("snt_amount", { precision: 20, scale: 4 }).notNull(), // 申请提现的 SNT 数量
+	bscAddress: varchar("bsc_address", { length: 100 }).notNull(), // 目标 BEP20 地址
+	status: mysqlEnum(['pending', 'processing', 'completed', 'rejected']).default('pending').notNull(),
+	adminNote: text("admin_note"), // 管理员备注（拒绝原因等）
+	txnHash: varchar("txn_hash", { length: 100 }), // 链上交易哈希
+	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+},
+(table) => [
+	index("snt_withdrawals_user_id_idx").on(table.userId),
+	index("snt_withdrawals_status_idx").on(table.status),
+]);
+export type SntWithdrawal = typeof sntWithdrawals.$inferSelect;
+export type InsertSntWithdrawal = typeof sntWithdrawals.$inferInsert;
