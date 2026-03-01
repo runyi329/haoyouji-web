@@ -422,23 +422,22 @@ export default function SentiaBuy() {
               </div>
             )}
 
-            {/* 价格卡 */}
-            <div style={{
-              background: BNB.card,
-              border: `1px solid ${BNB.divider}`,
-              borderRadius: 6, padding: "16px 18px",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
-              <div>
-                <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 4, letterSpacing: 0.5 }}>合伙人专属价格</div>
-                <div style={{ fontSize: 30, fontWeight: 800, color: BNB.yellow }}>$0.04</div>
-                <div style={{ fontSize: 11, color: BNB.textSecondary, marginTop: 2 }}>USDT / SNT</div>
-              </div>
-              <img src={SENTIA_ICON} alt="SNT" style={{ width: 52, height: 52, borderRadius: "50%" }} />
-            </div>
-
-            {/* 购买表单 */}
+            {/* 购买表单（价格标注已合并） */}
             <div style={cardStyle}>
+              {/* 表单头：代币标识 + 价格小标注 */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, paddingBottom: 14, borderBottom: `1px solid ${BNB.divider}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <img src={SENTIA_ICON} alt="SNT" style={{ width: 32, height: 32, borderRadius: "50%" }} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: BNB.text, lineHeight: 1 }}>SNT</div>
+                    <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 3 }}>Sentia Token</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 2 }}>合伙人价</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: BNB.yellow }}>1 SNT = $0.04</div>
+                </div>
+              </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: BNB.textSecondary, display: "block", marginBottom: 8 }}>购买数量（SNT）</label>
                 <input
