@@ -11,6 +11,24 @@ import QRCode from "qrcode";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
 const SNT_PRICE = 0.04; // USDT per SNT
+const SENTIA_SESSION_KEY = "sentia-auth-token"; // sessionStorage key，关闭浏览器自动清除
+
+// 将 token 同时写入 sessionStorage 和 localStorage（供 tRPC 请求头使用）
+function saveToken(token: string) {
+  try {
+    sessionStorage.setItem(SENTIA_SESSION_KEY, token);
+    localStorage.setItem("auth-token", token);
+  } catch {}
+}
+
+// 检查当前会话是否已登录
+function hasSessionToken(): boolean {
+  try {
+    return !!sessionStorage.getItem(SENTIA_SESSION_KEY);
+  } catch {
+    return false;
+  }
+}
 
 type Step = "login" | "buy" | "pay" | "submitted" | "orders";
 
@@ -62,7 +80,8 @@ const btnSecondary: React.CSSProperties = {
 
 export default function SentiaBuy() {
   const [, navigate] = useLocation();
-  const [step, setStep] = useState<Step>("login");
+  // 若本次浏览器会话已登录，直接进入购买步骤
+  const [step, setStep] = useState<Step>(() => hasSessionToken() ? "buy" : "login");
   const [isRegister, setIsRegister] = useState(false);
 
   // 登录/注册表单
@@ -153,11 +172,16 @@ export default function SentiaBuy() {
     setAuthError("");
     setAuthLoading(true);
     try {
+      let token: string | undefined;
       if (isRegister) {
-        await registerMutation.mutateAsync({ username, password, inviteCode: inviteCode || undefined });
+        const res = await registerMutation.mutateAsync({ username, password, inviteCode: inviteCode || undefined });
+        token = (res as any)?.token;
       } else {
-        await loginMutation.mutateAsync({ username, password });
+        const res = await loginMutation.mutateAsync({ username, password });
+        token = (res as any)?.token;
       }
+      // 保存 token 到 sessionStorage，本次会话内保持登录
+      if (token) saveToken(token);
       setStep("buy");
     } catch (err: any) {
       setAuthError(err.message || (isRegister ? "注册失败，请重试" : "用户名或密码错误"));
