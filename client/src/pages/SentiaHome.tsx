@@ -118,7 +118,7 @@ export default function SentiaHome() {
 
           <div style={{ display: "flex", gap: 10, justifyContent: "center", width: "100%", maxWidth: 360 }}>
             <button
-              onClick={() => navigate("/sentia/buy")}
+              onClick={() => navigate("/sentia/whitepaper")}
               style={{
                 flex: 1,
                 background: BNB.yellow,
@@ -126,10 +126,13 @@ export default function SentiaHome() {
                 color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
               }}
             >
-              立即参与预售
+              查看白皮书
             </button>
             <button
-              onClick={() => navigate("/sentia/whitepaper")}
+              onClick={() => {
+                const el = document.getElementById("whitepaper");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
               style={{
                 flex: 1,
                 background: "transparent",
@@ -137,7 +140,7 @@ export default function SentiaHome() {
                 color: BNB.text, fontWeight: 500, fontSize: 15, cursor: "pointer",
               }}
             >
-              查看白皮书
+              了解项目
             </button>
           </div>
         </div>
@@ -154,11 +157,11 @@ export default function SentiaHome() {
           }}>
             {[
               { label: "代币名称", value: "Sentia", sub: "SNT" },
-              { label: "发行总量", value: "10 亿枚", sub: "1,000,000,000 SNT" },
+              { label: "发行总量", value: "1,000,000,000", sub: "固定总量，不增发" },
               { label: "所属赛道", value: "AI 基础设施", sub: "Artificial Intelligence" },
               { label: "底层网络", value: "BNB Chain", sub: "BEP-20 标准" },
-              { label: "私募阶段", value: "进行中", sub: "定向邀请制" },
-              { label: "TGE 计划", value: "2025 年", sub: "具体时间待公告" },
+              { label: "共识机制", value: "PoS + AI", sub: "AI 增强共识层" },
+              { label: "开源协议", value: "计划中", sub: "GitHub 待公开" },
             ].map((item, i) => (
               <div key={i} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -167,7 +170,7 @@ export default function SentiaHome() {
               }}>
                 <span style={{ fontSize: 13, color: BNB.textSecondary }}>{item.label}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: item.label === "私募价格" ? BNB.yellow : BNB.text }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: BNB.text }}>
                     {item.value}
                   </div>
                   <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 2 }}>{item.sub}</div>
@@ -509,25 +512,24 @@ export default function SentiaHome() {
         textAlign: "center",
       }}>
         <div style={{ maxWidth: 480, margin: "0 auto" }}>
-          <div style={{ fontSize: 13, color: BNB.textSecondary, marginBottom: 8, lineHeight: 1.6 }}>
-            Sentia 私募轮现已开放，定向邀请制参与
+          <div style={{ fontSize: 22, fontWeight: 800, color: BNB.text, marginBottom: 12, lineHeight: 1.3 }}>
+            加入 Sentia 生态
           </div>
-          <div style={{ fontSize: 12, color: BNB.textMuted, marginBottom: 28 }}>SNT · BEP-20 · BNB Chain</div>
+          <div style={{ fontSize: 14, color: BNB.textSecondary, marginBottom: 28, lineHeight: 1.7, maxWidth: 320, margin: "0 auto 28px" }}>
+            阅读白皮书，了解 Sentia 如何将 AI 与区块链融合，构建下一代去中心化智能网络
+          </div>
           <button
-            onClick={() => navigate("/sentia/buy")}
+            onClick={() => navigate("/sentia/whitepaper")}
             style={{
               background: BNB.yellow,
               border: "none", borderRadius: 4, padding: "15px 0",
-              color: "#0B0E11", fontWeight: 700, fontSize: 16, cursor: "pointer",
+              color: "#0B0E11", fontWeight: 700, fontSize: 15, cursor: "pointer",
               width: "100%", maxWidth: 320,
               letterSpacing: 0.3,
             }}
           >
-            申请参与私募
+            阅读技术白皮书
           </button>
-          <div style={{ fontSize: 11, color: BNB.textMuted, marginTop: 14 }}>
-            私募名额有限 · 需持有邀请码
-          </div>
         </div>
       </section>
 
