@@ -434,38 +434,37 @@ export default function SentiaBuy() {
                 border: `1px solid ${BNB.yellowBorder}`,
                 borderRadius: 6, padding: "16px 18px",
               }}>
-                <div style={{ fontSize: 11, color: BNB.textMuted, marginBottom: 10, fontWeight: 600, letterSpacing: 0.5 }}>
-                  我的持仓
-                </div>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>累计已到账</div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                        <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
-                          {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                        </div>
-                        <div style={{ fontSize: 13, color: BNB.textMuted, fontWeight: 600 }}>SNT</div>
-                      </div>
-                    </div>
-                    {/* 三个操作按钮，放在数字右边 */}
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {[
-                        { label: "充値", onClick: () => setStep("buy"), primary: true },
-                        { label: "提现", onClick: () => alert("提现功能即将开放，敬请期待"), primary: false },
-                        { label: "划转", onClick: () => { setShowTransferModal(true); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }, primary: false },
-                      ].map((btn, i) => (
-                        <button key={i} onClick={btn.onClick} style={{
-                          background: btn.primary ? BNB.yellow : "transparent",
-                          border: `1px solid ${btn.primary ? BNB.yellow : BNB.cardBorder}`,
-                          borderRadius: 3, padding: "4px 10px",
-                          color: btn.primary ? "#0B0E11" : BNB.textSecondary,
-                          fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-                        }}>
-                          {btn.label}
-                        </button>
-                      ))}
-                    </div>
+                {/* 标题行：左侧「我的持仓」，右侧三个操作按钮 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: BNB.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>我的持仓</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { label: "充值", onClick: () => setStep("buy"), primary: true },
+                      { label: "提现", onClick: () => alert("提现功能即将开放，敬请期待"), primary: false },
+                      { label: "划转", onClick: () => { setShowTransferModal(true); setTransferTarget(null); setTransferKeyword(""); setTransferAmount(""); setTransferMsg(null); }, primary: false },
+                    ].map((btn, i) => (
+                      <button key={i} onClick={btn.onClick} style={{
+                        background: btn.primary ? BNB.yellow : "transparent",
+                        border: `1px solid ${btn.primary ? BNB.yellow : BNB.cardBorder}`,
+                        borderRadius: 3, padding: "3px 9px",
+                        color: btn.primary ? "#0B0E11" : BNB.textSecondary,
+                        fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                      }}>
+                        {btn.label}
+                      </button>
+                    ))}
                   </div>
+                </div>
+                {/* SNT 数字 */}
+                <div>
+                  <div style={{ fontSize: 11, color: BNB.textSecondary, marginBottom: 4 }}>累计已到账</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: BNB.yellow }}>
+                      {(totalSNT ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                    </div>
+                    <div style={{ fontSize: 13, color: BNB.textMuted, fontWeight: 600 }}>SNT</div>
+                  </div>
+                </div>
               </div>
             )}
 
