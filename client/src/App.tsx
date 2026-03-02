@@ -153,6 +153,9 @@ const UserAgreement = lazy(() => import("./pages/UserAgreement"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 const SentiaBuy = lazy(() => import("./pages/SentiaBuy"));
 const SentiaWhitepaper = lazy(() => import("./pages/SentiaWhitepaper"));
+// 脉动工具
+const Tools = lazy(() => import("./pages/Tools"));
+const ContractTool = lazy(() => import("./pages/ContractTool"));
 // 奢贝美容院
 const BeautyHome = lazy(() => import("./pages/beauty/BeautyHome"));
 const BeautyServices = lazy(() => import("./pages/beauty/BeautyServices"));
@@ -246,6 +249,8 @@ function Router() {
         <Route path="/parent/profile/edit" component={ProfileEdit} />
         <Route path="/parent/theme-settings" component={ThemeSettings} />
         <Route path="/parent/academy" component={Academy} />
+        <Route path="/tools" component={Tools} />
+        <Route path="/tools/contract" component={ContractTool} />
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/my-equity" component={MyEquityRedWhite} />

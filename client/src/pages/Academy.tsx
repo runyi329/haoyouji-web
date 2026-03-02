@@ -16,7 +16,8 @@ import {
   Phone,
   Wallet,
   Heart,
-  ArrowLeft
+  ArrowLeft,
+  Wrench
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +35,7 @@ interface AcademyModule {
   color: string;
   bgColor: string;
   category: 'core' | 'advanced' | 'system';
+  link?: string;
   content: {
     introduction: string;
     features: string[];
@@ -226,23 +228,21 @@ const academyModules: AcademyModule[] = [
     }
   },
   {
-    id: "pwa",
-    icon: Smartphone,
-    title: "PWA应用",
+    id: "tools",
+    icon: Wrench,
+    title: "脉动工具",
     color: "text-rose-400",
     bgColor: "bg-rose-400",
     category: "system",
+    link: "/tools",
     content: {
-      introduction: "将脉动安装到手机桌面，像使用普通App一样打开和使用。",
+      introduction: "脉动工具箱，提供各类实用小工具，助力日常工作与决策。",
       features: [
-        "桌面图标：在手机桌面显示脉动图标，一键打开",
-        "全屏体验：去除浏览器地址栏，获得更大的显示空间",
-        "离线访问：支持离线缓存，无网络时也能浏览已缓存的内容",
-        "快速启动：启动速度更快，无需等待浏览器加载"
+        "合约工具：SUI 动态风控计算器，实时计算强平价与补仓建议",
+        "持续扩展：更多实用工具陆续上线"
       ],
       tips: [
-        "Android手机：在Chrome浏览器中打开脉动，点击底部的安装提示",
-        "iPhone/iPad：在Safari浏览器中打开脉动，点击分享按钮，选择添加到主屏幕"
+        "点击图标可直接进入工具箱"
       ]
     }
   },
@@ -315,6 +315,10 @@ export default function Academy() {
   const systemModules = filteredModules.filter(m => m.category === 'system');
 
   const handleModuleClick = (module: AcademyModule) => {
+    if (module.link) {
+      setLocation(module.link);
+      return;
+    }
     setSelectedModule(module);
     setIsDialogOpen(true);
   };
