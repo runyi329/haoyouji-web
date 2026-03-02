@@ -5,23 +5,24 @@ import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 import { Card, CardContent } from "@/components/ui/card";
 
-// 15个成长动作定义
+// 16个成长动作定义
 const GROWTH_ACTIONS = [
   { id: 'avatar',    label: '添加头像' },
   { id: 'email',     label: '绑定邮箱' },
   { id: 'bank',      label: '绑定银行' },
   { id: 'alipay',    label: '绑定支付宝' },
   { id: 'wechat',    label: '绑定微信' },
-  { id: 'crypto',    label: '绑定数字币' },
+  { id: 'crypto',    label: '绑定数字钱包' },
   { id: 'contact',   label: '添加人脉' },
-  { id: 'ledger',    label: '新建账本' },
-  { id: 'record',    label: '添加账目' },
-  { id: 'joinbook',  label: '加入账本' },
-  { id: 'share',     label: '共享人脉' },
   { id: 'interact',  label: '增加联络' },
   { id: 'tag',       label: '增加标签' },
   { id: 'referrer',  label: '增加推荐人' },
-  { id: 'invite',    label: '邀请用户' },
+  { id: 'ledger',    label: '新建账本' },
+  { id: 'record',    label: '添加账目' },
+  { id: 'joinbook',  label: '加入账本' },
+  { id: 'backupbook',label: '备份账本' },
+  { id: 'share',     label: '共享人脉' },
+  { id: 'invite',    label: '邀请好友' },
 ];
 
 /**
@@ -206,12 +207,12 @@ export default function WorkGroupMembers() {
                         {completedCount}
                       </span>
                       <span className="text-xs" style={{ color: 'var(--text-gray)' }}>
-                        /{totalCount}
+                        /16
                       </span>
                     </div>
                   </div>
 
-                  {/* 第二行：15个成长动作流程链（绿点/红点） */}
+                  {/* 第二行：16个成长动作流程链（绿点/红点） */}
                   <div className="flex flex-wrap gap-x-1.5 gap-y-1.5">
                     {GROWTH_ACTIONS.map((action, idx) => {
                       const done = completedActions.has(action.id);
