@@ -18,6 +18,7 @@ const CURRENCIES = [
   { code: "MYR", name: "令吉", flag: "🇲🇾" },
   { code: "RUB", name: "卢布", flag: "🇷🇺" },
   { code: "AED", name: "迪拉姆", flag: "🇦🇪" },
+  { code: "MOP", name: "澳门币", flag: "🇲🇴" },
 ];
 
 function fmt(val: number): string {
@@ -142,15 +143,15 @@ export default function ExchangeRate() {
             // 骨架屏
             <div className="divide-y divide-gray-50">
               {otherCurrencies.map((c) => (
-                <div key={c.code} className="flex items-center justify-between px-4 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full animate-pulse" />
+                <div key={c.code} className="flex items-center justify-between px-4 py-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-gray-100 rounded-full animate-pulse" />
                     <div>
-                      <div className="w-10 h-4 bg-gray-100 rounded animate-pulse mb-1" />
-                      <div className="w-16 h-3 bg-gray-50 rounded animate-pulse" />
+                      <div className="w-10 h-3.5 bg-gray-100 rounded animate-pulse mb-1" />
+                      <div className="w-14 h-2.5 bg-gray-50 rounded animate-pulse" />
                     </div>
                   </div>
-                  <div className="w-20 h-5 bg-gray-100 rounded animate-pulse" />
+                  <div className="w-16 h-4 bg-gray-100 rounded animate-pulse" />
                 </div>
               ))}
             </div>
@@ -162,17 +163,17 @@ export default function ExchangeRate() {
                 return (
                   <div
                     key={currency.code}
-                    className="flex items-center justify-between px-4 py-3.5 active:bg-gray-50 transition-colors"
+                    className="flex items-center justify-between px-4 py-2 active:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl leading-none">{currency.flag}</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl leading-none">{currency.flag}</span>
                       <div>
                         <div className="text-sm font-semibold text-[#222]">{currency.code}</div>
                         <div className="text-xs text-gray-400">{currency.name}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-base font-bold text-[#222]">
+                      <div className="text-sm font-bold text-[#222]">
                         {converted !== null && !isNaN(converted) ? fmt(converted) : "—"}
                       </div>
                       <div className="text-xs text-gray-400">
