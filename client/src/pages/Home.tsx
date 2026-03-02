@@ -389,26 +389,16 @@ export default function Home() {
             );
           })}
 
-          {/* 第5个按钮：liulifan显示提醒按钮，其他用户显示刷新按钮 */}
+          {/* 第5个按钮：liulifan显示奢贝按钮，其他用户显示刷新按钮 */}
           {isLiulifan ? (
             <a
-              href={`${BASE_URL}/parent/contacts/list?filter=needsAttention`}
+              href={`${BASE_URL}/beauty`}
               className="flex flex-col items-center space-y-2 cursor-pointer relative"
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm relative ${
-                needsAttentionCount > 0 
-                  ? 'bg-[#D32F2F] text-white' 
-                  : 'bg-[#D32F2F]-light text-[#D32F2F]'
-              }`}>
-                <Bell className={`w-5 h-5 ${isAnimating ? 'bell-shake' : ''}`} />
-                {/* 红色角标 */}
-                {needsAttentionCount > 0 && (
-                  <span className={`absolute -top-1 -right-1 bg-[#D32F2F]-light0 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-white ${isAnimating ? 'badge-pulse' : ''}`}>
-                    {needsAttentionCount > 99 ? '99+' : needsAttentionCount}
-                  </span>
-                )}
+              <div className="w-10 h-10 rounded-full bg-[#D32F2F] flex items-center justify-center shadow-sm">
+                <span className="text-white text-[11px] font-bold tracking-tight">奢贝</span>
               </div>
-              <span className="text-xs font-medium text-[#757575]">提醒</span>
+              <span className="text-xs font-medium text-[#757575]">奢贝</span>
             </a>
           ) : (
             <a
