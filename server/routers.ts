@@ -8190,28 +8190,63 @@ export const appRouter = router({
 
   // ==================== 汇率计算器 ====================
   exchange: router({
-    // 获取指定基准货币的实时汇率
+    // 天行数据单对汇率查询
+    getRate: publicProcedure
+      .input(z.object({
+        fromcoin: z.string().default('USD'),
+        tocoin: z.string().default('CNY'),
+        money: z.number().default(1),
+      }))
+      .query(async ({ input }) => {
+        const TIANAPI_KEY = '3878a89bed4728b65cc7d8dc0a644c07';
+        try {
+          const params = new URLSearchParams({
+            key: TIANAPI_KEY,
+            fromcoin: input.fromcoin,
+            tocoin: input.tocoin,
+            money: String(input.money),
+          });
+          const res = await fetch(`https://apis.tianapi.com/fxrate/index?${params}`, {
+            signal: AbortSignal.timeout(8000),
+          });
+          const data = await res.json() as { code: number; msg: string; result?: { money: string } };
+          if (data.code === 200 && data.result) {
+            return { success: true, money: data.result.money, fromcoin: input.fromcoin, tocoin: input.tocoin };
+          }
+          return { success: false, money: '0', fromcoin: input.fromcoin, tocoin: input.tocoin };
+        } catch {
+          return { success: false, money: '0', fromcoin: input.fromcoin, tocoin: input.tocoin };
+        }
+      }),
+    // 批量获取常用货币对基准货币的汇率（一次请求多个币种）
     getRates: publicProcedure
       .input(z.object({ base: z.string().default('CNY') }))
       .query(async ({ input }) => {
+        const TIANAPI_KEY = '3878a89bed4728b65cc7d8dc0a644c07';
+        const targets = ['USD', 'EUR', 'GBP', 'JPY', 'HKD', 'KRW', 'AUD', 'CAD', 'SGD', 'CHF', 'THB', 'MYR', 'TWD', 'RUB', 'AED', 'CNY'];
+        const filtered = targets.filter(c => c !== input.base);
+        const rates: Record<string, number> = {};
+        const today = new Date();
+        const lastUpdated = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
         try {
-          const res = await fetch(`https://open.er-api.com/v6/latest/${input.base}`, {
-            signal: AbortSignal.timeout(8000),
-          });
-          const data = await res.json() as {
-            result: string;
-            base_code: string;
-            rates: Record<string, number>;
-            time_last_update_utc: string;
-          };
-          if (data.result === 'success') {
-            // 格式化更新时间
-            const raw = data.time_last_update_utc;
-            const d = new Date(raw);
-            const lastUpdated = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-            return { rates: data.rates, base: data.base_code, lastUpdated };
-          }
-          return { rates: {}, base: input.base, lastUpdated: '' };
+          // 并发请求所有目标货币
+          await Promise.all(filtered.map(async (tocoin) => {
+            const params = new URLSearchParams({
+              key: TIANAPI_KEY,
+              fromcoin: input.base,
+              tocoin,
+              money: '1',
+            });
+            const res = await fetch(`https://apis.tianapi.com/fxrate/index?${params}`, {
+              signal: AbortSignal.timeout(8000),
+            });
+            const data = await res.json() as { code: number; result?: { money: string } };
+            if (data.code === 200 && data.result) {
+              rates[tocoin] = parseFloat(data.result.money);
+            }
+          }));
+          rates[input.base] = 1;
+          return { rates, base: input.base, lastUpdated };
         } catch {
           return { rates: {}, base: input.base, lastUpdated: '' };
         }
