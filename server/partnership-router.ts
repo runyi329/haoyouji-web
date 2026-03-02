@@ -14,9 +14,7 @@ import {
   personalContactTags,
   ledgers,
   ledgerMembers,
-  ledgerRecords,
-  bankCards,
-  digitalWallets
+  ledgerRecords
 } from "../drizzle/schema";
 import { eq, and, inArray, like, or, sql, asc } from "drizzle-orm";
 import { mysqlTable, int, varchar, text, timestamp } from "drizzle-orm/mysql-core";
@@ -270,65 +268,6 @@ export const partnershipRouter = router({
           recordCount = recordCountResult[0]?.count || 0;
         }
 
-        // ===== 6个成长里程碑判断 =====
-
-        // 1. 个人资料：有邮箱 或 有银行卡 或 有数字钱包
-        // bankCards/digitalWallets 的 userId 是 varchar，需要转成字符串匹配
-        const hasBankCard = await db
-          .select({ id: bankCards.id })
-          .from(bankCards)
-          .where(sql`${bankCards.userId} = ${String(member.id)}`)
-          .limit(1);
-        const hasDigitalWallet = await db
-          .select({ id: digitalWallets.id })
-          .from(digitalWallets)
-          .where(sql`${digitalWallets.userId} = ${String(member.id)}`)
-          .limit(1);
-        const hasProfile = !!(member.email) || hasBankCard.length > 0 || hasDigitalWallet.length > 0;
-
-        // 2. 新建人脉：自己创建了至少1个联系人
-        const hasContact = ownContactsCount > 0;
-
-        // 3. 共享人脉：作为sharerId或receiverId有active状态的共享连接
-        const sharingAsSenderResult = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(contactSharingConnections)
-          .where(
-            and(
-              eq(contactSharingConnections.sharerId, member.id),
-              eq(contactSharingConnections.status, 'active')
-            )
-          );
-        const hasShareContact = (sharingAsSenderResult[0]?.count || 0) > 0 || sharedContactsCount > 0;
-
-        // 4. 新建账本：自己作为ownerId创建了至少1个账本
-        const ownLedgerResult = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(ledgers)
-          .where(eq(ledgers.ownerId, member.id));
-        const hasLedger = (ownLedgerResult[0]?.count || 0) > 0;
-
-        // 5. 共享账本：参与的账本中有超过1个成员的账本
-        let hasShareBook = false;
-        if (memberLedgerIds.length > 0) {
-          const ledgerIdList = memberLedgerIds.map(l => l.ledgerId);
-          const sharedLedgerResult = await db
-            .select({ ledgerId: ledgerMembers.ledgerId })
-            .from(ledgerMembers)
-            .where(inArray(ledgerMembers.ledgerId, ledgerIdList))
-            .groupBy(ledgerMembers.ledgerId)
-            .having(sql`count(*) > 1`);
-          hasShareBook = sharedLedgerResult.length > 0;
-        }
-
-        // 6. 好友邀请：inviteCount > 0
-        const inviteInfoResult = await db
-          .select({ inviteCount: users.inviteCount })
-          .from(users)
-          .where(eq(users.id, member.id))
-          .limit(1);
-        const hasInvite = (inviteInfoResult[0]?.inviteCount || 0) > 0;
-
         return {
           ...member,
           workGroups,
@@ -339,12 +278,6 @@ export const partnershipRouter = router({
           interactionsCount,
           ledgerCount,
           recordCount,
-          hasProfile,
-          hasContact,
-          hasShareContact,
-          hasLedger,
-          hasShareBook,
-          hasInvite,
         };
       }));
 
