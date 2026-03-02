@@ -5,15 +5,11 @@ import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 import { Card, CardContent } from "@/components/ui/card";
 
-// 8个成长动作定义
+// 5个成长动作定义
 const GROWTH_ACTIONS = [
-  { id: 'profile',   label: '资料' },   // 头像+邮箱+银行卡+支付宝+微信+数字钱包
-  { id: 'contact',   label: '人脉' },
-  { id: 'interact',  label: '联络' },
-  { id: 'tag',       label: '标签' },
-  { id: 'referrer',  label: '推荐人' },
-  { id: 'sharebook', label: '共享账本' }, // 账本+账目+加入账本+共享账本
-  { id: 'share',     label: '共享人脉' },
+  { id: 'profile',   label: '资料' },      // 头像+邮箱+银行卡+支付宝+微信+数字钱包
+  { id: 'share',     label: '共享人脉' },  // 人脉+联络+标签+推荐人
+  { id: 'sharebook', label: '共享账本' },  // 账本+账目+加入账本+共享账本
   { id: 'invite',    label: '邀请好友' },
 ];
 
@@ -25,13 +21,10 @@ function inferCompletedActions(member: any): Set<string> {
   const done = new Set<string>();
   // 「资料」：有头像或邮箱即视为已完成
   if (member.avatar || member.email) done.add('profile');
-  // 以下根据统计数字推断
-  if ((member.ownContactsCount || 0) > 0) done.add('contact');
-  if ((member.interactionsCount || 0) > 0) done.add('interact');
-  if ((member.tagsCount || 0) > 0) done.add('tag');
+  // 共享人脉：有人脉、联络、标签任意一项即视为已完成
+  if ((member.ownContactsCount || 0) > 0 || (member.interactionsCount || 0) > 0 || (member.tagsCount || 0) > 0 || (member.sharedContactsCount || 0) > 0) done.add('share');
   // 共享账本：有账本或账目即视为已完成
   if ((member.ledgerCount || 0) > 0 || (member.recordCount || 0) > 0) done.add('sharebook');
-  if ((member.sharedContactsCount || 0) > 0) done.add('share');
   return done;
 }
 
@@ -129,7 +122,7 @@ export default function WorkGroupMembers() {
           members.map((member: any) => {
                     const completedActions = inferCompletedActions(member);
             const completedCount = completedActions.size;
-            const totalCount = 8;
+            const totalCount = 4;
 
             return (
               <Card 
@@ -197,12 +190,12 @@ export default function WorkGroupMembers() {
                         {completedCount}
                       </span>
                       <span className="text-xs" style={{ color: 'var(--text-gray)' }}>
-                        /8
+                        /4
                       </span>
                     </div>
                   </div>
 
-                  {/* 成长动作流程链（单行，8个节点） */}
+                  {/* 成长动作流程链（单行，4个节点） */}
                   <div className="flex items-center w-full overflow-hidden">
                     {GROWTH_ACTIONS.map((action, idx) => {
                       const done = completedActions.has(action.id);
