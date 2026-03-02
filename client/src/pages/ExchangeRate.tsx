@@ -16,7 +16,6 @@ const CURRENCIES = [
   { code: "CHF", name: "瑞士法郎", flag: "🇨🇭" },
   { code: "THB", name: "泰铢", flag: "🇹🇭" },
   { code: "MYR", name: "令吉", flag: "🇲🇾" },
-  { code: "TWD", name: "新台币", flag: "🇹🇼" },
   { code: "RUB", name: "卢布", flag: "🇷🇺" },
   { code: "AED", name: "迪拉姆", flag: "🇦🇪" },
 ];
