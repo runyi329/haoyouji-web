@@ -8112,6 +8112,43 @@ export const appRouter = router({
   // ==================== 管理员功能 ====================
   adminFeature: adminFeatureRouter,
 
+  // ==================== 账本分组管理 ====================
+  ledgerGroup: router({
+    // 获取当前用户的所有分组（含账本归属信息）
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const { getLedgerGroupsWithLedgers } = await import('./db-ledger');
+      return getLedgerGroupsWithLedgers(ctx.user.id);
+    }),
+    // 创建分组
+    create: protectedProcedure
+      .input(z.object({ name: z.string().min(1).max(50) }))
+      .mutation(async ({ ctx, input }) => {
+        const { createLedgerGroup } = await import('./db-ledger');
+        return createLedgerGroup(ctx.user.id, input.name);
+      }),
+    // 重命名分组
+    update: protectedProcedure
+      .input(z.object({ groupId: z.number(), name: z.string().min(1).max(50) }))
+      .mutation(async ({ ctx, input }) => {
+        const { updateLedgerGroup } = await import('./db-ledger');
+        return updateLedgerGroup(ctx.user.id, input.groupId, input.name);
+      }),
+    // 删除分组（账本移出分组，不删除账本）
+    delete: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { deleteLedgerGroup } = await import('./db-ledger');
+        return deleteLedgerGroup(ctx.user.id, input.groupId);
+      }),
+    // 将账本归入/移出分组
+    assignLedger: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), groupId: z.number().nullable() }))
+      .mutation(async ({ ctx, input }) => {
+        const { assignLedgerToGroup } = await import('./db-ledger');
+        return assignLedgerToGroup(ctx.user.id, input.ledgerId, input.groupId);
+      }),
+  }),
+
   // ==================== 数据安全（加密管理） ====================
   encryption: router({
     // 获取加密配置列表

@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -59,6 +59,16 @@ export default function Ledger() {
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [joinSecretKey, setJoinSecretKey] = useState("");
 
+  // 分组相关 state
+  const [showGroupManageDialog, setShowGroupManageDialog] = useState(false);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [editingGroup, setEditingGroup] = useState<{ id: number; name: string } | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
+  const [showAssignGroupDialog, setShowAssignGroupDialog] = useState(false);
+  const [assigningLedgerId, setAssigningLedgerId] = useState<number | null>(null);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(new Set());
+
   // 持久化排序设置的包装函数
   const setSortBy = (val: "members" | "records" | "date") => {
     setSortByState(val);
@@ -81,6 +91,29 @@ export default function Ledger() {
 
   // 获取当前用户信息
   const { data: user } = trpc.auth.me.useQuery();
+
+  // 获取账本分组数据
+  const { data: groupData, refetch: refetchGroups } = trpc.ledgerGroup.list.useQuery();
+  const groups = groupData?.groups || [];
+  const ledgerGroupMap: Record<number, number | null> = groupData?.ledgerGroupMap || {};
+
+  // 分组 mutations
+  const createGroupMutation = trpc.ledgerGroup.create.useMutation({
+    onSuccess: () => { toast.success('分组已创建'); refetchGroups(); setShowCreateGroupDialog(false); setNewGroupName(''); },
+    onError: (e) => toast.error(`创建失败: ${e.message}`),
+  });
+  const updateGroupMutation = trpc.ledgerGroup.update.useMutation({
+    onSuccess: () => { toast.success('分组已重命名'); refetchGroups(); setEditingGroup(null); },
+    onError: (e) => toast.error(`重命名失败: ${e.message}`),
+  });
+  const deleteGroupMutation = trpc.ledgerGroup.delete.useMutation({
+    onSuccess: () => { toast.success('分组已删除，账本已移出分组'); refetchGroups(); setDeletingGroupId(null); },
+    onError: (e) => toast.error(`删除失败: ${e.message}`),
+  });
+  const assignGroupMutation = trpc.ledgerGroup.assignLedger.useMutation({
+    onSuccess: () => { toast.success('已更新分组'); refetchGroups(); setShowAssignGroupDialog(false); setAssigningLedgerId(null); },
+    onError: (e) => toast.error(`操作失败: ${e.message}`),
+  });
   
   // 从后端API获取账本列表
   const { data: ledgers, isLoading, refetch } = trpc.ledger.list.useQuery({
@@ -383,6 +416,16 @@ export default function Ledger() {
           </Link>
           <h1 className="flex-1 text-lg font-medium text-center text-[#222222]">共享账本</h1>
           <div className="flex items-center gap-1">
+            {/* 分组管理按钮 */}
+            {activeTab === "active" && (
+              <button
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="管理分组"
+                onClick={() => setShowGroupManageDialog(true)}
+              >
+                <FolderPlus className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+              </button>
+            )}
             {/* 说明书按钮 */}
             <Link href="/ledger/guide">
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="功能说明书">
@@ -600,7 +643,7 @@ export default function Ledger() {
       </div>
 
       {/* 账本列表 */}
-      <div className="px-4 pb-4 space-y-3">
+      <div className="px-4 pb-4">
         {isLoading ? (
           <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
             <p className="text-gray-500">加载中...</p>
@@ -609,8 +652,10 @@ export default function Ledger() {
           <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
             <p className="text-gray-500">暂无{activeTab === "active" ? "使用中" : "已封存"}的账本</p>
           </div>
-        ) : (
-          filteredLedgers.map((ledger) => (
+        ) : activeTab === "archived" ? (
+          // 已封存账本不分组
+          <div className="space-y-3">
+          {filteredLedgers.map((ledger) => (
             <div
               key={ledger.id}
               className="cursor-pointer"
@@ -776,6 +821,16 @@ export default function Ledger() {
                         >
                           封存
                         </button>
+                        <button
+                          className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssigningLedgerId(ledger.id);
+                            setShowAssignGroupDialog(true);
+                          }}
+                        >
+                          分组：{ledgerGroupMap[ledger.id] ? (groups.find(g => g.id === ledgerGroupMap[ledger.id])?.name || '已分组') : '未分组'}
+                        </button>
                       </>
                     )}
                     {activeTab === "archived" && (
@@ -806,7 +861,136 @@ export default function Ledger() {
                 </div>
               </div>
             </div>
-          ))
+          ))}
+          </div>
+        ) : (
+          // 使用中账本：按分组展示
+          <div className="space-y-4">
+            {/* 有分组的展示 */}
+            {groups.map(group => {
+              const groupLedgers = filteredLedgers.filter(l => ledgerGroupMap[l.id] === group.id);
+              if (groupLedgers.length === 0) return null;
+              const isCollapsed = collapsedGroupIds.has(group.id);
+              return (
+                <div key={group.id}>
+                  {/* 分组标题 */}
+                  <button
+                    className="flex items-center gap-2 w-full mb-2 px-1"
+                    onClick={() => setCollapsedGroupIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+                      return next;
+                    })}
+                  >
+                    {isCollapsed
+                      ? <Folder className="w-4 h-4 text-[#D32F2F]" />
+                      : <FolderOpen className="w-4 h-4 text-[#D32F2F]" />}
+                    <span className="text-sm font-semibold text-[#D32F2F]">{group.name}</span>
+                    <span className="text-xs text-gray-400">({groupLedgers.length})</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-3">
+                      {groupLedgers.map(ledger => (
+                        <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                          <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]">
+                            <div className="px-4 py-4">
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
+                                    <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                                    {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
+                                  </div>
+                                  <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
+                                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+                                  <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
+                                  <span className="text-gray-300">|</span>
+                                  <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
+                                  <span className="text-gray-300">|</span>
+                                  <span>{ledger.recordCount || 0}条账目</span>
+                                </div>
+                              </div>
+                              {expandedLedgerIds.has(ledger.id) && (
+                                <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/filter`); }}>搜索</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setInvitingLedgerId(ledger.id); setShowInviteDialog(true); }}>共享</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/report`); }}>报表</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenExportDialog(ledger.id); }}>导出</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/settings`); }}>设置</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setArchivingLedgerId(ledger.id); setShowArchiveDialog(true); }}>封存</button>
+                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3" onClick={(e) => { e.stopPropagation(); setAssigningLedgerId(ledger.id); setShowAssignGroupDialog(true); }}>分组：{groups.find(g => g.id === ledgerGroupMap[ledger.id])?.name || '已分组'}</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {/* 未分组的账本 */}
+            {(() => {
+              const ungrouped = filteredLedgers.filter(l => !ledgerGroupMap[l.id]);
+              if (ungrouped.length === 0 && groups.length > 0) return null;
+              return (
+                <div>
+                  {groups.length > 0 && (
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <Folder className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-semibold text-gray-500">未分组</span>
+                      <span className="text-xs text-gray-400">({ungrouped.length})</span>
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {ungrouped.map(ledger => (
+                      <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                        <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                          <div className="px-4 py-4">
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />
+                                  <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                                  {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
+                                </div>
+                                <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
+                                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+                                <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
+                                <span className="text-gray-300">|</span>
+                                <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
+                                <span className="text-gray-300">|</span>
+                                <span>{ledger.recordCount || 0}条账目</span>
+                              </div>
+                            </div>
+                            {expandedLedgerIds.has(ledger.id) && (
+                              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/filter`); }}>搜索</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setInvitingLedgerId(ledger.id); setShowInviteDialog(true); }}>共享</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/report`); }}>报表</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenExportDialog(ledger.id); }}>导出</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/settings`); }}>设置</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setArchivingLedgerId(ledger.id); setShowArchiveDialog(true); }}>封存</button>
+                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3" onClick={(e) => { e.stopPropagation(); setAssigningLedgerId(ledger.id); setShowAssignGroupDialog(true); }}>分组：未分组</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
 
@@ -1169,7 +1353,170 @@ export default function Ledger() {
         </DialogContent>
       </Dialog>
 
+      {/* 分组管理对话框 */}
+      <Dialog open={showGroupManageDialog} onOpenChange={setShowGroupManageDialog}>
+        <DialogContent className="w-[90%] max-w-md rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">管理分组</DialogTitle>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">管理分组</h3>
+              <button onClick={() => setShowGroupManageDialog(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            {/* 分组列表 */}
+            <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+              {groups.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">还没有分组，点击下方创建第一个</p>
+              ) : groups.map(group => (
+                <div key={group.id} className="flex items-center gap-2 p-3 bg-[#FAF3ED] rounded-xl">
+                  <Folder className="w-4 h-4 text-[#D32F2F] flex-shrink-0" />
+                  {editingGroup !== null && editingGroup.id === group.id ? (
+                    <Input
+                      autoFocus
+                      value={editingGroup.name}
+                      onChange={(e) => setEditingGroup(prev => prev ? { ...prev, name: e.target.value } : prev)}
+                      onKeyDown={(e) => {
+                        if (editingGroup && e.key === 'Enter' && editingGroup.name.trim()) {
+                          updateGroupMutation.mutate({ groupId: group.id, name: editingGroup.name.trim() });
+                        } else if (e.key === 'Escape') setEditingGroup(null);
+                      }}
+                      className="flex-1 h-7 text-sm"
+                    />
+                  ) : (
+                    <span className="flex-1 text-sm font-medium text-gray-800">{group.name}</span>
+                  )}
+                  {editingGroup !== null && editingGroup.id === group.id ? (
+                    <button
+                      className="text-xs text-[#D32F2F] font-medium px-2 py-1 rounded hover:bg-red-50"
+                      onClick={() => { if (editingGroup && editingGroup.name.trim()) updateGroupMutation.mutate({ groupId: group.id, name: editingGroup.name.trim() }); }}
+                      disabled={updateGroupMutation.isPending}
+                    >保存</button>
+                  ) : (
+                    <>
+                      <button className="p-1 hover:bg-gray-200 rounded" onClick={() => setEditingGroup({ id: group.id, name: group.name })}>
+                        <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                      </button>
+                      <button
+                        className="p-1 hover:bg-red-100 rounded"
+                        onClick={() => setDeletingGroupId(group.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 删除确认 */}
+            {deletingGroupId !== null && (
+              <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200">
+                <p className="text-sm text-red-700 mb-2">确认删除分组“{groups.find(g => g.id === deletingGroupId)?.name}”？账本将被移出分组，不会删除。</p>
+                <div className="flex gap-2">
+                  <button className="flex-1 text-xs py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600" onClick={() => setDeletingGroupId(null)}>取消</button>
+                  <button
+                    className="flex-1 text-xs py-1.5 rounded-lg bg-[#D32F2F] text-white"
+                    onClick={() => deleteGroupMutation.mutate({ groupId: deletingGroupId })}
+                    disabled={deleteGroupMutation.isPending}
+                  >{deleteGroupMutation.isPending ? '删除中...' : '确认删除'}</button>
+                </div>
+              </div>
+            )}
+            {/* 创建新分组 */}
+            <button
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-[#D32F2F] text-[#D32F2F] text-sm font-medium hover:bg-[#FFF3F3] transition-colors"
+              onClick={() => { setShowGroupManageDialog(false); setShowCreateGroupDialog(true); }}
+            >
+              <FolderPlus className="w-4 h-4" />
+              创建新分组
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
+      {/* 创建分组对话框 */}
+      <Dialog open={showCreateGroupDialog} onOpenChange={setShowCreateGroupDialog}>
+        <DialogContent className="w-[85%] rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">创建分组</DialogTitle>
+          <div className="p-5">
+            <h3 className="text-base font-semibold text-gray-900 mb-3">创建新分组</h3>
+            <Input
+              autoFocus
+              placeholder="输入分组名称，如“张三的账本”"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && newGroupName.trim() && createGroupMutation.mutate({ name: newGroupName.trim() })}
+              className="mb-4"
+              maxLength={50}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowCreateGroupDialog(false); setNewGroupName(''); }}>取消</Button>
+              <Button
+                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                onClick={() => newGroupName.trim() && createGroupMutation.mutate({ name: newGroupName.trim() })}
+                disabled={!newGroupName.trim() || createGroupMutation.isPending}
+              >{createGroupMutation.isPending ? '创建中...' : '确认创建'}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 归组对话框 */}
+      <Dialog open={showAssignGroupDialog} onOpenChange={setShowAssignGroupDialog}>
+        <DialogContent className="w-[85%] rounded-2xl p-0" showCloseButton={false}>
+          <DialogTitle className="sr-only">选择分组</DialogTitle>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900">选择分组</h3>
+              <button onClick={() => { setShowAssignGroupDialog(false); setAssigningLedgerId(null); }} className="p-1 hover:bg-gray-100 rounded-full">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="space-y-2 mb-3">
+              {/* 移出分组选项 */}
+              <button
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                  assigningLedgerId !== null && !ledgerGroupMap[assigningLedgerId]
+                    ? 'border-[#D32F2F] bg-red-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => assigningLedgerId !== null && assignGroupMutation.mutate({ ledgerId: assigningLedgerId, groupId: null })}
+              >
+                <Folder className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-medium text-gray-700">不分组</span>
+              </button>
+              {groups.map(group => (
+                <button
+                  key={group.id}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                    assigningLedgerId !== null && ledgerGroupMap[assigningLedgerId] === group.id
+                      ? 'border-[#D32F2F] bg-red-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => assigningLedgerId !== null && assignGroupMutation.mutate({ ledgerId: assigningLedgerId, groupId: group.id })}
+                  disabled={assignGroupMutation.isPending}
+                >
+                  <FolderOpen className="w-4 h-4 text-[#D32F2F]" />
+                  <span className="text-sm font-medium text-gray-800">{group.name}</span>
+                  {assigningLedgerId !== null && ledgerGroupMap[assigningLedgerId] === group.id && (
+                    <span className="ml-auto text-xs text-[#D32F2F] font-medium">当前</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {groups.length === 0 && (
+              <p className="text-center text-gray-400 text-sm py-2">还没有分组，请先创建分组</p>
+            )}
+            <button
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-gray-300 text-gray-500 text-sm hover:bg-gray-50 transition-colors mt-2"
+              onClick={() => { setShowAssignGroupDialog(false); setShowCreateGroupDialog(true); }}
+            >
+              <FolderPlus className="w-4 h-4" />
+              新建分组
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
