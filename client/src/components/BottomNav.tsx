@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Users, Wallet, Plus } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 interface BottomNavProps {
   /** 
@@ -15,6 +16,8 @@ interface BottomNavProps {
 export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavProps) {
   const [location, setLocation] = useLocation();
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
+  const { data: user } = trpc.auth.me.useQuery();
+  const isLiulifan = user?.username === 'liulifan';
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -25,9 +28,13 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     setLocation(path);
   };
 
-  // 加号按钮点击逻辑
+  // 加号/奢贝按钮点击逻辑
   const handlePlusClick = () => {
-    if (isLedgerPage) {
+    if (isLiulifan) {
+      // liulifan：跳转到奢贝首页
+      setShowLedgerMenu(false);
+      setLocation('/beauty');
+    } else if (isLedgerPage) {
       // 钱脉页面：弹出选项菜单
       setShowLedgerMenu(!showLedgerMenu);
     } else {
@@ -117,7 +124,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               </span>
             </button>
 
-            {/* 加号按钮 */}
+            {/* 加号/奢贝按钮 */}
             <button
               onClick={handlePlusClick}
               className="relative -mt-6"
@@ -127,7 +134,11 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   ? 'bg-gray-600 rotate-45' 
                   : 'bg-[#D32F2F] hover:bg-[#B71C1C]'
               }`}>
-                <Plus className="w-7 h-7 text-white" />
+                {isLiulifan ? (
+                  <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
+                ) : (
+                  <Plus className="w-7 h-7 text-white" />
+                )}
               </div>
             </button>
 

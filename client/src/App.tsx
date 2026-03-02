@@ -177,8 +177,8 @@ function Router() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        {/* 首页 - 根据用户账本访问记录跳转 */}
-        <Route path="/" component={lazy(() => import("./pages/Home"))} />
+        {/* 首页 - liulifan自动重定向到奢贝，其他用户显示人脉首页 */}
+        <Route path="/" component={lazy(() => import("./pages/HomeEntry"))} />
         {/* 脉动Dashboard */}        <Route path="/login" component={Login} />
         <Route path="/privacy-policy" component={PrivacyPolicy} />
         <Route path="/user-agreement" component={UserAgreement} />
