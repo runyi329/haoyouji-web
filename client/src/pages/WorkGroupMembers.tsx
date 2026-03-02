@@ -5,25 +5,21 @@ import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 import { Card, CardContent } from "@/components/ui/card";
 
-// 16个成长动作定义
+// 11个成长动作定义（头像+邮箱+银行卡+支付宝+微信+数字钱包 合并为「资料」）
 const GROWTH_ACTIONS = [
-  { id: 'avatar',    label: '头像' },
-  { id: 'email',     label: '邮箱' },
-  { id: 'bank',      label: '银行卡' },
-  { id: 'alipay',    label: '支付宝' },
-  { id: 'wechat',    label: '微信' },
-  { id: 'crypto',    label: '数字钱包' },
-  { id: 'contact',   label: '人脉' },
-  { id: 'interact',  label: '联络' },
-  { id: 'tag',       label: '标签' },
-  { id: 'referrer',  label: '推荐人' },
-  { id: 'ledger',    label: '账本' },
-  { id: 'record',    label: '账目' },
-  { id: 'joinbook',  label: '加入账本' },
-  { id: 'sharebook', label: '共享账本' },
-  { id: 'share',     label: '共享人脉' },
-  { id: 'invite',    label: '邀请好友' },
-];
+  { id: 'profile',   label: '资料',    // 头像+邮箱+银行卡+支付宝+微信+数字钱包
+    ids: ['avatar', 'email', 'bank', 'alipay', 'wechat', 'crypto'] },
+  { id: 'contact',   label: '人脉',    ids: ['contact'] },
+  { id: 'interact',  label: '联络',    ids: ['interact'] },
+  { id: 'tag',       label: '标签',    ids: ['tag'] },
+  { id: 'referrer',  label: '推荐人',  ids: ['referrer'] },
+  { id: 'ledger',    label: '账本',    ids: ['ledger'] },
+  { id: 'record',    label: '账目',    ids: ['record'] },
+  { id: 'joinbook',  label: '加入账本', ids: ['joinbook'] },
+  { id: 'sharebook', label: '共享账本', ids: ['sharebook'] },
+  { id: 'share',     label: '共享人脉', ids: ['share'] },
+  { id: 'invite',    label: '邀请好友', ids: ['invite'] },
+] as const;
 
 /**
  * 根据成员数据推断哪些动作已完成
@@ -31,16 +27,16 @@ const GROWTH_ACTIONS = [
  */
 function inferCompletedActions(member: any): Set<string> {
   const done = new Set<string>();
-  if (member.avatar) done.add('avatar');
-  if (member.email) done.add('email');
+  // 「资料」：有头像或邮箱即视为已完成
+  if (member.avatar || member.email) done.add('profile');
   // 以下根据统计数字推断
   if ((member.ownContactsCount || 0) > 0) done.add('contact');
+  if ((member.interactionsCount || 0) > 0) done.add('interact');
+  if ((member.tagsCount || 0) > 0) done.add('tag');
   if ((member.ledgerCount || 0) > 0) done.add('ledger');
   if ((member.recordCount || 0) > 0) done.add('record');
   if ((member.sharedContactsCount || 0) > 0) done.add('share');
-  if ((member.interactionsCount || 0) > 0) done.add('interact');
-  if ((member.tagsCount || 0) > 0) done.add('tag');
-  // 如果账本数 > 1，推断加入了别人账本
+  // 账本数 > 1 推断加入了别人账本
   if ((member.ledgerCount || 0) > 1) done.add('joinbook');
   return done;
 }
@@ -137,9 +133,9 @@ export default function WorkGroupMembers() {
           </Card>
         ) : (
           members.map((member: any) => {
-            const completedActions = inferCompletedActions(member);
+                    const completedActions = inferCompletedActions(member);
             const completedCount = completedActions.size;
-            const totalCount = GROWTH_ACTIONS.length;
+            const totalCount = 11;
 
             return (
               <Card 
@@ -207,42 +203,39 @@ export default function WorkGroupMembers() {
                         {completedCount}
                       </span>
                       <span className="text-xs" style={{ color: 'var(--text-gray)' }}>
-                        /16
+                        /11
                       </span>
                     </div>
                   </div>
 
-                  {/* 第二行：16个成长动作流程链（绿点/红点） */}
-                  <div className="flex flex-wrap gap-x-1.5 gap-y-1.5">
+                  {/* 成长动作流程链（单行，11个节点） */}
+                  <div className="flex items-center w-full overflow-hidden">
                     {GROWTH_ACTIONS.map((action, idx) => {
                       const done = completedActions.has(action.id);
+                      const isLast = idx === GROWTH_ACTIONS.length - 1;
                       return (
-                        <div key={action.id} className="flex items-center gap-0.5">
-                          {/* 连接线（非第一个） */}
-                          {idx > 0 && (
+                        <div key={action.id} className="flex items-center flex-1 min-w-0">
+                          {/* 节点 */}
+                          <div className="flex flex-col items-center flex-shrink-0">
                             <div 
-                              className="w-2 h-px flex-shrink-0"
-                              style={{ backgroundColor: done ? '#4CAF50' : '#E0E0E0' }}
-                            />
-                          )}
-                          {/* 动作节点 */}
-                          <div className="flex flex-col items-center">
-                            <div 
-                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              className="w-3 h-3 rounded-full"
                               style={{ backgroundColor: done ? '#4CAF50' : '#EF5350' }}
                               title={action.label}
                             />
                             <span 
-                              className="text-[9px] leading-tight mt-0.5 text-center"
-                              style={{ 
-                                color: done ? '#4CAF50' : '#9E9E9E',
-                                maxWidth: '28px',
-                                wordBreak: 'break-all'
-                              }}
+                              className="text-[8px] leading-tight mt-0.5 text-center whitespace-nowrap"
+                              style={{ color: done ? '#4CAF50' : '#BDBDBD' }}
                             >
                               {action.label}
                             </span>
                           </div>
+                          {/* 连接线（最后一个不加） */}
+                          {!isLast && (
+                            <div 
+                              className="flex-1 h-px mx-0.5"
+                              style={{ backgroundColor: done ? '#4CAF50' : '#E0E0E0', minWidth: '4px' }}
+                            />
+                          )}
                         </div>
                       );
                     })}
