@@ -13,6 +13,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useState } from "react";
 import { toast } from "sonner";
 import BeautyTabBar from "./BeautyTabBar";
+import BottomNav from "@/components/BottomNav";
 
 const BUSINESS_HOURS = { start: 11, end: 20 };
 const MAX_BOOKING_DAYS = 10;
@@ -99,7 +100,7 @@ export default function BeautyBooking() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-28">
       {/* 顶部 */}
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
@@ -368,6 +369,7 @@ export default function BeautyBooking() {
           </Card>
         )}
       </main>
+      <BottomNav />
     </div>
   );
 }

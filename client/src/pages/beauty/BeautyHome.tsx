@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
+import BottomNav from "@/components/BottomNav";
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -34,7 +35,7 @@ export default function BeautyHome() {
   const services = servicesQuery.data ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-28">
       {/* 顶部 Banner */}
       <div className="relative bg-gradient-to-br from-rose-400 via-pink-400 to-rose-300 text-white overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -180,6 +181,7 @@ export default function BeautyHome() {
       </div>
 
 
+      <BottomNav />
     </div>
   );
 }

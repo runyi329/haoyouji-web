@@ -7,12 +7,13 @@ import { Link } from "wouter";
 import { ChevronLeft, ChevronRight, Clock, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
+import BottomNav from "@/components/BottomNav";
 
 export default function BeautyServices() {
   const { data: services, isLoading } = trpc.beauty.service.list.useQuery();
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-28">
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
           <div className="flex items-center gap-3 px-4 py-3">
@@ -82,6 +83,7 @@ export default function BeautyServices() {
           </CardContent>
         </Card>
       </div>
+      <BottomNav />
     </div>
   );
 }
