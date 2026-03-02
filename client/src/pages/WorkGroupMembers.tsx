@@ -86,16 +86,13 @@ export default function WorkGroupMembers() {
             // 找到最后一个已完成的索引，用于轨道着色
             const lastDoneIdx = MILESTONES.reduce((acc, m, i) => done.has(m.id) ? i : acc, -1);
 
-            // 权限控制：仅超级管理员或本人可点入详情
             const canClick = currentUser?.role === 'super_admin' || currentUser?.id === member.id;
 
             return (
               <div
                 key={member.id}
                 onClick={() => canClick && setLocation(`/work-group-member/${member.id}`)}
-                className={`bg-white rounded-xl shadow-sm transition-transform ${
-                  canClick ? 'cursor-pointer active:scale-[0.99]' : 'cursor-default opacity-95'
-                }`}
+                className={`bg-white rounded-xl shadow-sm transition-transform ${canClick ? 'cursor-pointer active:scale-[0.99]' : 'cursor-default'}`}
                 style={{ overflow: 'hidden' }}
               >
                 {/* 顶部红色进度条 */}
