@@ -16,11 +16,13 @@ const MILESTONES = [
 
 function inferCompleted(member: any): Set<string> {
   const done = new Set<string>();
-  if (member.avatar || member.email) done.add('profile');
-  if ((member.ownContactsCount || 0) > 0) done.add('contact');
-  if ((member.sharedContactsCount || 0) > 0 || (member.interactionsCount || 0) > 0 || (member.tagsCount || 0) > 0) done.add('share');
-  if ((member.ledgerCount || 0) > 0) done.add('ledger');
-  if ((member.recordCount || 0) > 0 || (member.ledgerCount || 0) > 1) done.add('sharebook');
+  // 直接使用后端返回的真实字段
+  if (member.hasProfile)      done.add('profile');
+  if (member.hasContact)      done.add('contact');
+  if (member.hasShareContact) done.add('share');
+  if (member.hasLedger)       done.add('ledger');
+  if (member.hasShareBook)    done.add('sharebook');
+  if (member.hasInvite)       done.add('invite');
   return done;
 }
 
