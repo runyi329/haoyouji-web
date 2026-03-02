@@ -157,43 +157,39 @@ export default function BeautyHome() {
             </Link>
           </div>
           {newsLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-6">
               <Loader2 className="w-5 h-5 text-rose-300 animate-spin" />
             </div>
           ) : healthNews.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-xs">暂无资讯</div>
+            <div className="text-center py-4 text-gray-400 text-xs">暂无资讯</div>
           ) : (
-            <div className="space-y-2">
-              {healthNews.map((item) => (
-                <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer">
-                  <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="p-3">
-                      <div className="flex gap-3">
-                        {item.picUrl ? (
-                          <img
-                            src={item.picUrl}
-                            alt={item.title}
-                            className="w-20 h-16 rounded-lg object-cover flex-shrink-0 bg-rose-50"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-20 h-16 rounded-lg bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center flex-shrink-0">
-                            <Heart className="w-6 h-6 text-rose-300" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{item.title}</h3>
-                          {item.description && (
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</p>
-                          )}
-                          <div className="flex items-center gap-1 mt-1.5">
-                            <ExternalLink className="w-3 h-3 text-rose-400" />
-                            <span className="text-xs text-rose-400">查看原文</span>
-                          </div>
-                        </div>
+            <div className="bg-white rounded-xl overflow-hidden border border-gray-100">
+              {healthNews.map((item, idx) => (
+                <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="block">
+                  <div className="flex items-center gap-3 px-3 py-2.5 active:bg-gray-50">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{item.title}</h3>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {(item as any).source && <span className="text-xs text-gray-400">{(item as any).source}</span>}
+                        {(item as any).source && item.ctime && <span className="text-gray-300 text-xs">·</span>}
+                        {item.ctime && <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    {item.picUrl ? (
+                      <img
+                        src={item.picUrl}
+                        alt={item.title}
+                        className="rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                        style={{ width: '72px', height: '48px' }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0" style={{ width: '72px', height: '48px' }}>
+                        <Heart className="w-4 h-4 text-rose-200" />
+                      </div>
+                    )}
+                  </div>
+                  {idx < healthNews.length - 1 && <div className="mx-3 border-b border-gray-100" />}
                 </a>
               ))}
             </div>
