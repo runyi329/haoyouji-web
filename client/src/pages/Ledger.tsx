@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, TrendingUp } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Banknote } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -422,7 +422,7 @@ export default function Ledger() {
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 title="汇率计算器"
               >
-                <TrendingUp className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+                <Banknote className="w-5 h-5 text-[#222222]" strokeWidth={2} />
               </button>
             </Link>
             {/* 说明书按钮 */}
