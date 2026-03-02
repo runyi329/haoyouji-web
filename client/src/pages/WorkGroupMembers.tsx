@@ -6,12 +6,12 @@ import AddMemberDialog from '../components/AddMemberDialog';
 
 // 6个成长里程碑
 const MILESTONES = [
-  { id: 'profile',    short: '资料',   full: '添加资料' },
-  { id: 'contact',   short: '人脉',   full: '添加人脉' },
-  { id: 'share',     short: '共享人脉', full: '共享人脉' },
-  { id: 'ledger',    short: '账本',   full: '添加账本' },
-  { id: 'sharebook', short: '共享账本', full: '共享账本' },
-  { id: 'invite',    short: '邀请',   full: '邀请好友' },
+  { id: 'profile',    short: '个人资料' },
+  { id: 'contact',   short: '新建人脉' },
+  { id: 'share',     short: '共享人脉' },
+  { id: 'ledger',    short: '新建账本' },
+  { id: 'sharebook', short: '共享账本' },
+  { id: 'invite',    short: '好友邀请' },
 ];
 
 function inferCompleted(member: any): Set<string> {
@@ -149,31 +149,30 @@ export default function WorkGroupMembers() {
                     </div>
                   </div>
 
-                  {/* 第二行：横向任务轴 */}
-                  {/* 设计：轨道线贯穿，节点用菱形/圆形区分完成状态，标签在下方 */}
+                  {/* 横向任务轴 */}
                   <div className="relative flex items-start">
-                    {/* 底层轨道线 */}
+                    {/* 轨道线：从第1个节点中心到最后一个节点中心 */}
+                    {/* 每个节点占 flex-1，节点宽6px，所以轨道从左偶 3px 到右偶 3px */}
                     <div
                       className="absolute"
                       style={{
-                        top: '7px',
-                        left: '7px',
-                        right: '7px',
-                        height: '2px',
-                        backgroundColor: '#EEEEEE',
+                        top: '5px',
+                        left: 'calc(100% / 12)',       // 第一个节点中心
+                        right: 'calc(100% / 12)',      // 最后一个节点中心
+                        height: '1px',
+                        backgroundColor: '#E0E0E0',
                         zIndex: 0,
                       }}
                     />
-                    {/* 已完成段的轨道线（覆盖在灰色上） */}
+                    {/* 已完成段红色轨道 */}
                     {lastDoneIdx >= 0 && (
                       <div
                         className="absolute"
                         style={{
-                          top: '7px',
-                          left: '7px',
-                          // 每段宽度 = (100% - 14px) / 5 * lastDoneIdx
-                          width: `calc((100% - 14px) / 5 * ${lastDoneIdx})`,
-                          height: '2px',
+                          top: '5px',
+                          left: 'calc(100% / 12)',
+                          width: `calc((100% - 100% / 6) / 5 * ${lastDoneIdx})`,
+                          height: '1px',
                           backgroundColor: 'var(--brand-red)',
                           zIndex: 1,
                         }}
@@ -181,9 +180,8 @@ export default function WorkGroupMembers() {
                     )}
 
                     {/* 节点列表 */}
-                    {MILESTONES.map((m, idx) => {
+                    {MILESTONES.map((m) => {
                       const isDone = done.has(m.id);
-                      const isActive = idx === lastDoneIdx + 1; // 下一个待完成
                       return (
                         <div
                           key={m.id}
@@ -193,16 +191,11 @@ export default function WorkGroupMembers() {
                           {/* 节点圆 */}
                           <div
                             style={{
-                              width: '14px',
-                              height: '14px',
+                              width: '10px',
+                              height: '10px',
                               borderRadius: '50%',
-                              backgroundColor: isDone ? 'var(--brand-red)' : isActive ? 'white' : 'white',
-                              border: isDone
-                                ? '2px solid var(--brand-red)'
-                                : isActive
-                                ? '2px solid var(--brand-red)'
-                                : '2px solid #DDDDDD',
-                              boxShadow: isDone ? '0 0 0 2px rgba(211,47,47,0.15)' : 'none',
+                              backgroundColor: isDone ? 'var(--brand-red)' : 'white',
+                              border: isDone ? '1.5px solid var(--brand-red)' : '1.5px solid #CCCCCC',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -210,25 +203,22 @@ export default function WorkGroupMembers() {
                             }}
                           >
                             {isDone && (
-                              <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
-                                <path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
+                                <path d="M1 3L2.5 4.5L5 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                               </svg>
-                            )}
-                            {isActive && (
-                              <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--brand-red)' }} />
                             )}
                           </div>
 
                           {/* 标签 */}
                           <span
                             style={{
-                              fontSize: '9px',
+                              fontSize: '8.5px',
                               lineHeight: '1.2',
                               marginTop: '3px',
                               textAlign: 'center',
                               whiteSpace: 'nowrap',
-                              color: isDone ? 'var(--brand-red)' : isActive ? '#555555' : '#CCCCCC',
-                              fontWeight: isDone || isActive ? 500 : 400,
+                              color: isDone ? 'var(--brand-red)' : '#C0C0C0',
+                              fontWeight: isDone ? 500 : 400,
                             }}
                           >
                             {m.short}
