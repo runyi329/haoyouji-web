@@ -26,7 +26,12 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   const handleNavigation = (path: string) => {
     setShowLedgerMenu(false);
-    setLocation(path);
+    // 在奢贝页面时，wouter的setLocation可能无法正确触发，改用window.location确保跳转
+    if (isBeautyPage) {
+      window.location.href = path;
+    } else {
+      setLocation(path);
+    }
   };
 
   // 加号/奢贝按钮点击逻辑
