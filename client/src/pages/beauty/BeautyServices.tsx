@@ -3,6 +3,7 @@
  * 路径: /beauty/services
  */
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight, Clock, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,19 +11,25 @@ import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
 
 export default function BeautyServices() {
+  const { user } = useAuth();
   const { data: services, isLoading } = trpc.beauty.service.list.useQuery();
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <Link href="/beauty">
-              <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
-              </button>
-            </Link>
-            <h1 className="font-semibold text-gray-800">美容项目</h1>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Link href="/beauty">
+                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                  <ChevronLeft className="w-5 h-5 text-gray-600" />
+                </button>
+              </Link>
+              <h1 className="font-semibold text-gray-800">美容项目</h1>
+            </div>
+            {user?.username && (
+              <span className="text-xs text-gray-300 pr-1 select-none">{user.username}</span>
+            )}
           </div>
         </div>
         <BeautyTabBar />
