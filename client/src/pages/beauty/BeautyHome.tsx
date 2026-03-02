@@ -11,18 +11,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
-import { useState, useEffect } from "react";
-
-const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
-
-interface HealthArticle {
-  id: number;
-  title: string;
-  description: string;
-  picUrl: string;
-  ctime: string;
-  url: string;
-}
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -42,24 +30,12 @@ export default function BeautyHome() {
   const { user } = useAuth();
   const promotionsQuery = trpc.beauty.promotion.list.useQuery();
   const servicesQuery = trpc.beauty.service.list.useQuery();
+  const healthQuery = trpc.beauty.health.news.useQuery({ num: 3, page: 1 });
 
   const promotions = promotionsQuery.data ?? [];
   const services = servicesQuery.data ?? [];
-
-  const [healthNews, setHealthNews] = useState<HealthArticle[]>([]);
-  const [newsLoading, setNewsLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`https://apis.tianapi.com/health/index?key=${TIANAPI_KEY}&num=3`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.code === 200 && data.result?.list) {
-          setHealthNews(data.result.list);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setNewsLoading(false));
-  }, []);
+  const healthNews = healthQuery.data ?? [];
+  const newsLoading = healthQuery.isLoading;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
@@ -92,7 +68,7 @@ export default function BeautyHome() {
             </div>
           </div>
 
-          {/* 特色功能入口（替换原来4个重复快捷按钮） */}
+          {/* 特色功能入口 */}
           <div className="grid grid-cols-2 gap-3 mt-6">
             <Link href="/beauty/health">
               <div className="flex items-center gap-3 bg-white/20 rounded-2xl py-4 px-4 hover:bg-white/30 transition-colors cursor-pointer">

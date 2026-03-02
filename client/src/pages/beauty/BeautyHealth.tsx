@@ -2,65 +2,64 @@
  * 奢贝美容院 - 健康资讯页
  * 路径: /beauty/health
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, Heart, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
-
-const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
-
-interface HealthArticle {
-  id: number;
-  title: string;
-  description: string;
-  picUrl: string;
-  ctime: string;
-  url: string;
-}
+import { trpc } from "@/lib/trpc";
 
 export default function BeautyHealth() {
-  const [articles, setArticles] = useState<HealthArticle[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [allArticles, setAllArticles] = useState<Array<{
+    id: number; title: string; description: string; picUrl: string; ctime: string; url: string;
+  }>>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchNews = async (p: number, append = false) => {
+  const { data, isLoading, refetch } = trpc.beauty.health.news.useQuery(
+    { num: 10, page: 1 },
+    {
+      onSuccess: (list) => {
+        setAllArticles(list);
+        setHasMore(list.length >= 10);
+      },
+    }
+  );
+
+  const articles = allArticles.length > 0 ? allArticles : (data ?? []);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+    // 直接调用 tRPC 查询获取下一页
     try {
       const res = await fetch(
-        `https://apis.tianapi.com/health/index?key=${TIANAPI_KEY}&num=10&page=${p}`
+        `/api/trpc/beauty.health.news?input=${encodeURIComponent(JSON.stringify({ num: 10, page: nextPage }))}`
       );
-      const data = await res.json();
-      if (data.code === 200 && data.result?.list?.length > 0) {
-        if (append) {
-          setArticles(prev => [...prev, ...data.result.list]);
-        } else {
-          setArticles(data.result.list);
-        }
-        if (data.result.list.length < 10) setHasMore(false);
+      const json = await res.json();
+      const list = json?.result?.data ?? [];
+      if (list.length > 0) {
+        setAllArticles(prev => [...prev, ...list]);
+        if (list.length < 10) setHasMore(false);
       } else {
         setHasMore(false);
       }
     } catch {
       setHasMore(false);
     } finally {
-      setLoading(false);
       setLoadingMore(false);
     }
   };
 
-  useEffect(() => {
-    fetchNews(1);
-  }, []);
-
-  const loadMore = () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchNews(nextPage, true);
+  const handleRefresh = () => {
+    setPage(1);
+    setAllArticles([]);
+    setHasMore(true);
+    refetch();
   };
 
   return (
@@ -78,7 +77,7 @@ export default function BeautyHealth() {
               <h1 className="font-semibold text-gray-800">健康美容资讯</h1>
             </div>
             <button
-              onClick={() => { setLoading(true); setPage(1); setHasMore(true); fetchNews(1); }}
+              onClick={handleRefresh}
               className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
             >
               <RefreshCw className="w-4 h-4 text-gray-500" />
@@ -89,7 +88,7 @@ export default function BeautyHealth() {
       </div>
 
       <div className="px-4 py-4 space-y-3 max-w-lg mx-auto">
-        {loading ? (
+        {isLoading && articles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 className="w-8 h-8 text-rose-400 animate-spin" />
             <p className="text-sm text-gray-400">正在加载资讯...</p>
@@ -107,7 +106,7 @@ export default function BeautyHealth() {
                         <img
                           src={item.picUrl}
                           alt={item.title}
-                          className="w-24 h-18 rounded-xl object-cover flex-shrink-0 bg-rose-50"
+                          className="w-24 rounded-xl object-cover flex-shrink-0 bg-rose-50"
                           style={{ height: '72px' }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
