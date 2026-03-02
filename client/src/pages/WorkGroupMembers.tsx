@@ -16,11 +16,12 @@ const MILESTONES = [
 
 function inferCompleted(member: any): Set<string> {
   const done = new Set<string>();
-  if (member.avatar || member.email) done.add('profile');
-  if ((member.ownContactsCount || 0) > 0) done.add('contact');
-  if ((member.sharedContactsCount || 0) > 0 || (member.interactionsCount || 0) > 0 || (member.tagsCount || 0) > 0) done.add('share');
-  if ((member.ledgerCount || 0) > 0) done.add('ledger');
-  if ((member.recordCount || 0) > 0 || (member.ledgerCount || 0) > 1) done.add('sharebook');
+  if (member.hasProfile)      done.add('profile');
+  if (member.hasContact)      done.add('contact');
+  if (member.hasShareContact) done.add('share');
+  if (member.hasLedger)       done.add('ledger');
+  if (member.hasShareBook)    done.add('sharebook');
+  if (member.hasInvite)       done.add('invite');
   return done;
 }
 
@@ -85,11 +86,16 @@ export default function WorkGroupMembers() {
             // 找到最后一个已完成的索引，用于轨道着色
             const lastDoneIdx = MILESTONES.reduce((acc, m, i) => done.has(m.id) ? i : acc, -1);
 
+            // 权限控制：仅超级管理员或本人可点入详情
+            const canClick = currentUser?.role === 'super_admin' || currentUser?.id === member.id;
+
             return (
               <div
                 key={member.id}
-                onClick={() => setLocation(`/work-group-member/${member.id}`)}
-                className="bg-white rounded-xl shadow-sm cursor-pointer active:scale-[0.99] transition-transform"
+                onClick={() => canClick && setLocation(`/work-group-member/${member.id}`)}
+                className={`bg-white rounded-xl shadow-sm transition-transform ${
+                  canClick ? 'cursor-pointer active:scale-[0.99]' : 'cursor-default opacity-95'
+                }`}
                 style={{ overflow: 'hidden' }}
               >
                 {/* 顶部红色进度条 */}
