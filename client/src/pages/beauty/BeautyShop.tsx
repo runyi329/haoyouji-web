@@ -52,6 +52,9 @@ export default function BeautyShop() {
                 </button>
               </Link>
               <h1 className="font-semibold text-gray-800">品牌商城</h1>
+              {user?.username && (
+                <span className="text-xs text-gray-300 select-none">{user.username}</span>
+              )}
             </div>
             <Link href="/beauty/cart">
               <button className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
