@@ -5,21 +5,17 @@ import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 import { Card, CardContent } from "@/components/ui/card";
 
-// 11个成长动作定义（头像+邮箱+银行卡+支付宝+微信+数字钱包 合并为「资料」）
+// 8个成长动作定义
 const GROWTH_ACTIONS = [
-  { id: 'profile',   label: '资料',    // 头像+邮箱+银行卡+支付宝+微信+数字钱包
-    ids: ['avatar', 'email', 'bank', 'alipay', 'wechat', 'crypto'] },
-  { id: 'contact',   label: '人脉',    ids: ['contact'] },
-  { id: 'interact',  label: '联络',    ids: ['interact'] },
-  { id: 'tag',       label: '标签',    ids: ['tag'] },
-  { id: 'referrer',  label: '推荐人',  ids: ['referrer'] },
-  { id: 'ledger',    label: '账本',    ids: ['ledger'] },
-  { id: 'record',    label: '账目',    ids: ['record'] },
-  { id: 'joinbook',  label: '加入账本', ids: ['joinbook'] },
-  { id: 'sharebook', label: '共享账本', ids: ['sharebook'] },
-  { id: 'share',     label: '共享人脉', ids: ['share'] },
-  { id: 'invite',    label: '邀请好友', ids: ['invite'] },
-] as const;
+  { id: 'profile',   label: '资料' },   // 头像+邮箱+银行卡+支付宝+微信+数字钱包
+  { id: 'contact',   label: '人脉' },
+  { id: 'interact',  label: '联络' },
+  { id: 'tag',       label: '标签' },
+  { id: 'referrer',  label: '推荐人' },
+  { id: 'sharebook', label: '共享账本' }, // 账本+账目+加入账本+共享账本
+  { id: 'share',     label: '共享人脉' },
+  { id: 'invite',    label: '邀请好友' },
+];
 
 /**
  * 根据成员数据推断哪些动作已完成
@@ -33,11 +29,9 @@ function inferCompletedActions(member: any): Set<string> {
   if ((member.ownContactsCount || 0) > 0) done.add('contact');
   if ((member.interactionsCount || 0) > 0) done.add('interact');
   if ((member.tagsCount || 0) > 0) done.add('tag');
-  if ((member.ledgerCount || 0) > 0) done.add('ledger');
-  if ((member.recordCount || 0) > 0) done.add('record');
+  // 共享账本：有账本或账目即视为已完成
+  if ((member.ledgerCount || 0) > 0 || (member.recordCount || 0) > 0) done.add('sharebook');
   if ((member.sharedContactsCount || 0) > 0) done.add('share');
-  // 账本数 > 1 推断加入了别人账本
-  if ((member.ledgerCount || 0) > 1) done.add('joinbook');
   return done;
 }
 
@@ -135,7 +129,7 @@ export default function WorkGroupMembers() {
           members.map((member: any) => {
                     const completedActions = inferCompletedActions(member);
             const completedCount = completedActions.size;
-            const totalCount = 11;
+            const totalCount = 8;
 
             return (
               <Card 
@@ -203,12 +197,12 @@ export default function WorkGroupMembers() {
                         {completedCount}
                       </span>
                       <span className="text-xs" style={{ color: 'var(--text-gray)' }}>
-                        /11
+                        /8
                       </span>
                     </div>
                   </div>
 
-                  {/* 成长动作流程链（单行，11个节点） */}
+                  {/* 成长动作流程链（单行，8个节点） */}
                   <div className="flex items-center w-full overflow-hidden">
                     {GROWTH_ACTIONS.map((action, idx) => {
                       const done = completedActions.has(action.id);
