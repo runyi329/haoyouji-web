@@ -89,41 +89,6 @@ function getLevelClassName(level?: string): string {
   }
 }
 
-// 使用Web Audio API生成提示音（两声清脆的"叮叮"）
-function playReminderSound() {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    const playTone = (startTime: number, frequency: number, duration: number) => {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(frequency, startTime);
-      
-      // 音量包络：快速升起，缓慢衰减
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-      
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
-    };
-    
-    const now = audioContext.currentTime;
-    // 第一声 "叮"（较高音）
-    playTone(now, 880, 0.3);
-    // 第二声 "叮"（更高音，间隔0.2秒）
-    playTone(now + 0.25, 1100, 0.3);
-    // 第三声 "叮"（最高音，间隔0.2秒）
-    playTone(now + 0.5, 1320, 0.4);
-  } catch (e) {
-    console.log('Audio playback not supported:', e);
-  }
-}
 
 export default function Home() {
   const { user } = useAuth();
@@ -166,25 +131,21 @@ export default function Home() {
   });
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [hasPlayedSound, setHasPlayedSound] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
-  // 声音提醒：页面加载后如果有需要关注的人，播放提示音 + 启动跳动动画
+  // 跳动动画：页面加载后如果有需要关注的人，启动跳动动画
   useEffect(() => {
-    if (isLiulifan && needsAttentionCount > 0 && !hasPlayedSound) {
-      // 延迟1秒播放，让页面先加载完
+    if (isLiulifan && needsAttentionCount > 0) {
       const timer = setTimeout(() => {
-        playReminderSound();
-        setHasPlayedSound(true);
         setIsAnimating(true);
         // 跳动动画持续5秒后停止（但角标始终显示）
         setTimeout(() => setIsAnimating(false), 5000);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [isLiulifan, needsAttentionCount, hasPlayedSound]);
+  }, [isLiulifan, needsAttentionCount]);
   const banners = [
     {
       id: 1,
