@@ -112,10 +112,7 @@ export default function BeautyHealth() {
                         <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-0.5 text-rose-400">
-                      <ExternalLink className="w-3 h-3" />
-                      <span className="text-xs">查看原文</span>
-                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-rose-400" />
                   </div>
                 </div>
                 {idx < articles.length - 1 && (
