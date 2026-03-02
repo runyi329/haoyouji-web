@@ -1,9 +1,11 @@
 /**
  * 奢贝美容院 - 顶部 Tab 栏
  * 用于奢贝模块内部页面切换：首页 / 预约 / 商城 / 我的
+ * Tab 栏顶部显示当前登录用户名（低调小字）
  */
 import { Link, useLocation } from "wouter";
 import { Home as HomeIcon, Calendar, Gift, User } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 const TABS = [
   { label: "首页", href: "/beauty", icon: <HomeIcon className="w-4 h-4" /> },
@@ -14,6 +16,7 @@ const TABS = [
 
 export default function BeautyTabBar() {
   const [location] = useLocation();
+  const { data: user } = trpc.auth.me.useQuery();
 
   const isActive = (href: string) => {
     if (href === "/beauty") return location === "/beauty";
@@ -22,6 +25,15 @@ export default function BeautyTabBar() {
 
   return (
     <div className="bg-white border-b border-gray-100">
+      {/* 用户名标识行 */}
+      {user?.username && (
+        <div className="flex justify-end px-4 pt-1.5">
+          <span className="text-[10px] text-gray-300 tracking-wide select-none">
+            {user.username}
+          </span>
+        </div>
+      )}
+      {/* Tab 切换行 */}
       <div className="flex max-w-lg mx-auto">
         {TABS.map((tab) => {
           const active = isActive(tab.href);
