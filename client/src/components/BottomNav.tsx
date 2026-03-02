@@ -21,6 +21,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
+  const isBeautyPage = location.startsWith('/beauty');
   const isHomePage = location === '/' || location === '';
 
   const handleNavigation = (path: string) => {
@@ -44,8 +45,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     }
   };
 
-  // 判断激活状态
-  const isContactsActive = !isLedgerPage;
+  // 判断激活状态（在奢贝页面时，人脉和钱脉都不激活）
+  const isContactsActive = !isLedgerPage && !isBeautyPage;
   const isLedgerActive = isLedgerPage;
 
   return (
@@ -129,10 +130,12 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               onClick={handlePlusClick}
               className="relative -mt-6"
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-white transition-all duration-200 ${
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
                 showLedgerMenu 
-                  ? 'bg-gray-600 rotate-45' 
-                  : 'bg-[#D32F2F] hover:bg-[#B71C1C]'
+                  ? 'bg-gray-600 rotate-45 border-4 border-white' 
+                  : isBeautyPage
+                  ? 'bg-[#D32F2F] border-4 border-rose-200 ring-2 ring-rose-300'
+                  : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white'
               }`}>
                 {isLiulifan ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>

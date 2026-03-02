@@ -5,11 +5,11 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, ChevronRight, ShoppingCart, Star, Home as HomeIcon, Gift, Calendar, User, Plus, Minus } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Gift, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
+import BeautyTabBar from "./BeautyTabBar";
 
 export default function BeautyShop() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
@@ -41,27 +41,30 @@ export default function BeautyShop() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部 */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Link href="/beauty">
-              <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
+      <div className="sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-100">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Link href="/beauty">
+                <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                  <ChevronLeft className="w-5 h-5 text-gray-600" />
+                </button>
+              </Link>
+              <h1 className="font-semibold text-gray-800">品牌商城</h1>
+            </div>
+            <Link href="/beauty/cart">
+              <button className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <ShoppingCart className="w-5 h-5 text-gray-600" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
               </button>
             </Link>
-            <h1 className="font-semibold text-gray-800">品牌商城</h1>
           </div>
-          <Link href="/beauty/cart">
-            <button className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
-              <ShoppingCart className="w-5 h-5 text-gray-600" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          </Link>
         </div>
+        <BeautyTabBar />
       </div>
 
       <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
@@ -110,11 +113,9 @@ export default function BeautyShop() {
                 </Link>
                 <CardContent className="p-3">
                   <p className="text-sm font-medium text-gray-800 line-clamp-2">{p.name}</p>
-
                   <div className="flex items-center justify-between mt-2">
                     <div>
                       <span className="text-rose-500 font-bold text-sm">¥{p.price}</span>
-
                     </div>
                     <button
                       onClick={() => addToCart.mutate({ productId: p.id, quantity: 1 })}
@@ -129,25 +130,6 @@ export default function BeautyShop() {
           </div>
         )}
       </div>
-
-      {/* 底部导航 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
-        <div className="grid grid-cols-4 h-14">
-          {[
-            { icon: <HomeIcon className="w-5 h-5" />, label: "首页", href: "/beauty" },
-            { icon: <Gift className="w-5 h-5" />, label: "品牌", href: "/beauty/shop" },
-            { icon: <Calendar className="w-5 h-5" />, label: "预约", href: "/beauty/booking" },
-            { icon: <User className="w-5 h-5" />, label: "我的", href: "/beauty/appointments" },
-          ].map((item) => (
-            <Link key={item.label} href={item.href}>
-              <button className="flex flex-col items-center justify-center h-full w-full text-gray-400 hover:text-rose-500 transition-colors">
-                {item.icon}
-                <span className="text-xs mt-0.5">{item.label}</span>
-              </button>
-            </Link>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 }

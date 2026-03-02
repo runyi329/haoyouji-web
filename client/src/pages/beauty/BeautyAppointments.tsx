@@ -5,10 +5,11 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
-import { ChevronLeft, Calendar, Clock, CheckCircle2, XCircle, AlertCircle, Home as HomeIcon, Gift, User } from "lucide-react";
+import { ChevronLeft, Calendar, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import BeautyTabBar from "./BeautyTabBar";
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   pending: { label: "待确认", color: "text-amber-500 bg-amber-50", icon: <AlertCircle className="w-3.5 h-3.5" /> },
@@ -38,15 +39,18 @@ export default function BeautyAppointments() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <Link href="/beauty">
-            <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
-              <ChevronLeft className="w-5 h-5 text-gray-600" />
-            </button>
-          </Link>
-          <h1 className="font-semibold text-gray-800">我的预约</h1>
+      <div className="sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-100">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Link href="/beauty">
+              <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+                <ChevronLeft className="w-5 h-5 text-gray-600" />
+              </button>
+            </Link>
+            <h1 className="font-semibold text-gray-800">我的预约</h1>
+          </div>
         </div>
+        <BeautyTabBar />
       </div>
 
       <div className="px-4 py-4 space-y-3 max-w-lg mx-auto">
@@ -108,25 +112,6 @@ export default function BeautyAppointments() {
           })
         )}
       </div>
-
-      {/* 底部导航 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
-        <div className="grid grid-cols-4 h-14">
-          {[
-            { icon: <HomeIcon className="w-5 h-5" />, label: "首页", href: "/beauty" },
-            { icon: <Gift className="w-5 h-5" />, label: "品牌", href: "/beauty/shop" },
-            { icon: <Calendar className="w-5 h-5" />, label: "预约", href: "/beauty/booking" },
-            { icon: <User className="w-5 h-5" />, label: "我的", href: "/beauty/appointments" },
-          ].map((item) => (
-            <Link key={item.label} href={item.href}>
-              <button className="flex flex-col items-center justify-center h-full w-full text-gray-400 hover:text-rose-500 transition-colors">
-                {item.icon}
-                <span className="text-xs mt-0.5">{item.label}</span>
-              </button>
-            </Link>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 }
