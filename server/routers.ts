@@ -8187,6 +8187,36 @@ export const appRouter = router({
       return { success: true };
     }),
   }),
+
+  // ==================== 汇率计算器 ====================
+  exchange: router({
+    // 获取指定基准货币的实时汇率
+    getRates: publicProcedure
+      .input(z.object({ base: z.string().default('CNY') }))
+      .query(async ({ input }) => {
+        try {
+          const res = await fetch(`https://open.er-api.com/v6/latest/${input.base}`, {
+            signal: AbortSignal.timeout(8000),
+          });
+          const data = await res.json() as {
+            result: string;
+            base_code: string;
+            rates: Record<string, number>;
+            time_last_update_utc: string;
+          };
+          if (data.result === 'success') {
+            // 格式化更新时间
+            const raw = data.time_last_update_utc;
+            const d = new Date(raw);
+            const lastUpdated = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+            return { rates: data.rates, base: data.base_code, lastUpdated };
+          }
+          return { rates: {}, base: input.base, lastUpdated: '' };
+        } catch {
+          return { rates: {}, base: input.base, lastUpdated: '' };
+        }
+      }),
+  }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
