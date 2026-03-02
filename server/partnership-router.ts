@@ -272,16 +272,17 @@ export const partnershipRouter = router({
 
         // ===== 6个成长里程碑判断 =====
 
-        // 1. 个人资料：有邮箱 或 有银行卡 或 有数字钱包（支付宝/微信/区块链）
+        // 1. 个人资料：有邮箱 或 有银行卡 或 有数字钱包
+        // bankCards/digitalWallets 的 userId 是 varchar，需要转成字符串匹配
         const hasBankCard = await db
           .select({ id: bankCards.id })
           .from(bankCards)
-          .where(eq(bankCards.userId, String(member.id)))
+          .where(sql`${bankCards.userId} = ${String(member.id)}`)
           .limit(1);
         const hasDigitalWallet = await db
           .select({ id: digitalWallets.id })
           .from(digitalWallets)
-          .where(eq(digitalWallets.userId, String(member.id)))
+          .where(sql`${digitalWallets.userId} = ${String(member.id)}`)
           .limit(1);
         const hasProfile = !!(member.email) || hasBankCard.length > 0 || hasDigitalWallet.length > 0;
 
@@ -307,13 +308,12 @@ export const partnershipRouter = router({
           .where(eq(ledgers.ownerId, member.id));
         const hasLedger = (ownLedgerResult[0]?.count || 0) > 0;
 
-        // 5. 共享账本：账本中有其他成员（自己创建的账本里加了别人），或自己加入了别人的账本
+        // 5. 共享账本：参与的账本中有超过1个成员的账本
         let hasShareBook = false;
         if (memberLedgerIds.length > 0) {
           const ledgerIdList = memberLedgerIds.map(l => l.ledgerId);
-          // 检查这些账本中是否有多于1个成员（即有共享）
           const sharedLedgerResult = await db
-            .select({ ledgerId: ledgerMembers.ledgerId, count: sql<number>`count(*)` })
+            .select({ ledgerId: ledgerMembers.ledgerId })
             .from(ledgerMembers)
             .where(inArray(ledgerMembers.ledgerId, ledgerIdList))
             .groupBy(ledgerMembers.ledgerId)
@@ -321,7 +321,7 @@ export const partnershipRouter = router({
           hasShareBook = sharedLedgerResult.length > 0;
         }
 
-        // 6. 好友邀请：inviteCount > 0（已成功邀请至少1人注册）
+        // 6. 好友邀请：inviteCount > 0
         const inviteInfoResult = await db
           .select({ inviteCount: users.inviteCount })
           .from(users)
@@ -339,7 +339,6 @@ export const partnershipRouter = router({
           interactionsCount,
           ledgerCount,
           recordCount,
-          // 6个成长里程碑
           hasProfile,
           hasContact,
           hasShareContact,
