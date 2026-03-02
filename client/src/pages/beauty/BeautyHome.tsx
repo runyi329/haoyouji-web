@@ -6,7 +6,7 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart
 } from "lucide-react";
 
 // 根据标题关键词自动匹配分类标签
