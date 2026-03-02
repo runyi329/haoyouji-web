@@ -33,6 +33,7 @@ import { invitePermissionRouter } from "./invite-permission-api";
 import { workGroupsRouter } from "./work-groups-api";
 import { partnershipRouter } from "./partnership-router";
 import { posterFavoritesRouter } from "./poster-favorites-router";
+import { beautyRouter } from "./beauty-router";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -47,6 +48,7 @@ export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
   partnership: partnershipRouter,
+  beauty: beautyRouter,
 
   // 支付账户管理
   paymentAccounts: router({
