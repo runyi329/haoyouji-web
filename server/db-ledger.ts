@@ -4926,3 +4926,172 @@ export async function getRecordLogCount(
     return 0;
   }
 }
+
+// ========== 账本分组功能 ==========
+
+// 自动建表迁移：ledger_groups 和 ledgers.group_id 字段
+let _ledgerGroupsMigrated = false;
+async function ensureLedgerGroupsTable() {
+  if (_ledgerGroupsMigrated) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 创建 ledger_groups 表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS ledger_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_user_id (user_id)
+      )
+    `);
+  } catch (e: any) {
+    console.error('[ensureLedgerGroupsTable] 创建 ledger_groups 表失败:', e.message);
+  }
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 给 ledgers 表添加 group_id 字段
+    await conn.execute(`ALTER TABLE ledgers ADD COLUMN group_id INT NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerGroupsTable] 添加 group_id 字段失败:', e.message);
+    }
+  }
+  _ledgerGroupsMigrated = true;
+  console.log('[ensureLedgerGroupsTable] 账本分组迁移完成');
+}
+ensureLedgerGroupsTable().catch(console.error);
+
+/**
+ * 获取用户的所有账本分组
+ */
+export async function getLedgerGroups(userId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT id, user_id as userId, name, sort_order as sortOrder, created_at as createdAt
+     FROM ledger_groups WHERE user_id = ? ORDER BY sort_order ASC, id ASC`,
+    [userId]
+  ) as any[];
+  return (rows as any[]) || [];
+}
+
+/**
+ * 创建账本分组
+ */
+export async function createLedgerGroup(userId: number, name: string) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 获取当前最大 sort_order
+  const [maxRows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) as maxOrder FROM ledger_groups WHERE user_id = ?`,
+    [userId]
+  ) as any[];
+  const maxOrder = Number((maxRows as any[])[0]?.maxOrder ?? -1);
+  const [result] = await conn.execute(
+    `INSERT INTO ledger_groups (user_id, name, sort_order) VALUES (?, ?, ?)`,
+    [userId, name, maxOrder + 1]
+  ) as any[];
+  return { id: (result as any).insertId, name, sortOrder: maxOrder + 1 };
+}
+
+/**
+ * 更新账本分组名称
+ */
+export async function updateLedgerGroup(userId: number, groupId: number, name: string) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  await conn.execute(
+    `UPDATE ledger_groups SET name = ? WHERE id = ? AND user_id = ?`,
+    [name, groupId, userId]
+  );
+  return { success: true };
+}
+
+/**
+ * 删除账本分组（账本移出分组，不删除账本）
+ */
+export async function deleteLedgerGroup(userId: number, groupId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 先将该分组下的所有账本的 group_id 置为 NULL
+  await conn.execute(
+    `UPDATE ledgers SET group_id = NULL WHERE group_id = ?`,
+    [groupId]
+  );
+  // 删除分组
+  await conn.execute(
+    `DELETE FROM ledger_groups WHERE id = ? AND user_id = ?`,
+    [groupId, userId]
+  );
+  return { success: true };
+}
+
+/**
+ * 将账本归入/移出分组
+ * groupId 为 null 时表示移出分组
+ */
+export async function assignLedgerToGroup(userId: number, ledgerId: number, groupId: number | null) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 验证分组属于该用户
+  if (groupId !== null) {
+    const [groupRows] = await conn.execute(
+      `SELECT id FROM ledger_groups WHERE id = ? AND user_id = ?`,
+      [groupId, userId]
+    ) as any[];
+    if (!(groupRows as any[]).length) throw new Error('分组不存在或无权限');
+  }
+  // 验证账本属于该用户（是成员）
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库连接失败');
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (!member.length) throw new Error('账本不存在或无权限');
+  // 更新 group_id
+  await conn.execute(
+    `UPDATE ledgers SET group_id = ? WHERE id = ?`,
+    [groupId, ledgerId]
+  );
+  return { success: true };
+}
+
+/**
+ * 获取用户账本列表（含分组信息）
+ */
+export async function getLedgerGroupsWithLedgers(userId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) return { groups: [], ungroupedLedgerIds: [] };
+  // 获取所有分组
+  const [groupRows] = await conn.execute(
+    `SELECT id, name, sort_order as sortOrder FROM ledger_groups WHERE user_id = ? ORDER BY sort_order ASC, id ASC`,
+    [userId]
+  ) as any[];
+  const groups = (groupRows as any[]) || [];
+  // 获取每个账本的 group_id（只获取该用户参与的账本）
+  const [ledgerGroupRows] = await conn.execute(
+    `SELECT l.id as ledgerId, l.group_id as groupId
+     FROM ledgers l
+     INNER JOIN ledger_members lm ON l.id = lm.ledgerId AND lm.userId = ?
+     WHERE l.is_archived = 0`,
+    [userId]
+  ) as any[];
+  const ledgerGroupMap: Record<number, number | null> = {};
+  for (const row of (ledgerGroupRows as any[])) {
+    ledgerGroupMap[row.ledgerId] = row.groupId ?? null;
+  }
+  return { groups, ledgerGroupMap };
+}
