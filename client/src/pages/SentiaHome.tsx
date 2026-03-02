@@ -35,12 +35,12 @@ const T = {
     navWhitepaper: "Whitepaper",
     navPrivateSale: "Private Sale",
     navSwitchLang: "切换中文",
-    badge: "PRIVATE SALE · LIVE",
+    networkBadge: "MAINNET · BNB CHAIN",
     heroSub: "SNT Protocol",
     heroTitle: "Decentralized AI Intelligence Layer",
     heroSubtitle: "for the Next-Generation Web3 Ecosystem",
     heroDesc: "Sentia bridges on-chain consensus with federated AI inference, enabling verifiable, permissionless intelligence across distributed networks.",
-    heroCta1: "Join Private Sale",
+    heroCta1: "Explore Features",
     heroCta2: "Explore Architecture",
     heroWhitepaper: "Read Technical Whitepaper",
     statsSupply: "Total Supply",
@@ -113,12 +113,12 @@ const T = {
     navWhitepaper: "白皮书",
     navPrivateSale: "私募认购",
     navSwitchLang: "Switch to English",
-    badge: "私募认购 · 进行中",
+    networkBadge: "主网 · BNB Chain",
     heroSub: "SNT 协议",
     heroTitle: "去中心化 AI 智能层",
     heroSubtitle: "面向下一代 Web3 生态系统",
     heroDesc: "Sentia 将链上共识与联邦 AI 推理相结合，在分布式网络中实现可验证、无需许可的智能计算。",
-    heroCta1: "参与私募认购",
+    heroCta1: "探索功能",
     heroCta2: "探索架构",
     heroWhitepaper: "阅读技术白皮书",
     statsSupply: "总供应量",
@@ -386,16 +386,12 @@ export default function SentiaHome() {
           <button
             onClick={() => navigate("/sentia/buy")}
             style={{
-              background: C.amber,
-              border: "none", borderRadius: 4, padding: "6px 14px",
-              color: "#080B10", fontWeight: 700, fontSize: 12, cursor: "pointer",
+              background: "transparent",
+              border: `1px solid ${C.amberBorder}`, borderRadius: 4, padding: "6px 14px",
+              color: C.amber, fontWeight: 600, fontSize: 12, cursor: "pointer",
               letterSpacing: 0.3,
-              display: "flex", alignItems: "center", gap: 5,
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-            </svg>
             {t.navBuy}
           </button>
         </div>
@@ -409,16 +405,16 @@ export default function SentiaHome() {
         textAlign: "center",
       }}>
         <div style={{ maxWidth: 580, margin: "0 auto" }}>
-          {/* Badge */}
+          {/* Network Badge */}
           <div style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            background: C.amberDim,
-            border: `1px solid ${C.amberBorder}`,
+            background: "rgba(34,197,94,0.08)",
+            border: "1px solid rgba(34,197,94,0.22)",
             borderRadius: 20, padding: "4px 14px", marginBottom: 24,
-            fontSize: 10, color: C.amber, letterSpacing: 1.8, fontWeight: 600,
+            fontSize: 10, color: C.green, letterSpacing: 1.8, fontWeight: 600,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, display: "inline-block" }} />
-            {t.badge}
+            {t.networkBadge}
           </div>
 
           {/* Logo + Name */}
@@ -444,7 +440,10 @@ export default function SentiaHome() {
           {/* CTA Buttons */}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button
-              onClick={() => navigate("/sentia/buy")}
+              onClick={() => {
+                const el = document.getElementById("features");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }}
               style={{
                 background: C.amber,
                 border: "none", borderRadius: 4, padding: "11px 22px",
