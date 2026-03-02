@@ -36,18 +36,69 @@ function getCurrencyInfo(code: string) {
   return CURRENCIES.find(c => c.code === code) || { code, name: code, flag: "💱" };
 }
 
+// 单个货币行组件，独立查询
+function CurrencyRateRow({
+  currency,
+  fromCurrency,
+  isSelected,
+  onClick,
+}: {
+  currency: typeof CURRENCIES[0];
+  fromCurrency: string;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const { data, isLoading } = trpc.exchange.getRate.useQuery(
+    { fromcoin: fromCurrency, tocoin: currency.code, money: 1 },
+    { staleTime: 5 * 60 * 1000, enabled: currency.code !== fromCurrency }
+  );
+  const rate = data?.success ? parseFloat(data.money) : null;
+
+  return (
+    <div
+      onClick={onClick}
+      className={`flex items-center justify-between py-2.5 px-2 -mx-2 rounded-xl cursor-pointer transition-colors ${
+        isSelected ? "bg-red-50" : "active:bg-gray-50"
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="text-base">{currency.flag}</span>
+        <div>
+          <div className={`text-sm font-medium ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
+            {currency.code}
+          </div>
+          <div className="text-xs text-gray-400">{currency.name}</div>
+        </div>
+      </div>
+      <div className="text-right">
+        {isLoading ? (
+          <div className="w-12 h-4 bg-gray-100 rounded animate-pulse" />
+        ) : rate !== null ? (
+          <div className={`text-sm font-semibold ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
+            {fmt(rate)}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-300">—</div>
+        )}
+        {isSelected && <div className="text-xs text-[#C0392B]">已选中</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function ExchangeRate() {
   const [fromCurrency, setFromCurrency] = useState("CNY");
   const [toCurrency, setToCurrency] = useState("USD");
   const [amount, setAmount] = useState("100");
   const [showPicker, setShowPicker] = useState<"from" | "to" | null>(null);
 
-  const { data, isLoading, refetch } = trpc.exchange.getRates.useQuery(
-    { base: fromCurrency },
-    { staleTime: 5 * 60 * 1000 }
+  // 主汇率查询（当前选中的货币对）
+  const { data: rateData, isLoading, refetch } = trpc.exchange.getRate.useQuery(
+    { fromcoin: fromCurrency, tocoin: toCurrency, money: 1 },
+    { staleTime: 5 * 60 * 1000, enabled: fromCurrency !== toCurrency }
   );
 
-  const rate = data?.rates?.[toCurrency] ?? null;
+  const rate = rateData?.success ? parseFloat(rateData.money) : null;
   const result = rate !== null && amount ? parseFloat(amount) * rate : null;
   const fromInfo = getCurrencyInfo(fromCurrency);
   const toInfo = getCurrencyInfo(toCurrency);
@@ -84,7 +135,7 @@ export default function ExchangeRate() {
               <TrendingUp className="w-4 h-4 text-[#C0392B]" />
               <span className="text-sm text-gray-500 font-medium">实时汇率</span>
             </div>
-            <span className="text-xs text-gray-400">天行数据 · {data?.lastUpdated || dateStr}</span>
+            <span className="text-xs text-gray-400">天行数据 · {dateStr}</span>
           </div>
           <div className="text-center py-1">
             {isLoading ? (
@@ -113,12 +164,10 @@ export default function ExchangeRate() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowPicker("from")}
-                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 active:bg-gray-100"
-                style={{ minWidth: 0, flexShrink: 0 }}
+                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 active:bg-gray-100 flex-shrink-0"
               >
                 <span className="text-lg leading-none">{fromInfo.flag}</span>
                 <span className="text-sm font-bold text-[#222]">{fromInfo.code}</span>
-                <span className="text-xs text-gray-400 hidden sm:inline">{fromInfo.name}</span>
               </button>
               <input
                 type="number"
@@ -136,7 +185,7 @@ export default function ExchangeRate() {
             <div className="flex-1 h-px bg-gray-100" />
             <button
               onClick={handleSwap}
-              className="w-9 h-9 bg-[#C0392B] rounded-full flex items-center justify-center shadow active:scale-95 transition-transform"
+              className="w-9 h-9 bg-[#C0392B] rounded-full flex items-center justify-center shadow active:scale-95 transition-transform flex-shrink-0"
             >
               <ArrowLeftRight className="w-4 h-4 text-white" strokeWidth={2.5} />
             </button>
@@ -149,17 +198,19 @@ export default function ExchangeRate() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowPicker("to")}
-                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 active:bg-gray-100"
-                style={{ minWidth: 0, flexShrink: 0 }}
+                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 active:bg-gray-100 flex-shrink-0"
               >
                 <span className="text-lg leading-none">{toInfo.flag}</span>
                 <span className="text-sm font-bold text-[#222]">{toInfo.code}</span>
-                <span className="text-xs text-gray-400 hidden sm:inline">{toInfo.name}</span>
               </button>
               <div className="flex-1 text-right">
-                <span className="text-2xl font-bold text-[#C0392B]">
-                  {result !== null && !isNaN(result) ? fmt(result) : "—"}
-                </span>
+                {isLoading ? (
+                  <div className="w-24 h-8 bg-gray-100 rounded animate-pulse ml-auto" />
+                ) : (
+                  <span className="text-2xl font-bold text-[#C0392B]">
+                    {result !== null && !isNaN(result) ? fmt(result) : "—"}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -194,35 +245,15 @@ export default function ExchangeRate() {
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="text-sm font-medium text-gray-500 mb-3">主要货币（基准：{fromCurrency}）</div>
           <div className="space-y-0">
-            {CURRENCIES.filter(c => c.code !== fromCurrency).map((currency) => {
-              const r = data?.rates?.[currency.code];
-              const isSelected = toCurrency === currency.code;
-              return (
-                <div
-                  key={currency.code}
-                  onClick={() => setToCurrency(currency.code)}
-                  className={`flex items-center justify-between py-2.5 px-2 -mx-2 rounded-xl cursor-pointer transition-colors ${
-                    isSelected ? "bg-red-50" : "active:bg-gray-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-base">{currency.flag}</span>
-                    <div>
-                      <div className={`text-sm font-medium ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
-                        {currency.code}
-                      </div>
-                      <div className="text-xs text-gray-400">{currency.name}</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-sm font-semibold ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
-                      {r !== undefined ? fmt(r) : <span className="text-gray-300">—</span>}
-                    </div>
-                    {isSelected && <div className="text-xs text-[#C0392B]">已选中</div>}
-                  </div>
-                </div>
-              );
-            })}
+            {CURRENCIES.filter(c => c.code !== fromCurrency).map((currency) => (
+              <CurrencyRateRow
+                key={currency.code}
+                currency={currency}
+                fromCurrency={fromCurrency}
+                isSelected={toCurrency === currency.code}
+                onClick={() => setToCurrency(currency.code)}
+              />
+            ))}
           </div>
         </div>
 
