@@ -397,41 +397,7 @@ export default function Home() {
 
 
 
-      {/* 专属祝福语 - 仅yunting可见 */}
-      {user?.username === 'yunting' && (
-        <div className="px-4 mt-3">
-          <div className="bg-gradient-to-r from-[#A80000] to-[#d44] rounded-2xl p-4 shadow-lg text-center">
-            <p className="text-white text-lg font-bold tracking-wider">
-              🎉 2026马上发财 🎉
-            </p>
-            <p className="text-white/80 text-xs mt-1">祝蓬女士财源滚滚、大吉大利</p>
-          </div>
-        </div>
-      )}
 
-      {/* 专属祝福语 - 仅vesen可见 */}
-      {user?.username === 'vesen' && (
-        <div className="px-4 mt-3">
-          <div className="bg-gradient-to-r from-[#A80000] to-[#d44] rounded-2xl p-4 shadow-lg text-center">
-            <p className="text-white text-lg font-bold tracking-wider">
-              🎉 老周，新年快乐！🎉
-            </p>
-            <p className="text-white/80 text-xs mt-1">祝您新的一年万事如意、财源广进</p>
-          </div>
-        </div>
-      )}
-
-      {/* 专属祝福语 - 仅liulifan可见 */}
-      {user?.username === 'liulifan' && (
-        <div className="px-4 mt-3">
-          <div className="bg-gradient-to-r from-[#A80000] to-[#d44] rounded-2xl p-4 shadow-lg text-center">
-            <p className="text-white text-lg font-bold tracking-wider">
-              🧧 丽凡，新年快乐！🧧
-            </p>
-            <p className="text-white/80 text-xs mt-1">愿新的一年，万事顺遂、阖家幸福、事业蒸蒸日上</p>
-          </div>
-        </div>
-      )}
 
       {/* Bottom Navigation */}
       <BottomNav />
