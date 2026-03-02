@@ -1,9 +1,48 @@
 import { useLocation, useParams } from 'wouter';
 import { useState } from 'react';
 import { trpc } from '../lib/trpc';
-import { Plus, Users, Share } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
 import { Card, CardContent } from "@/components/ui/card";
+
+// 15个成长动作定义
+const GROWTH_ACTIONS = [
+  { id: 'avatar',    label: '添加头像' },
+  { id: 'email',     label: '绑定邮箱' },
+  { id: 'bank',      label: '绑定银行' },
+  { id: 'alipay',    label: '绑定支付宝' },
+  { id: 'wechat',    label: '绑定微信' },
+  { id: 'crypto',    label: '绑定数字币' },
+  { id: 'contact',   label: '添加人脉' },
+  { id: 'ledger',    label: '新建账本' },
+  { id: 'record',    label: '添加账目' },
+  { id: 'joinbook',  label: '加入账本' },
+  { id: 'share',     label: '共享人脉' },
+  { id: 'interact',  label: '增加联络' },
+  { id: 'tag',       label: '增加标签' },
+  { id: 'referrer',  label: '增加推荐人' },
+  { id: 'invite',    label: '邀请用户' },
+];
+
+/**
+ * 根据成员数据推断哪些动作已完成
+ * 实际项目中应由后端返回 completedActions 字段
+ */
+function inferCompletedActions(member: any): Set<string> {
+  const done = new Set<string>();
+  if (member.avatar) done.add('avatar');
+  if (member.email) done.add('email');
+  // 以下根据统计数字推断
+  if ((member.ownContactsCount || 0) > 0) done.add('contact');
+  if ((member.ledgerCount || 0) > 0) done.add('ledger');
+  if ((member.recordCount || 0) > 0) done.add('record');
+  if ((member.sharedContactsCount || 0) > 0) done.add('share');
+  if ((member.interactionsCount || 0) > 0) done.add('interact');
+  if ((member.tagsCount || 0) > 0) done.add('tag');
+  // 如果账本数 > 1，推断加入了别人账本
+  if ((member.ledgerCount || 0) > 1) done.add('joinbook');
+  return done;
+}
 
 export default function WorkGroupMembers() {
   const [, setLocation] = useLocation();
@@ -29,7 +68,6 @@ export default function WorkGroupMembers() {
 
   // 渲染工作群标签 - 兼容对象格式和数字格式
   const renderWorkGroupBadge = (group: any, index: number) => {
-    // API返回的是对象 {id, name}
     if (typeof group === 'object' && group !== null) {
       return (
         <span 
@@ -44,7 +82,6 @@ export default function WorkGroupMembers() {
         </span>
       );
     }
-    // 模拟数据是数字
     return (
       <span 
         key={index}
@@ -98,213 +135,129 @@ export default function WorkGroupMembers() {
             </CardContent>
           </Card>
         ) : (
-          members.map((member: any) => (
-            <Card 
-              key={member.id}
-              onClick={() => setLocation(`/work-group-member/${member.id}`)}
-              className="bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-md transition-shadow"
-            >
-              <CardContent className="p-3">
-                {/* 第一行：头像 + 基本信息（紧凑布局） */}
-                <div className="flex items-center gap-2.5 mb-2">
-                  {/* 头像 */}
-                  <div className="flex-shrink-0">
-                    {member.avatar ? (
-                      <img
-                        src={member.avatar}
-                        alt={member.name}
-                        className="w-11 h-11 rounded-full object-cover border-2"
-                        style={{ borderColor: 'color-mix(in srgb, var(--brand-red) 10%, transparent)' }}
-                      />
-                    ) : (
-                      <div 
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                        style={{ 
-                          background: 'linear-gradient(135deg, var(--brand-red-dark) 0%, var(--brand-red) 100%)' 
-                        }}
-                      >
-                        {(member.name || "?").charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+          members.map((member: any) => {
+            const completedActions = inferCompletedActions(member);
+            const completedCount = completedActions.size;
+            const totalCount = GROWTH_ACTIONS.length;
 
-                  {/* 基本信息 */}
-                  <div className="flex-1 min-w-0">
-                    {/* 姓名和工作群标签 */}
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <h3 
-                        className="font-semibold text-[15px]"
-                        style={{ color: 'var(--text-black)' }}
-                      >
-                        {member.name}
-                      </h3>
-                      {/* 工作群标签 */}
-                      {member.workGroups && member.workGroups.length > 0 && (
-                        <div className="flex gap-1 flex-wrap">
-                          {member.workGroups.map((group: any, index: number) => 
-                            renderWorkGroupBadge(group, index)
-                          )}
+            return (
+              <Card 
+                key={member.id}
+                onClick={() => setLocation(`/work-group-member/${member.id}`)}
+                className="bg-white/90 backdrop-blur-sm cursor-pointer hover:shadow-md transition-shadow"
+              >
+                <CardContent className="p-3">
+                  {/* 第一行：头像 + 基本信息 */}
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    {/* 头像 */}
+                    <div className="flex-shrink-0">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="w-11 h-11 rounded-full object-cover border-2"
+                          style={{ borderColor: 'color-mix(in srgb, var(--brand-red) 10%, transparent)' }}
+                        />
+                      ) : (
+                        <div 
+                          className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                          style={{ 
+                            background: 'linear-gradient(135deg, var(--brand-red-dark) 0%, var(--brand-red) 100%)' 
+                          }}
+                        >
+                          {(member.name || "?").charAt(0).toUpperCase()}
                         </div>
                       )}
                     </div>
 
-                    {/* 角色、邮箱、加入时间（一行显示） */}
-                    <div 
-                      className="text-[11px] flex items-center gap-1.5"
-                      style={{ color: 'var(--text-gray)' }}
-                    >
-                      <span>{member.role === 'admin' ? '管理员' : '成员'}</span>
-                      {member.email && (
-                        <>
-                          <span>·</span>
-                          <span className="truncate max-w-[120px]">{member.email}</span>
-                        </>
-                      )}
-                      <span>·</span>
-                      <span className="flex-shrink-0">
-                        {member.joinedAt ? member.joinedAt.split(' ')[0] : ''}
+                    {/* 基本信息 */}
+                    <div className="flex-1 min-w-0">
+                      {/* 姓名和工作群标签 */}
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <h3 
+                          className="font-semibold text-[15px]"
+                          style={{ color: 'var(--text-black)' }}
+                        >
+                          {member.name}
+                        </h3>
+                        {member.workGroups && member.workGroups.length > 0 && (
+                          <div className="flex gap-1 flex-wrap">
+                            {member.workGroups.map((group: any, index: number) => 
+                              renderWorkGroupBadge(group, index)
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 角色、邮箱、加入时间 */}
+                      <div 
+                        className="text-[11px] flex items-center gap-1.5"
+                        style={{ color: 'var(--text-gray)' }}
+                      >
+                        <span>{member.role === 'admin' ? '管理员' : '成员'}</span>
+                        {member.email && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate max-w-[120px]">{member.email}</span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <span className="flex-shrink-0">
+                          {member.joinedAt ? member.joinedAt.split(' ')[0] : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 右侧完成进度 */}
+                    <div className="flex-shrink-0 text-right">
+                      <span className="text-xs font-bold" style={{ color: 'var(--brand-red)' }}>
+                        {completedCount}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--text-gray)' }}>
+                        /{totalCount}
                       </span>
                     </div>
                   </div>
-                </div>
 
-                {/* 第二行：统计数据（紧凑的横向布局，7个徽章） */}
-                <div className="grid grid-cols-7 gap-1">
-                  {/* 我的 */}
-                  <div 
-                    className="flex flex-col items-center px-1.5 py-1 rounded"
-                    style={{ backgroundColor: 'var(--bg-cream)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <Users className="w-3 h-3" style={{ color: 'var(--status-link)' }} />
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>我的</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: 'var(--status-link)' }}
-                    >
-                      {member.ownContactsCount || 0}
-                    </span>
+                  {/* 第二行：15个成长动作流程链（绿点/红点） */}
+                  <div className="flex flex-wrap gap-x-1.5 gap-y-1.5">
+                    {GROWTH_ACTIONS.map((action, idx) => {
+                      const done = completedActions.has(action.id);
+                      return (
+                        <div key={action.id} className="flex items-center gap-0.5">
+                          {/* 连接线（非第一个） */}
+                          {idx > 0 && (
+                            <div 
+                              className="w-2 h-px flex-shrink-0"
+                              style={{ backgroundColor: done ? '#4CAF50' : '#E0E0E0' }}
+                            />
+                          )}
+                          {/* 动作节点 */}
+                          <div className="flex flex-col items-center">
+                            <div 
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: done ? '#4CAF50' : '#EF5350' }}
+                              title={action.label}
+                            />
+                            <span 
+                              className="text-[9px] leading-tight mt-0.5 text-center"
+                              style={{ 
+                                color: done ? '#4CAF50' : '#9E9E9E',
+                                maxWidth: '28px',
+                                wordBreak: 'break-all'
+                              }}
+                            >
+                              {action.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  {/* 共享 */}
-                  <div 
-                    className="flex flex-col items-center px-1.5 py-1 rounded"
-                    style={{ backgroundColor: 'color-mix(in srgb, var(--status-success) 10%, white)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <Share className="w-3 h-3" style={{ color: 'var(--status-success)' }} />
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>共享</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: 'var(--status-success)' }}
-                    >
-                      {member.sharedContactsCount || 0}
-                    </span>
-                  </div>
-
-                  {/* 全部 */}
-                  <div 
-                    className="flex flex-col items-center px-1.5 py-1 rounded"
-                    style={{ backgroundColor: 'var(--brand-red-light)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <Users className="w-3 h-3" style={{ color: 'var(--brand-red)' }} />
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>全部</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: 'var(--brand-red)' }}
-                    >
-                      {member.totalContactsCount || 0}
-                    </span>
-                  </div>
-                  
-                  {/* 标签数 */}
-                  <div 
-                    className="flex flex-col items-center px-1.5 py-1 rounded"
-                    style={{ backgroundColor: 'color-mix(in srgb, var(--brand-gold) 15%, white)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--brand-gold)' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>标签</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: 'var(--brand-gold)' }}
-                    >
-                      {member.tagsCount || 0}
-                    </span>
-                  </div>
-                  
-                  {/* 联络数 */}
-                  <div 
-                    className="flex flex-col items-center px-1 py-1 rounded"
-                    style={{ backgroundColor: 'var(--bg-cream)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--brand-gold)' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>联络</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: 'var(--brand-gold)' }}
-                    >
-                      {member.interactionsCount || 0}
-                    </span>
-                  </div>
-
-                  {/* 账本数 */}
-                  <div 
-                    className="flex flex-col items-center px-1 py-1 rounded"
-                    style={{ backgroundColor: 'color-mix(in srgb, #6366F1 10%, white)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#6366F1' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>账本</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: '#6366F1' }}
-                    >
-                      {member.ledgerCount || 0}
-                    </span>
-                  </div>
-
-                  {/* 账目数 */}
-                  <div 
-                    className="flex flex-col items-center px-1 py-1 rounded"
-                    style={{ backgroundColor: 'color-mix(in srgb, #0EA5E9 10%, white)' }}
-                  >
-                    <div className="flex items-center gap-0.5 mb-0.5">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: '#0EA5E9' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                      </svg>
-                      <span className="text-[10px]" style={{ color: 'var(--text-gray)' }}>账目</span>
-                    </div>
-                    <span 
-                      className="text-sm font-semibold leading-none"
-                      style={{ color: '#0EA5E9' }}
-                    >
-                      {member.recordCount || 0}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 预留扩展区域（可在此添加更多内容） */}
-                <div className="mt-2 min-h-[20px]">
-                  {/* 此处预留空间，可添加其他功能 */}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
 
