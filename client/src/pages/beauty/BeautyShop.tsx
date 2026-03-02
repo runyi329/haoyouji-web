@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { toast } from "sonner";
 import BeautyTabBar from "./BeautyTabBar";
+import BottomNav from "@/components/BottomNav";
 
 export default function BeautyShop() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
@@ -39,7 +40,7 @@ export default function BeautyShop() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-28">
       {/* 顶部 */}
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
@@ -130,6 +131,7 @@ export default function BeautyShop() {
           </div>
         )}
       </div>
+      <BottomNav />
     </div>
   );
 }
