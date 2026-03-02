@@ -6,8 +6,30 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Heart, Brain, ExternalLink, Loader2
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2
 } from "lucide-react";
+
+// 根据标题关键词自动匹配分类标签
+function getCategory(title: string): { label: string; color: string; bg: string } {
+  const t = title;
+  if (/美容|护肤|皮肤|面膜|抗衰|保湿|美白|祛斑|祛痘|胶原/.test(t))
+    return { label: "美容护肤", color: "text-rose-600", bg: "bg-rose-50" };
+  if (/减肥|瘦身|体重|卡路里|热量|塑形|燃脂/.test(t))
+    return { label: "减肥塑形", color: "text-orange-600", bg: "bg-orange-50" };
+  if (/饮食|食物|营养|蛋白质|维生素|膳食|吃|食谱|控糖|血糖/.test(t))
+    return { label: "饮食营养", color: "text-green-600", bg: "bg-green-50" };
+  if (/运动|锻炼|健身|瑜伽|跑步|步数|肌肉/.test(t))
+    return { label: "运动健身", color: "text-blue-600", bg: "bg-blue-50" };
+  if (/疫苗|接种|HPV|流感|病毒|感染|传染|中疾控|疾控/.test(t))
+    return { label: "疾病预防", color: "text-purple-600", bg: "bg-purple-50" };
+  if (/药|用药|治疗|医生|医院|手术|诊断|病/.test(t))
+    return { label: "医疗健康", color: "text-indigo-600", bg: "bg-indigo-50" };
+  if (/睡眠|失眠|熬夜|休息/.test(t))
+    return { label: "睡眠健康", color: "text-cyan-600", bg: "bg-cyan-50" };
+  if (/儿童|宝宝|婴儿|孩子|手足口/.test(t))
+    return { label: "儿童健康", color: "text-pink-600", bg: "bg-pink-50" };
+  return { label: "健康资讯", color: "text-gray-600", bg: "bg-gray-100" };
+}
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
@@ -164,34 +186,31 @@ export default function BeautyHome() {
             <div className="text-center py-4 text-gray-400 text-xs">暂无资讯</div>
           ) : (
             <div className="bg-white rounded-xl overflow-hidden border border-gray-100">
-              {healthNews.map((item, idx) => (
-                <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="block">
-                  <div className="flex items-center gap-3 px-3 py-2.5 active:bg-gray-50">
-                    <div className="flex-1 min-w-0">
+              {healthNews.map((item, idx) => {
+                const cat = getCategory(item.title);
+                return (
+                  <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="block">
+                    <div className="px-3 py-2.5 active:bg-gray-50">
+                      <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mb-1 ${cat.bg} ${cat.color}`}>
+                        {cat.label}
+                      </span>
                       <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{item.title}</h3>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {(item as any).source && <span className="text-xs text-gray-400">{(item as any).source}</span>}
-                        {(item as any).source && item.ctime && <span className="text-gray-300 text-xs">·</span>}
-                        {item.ctime && <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>}
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-1.5">
+                          {(item as any).source && <span className="text-xs text-gray-400">{(item as any).source}</span>}
+                          {(item as any).source && item.ctime && <span className="text-gray-300 text-xs">·</span>}
+                          {item.ctime && <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>}
+                        </div>
+                        <div className="flex items-center gap-0.5 text-rose-400">
+                          <ExternalLink className="w-3 h-3" />
+                          <span className="text-xs">查看原文</span>
+                        </div>
                       </div>
                     </div>
-                    {item.picUrl ? (
-                      <img
-                        src={item.picUrl}
-                        alt={item.title}
-                        className="rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                        style={{ width: '72px', height: '48px' }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0" style={{ width: '72px', height: '48px' }}>
-                        <Heart className="w-4 h-4 text-rose-200" />
-                      </div>
-                    )}
-                  </div>
-                  {idx < healthNews.length - 1 && <div className="mx-3 border-b border-gray-100" />}
-                </a>
-              ))}
+                    {idx < healthNews.length - 1 && <div className="mx-3 border-b border-gray-100" />}
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>
