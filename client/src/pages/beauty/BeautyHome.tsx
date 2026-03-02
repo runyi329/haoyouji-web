@@ -2,15 +2,27 @@
  * 奢贝美容院 - 首页
  * 路径: /beauty
  */
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Sparkles, MapPin, Clock, Train, Car, Calendar, Gift, ChevronRight, Star, Scissors
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Heart, Brain, ExternalLink, Loader2
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+import { useState, useEffect } from "react";
+
+const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
+
+interface HealthArticle {
+  id: number;
+  title: string;
+  description: string;
+  picUrl: string;
+  ctime: string;
+  url: string;
+}
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -33,6 +45,21 @@ export default function BeautyHome() {
 
   const promotions = promotionsQuery.data ?? [];
   const services = servicesQuery.data ?? [];
+
+  const [healthNews, setHealthNews] = useState<HealthArticle[]>([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`https://apis.tianapi.com/health/index?key=${TIANAPI_KEY}&num=3`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.code === 200 && data.result?.list) {
+          setHealthNews(data.result.list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setNewsLoading(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
@@ -64,21 +91,31 @@ export default function BeautyHome() {
               )}
             </div>
           </div>
-          {/* 快捷入口 */}
-          <div className="grid grid-cols-4 gap-2 mt-6">
-            {[
-              { icon: <Scissors className="w-5 h-5" />, label: "美容项目", href: "/beauty/services" },
-              { icon: <Calendar className="w-5 h-5" />, label: "立即预约", href: "/beauty/booking" },
-              { icon: <Gift className="w-5 h-5" />, label: "品牌商城", href: "/beauty/shop" },
-              { icon: <Star className="w-5 h-5" />, label: "我的预约", href: "/beauty/appointments" },
-            ].map((item) => (
-              <Link key={item.label} href={item.href}>
-                <div className="flex flex-col items-center gap-1.5 bg-white/20 rounded-xl py-3 px-1 hover:bg-white/30 transition-colors cursor-pointer">
-                  <div className="text-white">{item.icon}</div>
-                  <span className="text-white text-xs font-medium">{item.label}</span>
+
+          {/* 特色功能入口（替换原来4个重复快捷按钮） */}
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Link href="/beauty/health">
+              <div className="flex items-center gap-3 bg-white/20 rounded-2xl py-4 px-4 hover:bg-white/30 transition-colors cursor-pointer">
+                <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center flex-shrink-0">
+                  <Heart className="w-5 h-5 text-white" />
                 </div>
-              </Link>
-            ))}
+                <div>
+                  <p className="text-white font-semibold text-sm">健康资讯</p>
+                  <p className="text-white/70 text-xs mt-0.5">美容养生知识</p>
+                </div>
+              </div>
+            </Link>
+            <Link href="/beauty/ai-diet">
+              <div className="flex items-center gap-3 bg-white/20 rounded-2xl py-4 px-4 hover:bg-white/30 transition-colors cursor-pointer">
+                <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center flex-shrink-0">
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold text-sm">AI 减肥</p>
+                  <p className="text-white/70 text-xs mt-0.5">智能瘦身方案</p>
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
       </div>
@@ -135,6 +172,58 @@ export default function BeautyHome() {
           </div>
         )}
 
+        {/* 健康资讯预览 */}
+        <div>
+          <div className="flex items-center justify-between px-1 mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">健康美容资讯</h2>
+            <Link href="/beauty/health">
+              <span className="text-xs text-rose-500 flex items-center gap-0.5">查看更多 <ChevronRight className="w-3 h-3" /></span>
+            </Link>
+          </div>
+          {newsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 text-rose-300 animate-spin" />
+            </div>
+          ) : healthNews.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 text-xs">暂无资讯</div>
+          ) : (
+            <div className="space-y-2">
+              {healthNews.map((item) => (
+                <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer">
+                  <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                    <CardContent className="p-3">
+                      <div className="flex gap-3">
+                        {item.picUrl ? (
+                          <img
+                            src={item.picUrl}
+                            alt={item.title}
+                            className="w-20 h-16 rounded-lg object-cover flex-shrink-0 bg-rose-50"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-20 h-16 rounded-lg bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center flex-shrink-0">
+                            <Heart className="w-6 h-6 text-rose-300" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{item.title}</h3>
+                          {item.description && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</p>
+                          )}
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <ExternalLink className="w-3 h-3 text-rose-400" />
+                            <span className="text-xs text-rose-400">查看原文</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* 门店信息 */}
         <Card className="border-0 shadow-md">
           <CardContent className="p-0">
@@ -190,7 +279,6 @@ export default function BeautyHome() {
           </CardContent>
         </Card>
       </div>
-
 
       <BottomNav />
     </div>
