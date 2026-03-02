@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput } from "lucide-react";
+import { Crown, Notebook, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, TrendingUp } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -416,16 +416,15 @@ export default function Ledger() {
           </Link>
           <h1 className="flex-1 text-lg font-medium text-center text-[#222222]">共享账本</h1>
           <div className="flex items-center gap-1">
-            {/* 分组管理按钮 */}
-            {activeTab === "active" && (
+            {/* 汇率计算器按钮 */}
+            <Link href="/exchange-rate">
               <button
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="管理分组"
-                onClick={() => setShowGroupManageDialog(true)}
+                title="汇率计算器"
               >
-                <FolderPlus className="w-5 h-5 text-[#222222]" strokeWidth={2} />
+                <TrendingUp className="w-5 h-5 text-[#222222]" strokeWidth={2} />
               </button>
-            )}
+            </Link>
             {/* 说明书按钮 */}
             <Link href="/ledger/guide">
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="功能说明书">
