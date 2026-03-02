@@ -50,8 +50,14 @@ export default function BeautyHome() {
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/40">
-                <Sparkles className="w-7 h-7 text-white" />
+              <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.username ?? ''} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white text-xl font-bold">
+                    {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
+                  </span>
+                )}
               </div>
               {user?.username && (
                 <span className="text-white/50 text-[10px] tracking-wide select-none">{user.username}</span>
