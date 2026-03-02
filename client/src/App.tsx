@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect } from "react";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ColorThemeProvider } from "./contexts/ColorThemeContext";
@@ -174,10 +175,28 @@ function LoadingFallback() {
 }
 
 function Router() {
+  const [location, setLocation] = useLocation();
+  const { data: user, isLoading } = trpc.auth.me.useQuery();
+
+  useEffect(() => {
+    if (isLoading) return;
+    // liulifan 打开网站时（路径为 /）自动跳到奢贝首页
+    // 点人脉按鈕进入 / 时，sessionStorage 里有 _from_nav 标记，不会跳转
+    if (user?.username === 'liulifan' && location === '/') {
+      const fromNav = sessionStorage.getItem('_from_nav');
+      if (!fromNav) {
+        setLocation('/beauty');
+      } else {
+        // 清除标记，下次刷新还能再次跳转
+        sessionStorage.removeItem('_from_nav');
+      }
+    }
+  }, [user, isLoading, location]);
+
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        {/* 首页 - liulifan自动重定向到奢贝，其他用户显示人脉首页 */}
+        {/* 首页 - / 路由永远是人脉页面 */}
         <Route path="/" component={lazy(() => import("./pages/HomeEntry"))} />
         {/* 脉动Dashboard */}        <Route path="/login" component={Login} />
         <Route path="/privacy-policy" component={PrivacyPolicy} />
