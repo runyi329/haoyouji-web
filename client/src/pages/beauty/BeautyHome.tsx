@@ -201,10 +201,7 @@ export default function BeautyHome() {
                           {(item as any).source && item.ctime && <span className="text-gray-300 text-xs">·</span>}
                           {item.ctime && <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>}
                         </div>
-                        <div className="flex items-center gap-0.5 text-rose-400">
-                          <ExternalLink className="w-3 h-3" />
-                          <span className="text-xs">查看原文</span>
-                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-rose-400" />
                       </div>
                     </div>
                     {idx < healthNews.length - 1 && <div className="mx-3 border-b border-gray-100" />}
