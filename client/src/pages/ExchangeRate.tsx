@@ -85,10 +85,10 @@ export default function ExchangeRate() {
   const otherCurrencies = CURRENCIES.filter(c => c.code !== fromCurrency);
 
   return (
-    <div className="min-h-screen" style={{ background: "#F2F2F7" }}>
+    <div className="flex flex-col" style={{ height: "100dvh", background: "#F2F2F7", overflow: "hidden" }}>
 
-      {/* 顶部红色区域（顶盖） */}
-      <div style={{ background: "linear-gradient(135deg, #C0392B 0%, #96281B 100%)" }}>
+      {/* 顶部红色区域（固定不动） */}
+      <div style={{ background: "linear-gradient(135deg, #C0392B 0%, #96281B 100%)", flexShrink: 0 }}>
         {/* 导航栏 */}
         <div className="px-4 pt-3 pb-2 flex items-center">
           <Link href="/ledger">
@@ -139,8 +139,8 @@ export default function ExchangeRate() {
         </div>
       </div>
 
-      {/* 货币列表 */}
-      <div className="px-3 pt-3 pb-6">
+      {/* 货币列表（可滚动） */}
+      <div className="px-3 pt-3 pb-6 overflow-y-auto" style={{ flex: 1, WebkitOverflowScrolling: "touch" }}>
         <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 8px rgba(0,0,0,0.06)" }}>
           {isLoading ? (
             <div>
