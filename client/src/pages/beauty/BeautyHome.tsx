@@ -6,10 +6,10 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Sparkles, MapPin, Clock, Train, Car, Phone, Calendar, Gift, User, Home as HomeIcon, ChevronRight, Star, Scissors
+  Sparkles, MapPin, Clock, Train, Car, Calendar, Gift, ChevronRight, Star, Scissors
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import BeautyTabBar from "./BeautyTabBar";
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -69,6 +69,11 @@ export default function BeautyHome() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* 顶部 Tab 栏 */}
+      <div className="sticky top-0 z-10">
+        <BeautyTabBar />
       </div>
 
       <div className="px-4 py-4 space-y-4">
@@ -174,24 +179,7 @@ export default function BeautyHome() {
         </Card>
       </div>
 
-      {/* 底部导航 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
-        <div className="grid grid-cols-4 h-14">
-          {[
-            { icon: <HomeIcon className="w-5 h-5" />, label: "首页", href: "/beauty" },
-            { icon: <Gift className="w-5 h-5" />, label: "品牌", href: "/beauty/shop" },
-            { icon: <Calendar className="w-5 h-5" />, label: "预约", href: "/beauty/booking" },
-            { icon: <User className="w-5 h-5" />, label: "我的", href: "/beauty/appointments" },
-          ].map((item) => (
-            <Link key={item.label} href={item.href}>
-              <button className="flex flex-col items-center justify-center h-full w-full text-gray-400 hover:text-rose-500 transition-colors">
-                {item.icon}
-                <span className="text-xs mt-0.5">{item.label}</span>
-              </button>
-            </Link>
-          ))}
-        </div>
-      </nav>
+
     </div>
   );
 }
