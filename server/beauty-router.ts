@@ -468,9 +468,9 @@ export const beautyRouter = router({
         });
         try {
           const res = await fetch(`https://apis.tianapi.com/health/index?${params}`);
-          const data = await res.json() as { code: number; result?: { list: Array<{ id: number; title: string; description: string; picUrl: string; ctime: string; url: string }> } };
-          if (data.code === 200 && data.result?.list) {
-            return data.result.list;
+          const data = await res.json() as { code: number; result?: { newslist: Array<{ id: string; title: string; description: string; picUrl: string; ctime: string; url: string; source?: string }> } };
+          if (data.code === 200 && data.result?.newslist) {
+            return data.result.newslist;
           }
           return [];
         } catch {

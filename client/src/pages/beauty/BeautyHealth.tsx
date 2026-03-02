@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 export default function BeautyHealth() {
   const [page, setPage] = useState(1);
   const [allArticles, setAllArticles] = useState<Array<{
-    id: number; title: string; description: string; picUrl: string; ctime: string; url: string;
+    id: string; title: string; description: string; picUrl: string; ctime: string; url: string; source?: string;
   }>>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
