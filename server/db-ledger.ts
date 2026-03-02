@@ -3691,53 +3691,62 @@ export async function deleteApprovalRule(ruleId: number, userId: number) {
  * 检查记账是否需要审批
  */
 export async function checkNeedApproval(ledgerId: number, recorderId: number) {
-  const db = await getLedgerDb();
-  const { ledgerApprovalRules } = await import("../drizzle/schema.js");
-  
-  // 查找特殊规则（recorderId 匹配）
-  const specificRule = await db
-    .select()
-    .from(ledgerApprovalRules)
-    .where(
-      and(
-        eq(ledgerApprovalRules.ledgerId, ledgerId),
-        eq(ledgerApprovalRules.recorderId, recorderId),
-        eq(ledgerApprovalRules.isEnabled, 1)
+  try {
+    const db = await getLedgerDb();
+    const { ledgerApprovalRules } = await import("../drizzle/schema.js");
+    
+    // 查找特殊规则（recorderId 匹配）
+    const specificRule = await db
+      .select()
+      .from(ledgerApprovalRules)
+      .where(
+        and(
+          eq(ledgerApprovalRules.ledgerId, ledgerId),
+          eq(ledgerApprovalRules.recorderId, recorderId),
+          eq(ledgerApprovalRules.isEnabled, 1)
+        )
       )
-    )
-    .limit(1);
-  
-  if (specificRule.length > 0) {
+      .limit(1);
+    
+    if (specificRule.length > 0) {
+      return {
+        needApproval: true,
+        rule: specificRule[0],
+      };
+    }
+    
+    // 查找默认规则（recorderId 为 null）
+    const defaultRule = await db
+      .select()
+      .from(ledgerApprovalRules)
+      .where(
+        and(
+          eq(ledgerApprovalRules.ledgerId, ledgerId),
+          isNull(ledgerApprovalRules.recorderId),
+          eq(ledgerApprovalRules.isEnabled, 1)
+        )
+      )
+      .limit(1);
+    
+    if (defaultRule.length > 0) {
+      return {
+        needApproval: true,
+        rule: defaultRule[0],
+      };
+    }
+    
     return {
-      needApproval: true,
-      rule: specificRule[0],
+      needApproval: false,
+      rule: null,
+    };
+  } catch (err) {
+    // 审批规则表可能尚未创建，跳过审批检查
+    console.warn('[checkNeedApproval] 审批规则表不可用，跳过审批检查:', (err as Error).message);
+    return {
+      needApproval: false,
+      rule: null,
     };
   }
-  
-  // 查找默认规则（recorderId 为 null）
-  const defaultRule = await db
-    .select()
-    .from(ledgerApprovalRules)
-    .where(
-      and(
-        eq(ledgerApprovalRules.ledgerId, ledgerId),
-        isNull(ledgerApprovalRules.recorderId),
-        eq(ledgerApprovalRules.isEnabled, 1)
-      )
-    )
-    .limit(1);
-  
-  if (defaultRule.length > 0) {
-    return {
-      needApproval: true,
-      rule: defaultRule[0],
-    };
-  }
-  
-  return {
-    needApproval: false,
-    rule: null,
-  };
 }
 
 /**
