@@ -453,4 +453,29 @@ export const beautyRouter = router({
         return { success: true };
       }),
   }),
+
+  // ===== 健康资讯（天行数据代理）=====
+  health: router({
+    news: publicProcedure
+      .input(z.object({ num: z.number().min(1).max(50).default(10), page: z.number().min(1).default(1), word: z.string().optional() }))
+      .query(async ({ input }) => {
+        const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
+        const params = new URLSearchParams({
+          key: TIANAPI_KEY,
+          num: String(input.num),
+          page: String(input.page),
+          ...(input.word ? { word: input.word } : {}),
+        });
+        try {
+          const res = await fetch(`https://apis.tianapi.com/health/index?${params}`);
+          const data = await res.json() as { code: number; result?: { list: Array<{ id: number; title: string; description: string; picUrl: string; ctime: string; url: string }> } };
+          if (data.code === 200 && data.result?.list) {
+            return data.result.list;
+          }
+          return [];
+        } catch {
+          return [];
+        }
+      }),
+  }),
 });
