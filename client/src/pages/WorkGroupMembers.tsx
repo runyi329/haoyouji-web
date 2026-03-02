@@ -16,7 +16,6 @@ const MILESTONES = [
 
 function inferCompleted(member: any): Set<string> {
   const done = new Set<string>();
-  // 直接使用后端返回的真实字段
   if (member.hasProfile)      done.add('profile');
   if (member.hasContact)      done.add('contact');
   if (member.hasShareContact) done.add('share');
