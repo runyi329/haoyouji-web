@@ -3,7 +3,7 @@
  * 路径: /beauty/health
  * 风格参考：今日头条 / 网易新闻 资讯列表
  */
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, RefreshCw, Loader2 } from "lucide-react";
 import BeautyTabBar from "./BeautyTabBar";
@@ -21,32 +21,37 @@ type Article = {
 };
 
 export default function BeautyHealth() {
-  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [allArticles, setAllArticles] = useState<Article[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const { isLoading, refetch } = trpc.beauty.health.news.useQuery(
+  const { data, isLoading } = trpc.beauty.health.news.useQuery(
     { num: 10, page: 1 },
-    {
-      onSuccess: (list) => {
-        setAllArticles(list as Article[]);
-        setHasMore(list.length >= 10);
-        setPage(1);
-      },
-    }
+    { queryKey: ["beauty.health.news", refreshKey] as any }
   );
 
-  const handleRefresh = useCallback(() => {
+  // 首次加载数据同步到 allArticles
+  useEffect(() => {
+    if (data && data.length > 0) {
+      setAllArticles(data as Article[]);
+      setHasMore(data.length >= 10);
+      setCurrentPage(1);
+    }
+  }, [data]);
+
+  const handleRefresh = () => {
     setAllArticles([]);
     setHasMore(true);
-    refetch();
-  }, [refetch]);
+    setCurrentPage(1);
+    setRefreshKey(k => k + 1);
+  };
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    const nextPage = page + 1;
+    const nextPage = currentPage + 1;
     try {
       const input = encodeURIComponent(JSON.stringify({ "0": { json: { num: 10, page: nextPage } } }));
       const res = await fetch(`/api/trpc/beauty.health.news?batch=1&input=${input}`);
@@ -54,7 +59,7 @@ export default function BeautyHealth() {
       const list: Article[] = json?.[0]?.result?.data ?? [];
       if (list.length > 0) {
         setAllArticles(prev => [...prev, ...list]);
-        setPage(nextPage);
+        setCurrentPage(nextPage);
         if (list.length < 10) setHasMore(false);
       } else {
         setHasMore(false);
@@ -109,19 +114,18 @@ export default function BeautyHealth() {
               rel="noopener noreferrer"
               className="block"
             >
-              {/* 每条资讯：参考今日头条布局 */}
-              <div className="flex items-start gap-3 px-4 py-3 active:bg-gray-50">
+              <div className="flex items-center gap-3 px-4 py-3 active:bg-gray-50">
                 {/* 左侧：标题 + 来源+时间 */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between" style={{ minHeight: '64px' }}>
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <h3 className="text-sm font-medium text-gray-900 leading-snug line-clamp-2">
                     {item.title}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex items-center gap-1.5">
                     {item.source && (
                       <span className="text-xs text-gray-400">{item.source}</span>
                     )}
                     {item.source && item.ctime && (
-                      <span className="text-gray-200 text-xs">·</span>
+                      <span className="text-gray-300 text-xs">·</span>
                     )}
                     {item.ctime && (
                       <span className="text-xs text-gray-400">{item.ctime.slice(0, 10)}</span>
@@ -136,16 +140,16 @@ export default function BeautyHealth() {
                     alt={item.title}
                     className="w-20 h-14 rounded-lg object-cover flex-shrink-0 bg-gray-100"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.querySelector('.fallback-img')!.classList.remove('hidden');
+                      (e.target as HTMLImageElement).classList.add('hidden');
                     }}
                   />
                 ) : (
                   <div className="w-20 h-14 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
-                    <span className="text-rose-200 text-2xl">♡</span>
+                    <span className="text-rose-200 text-xl">♡</span>
                   </div>
                 )}
               </div>
-              {/* 分割线 */}
               {idx < articles.length - 1 && (
                 <div className="mx-4 border-b border-gray-100" />
               )}
@@ -153,7 +157,7 @@ export default function BeautyHealth() {
           ))}
 
           {/* 加载更多 */}
-          <div className="py-4 text-center">
+          <div className="py-5 text-center">
             {loadingMore ? (
               <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
