@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, RefreshCw, ArrowLeftRight, TrendingUp } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 
 const CURRENCIES = [
   { code: "CNY", name: "人民币", flag: "🇨🇳" },
@@ -36,54 +35,28 @@ function getCurrencyInfo(code: string) {
   return CURRENCIES.find(c => c.code === code) || { code, name: code, flag: "💱" };
 }
 
-// 单个货币行组件，独立查询
-function CurrencyRateRow({
-  currency,
-  fromCurrency,
-  isSelected,
-  onClick,
-}: {
-  currency: typeof CURRENCIES[0];
-  fromCurrency: string;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  const { data, isLoading } = trpc.exchange.getRate.useQuery(
-    { fromcoin: fromCurrency, tocoin: currency.code, money: 1 },
-    { staleTime: 5 * 60 * 1000, enabled: currency.code !== fromCurrency }
-  );
-  const rate = data?.success ? parseFloat(data.money) : null;
+// 缓存：避免重复请求同一基准货币
+const ratesCache: Record<string, { rates: Record<string, number>; lastUpdated: string; fetchedAt: number }> = {};
 
-  return (
-    <div
-      onClick={onClick}
-      className={`flex items-center justify-between py-2.5 px-2 -mx-2 rounded-xl cursor-pointer transition-colors ${
-        isSelected ? "bg-red-50" : "active:bg-gray-50"
-      }`}
-    >
-      <div className="flex items-center gap-2.5">
-        <span className="text-base">{currency.flag}</span>
-        <div>
-          <div className={`text-sm font-medium ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
-            {currency.code}
-          </div>
-          <div className="text-xs text-gray-400">{currency.name}</div>
-        </div>
-      </div>
-      <div className="text-right">
-        {isLoading ? (
-          <div className="w-12 h-4 bg-gray-100 rounded animate-pulse" />
-        ) : rate !== null ? (
-          <div className={`text-sm font-semibold ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
-            {fmt(rate)}
-          </div>
-        ) : (
-          <div className="text-sm text-gray-300">—</div>
-        )}
-        {isSelected && <div className="text-xs text-[#C0392B]">已选中</div>}
-      </div>
-    </div>
-  );
+async function fetchRates(base: string): Promise<{ rates: Record<string, number>; lastUpdated: string } | null> {
+  // 5分钟内使用缓存
+  const cached = ratesCache[base];
+  if (cached && Date.now() - cached.fetchedAt < 5 * 60 * 1000) {
+    return { rates: cached.rates, lastUpdated: cached.lastUpdated };
+  }
+  try {
+    const resp = await fetch(`https://open.er-api.com/v6/latest/${base}`);
+    const data = await resp.json();
+    if (data.result === "success") {
+      const d = new Date(data.time_last_update_utc);
+      const lastUpdated = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+      ratesCache[base] = { rates: data.rates, lastUpdated, fetchedAt: Date.now() };
+      return { rates: data.rates, lastUpdated };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export default function ExchangeRate() {
@@ -91,14 +64,27 @@ export default function ExchangeRate() {
   const [toCurrency, setToCurrency] = useState("USD");
   const [amount, setAmount] = useState("100");
   const [showPicker, setShowPicker] = useState<"from" | "to" | null>(null);
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 主汇率查询（当前选中的货币对）
-  const { data: rateData, isLoading, refetch } = trpc.exchange.getRate.useQuery(
-    { fromcoin: fromCurrency, tocoin: toCurrency, money: 1 },
-    { staleTime: 5 * 60 * 1000, enabled: fromCurrency !== toCurrency }
-  );
+  const loadRates = async (base: string) => {
+    setIsLoading(true);
+    const result = await fetchRates(base);
+    if (result) {
+      setRates(result.rates);
+      setLastUpdated(result.lastUpdated);
+    } else {
+      setRates({});
+    }
+    setIsLoading(false);
+  };
 
-  const rate = rateData?.success ? parseFloat(rateData.money) : null;
+  useEffect(() => {
+    loadRates(fromCurrency);
+  }, [fromCurrency]);
+
+  const rate = rates[toCurrency] ?? null;
   const result = rate !== null && amount ? parseFloat(amount) * rate : null;
   const fromInfo = getCurrencyInfo(fromCurrency);
   const toInfo = getCurrencyInfo(toCurrency);
@@ -109,7 +95,7 @@ export default function ExchangeRate() {
   };
 
   const today = new Date();
-  const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
+  const dateStr = lastUpdated || `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -121,7 +107,7 @@ export default function ExchangeRate() {
           </button>
         </Link>
         <h1 className="flex-1 text-base font-semibold text-center text-[#222]">汇率计算器</h1>
-        <button onClick={() => refetch()} className="p-2 -mr-2 hover:bg-gray-100 rounded-lg">
+        <button onClick={() => loadRates(fromCurrency)} className="p-2 -mr-2 hover:bg-gray-100 rounded-lg">
           <RefreshCw className={`w-5 h-5 text-[#222] ${isLoading ? "animate-spin" : ""}`} strokeWidth={2} />
         </button>
       </div>
@@ -135,7 +121,7 @@ export default function ExchangeRate() {
               <TrendingUp className="w-4 h-4 text-[#C0392B]" />
               <span className="text-sm text-gray-500 font-medium">实时汇率</span>
             </div>
-            <span className="text-xs text-gray-400">天行数据 · {dateStr}</span>
+            <span className="text-xs text-gray-400">每日更新 · {dateStr}</span>
           </div>
           <div className="text-center py-1">
             {isLoading ? (
@@ -158,7 +144,6 @@ export default function ExchangeRate() {
 
         {/* 金额换算 */}
         <div className="bg-white rounded-2xl p-4 shadow-sm">
-          {/* 源货币行 */}
           <div className="mb-4">
             <div className="text-xs text-gray-400 mb-1.5">从</div>
             <div className="flex items-center gap-2">
@@ -180,7 +165,6 @@ export default function ExchangeRate() {
             </div>
           </div>
 
-          {/* 互换按钮 */}
           <div className="flex items-center gap-3 mb-4">
             <div className="flex-1 h-px bg-gray-100" />
             <button
@@ -192,7 +176,6 @@ export default function ExchangeRate() {
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
-          {/* 目标货币行 */}
           <div>
             <div className="text-xs text-gray-400 mb-1.5">到</div>
             <div className="flex items-center gap-2">
@@ -245,20 +228,46 @@ export default function ExchangeRate() {
         <div className="bg-white rounded-2xl p-4 shadow-sm">
           <div className="text-sm font-medium text-gray-500 mb-3">主要货币（基准：{fromCurrency}）</div>
           <div className="space-y-0">
-            {CURRENCIES.filter(c => c.code !== fromCurrency).map((currency) => (
-              <CurrencyRateRow
-                key={currency.code}
-                currency={currency}
-                fromCurrency={fromCurrency}
-                isSelected={toCurrency === currency.code}
-                onClick={() => setToCurrency(currency.code)}
-              />
-            ))}
+            {CURRENCIES.filter(c => c.code !== fromCurrency).map((currency) => {
+              const r = rates[currency.code];
+              const isSelected = toCurrency === currency.code;
+              return (
+                <div
+                  key={currency.code}
+                  onClick={() => setToCurrency(currency.code)}
+                  className={`flex items-center justify-between py-2.5 px-2 -mx-2 rounded-xl cursor-pointer transition-colors ${
+                    isSelected ? "bg-red-50" : "active:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base">{currency.flag}</span>
+                    <div>
+                      <div className={`text-sm font-medium ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
+                        {currency.code}
+                      </div>
+                      <div className="text-xs text-gray-400">{currency.name}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {isLoading ? (
+                      <div className="w-12 h-4 bg-gray-100 rounded animate-pulse" />
+                    ) : r !== undefined ? (
+                      <div className={`text-sm font-semibold ${isSelected ? "text-[#C0392B]" : "text-[#222]"}`}>
+                        {fmt(r)}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-300">—</div>
+                    )}
+                    {isSelected && <div className="text-xs text-[#C0392B]">已选中</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         <div className="text-center text-xs text-gray-400 pb-4">
-          汇率数据来源于天行数据，每日更新，仅供参考
+          汇率数据每日更新，仅供参考
         </div>
       </div>
 
