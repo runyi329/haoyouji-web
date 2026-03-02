@@ -189,19 +189,11 @@ export default function WorkGroupMembers() {
                         )}
                       </div>
 
-                      {/* 角色、邮箱、加入时间 */}
+                      {/* 加入时间 */}
                       <div 
                         className="text-[11px] flex items-center gap-1.5"
                         style={{ color: 'var(--text-gray)' }}
                       >
-                        <span>{member.role === 'admin' ? '管理员' : '成员'}</span>
-                        {member.email && (
-                          <>
-                            <span>·</span>
-                            <span className="truncate max-w-[120px]">{member.email}</span>
-                          </>
-                        )}
-                        <span>·</span>
                         <span className="flex-shrink-0">
                           {member.joinedAt ? member.joinedAt.split(' ')[0] : ''}
                         </span>
