@@ -65,13 +65,13 @@ export const dietRouter = router({
       userId: z.number(),
       studentName: z.string().optional(),
       gender: z.enum(['male', 'female']).optional(),
-      height: z.number().positive().optional(),
+      height: z.number().positive().nullable().optional(),
       initialWeight: z.number().positive(),
       targetWeight: z.number().positive(),
       startDate: z.string().optional(),
-      chest: z.number().positive().optional(),
-      waist: z.number().positive().optional(),
-      hip: z.number().positive().optional(),
+      chest: z.number().positive().nullable().optional(),
+      waist: z.number().positive().nullable().optional(),
+      hip: z.number().positive().nullable().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
