@@ -348,16 +348,45 @@ export default function TransactionDetail() {
       <div className="bg-white px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-lg text-gray-900">
-            {transaction.category}
+            {(() => {
+              const desc = transaction.description || '';
+              const isDiet = desc.startsWith('[diet:');
+              if (isDiet) {
+                const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+                const type = m ? m[1] : '';
+                const unit = m ? m[2].split(':')[0] : '';
+                // 清洗 emoji
+                const cleanName = (transaction.category || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\s]+/gu, '').trim();
+                // 如果分类名已包含单位（如「胸围/cm」）则只取斜杠前的名称
+                if (cleanName.includes('/')) return cleanName.split('/')[0];
+                return cleanName;
+              }
+              return transaction.category;
+            })()}
             {transaction.subcategory && `–${transaction.subcategory}`}
           </span>
-          {(transaction as any).unit && (
-            <span className="text-sm text-gray-400">{(transaction as any).unit}</span>
-          )}
+          {/* 单位显示在分类名右侧 */}
+          {(() => {
+            const desc = transaction.description || '';
+            if (!desc.startsWith('[diet:')) return null;
+            const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+            const type = m ? m[1] : '';
+            const unit = m ? m[2].split(':')[0] : '';
+            const unitMap: Record<string, string> = { weight: '斤', bmi: '', calorie: 'kcal', measurement: 'cm' };
+            const u = unit || unitMap[type] || '';
+            return u ? <span className="text-sm text-gray-400">{u}</span> : null;
+          })()}
         </div>
         <div className="text-right">
           <div className="text-3xl font-medium text-gray-900">
-            {transaction.amount}
+            {/* 三围数据去除小数点 */}
+            {(() => {
+              const desc = transaction.description || '';
+              const isMeasurement = desc.startsWith('[diet:measurement:');
+              const num = Number(transaction.amount);
+              if (isMeasurement && !isNaN(num)) return Math.round(num).toString();
+              return transaction.amount;
+            })()}
           </div>
         </div>
       </div>
