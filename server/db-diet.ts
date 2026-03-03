@@ -407,3 +407,42 @@ export async function getDietStats(ledgerId: number, userId: number) {
     startWeight: config?.initialWeight ? Number(config.initialWeight) : (weights.length > 0 ? Number(weights[0].weight) : null),
   };
 }
+
+// ========== 减肥分类辅助（确保账本存在对应分类，返回categoryId） ==========
+const _dietCategoryCache: Record<string, number> = {};
+
+export async function ensureDietCategory(
+  ledgerId: number,
+  userId: number,
+  name: string,
+  icon: string,
+  color: string
+): Promise<number> {
+  const cacheKey = `${ledgerId}:${name}`;
+  if (_dietCategoryCache[cacheKey]) return _dietCategoryCache[cacheKey];
+
+  const db = await getLedgerDb();
+  if (!db) throw new Error("DB connection failed");
+
+  // 查找是否已存在同名分类
+  const existing = await db.execute(sql`
+    SELECT id FROM ledger_categories
+    WHERE ledgerId = ${ledgerId} AND name = ${name}
+    LIMIT 1
+  `);
+  const rows = (existing as any)[0] as any[];
+  if (rows && rows.length > 0) {
+    const id = Number(rows[0].id);
+    _dietCategoryCache[cacheKey] = id;
+    return id;
+  }
+
+  // 不存在则创建
+  const result = await db.execute(sql`
+    INSERT INTO ledger_categories (ledgerId, name, type, icon, color, isDefault, createdBy, sortOrder)
+    VALUES (${ledgerId}, ${name}, 'expense', ${icon}, ${color}, 0, ${userId}, 99)
+  `);
+  const newId = Number((result as any)[0]?.insertId || 0);
+  if (newId > 0) _dietCategoryCache[cacheKey] = newId;
+  return newId;
+}

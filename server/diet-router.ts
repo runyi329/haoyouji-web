@@ -116,7 +116,7 @@ export const dietRouter = router({
       recordDate: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return await dbDiet.addWeightRecord({
+      const result = await dbDiet.addWeightRecord({
         ledgerId: input.ledgerId,
         userId: ctx.user.id,
         weight: input.weight,
@@ -125,6 +125,24 @@ export const dietRouter = router({
         note: input.note,
         recordDate: input.recordDate,
       });
+      // 同步写入账目条目（金额0，用于在账本列表中展示打卡记录）
+      try {
+        const unit = input.weightUnit === 'kg' ? 'kg' : '斤';
+        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '体重打卡', '⚖️', '#E53935');
+        await dbLedger.addTransaction({
+          ledgerId: input.ledgerId,
+          userId: ctx.user.id,
+          type: 'expense',
+          amount: 0,
+          categoryId,
+          description: `体重打卡：${input.weight}${unit}${input.note ? ' · ' + input.note : ''}`,
+          imageUrl: input.imageUrl,
+          transactionDate: input.recordDate,
+        });
+      } catch (e) {
+        console.error('[diet.addWeight] 同步账目条目失败:', e);
+      }
+      return result;
     }),
 
   addMeasurement: protectedProcedure
@@ -142,7 +160,7 @@ export const dietRouter = router({
       recordDate: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return await dbDiet.addMeasurementRecord({
+      const result = await dbDiet.addMeasurementRecord({
         ledgerId: input.ledgerId,
         userId: ctx.user.id,
         measureType: input.measureType,
@@ -156,6 +174,25 @@ export const dietRouter = router({
         note: input.note,
         recordDate: input.recordDate,
       });
+      // 同步写入账目条目
+      try {
+        if (input.measureType === 'bmi') {
+          const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, 'BMI指标', '📊', '#1D4ED8');
+          const desc = `BMI指标：${input.bmi ?? ''}（身高${input.height}cm / 体重${input.weight}kg）${input.note ? ' · ' + input.note : ''}`;
+          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+        } else {
+          const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '三围记录', '📏', '#7C3AED');
+          const parts = [];
+          if (input.chest) parts.push(`胸${input.chest}cm`);
+          if (input.waist) parts.push(`腾${input.waist}cm`);
+          if (input.hip) parts.push(`臀${input.hip}cm`);
+          const desc = `三围记录：${parts.join(' / ')}${input.note ? ' · ' + input.note : ''}`;
+          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+        }
+      } catch (e) {
+        console.error('[diet.addMeasurement] 同步账目条目失败:', e);
+      }
+      return result;
     }),
 
   getMeasurementHistory: protectedProcedure
@@ -187,7 +224,7 @@ export const dietRouter = router({
       recordDate: z.string(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return await dbDiet.addCalorieRecord({
+      const result = await dbDiet.addCalorieRecord({
         ledgerId: input.ledgerId,
         userId: ctx.user.id,
         calories: input.calories,
@@ -195,6 +232,16 @@ export const dietRouter = router({
         note: input.note,
         recordDate: input.recordDate,
       });
+      // 同步写入账目条目
+      try {
+        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '卡路里消耗', '🔥', '#EA580C');
+        const actStr = input.activityType ? `《${input.activityType}》 ` : '';
+        const desc = `卡路里消耗：${actStr}${input.calories}kcal${input.note ? ' · ' + input.note : ''}`;
+        await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, transactionDate: input.recordDate });
+      } catch (e) {
+        console.error('[diet.addCalorie] 同步账目条目失败:', e);
+      }
+      return result;
     }),
 
   getCalorieHistory: protectedProcedure
