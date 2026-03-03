@@ -149,11 +149,12 @@ export default function Home() {
       utils.auth.me.invalidate();
       if (isLiulifan) utils.contacts.overviewStats.invalidate();
     };
-    // pageshow: 微信浏览器点×返回时会从 bfcache 恢复页面，pageshow 事件会触发
+    // pageshow: 微信浏览器点×返回时会从 bfcache 恢复页面，
+    // bfcache 恢复时 React 状态和 QueryClient 缓存都被冻结，invalidate 无效，
+    // 必须用 window.location.reload() 强制重新加载整个页面
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
-        // 从 bfcache 恢复，强制刷新所有数据
-        refreshAllData();
+        window.location.reload();
       }
     };
     // visibilitychange: 作为补充，处理标签页切换等场景
