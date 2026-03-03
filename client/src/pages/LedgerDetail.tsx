@@ -16,9 +16,6 @@ import {
   Search,
   Receipt,
   Hourglass,
-  Scale,
-  Flame,
-  Brain,
   Users,
   TrendingDown,
 } from "lucide-react";
@@ -88,7 +85,6 @@ export default function LedgerDetail() {
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   // 减肥账本：快捷操作弹窗
-  const [showDietMenu, setShowDietMenu] = useState(false);
 
   // 减肥账本数据
   const isDiet = (ledgerData as any)?.type === 'diet';
@@ -573,10 +569,8 @@ export default function LedgerDetail() {
 
       {/* 固定底部中间的添加账目按钮 */}
       {isDiet ? (
-        <>
-          {/* 减肥账本：点击弹出三个选项 */}
           <button
-            onClick={() => setShowDietMenu(true)}
+            onClick={() => setLocation(`/ledger/${ledgerId}/diet-checkin`)}
             className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
             style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
           >
@@ -585,45 +579,6 @@ export default function LedgerDetail() {
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
-          {/* 减肥快捷操作弹窗 */}
-          {showDietMenu && (
-            <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowDietMenu(false)}>
-              <div className="w-full bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
-                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
-                <div className="text-sm font-medium text-gray-500 mb-3 text-center">选择打卡类型</div>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-add?type=weight`); }}
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-rose-50 active:scale-95 transition-transform"
-                  >
-                    <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center">
-                      <Scale className="w-6 h-6 text-rose-500" />
-                    </div>
-                    <span className="text-xs text-gray-700 font-medium">体重打卡</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-add?type=calorie`); }}
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-orange-50 active:scale-95 transition-transform"
-                  >
-                    <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Flame className="w-6 h-6 text-orange-500" />
-                    </div>
-                    <span className="text-xs text-gray-700 font-medium">记录消耗</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-meal`); }}
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-purple-50 active:scale-95 transition-transform"
-                  >
-                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                      <Brain className="w-6 h-6 text-purple-500" />
-                    </div>
-                    <span className="text-xs text-gray-700 font-medium">AI营养师</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
       ) : (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
