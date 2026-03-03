@@ -215,7 +215,7 @@ export default function DietMeal() {
     <div className="min-h-screen bg-[#FFF5F5] pb-8">
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-purple-500 to-pink-400 text-white px-3 py-3 flex items-center">
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/diet`)} className="p-1 -ml-1">
+        <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="flex-1 text-center text-base font-semibold pr-6">AI 营养师</h1>

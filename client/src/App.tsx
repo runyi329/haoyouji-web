@@ -118,7 +118,6 @@ const LedgerAdminManagement = lazy(() => import("./pages/LedgerAdminManagement")
 const LedgerReport = lazy(() => import("./pages/LedgerReport"));
 const LedgerCalendar = lazy(() => import("./pages/LedgerCalendar"));
 const LedgerImages = lazy(() => import("./pages/LedgerImages"));
-const DietLedger = lazy(() => import("./pages/DietLedger"));
 const DietAdd = lazy(() => import("./pages/DietAdd"));
 const DietConfig = lazy(() => import("./pages/DietConfig"));
 const DietMeal = lazy(() => import("./pages/DietMeal"));
@@ -312,7 +311,6 @@ function Router() {
         <Route path="/ledger/:id/deleted-records" component={DeletedRecords} />
         <Route path="/ledger/:ledgerId/transaction/:transactionId" component={TransactionDetail} />
         <Route path="/ledger/:ledgerId/transaction/:transactionId/logs" component={RecordLogs} />
-        <Route path="/ledger/:id/diet" component={DietLedger} />
         <Route path="/ledger/:id/diet-add" component={DietAdd} />
         <Route path="/ledger/:id/diet-config" component={DietConfig} />
         <Route path="/ledger/:id/diet-meal" component={DietMeal} />

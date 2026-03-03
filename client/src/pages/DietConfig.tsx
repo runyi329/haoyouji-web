@@ -31,7 +31,7 @@ export default function DietConfig() {
   const saveMutation = trpc.diet.saveConfig.useMutation({
     onSuccess: () => {
       toast.success("目标设置成功！");
-      setLocation(`/ledger/${ledgerId}/diet`);
+      setLocation(`/ledger/${ledgerId}`);
     },
     onError: (e) => toast.error("保存失败：" + e.message),
   });
@@ -57,7 +57,7 @@ export default function DietConfig() {
     <div className="min-h-screen bg-[#FFF5F5]">
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-rose-500 to-pink-400 text-white px-3 py-3 flex items-center">
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/diet`)} className="p-1 -ml-1">
+        <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="flex-1 text-center text-base font-semibold pr-6">设置减肥目标</h1>
