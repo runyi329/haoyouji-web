@@ -339,8 +339,7 @@ export default function TransactionDetail() {
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>日志</span>
           <span>成员 {transaction.member?.nickname || transaction.member?.username || '未知'}</span>
-          <span>添加</span>
-          <span>账目</span>
+          <span>添加数据</span>
         </div>
         <ChevronRight className="w-5 h-5 text-gray-400" />
       </div>
@@ -355,11 +354,13 @@ export default function TransactionDetail() {
           </span>
         </div>
         <div className="text-right">
-          <div className="text-xs text-gray-500 mb-1">
-            {transaction.type === "expense" ? "支出" : "收入"}
-          </div>
-          <div className="text-3xl font-medium text-gray-900">
-            {transaction.amount}
+          <div className="flex items-baseline gap-1.5">
+            <div className="text-3xl font-medium text-gray-900">
+              {transaction.amount}
+            </div>
+            {(transaction as any).unit && (
+              <span className="text-sm text-gray-500">{(transaction as any).unit}</span>
+            )}
           </div>
         </div>
       </div>
@@ -368,7 +369,7 @@ export default function TransactionDetail() {
       <div className="bg-white mt-3">
         <DetailItem label="账户" value="现金" />
         <DetailItem
-          label={transaction.type === 'expense' ? "支出人" : "收入人"}
+          label="登记人"
           rightContent={
             <div className="flex items-center gap-2">
               {transaction.member?.avatar ? (
@@ -435,7 +436,7 @@ export default function TransactionDetail() {
 
         {transaction.images && transaction.images.length > 0 ? (
           <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
-            <span className="text-xs text-gray-500">凭证图片</span>
+            <span className="text-xs text-gray-500">图片</span>
             <div className="flex-1 flex flex-wrap justify-end gap-2">
               {transaction.images.map((imageUrl: string, index: number) => (
                 <img
@@ -458,7 +459,7 @@ export default function TransactionDetail() {
             </div>
           </div>
         ) : (
-          <DetailItem label="凭证图片" value="未上传" />
+          <DetailItem label="图片" value="未上传" />
         )}
       </div>
 
@@ -480,12 +481,8 @@ export default function TransactionDetail() {
           }
         />
         <DetailItem label="添加时间" value={transaction.createdAt} />
-        <DetailItem label="添加来源" value="手动记账" />
-        <DetailItem 
-          label="入账状态" 
-          value={getApprovalStatusText()}
-          highlight={transaction.approvalStatus === 'pending'}
-        />
+        <DetailItem label="添加来源" value="手动输入" />
+
         <DetailItem
           label="修改记录"
           rightContent={
@@ -530,27 +527,19 @@ export default function TransactionDetail() {
 
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
-          {/* 申请报销按钮 - 只在未报销状态显示 */}
-          {displayStatus === 'none' && (
-            <button 
-              onClick={() => setShowReimbursementForm(true)}
-              className="w-full py-3 bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white rounded-lg font-medium text-base transition-colors"
-            >
-              申请报销
-            </button>
-          )}
+
           <button 
             onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
             className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
           >
-            修改账目
+            修改数据
           </button>
           <button 
             onClick={() => setShowDeleteDialog(true)}
             className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
             style={{ backgroundColor: themeColors.primary }}
           >
-            删除账目
+            删除数据
           </button>
         </div>
       )}
