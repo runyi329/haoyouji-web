@@ -126,6 +126,44 @@ export async function saveMemberConfig(ledgerId: number, userId: number, config:
   `);
 }
 
+// 设置成员档案（完整版）
+export async function setMemberConfig(ledgerId: number, userId: number, config: any) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("DB connection failed");
+  await ensureDietTables();
+  const existing = await getMemberConfig(ledgerId, userId);
+  if (existing) {
+    await db.execute(sql`
+      UPDATE diet_member_config SET
+        nickname = ${config.studentName ?? existing.nickname},
+        gender = ${config.gender ?? existing.gender},
+        height = ${config.height ?? existing.height},
+        initialWeight = ${config.initialWeight},
+        targetWeight = ${config.targetWeight},
+        currentWeight = ${config.initialWeight}
+      WHERE ledgerId = ${ledgerId} AND userId = ${userId}
+    `);
+  } else {
+    await db.execute(sql`
+      INSERT INTO diet_member_config (ledgerId, userId, nickname, gender, height, initialWeight, targetWeight, currentWeight)
+      VALUES (${ledgerId}, ${userId}, ${config.studentName ?? null}, ${config.gender ?? 'female'}, ${config.height ?? null}, ${config.initialWeight}, ${config.targetWeight}, ${config.initialWeight})
+    `);
+  }
+}
+
+// 获取指定学员的完整档案
+export async function getMemberFullConfig(ledgerId: number, userId: number) {
+  const config = await getMemberConfig(ledgerId, userId);
+  if (!config) return null;
+  let bmi = null;
+  if (config.height && config.initialWeight) {
+    const heightM = Number(config.height) / 100;
+    const weightKg = Number(config.initialWeight) * 0.5;
+    bmi = Number((weightKg / (heightM * heightM)).toFixed(1));
+  }
+  return { ...config, bmi };
+}
+
 // 获取账本内所有学员的档案（教练用）
 export async function getAllMemberConfigs(ledgerId: number) {
   const db = await getLedgerDb();
