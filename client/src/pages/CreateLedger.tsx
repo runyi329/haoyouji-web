@@ -90,11 +90,7 @@ export default function CreateLedger() {
 
   const handleSkip = () => {
     if (createdLedgerId) {
-      if (isDiet) {
-        setLocation(`/ledger/${createdLedgerId}/diet`);
-      } else {
-        setLocation(`/ledger/${createdLedgerId}`);
-      }
+      setLocation(`/ledger/${createdLedgerId}`);
     } else {
       setLocation("/ledger");
     }
