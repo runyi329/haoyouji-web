@@ -93,11 +93,12 @@ export default function LedgerAdminManagement() {
     );
   }
 
+  const isDiet = (ledgerData as any).type === 'diet';
   // 只有owner可以访问此页面
   if (ledgerData.userRole !== 'owner') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">只有账本所有者可以管理管理员</div>
+        <div className="text-gray-500">{isDiet ? '只有账本创建人可以管理教练' : '只有账本所有者可以管理管理员'}</div>
       </div>
     );
   }
@@ -114,7 +115,7 @@ export default function LedgerAdminManagement() {
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="text-lg font-medium text-gray-900">
-            账本管理员管理
+            {isDiet ? '减肥教练管理' : '账本管理员管理'}
           </h1>
           <div className="w-10"></div>
         </div>
@@ -123,7 +124,7 @@ export default function LedgerAdminManagement() {
       {/* 说明文字 */}
       <div className="bg-[#F5F5F5] border-l-4 border-blue-400 p-4 mt-3 mx-4 rounded-r-lg">
         <p className="text-sm text-blue-700">
-          管理员可以管理报销、审批账目等，但不能删除账本或封存账本。
+          {isDiet ? '减肥教练可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本。' : '管理员可以管理报销、审批账目等，但不能删除账本或封存账本。'}
         </p>
       </div>
 
@@ -177,7 +178,7 @@ export default function LedgerAdminManagement() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">管理员</SelectItem>
+                      <SelectItem value="admin">{isDiet ? '减肥教练' : '管理员'}</SelectItem>
                       <SelectItem value="member">普通成员</SelectItem>
                     </SelectContent>
                   </Select>
@@ -212,8 +213,8 @@ export default function LedgerAdminManagement() {
             <div className="text-gray-600">拥有所有权限，包括删除账本、封存账本、设置管理员等</div>
           </div>
           <div>
-            <div className="font-medium text-gray-900 mb-1">管理员</div>
-            <div className="text-gray-600">可以管理报销、审批账目、管理分类等，但不能删除账本或封存账本</div>
+            <div className="font-medium text-gray-900 mb-1">{isDiet ? '减肥教练' : '管理员'}</div>
+            <div className="text-gray-600">{isDiet ? '可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本' : '可以管理报销、审批账目、管理分类等，但不能删除账本或封存账本'}</div>
           </div>
           <div>
             <div className="font-medium text-gray-900 mb-1">普通成员</div>

@@ -16,6 +16,11 @@ import {
   Search,
   Receipt,
   Hourglass,
+  Scale,
+  Flame,
+  Brain,
+  Users,
+  TrendingDown,
 } from "lucide-react";
 
 export default function LedgerDetail() {
@@ -82,6 +87,26 @@ export default function LedgerDetail() {
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
+  // 减肥账本：快捷操作弹窗
+  const [showDietMenu, setShowDietMenu] = useState(false);
+
+  // 减肥账本数据
+  const isDiet = (ledgerData as any)?.type === 'diet';
+  const isOwner = (ledgerData as any)?.userRole === 'owner';
+  const isAdmin = (ledgerData as any)?.userRole === 'admin';
+  const isDietCoach = isDiet && (isOwner || isAdmin);
+  const { data: dietStats } = trpc.diet.getStats.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isDiet }
+  );
+  const dietConfig = (dietStats as any)?.config;
+  const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
+  const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
+  const dietCurrentWeight = (dietStats as any)?.currentWeight ?? dietInitialWeight;
+  const dietLostWeight = (dietInitialWeight && dietCurrentWeight) ? Math.max(0, dietInitialWeight - dietCurrentWeight) : 0;
+  const dietNeedToLose = (dietInitialWeight && dietTargetWeight) ? (dietInitialWeight - dietTargetWeight) : 0;
+  const dietProgress = dietNeedToLose > 0 ? Math.min(100, Math.round((dietLostWeight / dietNeedToLose) * 100)) : 0;
+  const dietTotalCalories = Number((dietStats as any)?.totalCaloriesBurned ?? 0);
   
   // 统计周期状态（从 localStorage 读取上次的选择，默认为 'month'）
   const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>(() => {
@@ -246,6 +271,16 @@ export default function LedgerDetail() {
           
           {/* 功能按钮（靠右） */}
           <div className="flex items-center gap-2">
+            {/* 减肥账本教练：学员管理按钮 */}
+            {isDietCoach && (
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                style={{ backgroundColor: '#FFFFFF' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/diet-members`)}
+              >
+                <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
+              </div>
+            )}
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
               style={{ backgroundColor: '#FFFFFF' }}
@@ -253,25 +288,64 @@ export default function LedgerDetail() {
             >
               <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
             </div>
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: '#FFFFFF' }}
-              onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-            >
-              <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
-            </div>
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: '#FFFFFF' }}
-              onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-            >
-              <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
-            </div>
+            {!isDiet && (
+              <>
+                <div 
+                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                  style={{ backgroundColor: '#FFFFFF' }}
+                  onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+                >
+                  <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                </div>
+                <div 
+                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                  style={{ backgroundColor: '#FFFFFF' }}
+                  onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
+                >
+                  <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* 统计区域 */}
         <div className="px-4 pt-2 relative">
+          {/* 减肥账本：显示减肥进度面板 */}
+          {isDiet ? (
+            <div>
+              {dietConfig ? (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-center">
+                      <div className="text-xs opacity-80">初始体重</div>
+                      <div className="text-base font-semibold">{dietInitialWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs opacity-80">当前体重</div>
+                      <div className="text-xl font-bold">{dietCurrentWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs opacity-80">目标体重</div>
+                      <div className="text-base font-semibold">{dietTargetWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
+                    </div>
+                  </div>
+                  <div className="bg-white/30 rounded-full h-2 mb-1">
+                    <div className="bg-white rounded-full h-2 transition-all" style={{ width: `${dietProgress}%` }} />
+                  </div>
+                  <div className="flex justify-between text-xs opacity-80">
+                    <span>已减 {dietLostWeight > 0 ? dietLostWeight.toFixed(1) : 0} 斤</span>
+                    <span>{dietProgress}%</span>
+                    <span>消耗 {dietTotalCalories.toLocaleString()} kcal</span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-2 opacity-80">
+                  <div className="text-sm">{isDietCoach ? '在学员管理中为成员设置减肥档案' : '等待教练设置你的减肥档案'}</div>
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="relative">
               <div className="text-xs opacity-90 flex items-center justify-center gap-1">
@@ -356,6 +430,7 @@ export default function LedgerDetail() {
               <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -476,16 +551,70 @@ export default function LedgerDetail() {
       </div>
 
       {/* 固定底部中间的添加账目按钮 */}
-      <button
-        onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
-        style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
+      {isDiet ? (
+        <>
+          {/* 减肥账本：点击弹出三个选项 */}
+          <button
+            onClick={() => setShowDietMenu(true)}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+            style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          {/* 减肥快捷操作弹窗 */}
+          {showDietMenu && (
+            <div className="fixed inset-0 z-50 flex items-end" onClick={() => setShowDietMenu(false)}>
+              <div className="w-full bg-white rounded-t-2xl shadow-xl p-4 pb-8" onClick={e => e.stopPropagation()}>
+                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
+                <div className="text-sm font-medium text-gray-500 mb-3 text-center">选择打卡类型</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-add?type=weight`); }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-rose-50 active:scale-95 transition-transform"
+                  >
+                    <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center">
+                      <Scale className="w-6 h-6 text-rose-500" />
+                    </div>
+                    <span className="text-xs text-gray-700 font-medium">体重打卡</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-add?type=calorie`); }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-orange-50 active:scale-95 transition-transform"
+                  >
+                    <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                      <Flame className="w-6 h-6 text-orange-500" />
+                    </div>
+                    <span className="text-xs text-gray-700 font-medium">记录消耗</span>
+                  </button>
+                  <button
+                    onClick={() => { setShowDietMenu(false); setLocation(`/ledger/${ledgerId}/diet-meal`); }}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-purple-50 active:scale-95 transition-transform"
+                  >
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                      <Brain className="w-6 h-6 text-purple-500" />
+                    </div>
+                    <span className="text-xs text-gray-700 font-medium">AI营养师</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+          style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      )}
 
       {/* 成员列表弹窗 */}
       {membersData && (
