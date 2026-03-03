@@ -131,7 +131,7 @@ export default function DietMembers() {
       {/* 顶部导航 */}
       <div className="text-white px-3 py-2.5 flex items-center sticky top-0 z-10"
         style={{ backgroundColor: 'var(--brand-red, #D32F2F)' }}>
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/diet`)} className="p-1 -ml-1">
+        <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="flex-1 text-center text-base font-medium pr-6">学员管理</h1>

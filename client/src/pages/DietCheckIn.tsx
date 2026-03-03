@@ -71,15 +71,15 @@ export default function DietCheckIn() {
 
   // ---- mutations ----
   const addWeightMutation = trpc.diet.addWeight.useMutation({
-    onSuccess: () => { toast.success("体重打卡成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}/diet`), 800); },
+    onSuccess: () => { toast.success("体重打卡成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const addMeasurementMutation = trpc.diet.addMeasurement.useMutation({
-    onSuccess: () => { toast.success("记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}/diet`), 800); },
+    onSuccess: () => { toast.success("记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const addCalorieMutation = trpc.diet.addCalorie.useMutation({
-    onSuccess: () => { toast.success("消耗记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}/diet`), 800); },
+    onSuccess: () => { toast.success("消耗记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
@@ -136,7 +136,7 @@ export default function DietCheckIn() {
     <div className="h-screen flex flex-col bg-[#FAF3ED]">
       {/* 顶部红色导航栏 */}
       <div className="bg-[#D32F2F] text-white px-3 py-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/diet`)} className="p-1">
+        <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="text-base font-semibold">减肥打卡</h1>
