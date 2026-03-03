@@ -1,6 +1,7 @@
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 
 type UseAuthOptions = {
@@ -12,6 +13,7 @@ export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
     options ?? {};
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
@@ -45,10 +47,10 @@ export function useAuth(options?: UseAuthOptions) {
       } catch (e) {
         console.warn('[Logout] Failed to remove token from localStorage:', e);
       }
-      utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
+      // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留给下一个登录用户
+      queryClient.clear();
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation, utils, queryClient]);
 
   const state = useMemo(() => {
     // 安全地存储用户信息到localStorage，只存储必要的字段

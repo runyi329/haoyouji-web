@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -35,15 +36,25 @@ export default function Login() {
   const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+
+  // 切换用户时清空所有缓存，防止旧用户数据残留
+  const clearAllCacheAndNavigate = (token?: string) => {
+    if (token) {
+      try { localStorage.setItem('auth-token', token); } catch (e) {}
+    }
+    // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留
+    queryClient.clear();
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 200);
+  };
 
   // 游客模式：自动登录到游客账户
   const guestLoginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("已以游客身份登录！");
-      utils.auth.me.invalidate();
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 200);
+      clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error("游客登录失败: " + error.message);
@@ -74,46 +85,21 @@ export default function Login() {
   const loginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("登录成功！");
-      // 将token存储到localStorage作为备用（防止Cookie被微信清除）
-      if (data.token) {
-        try {
-          localStorage.setItem('auth-token', data.token);
-          console.log('[Login] Token saved to localStorage');
-        } catch (e) {
-          console.warn('[Login] Failed to save token to localStorage:', e);
-        }
-      }
-      utils.auth.me.invalidate();
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 200);
+      clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
-
   const registerMutation = trpc.auth.registerWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("注册成功！");
-      // 将token存储到localStorage作为备用
-      if (data.token) {
-        try {
-          localStorage.setItem('auth-token', data.token);
-          console.log('[Register] Token saved to localStorage');
-        } catch (e) {
-          console.warn('[Register] Failed to save token to localStorage:', e);
-        }
-      }
-      utils.auth.me.invalidate();
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 200);
+      clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
       toast.error(error.message);
     },
-  });
+  });;
 
   // 登录处理 - 只通过按钮点击触发
   const handleLogin = () => {
