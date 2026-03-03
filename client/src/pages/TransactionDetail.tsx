@@ -329,7 +329,7 @@ export default function TransactionDetail() {
           <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-medium">账目详细</h1>
+          <h1 className="text-lg font-medium">数据详情</h1>
           <div className="w-6"></div>
         </div>
       </div>
@@ -347,27 +347,24 @@ export default function TransactionDetail() {
       {/* 分类信息卡片 */}
       <div className="bg-white px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full ${transaction.type === 'expense' ? 'bg-[#D32F2F]' : 'bg-[#4CAF50]'}`}></span>
           <span className="text-lg text-gray-900">
             {transaction.category}
             {transaction.subcategory && `–${transaction.subcategory}`}
           </span>
+          {(transaction as any).unit && (
+            <span className="text-sm text-gray-400">{(transaction as any).unit}</span>
+          )}
         </div>
         <div className="text-right">
-          <div className="flex items-baseline gap-1.5">
-            <div className="text-3xl font-medium text-gray-900">
-              {transaction.amount}
-            </div>
-            {(transaction as any).unit && (
-              <span className="text-sm text-gray-500">{(transaction as any).unit}</span>
-            )}
+          <div className="text-3xl font-medium text-gray-900">
+            {transaction.amount}
           </div>
         </div>
       </div>
 
       {/* 详细信息列表 */}
       <div className="bg-white mt-3">
-        <DetailItem label="账户" value="现金" />
+
         <DetailItem
           label="登记人"
           rightContent={
