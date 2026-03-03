@@ -6,8 +6,9 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift
 } from "lucide-react";
+import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
 // 根据标题关键词自动匹配分类标签
 function getCategory(title: string): { label: string; color: string; bg: string } {
@@ -51,11 +52,13 @@ function openMapNavigation() {
 export default function BeautyHome() {
   const { user } = useAuth();
   const promotionsQuery = trpc.beauty.promotion.list.useQuery();
-  const servicesQuery = trpc.beauty.service.list.useQuery();
+  const productsQuery = trpc.beauty.shop.products.useQuery({});
   const healthQuery = trpc.beauty.health.news.useQuery({ num: 3, page: 1 });
 
   const promotions = promotionsQuery.data ?? [];
-  const services = servicesQuery.data ?? [];
+  // 商品数据：优先用数据库数据，查询失败或为空时用兜底数据
+  const dbProducts = productsQuery.data ?? [];
+  const products = dbProducts.length > 0 ? dbProducts : (productsQuery.isError ? FALLBACK_PRODUCTS : (productsQuery.isLoading ? [] : FALLBACK_PRODUCTS));
   const healthNews = healthQuery.data ?? [];
   const newsLoading = healthQuery.isLoading;
 
@@ -140,27 +143,30 @@ export default function BeautyHome() {
           </div>
         )}
 
-        {/* 热门项目 */}
-        {services.length > 0 && (
+        {/* 热门商品 */}
+        {products.length > 0 && (
           <div>
             <div className="flex items-center justify-between px-1 mb-2">
-              <h2 className="text-sm font-semibold text-gray-700">热门项目</h2>
-              <Link href="/beauty/services">
+              <h2 className="text-sm font-semibold text-gray-700">热门商品</h2>
+              <Link href="/beauty/shop">
                 <span className="text-xs text-rose-500 flex items-center gap-0.5">查看全部 <ChevronRight className="w-3 h-3" /></span>
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {services.slice(0, 4).map((s) => (
-                <Link key={s.id} href={`/beauty/booking?service=${s.id}`}>
+              {products.slice(0, 4).map((p) => (
+                <Link key={p.id} href={`/beauty/product/${p.id}`}>
                   <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
-                    <div className="h-24 bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center">
-                      <Sparkles className="w-8 h-8 text-rose-300" />
+                    <div className="h-28 bg-gradient-to-br from-rose-50 to-pink-50 flex items-center justify-center">
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <Gift className="w-8 h-8 text-rose-300" />
+                      )}
                     </div>
                     <CardContent className="p-3">
-                      <h3 className="text-sm font-semibold text-gray-800 truncate">{s.name}</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 truncate">{p.name}</h3>
                       <div className="flex items-center justify-between mt-1">
-                        <span className="text-rose-500 font-bold text-sm">¥{s.price}</span>
-                        <span className="text-xs text-gray-400 flex items-center gap-0.5"><Clock className="w-3 h-3" />{s.duration}分钟</span>
+                        <span className="text-rose-500 font-bold text-sm">¥{Number(p.price).toLocaleString()}</span>
                       </div>
                     </CardContent>
                   </Card>

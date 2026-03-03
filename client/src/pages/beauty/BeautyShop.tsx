@@ -11,6 +11,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+import { FALLBACK_PRODUCTS, FALLBACK_BRANDS } from "./beauty-fallback-data";
 
 export default function BeautyShop() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
@@ -21,10 +22,15 @@ export default function BeautyShop() {
   const productsQuery = trpc.beauty.shop.products.useQuery({});
   const cartQuery = trpc.beauty.shop.getCart.useQuery();
 
-  const brands = brandsQuery.data ?? [];
-  const products = productsQuery.data ?? [];
+  // 兜底逻辑：数据库查询失败或为空时用前端硬编码数据
+  const dbBrands = brandsQuery.data ?? [];
+  const brands = dbBrands.length > 0 ? dbBrands : (brandsQuery.isError ? FALLBACK_BRANDS : (brandsQuery.isLoading ? [] : FALLBACK_BRANDS));
+  const dbProducts = productsQuery.data ?? [];
+  const products = dbProducts.length > 0 ? dbProducts : (productsQuery.isError ? FALLBACK_PRODUCTS : (productsQuery.isLoading ? [] : FALLBACK_PRODUCTS));
   const cartItems = cartQuery.data ?? [];
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
+  // 是否使用兜底数据（兜底时禁用购物车功能）
+  const isFallback = dbProducts.length === 0 && products.length > 0;
 
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
   const filteredProducts = selectedBrand
@@ -73,7 +79,7 @@ export default function BeautyShop() {
 
       <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
         {/* 品牌筛选 */}
-        {brands.length > 0 && (
+        {brands.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             <button
               onClick={() => setSelectedBrand(null)}
@@ -98,7 +104,7 @@ export default function BeautyShop() {
         )}
 
         {/* 商品列表 */}
-        {productsQuery.isLoading ? (
+        {productsQuery.isLoading && dbProducts.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">暂无商品</div>
@@ -106,7 +112,7 @@ export default function BeautyShop() {
           <div className="grid grid-cols-2 gap-3">
             {filteredProducts.map((p) => (
               <Card key={p.id} className="border-0 shadow-sm overflow-hidden">
-                <Link href={`/beauty/product/${p.id}`}>
+                <Link href={isFallback ? `/beauty/product/fallback-${p.id}` : `/beauty/product/${p.id}`}>
                   <div className="h-36 bg-gradient-to-br from-rose-50 to-pink-50 flex items-center justify-center cursor-pointer">
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
@@ -119,14 +125,16 @@ export default function BeautyShop() {
                   <p className="text-sm font-medium text-gray-800 line-clamp-2">{p.name}</p>
                   <div className="flex items-center justify-between mt-2">
                     <div>
-                      <span className="text-rose-500 font-bold text-sm">¥{p.price}</span>
+                      <span className="text-rose-500 font-bold text-sm">¥{Number(p.price).toLocaleString()}</span>
                     </div>
-                    <button
-                      onClick={() => addToCart.mutate({ productId: p.id, quantity: 1 })}
-                      className="w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center"
-                    >
-                      <Plus className="w-4 h-4 text-white" />
-                    </button>
+                    {!isFallback && (
+                      <button
+                        onClick={() => addToCart.mutate({ productId: p.id, quantity: 1 })}
+                        className="w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center"
+                      >
+                        <Plus className="w-4 h-4 text-white" />
+                      </button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
