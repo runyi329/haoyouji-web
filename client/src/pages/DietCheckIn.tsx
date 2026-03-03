@@ -206,17 +206,17 @@ export default function DietCheckIn() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-2 overflow-hidden">
                 <input
                   type="number"
                   inputMode="decimal"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-center"
-                  style={{ caretColor: accent }}
+                  className="flex-1 min-w-0 text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-center"
+                  style={{ caretColor: accent, maxWidth: 'calc(100% - 2.5rem)' }}
                 />
-                <span className="text-base text-gray-400 mb-2">{weightUnit === "jin" ? "斤" : "kg"}</span>
+                <span className="text-base text-gray-400 mb-2 shrink-0">{weightUnit === "jin" ? "斤" : "kg"}</span>
               </div>
               <p className="text-xs text-gray-400 text-center mt-1">请填写今天称重的实际体重</p>
             </div>
@@ -302,7 +302,7 @@ export default function DietCheckIn() {
                     value={calories}
                     onChange={(e) => setCalories(e.target.value)}
                     placeholder="0"
-                    className="w-full text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-right"
+                    className="w-full min-w-0 text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-right overflow-hidden"
                     style={{ caretColor: accent }}
                   />
                 </div>
