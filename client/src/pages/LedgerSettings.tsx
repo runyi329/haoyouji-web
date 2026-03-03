@@ -400,7 +400,7 @@ export default function LedgerSettings() {
       {/* 基本设置 */}
       <div className="bg-white mt-3">
         <SettingItem 
-          label="账本名称" 
+          label="减肥账本名称" 
           value={ledgerData.name} 
           showIcon 
           onClick={() => setLocation(`/ledger/${ledgerId}/edit-name`)}
@@ -470,11 +470,11 @@ export default function LedgerSettings() {
 
 
 
-        <SettingItem label="账本功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
-        <SettingItem label="账本分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
-        <SettingItem label="删除账单找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
+        <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
+        <SettingItem label="分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
+        <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
-        <SettingItem label="账本图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
+        <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
         <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
         {/* 账本密钥 - 只有管理员和创建人可见 */}
         {(() => {
@@ -483,7 +483,7 @@ export default function LedgerSettings() {
           if (!isAdminOrOwner) return null;
           return <SecretKeyItem ledgerId={ledgerId} showSecretKey={showSecretKey} setShowSecretKey={setShowSecretKey} />;
         })()}
-        <SettingItem label="账本创建人转移" showIcon onClick={() => {
+        <SettingItem label="创建人转移" showIcon onClick={() => {
           // 只有owner才能转移
           const currentMember = members?.find(m => m.userId === user?.id);
           if (currentMember?.role !== 'owner') {
@@ -1150,7 +1150,7 @@ function SecretKeyItem({ ledgerId, showSecretKey, setShowSecretKey }: { ledgerId
 
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-      <span className="text-[15px] text-gray-900 shrink-0">账本密钥</span>
+      <span className="text-[15px] text-gray-900 shrink-0">密钥</span>
       <div className="flex items-center gap-2 ml-3 min-w-0">
         {showSecretKey && secretKeyData?.secretKey ? (
           <>
