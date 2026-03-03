@@ -473,7 +473,7 @@ export default function LedgerSettings() {
         <SettingItem label="删除账单找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
         <SettingItem label="账本图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
-        <SettingItem label="账本管理员管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
+        <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
         {/* 账本密钥 - 只有管理员和创建人可见 */}
         {(() => {
           const currentMember = members?.find(m => m.userId === user?.id);
@@ -646,7 +646,7 @@ export default function LedgerSettings() {
                   <div>
                     <div className="font-medium text-gray-900">{member.nickname || member.username}</div>
                     <div className="text-xs text-gray-400">
-                      {member.role === 'admin' ? '管理员' : '普通成员'}
+                      {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '减肥教练' : '管理员') : '普通成员'}
                     </div>
                   </div>
                 </div>
@@ -975,7 +975,7 @@ export default function LedgerSettings() {
                   <div className="flex-1">
                     <div className="font-medium text-sm">{member.nickname || member.username}</div>
                     <div className="text-xs text-gray-400">
-                      {member.role === 'admin' ? '管理员' : '普通成员'}
+                      {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '减肥教练' : '管理员') : '普通成员'}
                     </div>
                   </div>
                   {transferTarget?.userId === member.userId && (
