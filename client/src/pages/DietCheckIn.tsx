@@ -6,18 +6,20 @@
  */
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Scale, Ruler, BarChart2, Flame, Camera, X } from "lucide-react";
+import { ChevronLeft, Scale, Ruler, BarChart2, Flame, Camera, X, Utensils } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { autoCompressImage } from "@/utils/imageUtils";
+import FoodRecognition from "@/components/FoodRecognition";
 
-type Category = "weight" | "measurement" | "bmi" | "calorie";
+type Category = "weight" | "measurement" | "bmi" | "calorie" | "food";
 
 const CATEGORIES: { id: Category; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
   { id: "weight",      label: "体重",    icon: <Scale className="w-5 h-5" />,    color: "text-rose-500",   bg: "bg-rose-50 border-rose-200" },
   { id: "measurement", label: "三围",    icon: <Ruler className="w-5 h-5" />,    color: "text-violet-500", bg: "bg-violet-50 border-violet-200" },
   { id: "bmi",         label: "BMI指标", icon: <BarChart2 className="w-5 h-5" />, color: "text-blue-500",   bg: "bg-blue-50 border-blue-200" },
   { id: "calorie",     label: "记录消耗", icon: <Flame className="w-5 h-5" />,   color: "text-orange-500", bg: "bg-orange-50 border-orange-200" },
+  { id: "food",        label: "食物识别", icon: <Utensils className="w-5 h-5" />, color: "text-green-500",   bg: "bg-green-50 border-green-200" },
 ];
 
 const ACTIVITY_TYPES = ["跑步", "快走", "游泳", "骑车", "瑜伽", "健身操", "力量训练", "跳绳", "爬山", "其他"];
@@ -27,6 +29,7 @@ const ACCENT: Record<Category, string> = {
   measurement: "#7C3AED",
   bmi:         "#1D4ED8",
   calorie:     "#EA580C",
+  food:        "#16A34A",
 };
 
 export default function DietCheckIn() {
@@ -152,7 +155,7 @@ export default function DietCheckIn() {
 
       {/* 分类选择 */}
       <div className="px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {CATEGORIES.map((cat) => {
             const active = category === cat.id;
             return (
@@ -288,6 +291,11 @@ export default function DietCheckIn() {
               </div>
             )}
           </div>
+        )}
+
+              {/* ===== 食物识别 ===== */}
+        {category === "food" && (
+          <FoodRecognition />
         )}
 
         {/* ===== 卡路里 ===== */}
