@@ -58,6 +58,45 @@ export const dietRouter = router({
       return await dbDiet.getAllMemberConfigs(input.ledgerId);
     }),
 
+  // 设置成员档案（完整版）- 用于成员信息设置页
+  setMemberConfig: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      userId: z.number(),
+      studentName: z.string().optional(),
+      gender: z.enum(['male', 'female']).optional(),
+      height: z.number().positive().optional(),
+      initialWeight: z.number().positive(),
+      targetWeight: z.number().positive(),
+      startDate: z.string().optional(),
+      chest: z.number().positive().optional(),
+      waist: z.number().positive().optional(),
+      hip: z.number().positive().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await dbDiet.setMemberConfig(input.ledgerId, input.userId, {
+        studentName: input.studentName,
+        gender: input.gender,
+        height: input.height,
+        initialWeight: input.initialWeight,
+        targetWeight: input.targetWeight,
+        startDate: input.startDate,
+        chest: input.chest,
+        waist: input.waist,
+        hip: input.hip,
+        notes: input.notes,
+      });
+      return { success: true };
+    }),
+
+  // 获取指定学员的完整档案（教练用）
+  getMemberFullConfig: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), userId: z.number() }))
+    .query(async ({ input }) => {
+      return await dbDiet.getMemberFullConfig(input.ledgerId, input.userId);
+    }),
+
   // 获取账本成员列表（含用户信息，用于学员管理页）
   getLedgerMembers: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
