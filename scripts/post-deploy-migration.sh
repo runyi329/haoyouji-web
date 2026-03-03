@@ -54,6 +54,7 @@ MIGRATIONS=(
   "drizzle/migrations/add_require_image_to_ledgers.sql"
   "drizzle/migrations/add_soft_delete.sql"
   "drizzle/migrations/create_record_logs.sql"
+  "drizzle/migrations/create_beauty_tables.sql"
 )
 
 # 执行每个迁移文件
