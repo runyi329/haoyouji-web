@@ -70,16 +70,23 @@ export default function DietCheckIn() {
   const [activityType, setActivityType] = useState("跑步");
 
   // ---- mutations ----
+  const utils = trpc.useUtils();
+  const invalidateDiet = () => {
+    utils.diet.getStats.invalidate({ ledgerId });
+    utils.diet.getWeightHistory.invalidate({ ledgerId });
+    utils.diet.getCalorieHistory.invalidate({ ledgerId });
+    utils.ledger.getTransactions.invalidate();
+  };
   const addWeightMutation = trpc.diet.addWeight.useMutation({
-    onSuccess: () => { toast.success("体重打卡成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
+    onSuccess: () => { invalidateDiet(); toast.success("体重打卡成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const addMeasurementMutation = trpc.diet.addMeasurement.useMutation({
-    onSuccess: () => { toast.success("记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
+    onSuccess: () => { invalidateDiet(); toast.success("记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const addCalorieMutation = trpc.diet.addCalorie.useMutation({
-    onSuccess: () => { toast.success("消耗记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
+    onSuccess: () => { invalidateDiet(); toast.success("消耗记录成功！"); setTimeout(() => setLocation(`/ledger/${ledgerId}`), 800); },
     onError: (e) => toast.error("记录失败：" + e.message),
   });
   const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
