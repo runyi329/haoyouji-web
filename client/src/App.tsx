@@ -192,15 +192,14 @@ function Router() {
 
   useEffect(() => {
     if (isLoading) return;
-    // liulifan 打开网站时（路径为 /）自动跳到奢贝首页
-    // 点人脉按鈕进入 / 时，sessionStorage 里有 _from_nav 标记，不会跳转
+    // liulifan 首次打开网站时自动跳到奢贝首页
+    // 使用 sessionStorage 标记确保每次会话只跳转一次
+    // 之后点人脉/钱脉/奢贝都是平行切换，不会强制跳转
     if (user?.username === 'liulifan' && location === '/') {
-      const fromNav = sessionStorage.getItem('_from_nav');
-      if (!fromNav) {
+      const hasRedirected = sessionStorage.getItem('_beauty_redirected');
+      if (!hasRedirected) {
+        sessionStorage.setItem('_beauty_redirected', '1');
         setLocation('/beauty');
-      } else {
-        // 清除标记，下次刷新还能再次跳转
-        sessionStorage.removeItem('_from_nav');
       }
     }
   }, [user, isLoading, location]);

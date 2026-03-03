@@ -26,10 +26,6 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   const handleNavigation = (path: string) => {
     setShowLedgerMenu(false);
-    // 在奢贝页面点人脉时，写入标记告知 Router 这是 SPA 内部导航，不要再跳转到奢贝
-    if (isBeautyPage && path === '/') {
-      sessionStorage.setItem('_from_nav', '1');
-    }
     setLocation(path);
   };
 
