@@ -1,6 +1,6 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v2.0.0';
+const CACHE_VERSION = 'v2.1.0';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源
@@ -11,10 +11,8 @@ const STATIC_CACHE_URLS = [
   '/maidong-hyy.png',
 ];
 
-// 需要缓存的 API 路径前缀（可选）
-const API_CACHE_URLS = [
-  '/api/trpc',
-];
+// API 请求不缓存，始终走网络
+const API_CACHE_URLS = [];
 
 // 安装事件：缓存静态资源
 self.addEventListener('install', (event) => {
@@ -62,23 +60,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API 请求：网络优先，失败时使用缓存
+  // API 请求：始终走网络，不缓存（避免用户切换后返回旧用户数据）
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // 克隆响应，一份用于缓存，一份返回给页面
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
-          return response;
-        })
-        .catch(() => {
-          // 网络失败时，尝试从缓存读取
-          return caches.match(request);
-        })
-    );
     return;
   }
 
