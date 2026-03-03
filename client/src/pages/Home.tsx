@@ -135,25 +135,67 @@ export default function Home() {
   
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
-  // 监听页面可见性变化：当用户从其他页面返回首页时，重新拉取所有数据
-  // 解决同一手机切换用户后首页显示旧用户数据的问题
+  // 监听页面返回事件：解决微信浏览器中点×/右滑返回时显示旧用户数据的问题
+  // pageshow 事件在从 bfcache 恢复时也会触发，而 visibilitychange 作为补充
   const utils = trpc.useUtils();
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        utils.contacts.stats.invalidate();
-        utils.contacts.totalInteractionCount.invalidate();
-        utils.contacts.totalTagCount.invalidate();
-        utils.contacts.getTotalUsageDays.invalidate();
-        utils.invite.getMyInviteInfo.invalidate();
-        utils.equity.getPromotionStats.invalidate();
-        utils.auth.me.invalidate();
-        if (isLiulifan) utils.contacts.overviewStats.invalidate();
+    const refreshAllData = () => {
+      utils.contacts.stats.invalidate();
+      utils.contacts.totalInteractionCount.invalidate();
+      utils.contacts.totalTagCount.invalidate();
+      utils.contacts.getTotalUsageDays.invalidate();
+      utils.invite.getMyInviteInfo.invalidate();
+      utils.equity.getPromotionStats.invalidate();
+      utils.auth.me.invalidate();
+      if (isLiulifan) utils.contacts.overviewStats.invalidate();
+    };
+    // pageshow: 微信浏览器点×返回时会从 bfcache 恢复页面，pageshow 事件会触发
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        // 从 bfcache 恢复，强制刷新所有数据
+        refreshAllData();
       }
     };
+    // visibilitychange: 作为补充，处理标签页切换等场景
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAllData();
+      }
+    };
+    // focus: 处理微信内置浏览器中窗口重新获得焦点的场景
+    const handleFocus = () => {
+      refreshAllData();
+    };
+    window.addEventListener('pageshow', handlePageShow);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [utils, isLiulifan]);
+
+  // 禁用右滑返回手势，避免用户滑动返回时看到旧缓存页面
+  useEffect(() => {
+    let startX = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      const deltaX = e.touches[0].clientX - startX;
+      // 如果从屏幕左侧边缘开始向右滑动，阻止默认行为
+      if (startX < 30 && deltaX > 10) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
 
   // 跳动动画：页面加载后如果有需要关注的人，启动跳动动画
   useEffect(() => {
