@@ -184,15 +184,17 @@ export const dietRouter = router({
           const desc = `[diet:bmi:BMI] 身高${input.height}cm 体重${input.weight}kg${input.note ? ' ' + input.note : ''}`.trim();
           await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: bmiVal, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
         } else {
-          const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '三围记录', '📏', '#7C3AED');
-          // amount存腾围（主要指标），description存全部三围数据
-          const waistVal = input.waist ?? input.chest ?? input.hip ?? 0;
-          const parts = [];
-          if (input.chest) parts.push(`胸${input.chest}`);
-          if (input.waist) parts.push(`腾${input.waist}`);
-          if (input.hip) parts.push(`臀${input.hip}`);
-          const desc = `[diet:measurement:cm] ${parts.join('/')}${input.note ? ' ' + input.note : ''}`.trim();
-          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: waistVal, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+          // 三围：每个填写的维度单独生成一条账目条目，带独立分类标签
+          const measurements = [
+            { key: '胸围', value: input.chest, tag: 'chest', icon: '📏' },
+            { key: '腰围', value: input.waist, tag: 'waist', icon: '📏' },
+            { key: '臀围', value: input.hip,   tag: 'hip',   icon: '📏' },
+          ].filter(m => m.value != null && m.value > 0);
+          for (const m of measurements) {
+            const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, `📏 ${m.key}`, '📏', '#7C3AED');
+            const desc = `[diet:measurement:cm:${m.tag}] ${m.key}${input.note ? ' ' + input.note : ''}`.trim();
+            await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: m.value!, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+          }
         }
       } catch (e) {
         console.error('[diet.addMeasurement] 同步账目条目失败:', e);
