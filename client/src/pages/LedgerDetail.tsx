@@ -555,14 +555,11 @@ export default function LedgerDetail() {
                       {/* 金额 / 减肥数据 */}
                       {isDiet && record.description?.startsWith('[diet:') ? (
                         (() => {
-                          // 解析 [diet:type:unit] 格式
-                          const match = record.description.match(/^\[diet:(\w+):([^\]]+)\]/);
-                          const unit = match ? match[2] : '';
+                          // 分类名已包含单位（如“体重/斤”、“BMI”、“胸围/cm”），右侧只显示纯数字
                           const val = record.amount;
                           return (
                             <div className="text-sm font-semibold flex-shrink-0 text-[#D32F2F]">
                               {val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}
-                              <span className="text-xs font-normal ml-0.5">{unit}</span>
                             </div>
                           );
                         })()

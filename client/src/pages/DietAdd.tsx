@@ -79,7 +79,7 @@ export default function DietAdd() {
           <CheckCircle className="w-9 h-9 text-rose-500" />
         </div>
         <p className="text-lg font-semibold text-gray-800">打卡成功！</p>
-        <p className="text-sm text-gray-500">继续加油，你最棒！💪</p>
+        <p className="text-sm text-gray-500">继续加油，你最棒！</p>
       </div>
     );
   }

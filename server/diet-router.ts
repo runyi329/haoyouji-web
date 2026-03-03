@@ -128,7 +128,7 @@ export const dietRouter = router({
       // 同步写入账目条目（金额0，用于在账本列表中展示打卡记录）
       try {
         const unit = input.weightUnit === 'kg' ? 'kg' : '斤';
-        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '体重打卡', '⚖️', '#E53935');
+        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, `体重/${unit}`, '', '#E53935');
         // amount存体重数值*100（整数存储），description存单位标识，方便前端解析
         await dbLedger.addTransaction({
           ledgerId: input.ledgerId,
@@ -178,7 +178,7 @@ export const dietRouter = router({
       // 同步写入账目条目
       try {
         if (input.measureType === 'bmi') {
-          const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, 'BMI指标', '📊', '#1D4ED8');
+          const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, 'BMI', '', '#1D4ED8');
           // amount存BMI数值，description存类型标识
           const bmiVal = input.bmi ?? 0;
           const desc = `[diet:bmi:BMI] 身高${input.height}cm 体重${input.weight}kg${input.note ? ' ' + input.note : ''}`.trim();
@@ -186,12 +186,12 @@ export const dietRouter = router({
         } else {
           // 三围：每个填写的维度单独生成一条账目条目，带独立分类标签
           const measurements = [
-            { key: '胸围', value: input.chest, tag: 'chest', icon: '📏' },
-            { key: '腰围', value: input.waist, tag: 'waist', icon: '📏' },
-            { key: '臀围', value: input.hip,   tag: 'hip',   icon: '📏' },
+            { key: '胸围', value: input.chest, tag: 'chest' },
+            { key: '腰围', value: input.waist, tag: 'waist' },
+            { key: '臀围', value: input.hip,   tag: 'hip'   },
           ].filter(m => m.value != null && m.value > 0);
           for (const m of measurements) {
-            const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, `📏 ${m.key}`, '📏', '#7C3AED');
+            const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, `${m.key}/cm`, '', '#7C3AED');
             const desc = `[diet:measurement:cm:${m.tag}] ${m.key}${input.note ? ' ' + input.note : ''}`.trim();
             await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: m.value!, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
           }
@@ -241,7 +241,7 @@ export const dietRouter = router({
       });
       // 同步写入账目条目
       try {
-        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '卡路里消耗', '🔥', '#EA580C');
+        const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '卡路里/kcal', '', '#EA580C');
         // amount存卡路里数值，description存类型标识
         const actStr = input.activityType ? input.activityType : '';
         const desc = `[diet:calorie:kcal] ${actStr}${input.note ? ' ' + input.note : ''}`.trim();

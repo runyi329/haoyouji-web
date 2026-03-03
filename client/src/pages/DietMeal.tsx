@@ -10,11 +10,11 @@ import { toast } from "sonner";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
-const MEAL_LABELS: Record<MealType, { label: string; emoji: string; color: string }> = {
-  breakfast: { label: "早餐", emoji: "🌅", color: "bg-amber-100 text-amber-600 border-amber-200" },
-  lunch: { label: "午餐", emoji: "☀️", color: "bg-orange-100 text-orange-600 border-orange-200" },
-  dinner: { label: "晚餐", emoji: "🌙", color: "bg-purple-100 text-purple-600 border-purple-200" },
-  snack: { label: "加餐", emoji: "🍎", color: "bg-green-100 text-green-600 border-green-200" },
+const MEAL_LABELS: Record<MealType, { label: string; color: string }> = {
+  breakfast: { label: "早餐", color: "bg-amber-100 text-amber-600 border-amber-200" },
+  lunch: { label: "午餐", color: "bg-orange-100 text-orange-600 border-orange-200" },
+  dinner: { label: "晚餐", color: "bg-purple-100 text-purple-600 border-purple-200" },
+  snack: { label: "加餐", color: "bg-green-100 text-green-600 border-green-200" },
 };
 
 interface MealAnalysis {
@@ -63,7 +63,7 @@ function MealCard({ meal, expanded, onToggle }: { meal: MealRecord; expanded: bo
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-xs px-2 py-0.5 rounded-full border ${meta.color}`}>
-              {meta.emoji} {meta.label}
+              {meta.label}
             </span>
             {ai && (
               <span className="text-xs text-gray-400">{meal.recordDate.slice(5)}</span>
@@ -251,7 +251,6 @@ export default function DietMeal() {
                   : "bg-gray-50 text-gray-500 border-gray-100"
               }`}
             >
-              <div className="text-base mb-0.5">{meta.emoji}</div>
               {meta.label}
             </button>
           ))}
@@ -291,7 +290,11 @@ export default function DietMeal() {
       <div className="mx-4 mt-3 space-y-3">
         {(meals as MealRecord[]).length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-            <div className="text-4xl mb-3">🍽️</div>
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+              <svg className="w-6 h-6 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 11l19-9-9 19-2-8-8-2z" />
+              </svg>
+            </div>
             <p className="text-sm text-gray-400">今天还没有上传餐食照片</p>
             <p className="text-xs text-gray-300 mt-1">拍照上传你的三餐，AI帮你分析营养</p>
           </div>
