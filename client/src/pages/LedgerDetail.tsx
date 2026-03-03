@@ -488,9 +488,11 @@ export default function LedgerDetail() {
                   <span>
                     {dayRecord.date} {dayOfWeek}
                   </span>
-                  <span className="text-xs">
-                    收:{dayRecord.income.toFixed(2)}, 支:{dayRecord.expense.toFixed(2)}, 余:{dayRecord.balance.toFixed(2)}
-                  </span>
+                  {!isDiet && (
+                    <span className="text-xs">
+                      收:{dayRecord.income.toFixed(2)}, 支:{dayRecord.expense.toFixed(2)}, 余:{dayRecord.balance.toFixed(2)}
+                    </span>
+                  )}
                 </div>
 
                 {/* 当天的记录 */}
@@ -545,19 +547,34 @@ export default function LedgerDetail() {
                             <Hourglass className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'} />
                           )}
                         </div>
-                        {record.description && (
+                        {record.description && !record.description.startsWith('[diet:') && (
                           <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
                         )}
                       </div>
 
-                      {/* 金额 */}
-                      <div className={`text-sm font-normal flex-shrink-0 ${
-                        record.pendingType && record.pendingIncludeStats === 0
-                          ? 'text-gray-400'
-                          : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
-                      }`}>
-                        {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
-                      </div>
+                      {/* 金额 / 减肥数据 */}
+                      {isDiet && record.description?.startsWith('[diet:') ? (
+                        (() => {
+                          // 解析 [diet:type:unit] 格式
+                          const match = record.description.match(/^\[diet:(\w+):([^\]]+)\]/);
+                          const unit = match ? match[2] : '';
+                          const val = record.amount;
+                          return (
+                            <div className="text-sm font-semibold flex-shrink-0 text-[#D32F2F]">
+                              {val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}
+                              <span className="text-xs font-normal ml-0.5">{unit}</span>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <div className={`text-sm font-normal flex-shrink-0 ${
+                          record.pendingType && record.pendingIncludeStats === 0
+                            ? 'text-gray-400'
+                            : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
+                        }`}>
+                          {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
