@@ -355,6 +355,62 @@ export const dietRouter = router({
       }));
     }),
 
+  // ========== 食物识别 ==========
+
+  analyzeFood: protectedProcedure
+    .input(z.object({
+      imageUrl: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const aiResult = await invokeLLM({
+          messages: [
+            {
+              role: 'system',
+              content: `你是一位专业的营养师AI，擅长通过食物照片分析营养成分和热量。请用中文回复，格式为JSON。`,
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'image_url', image_url: { url: input.imageUrl, detail: 'auto' } },
+                {
+                  type: 'text',
+                  text: `请分析这张食物照片，返回以下JSON格式（必须是有效的JSON）：
+{
+  "foodName": "食物名称或菜名",
+  "calories": 热量数字(kcal),
+  "caloriesRange": "热量范围，如'150-200kcal'",
+  "recommendedAmount": "建议食用量，如'一碗（200g）'",
+  "dietRating": "多吃|适量|少吃",
+  "dietRatingReason": "对减肥的影响说明",
+  "nutrition": {
+    "protein": "蛋白质含量，如'15g'",
+    "carbs": "碳水化合物含量，如'45g'",
+    "fat": "脂肪含量，如'8g'"
+  },
+  "benefits": ["健康优势1", "健康优势2"],
+  "warnings": ["注意事项1", "注意事项2"]
+}
+只返回JSON，不要其他文字。`,
+                },
+              ],
+            },
+          ],
+        });
+
+        const aiText = typeof aiResult.content === 'string' ? aiResult.content : '';
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const analysis = JSON.parse(jsonMatch[0]);
+          return { success: true, analysis };
+        }
+      } catch (e) {
+        console.error('[diet.analyzeFood] AI分析失败:', e);
+      }
+
+      return { success: false, analysis: null };
+    }),
+
   // ========== 综合统计 ==========
 
   getStats: protectedProcedure
