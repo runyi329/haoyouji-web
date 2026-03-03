@@ -106,17 +106,19 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // 优先尝试从 Cookie 读取 token
-    const cookies = this.parseCookies(req.headers.cookie);
-    let sessionCookie = cookies.get(COOKIE_NAME);
+    // 优先从 Authorization header 读取 token
+    // 前端始终会从 localStorage 发送最新登录用户的 token
+    // 解决微信浏览器中 Cookie 残留旧用户 token 的问题
+    let sessionCookie: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      sessionCookie = authHeader.substring(7); // 移除 "Bearer " 前缀
+    }
     
-    // 如果 Cookie 中没有 token，尝试从 Authorization header 读取（备用方案）
+    // 如果 Authorization header 中没有 token，回退到 Cookie
     if (!sessionCookie) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        sessionCookie = authHeader.substring(7); // 移除 "Bearer " 前缀
-        console.log('[Auth] Using token from Authorization header (Cookie fallback)');
-      }
+      const cookies = this.parseCookies(req.headers.cookie);
+      sessionCookie = cookies.get(COOKIE_NAME);
     }
     
     const session = await this.verifySession(sessionCookie);
