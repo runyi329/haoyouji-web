@@ -33,12 +33,12 @@ const IMG = {
 
 /* ─── 功效数据 ─── */
 const BENEFITS = [
-  { num: "01", title: "焕活身体活力", desc: "温和唤醒身体能量，让人更有精神、不易疲惫，日常工作生活更有干劲。" },
-  { num: "02", title: "促进身体循环", desc: "助力气血顺畅运行，改善身体发沉、手脚易凉的状态，周身舒畅。" },
-  { num: "03", title: "温和排浊", desc: "微微出汗，帮助代谢多余湿气与浊物，体感轻盈舒适，身体更轻松。" },
-  { num: "04", title: "提升睡眠质量", desc: "放松神经，帮助睡得更安稳，晨起更有活力，告别失眠困扰。" },
-  { num: "05", title: "焕亮肌肤状态", desc: "温和养护肌肤，让肤色更透亮、肤质更细腻，透出好气色。" },
-  { num: "06", title: "调理体质", desc: "长期坚持，帮助身体保持良好状态，体质更稳定，日常更有活力。" },
+  { num: "01", title: "给身体充电，让生命活力拉满", desc: "唤醒生命的能量，保持旺盛精力、活力满满。" },
+  { num: "02", title: "构筑身体防护网，抵御外邪侵入", desc: "升级身体的防御能力，对付流感、感冒的外敌更省力。" },
+  { num: "03", title: "打通气血通路，温和驱除寒湿", desc: "温经通络，气血运行通畅，告别寒湿体质。" },
+  { num: "04", title: "给肌肤焕新颜，让年轻看得见", desc: "让胶原蛋白充分释放，让肤色更透亮、肤质更细腻。" },
+  { num: "05", title: "舒缓身心，优化睡眠质量", desc: "放松身心，减轻焦虑，助推深度睡眠，晨起更有活力。" },
+  { num: "06", title: "\"燃烧\"多余的脂肪，重塑曼妙身材", desc: "减少脂肪囤积，\"懒人\"、\"美食家\"也能管理身材。" },
 ];
 
 /* ─── 智能特性数据 ─── */
@@ -260,7 +260,7 @@ export default function BeautyProductDetail() {
       {/* ① Hero 轮播 */}
       <HeroCarousel />
 
-      {/* ② 产品标题 + 价格 */}
+      {/* ③ 产品标题 + 价格 */}
       <div className="px-5 pt-5 pb-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs tracking-widest" style={{ color: "#c9a84c" }}>IDEALIGHT 爱达光</span>
@@ -277,9 +277,9 @@ export default function BeautyProductDetail() {
         </div>
       </div>
 
-      {/* ③ 品牌理念 */}
+      {/* ③ 品牧理念 */}
       <div className="px-5 py-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="text-xs tracking-widest mb-2" style={{ color: "#c9a84c" }}>品牌理念</div>
+        <div className="text-xs tracking-widest mb-2" style={{ color: "#c9a84c" }}>品牧理念</div>
         <h2 className="text-lg font-bold text-white mb-3">红光舱 = 给身体充能</h2>
         <p className="text-sm leading-relaxed text-white/60">
           红光是波长为 <span className="text-white/90 font-medium">630–680nm</span> 的红色可见光，属于生物活性光。
@@ -325,7 +325,7 @@ export default function BeautyProductDetail() {
         </div>
       </div>
 
-      {/* ⑤ 六大核心功效 */}
+      {/* ⑤ 六大核心      {/* ⑤ 六大核心功效 */}
       <div className="py-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="px-5 mb-4">
           <div className="text-xs tracking-widest mb-1" style={{ color: "#c9a84c" }}>六大核心功效</div>
@@ -348,13 +348,14 @@ export default function BeautyProductDetail() {
                 className="text-xs font-bold flex-shrink-0 mt-0.5"
                 style={{ color: "#c9a84c", minWidth: 20 }}
               >
-                {b.num}
-              </span>
               <div>
-                <p className="text-sm font-semibold text-white">{b.title}</p>
-                <p className="text-xs text-white/50 mt-1 leading-relaxed">{b.desc}</p>
+                <div className="font-semibold text-white">{b.title}</div>
+                <p className="text-xs text-white/60 mt-0.5">{b.desc}</p>
               </div>
             </div>
+          ))}
+        </div>
+      </div>iv>
           ))}
         </div>
       </div>
@@ -387,8 +388,8 @@ export default function BeautyProductDetail() {
             >
               <span className="text-xs font-bold flex-shrink-0 mt-0.5" style={{ color: "#c9a84c", minWidth: 20 }}>{f.num}</span>
               <div>
-                <p className="text-sm font-semibold text-white">{f.title}</p>
-                <p className="text-xs text-white/40 mt-0.5">{f.desc}</p>
+                <div className="font-semibold text-gray-900">{b.title}</div>
+                <p className="text-xs text-gray-600 mt-0.5">{b.desc}</p>
               </div>
             </div>
           ))}
