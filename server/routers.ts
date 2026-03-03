@@ -34,6 +34,7 @@ import { workGroupsRouter } from "./work-groups-api";
 import { partnershipRouter } from "./partnership-router";
 import { posterFavoritesRouter } from "./poster-favorites-router";
 import { beautyRouter } from "./beauty-router";
+import { dietRouter } from "./diet-router";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -49,6 +50,7 @@ export const appRouter = router({
   equity: equityRouter,
   partnership: partnershipRouter,
   beauty: beautyRouter,
+  diet: dietRouter,
 
   // 支付账户管理
   paymentAccounts: router({

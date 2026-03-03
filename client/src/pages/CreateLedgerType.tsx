@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit } from "lucide-react";
+import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit, Dumbbell } from "lucide-react";
 
 // 账本类型配置
 const ledgerTypes = [
@@ -46,6 +46,13 @@ const ledgerTypes = [
     description: "公司出差采购支出报销给So easy",
     icon: Receipt,
     color: "bg-cyan-100 text-cyan-600",
+  },
+  {
+    id: "diet",
+    name: "减肥账本",
+    description: "记录体重变化，教练拉拉队共同见证",
+    icon: Dumbbell,
+    color: "bg-rose-100 text-rose-500",
   },
   {
     id: "custom",

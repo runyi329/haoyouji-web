@@ -17,7 +17,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit } from "lucide-react";
+import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -29,6 +29,7 @@ const ledgerTypeConfig: Record<string, { name: string; icon: any; defaultName: s
   business: { name: "生意账本", icon: Briefcase, defaultName: "生意账本" },
   class: { name: "班级账本", icon: GraduationCap, defaultName: "班级账本" },
   reimbursement: { name: "报销账本", icon: Receipt, defaultName: "报销账本" },
+  diet: { name: "减肥账本", icon: Dumbbell, defaultName: "我的减肥账本" },
   custom: { name: "自定义账本", icon: Edit, defaultName: "自定义账本" },
 };
 
@@ -95,8 +96,12 @@ export default function CreateLedger() {
 
   const handleSkip = () => {
     if (createdLedgerId) {
-      // 跳转到新创建的账本详情页
-      setLocation(`/ledger/${createdLedgerId}`);
+      // 减肥账本跳转到减肥账本详情页，其他账本跳转到普通账本详情页
+      if (typeParam === 'diet') {
+        setLocation(`/ledger/${createdLedgerId}/diet`);
+      } else {
+        setLocation(`/ledger/${createdLedgerId}`);
+      }
     } else {
       // 如果没有创建成功，跳转到账本列表
       setLocation("/ledger");
