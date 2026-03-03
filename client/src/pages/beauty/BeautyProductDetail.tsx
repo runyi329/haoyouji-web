@@ -12,8 +12,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Link, useParams, useLocation } from "wouter";
 import {
-  ChevronLeft, ShoppingCart, Gift, Shield, Zap, Wind,
-  Thermometer, Wifi, Clock, Volume2, Gauge, ChevronDown,
+  ChevronLeft, ShoppingCart, Gift, Shield, ChevronDown,
   ChevronUp, Phone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,8 +21,6 @@ import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
 /* ─── 图片资源 ─── */
 const IMG = {
-  // 实物图（用户提供）
-  realPhoto: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/xVBvVJhDaEvKEBxO.png",
   // AI生成图
   interiorGlow: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-interior-glow-TYQRnUXEKzekhmfKUjkMKw.png",
   scienceDiagram: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-science-diagram-LdSSaUWUtsLEuiQPD8GBLj.png",
@@ -37,12 +34,12 @@ const IMG = {
 
 /* ─── 功效数据 ─── */
 const BENEFITS = [
-  { emoji: "⚡", title: "焕活身体活力", desc: "温和唤醒身体能量，让人更有精神、不易疲惫，日常工作生活更有干劲。" },
-  { emoji: "🌀", title: "促进身体循环", desc: "助力气血顺畅运行，改善身体发沉、手脚易凉的状态，周身舒畅。" },
-  { emoji: "💧", title: "温和排浊", desc: "微微出汗，帮助代谢多余湿气与浊物，体感轻盈舒适，身体更轻松。" },
-  { emoji: "🌙", title: "提升睡眠质量", desc: "放松神经，帮助睡得更安稳，晨起更有活力，告别失眠困扰。" },
-  { emoji: "✨", title: "焕亮肌肤状态", desc: "温和养护肌肤，让肤色更透亮、肤质更细腻，透出好气色。" },
-  { emoji: "🛡️", title: "调理体质", desc: "长期坚持，帮助身体保持良好状态，体质更稳定，日常更有活力。" },
+  { num: "01", title: "焕活身体活力", desc: "温和唤醒身体能量，让人更有精神、不易疲惫，日常工作生活更有干劲。" },
+  { num: "02", title: "促进身体循环", desc: "助力气血顺畅运行，改善身体发沉、手脚易凉的状态，周身舒畅。" },
+  { num: "03", title: "温和排浊", desc: "微微出汗，帮助代谢多余湿气与浊物，体感轻盈舒适，身体更轻松。" },
+  { num: "04", title: "提升睡眠质量", desc: "放松神经，帮助睡得更安稳，晨起更有活力，告别失眠困扰。" },
+  { num: "05", title: "焕亮肌肤状态", desc: "温和养护肌肤，让肤色更透亮、肤质更细腻，透出好气色。" },
+  { num: "06", title: "调理体质", desc: "长期坚持，帮助身体保持良好状态，体质更稳定，日常更有活力。" },
 ];
 
 /* ─── 智能特性数据 ─── */
@@ -85,7 +82,7 @@ const SPECS_EXTRA = [
 
 /* ─── Hero 图片轮播 ─── */
 function HeroCarousel() {
-  const images = [IMG.interiorGlow, IMG.realPhoto, IMG.heroOld];
+  const images = [IMG.interiorGlow, IMG.heroOld, IMG.lifestyle];
   const [idx, setIdx] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
@@ -314,15 +311,15 @@ export default function BeautyProductDetail() {
         {/* 双图 */}
         <div className="flex gap-1 mt-1 px-0">
           <div className="flex-1 overflow-hidden" style={{ height: "40vw", maxHeight: 220 }}>
-            <img src={IMG.realPhoto} alt="产品外观" className="w-full h-full object-cover" />
+            <img src={IMG.heroOld} alt="产品展示" className="w-full h-full object-cover" />
           </div>
           <div className="flex-1 overflow-hidden" style={{ height: "40vw", maxHeight: 220 }}>
-            <img src={IMG.heroOld} alt="产品展示" className="w-full h-full object-cover" />
+            <img src={IMG.lifestyle} alt="使用场景" className="w-full h-full object-cover" />
           </div>
         </div>
         <div className="flex px-5 mt-2">
-          <span className="flex-1 text-center text-xs text-white/30">舱内红光效果</span>
           <span className="flex-1 text-center text-xs text-white/30">产品外观展示</span>
+          <span className="flex-1 text-center text-xs text-white/30">使用场景</span>
         </div>
       </div>
 
@@ -345,12 +342,12 @@ export default function BeautyProductDetail() {
               className="flex gap-4 items-start p-4 rounded-xl"
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg"
-                style={{ background: "rgba(225,29,72,0.15)", border: "1px solid rgba(225,29,72,0.3)" }}
+              <span
+                className="text-xs font-bold flex-shrink-0 mt-0.5"
+                style={{ color: "#c9a84c", minWidth: 20 }}
               >
-                {b.emoji}
-              </div>
+                {b.num}
+              </span>
               <div>
                 <p className="text-sm font-semibold text-white">{b.title}</p>
                 <p className="text-xs text-white/50 mt-1 leading-relaxed">{b.desc}</p>
