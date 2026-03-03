@@ -518,7 +518,21 @@ export default function LedgerDetail() {
                         <div className="flex items-center gap-1">
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
                           <span className="text-xs text-[#222222] font-normal">
-                            {record.category}
+                            {isDiet && record.description?.startsWith('[diet:') ? (() => {
+                              // 对 diet 分类名做前端清洗：去掉 emoji，并根据 description 标签补充单位
+                              const desc = record.description || '';
+                              const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+                              const type = m ? m[1] : '';
+                              const unit = m ? m[2].split(':')[0] : '';
+                              // 去掉分类名中的 emoji（Unicode 范围）
+                              const cleanName = (record.category || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\s]+/gu, '').trim();
+                              // 如果分类名已包含单位则直接显示，否则补充
+                              if (cleanName.includes('/')) return cleanName;
+                              // 根据类型补充单位
+                              const unitMap: Record<string, string> = { weight: '斤', bmi: '', calorie: 'kcal', measurement: 'cm' };
+                              const u = unit || unitMap[type] || '';
+                              return u ? `${cleanName}/${u}` : cleanName;
+                            })() : record.category}
                           </span>
                           {/* 图片图标 */}
                           {record.imageUrl && (

@@ -411,6 +411,17 @@ export async function getDietStats(ledgerId: number, userId: number) {
 // ========== 减肥分类辅助（确保账本存在对应分类，返回categoryId） ==========
 const _dietCategoryCache: Record<string, number> = {};
 
+// 旧分类名称映射表（带 emoji 的旧名 -> 新名）
+const DIET_CATEGORY_ALIASES: Record<string, string[]> = {
+  '体重/斤': ['体重打卡'],
+  '体重/kg': ['体重打卡'],
+  'BMI': ['BMI指标'],
+  '胸围/cm': ['📏 胸围', '胸围'],
+  '腰围/cm': ['📏 腰围', '腰围'],
+  '臀围/cm': ['📏 臀围', '臀围'],
+  '卡路里/kcal': ['卡路里消耗'],
+};
+
 export async function ensureDietCategory(
   ledgerId: number,
   userId: number,
@@ -424,7 +435,7 @@ export async function ensureDietCategory(
   const db = await getLedgerDb();
   if (!db) throw new Error("DB connection failed");
 
-  // 查找是否已存在同名分类
+  // 查找是否已存在精确同名分类
   const existing = await db.execute(sql`
     SELECT id FROM ledger_categories
     WHERE ledgerId = ${ledgerId} AND name = ${name}
@@ -433,14 +444,32 @@ export async function ensureDietCategory(
   const rows = (existing as any)[0] as any[];
   if (rows && rows.length > 0) {
     const id = Number(rows[0].id);
+    // 确保 icon 已清除
+    await db.execute(sql`UPDATE ledger_categories SET icon = '' WHERE id = ${id} AND icon != ''`);
     _dietCategoryCache[cacheKey] = id;
     return id;
   }
 
-  // 不存在则创建
+  // 尝试匹配旧的带 emoji 分类名，如果找到则重命名为新名称并清除 icon
+  const aliases = DIET_CATEGORY_ALIASES[name] || [];
+  for (const oldName of aliases) {
+    const oldRows = (await db.execute(sql`
+      SELECT id FROM ledger_categories
+      WHERE ledgerId = ${ledgerId} AND name = ${oldName}
+      LIMIT 1
+    `) as any)[0] as any[];
+    if (oldRows && oldRows.length > 0) {
+      const id = Number(oldRows[0].id);
+      await db.execute(sql`UPDATE ledger_categories SET name = ${name}, icon = '' WHERE id = ${id}`);
+      _dietCategoryCache[cacheKey] = id;
+      return id;
+    }
+  }
+
+  // 不存在则创建（icon 一律为空）
   const result = await db.execute(sql`
     INSERT INTO ledger_categories (ledgerId, name, type, icon, color, isDefault, createdBy, sortOrder)
-    VALUES (${ledgerId}, ${name}, 'expense', ${icon}, ${color}, 0, ${userId}, 99)
+    VALUES (${ledgerId}, ${name}, 'expense', '', ${color}, 0, ${userId}, 99)
   `);
   const newId = Number((result as any)[0]?.insertId || 0);
   if (newId > 0) _dietCategoryCache[cacheKey] = newId;
