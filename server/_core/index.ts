@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
+import { ensureBeautyTables } from "../db-beauty-init";
 
 async function initFieldCategories() {
   try {
@@ -169,6 +170,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   // 初始化字段分类
   await initFieldCategories();
+  // 确保奢贝美容院数据库表存在
+  await ensureBeautyTables();
   // 初始化红立方商品
   await initRedCubeProduct();
   
