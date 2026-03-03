@@ -95,6 +95,8 @@ export default function LedgerDetail() {
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isDietCoach = isDiet && (isOwner || isAdmin);
+  const isDietStudent = isDiet && !isDietCoach;
+  const { data: user } = trpc.auth.me.useQuery();
   const { data: dietStats } = trpc.diet.getStats.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isDiet }
