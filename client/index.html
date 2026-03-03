@@ -46,11 +46,35 @@
         var isWeChatMiniProgram = ua.indexOf('miniprogram') > -1 || window.__wxjs_environment === 'miniprogram';
         
         if (isWeChat || isWeChatMiniProgram) {
-          // 微信环境，缩小85%
           document.documentElement.style.fontSize = '85%';
           document.body.classList.add('wechat-env');
         }
       })();
+    </script>
+    
+    <!-- 禁用Safari bfcache + 页面加载时立即同步Cookie -->
+    <script>
+      // 1. 注册unload事件禁用Safari的bfcache
+      window.addEventListener('unload', function() {});
+      
+      // 2. 页面加载时立即用localStorage的token覆盖Cookie
+      try {
+        var token = localStorage.getItem('auth-token');
+        if (token) {
+          document.cookie = 'app_session_id=' + token + '; path=/; max-age=' + (365*24*60*60);
+        }
+      } catch(e) {}
+      
+      // 3. pageshow事件：如果从缓存恢复，强制刷新
+      window.addEventListener('pageshow', function(e) {
+        if (e.persisted) {
+          try {
+            var t = localStorage.getItem('auth-token');
+            if (t) document.cookie = 'app_session_id=' + t + '; path=/; max-age=' + (365*24*60*60);
+          } catch(ex) {}
+          window.location.replace(window.location.pathname + '?_t=' + Date.now());
+        }
+      });
     </script>
     
     <script type="module" src="/src/main.tsx"></script>

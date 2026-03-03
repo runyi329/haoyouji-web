@@ -79,6 +79,11 @@ export function serveStatic(app: Express) {
       return res.status(404).send('Not Found');
     }
     // 只对HTML页面请求返回index.html
+    // 禁止浏览器缓存HTML，解决Safari PWA模式下返回时显示旧页面的问题
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
