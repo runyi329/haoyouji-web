@@ -135,6 +135,26 @@ export default function Home() {
   
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
+  // 监听页面可见性变化：当用户从其他页面返回首页时，重新拉取所有数据
+  // 解决同一手机切换用户后首页显示旧用户数据的问题
+  const utils = trpc.useUtils();
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        utils.contacts.stats.invalidate();
+        utils.contacts.totalInteractionCount.invalidate();
+        utils.contacts.totalTagCount.invalidate();
+        utils.contacts.getTotalUsageDays.invalidate();
+        utils.invite.getMyInviteInfo.invalidate();
+        utils.equity.getPromotionStats.invalidate();
+        utils.auth.me.invalidate();
+        if (isLiulifan) utils.contacts.overviewStats.invalidate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [utils, isLiulifan]);
+
   // 跳动动画：页面加载后如果有需要关注的人，启动跳动动画
   useEffect(() => {
     if (isLiulifan && needsAttentionCount > 0) {
