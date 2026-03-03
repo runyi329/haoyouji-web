@@ -135,45 +135,54 @@ export default function Home() {
   
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
-  // 解决微信浏览器中点×/右滑返回时显示旧缓存数据的问题
-  // 策略：记录页面离开时间，返回时检测时间差，如果超过2秒则强制reload
-  // 这样无论微信浏览器是否走标准bfcache流程，都能可靠地刷新
+  // 解决Safari PWA模式中点×/右滑返回时显示旧缓存数据的问题
+  // 策略：记录当前用户ID，页面变为可见时检查用户是否变化，如果变化则强制导航到带时间戳的新URL
   const utils = trpc.useUtils();
   useEffect(() => {
     let hiddenTime = 0;
     
-    const handleHidden = () => {
+    // 记录当前页面加载时的用户token
+    const currentToken = localStorage.getItem('auth-token') || '';
+    
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         hiddenTime = Date.now();
-      }
-    };
-    
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible' && hiddenTime > 0) {
-        const elapsed = Date.now() - hiddenTime;
-        // 如果页面隐藏超过2秒（说明用户去了其他页面），强制重新加载
-        if (elapsed > 2000) {
-          window.location.reload();
+      } else if (document.visibilityState === 'visible') {
+        // 检查token是否变化（用户切换了）
+        const newToken = localStorage.getItem('auth-token') || '';
+        const tokenChanged = newToken !== currentToken;
+        const wasHiddenLong = hiddenTime > 0 && (Date.now() - hiddenTime) > 2000;
+        
+        if (tokenChanged || wasHiddenLong) {
+          // 强制同步Cookie
+          if (newToken) {
+            document.cookie = `app_session_id=${newToken}; path=/; max-age=${365 * 24 * 60 * 60}`;
+          }
+          // 用带时间戳的URL强制导航，彻底绕过Safari的所有缓存
+          const baseUrl = window.location.pathname;
+          window.location.replace(baseUrl + '?_t=' + Date.now());
           return;
         }
         hiddenTime = 0;
       }
     };
     
-    // pageshow: 处理bfcache恢复场景（无论 persisted 是否为 true）
+    // pageshow: 处理bfcache恢复场景
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
-        window.location.reload();
+        const newToken = localStorage.getItem('auth-token') || '';
+        if (newToken) {
+          document.cookie = `app_session_id=${newToken}; path=/; max-age=${365 * 24 * 60 * 60}`;
+        }
+        window.location.replace(window.location.pathname + '?_t=' + Date.now());
       }
     };
     
-    document.addEventListener('visibilitychange', handleHidden);
-    document.addEventListener('visibilitychange', handleVisible);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pageshow', handlePageShow);
     
     return () => {
-      document.removeEventListener('visibilitychange', handleHidden);
-      document.removeEventListener('visibilitychange', handleVisible);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pageshow', handlePageShow);
     };
   }, []);
