@@ -129,13 +129,14 @@ export const dietRouter = router({
       try {
         const unit = input.weightUnit === 'kg' ? 'kg' : '斤';
         const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '体重打卡', '⚖️', '#E53935');
+        // amount存体重数值*100（整数存储），description存单位标识，方便前端解析
         await dbLedger.addTransaction({
           ledgerId: input.ledgerId,
           userId: ctx.user.id,
           type: 'expense',
-          amount: 0,
+          amount: input.weight,
           categoryId,
-          description: `体重打卡：${input.weight}${unit}${input.note ? ' · ' + input.note : ''}`,
+          description: `[diet:weight:${unit}] ${input.note || ''}`.trim(),
           imageUrl: input.imageUrl,
           transactionDate: input.recordDate,
         });
@@ -178,16 +179,20 @@ export const dietRouter = router({
       try {
         if (input.measureType === 'bmi') {
           const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, 'BMI指标', '📊', '#1D4ED8');
-          const desc = `BMI指标：${input.bmi ?? ''}（身高${input.height}cm / 体重${input.weight}kg）${input.note ? ' · ' + input.note : ''}`;
-          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+          // amount存BMI数值，description存类型标识
+          const bmiVal = input.bmi ?? 0;
+          const desc = `[diet:bmi:BMI] 身高${input.height}cm 体重${input.weight}kg${input.note ? ' ' + input.note : ''}`.trim();
+          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: bmiVal, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
         } else {
           const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '三围记录', '📏', '#7C3AED');
+          // amount存腾围（主要指标），description存全部三围数据
+          const waistVal = input.waist ?? input.chest ?? input.hip ?? 0;
           const parts = [];
-          if (input.chest) parts.push(`胸${input.chest}cm`);
-          if (input.waist) parts.push(`腾${input.waist}cm`);
-          if (input.hip) parts.push(`臀${input.hip}cm`);
-          const desc = `三围记录：${parts.join(' / ')}${input.note ? ' · ' + input.note : ''}`;
-          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
+          if (input.chest) parts.push(`胸${input.chest}`);
+          if (input.waist) parts.push(`腾${input.waist}`);
+          if (input.hip) parts.push(`臀${input.hip}`);
+          const desc = `[diet:measurement:cm] ${parts.join('/')}${input.note ? ' ' + input.note : ''}`.trim();
+          await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: waistVal, categoryId, description: desc, imageUrl: input.imageUrl, transactionDate: input.recordDate });
         }
       } catch (e) {
         console.error('[diet.addMeasurement] 同步账目条目失败:', e);
@@ -235,9 +240,10 @@ export const dietRouter = router({
       // 同步写入账目条目
       try {
         const categoryId = await dbDiet.ensureDietCategory(input.ledgerId, ctx.user.id, '卡路里消耗', '🔥', '#EA580C');
-        const actStr = input.activityType ? `《${input.activityType}》 ` : '';
-        const desc = `卡路里消耗：${actStr}${input.calories}kcal${input.note ? ' · ' + input.note : ''}`;
-        await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: 0, categoryId, description: desc, transactionDate: input.recordDate });
+        // amount存卡路里数值，description存类型标识
+        const actStr = input.activityType ? input.activityType : '';
+        const desc = `[diet:calorie:kcal] ${actStr}${input.note ? ' ' + input.note : ''}`.trim();
+        await dbLedger.addTransaction({ ledgerId: input.ledgerId, userId: ctx.user.id, type: 'expense', amount: input.calories, categoryId, description: desc, transactionDate: input.recordDate });
       } catch (e) {
         console.error('[diet.addCalorie] 同步账目条目失败:', e);
       }
