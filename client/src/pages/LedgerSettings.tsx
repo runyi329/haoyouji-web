@@ -428,13 +428,13 @@ export default function LedgerSettings() {
         />
 
 
-        {/* 只有账本创建人(owner)和管理员(admin)才能看到成员记账审批 */}
+        {/* 只有账本创建人(owner)和管理员(admin)才能看到 */}
         {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
           <SettingItem 
-            label="成员记账审批" 
+            label={ledgerData?.type === 'diet' ? '成员信息设置' : '成员记账审批'} 
             showIcon 
             hasHelp 
-            onClick={() => setLocation(`/ledger/${ledgerId}/approval-settings`)}
+            onClick={() => setLocation(`/ledger/${ledgerId}/${ledgerData?.type === 'diet' ? 'member-info' : 'approval-settings'}`)}
           />
         )}
         <SettingItem label="账本预算&目标" showIcon hasHelp />
