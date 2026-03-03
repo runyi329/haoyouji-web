@@ -57,8 +57,9 @@ export default function BeautyHome() {
 
   const promotions = promotionsQuery.data ?? [];
   // 商品数据：优先用数据库数据，查询失败或为空时用兜底数据
+  // 立即显示底逃数据，API数据到达后再替换
   const dbProducts = productsQuery.data ?? [];
-  const products = dbProducts.length > 0 ? dbProducts : (productsQuery.isError ? FALLBACK_PRODUCTS : (productsQuery.isLoading ? [] : FALLBACK_PRODUCTS));
+  const products = dbProducts.length > 0 ? dbProducts : FALLBACK_PRODUCTS;
   const healthNews = healthQuery.data ?? [];
   const newsLoading = healthQuery.isLoading;
 
@@ -154,7 +155,7 @@ export default function BeautyHome() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               {products.slice(0, 4).map((p) => (
-                <Link key={p.id} href={`/beauty/product/${p.id}`}>
+                <Link key={p.id} href={dbProducts.length > 0 ? `/beauty/product/${p.id}` : `/beauty/product/fallback-${p.id}`}>
                   <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
                     <div className="h-28 bg-gradient-to-br from-rose-50 to-pink-50 flex items-center justify-center">
                       {p.imageUrl ? (

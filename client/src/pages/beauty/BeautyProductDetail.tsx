@@ -140,17 +140,25 @@ export default function BeautyProductDetail() {
   const { data: currentUser } = trpc.auth.me.useQuery();
   const [showAllSpecs, setShowAllSpecs] = useState(false);
 
-  // 判断是否使用兜底数据
-  const isFallback = id.startsWith("fallback-");
-  const fallbackId = isFallback ? parseInt(id.replace("fallback-", "")) : null;
-  const fallbackProduct = isFallback ? FALLBACK_PRODUCTS.find(p => p.id === fallbackId) : null;
+  // 判断是否使用底逃数据
+  const isFallbackRoute = id.startsWith("fallback-");
+  const fallbackId = isFallbackRoute ? parseInt(id.replace("fallback-", "")) : null;
+  // 底逃商品：直接从底逃数据中查找
+  const fallbackProduct = FALLBACK_PRODUCTS.find(p =>
+    isFallbackRoute ? p.id === fallbackId : p.name === "placeholder"
+  ) ?? null;
 
-  const { data: dbProduct, isLoading } = trpc.beauty.shop.getProduct.useQuery(
-    { id: parseInt(id) },
-    { enabled: !isFallback }
+  const numericId = !isFallbackRoute && /^\d+$/.test(id) ? parseInt(id) : -1;
+  const { data: dbProduct } = trpc.beauty.shop.getProduct.useQuery(
+    { id: numericId },
+    { enabled: !isFallbackRoute && numericId > 0 }
   );
 
-  const product = isFallback ? fallbackProduct : dbProduct;
+  // 立即显示：数据库数据优先，如果还在加载则用底逃匹配
+  const product = dbProduct ?? (isFallbackRoute ? fallbackProduct : (
+    FALLBACK_PRODUCTS.find(p => p.id === numericId) ?? null
+  ));
+  const isFallback = !dbProduct;
 
   const addToCart = trpc.beauty.shop.addToCart.useMutation({
     onSuccess: () => {
@@ -160,13 +168,7 @@ export default function BeautyProductDetail() {
     onError: (err) => toast.error("操作失败", { description: err.message }),
   });
 
-  if (!isFallback && isLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-gray-500 text-sm">加载中...</p>
-      </div>
-    );
-  }
+  // 不再显示加载中状态，底逃数据立即可用
 
   if (!product) {
     return (

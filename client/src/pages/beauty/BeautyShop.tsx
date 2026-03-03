@@ -22,15 +22,15 @@ export default function BeautyShop() {
   const productsQuery = trpc.beauty.shop.products.useQuery({});
   const cartQuery = trpc.beauty.shop.getCart.useQuery();
 
-  // 兜底逻辑：数据库查询失败或为空时用前端硬编码数据
+  // 底逃逻辑：立即显示底逃数据，API数据到达后再替换（不等待加载）
   const dbBrands = brandsQuery.data ?? [];
-  const brands = dbBrands.length > 0 ? dbBrands : (brandsQuery.isError ? FALLBACK_BRANDS : (brandsQuery.isLoading ? [] : FALLBACK_BRANDS));
+  const brands = dbBrands.length > 0 ? dbBrands : FALLBACK_BRANDS;
   const dbProducts = productsQuery.data ?? [];
-  const products = dbProducts.length > 0 ? dbProducts : (productsQuery.isError ? FALLBACK_PRODUCTS : (productsQuery.isLoading ? [] : FALLBACK_PRODUCTS));
+  const products = dbProducts.length > 0 ? dbProducts : FALLBACK_PRODUCTS;
   const cartItems = cartQuery.data ?? [];
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
-  // 是否使用兜底数据（兜底时禁用购物车功能）
-  const isFallback = dbProducts.length === 0 && products.length > 0;
+  // 是否使用底逃数据（底逃时禁用购物车功能）
+  const isFallback = dbProducts.length === 0;
 
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
   const filteredProducts = selectedBrand
@@ -103,10 +103,8 @@ export default function BeautyShop() {
           </div>
         )}
 
-        {/* 商品列表 */}
-        {productsQuery.isLoading && dbProducts.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
-        ) : filteredProducts.length === 0 ? (
+        {/* 商品列表 - 立即显示底逃数据，无需等待API */}
+        {filteredProducts.length === 0 ? (
           <div className="text-center py-12 text-gray-400 text-sm">暂无商品</div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
