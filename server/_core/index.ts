@@ -73,7 +73,7 @@ async function initRedCubeProduct() {
     if (existingBrand.length > 0) {
       brandId = existingBrand[0].id;
     } else {
-      const [inserted] = await db.insert(beautyBrands).values({
+      await db.insert(beautyBrands).values({
         name: 'IDEALIGHT',
         description: '上海佰时特健康科技有限公司旗下品牌，专注红光生物光疗设备研发，产品通过国家CMA计量认证与CNAS实验室认证。',
         logoUrl: null,
@@ -81,7 +81,9 @@ async function initRedCubeProduct() {
         isActive: 1,
         sortOrder: 0,
       });
-      brandId = (inserted as any).insertId;
+      const newBrand = await db.select().from(beautyBrands)
+        .where(eq(beautyBrands.name, 'IDEALIGHT')).limit(1);
+      brandId = newBrand[0].id;
     }
 
     // 确保分类存在
@@ -92,13 +94,15 @@ async function initRedCubeProduct() {
     if (existingCat.length > 0) {
       categoryId = existingCat[0].id;
     } else {
-      const [inserted] = await db.insert(beautyProductCategories).values({
+      await db.insert(beautyProductCategories).values({
         name: '健康仪器',
         type: 'health',
         isActive: 1,
         sortOrder: 0,
       });
-      categoryId = (inserted as any).insertId;
+      const newCat = await db.select().from(beautyProductCategories)
+        .where(eq(beautyProductCategories.name, '健康仪器')).limit(1);
+      categoryId = newCat[0].id;
     }
 
     // 插入商品
@@ -139,7 +143,7 @@ async function initRedCubeProduct() {
     });
     console.log('[初始化] 红立方光焕能舱商品已创建');
   } catch (error) {
-    console.error('[初始化] 红立方商品创建失败:', error);
+    console.error('[初始化] 红立方商品创建失败:', error instanceof Error ? error.message : error);
   }
 }
 
