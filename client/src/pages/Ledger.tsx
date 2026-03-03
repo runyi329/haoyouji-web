@@ -660,11 +660,7 @@ export default function Ledger() {
               className="cursor-pointer"
               onClick={() => {
                 handleLedgerClick(ledger.id);
-                if ((ledger as any).type === 'diet') {
-                  setLocation(`/ledger/${ledger.id}/diet`);
-                } else {
-                  setLocation(`/ledger/${ledger.id}`);
-                }
+                setLocation(`/ledger/${ledger.id}`);
               }}
             >
               <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -895,7 +891,7 @@ export default function Ledger() {
                   {!isCollapsed && (
                     <div className="space-y-3">
                       {groupLedgers.map(ledger => (
-                        <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); if ((ledger as any).type === 'diet') { setLocation(`/ledger/${ledger.id}/diet`); } else { setLocation(`/ledger/${ledger.id}`); } }}>
+                        <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
                           <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]">
                             <div className="px-4 py-4">
                               <div className="mb-3">
@@ -952,7 +948,7 @@ export default function Ledger() {
                   )}
                   <div className="space-y-3">
                     {ungrouped.map(ledger => (
-                      <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); if ((ledger as any).type === 'diet') { setLocation(`/ledger/${ledger.id}/diet`); } else { setLocation(`/ledger/${ledger.id}`); } }}>
+                      <div key={ledger.id} className="cursor-pointer" onClick={() => { handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                           <div className="px-4 py-4">
                             <div className="mb-3">
