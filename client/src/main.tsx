@@ -62,21 +62,27 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
-        // 从 localStorage 读取 token 作为备用（防止 Cookie 被微信清除）
+        // 从 localStorage 读取最新登录的 token
         const token = localStorage.getItem('auth-token');
         const headers = new Headers(init?.headers);
         
-        // 始终添加 Authorization header（如果有token）
-        // 这样即使 Cookie 失效，服务端也能通过 Authorization header 验证
         if (token) {
+          // 添加 Authorization header
           headers.set('Authorization', `Bearer ${token}`);
-          console.log('[tRPC] Using token from localStorage');
+          
+          // 强制用 localStorage 中的 token 覆盖 Cookie
+          // 解决微信浏览器中 Cookie 和 localStorage token 不一致的问题
+          // （微信多 webview 可能导致旧用户的 Cookie 残留）
+          try {
+            document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
+          } catch (e) {}
         }
         
         return globalThis.fetch(input, {
           ...(init ?? {}),
           headers,
           credentials: "include",
+          cache: "no-store",  // 禁用 HTTP 缓存
         });
       },
     }),
