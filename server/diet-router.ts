@@ -1,35 +1,47 @@
 /**
  * 减肥账本路由
- * 包含：配置管理、体重记录、卡路里记录、三餐AI分析
+ * 支持多学员：教练可为任意学员设置档案，学员看自己的数据
  */
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 import * as dbDiet from "./db-diet";
 import { invokeLLM } from "./_core/llm";
 import { uploadImageToCOS } from "./cos-upload";
+import * as dbLedger from "./db-ledger";
 
 export const dietRouter = router({
-  // ========== 配置 ==========
 
-  // 获取减肥账本配置
-  getConfig: protectedProcedure
+  // ========== 学员档案（教练管理） ==========
+
+  // 获取当前用户自己的减肥档案
+  getMyConfig: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ input }) => {
-      return await dbDiet.getDietConfig(input.ledgerId);
+    .query(async ({ ctx, input }) => {
+      return await dbDiet.getMemberConfig(input.ledgerId, ctx.user.id);
     }),
 
-  // 保存/更新减肥账本配置
-  saveConfig: protectedProcedure
+  // 获取指定学员的减肥档案（教练用）
+  getMemberConfig: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), userId: z.number() }))
+    .query(async ({ input }) => {
+      return await dbDiet.getMemberConfig(input.ledgerId, input.userId);
+    }),
+
+  // 保存/更新指定学员的减肥档案（教练为学员设置）
+  saveMemberConfig: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
-      initialWeight: z.number().positive(),
-      targetWeight: z.number().positive(),
+      userId: z.number(),   // 要设置档案的学员userId
+      nickname: z.string().optional(),
+      initialWeight: z.number().positive().optional(),
+      targetWeight: z.number().positive().optional(),
       currentWeight: z.number().positive().optional(),
       height: z.number().positive().optional(),
       gender: z.enum(['male', 'female']).optional(),
     }))
     .mutation(async ({ input }) => {
-      await dbDiet.saveDietConfig(input.ledgerId, {
+      await dbDiet.saveMemberConfig(input.ledgerId, input.userId, {
+        nickname: input.nickname,
         initialWeight: input.initialWeight,
         targetWeight: input.targetWeight,
         currentWeight: input.currentWeight,
@@ -39,9 +51,22 @@ export const dietRouter = router({
       return { success: true };
     }),
 
+  // 获取账本内所有学员的档案列表（教练用）
+  getAllMemberConfigs: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      return await dbDiet.getAllMemberConfigs(input.ledgerId);
+    }),
+
+  // 获取账本成员列表（含用户信息，用于学员管理页）
+  getLedgerMembers: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+    }),
+
   // ========== 体重记录 ==========
 
-  // 添加体重打卡
   addWeight: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
@@ -59,19 +84,17 @@ export const dietRouter = router({
       });
     }),
 
-  // 获取体重记录列表（用于图表）
   getWeightHistory: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
       days: z.number().optional().default(60),
     }))
-    .query(async ({ input }) => {
-      return await dbDiet.getWeightRecords(input.ledgerId, input.days);
+    .query(async ({ ctx, input }) => {
+      return await dbDiet.getWeightRecords(input.ledgerId, ctx.user.id, input.days);
     }),
 
   // ========== 卡路里记录 ==========
 
-  // 添加卡路里消耗
   addCalorie: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
@@ -91,24 +114,22 @@ export const dietRouter = router({
       });
     }),
 
-  // 获取卡路里记录（按日期汇总，用于图表）
   getCalorieHistory: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
       days: z.number().optional().default(60),
     }))
-    .query(async ({ input }) => {
-      return await dbDiet.getCalorieSummaryByDate(input.ledgerId, input.days);
+    .query(async ({ ctx, input }) => {
+      return await dbDiet.getCalorieSummaryByDate(input.ledgerId, ctx.user.id, input.days);
     }),
 
   // ========== 三餐AI分析 ==========
 
-  // 上传餐食照片并触发AI分析
   analyzeMeal: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
       mealType: z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
-      imageBase64: z.string(), // base64编码的图片
+      imageBase64: z.string(),
       imageFilename: z.string().optional(),
       recordDate: z.string(),
     }))
@@ -125,7 +146,7 @@ export const dietRouter = router({
         throw new Error('图片上传失败，请重试');
       }
 
-      // 2. 先保存记录（无AI分析）
+      // 2. 先保存记录
       const record = await dbDiet.addMealRecord({
         ledgerId: input.ledgerId,
         userId: ctx.user.id,
@@ -134,7 +155,7 @@ export const dietRouter = router({
         recordDate: input.recordDate,
       });
 
-      // 3. 调用AI分析（图片识别）
+      // 3. AI分析
       const mealTypeLabel = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' }[input.mealType];
       try {
         const aiResult = await invokeLLM({
@@ -146,10 +167,7 @@ export const dietRouter = router({
             {
               role: 'user',
               content: [
-                {
-                  type: 'image_url',
-                  image_url: { url: imageUrl, detail: 'auto' },
-                },
+                { type: 'image_url', image_url: { url: imageUrl, detail: 'auto' } },
                 {
                   type: 'text',
                   text: `这是用户的${mealTypeLabel}照片。请分析这顿餐食，返回以下JSON格式：
@@ -174,15 +192,10 @@ export const dietRouter = router({
         });
 
         const aiText = typeof aiResult.content === 'string' ? aiResult.content : '';
-        // 提取JSON
         const jsonMatch = aiText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           await dbDiet.updateMealAiAnalysis(record.id, jsonMatch[0]);
-          return {
-            id: record.id,
-            imageUrl,
-            aiAnalysis: JSON.parse(jsonMatch[0]),
-          };
+          return { id: record.id, imageUrl, aiAnalysis: JSON.parse(jsonMatch[0]) };
         }
       } catch (e) {
         console.error('[diet.analyzeMeal] AI分析失败:', e);
@@ -191,14 +204,13 @@ export const dietRouter = router({
       return { id: record.id, imageUrl, aiAnalysis: null };
     }),
 
-  // 获取某天的三餐记录
   getMeals: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
       date: z.string().optional(),
     }))
-    .query(async ({ input }) => {
-      const records = await dbDiet.getMealRecords(input.ledgerId, input.date);
+    .query(async ({ ctx, input }) => {
+      const records = await dbDiet.getMealRecords(input.ledgerId, ctx.user.id, input.date);
       return records.map((r: any) => ({
         ...r,
         aiAnalysis: r.aiAnalysis ? (() => { try { return JSON.parse(r.aiAnalysis); } catch { return null; } })() : null,
@@ -207,10 +219,9 @@ export const dietRouter = router({
 
   // ========== 综合统计 ==========
 
-  // 获取减肥账本完整统计（用于首页面板）
   getStats: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ input }) => {
-      return await dbDiet.getDietStats(input.ledgerId);
+    .query(async ({ ctx, input }) => {
+      return await dbDiet.getDietStats(input.ledgerId, ctx.user.id);
     }),
 });

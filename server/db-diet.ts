@@ -1,11 +1,10 @@
 /**
  * 减肥账本 - 数据库操作
- * 包含：体重记录、卡路里记录、三餐照片、AI营养分析
+ * 支持多学员：每个学员有独立的减肥档案（按 ledgerId + userId 区分）
  */
 import { getLedgerDb } from "./db";
 import { sql } from "drizzle-orm";
 
-// ========== 自动建表 ==========
 let _tablesCreated = false;
 
 export async function ensureDietTables() {
@@ -13,18 +12,21 @@ export async function ensureDietTables() {
   const db = await getLedgerDb();
   if (!db) return;
 
-  // 减肥账本配置表（初始体重/目标体重）
+  // 减肥档案表（每个学员独立一条，按 ledgerId+userId 唯一）
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS diet_ledger_config (
+    CREATE TABLE IF NOT EXISTS diet_member_config (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      ledgerId INT NOT NULL UNIQUE,
-      initialWeight DECIMAL(5,1) NOT NULL COMMENT '初始体重(斤)',
-      targetWeight DECIMAL(5,1) NOT NULL COMMENT '目标体重(斤)',
+      ledgerId INT NOT NULL,
+      userId INT NOT NULL,
+      nickname VARCHAR(50) COMMENT '学员昵称',
+      initialWeight DECIMAL(5,1) COMMENT '初始体重(斤)',
+      targetWeight DECIMAL(5,1) COMMENT '目标体重(斤)',
       currentWeight DECIMAL(5,1) COMMENT '当前体重(斤)',
       height DECIMAL(5,1) COMMENT '身高(cm)',
       gender ENUM('male','female') DEFAULT 'female',
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_ledger_user (ledgerId, userId)
     )
   `);
 
@@ -38,7 +40,7 @@ export async function ensureDietTables() {
       note VARCHAR(200) COMMENT '备注',
       recordDate DATE NOT NULL,
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_ledger_date (ledgerId, recordDate)
+      INDEX idx_ledger_user_date (ledgerId, userId, recordDate)
     )
   `);
 
@@ -53,7 +55,7 @@ export async function ensureDietTables() {
       note VARCHAR(200) COMMENT '备注',
       recordDate DATE NOT NULL,
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_ledger_date (ledgerId, recordDate)
+      INDEX idx_ledger_user_date (ledgerId, userId, recordDate)
     )
   `);
 
@@ -63,12 +65,12 @@ export async function ensureDietTables() {
       id INT AUTO_INCREMENT PRIMARY KEY,
       ledgerId INT NOT NULL,
       userId INT NOT NULL,
-      mealType ENUM('breakfast','lunch','dinner','snack') NOT NULL COMMENT '餐次',
-      imageUrl VARCHAR(500) NOT NULL COMMENT '照片URL',
+      mealType ENUM('breakfast','lunch','dinner','snack') NOT NULL,
+      imageUrl VARCHAR(500) NOT NULL,
       aiAnalysis TEXT COMMENT 'AI分析结果JSON',
       recordDate DATE NOT NULL,
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_ledger_date (ledgerId, recordDate)
+      INDEX idx_ledger_user_date (ledgerId, userId, recordDate)
     )
   `);
 
@@ -76,26 +78,26 @@ export async function ensureDietTables() {
   console.log("[diet] 减肥账本数据表初始化完成");
 }
 
-// 在模块加载时执行
 ensureDietTables().catch(console.error);
 
-// ========== 减肥账本配置 ==========
+// ========== 学员档案（教练可为任意学员设置） ==========
 
-export async function getDietConfig(ledgerId: number) {
+export async function getMemberConfig(ledgerId: number, userId: number) {
   const db = await getLedgerDb();
   if (!db) return null;
   await ensureDietTables();
   const rows = await db.execute(sql`
-    SELECT * FROM diet_ledger_config WHERE ledgerId = ${ledgerId} LIMIT 1
+    SELECT * FROM diet_member_config WHERE ledgerId = ${ledgerId} AND userId = ${userId} LIMIT 1
   `);
   const data = (rows as any)[0];
   if (!data || !Array.isArray(data) || data.length === 0) return null;
   return data[0];
 }
 
-export async function saveDietConfig(ledgerId: number, config: {
-  initialWeight: number;
-  targetWeight: number;
+export async function saveMemberConfig(ledgerId: number, userId: number, config: {
+  nickname?: string;
+  initialWeight?: number;
+  targetWeight?: number;
   currentWeight?: number;
   height?: number;
   gender?: 'male' | 'female';
@@ -104,14 +106,40 @@ export async function saveDietConfig(ledgerId: number, config: {
   if (!db) throw new Error("DB connection failed");
   await ensureDietTables();
   await db.execute(sql`
-    INSERT INTO diet_ledger_config (ledgerId, initialWeight, targetWeight, currentWeight, height, gender)
-    VALUES (${ledgerId}, ${config.initialWeight}, ${config.targetWeight}, ${config.currentWeight ?? null}, ${config.height ?? null}, ${config.gender ?? 'female'})
+    INSERT INTO diet_member_config (ledgerId, userId, nickname, initialWeight, targetWeight, currentWeight, height, gender)
+    VALUES (
+      ${ledgerId}, ${userId},
+      ${config.nickname ?? null},
+      ${config.initialWeight ?? null},
+      ${config.targetWeight ?? null},
+      ${config.currentWeight ?? config.initialWeight ?? null},
+      ${config.height ?? null},
+      ${config.gender ?? 'female'}
+    )
     ON DUPLICATE KEY UPDATE
-      targetWeight = VALUES(targetWeight),
+      nickname = COALESCE(VALUES(nickname), nickname),
+      initialWeight = COALESCE(VALUES(initialWeight), initialWeight),
+      targetWeight = COALESCE(VALUES(targetWeight), targetWeight),
       currentWeight = COALESCE(VALUES(currentWeight), currentWeight),
       height = COALESCE(VALUES(height), height),
       gender = VALUES(gender)
   `);
+}
+
+// 获取账本内所有学员的档案（教练用）
+export async function getAllMemberConfigs(ledgerId: number) {
+  const db = await getLedgerDb();
+  if (!db) return [];
+  await ensureDietTables();
+  const rows = await db.execute(sql`
+    SELECT c.*, 
+      (SELECT weight FROM diet_weight_records WHERE ledgerId = c.ledgerId AND userId = c.userId ORDER BY recordDate DESC LIMIT 1) as latestWeight,
+      (SELECT recordDate FROM diet_weight_records WHERE ledgerId = c.ledgerId AND userId = c.userId ORDER BY recordDate DESC LIMIT 1) as lastCheckIn
+    FROM diet_member_config c
+    WHERE c.ledgerId = ${ledgerId}
+    ORDER BY c.createdAt ASC
+  `);
+  return (rows as any)[0] as any[];
 }
 
 // ========== 体重记录 ==========
@@ -130,21 +158,22 @@ export async function addWeightRecord(data: {
     INSERT INTO diet_weight_records (ledgerId, userId, weight, note, recordDate)
     VALUES (${data.ledgerId}, ${data.userId}, ${data.weight}, ${data.note ?? null}, ${data.recordDate})
   `);
-  // 同步更新配置里的当前体重
+  // 同步更新该学员的当前体重
   await db.execute(sql`
-    UPDATE diet_ledger_config SET currentWeight = ${data.weight} WHERE ledgerId = ${data.ledgerId}
+    UPDATE diet_member_config SET currentWeight = ${data.weight}
+    WHERE ledgerId = ${data.ledgerId} AND userId = ${data.userId}
   `);
   return { id: Number((result as any)[0]?.insertId || (result as any).insertId) };
 }
 
-export async function getWeightRecords(ledgerId: number, days: number = 30) {
+export async function getWeightRecords(ledgerId: number, userId: number, days: number = 30) {
   const db = await getLedgerDb();
   if (!db) return [];
   await ensureDietTables();
   const rows = await db.execute(sql`
     SELECT id, weight, note, recordDate, createdAt
     FROM diet_weight_records
-    WHERE ledgerId = ${ledgerId}
+    WHERE ledgerId = ${ledgerId} AND userId = ${userId}
     ORDER BY recordDate ASC
     LIMIT ${days}
   `);
@@ -171,29 +200,14 @@ export async function addCalorieRecord(data: {
   return { id: Number((result as any)[0]?.insertId || (result as any).insertId) };
 }
 
-export async function getCalorieRecords(ledgerId: number, days: number = 30) {
-  const db = await getLedgerDb();
-  if (!db) return [];
-  await ensureDietTables();
-  const rows = await db.execute(sql`
-    SELECT id, calories, activityType, note, recordDate, createdAt
-    FROM diet_calorie_records
-    WHERE ledgerId = ${ledgerId}
-    ORDER BY recordDate ASC
-    LIMIT ${days}
-  `);
-  return (rows as any)[0] as any[];
-}
-
-// 按日期汇总卡路里（用于图表）
-export async function getCalorieSummaryByDate(ledgerId: number, days: number = 30) {
+export async function getCalorieSummaryByDate(ledgerId: number, userId: number, days: number = 30) {
   const db = await getLedgerDb();
   if (!db) return [];
   await ensureDietTables();
   const rows = await db.execute(sql`
     SELECT recordDate, SUM(calories) as totalCalories
     FROM diet_calorie_records
-    WHERE ledgerId = ${ledgerId}
+    WHERE ledgerId = ${ledgerId} AND userId = ${userId}
     GROUP BY recordDate
     ORDER BY recordDate ASC
     LIMIT ${days}
@@ -221,7 +235,7 @@ export async function addMealRecord(data: {
   return { id: Number((result as any)[0]?.insertId || (result as any).insertId) };
 }
 
-export async function getMealRecords(ledgerId: number, date?: string) {
+export async function getMealRecords(ledgerId: number, userId: number, date?: string) {
   const db = await getLedgerDb();
   if (!db) return [];
   await ensureDietTables();
@@ -230,14 +244,14 @@ export async function getMealRecords(ledgerId: number, date?: string) {
     rows = await db.execute(sql`
       SELECT id, mealType, imageUrl, aiAnalysis, recordDate, createdAt
       FROM diet_meal_records
-      WHERE ledgerId = ${ledgerId} AND recordDate = ${date}
+      WHERE ledgerId = ${ledgerId} AND userId = ${userId} AND recordDate = ${date}
       ORDER BY createdAt ASC
     `);
   } else {
     rows = await db.execute(sql`
       SELECT id, mealType, imageUrl, aiAnalysis, recordDate, createdAt
       FROM diet_meal_records
-      WHERE ledgerId = ${ledgerId}
+      WHERE ledgerId = ${ledgerId} AND userId = ${userId}
       ORDER BY recordDate DESC, createdAt ASC
       LIMIT 50
     `);
@@ -253,22 +267,22 @@ export async function updateMealAiAnalysis(mealId: number, aiAnalysis: string) {
   `);
 }
 
-// ========== 综合统计 ==========
+// ========== 综合统计（按学员） ==========
 
-export async function getDietStats(ledgerId: number) {
+export async function getDietStats(ledgerId: number, userId: number) {
   const db = await getLedgerDb();
   if (!db) return null;
   await ensureDietTables();
 
-  const config = await getDietConfig(ledgerId);
+  const config = await getMemberConfig(ledgerId, userId);
   const weightRows = await db.execute(sql`
     SELECT weight, recordDate FROM diet_weight_records
-    WHERE ledgerId = ${ledgerId}
+    WHERE ledgerId = ${ledgerId} AND userId = ${userId}
     ORDER BY recordDate ASC
   `);
   const calorieRows = await db.execute(sql`
     SELECT SUM(calories) as total FROM diet_calorie_records
-    WHERE ledgerId = ${ledgerId}
+    WHERE ledgerId = ${ledgerId} AND userId = ${userId}
   `);
 
   const weights = (weightRows as any)[0] as any[];
@@ -278,7 +292,7 @@ export async function getDietStats(ledgerId: number) {
     config,
     weightHistory: weights,
     totalCaloriesBurned: totalCalories,
-    currentWeight: weights.length > 0 ? Number(weights[weights.length - 1].weight) : null,
-    startWeight: weights.length > 0 ? Number(weights[0].weight) : null,
+    currentWeight: weights.length > 0 ? Number(weights[weights.length - 1].weight) : (config?.currentWeight ? Number(config.currentWeight) : null),
+    startWeight: config?.initialWeight ? Number(config.initialWeight) : (weights.length > 0 ? Number(weights[0].weight) : null),
   };
 }

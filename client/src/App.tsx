@@ -122,6 +122,7 @@ const DietLedger = lazy(() => import("./pages/DietLedger"));
 const DietAdd = lazy(() => import("./pages/DietAdd"));
 const DietConfig = lazy(() => import("./pages/DietConfig"));
 const DietMeal = lazy(() => import("./pages/DietMeal"));
+const DietMembers = lazy(() => import("./pages/DietMembers"));
 
 const BannerConfig = lazy(() => import("./pages/admin/BannerConfig"));
 const PointsManagement = lazy(() => import("./pages/admin/PointsManagement"));
@@ -312,6 +313,7 @@ function Router() {
         <Route path="/ledger/:id/diet-add" component={DietAdd} />
         <Route path="/ledger/:id/diet-config" component={DietConfig} />
         <Route path="/ledger/:id/diet-meal" component={DietMeal} />
+        <Route path="/ledger/:id/diet-members" component={DietMembers} />
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />
