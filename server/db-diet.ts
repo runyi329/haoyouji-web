@@ -74,7 +74,34 @@ export async function ensureDietTables() {
     )
   `);
 
+  // 三围/BMI记录表
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS diet_measurement_records (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ledgerId INT NOT NULL,
+      userId INT NOT NULL,
+      measureType ENUM('measurement','bmi') NOT NULL COMMENT '记录类型：三围/BMI',
+      chest DECIMAL(5,1) COMMENT '胸围(cm)',
+      waist DECIMAL(5,1) COMMENT '腰围(cm)',
+      hip DECIMAL(5,1) COMMENT '臀围(cm)',
+      height DECIMAL(5,1) COMMENT '身高(cm，BMI用)',
+      weight DECIMAL(5,1) COMMENT '体重(kg，BMI用)',
+      bmi DECIMAL(4,1) COMMENT 'BMI值',
+      imageUrl VARCHAR(500) COMMENT '照片URL',
+      note VARCHAR(200) COMMENT '备注',
+      recordDate DATE NOT NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_ledger_user_date (ledgerId, userId, recordDate)
+    )
+  `);
   _tablesCreated = true;
+  // 迁移：为体重记录表添加 weightUnit 和 imageUrl 字段
+  try {
+    await db.execute(sql`ALTER TABLE diet_weight_records ADD COLUMN weightUnit ENUM('jin','kg') NOT NULL DEFAULT 'jin' COMMENT '单位：斤/公斤'`);
+  } catch (e: any) { if (!String(e).includes('Duplicate column')) console.warn('[diet] weightUnit迁移跳过:', e?.message); }
+  try {
+    await db.execute(sql`ALTER TABLE diet_weight_records ADD COLUMN imageUrl VARCHAR(500) NULL COMMENT '照片URL'`);
+  } catch (e: any) { if (!String(e).includes('Duplicate column')) console.warn('[diet] imageUrl迁移跳过:', e?.message); }
   console.log("[diet] 减肥账本数据表初始化完成");
 }
 
@@ -186,6 +213,8 @@ export async function addWeightRecord(data: {
   ledgerId: number;
   userId: number;
   weight: number;
+  weightUnit?: 'jin' | 'kg';
+  imageUrl?: string;
   note?: string;
   recordDate: string;
 }) {
@@ -193,8 +222,8 @@ export async function addWeightRecord(data: {
   if (!db) throw new Error("DB connection failed");
   await ensureDietTables();
   const result = await db.execute(sql`
-    INSERT INTO diet_weight_records (ledgerId, userId, weight, note, recordDate)
-    VALUES (${data.ledgerId}, ${data.userId}, ${data.weight}, ${data.note ?? null}, ${data.recordDate})
+    INSERT INTO diet_weight_records (ledgerId, userId, weight, weightUnit, imageUrl, note, recordDate)
+    VALUES (${data.ledgerId}, ${data.userId}, ${data.weight}, ${data.weightUnit ?? 'jin'}, ${data.imageUrl ?? null}, ${data.note ?? null}, ${data.recordDate})
   `);
   // 同步更新该学员的当前体重
   await db.execute(sql`
@@ -202,6 +231,50 @@ export async function addWeightRecord(data: {
     WHERE ledgerId = ${data.ledgerId} AND userId = ${data.userId}
   `);
   return { id: Number((result as any)[0]?.insertId || (result as any).insertId) };
+}
+
+// ========== 三围/BMI 记录 ==========
+
+export async function addMeasurementRecord(data: {
+  ledgerId: number;
+  userId: number;
+  measureType: 'measurement' | 'bmi';
+  chest?: number;
+  waist?: number;
+  hip?: number;
+  height?: number;
+  weight?: number;
+  bmi?: number;
+  imageUrl?: string;
+  note?: string;
+  recordDate: string;
+}) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("DB connection failed");
+  await ensureDietTables();
+  const result = await db.execute(sql`
+    INSERT INTO diet_measurement_records (ledgerId, userId, measureType, chest, waist, hip, height, weight, bmi, imageUrl, note, recordDate)
+    VALUES (
+      ${data.ledgerId}, ${data.userId}, ${data.measureType},
+      ${data.chest ?? null}, ${data.waist ?? null}, ${data.hip ?? null},
+      ${data.height ?? null}, ${data.weight ?? null}, ${data.bmi ?? null},
+      ${data.imageUrl ?? null}, ${data.note ?? null}, ${data.recordDate}
+    )
+  `);
+  return { id: Number((result as any)[0]?.insertId || (result as any).insertId) };
+}
+
+export async function getMeasurementRecords(ledgerId: number, userId: number, days: number = 30) {
+  const db = await getLedgerDb();
+  if (!db) return [];
+  await ensureDietTables();
+  const rows = await db.execute(sql`
+    SELECT * FROM diet_measurement_records
+    WHERE ledgerId = ${ledgerId} AND userId = ${userId}
+    ORDER BY recordDate DESC
+    LIMIT ${days}
+  `);
+  return (rows as any)[0] as any[];
 }
 
 export async function getWeightRecords(ledgerId: number, userId: number, days: number = 30) {

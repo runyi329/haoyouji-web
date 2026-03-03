@@ -110,6 +110,8 @@ export const dietRouter = router({
     .input(z.object({
       ledgerId: z.number(),
       weight: z.number().positive(),
+      weightUnit: z.enum(['jin', 'kg']).optional().default('jin'),
+      imageUrl: z.string().optional(),
       note: z.string().optional(),
       recordDate: z.string(),
     }))
@@ -118,9 +120,51 @@ export const dietRouter = router({
         ledgerId: input.ledgerId,
         userId: ctx.user.id,
         weight: input.weight,
+        weightUnit: input.weightUnit,
+        imageUrl: input.imageUrl,
         note: input.note,
         recordDate: input.recordDate,
       });
+    }),
+
+  addMeasurement: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      measureType: z.enum(['measurement', 'bmi']),
+      chest: z.number().positive().optional(),
+      waist: z.number().positive().optional(),
+      hip: z.number().positive().optional(),
+      height: z.number().positive().optional(),
+      weight: z.number().positive().optional(),
+      bmi: z.number().optional(),
+      imageUrl: z.string().optional(),
+      note: z.string().optional(),
+      recordDate: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return await dbDiet.addMeasurementRecord({
+        ledgerId: input.ledgerId,
+        userId: ctx.user.id,
+        measureType: input.measureType,
+        chest: input.chest,
+        waist: input.waist,
+        hip: input.hip,
+        height: input.height,
+        weight: input.weight,
+        bmi: input.bmi,
+        imageUrl: input.imageUrl,
+        note: input.note,
+        recordDate: input.recordDate,
+      });
+    }),
+
+  getMeasurementHistory: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      days: z.number().optional().default(60),
+    }))
+    .query(async ({ ctx, input }) => {
+      return await dbDiet.getMeasurementRecords(input.ledgerId, ctx.user.id, input.days);
     }),
 
   getWeightHistory: protectedProcedure
