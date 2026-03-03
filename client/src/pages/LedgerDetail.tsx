@@ -454,8 +454,8 @@ export default function LedgerDetail() {
       <div className="flex-1 px-4 pb-20 space-y-3">
         {!hasRecords ? (
           <div className="text-center py-12">
-            <div className="text-gray-400 text-base mb-1">还没有记账记录</div>
-            <div className="text-gray-400 text-sm">点击下方"+"按钮开始记账</div>
+            <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
+            <div className="text-gray-400 text-sm">{ledgerData?.type === 'diet' ? '点击下方按钮，添加减肥记录' : '点击下方"+"按钮开始记账'}</div>
           </div>
         ) : (
           transactionsData.map((dayRecord: any) => {
