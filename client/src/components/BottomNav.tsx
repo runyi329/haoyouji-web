@@ -41,7 +41,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     } else {
       // 人脉页面（首页）：直接跳转到添加人脉
       setShowLedgerMenu(false);
-      window.location.href = 'https://www.jiangyuchen.cn/parent/contacts/add';
+      setLocation('/parent/contacts/add');
     }
   };
 

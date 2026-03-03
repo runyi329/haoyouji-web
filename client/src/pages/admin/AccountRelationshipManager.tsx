@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -124,6 +125,7 @@ function FeaturePermissionSwitch({
  * 3. 清晰展示账户体系结构
  */
 export default function AccountRelationshipManager() {
+  const [, setLocation] = useLocation();
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [selectedRelatedUserId, setSelectedRelatedUserId] = useState<number | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
@@ -334,7 +336,7 @@ export default function AccountRelationshipManager() {
       // 服务器端已经设置了cookie，直接刷新页面即可
       toast.success(`已登录为 ${data.user.name || data.user.username}，正在跳转...`);
       setTimeout(() => {
-        window.location.href = "/";
+        setLocation("/");
       }, 500);
     },
     onError: (error) => {

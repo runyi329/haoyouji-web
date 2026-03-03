@@ -1236,7 +1236,7 @@ export default function AssetReport() {
 
         {/* 标题栏：返回箭头和标题在同一行 */}
         <div className="flex items-center justify-between mb-6 relative z-10">
-          <Link href={BASE_URL}>
+          <Link href="/">
             <a className="text-white/90 hover:text-white transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </a>

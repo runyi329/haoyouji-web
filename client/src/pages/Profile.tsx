@@ -283,7 +283,9 @@ export default function Profile() {
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
       document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      window.location.href = "https://www.jiangyuchen.cn/login";
+      document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      localStorage.removeItem('auth-token');
+      navigate("/login");
     },
   });
 
@@ -415,7 +417,7 @@ export default function Profile() {
   const allFeaturesBase: FeatureItem[] = [
     { id: "edit-profile", icon: User, label: "编辑资料", color: "bg-[#E3F2FD] text-[#2196F3]", badge: null, onClick: () => navigate("/parent/profile/edit") },
     { id: "invite-friends", icon: UserPlus, label: "邀请好友", color: "bg-[#FFF3E0] text-[#FF9800]", badge: null, onClick: () => navigate("/parent/profile/invite") },
-    { id: "network-data", icon: BarChart2, label: "人脉数据", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => window.location.href = "https://www.jiangyuchen.cn/parent/contacts/data-comparison" },
+    { id: "network-data", icon: BarChart2, label: "人脉数据", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/parent/contacts/data-comparison") },
     { id: "my-equity", icon: Coins, label: "我的股权", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/my-equity") },
     { id: "my-coupons", icon: Ticket, label: "我的卡券", color: "bg-[#FFF3E0] text-[#FF9800]", badge: null, onClick: () => navigate("/coupons") },
     { id: "wallet", icon: Wallet, label: "我的钱包", color: "bg-[#E3F2FD] text-[#2196F3]", badge: null, onClick: () => navigate("/wallet") },
@@ -484,7 +486,7 @@ export default function Profile() {
 
   // 如果没有用户信息，重定向到登录页
   if (!user) {
-    window.location.href = "https://www.jiangyuchen.cn/login";
+    navigate("/login");
     return null;
   }
 

@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -12,6 +13,7 @@ type UseAuthOptions = {
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
     options ?? {};
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
 
@@ -95,13 +97,15 @@ export function useAuth(options?: UseAuthOptions) {
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    window.location.href = redirectPath
+    // 使用 SPA 导航而不是 window.location.href，避免 Safari PWA 创建新视图层
+    setLocation(redirectPath);
   }, [
     redirectOnUnauthenticated,
     redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
     state.user,
+    setLocation,
   ]);
 
   return {

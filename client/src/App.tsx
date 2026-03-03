@@ -360,6 +360,24 @@ function App() {
   // Token持久化（确保微信环境下登录状态不丢失）
   useTokenPersistence();
 
+  // Safari PWA 视图层保护：页面从后台恢复时，强制重新验证用户身份
+  // 这是最后一道防线，确保即使SPA导航未生效，也能检测到用户变化
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // 页面变为可见时，同步localStorage token到Cookie
+        try {
+          const token = localStorage.getItem('auth-token');
+          if (token) {
+            document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
+          }
+        } catch (e) {}
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // 解锁音频上下文（移动端需要用户交互后才能播放音频）
   useEffect(() => {
     const unlockAudio = () => {
