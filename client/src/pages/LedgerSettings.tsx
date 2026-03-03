@@ -437,10 +437,11 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}/${ledgerData?.type === 'diet' ? 'member-info' : 'approval-settings'}`)}
           />
         )}
-        <SettingItem label="账本预算&目标" showIcon hasHelp />
+        {ledgerData?.type !== 'diet' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
       </div>
 
       {/* 高级设置 */}
+      {ledgerData?.type !== 'diet' && (
       <div className="bg-white mt-3">
         <SettingItem 
           label="账本结算币种" 
@@ -460,6 +461,7 @@ export default function LedgerSettings() {
           hasHelp 
         />
       </div>
+      )}
 
       {/* 共享设置 - 已移除，功能整合到成员权限设置中 */}
 
@@ -492,7 +494,8 @@ export default function LedgerSettings() {
         }} />
       </div>
 
-      {/* 导入导出功能 */}
+      {/* 导入导出功能 - 减肥账本不显示 */}
+      {ledgerData?.type !== 'diet' && (
       <div className="bg-white mt-3">
         <SettingItem 
           label="表格导入账单" 
@@ -525,6 +528,7 @@ export default function LedgerSettings() {
           } : undefined} 
         />
       </div>
+      )}
 
 
 
