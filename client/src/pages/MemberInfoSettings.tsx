@@ -271,6 +271,37 @@ export default function MemberInfoSettings() {
                 />
               </div>
 
+              {/* 初始 BMI 自动计算 */}
+              {editForm.height && editForm.initialWeight && Number(editForm.height) > 0 && Number(editForm.initialWeight) > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500">初始 BMI（自动计算）</p>
+                    <p className="text-xl font-bold text-blue-600 mt-0.5">
+                      {(Number(editForm.initialWeight) / ((Number(editForm.height) / 100) ** 2)).toFixed(1)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-sm font-medium px-2 py-1 rounded-full ${
+                      (() => {
+                        const bmi = Number(editForm.initialWeight) / ((Number(editForm.height) / 100) ** 2);
+                        if (bmi < 18.5) return 'bg-blue-100 text-blue-700';
+                        if (bmi < 24) return 'bg-green-100 text-green-700';
+                        if (bmi < 28) return 'bg-yellow-100 text-yellow-700';
+                        return 'bg-red-100 text-red-700';
+                      })()
+                    }`}>
+                      {(() => {
+                        const bmi = Number(editForm.initialWeight) / ((Number(editForm.height) / 100) ** 2);
+                        if (bmi < 18.5) return '低体重';
+                        if (bmi < 24) return '正常';
+                        if (bmi < 28) return '超重';
+                        return '肉肥';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* 目标体重 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
