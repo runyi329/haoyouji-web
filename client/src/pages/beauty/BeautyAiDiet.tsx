@@ -1,14 +1,17 @@
 /**
  * 奢贝美容院 - AI 减肥
  * 路径: /beauty/ai-diet
+ * 接入天API BFR体脂率接口：https://apis.tianapi.com/bfrsum/index
  */
 import { useState } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, Brain, Loader2, Scale, Ruler, Activity, Target, Salad, Dumbbell } from "lucide-react";
+import { ChevronLeft, Brain, Loader2, Scale, Ruler, Activity, Target, Salad, Dumbbell, Percent, HeartPulse } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+
+const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
 
 interface FormData {
   gender: "female" | "male";
@@ -18,6 +21,15 @@ interface FormData {
   targetWeight: string;
   activityLevel: "sedentary" | "light" | "moderate" | "active";
   goal: "lose" | "maintain" | "tone";
+}
+
+interface BfrResult {
+  bfr: string;        // 体脂率，如 "17%"
+  normbfr: string;    // 正常体脂率范围，如 "14%-20%"
+  idealweight: number; // 理想体重 kg
+  normweight: string; // 正常体重范围，如 "54~66"
+  healthy?: string;   // 健康等级，如 "风险较低"
+  tip?: string;       // 建议文字
 }
 
 interface DietPlan {
@@ -31,9 +43,11 @@ interface DietPlan {
   dietTips: string[];
   exerciseTips: string[];
   beautyTips: string[];
+  bfrResult: BfrResult | null;
+  bfrError: string | null;
 }
 
-function calcPlan(form: FormData): DietPlan {
+function calcLocalPlan(form: FormData, bfrResult: BfrResult | null, bfrError: string | null): DietPlan {
   const h = parseFloat(form.height) / 100;
   const w = parseFloat(form.weight);
   const tw = parseFloat(form.targetWeight);
@@ -101,7 +115,30 @@ function calcPlan(form: FormData): DietPlan {
     "保持好心情，压力过大会导致皮质醇升高，阻碍减重",
   ];
 
-  return { bmi, bmiStatus, bmr: Math.round(bmr), tdee: Math.round(tdee), targetCalories: Math.round(targetCalories), weightDiff, weeklyPlan, dietTips, exerciseTips, beautyTips };
+  return {
+    bmi,
+    bmiStatus,
+    bmr: Math.round(bmr),
+    tdee: Math.round(tdee),
+    targetCalories: Math.round(targetCalories),
+    weightDiff,
+    weeklyPlan,
+    dietTips,
+    exerciseTips,
+    beautyTips,
+    bfrResult,
+    bfrError,
+  };
+}
+
+// 体脂率健康等级颜色
+function getBfrColor(healthy?: string): string {
+  if (!healthy) return "text-gray-600";
+  if (healthy.includes("偏低") || healthy.includes("过低")) return "text-blue-500";
+  if (healthy.includes("理想") || healthy.includes("较低") || healthy.includes("正常")) return "text-green-500";
+  if (healthy.includes("偏高") || healthy.includes("较高")) return "text-amber-500";
+  if (healthy.includes("肥胖") || healthy.includes("过高")) return "text-red-500";
+  return "text-gray-600";
 }
 
 export default function BeautyAiDiet() {
@@ -128,13 +165,31 @@ export default function BeautyAiDiet() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
-    setTimeout(() => {
-      setPlan(calcPlan(form));
-      setLoading(false);
-    }, 1200);
+
+    // 调用天API BFR体脂率接口
+    // sex: 1=男, 2=女
+    const sex = form.gender === "male" ? 1 : 2;
+    let bfrResult: BfrResult | null = null;
+    let bfrError: string | null = null;
+
+    try {
+      const url = `https://apis.tianapi.com/bfrsum/index?key=${TIANAPI_KEY}&age=${form.age}&height=${form.height}&weight=${form.weight}&sex=${sex}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (data.code === 200 && data.result) {
+        bfrResult = data.result as BfrResult;
+      } else {
+        bfrError = data.msg || "接口返回异常";
+      }
+    } catch (err) {
+      bfrError = "网络请求失败，已使用本地计算";
+    }
+
+    setPlan(calcLocalPlan(form, bfrResult, bfrError));
+    setLoading(false);
   };
 
   const bmiColor = plan ? (plan.bmi < 18.5 ? "text-blue-500" : plan.bmi < 24 ? "text-green-500" : plan.bmi < 28 ? "text-amber-500" : "text-red-500") : "";
@@ -268,7 +323,59 @@ export default function BeautyAiDiet() {
         {/* 结果展示 */}
         {plan && (
           <>
-            {/* BMI 卡片 */}
+            {/* ★ BFR 体脂率卡片（天API真实数据） */}
+            {plan.bfrResult ? (
+              <Card className="border-0 shadow-sm bg-gradient-to-br from-pink-50 to-rose-50">
+                <CardContent className="p-4">
+                  <h3 className="text-sm font-semibold text-rose-600 mb-3 flex items-center gap-2">
+                    <Percent className="w-4 h-4" /> 体脂率检测结果
+                    <span className="ml-auto text-[10px] text-rose-300 font-normal">由天API提供</span>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* 当前体脂率 */}
+                    <div className="bg-white rounded-xl p-3 text-center shadow-sm">
+                      <p className="text-xs text-gray-400 mb-1">当前体脂率</p>
+                      <p className={`text-2xl font-bold ${getBfrColor(plan.bfrResult.healthy)}`}>
+                        {plan.bfrResult.bfr}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">正常：{plan.bfrResult.normbfr}</p>
+                    </div>
+                    {/* 理想体重 */}
+                    <div className="bg-white rounded-xl p-3 text-center shadow-sm">
+                      <p className="text-xs text-gray-400 mb-1">理想体重</p>
+                      <p className="text-2xl font-bold text-rose-500">
+                        {plan.bfrResult.idealweight}<span className="text-sm font-normal text-gray-400">kg</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">正常范围：{plan.bfrResult.normweight}kg</p>
+                    </div>
+                  </div>
+                  {/* 健康等级 */}
+                  {plan.bfrResult.healthy && (
+                    <div className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-white shadow-sm`}>
+                      <HeartPulse className={`w-4 h-4 flex-shrink-0 ${getBfrColor(plan.bfrResult.healthy)}`} />
+                      <div>
+                        <span className={`text-sm font-semibold ${getBfrColor(plan.bfrResult.healthy)}`}>
+                          健康等级：{plan.bfrResult.healthy}
+                        </span>
+                        {plan.bfrResult.tip && (
+                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{plan.bfrResult.tip}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : plan.bfrError ? (
+              <Card className="border-0 shadow-sm border border-amber-100">
+                <CardContent className="p-3">
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <span>⚠</span> 体脂率接口：{plan.bfrError}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {/* BMI + 基础代谢卡片 */}
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">身体数据分析</h3>
