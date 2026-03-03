@@ -287,17 +287,19 @@ export default function DietCheckIn() {
         {category === "calorie" && (
           <>
             <div className="bg-white rounded-xl shadow-sm px-4 py-3">
-              <div className="flex items-end gap-2">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={calories}
-                  onChange={(e) => setCalories(e.target.value)}
-                  placeholder="0"
-                  className="flex-1 text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-center"
-                  style={{ caretColor: accent }}
-                />
-                <span className="text-base text-gray-400 mb-2">kcal</span>
+              <div className="flex items-end gap-2 overflow-hidden">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                    placeholder="0"
+                    className="w-full text-5xl font-light text-[#222] bg-transparent border-none outline-none placeholder-gray-200 text-right"
+                    style={{ caretColor: accent }}
+                  />
+                </div>
+                <span className="text-base text-gray-400 mb-2 flex-shrink-0">kcal</span>
               </div>
               <p className="text-xs text-gray-400 text-center mt-1">今日消耗的卡路里</p>
             </div>
