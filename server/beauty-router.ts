@@ -445,11 +445,32 @@ export const beautyRouter = router({
 
     // 管理员：创建商品
     createProduct: adminProcedure
-      .input(z.object({ name: z.string().min(1), price: z.string(), description: z.string().optional(), imageUrl: z.string().optional(), brandId: z.number(), categoryId: z.number(), specification: z.string().optional(), stock: z.number().default(0) }))
+      .input(z.object({ name: z.string().min(1), price: z.string(), description: z.string().optional(), imageUrl: z.string().optional(), brandId: z.number(), categoryId: z.number(), specification: z.string().optional(), stock: z.number().default(0), sortOrder: z.number().optional() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-        await db.insert(beautyProducts).values({ ...input, description: input.description ?? null, imageUrl: input.imageUrl ?? null, specification: input.specification ?? null, isActive: 1, sortOrder: 0 });
+        await db.insert(beautyProducts).values({ ...input, description: input.description ?? null, imageUrl: input.imageUrl ?? null, specification: input.specification ?? null, isActive: 1, sortOrder: input.sortOrder ?? 0 });
+        return { success: true };
+      }),
+
+    // 管理员：更新商品
+    updateProduct: adminProcedure
+      .input(z.object({ id: z.number(), name: z.string().min(1).optional(), price: z.string().optional(), description: z.string().optional(), imageUrl: z.string().optional(), specification: z.string().optional(), sortOrder: z.number().optional(), isActive: z.number().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        const { id, ...updates } = input;
+        await db.update(beautyProducts).set(updates).where(eq(beautyProducts.id, id));
+        return { success: true };
+      }),
+
+    // 管理员：删除商品
+    deleteProduct: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.delete(beautyProducts).where(eq(beautyProducts.id, input.id));
         return { success: true };
       }),
   }),
