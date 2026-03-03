@@ -135,47 +135,48 @@ export default function Home() {
   
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
-  // 监听页面返回事件：解决微信浏览器中点×/右滑返回时显示旧用户数据的问题
-  // pageshow 事件在从 bfcache 恢复时也会触发，而 visibilitychange 作为补充
+  // 解决微信浏览器中点×/右滑返回时显示旧缓存数据的问题
+  // 策略：记录页面离开时间，返回时检测时间差，如果超过2秒则强制reload
+  // 这样无论微信浏览器是否走标准bfcache流程，都能可靠地刷新
   const utils = trpc.useUtils();
   useEffect(() => {
-    const refreshAllData = () => {
-      utils.contacts.stats.invalidate();
-      utils.contacts.totalInteractionCount.invalidate();
-      utils.contacts.totalTagCount.invalidate();
-      utils.contacts.getTotalUsageDays.invalidate();
-      utils.invite.getMyInviteInfo.invalidate();
-      utils.equity.getPromotionStats.invalidate();
-      utils.auth.me.invalidate();
-      if (isLiulifan) utils.contacts.overviewStats.invalidate();
+    let hiddenTime = 0;
+    
+    const handleHidden = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenTime = Date.now();
+      }
     };
-    // pageshow: 微信浏览器点×返回时会从 bfcache 恢复页面，
-    // bfcache 恢复时 React 状态和 QueryClient 缓存都被冻结，invalidate 无效，
-    // 必须用 window.location.reload() 强制重新加载整个页面
+    
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible' && hiddenTime > 0) {
+        const elapsed = Date.now() - hiddenTime;
+        // 如果页面隐藏超过2秒（说明用户去了其他页面），强制重新加载
+        if (elapsed > 2000) {
+          window.location.reload();
+          return;
+        }
+        hiddenTime = 0;
+      }
+    };
+    
+    // pageshow: 处理bfcache恢复场景（无论 persisted 是否为 true）
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
         window.location.reload();
       }
     };
-    // visibilitychange: 作为补充，处理标签页切换等场景
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refreshAllData();
-      }
-    };
-    // focus: 处理微信内置浏览器中窗口重新获得焦点的场景
-    const handleFocus = () => {
-      refreshAllData();
-    };
+    
+    document.addEventListener('visibilitychange', handleHidden);
+    document.addEventListener('visibilitychange', handleVisible);
     window.addEventListener('pageshow', handlePageShow);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
+    
     return () => {
+      document.removeEventListener('visibilitychange', handleHidden);
+      document.removeEventListener('visibilitychange', handleVisible);
       window.removeEventListener('pageshow', handlePageShow);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
     };
-  }, [utils, isLiulifan]);
+  }, []);
 
   // 禁用右滑返回手势，避免用户滑动返回时看到旧缓存页面
   useEffect(() => {
