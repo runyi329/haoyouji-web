@@ -225,7 +225,8 @@ export default function LedgerDetail() {
 
         {/* 成员头像和功能按钮 */}
         <div className="px-4 py-2 flex items-center justify-between">
-          {/* 成员头像（靠左，堆叠显示） */}
+          {/* 成员头像（靠左，堆厠显示） - 减肥账本学员不显示 */}
+          {!isDietStudent && (
           <div className="flex items-center">
             {membersData && Array.isArray(membersData) && membersData.length > 0 && membersData.slice(0, 5).map((member, index) => (
               <div
@@ -268,6 +269,21 @@ export default function LedgerDetail() {
               </div>
             )}
           </div>
+          )}
+          
+          {/* 减肥账本学员：我的头像（靠右） */}
+          {isDietStudent && (
+          <div className="flex items-center">
+            {user && (
+              <UserAvatar
+                username={user.username}
+                avatar={user.avatar}
+                nickname={user.nickname}
+                size="md"
+              />
+            )}
+          </div>
+          )}
           
           {/* 功能按钮（靠右） */}
           <div className="flex items-center gap-2">
@@ -281,6 +297,8 @@ export default function LedgerDetail() {
                 <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
               </div>
             )}
+            {/* 减肥账本学员不显示设置按钮 */}
+            {!isDietStudent && (
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
               style={{ backgroundColor: '#FFFFFF' }}
@@ -288,6 +306,7 @@ export default function LedgerDetail() {
             >
               <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
             </div>
+            )}
             {!isDiet && (
               <>
                 <div 
