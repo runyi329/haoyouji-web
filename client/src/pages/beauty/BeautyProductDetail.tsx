@@ -21,15 +21,14 @@ import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
 /* ─── 图片资源 ─── */
 const IMG = {
-  // AI生成图
-  interiorGlow: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-interior-glow-TYQRnUXEKzekhmfKUjkMKw.png",
-  scienceDiagram: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-science-diagram-LdSSaUWUtsLEuiQPD8GBLj.png",
-  lifestyleWoman: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-lifestyle-woman-ZrewCHXxJVcq3FWVcrfo4L.png",
-  benefitsIcons: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-benefits-icons-UZf3Lkro3ac32YhzmnwBvV.png",
-  certification: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-certification-hMFe69mLf6NeSf2APi7J6S.png",
-  // 旧版图
-  heroOld: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-hero-NytJqiDx26kg74mRxvsXhM.png",
-  lifestyle: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-lifestyle-fCZ9pWFZHj96GtAvzYpf7m.png",
+  // 压缩版图片（手机端优化，加载更快）
+  interiorGlow: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_interior-glow_85c7e788.jpg",
+  scienceDiagram: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_science-diagram_74b6138b.jpg",
+  lifestyleWoman: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_lifestyle-woman_6ce2894a.jpg",
+  benefitsIcons: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_benefits-icons_c59852e6.jpg",
+  certification: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_interior-glow_85c7e788.jpg",
+  heroOld: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_hero-old_0b3dfbfe.jpg",
+  lifestyle: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_lifestyle_acf1f032.jpg",
 };
 
 /* ─── 功效数据 ─── */
@@ -180,7 +179,8 @@ export default function BeautyProductDetail() {
     );
   }
 
-  const isRedCube = product.name.includes("红立方") || product.name.includes("光焕能舱");
+  // 红立方光焕能舱和细胞焕能红光养护系列都使用专属详情页
+  const isRedCube = product.name.includes("红立方") || product.name.includes("光焕能舱") || product.name.includes("细胞焕能红光养护");
 
   /* ── 非红立方商品：简洁版 ── */
   if (!isRedCube) {
@@ -249,7 +249,7 @@ export default function BeautyProductDetail() {
         >
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
-        <span className="text-white/70 text-xs tracking-[0.15em]">IDEALIGHT · 红立方</span>
+        <span className="text-white/70 text-xs tracking-[0.15em]">{product.name.includes("红立方") ? "IDEALIGHT · 红立方" : "奢贝美容院 · 红光养护"}</span>
         {currentUser?.username ? (
           <span className="text-xs text-white/20 select-none">{currentUser.username}</span>
         ) : <div className="w-8" />}
@@ -263,15 +263,15 @@ export default function BeautyProductDetail() {
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs tracking-widest" style={{ color: "#c9a84c" }}>IDEALIGHT 爱达光</span>
           <span className="text-xs text-white/20">·</span>
-          <span className="text-xs text-white/40">元气焕活年度私定养护</span>
+          <span className="text-xs text-white/40">{product.specification || "红光养护"}</span>
         </div>
-        <h1 className="text-2xl font-bold text-white leading-tight">红立方 光焕能舱</h1>
-        <p className="text-sm text-white/50 mt-1">RQ-22 · 给身体充能 · 促循环 · 排浊 · 提活力 · 助好眠</p>
+        <h1 className="text-2xl font-bold text-white leading-tight">{product.name}</h1>
+        <p className="text-sm text-white/50 mt-1">{product.name.includes("红立方") ? "RQ-22 · 给身体充能 · 促循环 · 排浊 · 提活力 · 助好眠" : "细胞焕能红光养护 · 全身360°环绕照射"}</p>
         <div className="flex items-baseline gap-3 mt-3">
           <span className="text-3xl font-bold" style={{ color: "#e11d48" }}>
             ¥{Number(product.price).toLocaleString()}
           </span>
-          <span className="text-xs text-white/30">年度私定养护套餐</span>
+          <span className="text-xs text-white/30">{product.specification || "养护套餐"}</span>
         </div>
       </div>
 
