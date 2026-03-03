@@ -812,7 +812,7 @@ export default function ArticleDetail() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600 mb-4">文章不存在</p>
-          <Link href={BASE_URL}>
+          <Link href="/">
             <a className="text-[#D32F2F] hover:underline">返回首页</a>
           </Link>
         </div>
@@ -870,7 +870,7 @@ export default function ArticleDetail() {
         <div className="mt-8 bg-gradient-to-br from-[#800000] to-[#A80000] text-white rounded-lg p-6 text-center">
           <p className="text-lg font-bold mb-2">想了解更多？</p>
           <p className="text-sm text-white/80 mb-4">加入脉动网，让你的数据价值真正属于你</p>
-          <Link href={BASE_URL}>
+          <Link href="/">
             <a className="inline-block bg-white text-[#D32F2F] px-6 py-2 rounded-full font-bold hover:bg-gray-100 transition-colors">
               立即了解
             </a>

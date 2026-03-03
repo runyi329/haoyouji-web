@@ -28,11 +28,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
-
-const BASE_URL = "https://www.jiangyuchen.cn";
 
 function formatNumber(num: number): string {
   if (num >= 10000) {
@@ -92,6 +90,7 @@ function getLevelClassName(level?: string): string {
 
 export default function Home() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const isLiulifan = user?.username === 'liulifan';
   
 
@@ -237,29 +236,32 @@ export default function Home() {
     }
   ];
 
+  // 所有导航都使用SPA路由路径（不使用绝对URL），避免Safari PWA创建新视图层
   const features = [
-    { name: "地域", icon: MapPin, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/contacts/map` },
-    { name: "共享", icon: Handshake, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/contacts/sharing` },
-    { name: "资产", icon: Coins, color: "bg-[#D32F2F]-light text-[#D32F2F]", href: `${BASE_URL}/parent/asset-report` },
+    { name: "地域", icon: MapPin, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/contacts/map" },
+    { name: "共享", icon: Handshake, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/contacts/sharing" },
+    { name: "资产", icon: Coins, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/asset-report" },
   ];
 
   const metricsLeft = [
-    { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", href: `${BASE_URL}/parent/contacts/interaction-stats` },
-    { name: "累计使用", value: totalUsageDays ?? 0, unit: "天", href: `${BASE_URL}/parent/contacts` },
-    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", href: `${BASE_URL}/parent/contacts/list?view=company` },
-    { name: "今日活跃", value: stats?.todayActive ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=todayActive` },
+    { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
+    { name: "累计使用", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
+    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", path: "/parent/contacts/list?view=company" },
+    { name: "今日活跃", value: stats?.todayActive ?? 0, unit: "人", path: "/parent/contacts/list?filter=todayActive" },
   ];
 
   const metricsRight = [
-    { name: "本周新增", value: stats?.newThisWeek ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=thisWeek` },
-    { name: "共享总数", value: stats?.sharingToMeCount ?? 0, unit: "人", href: `${BASE_URL}/parent/contacts/list?filter=shared` },
-    { name: "我的积分", value: user?.points ?? 0, unit: "分", href: `${BASE_URL}/parent/points` },
-    { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", href: `${BASE_URL}/parent/profile/invite` },
+    { name: "本周新增", value: stats?.newThisWeek ?? 0, unit: "人", path: "/parent/contacts/list?filter=thisWeek" },
+    { name: "共享总数", value: stats?.sharingToMeCount ?? 0, unit: "人", path: "/parent/contacts/list?filter=shared" },
+    { name: "我的积分", value: user?.points ?? 0, unit: "分", path: "/parent/points" },
+    { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", path: "/parent/profile/invite" },
   ];
 
   const handleLogout = () => {
     document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    window.location.href = `${BASE_URL}/login`;
+    document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    localStorage.removeItem('auth-token');
+    navigate("/login");
   };
 
   const handleRefresh = () => {
@@ -326,9 +328,9 @@ export default function Home() {
         </Carousel>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - 使用SPA导航 */}
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        <a href="https://www.jiangyuchen.cn/parent/contacts/list" className="block">
+        <div className="block cursor-pointer" onClick={() => navigate("/parent/contacts/list")}>
         <Card className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 opacity-90">
             <Users className="w-5 h-5" />
@@ -345,9 +347,9 @@ export default function Home() {
             )}
           </div>
         </Card>
-        </a>
+        </div>
         
-        <a href="https://www.jiangyuchen.cn/parent/contacts/tag-stats" className="block">
+        <div className="block cursor-pointer" onClick={() => navigate("/parent/contacts/tag-stats")}>
           <Card className="bg-white text-[#222222] p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 text-gray-500">
             <Coins className="w-5 h-5" />
@@ -364,7 +366,7 @@ export default function Home() {
             )}
           </div>
         </Card>
-        </a>
+        </div>
       </div>
 
       {/* Feature Icons */}
@@ -387,11 +389,12 @@ export default function Home() {
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem asChild>
-                <a href={`${BASE_URL}/parent/profile`} className="flex items-center cursor-pointer">
-                  <UserCircle className="w-4 h-4 mr-2" />
-                  <span>个人中心</span>
-                </a>
+              <DropdownMenuItem 
+                onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
+                className="flex items-center cursor-pointer"
+              >
+                <UserCircle className="w-4 h-4 mr-2" />
+                <span>个人中心</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
                 <LogOut className="w-4 h-4 mr-2" />
@@ -405,9 +408,9 @@ export default function Home() {
             const isSharing = feature.name === '共享';
             const showBadge = isSharing && hasUnreadSharing;
             return (
-              <a
+              <div
                 key={feature.name}
-                href={feature.href}
+                onClick={() => navigate(feature.path)}
                 className="flex flex-col items-center space-y-2 cursor-pointer relative"
               >
                 <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
@@ -419,24 +422,23 @@ export default function Home() {
                   </span>
                 )}
                 <span className="text-xs font-medium text-[#757575]">{feature.name}</span>
-              </a>
+              </div>
             );
           })}
 
           {/* 第5个按钮：liulifan显示奢贝按钮，其他用户显示刷新按钮 */}
           {isLiulifan ? (
-            <a
-              href={`${BASE_URL}/beauty`}
+            <div
+              onClick={() => navigate("/beauty")}
               className="flex flex-col items-center space-y-2 cursor-pointer relative"
             >
               <div className="w-10 h-10 rounded-full bg-[#D32F2F] flex items-center justify-center shadow-sm">
                 <span className="text-white text-[11px] font-bold tracking-tight">奢贝</span>
               </div>
               <span className="text-xs font-medium text-[#757575]">奢贝</span>
-            </a>
+            </div>
           ) : (
-            <a
-              href={undefined}
+            <div
               onClick={handleRefresh}
               className="flex flex-col items-center space-y-2 cursor-pointer"
             >
@@ -444,16 +446,16 @@ export default function Home() {
                 <RefreshCw className="w-5 h-5" />
               </div>
               <span className="text-xs font-medium text-[#757575]">刷新</span>
-            </a>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Business Metrics Grid */}
+      {/* Business Metrics Grid - 使用SPA导航 */}
       <div className="px-4 mt-3">
         <div className="grid grid-cols-4 gap-3">
           {[...metricsLeft, ...metricsRight].map((stat, index) => (
-            <a key={index} href={stat.href}>
+            <div key={index} onClick={() => navigate(stat.path)} className="cursor-pointer">
               <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-[#FAF3ED] transition-colors aspect-square">
                 <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
                 <div className="flex items-baseline justify-center space-x-0.5">
@@ -463,11 +465,10 @@ export default function Home() {
                   <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
                 </div>
               </div>
-            </a>
+            </div>
           ))}
         </div>
       </div>
-
 
 
 

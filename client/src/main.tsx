@@ -37,7 +37,13 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
     return;
   }
 
-  window.location.href = getLoginUrl();
+  // 使用 history.pushState + 手动触发 popstate 来实现SPA导航
+  // 避免 window.location.href 在 Safari PWA 中创建新视图层
+  const loginUrl = getLoginUrl();
+  if (window.location.pathname !== loginUrl) {
+    window.history.pushState(null, '', loginUrl);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
 };
 
 queryClient.getQueryCache().subscribe(event => {

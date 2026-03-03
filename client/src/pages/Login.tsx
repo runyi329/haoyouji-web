@@ -46,7 +46,8 @@ export default function Login() {
     // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留
     queryClient.clear();
     setTimeout(() => {
-      window.location.href = "/";
+      // 使用 SPA 导航而不是 window.location.href，避免 Safari PWA 创建新视图层
+      setLocation("/");
     }, 200);
   };
 

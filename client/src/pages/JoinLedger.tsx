@@ -35,7 +35,7 @@ export default function JoinLedger() {
   const handleJoin = async () => {
     if (!user) {
       // 未登录，跳转到登录页
-      window.location.href = getLoginUrl();
+      setLocation(getLoginUrl());
       return;
     }
 
@@ -60,7 +60,7 @@ export default function JoinLedger() {
             您需要先登录脉动账号才能加入账本
           </p>
           <Button
-            onClick={() => window.location.href = getLoginUrl()}
+            onClick={() => setLocation(getLoginUrl())}
             className="w-full text-white hover:opacity-90"
             style={{ backgroundColor: '#D32F2F' }}
           >

@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowLeft, RotateCcw, Trophy, Clock, Sparkles, Check, X, Settings } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -87,6 +87,7 @@ const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
 
 export default function Addition20Game() {
   const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
@@ -676,7 +677,7 @@ export default function Addition20Game() {
                     onClick={() => {
                       pauseChallengeMutation.mutate({ challengeId: activeChallenge.id });
                       toast.success("已保存进度，下次继续！");
-                      window.location.href = `/games?kidId=${selectedKidId}`;
+                      setLocation(`/games?kidId=${selectedKidId}`);
                     }}
                     className="border-amber-400 text-[#CBA471] hover:bg-[#FAF3ED]"
                   >
