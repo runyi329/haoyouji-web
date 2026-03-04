@@ -88,6 +88,8 @@ export default function Ledger() {
   const handleLedgerClick = (ledgerId: number) => {
     setLastClickedLedgerId(ledgerId);
     try { localStorage.setItem('lastClickedLedgerId', ledgerId.toString()); } catch (e) {}
+    // 重新进入账本时清除上次的标签选择，让其默认第一个标签
+    try { sessionStorage.removeItem(`ledger_${ledgerId}_selectedTagId`); } catch (e) {}
   };
 
   // 获取当前用户信息
