@@ -708,28 +708,30 @@ export default function Ledger() {
                           </Badge>
                         )}
                       </div>
-                      {/* 展开/收起按钮 */}
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpandedLedgerIds(prev => {
-                            const newSet = new Set(prev);
-                            if (newSet.has(ledger.id)) {
-                              newSet.delete(ledger.id);
-                            } else {
-                              newSet.add(ledger.id);
-                            }
-                            return newSet;
-                          });
-                        }}
-                      >
-                        <ChevronDown 
-                          className={`w-5 h-5 text-gray-400 transition-transform ${
-                            expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
+                      {/* 展开/收起按钮：custom_aa 类型仅 super_admin 可见 */}
+                      {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
+                        <button
+                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedLedgerIds(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(ledger.id)) {
+                                newSet.delete(ledger.id);
+                              } else {
+                                newSet.add(ledger.id);
+                              }
+                              return newSet;
+                            });
+                          }}
+                        >
+                          <ChevronDown 
+                            className={`w-5 h-5 text-gray-400 transition-transform ${
+                              expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                      )}
                     </div>
                     {/* 信息行：小头像 + 开账天数 + 账目条数 */}
                     <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
@@ -923,9 +925,11 @@ export default function Ledger() {
                                     <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
-                                  <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
-                                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
-                                  </button>
+                                  {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
+                                    <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
+                                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                   <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
@@ -980,9 +984,11 @@ export default function Ledger() {
                                   <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                   {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                 </div>
-                                <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
-                                  <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
-                                </button>
+                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
+                                  <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
+                                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
+                                  </button>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                 <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
