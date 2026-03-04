@@ -7,13 +7,13 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
-  ArrowLeft, Users, Star, Calendar, UserPlus, ChevronRight, LogOut, Gift, ClipboardList
+  ArrowLeft, Users, Star, Calendar, UserPlus, ChevronRight, Gift, ClipboardList
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
 export default function BeautyProfile() {
   const [, setLocation] = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const pointsQuery = trpc.beauty.points.getMyBalance.useQuery();
   const canManageQuery = trpc.beauty.points.canManage.useQuery();
   const clientsQuery = trpc.beauty.points.getMyClients.useQuery(undefined, {
@@ -24,10 +24,6 @@ export default function BeautyProfile() {
   const canManage = canManageQuery.data?.canManage ?? false;
   const clientCount = clientsQuery.data?.length ?? 0;
 
-  async function handleLogout() {
-    await logout();
-    setLocation('/login');
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
@@ -162,31 +158,7 @@ export default function BeautyProfile() {
           <ChevronRight className="w-4 h-4 text-gray-300" />
         </button>
 
-        {/* 地址管理 */}
-        <button
-          onClick={() => setLocation('/profile')}
-          className="w-full bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center">
-              <svg className="w-4.5 h-4.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <p className="text-sm font-medium text-gray-800">地址管理</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
-        </button>
 
-        {/* 退出登录 */}
-        <button
-          onClick={handleLogout}
-          className="w-full bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-center gap-2 text-gray-400 active:bg-gray-50 transition-colors mt-6"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="text-sm">退出登录</span>
-        </button>
       </div>
 
       <BottomNav />
