@@ -1,6 +1,6 @@
 /**
  * 奢贝美容院 - 我的客户
- * 显示邀请的客户列表，可加减积分、添加消费卡、记录消费次数，优惠券功能预留
+ * 显示邀请的客户列表，可管理积分、消费卡（增删改）、记录消费次数，优惠券功能预留
  * 路径: /beauty/clients
  */
 import { useState, useMemo } from "react";
@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Minus, History, Gift, Search, Star, Share2, Copy,
-  CreditCard, CheckCircle, Calendar
+  CreditCard, CheckCircle, Calendar, Edit2, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,9 @@ const CARD_TYPES = [
 ] as const;
 
 type CardType = typeof CARD_TYPES[number]['value'];
+
+// 消费卡管理弹窗的模式
+type CardDialogMode = 'add' | 'edit' | 'manage';
 
 // 计算距离到期天数
 function getDaysUntilExpiry(endDate: string): number {
@@ -49,31 +52,36 @@ export default function BeautyClients() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 积分操作弹窗状态
-  const [adjustDialog, setAdjustDialog] = useState(false);
-  const [adjustType, setAdjustType] = useState<"add" | "subtract">("add");
-  const [adjustUserId, setAdjustUserId] = useState<number | null>(null);
-  const [adjustUserName, setAdjustUserName] = useState("");
-  const [adjustAmount, setAdjustAmount] = useState("");
-  const [adjustRemark, setAdjustRemark] = useState("");
+  // 积分管理弹窗状态（合并加减积分）
+  const [pointsDialog, setPointsDialog] = useState(false);
+  const [pointsUserId, setPointsUserId] = useState<number | null>(null);
+  const [pointsUserName, setPointsUserName] = useState("");
+  const [pointsType, setPointsType] = useState<"add" | "subtract">("add");
+  const [pointsAmount, setPointsAmount] = useState("");
+  const [pointsRemark, setPointsRemark] = useState("");
 
   // 日志弹窗状态
   const [logDialog, setLogDialog] = useState(false);
   const [logUserId, setLogUserId] = useState<number | null>(null);
   const [logUserName, setLogUserName] = useState("");
 
-  // 消费卡弹窗状态
+  // 消费卡管理弹窗状态（增删改合一）
   const [cardDialog, setCardDialog] = useState(false);
+  const [cardDialogMode, setCardDialogMode] = useState<CardDialogMode>('add');
   const [cardUserId, setCardUserId] = useState<number | null>(null);
   const [cardUserName, setCardUserName] = useState("");
+  const [editCardId, setEditCardId] = useState<number | null>(null);
   const [selectedCardType, setSelectedCardType] = useState<CardType>('monthly');
   const [cardStartDate, setCardStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [cardRemark, setCardRemark] = useState("");
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(false);
+  const [deleteCardId, setDeleteCardId] = useState<number | null>(null);
 
   // 消费次数弹窗状态
   const [visitDialog, setVisitDialog] = useState(false);
   const [visitUserId, setVisitUserId] = useState<number | null>(null);
   const [visitUserName, setVisitUserName] = useState("");
+  const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [visitRemark, setVisitRemark] = useState("");
 
   // 分享弹窗状态
@@ -115,10 +123,10 @@ export default function BeautyClients() {
   // Mutations
   const adjustMutation = trpc.beauty.points.adjustPoints.useMutation({
     onSuccess: (data) => {
-      toast.success(`积分${adjustType === "add" ? "增加" : "扣减"}成功，当前余额: ${data.newBalance}`);
-      setAdjustDialog(false);
-      setAdjustAmount("");
-      setAdjustRemark("");
+      toast.success(`积分${pointsType === "add" ? "增加" : "扣减"}成功，当前余额: ${data.newBalance}`);
+      setPointsDialog(false);
+      setPointsAmount("");
+      setPointsRemark("");
       clientsQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -129,6 +137,26 @@ export default function BeautyClients() {
       toast.success(`消费卡添加成功，到期日: ${data.endDate}`);
       setCardDialog(false);
       setCardRemark("");
+      cardsQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updateCardMutation = trpc.beauty.card.updateCard.useMutation({
+    onSuccess: (data) => {
+      toast.success(`消费卡已更新，到期日: ${data.endDate}`);
+      setCardDialog(false);
+      setCardRemark("");
+      cardsQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteCardMutation = trpc.beauty.card.deleteCard.useMutation({
+    onSuccess: () => {
+      toast.success("消费卡已删除");
+      setDeleteConfirmDialog(false);
+      setCardDialog(false);
       cardsQuery.refetch();
     },
     onError: (err) => toast.error(err.message),
@@ -177,26 +205,27 @@ export default function BeautyClients() {
       )
     : clients;
 
-  function openAdjust(userId: number, userName: string, type: "add" | "subtract") {
-    setAdjustUserId(userId);
-    setAdjustUserName(userName);
-    setAdjustType(type);
-    setAdjustAmount("");
-    setAdjustRemark("");
-    setAdjustDialog(true);
+  // 打开积分管理弹窗
+  function openPoints(userId: number, userName: string) {
+    setPointsUserId(userId);
+    setPointsUserName(userName);
+    setPointsType("add");
+    setPointsAmount("");
+    setPointsRemark("");
+    setPointsDialog(true);
   }
 
-  function handleAdjustSubmit() {
-    if (!adjustUserId || !adjustAmount) return;
-    const num = parseInt(adjustAmount);
+  function handlePointsSubmit() {
+    if (!pointsUserId || !pointsAmount) return;
+    const num = parseInt(pointsAmount);
     if (isNaN(num) || num <= 0) {
       toast.error("请输入有效的正整数");
       return;
     }
     adjustMutation.mutate({
-      userId: adjustUserId,
-      amount: adjustType === "add" ? num : -num,
-      remark: adjustRemark || undefined,
+      userId: pointsUserId,
+      amount: pointsType === "add" ? num : -num,
+      remark: pointsRemark || undefined,
     });
   }
 
@@ -206,28 +235,67 @@ export default function BeautyClients() {
     setLogDialog(true);
   }
 
-  function openCard(userId: number, userName: string) {
+  // 打开消费卡管理弹窗
+  function openCardManage(userId: number, userName: string) {
     setCardUserId(userId);
     setCardUserName(userName);
-    setSelectedCardType('monthly');
-    setCardStartDate(new Date().toISOString().split('T')[0]);
-    setCardRemark("");
+    const existingCard = cardMap[userId];
+    if (existingCard) {
+      // 有卡：进入管理模式（可编辑/删除）
+      setCardDialogMode('manage');
+      setEditCardId(existingCard.id);
+      setSelectedCardType(existingCard.cardType as CardType);
+      setCardStartDate(existingCard.startDate);
+      setCardRemark(existingCard.remark || "");
+    } else {
+      // 无卡：直接进入添加模式
+      setCardDialogMode('add');
+      setEditCardId(null);
+      setSelectedCardType('monthly');
+      setCardStartDate(new Date().toISOString().split('T')[0]);
+      setCardRemark("");
+    }
     setCardDialog(true);
   }
 
-  function handleAddCard() {
+  // 切换到编辑模式
+  function switchToEditMode() {
+    setCardDialogMode('edit');
+  }
+
+  function handleCardSubmit() {
     if (!cardUserId) return;
-    addCardMutation.mutate({
-      userId: cardUserId,
-      cardType: selectedCardType,
-      startDate: cardStartDate,
-      remark: cardRemark || undefined,
-    });
+    if (cardDialogMode === 'add') {
+      addCardMutation.mutate({
+        userId: cardUserId,
+        cardType: selectedCardType,
+        startDate: cardStartDate,
+        remark: cardRemark || undefined,
+      });
+    } else if (cardDialogMode === 'edit' && editCardId) {
+      updateCardMutation.mutate({
+        cardId: editCardId,
+        cardType: selectedCardType,
+        startDate: cardStartDate,
+        remark: cardRemark || undefined,
+      });
+    }
+  }
+
+  function confirmDeleteCard(cardId: number) {
+    setDeleteCardId(cardId);
+    setDeleteConfirmDialog(true);
+  }
+
+  function handleDeleteCard() {
+    if (!deleteCardId) return;
+    deleteCardMutation.mutate({ cardId: deleteCardId });
   }
 
   function openVisit(userId: number, userName: string) {
     setVisitUserId(userId);
     setVisitUserName(userName);
+    setVisitDate(new Date().toISOString().split('T')[0]);
     setVisitRemark("");
     setVisitDialog(true);
   }
@@ -236,6 +304,7 @@ export default function BeautyClients() {
     if (!visitUserId) return;
     addVisitMutation.mutate({
       userId: visitUserId,
+      visitDate: visitDate || undefined,
       remark: visitRemark || undefined,
     });
   }
@@ -262,6 +331,14 @@ export default function BeautyClients() {
         {getCardLabel(card.cardType)} · 还有{days}天
       </span>
     );
+  }
+
+  // 计算预计到期日
+  function calcEndDate(startDate: string, cardType: CardType): string {
+    const days = CARD_TYPES.find(c => c.value === cardType)?.days ?? 30;
+    const end = new Date(startDate);
+    end.setDate(end.getDate() + days);
+    return end.toLocaleDateString('zh-CN');
   }
 
   return (
@@ -316,6 +393,7 @@ export default function BeautyClients() {
           filteredClients.map((client) => {
             const clientName = client.name || client.username || `用户${client.id}`;
             const visitCount = visitCountMap[client.id] ?? 0;
+            const hasCard = !!cardMap[client.id];
             return (
               <div key={client.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                 {/* 客户信息行 */}
@@ -352,21 +430,14 @@ export default function BeautyClients() {
                   </div>
                 </div>
 
-                {/* 第一行操作按钮：积分操作 */}
+                {/* 第一行操作按钮：积分管理 + 记录 + 优惠券 */}
                 <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2">
                   <button
-                    onClick={() => openAdjust(client.id, clientName, "add")}
+                    onClick={() => openPoints(client.id, clientName)}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-rose-50 text-rose-500 text-xs font-medium active:bg-rose-100 transition-colors"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    加积分
-                  </button>
-                  <button
-                    onClick={() => openAdjust(client.id, clientName, "subtract")}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-50 text-gray-500 text-xs font-medium active:bg-gray-100 transition-colors"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                    减积分
+                    <Star className="w-3.5 h-3.5" />
+                    积分管理
                   </button>
                   <button
                     onClick={() => openLog(client.id, clientName)}
@@ -384,14 +455,18 @@ export default function BeautyClients() {
                   </button>
                 </div>
 
-                {/* 第二行操作按钮：消费卡 & 消费次数 */}
+                {/* 第二行操作按钮：消费卡管理 & 消费次数 */}
                 <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2">
                   <button
-                    onClick={() => openCard(client.id, clientName)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-50 text-indigo-500 text-xs font-medium active:bg-indigo-100 transition-colors"
+                    onClick={() => openCardManage(client.id, clientName)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-colors ${
+                      hasCard
+                        ? 'bg-indigo-500 text-white active:bg-indigo-600'
+                        : 'bg-indigo-50 text-indigo-500 active:bg-indigo-100'
+                    }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    添加消费卡
+                    消费卡管理
                   </button>
                   <button
                     onClick={() => openVisit(client.id, clientName)}
@@ -407,45 +482,68 @@ export default function BeautyClients() {
         )}
       </div>
 
-      {/* 积分加减弹窗 */}
-      <Dialog open={adjustDialog} onOpenChange={setAdjustDialog}>
+      {/* 积分管理弹窗（加减合一） */}
+      <Dialog open={pointsDialog} onOpenChange={setPointsDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">
-              {adjustType === "add" ? "增加积分" : "扣减积分"} - {adjustUserName}
-            </DialogTitle>
+            <DialogTitle className="text-base">积分管理 - {pointsUserName}</DialogTitle>
             <DialogDescription className="text-xs text-gray-400">
-              {adjustType === "add" ? "为客户增加奢贝积分" : "扣减客户的奢贝积分"}
+              为客户增加或扣减奢贝积分
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* 加减切换 */}
+            <div className="flex rounded-xl overflow-hidden border border-gray-100">
+              <button
+                onClick={() => setPointsType("add")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
+                  pointsType === "add"
+                    ? "bg-rose-500 text-white"
+                    : "bg-gray-50 text-gray-500 active:bg-gray-100"
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                加积分
+              </button>
+              <button
+                onClick={() => setPointsType("subtract")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
+                  pointsType === "subtract"
+                    ? "bg-gray-600 text-white"
+                    : "bg-gray-50 text-gray-500 active:bg-gray-100"
+                }`}
+              >
+                <Minus className="w-4 h-4" />
+                减积分
+              </button>
+            </div>
             <div className="space-y-2">
               <Label className="text-sm">积分数量</Label>
               <Input
                 type="number"
                 min="1"
                 placeholder="请输入积分数量"
-                value={adjustAmount}
-                onChange={(e) => setAdjustAmount(e.target.value)}
+                value={pointsAmount}
+                onChange={(e) => setPointsAmount(e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label className="text-sm">备注（选填）</Label>
               <Input
                 placeholder="如：消费赠送、活动奖励等"
-                value={adjustRemark}
-                onChange={(e) => setAdjustRemark(e.target.value)}
+                value={pointsRemark}
+                onChange={(e) => setPointsRemark(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustDialog(false)} className="flex-1">
+            <Button variant="outline" onClick={() => setPointsDialog(false)} className="flex-1">
               取消
             </Button>
             <Button
-              onClick={handleAdjustSubmit}
-              disabled={adjustMutation.isPending || !adjustAmount}
-              className={`flex-1 ${adjustType === "add" ? "bg-rose-500 hover:bg-rose-600" : "bg-gray-600 hover:bg-gray-700"}`}
+              onClick={handlePointsSubmit}
+              disabled={adjustMutation.isPending || !pointsAmount}
+              className={`flex-1 ${pointsType === "add" ? "bg-rose-500 hover:bg-rose-600" : "bg-gray-600 hover:bg-gray-700"}`}
             >
               {adjustMutation.isPending ? "处理中..." : "确认"}
             </Button>
@@ -495,93 +593,194 @@ export default function BeautyClients() {
         </DialogContent>
       </Dialog>
 
-      {/* 添加消费卡弹窗 */}
+      {/* 消费卡管理弹窗（增删改合一） */}
       <Dialog open={cardDialog} onOpenChange={setCardDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">添加消费卡 - {cardUserName}</DialogTitle>
+            <DialogTitle className="text-base">
+              {cardDialogMode === 'manage' ? '消费卡管理' : cardDialogMode === 'edit' ? '编辑消费卡' : '添加消费卡'}
+              {' '}- {cardUserName}
+            </DialogTitle>
             <DialogDescription className="text-xs text-gray-400">
-              选择卡类型和开始日期，系统自动计算到期日
+              {cardDialogMode === 'manage'
+                ? '当前客户已有消费卡，可编辑或删除'
+                : cardDialogMode === 'edit'
+                ? '修改卡类型和开始日期，系统自动重新计算到期日'
+                : '选择卡类型和开始日期，系统自动计算到期日'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* 卡类型选择 */}
-            <div className="space-y-2">
-              <Label className="text-sm">卡类型</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {CARD_TYPES.map((ct) => (
-                  <button
-                    key={ct.value}
-                    onClick={() => setSelectedCardType(ct.value)}
-                    className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${
-                      selectedCardType === ct.value
-                        ? 'bg-indigo-500 text-white shadow-sm'
-                        : 'bg-gray-50 text-gray-600 active:bg-gray-100'
-                    }`}
-                  >
-                    {ct.label}
-                  </button>
-                ))}
+
+          {/* 管理模式：显示当前卡信息，提供编辑/删除按钮 */}
+          {cardDialogMode === 'manage' && cardUserId && cardMap[cardUserId] && (
+            <div className="py-2 space-y-4">
+              {/* 当前卡信息展示 */}
+              <div className="bg-indigo-50 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-indigo-400">卡类型</span>
+                  <span className="text-sm font-semibold text-indigo-700">
+                    {getCardLabel(cardMap[cardUserId].cardType)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-indigo-400">开始日期</span>
+                  <span className="text-sm text-indigo-700">{cardMap[cardUserId].startDate}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-indigo-400">到期日期</span>
+                  <span className="text-sm text-indigo-700">{cardMap[cardUserId].endDate}</span>
+                </div>
+                {(() => {
+                  const days = getDaysUntilExpiry(cardMap[cardUserId].endDate);
+                  return (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-indigo-400">状态</span>
+                      <span className={`text-sm font-medium ${days < 0 ? 'text-gray-400' : days <= 7 ? 'text-orange-500' : 'text-emerald-600'}`}>
+                        {days < 0 ? '已过期' : `还有 ${days} 天`}
+                      </span>
+                    </div>
+                  );
+                })()}
+                {cardMap[cardUserId].remark && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-indigo-400">备注</span>
+                    <span className="text-xs text-indigo-600">{cardMap[cardUserId].remark}</span>
+                  </div>
+                )}
+              </div>
+              {/* 操作按钮 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={switchToEditMode}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-medium active:bg-indigo-100 transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  编辑
+                </button>
+                <button
+                  onClick={() => confirmDeleteCard(cardMap[cardUserId!]!.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-50 text-red-500 text-sm font-medium active:bg-red-100 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  删除
+                </button>
               </div>
             </div>
-            {/* 开始日期 */}
-            <div className="space-y-2">
-              <Label className="text-sm flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                开始日期
-              </Label>
-              <Input
-                type="date"
-                value={cardStartDate}
-                onChange={(e) => setCardStartDate(e.target.value)}
-              />
-            </div>
-            {/* 预览到期日 */}
-            {cardStartDate && (
-              <div className="bg-indigo-50 rounded-xl px-4 py-3">
-                <p className="text-xs text-indigo-400">预计到期日</p>
-                <p className="text-sm font-medium text-indigo-700 mt-0.5">
-                  {(() => {
-                    const days = CARD_TYPES.find(c => c.value === selectedCardType)?.days ?? 30;
-                    const end = new Date(cardStartDate);
-                    end.setDate(end.getDate() + days);
-                    return end.toLocaleDateString('zh-CN');
-                  })()}
-                </p>
+          )}
+
+          {/* 添加/编辑模式：显示表单 */}
+          {(cardDialogMode === 'add' || cardDialogMode === 'edit') && (
+            <div className="space-y-4 py-2">
+              {/* 卡类型选择 */}
+              <div className="space-y-2">
+                <Label className="text-sm">卡类型</Label>
+                <div className="grid grid-cols-4 gap-2">
+                  {CARD_TYPES.map((ct) => (
+                    <button
+                      key={ct.value}
+                      onClick={() => setSelectedCardType(ct.value)}
+                      className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${
+                        selectedCardType === ct.value
+                          ? 'bg-indigo-500 text-white shadow-sm'
+                          : 'bg-gray-50 text-gray-600 active:bg-gray-100'
+                      }`}
+                    >
+                      {ct.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-            {/* 备注 */}
-            <div className="space-y-2">
-              <Label className="text-sm">备注（选填）</Label>
-              <Input
-                placeholder="如：首次办卡、续卡等"
-                value={cardRemark}
-                onChange={(e) => setCardRemark(e.target.value)}
-              />
+              {/* 开始日期 */}
+              <div className="space-y-2">
+                <Label className="text-sm flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  开始日期
+                </Label>
+                <Input
+                  type="date"
+                  value={cardStartDate}
+                  onChange={(e) => setCardStartDate(e.target.value)}
+                />
+              </div>
+              {/* 预览到期日 */}
+              {cardStartDate && (
+                <div className="bg-indigo-50 rounded-xl px-4 py-3">
+                  <p className="text-xs text-indigo-400">预计到期日</p>
+                  <p className="text-sm font-medium text-indigo-700 mt-0.5">
+                    {calcEndDate(cardStartDate, selectedCardType)}
+                  </p>
+                </div>
+              )}
+              {/* 备注 */}
+              <div className="space-y-2">
+                <Label className="text-sm">备注（选填）</Label>
+                <Input
+                  placeholder="如：首次办卡、续卡等"
+                  value={cardRemark}
+                  onChange={(e) => setCardRemark(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 底部按钮 */}
+          {cardDialogMode === 'manage' ? (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCardDialog(false)} className="w-full">
+                关闭
+              </Button>
+            </DialogFooter>
+          ) : (
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => cardDialogMode === 'edit' ? setCardDialogMode('manage') : setCardDialog(false)}
+                className="flex-1"
+              >
+                {cardDialogMode === 'edit' ? '返回' : '取消'}
+              </Button>
+              <Button
+                onClick={handleCardSubmit}
+                disabled={addCardMutation.isPending || updateCardMutation.isPending}
+                className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+              >
+                {(addCardMutation.isPending || updateCardMutation.isPending) ? "处理中..." : cardDialogMode === 'edit' ? "保存修改" : "确认添加"}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除消费卡确认弹窗 */}
+      <Dialog open={deleteConfirmDialog} onOpenChange={setDeleteConfirmDialog}>
+        <DialogContent className="max-w-xs mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">确认删除</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
+              确定要删除 {cardUserName} 的消费卡吗？删除后不可恢复。
+            </DialogDescription>
+          </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCardDialog(false)} className="flex-1">
+            <Button variant="outline" onClick={() => setDeleteConfirmDialog(false)} className="flex-1">
               取消
             </Button>
             <Button
-              onClick={handleAddCard}
-              disabled={addCardMutation.isPending}
-              className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+              onClick={handleDeleteCard}
+              disabled={deleteCardMutation.isPending}
+              className="flex-1 bg-red-500 hover:bg-red-600"
             >
-              {addCardMutation.isPending ? "处理中..." : "确认添加"}
+              {deleteCardMutation.isPending ? "删除中..." : "确认删除"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 添加消费次数弹窗 */}
+      {/* 添加消费次数弹窗（含日期选择） */}
       <Dialog open={visitDialog} onOpenChange={setVisitDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <DialogTitle className="text-base">添加消费记录 - {visitUserName}</DialogTitle>
             <DialogDescription className="text-xs text-gray-400">
-              记录客户本次到店消费，累计消费次数加1
+              记录客户到店消费，累计消费次数加1
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -593,6 +792,19 @@ export default function BeautyClients() {
                   当前消费次数: {visitCountMap[visitUserId ?? 0] ?? 0} 次
                 </p>
               </div>
+            </div>
+            {/* 消费日期 */}
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                消费日期
+                <span className="text-gray-400 text-xs font-normal">（默认今天，可修改）</span>
+              </Label>
+              <Input
+                type="date"
+                value={visitDate}
+                onChange={(e) => setVisitDate(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-sm">备注（选填）</Label>
