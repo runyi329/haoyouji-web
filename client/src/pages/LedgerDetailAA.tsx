@@ -72,7 +72,7 @@ export default function LedgerDetailAA({
   const userRole = (ledgerData as any)?.userRole;
   const canEdit = userRole === 'owner' || userRole === 'admin';
 
-  const [calendarMode, setCalendarMode] = useState<"balance" | "dayPnL" | "monthPnL" | "yearPnL">("balance");
+  const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
   // 标签（被记录者）选择
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
