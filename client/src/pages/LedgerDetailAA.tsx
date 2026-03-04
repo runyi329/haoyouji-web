@@ -355,7 +355,7 @@ export default function LedgerDetailAA({
                     />
                     {/* 下拉菜单 */}
                     <div
-                      className="absolute left-0 top-full mt-1 rounded-xl shadow-lg z-50 overflow-hidden"
+                      className="absolute right-0 top-full mt-1 rounded-xl shadow-lg z-50 overflow-hidden"
                       style={{
                         backgroundColor: "#FFFFFF",
                         border: "1px solid #E0E0E0",
