@@ -372,6 +372,55 @@ export default function LedgerDetailAA({
     today.getMonth() === calendarDate.month &&
     today.getDate() === day;
 
+  // ─── A股非交易日判断 ───────────────────────────────────────────────────────
+  // 2026年法定节假日休市日（不含周末）
+  const HOLIDAY_MAP_2026: Record<string, string> = {
+    // 元旦 1/1-1/3
+    '2026-01-01': '元旦', '2026-01-02': '元旦', '2026-01-03': '元旦',
+    // 春节 2/15-2/23
+    '2026-02-15': '春节', '2026-02-16': '春节', '2026-02-17': '春节',
+    '2026-02-18': '春节', '2026-02-19': '春节', '2026-02-20': '春节',
+    '2026-02-21': '春节', '2026-02-22': '春节', '2026-02-23': '春节',
+    // 清明节 4/4-4/6
+    '2026-04-04': '清明节', '2026-04-05': '清明节', '2026-04-06': '清明节',
+    // 劳动节 5/1-5/5
+    '2026-05-01': '劳动节', '2026-05-02': '劳动节', '2026-05-03': '劳动节',
+    '2026-05-04': '劳动节', '2026-05-05': '劳动节',
+    // 端午节 6/19-6/21
+    '2026-06-19': '端午节', '2026-06-20': '端午节', '2026-06-21': '端午节',
+    // 中秋节 9/25-9/27
+    '2026-09-25': '中秋节', '2026-09-26': '中秋节', '2026-09-27': '中秋节',
+    // 国庆节 10/1-10/7
+    '2026-10-01': '国庆节', '2026-10-02': '国庆节', '2026-10-03': '国庆节',
+    '2026-10-04': '国庆节', '2026-10-05': '国庆节', '2026-10-06': '国庆节',
+    '2026-10-07': '国庆节',
+  };
+  // 调休上班日（周末但A股开盘）
+  const MAKEUP_WORKDAYS_2026 = new Set([
+    '2026-01-04', // 元旦调休
+    '2026-02-14', // 春节调休
+    '2026-02-28', // 春节调休
+    '2026-05-09', // 劳动节调休
+    '2026-09-20', // 国庆节调休00
+    '2026-10-10', // 国庆节调休
+  ]);
+
+  // 判断某天是否为A股非交易日，返回标注文字或null
+  const getNonTradingLabel = (day: number): string | null => {
+    const { year, month } = calendarDate;
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // 先检查调休上班日（周末但开盘，不标注）
+    if (MAKEUP_WORKDAYS_2026.has(dateStr)) return null;
+    // 检查法定节假日
+    if (HOLIDAY_MAP_2026[dateStr]) return HOLIDAY_MAP_2026[dateStr];
+    // 检查周末
+    const d = new Date(year, month, day);
+    const dow = d.getDay();
+    if (dow === 0) return '周日';
+    if (dow === 6) return '周六';
+    return null;
+  };
+
   // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
     if (!canEdit) return; // 普通用户不可操作
@@ -689,6 +738,8 @@ export default function LedgerDetailAA({
               <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
                 {calendarCells.map((day, idx) => {
                   if (day === null) return <div key={`empty-${idx}`} style={{ height: '44px' }} />;
+                  const nonTradingLabel = getNonTradingLabel(day);
+                  const isNonTrading = nonTradingLabel !== null;
                   const cellValue = getCellValue(day);
                   const hasRecord = cellValue !== null;
                   const todayMark = isToday(day);
@@ -730,24 +781,41 @@ export default function LedgerDetailAA({
                       }
                     }
                   }
+                  // 非交易日样式
+                  const cellBg = isNonTrading
+                    ? '#F0F0F0'
+                    : todayMark ? '#FFF3E0' : '#F9F9F9';
+                  const cellBorder = isNonTrading
+                    ? '1px solid #E0E0E0'
+                    : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
+                  const dayNumColor = isNonTrading
+                    ? '#BDBDBD'
+                    : todayMark ? '#D32F2F' : '#222222';
+
                   return (
                     <button
                       key={day}
-                      onClick={() => handleDayClick(day)}
+                      onClick={() => isNonTrading ? undefined : handleDayClick(day)}
+                      disabled={isNonTrading}
                       className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                       style={{
                         height: '44px',
-                        backgroundColor: todayMark ? "#FFF3E0" : "#F9F9F9",
-                        border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                        backgroundColor: cellBg,
+                        border: cellBorder,
                         padding: '2px 1px',
+                        cursor: isNonTrading ? 'default' : 'pointer',
                       }}
                     >
-                      <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, marginBottom: '2px', color: todayMark ? "#D32F2F" : "#222222" }}>{day}</span>
-                      {hasRecord && (
+                      <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, marginBottom: '1px', color: dayNumColor }}>{day}</span>
+                      {isNonTrading ? (
+                        <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                          {nonTradingLabel}
+                        </span>
+                      ) : hasRecord ? (
                         <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                           {cellValue}
                         </span>
-                      )}
+                      ) : null}
                     </button>
                   );
                 })}
