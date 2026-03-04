@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
+const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 // 不再使用动态主题，固定红色配色
@@ -124,6 +125,23 @@ export default function LedgerDetail() {
       localStorage.setItem('lastVisitedLedgerId', String(ledgerId));
     }
   }, [ledgerId]);
+
+  // 定制账本(AA)：使用专用UI
+  const isCustomAA = (ledgerData as any)?.type === 'custom_aa';
+  if (!isLoading && !error && isCustomAA && ledgerData) {
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}><div style={{ color: '#222222' }}>加载中...</div></div>}>
+        <LedgerDetailAA
+          ledgerId={ledgerId}
+          ledgerData={ledgerData}
+          membersData={membersData || []}
+          transactionsData={transactionsData || []}
+          refetchTransactions={refetchTransactions}
+          user={user}
+        />
+      </Suspense>
+    );
+  }
 
   if (isLoading) {
     return (

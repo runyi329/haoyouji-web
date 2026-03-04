@@ -114,9 +114,11 @@ const AddTransaction = () => {
   ); // 0=仅显示不计入，1=显示并计入，默认使用账本设置
   const [note, setNote] = useState("");
   
-  // 日期相关状态
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [displayDate, setDisplayDate] = useState(new Date().toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+  // 日期相关状态：支持 ?date=YYYY-MM-DD URL 参数预设日期
+  const presetDateStr = urlParams.get('date');
+  const initDate = presetDateStr ? new Date(presetDateStr + 'T00:00:00') : new Date();
+  const [selectedDate, setSelectedDate] = useState(initDate);
+  const [displayDate, setDisplayDate] = useState(initDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
   const [showDateConfirm, setShowDateConfirm] = useState(false);
