@@ -137,7 +137,11 @@ export default function LedgerDetailAA({
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
-    return transactionsData || [];
+    // 过滤掉 income=0 且 expense=0 的无效记录（误输入空值/0值后删除导致）
+    return (transactionsData || []).filter((d) => {
+      const total = (d.income || 0) + (d.expense || 0);
+      return total > 0;
+    });
   }, [transactionsData]);
 
   // ─── 按标签筛选 activeMemberTransactions ────────────────────────────────────────
@@ -158,6 +162,9 @@ export default function LedgerDetailAA({
         if (r.type === 'income') income += r.amount;
         else expense += r.amount;
       });
+
+      // 过滤掉 income+expense=0 的无效天（误输入空值/0值导致）
+      if (income === 0 && expense === 0) return null;
 
       return {
         ...day,
