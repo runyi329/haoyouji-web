@@ -7255,7 +7255,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         type: z.enum(['income', 'expense']),
-        amount: z.number().positive(),
+        amount: z.number().min(0),
         categoryId: z.number(),
         subcategoryId: z.number().optional(),
         description: z.string().optional(),
@@ -7351,7 +7351,7 @@ export const appRouter = router({
       .input(z.object({
         recordId: z.number(),
         type: z.enum(['income', 'expense']).optional(),
-        amount: z.number().positive().optional(),
+        amount: z.number().min(0).optional(),
         categoryId: z.number().optional(),
         subcategoryId: z.number().optional(),
         description: z.string().optional(),
