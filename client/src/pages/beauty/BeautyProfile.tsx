@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
-  ArrowLeft, Users, Star, Calendar, UserPlus, ChevronRight, Gift, ClipboardList
+  ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
@@ -141,22 +141,7 @@ export default function BeautyProfile() {
           </button>
         )}
 
-        {/* 好友邀请 */}
-        <button
-          onClick={() => setLocation('/parent/profile/invite')}
-          className="w-full bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-rose-50 flex items-center justify-center">
-              <UserPlus className="w-4.5 h-4.5 text-rose-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-medium text-gray-800">好友邀请</p>
-              <p className="text-xs text-gray-400 mt-0.5">邀请好友加入</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
-        </button>
+
 
 
       </div>
