@@ -91,6 +91,7 @@ const AddTransaction = () => {
   
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
+  const isCustomAA = (ledger as any)?.type === 'custom_aa';
   
   // 获取要编辑的账目详情
   const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
@@ -561,8 +562,8 @@ const AddTransaction = () => {
         <div className="w-5" /> {/* 占位 */}
       </div>
 
-      {/* 类型标签页 - 独立白色容器 */}
-      <div className="px-4 py-3 flex-shrink-0">
+      {/* 类型标签页 - 独立白色容器，custom_aa 账本不显示 */}
+      {!isCustomAA && <div className="px-4 py-3 flex-shrink-0">
         <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
@@ -585,7 +586,7 @@ const AddTransaction = () => {
             收入
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* 金额输入 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
@@ -682,8 +683,8 @@ const AddTransaction = () => {
 
 
 
-        {/* 账户选择 */}
-        <div className="bg-white mt-1">
+        {/* 账户选择 - custom_aa 不显示 */}
+        {!isCustomAA && <div className="bg-white mt-1">
           <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">
             {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
@@ -712,7 +713,7 @@ const AddTransaction = () => {
             ))}
           </div>
           </div>
-        </div>
+        </div>}
 
         {/* 报销状态选择 - 根据功能开关显示 */}
         {ledger?.enableReimbursement === 1 && (
@@ -844,13 +845,13 @@ const AddTransaction = () => {
               }
             }}
           />
-          <button 
+          {!isCustomAA && <button 
             className="px-6 bg-[#D32F2F] text-white flex items-center gap-2"
             onClick={() => fileInputRef.current?.click()}
           >
             <ImageIcon className="w-5 h-5" />
             <span className="text-sm font-medium">传图</span>
-          </button>
+          </button>}
         </div>
 
         {/* 图片预览区域 */}
