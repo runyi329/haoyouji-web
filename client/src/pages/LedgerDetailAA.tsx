@@ -192,14 +192,8 @@ export default function LedgerDetailAA({
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
   const formatMoney = (v: number) => {
-    // 日历格子只显示整数部分，不显示小数点
-    const abs = Math.abs(v);
-    const sign = v < 0 ? "-" : "";
-    if (abs >= 100000000) return `${sign}${Math.floor(abs / 100000000)}亿`;
-    if (abs >= 10000) return `${sign}${Math.floor(abs / 10000)}万`;
-    return Math.floor(Math.abs(v)) === 0 && v !== 0
-      ? (v < 0 ? "-<1" : "<1")
-      : String(Math.floor(Math.abs(v)) * (v < 0 ? -1 : 1));
+    // 日历格子只显示完整整数，不显示小数点、不显示正负号、不缩写
+    return String(Math.floor(Math.abs(v)));
   };
 
   const getDateStr = (day: number) => {
@@ -218,7 +212,7 @@ export default function LedgerDetailAA({
     }
     if (calendarMode === "daily") {
       const pnl = data.income - data.expense;
-      return (pnl >= 0 ? "+" : "") + formatMoney(pnl);
+      return formatMoney(pnl);
     }
     if (calendarMode === "monthly") {
       const { year, month } = calendarDate;
@@ -227,7 +221,7 @@ export default function LedgerDetailAA({
       dayMap.forEach((v, k) => {
         if (k.startsWith(prefix)) total += v.income - v.expense;
       });
-      return (total >= 0 ? "+" : "") + formatMoney(total);
+      return formatMoney(total);
     }
     if (calendarMode === "yearly") {
       const { year } = calendarDate;
@@ -235,7 +229,7 @@ export default function LedgerDetailAA({
       dayMap.forEach((v, k) => {
         if (k.startsWith(String(year))) total += v.income - v.expense;
       });
-      return (total >= 0 ? "+" : "") + formatMoney(total);
+      return formatMoney(total);
     }
     return null;
   };
