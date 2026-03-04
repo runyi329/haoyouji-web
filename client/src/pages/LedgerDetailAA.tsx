@@ -211,11 +211,11 @@ export default function LedgerDetailAA({
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
   const formatMoney = (v: number) => {
-    // 日历格子：超过1万用「万」缩写，避免溢出
-    const abs = Math.floor(Math.abs(v));
-    if (abs >= 100000000) return (abs / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
-    if (abs >= 10000) return (abs / 10000).toFixed(1).replace(/\.0$/, '') + '万';
-    return String(abs);
+    // 日历格子：超过1万用「万」缩写，保留2位小数
+    const abs = Math.abs(v);
+    if (abs >= 100000000) return (abs / 100000000).toFixed(2) + '亿';
+    if (abs >= 10000) return (abs / 10000).toFixed(2) + '万';
+    return abs.toFixed(2);
   };
 
   const getDateStr = (day: number) => {
@@ -249,10 +249,20 @@ export default function LedgerDetailAA({
       return dayTotal > 0 ? formatMoney(dayTotal) : null;
     }
     if (calendarMode === "daily") {
-      const diff = getDailyDiff(dateStr);
-      if (diff === null) return null;
-      const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
-      return sign + String(Math.floor(Math.abs(diff)));
+      // 当天绝对金额 - 前一天绝对金额的差值
+      const todayData = dayMap.get(dateStr);
+      if (!todayData) return null;
+      const todayTotal = todayData.expense + todayData.income;
+      // 找前一个有数据的日期
+      const allDates = Array.from(dayMap.keys()).sort();
+      const idx = allDates.indexOf(dateStr);
+      if (idx <= 0) return formatMoney(todayTotal); // 第一条数据直接显示当天金额
+      const prevDate = allDates[idx - 1];
+      const prevData = dayMap.get(prevDate)!;
+      const prevTotal = prevData.expense + prevData.income;
+      const diff = todayTotal - prevTotal;
+      const sign = diff > 0 ? "+" : "";
+      return sign + formatMoney(Math.abs(diff));
     }
     if (calendarMode === "monthly") {
       const { year, month } = calendarDate;
