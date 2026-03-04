@@ -627,20 +627,26 @@ const AddTransaction = () => {
 
       {/* 可滚动内容区域 */}
       <div className="flex-1 overflow-y-auto">
-        {/* 多级分类选择 - custom_aa 账本不显示 */}
-        {!isCustomAA && <div className="bg-white mt-1">
+        {/* 多级分类选择 - custom_aa 只显示自定义分类（过滤默认购物等） */}
+        <div className="bg-white mt-1">
           {/* 一级分类标题 */}
           <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 - 每级单独一行 */}
-          {categoryLevels.map((categories, level) => {
-            if (categories.length === 0) return null;
+          {categoryLevels.map((cats, level) => {
+            // custom_aa 账本第一级过滤掉默认分类（isDefault=true 或 id<=10 的预设）
+            const filteredCats = (isCustomAA && level === 0)
+              ? cats.filter((c: any) => !c.isDefault && c.id > 10)
+              : cats;
+            if (filteredCats.length === 0) return null;
+            // custom_aa 账本不显示二级及以下分类
+            if (isCustomAA && level > 0) return null;
             
             return (
               <div key={level} className="border-t border-gray-100">
                 <div className="p-3">
                   <div className="flex flex-wrap gap-2">
-                    {categories.map((category, index) => {
+                    {filteredCats.map((category: any, index: number) => {
                       const isSelected = selectedCategoryPath[level] === category.id;
                       const colorClass = themeColors[index % themeColors.length];
                       
@@ -659,8 +665,8 @@ const AddTransaction = () => {
                       );
                     })}
                     
-                    {/* 只在第一级显示"+"按钮 */}
-                    {level === 0 && (
+                    {/* 只在第一级显示"+"按鈕，custom_aa 不显示 */}
+                    {level === 0 && !isCustomAA && (
                       <button
                         className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1 hover:bg-[#D32F2F]-light"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
@@ -677,9 +683,8 @@ const AddTransaction = () => {
           {isLoadingTop && (
             <div className="text-xs text-gray-400 p-3">加载分类中...</div>
           )}
-          
 
-        </div>}
+        </div>
 
 
 
