@@ -627,8 +627,8 @@ const AddTransaction = () => {
 
       {/* 可滚动内容区域 */}
       <div className="flex-1 overflow-y-auto">
-        {/* 多级分类选择 */}
-        <div className="bg-white mt-1">
+        {/* 多级分类选择 - custom_aa 账本不显示 */}
+        {!isCustomAA && <div className="bg-white mt-1">
           {/* 一级分类标题 */}
           <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
@@ -679,7 +679,7 @@ const AddTransaction = () => {
           )}
           
 
-        </div>
+        </div>}
 
 
 
