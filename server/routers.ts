@@ -8014,7 +8014,7 @@ export const appRouter = router({
     updateMyInitialBalances: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        balances: z.record(z.string(), z.number()),
+        balances: z.record(z.string(), z.union([z.number(), z.string()])),
       }))
       .mutation(async ({ ctx, input }) => {
         await dbLedger.updateMyInitialBalances(input.ledgerId, ctx.user.id, input.balances);
@@ -8037,7 +8037,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         targetUserId: z.number(),
-        balances: z.record(z.string(), z.number()),
+        balances: z.record(z.string(), z.union([z.number(), z.string()])),
       }))
       .mutation(async ({ ctx, input }) => {
         // 验证操作者是owner或admin
