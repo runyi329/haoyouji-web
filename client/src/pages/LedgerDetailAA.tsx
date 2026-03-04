@@ -74,8 +74,20 @@ export default function LedgerDetailAA({
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
   // 标签（被记录者）选择
-  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  // 用 sessionStorage 持久化选中的标签，返回时恢复；页面首次加载时清除
+  const sessionKey = `ledger_${ledgerId}_selectedTagId`;
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(() => {
+    const saved = sessionStorage.getItem(sessionKey);
+    return saved ? parseInt(saved) : null;
+  });
   const [showTagDropdown, setShowTagDropdown] = useState(false);
+
+  // selectedTagId 变化时同步到 sessionStorage
+  useEffect(() => {
+    if (selectedTagId !== null) {
+      sessionStorage.setItem(sessionKey, String(selectedTagId));
+    }
+  }, [selectedTagId, sessionKey]);
 
 
   // 获取账本一级分类（标签）
