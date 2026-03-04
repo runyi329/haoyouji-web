@@ -2,11 +2,12 @@
  * 奢贝美容院 - 首页
  * 路径: /beauty
  */
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useState, useRef, useEffect } from "react";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut
 } from "lucide-react";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
@@ -50,7 +51,28 @@ function openMapNavigation() {
 }
 
 export default function BeautyHome() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  async function handleLogout() {
+    setMenuOpen(false);
+    await logout();
+    setLocation('/login');
+  }
   const promotionsQuery = trpc.beauty.promotion.list.useQuery();
   const productsQuery = trpc.beauty.shop.products.useQuery({});
   const healthQuery = trpc.beauty.health.news.useQuery({ num: 3, page: 1 });
@@ -78,8 +100,12 @@ export default function BeautyHome() {
               <h1 className="text-2xl font-bold tracking-wide">{STORE_INFO.name}</h1>
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
+              {/* 可点击头像 */}
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center active:scale-95 transition-transform"
+              >
                 {user?.avatar ? (
                   <img src={user.avatar} alt={user.username ?? ''} className="w-full h-full object-cover" />
                 ) : (
@@ -87,9 +113,30 @@ export default function BeautyHome() {
                     {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
                   </span>
                 )}
-              </div>
+              </button>
               {user?.username && (
                 <span className="text-white/50 text-[10px] tracking-wide select-none">{user.username}</span>
+              )}
+
+              {/* 下拉菜单 */}
+              {menuOpen && (
+                <div className="absolute top-16 right-0 z-50 bg-white rounded-2xl shadow-xl overflow-hidden min-w-[140px] border border-gray-100">
+                  <button
+                    onClick={() => { setMenuOpen(false); setLocation('/profile'); }}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-rose-50 active:bg-rose-100 transition-colors text-sm font-medium"
+                  >
+                    <User className="w-4 h-4 text-rose-400" />
+                    个人中心
+                  </button>
+                  <div className="h-px bg-gray-100" />
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-rose-50 active:bg-rose-100 transition-colors text-sm font-medium"
+                  >
+                    <LogOut className="w-4 h-4 text-rose-400" />
+                    退出登录
+                  </button>
+                </div>
               )}
             </div>
           </div>
