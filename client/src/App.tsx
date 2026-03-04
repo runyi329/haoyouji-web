@@ -103,6 +103,7 @@ const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
+const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
 const EditLedgerName = lazy(() => import("./pages/EditLedgerName"));
 const EditNickname = lazy(() => import("./pages/EditNickname"));
@@ -294,6 +295,7 @@ function Router() {
         <Route path="/ledger/join/:token" component={JoinLedger} />
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
+        <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />
         <Route path="/ledger/:id/import" component={LedgerImport} />
         <Route path="/ledger/:id/edit-name" component={EditLedgerName} />
         <Route path="/ledger/:id/edit-nickname" component={EditNickname} />
