@@ -230,6 +230,32 @@ async function startServer() {
     
     // 启动区块链扫描器（收款地址从数据库读取，无需环境变量）
     startScanner();
+
+    // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 执行）───
+    // 北京时间 = UTC+8，凌晨 2:00 BJT = UTC 18:00（前一天）
+    // 策略：每分钟检查一次当前 UTC 时间是否为 18:00（即 BJT 02:00），
+    // 并用一个标志位保证同一天只触发一次。
+    let lastBackupDate = '';
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        // UTC 18:00 = 北京时间 02:00
+        if (now.getUTCHours() === 18 && now.getUTCMinutes() === 0) {
+          const todayKey = now.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+          if (lastBackupDate !== todayKey) {
+            lastBackupDate = todayKey;
+            console.log(`[定时备份] 触发每日备份任务 (BJT 02:00) - ${todayKey}`);
+            const { checkAndExecuteBackups } = await import('../backup-service');
+            await checkAndExecuteBackups();
+            console.log(`[定时备份] 备份任务完成 - ${todayKey}`);
+          }
+        }
+      } catch (err) {
+        console.error('[定时备份] 执行失败:', err);
+      }
+    }, 60 * 1000); // 每分钟检查一次
+    console.log('[定时备份] 已注册，每天北京时间凌晨 02:00 自动执行');
+    // ──────────────────────────────────────────────────────
   });
 }
 
