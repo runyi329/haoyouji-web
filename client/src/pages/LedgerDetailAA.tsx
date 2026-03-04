@@ -524,7 +524,7 @@ export default function LedgerDetailAA({
                 if (!memberBalances) return '未设置';
                 const val = memberBalances[tagName];
                 if (val === undefined || val === null) return '未设置';
-                return '¥' + Math.floor(val).toLocaleString('zh-CN');
+                return '¥' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               })()}
             </div>
           </div>
