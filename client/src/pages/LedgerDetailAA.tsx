@@ -268,17 +268,18 @@ export default function LedgerDetailAA({
     const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
 
     if (calendarMode === "balance" || calendarMode === "daily") {
-      // 余额/日模式：生成当月所有天的数据点（无数据的天 balance=null）
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      // 余额/日模式：只保留当月有数据的交易日，去除空白间隔，折线图连续显示
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-      return Array.from({ length: daysInMonth }, (_, i) => {
-        const day = i + 1;
-        const dateStr = `${monthPrefix}-${String(day).padStart(2, "0")}`;
-        const d = dayMap.get(dateStr);
+      // 只取当月有数据的日期，按日期升序排列
+      const monthDays = sorted
+        .filter((d) => d.date.startsWith(monthPrefix))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      return monthDays.map((d) => {
+        const day = parseInt(d.date.slice(8), 10);
         return {
           date: `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-          balance: d ? (cumulativeMap.get(dateStr) ?? null) : null,
-          pnl: d ? (d.income - d.expense) : null,
+          balance: cumulativeMap.get(d.date) ?? null,
+          pnl: d.income - d.expense,
         };
       });
     } else if (calendarMode === "monthly") {
