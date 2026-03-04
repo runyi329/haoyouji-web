@@ -734,6 +734,7 @@ export default function Ledger() {
                       )}
                     </div>
                     {/* 信息行：小头像 + 开账天数 + 账目条数 */}
+                    {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
                     <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                       <div className="flex items-center gap-1.5">
                         <div className="flex -space-x-1">
@@ -790,6 +791,7 @@ export default function Ledger() {
                         {ledger.recordCount || 0}条账目
                       </span>
                     </div>
+                    )}
                   </div>
 
                   {/* 操作按钮区 - 默认折叠 */}
@@ -931,6 +933,7 @@ export default function Ledger() {
                                     </button>
                                   )}
                                 </div>
+                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
                                 <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                   <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
                                   <span className="text-gray-300">|</span>
@@ -938,6 +941,7 @@ export default function Ledger() {
                                   <span className="text-gray-300">|</span>
                                   <span>{ledger.recordCount || 0}条账目</span>
                                 </div>
+                                )}
                               </div>
                               {expandedLedgerIds.has(ledger.id) && (
                                 <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
@@ -990,6 +994,7 @@ export default function Ledger() {
                                   </button>
                                 )}
                               </div>
+                              {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && (
                               <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                 <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
                                 <span className="text-gray-300">|</span>
@@ -997,6 +1002,7 @@ export default function Ledger() {
                                 <span className="text-gray-300">|</span>
                                 <span>{ledger.recordCount || 0}条账目</span>
                               </div>
+                              )}
                             </div>
                             {expandedLedgerIds.has(ledger.id) && (
                               <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
