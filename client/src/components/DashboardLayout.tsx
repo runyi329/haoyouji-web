@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -324,8 +325,18 @@ function DashboardLayoutContent({
 // 用户切换对话框组件
 function UserSwitcherDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { data: users } = trpc.admin.getUsers.useQuery(undefined, { enabled: open });
+  const queryClient = useQueryClient();
   const switchUserMutation = trpc.auth.quickLogin.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // 将新用户的sessionToken存入localStorage，覆盖旧token
+      try {
+        if (data.sessionToken) {
+          localStorage.setItem('auth-token', data.sessionToken);
+        }
+        localStorage.removeItem('manus-runtime-user-info');
+      } catch (e) {}
+      // 清空所有React Query缓存
+      queryClient.clear();
       window.location.reload();
     },
     onError: (error) => {
