@@ -470,51 +470,8 @@ export default function LedgerDetailAA({
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
-        {/* 导航栏 */}
-        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-          <button
-            onClick={() => setLocation("/ledger")}
-            className="w-9 h-9 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-          >
-            <ChevronLeft className="w-5 h-5 text-white" />
-          </button>
-          <h1 className="text-base font-semibold flex-1 text-center mx-2 truncate">
-            {ledgerData?.name || "定制账本"}
-          </h1>
-          <div className="flex items-center gap-2">
-            {canEdit && (
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-                className="w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              >
-                <Search className="w-4 h-4 text-white" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-                className="w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              >
-                <BarChart3 className="w-4 h-4 text-white" />
-              </button>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-                className="w-9 h-9 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              >
-                <Settings className="w-4 h-4 text-white" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* 用户信息行 + 标签下拉 */}
-        <div className="px-4 pb-2 flex items-center gap-3">
+        {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}
+        <div className="px-4 pt-3 pb-2 flex items-center gap-3">
           {/* 头像（当前登录用户，纯展示） */}
           <div className="flex-shrink-0">
             {user ? (
@@ -534,13 +491,43 @@ export default function LedgerDetailAA({
             )}
           </div>
 
-          {/* 用户名 + 标签下拉（同行） */}
+          {/* 用户名 + 操作按钮 + 标签下拉（同行） */}
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
             <div className="text-base font-semibold truncate">
               {user?.nickname || user?.username || "用户"}
             </div>
 
-            {/* 标签下拉选择器 - 靠右 */}
+            {/* 右侧：操作按钮 + 标签下拉 */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {canEdit && (
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                >
+                  <Search className="w-3.5 h-3.5 text-white" />
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-white" />
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                >
+                  <Settings className="w-3.5 h-3.5 text-white" />
+                </button>
+              )}
+
+            {/* 标签下拉选择器 */}
             {categories && categories.length > 0 && (
               <div className="relative flex-shrink-0">
                 <button
@@ -603,6 +590,7 @@ export default function LedgerDetailAA({
                 )}
               </div>
             )}
+            </div>{/* end: 操作按钮+标签容器 */}
           </div>
         </div>
 
@@ -859,7 +847,7 @@ export default function LedgerDetailAA({
                       disabled={isNonTrading}
                       className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                       style={{
-                        height: '44px',
+                        height: '36px',
                         backgroundColor: cellBg,
                         border: cellBorder,
                         padding: '2px 1px',
