@@ -5095,3 +5095,124 @@ export async function getLedgerGroupsWithLedgers(userId: number) {
   }
   return { groups, ledgerGroupMap };
 }
+
+// ========== 初始金额相关 ==========
+
+/**
+ * 获取当前用户在某账本的初始金额配置
+ */
+export async function getMyInitialBalances(ledgerId: number, userId: number): Promise<Record<string, number> | null> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({ initialBalances: ledgerMembers.initialBalances })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (rows.length === 0) return null;
+  const raw = rows[0].initialBalances;
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 更新当前用户在某账本的初始金额配置
+ */
+export async function updateMyInitialBalances(
+  ledgerId: number,
+  userId: number,
+  balances: Record<string, number>
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({ id: ledgerMembers.id })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (rows.length === 0) throw new Error("您不是此账本的成员");
+
+  await db
+    .update(ledgerMembers)
+    .set({ initialBalances: JSON.stringify(balances) })
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    );
+}
+
+/**
+ * 获取账本所有成员的初始金额配置（管理员用）
+ * 返回 { userId: balances } 的映射
+ */
+export async function getAllMembersInitialBalances(ledgerId: number): Promise<Record<number, Record<string, number>>> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({
+      userId: ledgerMembers.userId,
+      initialBalances: ledgerMembers.initialBalances,
+    })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.ledgerId, ledgerId));
+
+  const result: Record<number, Record<string, number>> = {};
+  for (const row of rows) {
+    if (!row.initialBalances) {
+      result[row.userId] = {};
+    } else {
+      try {
+        result[row.userId] = JSON.parse(row.initialBalances) as Record<string, number>;
+      } catch {
+        result[row.userId] = {};
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * 获取指定用户在账本中的成员记录
+ */
+export async function getUserMembership(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({
+      id: ledgerMembers.id,
+      role: ledgerMembers.role,
+      memberType: ledgerMembers.memberType,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}

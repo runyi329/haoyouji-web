@@ -82,6 +82,11 @@ export default function LedgerDetailAA({
     { ledgerId, parentId: null },
     { enabled: !!ledgerId }
   );
+  // 获取当前用户的初始金额配置
+  const { data: initialBalancesData } = trpc.ledger.getMyInitialBalances.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
   const categories = useMemo(() => {
     if (!rawCategories) return [];
@@ -442,10 +447,18 @@ export default function LedgerDetailAA({
             </div>
           </div>
 
-          {/* 记录天数 */}
+          {/* 初始金额 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">记录天数</div>
-            <div className="text-base font-bold">{stats.recordDays} 天</div>
+            <div className="text-xs opacity-75 mb-0.5">初始金额</div>
+            <div className="text-base font-bold">
+              {(() => {
+                const tagName = selectedTag?.name;
+                if (!tagName || !initialBalancesData?.balances) return '未设置';
+                const val = initialBalancesData.balances[tagName];
+                if (val === undefined || val === null) return '未设置';
+                return '¥' + Math.floor(val).toLocaleString('zh-CN');
+              })()}
+            </div>
           </div>
 
           {/* 累计盈亏 */}

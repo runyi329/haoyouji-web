@@ -8001,6 +8001,52 @@ export const appRouter = router({
         }
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
       }),
+    // 获取当前用户的初始金额配置（定制账本AA）
+    getMyInitialBalances: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const balances = await dbLedger.getMyInitialBalances(input.ledgerId, ctx.user.id);
+        return { balances: balances ?? {} };
+      }),
+    // 更新当前用户的初始金额配置（定制账本AA）
+    updateMyInitialBalances: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        balances: z.record(z.string(), z.number()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbLedger.updateMyInitialBalances(input.ledgerId, ctx.user.id, input.balances);
+        return { success: true };
+      }),
+    // 管理员：获取所有成员的初始金额配置（定制账本AA）
+    adminGetAllInitialBalances: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        // 只有owner/admin可操作
+        const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+        const realMembers = members.filter((m: any) => m.memberType !== 'ai');
+        const result = await dbLedger.getAllMembersInitialBalances(input.ledgerId);
+        return { members: realMembers, balancesMap: result };
+      }),
+    // 管理员：设置指定成员的初始金额配置（定制账本AA）
+    adminSetMemberInitialBalances: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number(),
+        balances: z.record(z.string(), z.number()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // 验证操作者是owner或admin
+        const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置初始金额' });
+        }
+        await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
+        return { success: true };
+      }),
   }),
   
   // 银行列表管理
