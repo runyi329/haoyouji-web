@@ -505,7 +505,7 @@ export default function LedgerDetailAA({
               {user?.nickname || user?.username || "用户"}
             </div>
 
-            {/* 右侧：操作按钮 + 标签下拉 */}
+            {/* 右侧：操作按钮 + 返回按钮 + 标签下拉 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {canEdit && (
                 <button
@@ -534,6 +534,19 @@ export default function LedgerDetailAA({
                   <Settings className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
+              {/* 返回按钮：椭圆形，点击返回账本首页 */}
+              <button
+                onClick={() => setLocation("/ledger")}
+                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#D32F2F",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  minWidth: "44px",
+                }}
+              >
+                返回
+              </button>
 
             {/* 标签下拉选择器 */}
             {categories && categories.length > 0 && (
