@@ -198,6 +198,7 @@ export const beautyVisitLogs = mysqlTable("beauty_visit_logs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),           // 消费客户
   operatorId: int("operatorId").notNull(),   // 记录操作人
+  visitDate: varchar("visitDate", { length: 20 }),  // 消费日期 YYYY-MM-DD，为空则用createdAt
   remark: varchar("remark", { length: 200 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

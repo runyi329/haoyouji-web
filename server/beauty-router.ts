@@ -723,6 +723,76 @@ export const beautyRouter = router({
         });
         return { success: true, endDate: endDateStr };
       }),
+
+    // 更新消费卡（修改卡类型和开始日期）
+    updateCard: protectedProcedure
+      .input(z.object({
+        cardId: z.number(),
+        cardType: z.enum(['monthly', 'quarterly', 'semiannual', 'annual']),
+        startDate: z.string(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [card] = await db
+          .select({ id: beautyMemberCards.id, userId: beautyMemberCards.userId })
+          .from(beautyMemberCards)
+          .where(eq(beautyMemberCards.id, input.cardId));
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '卡不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, card.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        const daysMap: Record<string, number> = {
+          monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
+        };
+        const end = new Date(input.startDate);
+        end.setDate(end.getDate() + daysMap[input.cardType]);
+        const endDateStr = end.toISOString().split('T')[0];
+        await db
+          .update(beautyMemberCards)
+          .set({
+            cardType: input.cardType,
+            startDate: input.startDate,
+            endDate: endDateStr,
+            remark: input.remark || null,
+          })
+          .where(eq(beautyMemberCards.id, input.cardId));
+        return { success: true, endDate: endDateStr };
+      }),
+
+    // 删除消费卡（软删除，设为失效）
+    deleteCard: protectedProcedure
+      .input(z.object({ cardId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [card] = await db
+          .select({ id: beautyMemberCards.id, userId: beautyMemberCards.userId })
+          .from(beautyMemberCards)
+          .where(eq(beautyMemberCards.id, input.cardId));
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '卡不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, card.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .update(beautyMemberCards)
+          .set({ isActive: 0 })
+          .where(eq(beautyMemberCards.id, input.cardId));
+        return { success: true };
+      }),
   }),
 
   // ===== 消费次数 =====
@@ -750,6 +820,7 @@ export const beautyRouter = router({
     addVisit: protectedProcedure
       .input(z.object({
         userId: z.number(),
+        visitDate: z.string().optional(), // YYYY-MM-DD，默认今天
         remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -767,6 +838,7 @@ export const beautyRouter = router({
         await db.insert(beautyVisitLogs).values({
           userId: input.userId,
           operatorId: ctx.user.id,
+          visitDate: input.visitDate || new Date().toISOString().split('T')[0],
           remark: input.remark || null,
         });
         return { success: true };
