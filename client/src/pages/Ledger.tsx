@@ -58,6 +58,7 @@ export default function Ledger() {
   const [selectedCopyLedgerId, setSelectedCopyLedgerId] = useState<number | null>(null);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [joinSecretKey, setJoinSecretKey] = useState("");
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   // 分组相关 state
   const [showGroupManageDialog, setShowGroupManageDialog] = useState(false);
@@ -617,27 +618,57 @@ export default function Ledger() {
 
       {/* 切换按钮 */}
       <div className="px-4 py-3">
-        <div className="flex gap-2 bg-white rounded-2xl p-1 shadow-sm">
-          <button
-            onClick={() => setActiveTab("active")}
-            className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === "active"
-                ? "bg-[#D32F2F] text-white shadow-sm"
-                : "text-[#757575] hover:bg-gray-100"
-            }`}
-          >
-            使用中 {activeLedgers && `(${activeLedgers.length})`}
-          </button>
-          <button
-            onClick={() => setActiveTab("archived")}
-            className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
-              activeTab === "archived"
-                ? "bg-[#D32F2F] text-white shadow-sm"
-                : "text-[#757575] hover:bg-gray-100"
-            }`}
-          >
-            已封存 {archivedLedgers && `(${archivedLedgers.length})`}
-          </button>
+        <div className="flex gap-2 items-center">
+          <div className="flex flex-1 gap-2 bg-white rounded-2xl p-1 shadow-sm">
+            <button
+              onClick={() => setActiveTab("active")}
+              className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
+                activeTab === "active"
+                  ? "bg-[#D32F2F] text-white shadow-sm"
+                  : "text-[#757575] hover:bg-gray-100"
+              }`}
+            >
+              使用中 {activeLedgers && `(${activeLedgers.length})`}
+            </button>
+            <button
+              onClick={() => setActiveTab("archived")}
+              className={`flex-1 py-2 px-4 rounded-xl text-sm font-medium transition-colors ${
+                activeTab === "archived"
+                  ? "bg-[#D32F2F] text-white shadow-sm"
+                  : "text-[#757575] hover:bg-gray-100"
+              }`}
+            >
+              已封存 {archivedLedgers && `(${archivedLedgers.length})`}
+            </button>
+          </div>
+          {/* 快捷添加按钮 */}
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              className="w-10 h-10 bg-[#D32F2F] text-white rounded-xl shadow-sm flex items-center justify-center text-xl font-light hover:bg-[#B71C1C] transition-colors"
+            >
+              +
+            </button>
+            {showAddMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowAddMenu(false)} />
+                <div className="absolute right-0 top-12 z-50 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-44">
+                  <button
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                    onClick={() => { setShowAddMenu(false); setShowCreateDialog(true); }}
+                  >
+                    新建账本
+                  </button>
+                  <button
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 transition-colors"
+                    onClick={() => { setShowAddMenu(false); setShowJoinDialog(true); }}
+                  >
+                    加入他人账本
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
