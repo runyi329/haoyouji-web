@@ -192,8 +192,14 @@ export default function LedgerDetailAA({
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
   const formatMoney = (v: number) => {
-    if (Math.abs(v) >= 10000) return `${(v / 10000).toFixed(2)}万`;
-    return v.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    // 日历格子只显示整数部分，不显示小数点
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "-" : "";
+    if (abs >= 100000000) return `${sign}${Math.floor(abs / 100000000)}亿`;
+    if (abs >= 10000) return `${sign}${Math.floor(abs / 10000)}万`;
+    return Math.floor(Math.abs(v)) === 0 && v !== 0
+      ? (v < 0 ? "-<1" : "<1")
+      : String(Math.floor(Math.abs(v)) * (v < 0 ? -1 : 1));
   };
 
   const getDateStr = (day: number) => {
