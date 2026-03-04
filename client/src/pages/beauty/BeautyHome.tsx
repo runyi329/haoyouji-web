@@ -58,8 +58,10 @@ export default function BeautyHome() {
   // 查询奢贝积分和权限
   const pointsQuery = trpc.beauty.points.getMyBalance.useQuery();
   const canManageQuery = trpc.beauty.points.canManage.useQuery();
+  const canProfileQuery = trpc.beauty.points.canAccessProfile.useQuery();
   const myPoints = pointsQuery.data?.balance ?? 0;
   const canManage = canManageQuery.data?.canManage ?? false;
+  const canAccessProfile = canProfileQuery.data?.canAccess ?? false;
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -107,8 +109,8 @@ export default function BeautyHome() {
             </div>
             <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
               {/* 头像区域 */}
-              {canManage ? (
-                /* 有权限用户：可点击弹出菜单 */
+              {canAccessProfile ? (
+                /* 有个人中心权限：可点击弹出菜单 */
                 <button
                   onClick={() => setMenuOpen(v => !v)}
                   className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center active:scale-95 transition-transform"
@@ -141,8 +143,8 @@ export default function BeautyHome() {
               <div className="flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5">
                 <span className="text-amber-200 text-[10px] font-medium">{myPoints} 积分</span>
               </div>
-              {/* 下拉菜单（仅有权限用户） */}
-              {menuOpen && canManage && (
+              {/* 下拉菜单（有个人中心权限时显示） */}
+              {menuOpen && canAccessProfile && (
                 <div className="absolute top-20 right-0 z-50 bg-white rounded-2xl shadow-xl overflow-hidden min-w-[140px] border border-gray-100">
                   <button
                     onClick={() => { setMenuOpen(false); setLocation('/beauty/profile'); }}
