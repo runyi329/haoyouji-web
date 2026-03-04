@@ -190,6 +190,37 @@ export default function LedgerDetailAA({
     return cum;
   }, [filteredTransactions]);
 
+  // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
+  const allTagsStats = useMemo(() => {
+    if (!initialBalancesData?.balances || !categories || categories.length === 0) {
+      return { totalMargin: 0, totalPnl: 0, diff: 0 };
+    }
+    let totalMargin = 0;
+    let totalPnl = 0;
+    categories.forEach((cat: any) => {
+      const tagName = cat.name;
+      // 保证金
+      const margin = initialBalancesData.balances[`${tagName}__margin`];
+      if (margin !== undefined && margin !== null) totalMargin += Number(margin);
+      // 盈亏：需要计算每个标签的 initialBalance - latestBalance
+      const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
+      const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
+      // 找该标签最新的余额记录
+      const tagTransactions = (activeMemberTransactions || []).flatMap((day: any) =>
+        (day.records || []).filter((r: any) => r.category && r.category.includes(tagName))
+          .map((r: any) => ({ date: day.date, amount: r.amount, type: r.type }))
+      ).sort((a: any, b: any) => a.date.localeCompare(b.date));
+      if (tagTransactions.length > 0) {
+        const last = tagTransactions[tagTransactions.length - 1];
+        const latestBalance = last.amount;
+        if (initialBalance > 0) {
+          totalPnl += (initialBalance - latestBalance) * ratio;
+        }
+      }
+    });
+    return { totalMargin, totalPnl, diff: totalMargin + totalPnl };
+  }, [initialBalancesData, categories, activeMemberTransactions]);
+
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     if (!filteredTransactions || filteredTransactions.length === 0) {
@@ -577,6 +608,34 @@ export default function LedgerDetailAA({
 
         {/* 4个统计卡片 */}
         <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+          {selectedTagId === null ? (
+            /* ─── 全部模式：保证金总和 + 盈亏总和 + 差値 ─── */
+            <>
+              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+                <div className="text-xs opacity-75 mb-0.5">保证金总计</div>
+                <div className="text-base font-bold">
+                  ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs opacity-60 mt-0.5">全部标签保证金之和</div>
+              </div>
+              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+                <div className="text-xs opacity-75 mb-0.5">盈亏总计</div>
+                <div className="text-base font-bold">
+                  {allTagsStats.totalPnl > 0 ? '+' : ''}¥{allTagsStats.totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs opacity-60 mt-0.5">全部标签盈亏之和</div>
+              </div>
+              <div className="col-span-2 rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+                <div className="text-xs opacity-75 mb-0.5">差値（保证金 + 盈亏）</div>
+                <div className="text-base font-bold">
+                  {allTagsStats.diff > 0 ? '+' : ''}¥{allTagsStats.diff.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs opacity-60 mt-0.5">当前实际保证金余额</div>
+              </div>
+            </>
+          ) : (
+            /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
+            <>
           {/* 最新余额 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
             <div className="text-xs opacity-75 mb-0.5">最新余额</div>
@@ -651,10 +710,13 @@ export default function LedgerDetailAA({
               收益率 {stats.returnRate >= 0 ? "+" : ""}{stats.returnRate.toFixed(2)}%
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── 可滚动内容区域 ── */}
+      {/* ── 可滚动内容区域（全部模式下隐藏） ── */}
+      {selectedTagId !== null && (
       <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
 
       {/* ── 日历视图 ── */}
@@ -1046,6 +1108,7 @@ export default function LedgerDetailAA({
       </div>
 
       </div>{/* end 可滚动内容区域 */}
+      )}{/* end selectedTagId !== null */}
 
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见） ── */}
       {canEdit && (
