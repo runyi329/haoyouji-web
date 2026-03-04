@@ -1009,10 +1009,28 @@ export default function LedgerDetailAA({
               )}
             </div>
             <div className="text-[11px] mt-0.5" style={{ color: "#9E9E9E" }}>
-              {calendarMode === 'balance' ? '当月日度余额变化' : calendarMode === 'monthly' ? '全年月度盈亏' : '全部记录余额走势'}
+              {calendarMode === 'balance' ? '当月日度余额变化' : calendarMode === 'daily' ? '当月日盈亏走势' : calendarMode === 'monthly' ? '全年月度盈亏' : '全部记录余额走势'}
             </div>
           </div>
-          {chartData.filter((d: any) => d.balance !== null).length > 0 && (() => {
+          {/* 日盈亏模式：显示当月所有交易日盈亏累加总和；月/年模式：显示区间变化；余额模式：不显示数字 */}
+          {calendarMode === 'daily' && (() => {
+            // 日盈亏模式：当月所有交易日的 pnl 累加总和
+            const { year, month } = calendarDate;
+            const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+            const totalPnl = filteredTransactions
+              .filter((d) => d.date.startsWith(monthPrefix))
+              .reduce((sum, d) => sum + (d.income - d.expense), 0);
+            const isUp = totalPnl >= 0;
+            return (
+              <div className="text-right">
+                <div className="text-base font-bold" style={{ color: isUp ? "#D32F2F" : "#4CAF50" }}>
+                  {isUp ? '+' : ''}¥{totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[10px]" style={{ color: "#9E9E9E" }}>当月盈亏合计</div>
+              </div>
+            );
+          })()}
+          {(calendarMode === 'monthly' || calendarMode === 'yearly') && chartData.filter((d: any) => d.balance !== null).length > 0 && (() => {
             const validPoints = chartData.filter((d: any) => d.balance !== null);
             const latest = validPoints[validPoints.length - 1];
             const first = validPoints[0];
