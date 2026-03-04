@@ -8042,6 +8042,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // 验证操作者是owner或admin
         const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置初始金额' });
         }
         await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
