@@ -12,6 +12,11 @@
  *   绿     #4CAF50  正收益
  *   橙     #FFA000  警告
  *
+ * 标签 = 被记录者（账本一级分类）
+ * - 管理员通过账本设置创建/管理分类（标签）
+ * - 普通用户在头像右侧通过下拉选择标签
+ * - 选中标签后，日历和曲线只显示该标签下的账目
+ *
  * transactionsData 格式（来自 ledger.getTransactions）：
  *   Array<{ date: string; records: any[]; income: number; expense: number; balance: number }>
  *   注意：balance 是当天 income - expense，不是累计余额
@@ -19,7 +24,8 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import {
   AreaChart,
   Area,
@@ -64,18 +70,63 @@ export default function LedgerDetailAA({
   // 日历视图模式
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
 
+  // 标签（被记录者）选择
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+
+  // 获取账本一级分类（标签）
+  const { data: categories } = trpc.ledger.getCategories.useQuery(
+    { ledgerId, parentId: null },
+    { enabled: !!ledgerId }
+  );
+
+  // 当前选中的标签名
+  const selectedTag = useMemo(() => {
+    if (!selectedTagId || !categories) return null;
+    return categories.find((c: any) => c.id === selectedTagId) || null;
+  }, [selectedTagId, categories]);
+
+  // ─── 按标签筛选 transactionsData ────────────────────────────────────────
+  const filteredTransactions = useMemo(() => {
+    if (!selectedTagId || !categories) return transactionsData || [];
+    const tagName = selectedTag?.name;
+    if (!tagName) return transactionsData || [];
+
+    return (transactionsData || []).map((day) => {
+      // 筛选该标签下的记录（category 字段包含标签名）
+      const filtered = day.records.filter((r: any) =>
+        r.category && r.category.includes(tagName)
+      );
+      if (filtered.length === 0) return null;
+
+      let income = 0, expense = 0;
+      filtered.forEach((r: any) => {
+        if (r.type === 'income') income += r.amount;
+        else expense += r.amount;
+      });
+
+      return {
+        ...day,
+        records: filtered,
+        income,
+        expense,
+        balance: income - expense,
+      };
+    }).filter(Boolean) as DayGroup[];
+  }, [transactionsData, selectedTagId, selectedTag, categories]);
+
   // ─── 将分组数据转换为按日期索引的 Map ────────────────────────────────────
   const dayMap = useMemo(() => {
     const map = new Map<string, DayGroup>();
-    (transactionsData || []).forEach((d) => {
+    filteredTransactions.forEach((d) => {
       if (d.date) map.set(d.date, d);
     });
     return map;
-  }, [transactionsData]);
+  }, [filteredTransactions]);
 
   // ─── 计算累计余额（按日期升序累加）────────────────────────────────────────
   const cumulativeMap = useMemo(() => {
-    const sorted = [...(transactionsData || [])].sort((a, b) =>
+    const sorted = [...filteredTransactions].sort((a, b) =>
       a.date.localeCompare(b.date)
     );
     let running = 0;
@@ -85,21 +136,18 @@ export default function LedgerDetailAA({
       cum.set(d.date, running);
     });
     return cum;
-  }, [transactionsData]);
+  }, [filteredTransactions]);
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    if (!transactionsData || transactionsData.length === 0) {
-      return { latestBalance: 0, returnRate: 0, recordDays: 0, totalPnl: 0 };
+    if (!filteredTransactions || filteredTransactions.length === 0) {
+      return { latestBalance: 0, returnRate: 0, recordDays: 0, totalPnl: 0, initialBalance: 0 };
     }
 
-    // 最新余额 = 最后一天的累计余额
-    const sorted = [...transactionsData].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
     const lastDate = sorted[sorted.length - 1].date;
     const latestBalance = cumulativeMap.get(lastDate) ?? 0;
-
-    // 记录天数
-    const recordDays = transactionsData.length;
+    const recordDays = filteredTransactions.length;
 
     // 初始金额：从 description 中解析 "起始金额:XXXXX"
     let initialBalance = 0;
@@ -112,17 +160,17 @@ export default function LedgerDetailAA({
     const returnRate = initialBalance > 0 ? (totalPnl / initialBalance) * 100 : 0;
 
     return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
-  }, [transactionsData, cumulativeMap, ledgerData]);
+  }, [filteredTransactions, cumulativeMap, ledgerData]);
 
   // ─── 余额曲线数据 ──────────────────────────────────────────────────────────
   const chartData = useMemo(() => {
-    const sorted = [...(transactionsData || [])].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
     return sorted.map((d) => ({
       date: d.date.slice(5), // MM-DD
       balance: cumulativeMap.get(d.date) ?? 0,
       pnl: d.income - d.expense,
     }));
-  }, [transactionsData, cumulativeMap]);
+  }, [filteredTransactions, cumulativeMap]);
 
   // ─── 当前月日历格子 ────────────────────────────────────────────────────────
   const calendarCells = useMemo(() => {
@@ -191,6 +239,14 @@ export default function LedgerDetailAA({
     today.getMonth() === calendarDate.month &&
     today.getDate() === day;
 
+  // 点击日历格子跳转添加账目，带上日期和标签分类
+  const handleDayClick = (day: number) => {
+    const dateStr = getDateStr(day);
+    let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
+    if (selectedTagId) url += `&categoryId=${selectedTagId}`;
+    setLocation(url);
+  };
+
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
@@ -233,8 +289,9 @@ export default function LedgerDetailAA({
           </div>
         </div>
 
-        {/* 用户信息行 */}
+        {/* 用户信息行 + 标签下拉 */}
         <div className="px-4 pb-4 flex items-center gap-3">
+          {/* 头像 */}
           <div className="flex-shrink-0">
             {user ? (
               <UserAvatar
@@ -252,12 +309,76 @@ export default function LedgerDetailAA({
               </div>
             )}
           </div>
+
+          {/* 用户名 + 标签下拉 */}
           <div className="flex-1 min-w-0">
             <div className="text-base font-semibold truncate">
               {user?.nickname || user?.username || "用户"}
             </div>
-            {ledgerData?.description && (
-              <div className="text-xs opacity-80 mt-0.5 truncate">{ledgerData.description}</div>
+
+            {/* 标签下拉选择器 */}
+            {categories && categories.length > 0 && (
+              <div className="relative mt-1.5">
+                <button
+                  onClick={() => setShowTagDropdown(!showTagDropdown)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedTag ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
+                    color: selectedTag ? "#D32F2F" : "#FFFFFF",
+                    border: "1px solid rgba(255,255,255,0.4)",
+                  }}
+                >
+                  <span>{selectedTag ? selectedTag.name : "选择被记录者"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
+                </button>
+
+                {showTagDropdown && (
+                  <>
+                    {/* 遮罩 */}
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowTagDropdown(false)}
+                    />
+                    {/* 下拉菜单 */}
+                    <div
+                      className="absolute left-0 top-full mt-1 rounded-xl shadow-lg z-50 overflow-hidden"
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E0E0E0",
+                        minWidth: "140px",
+                      }}
+                    >
+                      {/* 全部（不筛选） */}
+                      <button
+                        onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
+                        style={{
+                          color: selectedTagId === null ? "#D32F2F" : "#222222",
+                          fontWeight: selectedTagId === null ? 600 : 400,
+                          borderBottom: "1px solid #F5F5F5",
+                        }}
+                      >
+                        全部
+                      </button>
+                      {categories.map((cat: any) => (
+                        <button
+                          key={cat.id}
+                          onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }}
+                          className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
+                          style={{
+                            color: selectedTagId === cat.id ? "#D32F2F" : "#222222",
+                            fontWeight: selectedTagId === cat.id ? 600 : 400,
+                            borderBottom: "1px solid #F5F5F5",
+                          }}
+                        >
+                          {cat.icon && <span className="mr-1.5">{cat.icon}</span>}
+                          {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -397,10 +518,7 @@ export default function LedgerDetailAA({
               return (
                 <button
                   key={day}
-                  onClick={() => {
-                    const dateStr = getDateStr(day);
-                    setLocation(`/ledger/${ledgerId}/add?date=${dateStr}`);
-                  }}
+                  onClick={() => handleDayClick(day)}
                   className="aspect-square rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                   style={{
                     backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
@@ -436,6 +554,11 @@ export default function LedgerDetailAA({
         <div className="px-4 pt-4 pb-4">
           <div className="text-sm font-semibold mb-0.5" style={{ color: "#222222" }}>
             余额变化曲线
+            {selectedTag && (
+              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
+                {selectedTag.name}
+              </span>
+            )}
           </div>
           <div className="text-xs mb-4" style={{ color: "#757575" }}>
             展示账户余额随时间的变化趋势
@@ -446,7 +569,7 @@ export default function LedgerDetailAA({
               className="flex items-center justify-center h-32 text-sm"
               style={{ color: "#757575" }}
             >
-              暂无数据，点击日历格子添加记录
+              {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
@@ -504,7 +627,11 @@ export default function LedgerDetailAA({
 
       {/* ── 悬浮加号按钮 ── */}
       <button
-        onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+        onClick={() => {
+          let url = `/ledger/${ledgerId}/add`;
+          if (selectedTagId) url += `?categoryId=${selectedTagId}`;
+          setLocation(url);
+        }}
         className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
         style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}
       >
