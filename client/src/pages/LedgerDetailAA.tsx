@@ -188,15 +188,27 @@ export default function LedgerDetailAA({
     return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
   }, [filteredTransactions, cumulativeMap, ledgerData]);
 
-  // ─── 余额曲线数据 ──────────────────────────────────────────────────────────
+  // ─── 余额曲线数据（根据日历模式筛选对应时间范围） ────────────────────────
   const chartData = useMemo(() => {
+    const { year, month } = calendarDate;
     const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
-    return sorted.map((d) => ({
+    // 根据日历模式筛选时间范围
+    let filtered = sorted;
+    if (calendarMode === "balance" || calendarMode === "daily") {
+      // 余额/日模式：只显示当前月的数据
+      const prefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+      filtered = sorted.filter((d) => d.date.startsWith(prefix));
+    } else if (calendarMode === "monthly") {
+      // 月模式：只显示当前年的数据
+      filtered = sorted.filter((d) => d.date.startsWith(String(year)));
+    }
+    // 年模式：显示全部数据
+    return filtered.map((d) => ({
       date: d.date.slice(5), // MM-DD
       balance: cumulativeMap.get(d.date) ?? 0,
       pnl: d.income - d.expense,
     }));
-  }, [filteredTransactions, cumulativeMap]);
+  }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate]);
 
   // ─── 当前月日历格子 ────────────────────────────────────────────────────────
   const calendarCells = useMemo(() => {
