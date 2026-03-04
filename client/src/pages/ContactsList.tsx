@@ -1017,6 +1017,22 @@ export default function ContactsList() {
           {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
           
+          {/* 刷新按钮 */}
+          <button
+            onClick={() => {
+              refetch();
+              refetchCompanyList();
+              refetchTags();
+              toast.success('已刷新');
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-all"
+            title="刷新页面"
+          >
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          
           <div className="flex items-center gap-1">
             {/* 共享人脉筛选按钮 */}
               <button
