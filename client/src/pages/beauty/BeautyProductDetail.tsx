@@ -329,8 +329,8 @@ export default function BeautyProductDetail() {
       <div className="py-6" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div className="px-5 mb-4">
           <div className="text-xs tracking-widest mb-1" style={{ color: "#c9a84c" }}>六大核心功效</div>
-          <h2 className="text-lg font-bold text-white">全方位守护您的健康</h2>
-          <p className="text-sm text-white/40 mt-1">红光疗法从细胞层面激活身体自愈力，六大维度全面改善身体状态。</p>
+          <h2 className="text-lg font-bold text-white">悉心守护您的健康</h2>
+          <p className="text-sm text-white/40 mt-1">红光疗法从细胞层面激活身体自愈力，六大维度多维调理身体。</p>
         </div>
         {/* 功效图标横幅 */}
         <div className="w-full overflow-hidden mb-4" style={{ height: "42vw", maxHeight: 240 }}>
