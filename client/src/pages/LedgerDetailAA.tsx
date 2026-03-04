@@ -178,16 +178,14 @@ export default function LedgerDetailAA({
     return map;
   }, [filteredTransactions]);
 
-  // ─── 计算累计余额（按日期升序累加）────────────────────────────────────────
+    // ─── 每天余额快照（直接存当天的余额绝对值，不累加）──────────────────────────
   const cumulativeMap = useMemo(() => {
-    const sorted = [...filteredTransactions].sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
-    let running = 0;
     const cum = new Map<string, number>();
-    sorted.forEach((d) => {
-      running += d.income - d.expense;
-      cum.set(d.date, running);
+    filteredTransactions.forEach((d) => {
+      // 每天的记录是当天余额快照，取 income 和 expense 中的主要金额
+      // income 和 expense 只会有一个有值，取其绝对值作为当天余额
+      const dayBalance = d.income > 0 ? d.income : d.expense;
+      cum.set(d.date, dayBalance);
     });
     return cum;
   }, [filteredTransactions]);
@@ -200,8 +198,8 @@ export default function LedgerDetailAA({
 
     const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
     const lastRecord = sorted[sorted.length - 1];
-    // 最新余额 = 最后一天所有记录的绝对金额（expense + income 绝对値）
-    const latestBalance = Math.abs(lastRecord.income - lastRecord.expense);
+    // 最新余额 = 最后一天的余额快照（income 和 expense 只有一个有值）
+    const latestBalance = lastRecord.income > 0 ? lastRecord.income : lastRecord.expense;
     const latestDate = lastRecord.date; // 最新余额登记日期
     const recordDays = filteredTransactions.length;
     // 初始金额：从 initialBalancesData 接口数据读取（当前选中标签对应的初始金额）
@@ -253,23 +251,26 @@ export default function LedgerDetailAA({
         };
       });
     } else if (calendarMode === "monthly") {
-      // 月模式：生成当年所有月份的数据点
+      // 月模式：取当月最后一天的余额快照作为该月余额
       return Array.from({ length: 12 }, (_, i) => {
         const m = i + 1;
         const prefix = `${year}-${String(m).padStart(2, "0")}`;
         const monthData = sorted.filter((d) => d.date.startsWith(prefix));
-        const net = monthData.reduce((sum, d) => sum + (d.income - d.expense), 0);
+        if (monthData.length === 0) return { date: `${m}月`, balance: null, pnl: null };
+        // 取当月最后一天的余额快照
+        const lastDay = monthData[monthData.length - 1];
+        const lastBalance = lastDay.income > 0 ? lastDay.income : lastDay.expense;
         return {
           date: `${m}月`,
-          balance: monthData.length > 0 ? net : null,
-          pnl: monthData.length > 0 ? net : null,
+          balance: lastBalance,
+          pnl: lastBalance,
         };
       });
     }
-    // 年模式：显示全部数据
+    // 年模式：显示全部数据，每天直接取余额快照
     return sorted.map((d) => ({
       date: d.date.slice(5),
-      balance: cumulativeMap.get(d.date) ?? 0,
+      balance: d.income > 0 ? d.income : d.expense,
       pnl: d.income - d.expense,
     }));
   }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap]);
