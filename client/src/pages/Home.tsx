@@ -265,7 +265,7 @@ export default function Home() {
   };
 
   const handleRefresh = () => {
-    refetch();
+    window.location.reload();
   };
 
   return (
@@ -426,28 +426,16 @@ export default function Home() {
             );
           })}
 
-          {/* 第5个按钮：liulifan显示奢贝按钮，其他用户显示刷新按钮 */}
-          {isLiulifan ? (
-            <div
-              onClick={() => navigate("/beauty")}
-              className="flex flex-col items-center space-y-2 cursor-pointer relative"
-            >
-              <div className="w-10 h-10 rounded-full bg-[#D32F2F] flex items-center justify-center shadow-sm">
-                <span className="text-white text-[11px] font-bold tracking-tight">奢贝</span>
-              </div>
-              <span className="text-xs font-medium text-[#757575]">奢贝</span>
+          {/* 第5个按钮：所有用户统一显示刷新按钮 */}
+          <div
+            onClick={handleRefresh}
+            className="flex flex-col items-center space-y-2 cursor-pointer"
+          >
+            <div className={`w-10 h-10 rounded-full bg-[#D32F2F]-light text-[#D32F2F] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
+              <RefreshCw className="w-5 h-5" />
             </div>
-          ) : (
-            <div
-              onClick={handleRefresh}
-              className="flex flex-col items-center space-y-2 cursor-pointer"
-            >
-              <div className={`w-10 h-10 rounded-full bg-[#D32F2F]-light text-[#D32F2F] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
-                <RefreshCw className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-medium text-[#757575]">刷新</span>
-            </div>
-          )}
+            <span className="text-xs font-medium text-[#757575]">刷新</span>
+          </div>
         </div>
       </div>
 
