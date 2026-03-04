@@ -92,6 +92,8 @@ const AddTransaction = () => {
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
   const isCustomAA = (ledger as any)?.type === 'custom_aa';
+  const userRole = (ledger as any)?.userRole;
+  const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
   // 获取要编辑的账目详情
   const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
@@ -665,8 +667,8 @@ const AddTransaction = () => {
                       );
                     })}
                     
-                    {/* 只在第一级显示"+"按鈕，custom_aa 不显示 */}
-                    {level === 0 && !isCustomAA && (
+                    {/* 只在第一级显示"+"按鈕，custom_aa 的 owner/admin 也可以添加 */}
+                    {level === 0 && canManageCategories && (
                       <button
                         className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1 hover:bg-[#D32F2F]-light"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
