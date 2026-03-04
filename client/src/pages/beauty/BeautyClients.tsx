@@ -717,10 +717,11 @@ export default function BeautyClients() {
                   <Calendar className="w-3.5 h-3.5" />
                   开始日期
                 </Label>
-                <Input
+                <input
                   type="date"
                   value={cardStartDate}
                   onChange={(e) => setCardStartDate(e.target.value)}
+                  className="w-40 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
               {cardStartDate && (
@@ -838,10 +839,11 @@ export default function BeautyClients() {
                     消费日期
                     <span className="text-gray-400 text-xs font-normal">（默认今天，可修改）</span>
                   </Label>
-                  <Input
+                  <input
                     type="date"
                     value={visitDate}
                     onChange={(e) => setVisitDate(e.target.value)}
+                    className="w-40 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
                 <div className="space-y-2">
@@ -924,10 +926,11 @@ export default function BeautyClients() {
                 <Calendar className="w-3.5 h-3.5" />
                 消费日期
               </Label>
-              <Input
+              <input
                 type="date"
                 value={editVisitDate}
                 onChange={(e) => setEditVisitDate(e.target.value)}
+                className="w-40 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <div className="space-y-2">
