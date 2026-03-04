@@ -198,8 +198,11 @@ export default function LedgerDetailAA({
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
   const formatMoney = (v: number) => {
-    // 日历格子只显示完整整数，不显示小数点、不显示正负号、不缩写
-    return String(Math.floor(Math.abs(v)));
+    // 日历格子：超过1万用「万」缩写，避免溢出
+    const abs = Math.floor(Math.abs(v));
+    if (abs >= 100000000) return (abs / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+    if (abs >= 10000) return (abs / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    return String(abs);
   };
 
   const getDateStr = (day: number) => {
@@ -554,15 +557,19 @@ export default function LedgerDetailAA({
               {/* 日历格子 */}
               <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
                 {calendarCells.map((day, idx) => {
-                  if (day === null) return <div key={`empty-${idx}`} style={{ height: '36px' }} />;
+                  if (day === null) return <div key={`empty-${idx}`} style={{ height: '44px' }} />;
                   const cellValue = getCellValue(day);
                   const hasRecord = cellValue !== null;
                   const todayMark = isToday(day);
+                  // 所有模式都根据当天对比上一次数据的正负显示颜色
+                  // 正数（盈）→ 红色，负数（亏）→ 绿色
                   let valueColor = "#D32F2F";
-                  if (calendarMode === "daily") {
+                  if (hasRecord) {
                     const dateStr = getDateStr(day);
                     const diff = getDailyDiff(dateStr);
-                    if (diff !== null) valueColor = diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E";
+                    if (diff !== null) {
+                      valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
+                    }
                   }
                   return (
                     <button
@@ -570,13 +577,18 @@ export default function LedgerDetailAA({
                       onClick={() => handleDayClick(day)}
                       className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                       style={{
-                        height: '36px',
+                        height: '44px',
                         backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
                         border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                        padding: '2px 1px',
                       }}
                     >
-                      <span className="text-xs font-medium leading-none mb-0.5" style={{ color: todayMark ? "#D32F2F" : "#222222" }}>{day}</span>
-                      {hasRecord && <span className="leading-none font-semibold" style={{ fontSize: "9px", color: valueColor }}>{cellValue}</span>}
+                      <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, marginBottom: '2px', color: todayMark ? "#D32F2F" : "#222222" }}>{day}</span>
+                      {hasRecord && (
+                        <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                          {cellValue}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
