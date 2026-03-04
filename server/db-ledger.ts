@@ -5132,7 +5132,7 @@ export async function getMyInitialBalances(ledgerId: number, userId: number): Pr
 export async function updateMyInitialBalances(
   ledgerId: number,
   userId: number,
-  balances: Record<string, number>
+  balances: Record<string, number | string>
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
