@@ -858,5 +858,66 @@ export const beautyRouter = router({
           .where(eq(beautyVisitLogs.userId, input.userId))
           .orderBy(desc(beautyVisitLogs.createdAt));
       }),
+
+    // 编辑消费记录（修改日期和备注）
+    updateVisit: protectedProcedure
+      .input(z.object({
+        visitId: z.number(),
+        visitDate: z.string(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证记录属于自己管理的客户
+        const [visit] = await db
+          .select({ id: beautyVisitLogs.id, userId: beautyVisitLogs.userId })
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        if (!visit) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, visit.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .update(beautyVisitLogs)
+          .set({
+            visitDate: input.visitDate,
+            remark: input.remark || null,
+          })
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        return { success: true };
+      }),
+
+    // 删除消费记录
+    deleteVisit: protectedProcedure
+      .input(z.object({ visitId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [visit] = await db
+          .select({ id: beautyVisitLogs.id, userId: beautyVisitLogs.userId })
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        if (!visit) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, visit.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .delete(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        return { success: true };
+      }),
   }),
 });
