@@ -435,7 +435,7 @@ export default function LedgerDetailAA({
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
+    <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 导航栏 */}
@@ -653,8 +653,11 @@ export default function LedgerDetailAA({
         </div>
       </div>
 
+      {/* ── 可滚动内容区域 ── */}
+      <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+
       {/* ── 日历视图 ── */}
-      <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm flex-shrink-0" style={{ backgroundColor: "#FFFFFF" }}>
+      <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
         <div className="px-3 pt-3 pb-2">
           {/* 月份导航 + 视图切换 */}
           <div className="flex items-center justify-between mb-2">
@@ -920,7 +923,7 @@ export default function LedgerDetailAA({
 
       {/* ── 余额变化曲线 ── */}
       <div
-        className="mx-3 mt-2 rounded-2xl shadow-sm mb-24"
+        className="mx-3 mt-2 rounded-2xl shadow-sm mb-4"
         style={{ backgroundColor: "#FFFFFF" }}
       >
         {/* 头部：标题 + 最新余额展示 */}
@@ -1041,7 +1044,9 @@ export default function LedgerDetailAA({
         )}
       </div>
 
-      {/* ── 悬浮加号按钮（仅管理员/创建者可见） ── */}
+      </div>{/* end 可滚动内容区域 */}
+
+      {/* ── 悬浮加号按鈕（仅管理员/创建者可见） ── */}
       {canEdit && (
         <button
           onClick={() => {
