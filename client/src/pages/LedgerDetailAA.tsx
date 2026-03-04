@@ -182,7 +182,8 @@ export default function LedgerDetailAA({
         initialBalance = Number(val);
       }
     }
-    const totalPnl = latestBalance - initialBalance;
+    // 负债视角：最新余额变大表示亏损（-），变小表示盈利（+）
+    const totalPnl = initialBalance - latestBalance;
     const returnRate = initialBalance > 0 ? (totalPnl / initialBalance) * 100 : 0;
     return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
