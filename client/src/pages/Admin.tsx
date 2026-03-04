@@ -309,10 +309,7 @@ export default function Admin() {
               <Users className="w-4 h-4 mr-1 hidden sm:inline" />
               账户关系
             </TabsTrigger>
-            <TabsTrigger value="permissions" className="text-xs sm:text-sm">
-              <Shield className="w-4 h-4 mr-1 hidden sm:inline" />
-              功能权限
-            </TabsTrigger>
+
             <TabsTrigger value="aiManagement" className="text-xs sm:text-sm">
               <Sparkles className="w-4 h-4 mr-1 hidden sm:inline" />
               AI管理
@@ -934,10 +931,7 @@ export default function Admin() {
             <AccountRelationshipManager />
           </TabsContent>
 
-          {/* 功能权限管理 */}
-          <TabsContent value="permissions">
-            <UserPermissionsManager />
-          </TabsContent>
+
 
           {/* AI 管理 */}
           <TabsContent value="aiManagement">

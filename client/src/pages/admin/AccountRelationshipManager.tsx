@@ -79,7 +79,7 @@ function FeaturePermissionSwitch({
   const getPermissionStatus = (): boolean => {
     if (!userPermissions) {
       // 这些新功能默认关闭
-      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet', 'beauty-profile', 'beauty-points-manage'];
       return !defaultOffFeatures.includes(featureKey);
     }
     const perm = userPermissions.find((p) => p.featureKey === featureKey);
@@ -87,7 +87,7 @@ function FeaturePermissionSwitch({
       return perm.isEnabled;
     }
     // 没有记录时，这些新功能默认关闭
-    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
+    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet', 'beauty-profile', 'beauty-points-manage'];
     return !defaultOffFeatures.includes(featureKey);
   };
   
@@ -809,6 +809,24 @@ export default function AccountRelationshipManager() {
                     featureKey="wallet"
                     label="我的钱包"
                     description="钱包功能和余额管理"
+                  />
+                </div>
+              </Card>
+              {/* 奢贝美容院功能开关 */}
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3 text-sm">奢贝美容院功能开关</h4>
+                <div className="space-y-3">
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="beauty-profile"
+                    label="奢贝个人中心"
+                    description="可在奢贝首页点击头像进入个人中心和退出登录"
+                  />
+                  <FeaturePermissionSwitch 
+                    userId={managedParent.id}
+                    featureKey="beauty-points-manage"
+                    label="奢贝积分管理"
+                    description="可给邀请的客户加减积分和赠送优惠券"
                   />
                 </div>
               </Card>

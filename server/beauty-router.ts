@@ -523,6 +523,12 @@ export const beautyRouter = router({
       return { canManage };
     }),
 
+    // 检查当前用户是否有奢贝个人中心权限
+    canAccessProfile: protectedProcedure.query(async ({ ctx }) => {
+      const canAccess = await hasFeaturePermission(ctx.user.id, 'beauty-profile');
+      return { canAccess };
+    }),
+
     // 获取我的客户列表（我邀请的用户 + 他们的积分）
     getMyClients: protectedProcedure.query(async ({ ctx }) => {
       const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
