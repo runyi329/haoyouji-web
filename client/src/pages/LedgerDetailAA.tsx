@@ -114,6 +114,13 @@ export default function LedgerDetailAA({
     if (!rawCategories) return [];
     return rawCategories.filter((c: any) => !c.isDefault);
   }, [rawCategories]);
+  // categories加载后默认选中第1个标签
+  useEffect(() => {
+    if (categories && categories.length > 0 && selectedTagId === null) {
+      setSelectedTagId(categories[0].id);
+    }
+  }, [categories]);
+
   // 当前选中的标签名
   const selectedTag = useMemo(() => {
     if (!selectedTagId || !categories) return null;
@@ -436,7 +443,7 @@ export default function LedgerDetailAA({
                     border: "1px solid rgba(255,255,255,0.4)",
                   }}
                 >
-                  <span>{selectedTag ? selectedTag.name : "切换"}</span>
+                  <span>{selectedTag?.name || "标签"}</span>
                   <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
                 </button>
 
