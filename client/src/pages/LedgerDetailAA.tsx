@@ -182,9 +182,18 @@ export default function LedgerDetailAA({
         initialBalance = Number(val);
       }
     }
-    // 负债视角：最新余额变大表示亏损（-），变小表示盈利（+）
-    const totalPnl = initialBalance - latestBalance;
-    const returnRate = initialBalance > 0 ? (totalPnl / initialBalance) * 100 : 0;
+    // 初始比例权重（存在 balances[标签名__ratio]）
+    let ratio = 1;
+    if (selectedTag?.name && initialBalancesData?.balances) {
+      const ratioVal = initialBalancesData.balances[`${selectedTag.name}__ratio`];
+      if (ratioVal !== undefined && ratioVal !== null) {
+        ratio = Number(ratioVal) / 100;
+      }
+    }
+    // 负债视角：最新余额变大表示亏损（-），变小表示盈利（+），乘以权重
+    const rawPnl = initialBalance - latestBalance;
+    const totalPnl = rawPnl * ratio;
+    const returnRate = initialBalance > 0 ? (rawPnl / initialBalance) * 100 : 0;
     return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
 
