@@ -800,8 +800,8 @@ const AddTransaction = () => {
           </div>
         )}
 
-        {/* 备注输入 */}
-        <div className="bg-white mt-1 flex items-stretch">
+        {/* 备注输入 - custom_aa 不显示 */}
+        {!isCustomAA && <div className="bg-white mt-1 flex items-stretch">
           <input
             type="text"
             placeholder="备注"
@@ -852,7 +852,7 @@ const AddTransaction = () => {
             <ImageIcon className="w-5 h-5" />
             <span className="text-sm font-medium">传图</span>
           </button>}
-        </div>
+        </div>}
 
         {/* 图片预览区域 */}
         {uploadedImages.length > 0 && (
@@ -882,10 +882,10 @@ const AddTransaction = () => {
         {/* 底部工具栏 */}
         <div className="bg-white mt-1 p-3 mb-2">
           <div className="flex items-center justify-between text-xs">
-            <button className="flex items-center gap-1 text-[#757575]">
+            {!isCustomAA && <button className="flex items-center gap-1 text-[#757575]">
               <Link2 className="w-3.5 h-3.5" />
               <span>关联账户</span>
-            </button>
+            </button>}
             <button 
               className="flex items-center gap-1 text-[#757575]"
               onClick={() => setIsDateSheetOpen(true)}
@@ -893,13 +893,13 @@ const AddTransaction = () => {
               <Calendar className="w-3.5 h-3.5" />
               <span>{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </button>
-            <button 
+            {!isCustomAA && <button 
               className="flex items-center gap-1 text-[#757575]"
               onClick={() => setIsPayerSheetOpen(true)}
             >
               <User className="w-3.5 h-3.5" />
               <span>{payer}</span>
-            </button>
+            </button>}
           </div>
         </div>
       </div>
