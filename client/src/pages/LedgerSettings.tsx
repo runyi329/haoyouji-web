@@ -445,6 +445,14 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
           />
         )}
+        {/* 账目明细：创建人/管理员可见 */}
+        {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+          <SettingItem
+            label="账目明细"
+            showIcon
+            onClick={() => setLocation(`/ledger/${ledgerId}/admin-transactions`)}
+          />
+        )}
         {ledgerData?.type !== 'diet' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
       </div>
 
