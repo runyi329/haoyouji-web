@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { Link, useParams, useLocation } from "wouter";
 import {
   ChevronLeft, ShoppingCart, Gift, Shield, ChevronDown,
-  ChevronUp, Phone
+  ChevronUp, Phone, MessageCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
