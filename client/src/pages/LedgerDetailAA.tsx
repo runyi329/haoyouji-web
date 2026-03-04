@@ -920,81 +920,125 @@ export default function LedgerDetailAA({
 
       {/* ── 余额变化曲线 ── */}
       <div
-        className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm mb-20 flex-1 min-h-0"
+        className="mx-3 mt-2 rounded-2xl shadow-sm mb-24"
         style={{ backgroundColor: "#FFFFFF" }}
       >
-        <div className="px-3 pt-3 pb-3 h-full flex flex-col">
-          <div className="text-xs font-semibold mb-0.5" style={{ color: "#222222" }}>
-            余额变化曲线
-            {selectedTag && (
-              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
-                {selectedTag.name}
-              </span>
-            )}
-          </div>
-          <div className="text-xs mb-2" style={{ color: "#757575" }}>
-            展示账户余额随时间的变化趋势
-          </div>
-
-          {chartData.length === 0 ? (
-            <div
-              className="flex items-center justify-center h-32 text-sm"
-              style={{ color: "#757575" }}
-            >
-              {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
+        {/* 头部：标题 + 最新余额展示 */}
+        <div className="px-4 pt-4 pb-2 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold" style={{ color: "#1A1A1A" }}>余额走势</span>
+              {selectedTag && (
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
+                  {selectedTag.name}
+                </span>
+              )}
             </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={138}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+            <div className="text-[11px] mt-0.5" style={{ color: "#9E9E9E" }}>
+              {calendarMode === 'balance' ? '当月日度余额变化' : calendarMode === 'monthly' ? '全年月度盈亏' : '全部记录余额走势'}
+            </div>
+          </div>
+          {chartData.filter((d: any) => d.balance !== null).length > 0 && (() => {
+            const validPoints = chartData.filter((d: any) => d.balance !== null);
+            const latest = validPoints[validPoints.length - 1];
+            const first = validPoints[0];
+            const diff = latest.balance - first.balance;
+            const isUp = diff >= 0;
+            return (
+              <div className="text-right">
+                <div className="text-base font-bold" style={{ color: isUp ? "#D32F2F" : "#4CAF50" }}>
+                  {isUp ? '+' : ''}¥{diff.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[10px]" style={{ color: "#9E9E9E" }}>区间变化</div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {chartData.filter((d: any) => d.balance !== null).length === 0 ? (
+          <div
+            className="flex items-center justify-center py-12 text-sm"
+            style={{ color: "#BDBDBD" }}
+          >
+            {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
+          </div>
+        ) : (
+          <div className="px-1 pb-4">
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
                 <defs>
-                  <linearGradient id="aaBalanceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#D32F2F" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#D32F2F" stopOpacity={0} />
+                  <linearGradient id="aaBalanceGradientUp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#D32F2F" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#D32F2F" stopOpacity={0.01} />
                   </linearGradient>
+                  <linearGradient id="aaBalanceGradientDown" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4CAF50" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#4CAF50" stopOpacity={0.01} />
+                  </linearGradient>
+                  <filter id="chartGlow">
+                    <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                    <feMerge>
+                      <feMergeNode in="coloredBlur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E0E0E0" />
+                <CartesianGrid strokeDasharray="2 4" stroke="#F0F0F0" vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: "#757575" }}
+                  tick={{ fontSize: 9, fill: "#BDBDBD", fontWeight: 400 }}
                   axisLine={false}
                   tickLine={false}
                   interval="preserveStartEnd"
+                  padding={{ left: 8, right: 8 }}
                 />
                 <YAxis
-                  tick={{ fontSize: 10, fill: "#757575" }}
+                  tick={{ fontSize: 9, fill: "#BDBDBD", fontWeight: 400 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) =>
-                    Math.abs(v) >= 10000 ? `${(v / 10000).toFixed(0)}万` : String(v)
+                    Math.abs(v) >= 10000 ? `${(v / 10000).toFixed(1)}万` : String(v)
                   }
-                  width={45}
+                  width={42}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E0E0E0",
-                    borderRadius: "8px",
+                    backgroundColor: "#1A1A1A",
+                    border: "none",
+                    borderRadius: "10px",
                     fontSize: "12px",
-                    color: "#222222",
+                    color: "#FFFFFF",
+                    padding: "8px 12px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
                   }}
+                  labelStyle={{ color: "#9E9E9E", fontSize: "10px", marginBottom: 2 }}
+                  itemStyle={{ color: "#FFFFFF", fontWeight: 600 }}
                   formatter={(value: number) => [
                     `¥${value.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}`,
                     "余额",
                   ]}
+                  cursor={{ stroke: "rgba(211,47,47,0.3)", strokeWidth: 1, strokeDasharray: "4 2" }}
                 />
                 <Area
                   type="monotone"
                   dataKey="balance"
                   stroke="#D32F2F"
-                  strokeWidth={2}
-                  fill="url(#aaBalanceGradient)"
-                  dot={{ r: 3, fill: "#D32F2F", strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: "#D32F2F" }}
+                  strokeWidth={2.5}
+                  fill="url(#aaBalanceGradientUp)"
+                  connectNulls={false}
+                  dot={false}
+                  activeDot={{
+                    r: 5,
+                    fill: "#FFFFFF",
+                    stroke: "#D32F2F",
+                    strokeWidth: 2.5,
+                    filter: "url(#chartGlow)",
+                  }}
                 />
               </AreaChart>
             </ResponsiveContainer>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── 悬浮加号按钮（仅管理员/创建者可见） ── */}
