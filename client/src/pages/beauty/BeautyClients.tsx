@@ -1,6 +1,6 @@
 /**
  * 奢贝美容院 - 我的客户
- * 显示邀请的客户列表，可管理积分、消费卡（增删改）、记录消费次数，优惠券功能预留
+ * 显示邀请的客户列表，可管理积分（加/减/记录）、消费卡（增删改）、消费次数（增删改），优惠券功能预留
  * 路径: /beauty/clients
  */
 import { useState, useMemo } from "react";
@@ -29,11 +29,14 @@ const CARD_TYPES = [
 ] as const;
 
 type CardType = typeof CARD_TYPES[number]['value'];
-
-// 消费卡管理弹窗的模式
 type CardDialogMode = 'add' | 'edit' | 'manage';
 
-// 计算距离到期天数
+// 积分管理弹窗的三个tab
+type PointsTab = 'add' | 'subtract' | 'log';
+
+// 消费次数管理弹窗的两个tab
+type VisitTab = 'add' | 'log';
+
 function getDaysUntilExpiry(endDate: string): number {
   const end = new Date(endDate);
   const now = new Date();
@@ -42,7 +45,6 @@ function getDaysUntilExpiry(endDate: string): number {
   return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// 卡类型中文名
 function getCardLabel(cardType: string): string {
   return CARD_TYPES.find(c => c.value === cardType)?.label ?? cardType;
 }
@@ -52,20 +54,15 @@ export default function BeautyClients() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 积分管理弹窗状态（合并加减积分）
+  // ===== 积分管理弹窗（三tab合一） =====
   const [pointsDialog, setPointsDialog] = useState(false);
+  const [pointsTab, setPointsTab] = useState<PointsTab>('add');
   const [pointsUserId, setPointsUserId] = useState<number | null>(null);
   const [pointsUserName, setPointsUserName] = useState("");
-  const [pointsType, setPointsType] = useState<"add" | "subtract">("add");
   const [pointsAmount, setPointsAmount] = useState("");
   const [pointsRemark, setPointsRemark] = useState("");
 
-  // 日志弹窗状态
-  const [logDialog, setLogDialog] = useState(false);
-  const [logUserId, setLogUserId] = useState<number | null>(null);
-  const [logUserName, setLogUserName] = useState("");
-
-  // 消费卡管理弹窗状态（增删改合一）
+  // ===== 消费卡管理弹窗 =====
   const [cardDialog, setCardDialog] = useState(false);
   const [cardDialogMode, setCardDialogMode] = useState<CardDialogMode>('add');
   const [cardUserId, setCardUserId] = useState<number | null>(null);
@@ -74,41 +71,54 @@ export default function BeautyClients() {
   const [selectedCardType, setSelectedCardType] = useState<CardType>('monthly');
   const [cardStartDate, setCardStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [cardRemark, setCardRemark] = useState("");
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState(false);
+  const [deleteCardConfirmDialog, setDeleteCardConfirmDialog] = useState(false);
   const [deleteCardId, setDeleteCardId] = useState<number | null>(null);
 
-  // 消费次数弹窗状态
+  // ===== 消费次数管理弹窗（两tab合一） =====
   const [visitDialog, setVisitDialog] = useState(false);
+  const [visitTab, setVisitTab] = useState<VisitTab>('add');
   const [visitUserId, setVisitUserId] = useState<number | null>(null);
   const [visitUserName, setVisitUserName] = useState("");
   const [visitDate, setVisitDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [visitRemark, setVisitRemark] = useState("");
+  // 编辑消费记录
+  const [editVisitId, setEditVisitId] = useState<number | null>(null);
+  const [editVisitDate, setEditVisitDate] = useState("");
+  const [editVisitRemark, setEditVisitRemark] = useState("");
+  const [editVisitDialog, setEditVisitDialog] = useState(false);
+  const [deleteVisitConfirmDialog, setDeleteVisitConfirmDialog] = useState(false);
+  const [deleteVisitId, setDeleteVisitId] = useState<number | null>(null);
 
-  // 分享弹窗状态
+  // ===== 分享弹窗 =====
   const [shareDialog, setShareDialog] = useState(false);
 
-  // 查询客户列表
+  // ===== 查询 =====
   const clientsQuery = trpc.beauty.points.getMyClients.useQuery(undefined, {
     refetchOnMount: 'always',
   });
 
-  // 获取所有客户的消费卡信息（批量）
   const clientIds = useMemo(() => (clientsQuery.data ?? []).map(c => c.id), [clientsQuery.data]);
+
   const cardsQuery = trpc.beauty.card.getClientsCards.useQuery(
     { userIds: clientIds },
     { enabled: clientIds.length > 0, refetchOnMount: 'always' }
   );
 
-  // 获取所有客户的消费次数（批量）
   const visitCountQuery = trpc.beauty.visit.getClientsVisitCount.useQuery(
     { userIds: clientIds },
     { enabled: clientIds.length > 0, refetchOnMount: 'always' }
   );
 
-  // 积分日志
+  // 积分日志（在积分管理弹窗的记录tab中使用）
   const logQuery = trpc.beauty.points.getPointsLog.useQuery(
-    { userId: logUserId! },
-    { enabled: logDialog && !!logUserId }
+    { userId: pointsUserId! },
+    { enabled: pointsDialog && pointsTab === 'log' && !!pointsUserId }
+  );
+
+  // 消费次数日志（在消费次数管理弹窗的记录tab中使用）
+  const visitLogQuery = trpc.beauty.visit.getVisitLog.useQuery(
+    { userId: visitUserId! },
+    { enabled: visitDialog && visitTab === 'log' && !!visitUserId }
   );
 
   // 邀请信息
@@ -120,14 +130,16 @@ export default function BeautyClients() {
     { enabled: shareDialog && !!inviteInfoQuery.data?.inviteCode }
   );
 
-  // Mutations
+  // ===== Mutations =====
   const adjustMutation = trpc.beauty.points.adjustPoints.useMutation({
     onSuccess: (data) => {
-      toast.success(`积分${pointsType === "add" ? "增加" : "扣减"}成功，当前余额: ${data.newBalance}`);
-      setPointsDialog(false);
+      const type = pointsTab === 'add' ? '增加' : '扣减';
+      toast.success(`积分${type}成功，当前余额: ${data.newBalance}`);
       setPointsAmount("");
       setPointsRemark("");
       clientsQuery.refetch();
+      // 切换到记录tab查看
+      setPointsTab('log');
     },
     onError: (err) => toast.error(err.message),
   });
@@ -155,7 +167,7 @@ export default function BeautyClients() {
   const deleteCardMutation = trpc.beauty.card.deleteCard.useMutation({
     onSuccess: () => {
       toast.success("消费卡已删除");
-      setDeleteConfirmDialog(false);
+      setDeleteCardConfirmDialog(false);
       setCardDialog(false);
       cardsQuery.refetch();
     },
@@ -165,14 +177,35 @@ export default function BeautyClients() {
   const addVisitMutation = trpc.beauty.visit.addVisit.useMutation({
     onSuccess: () => {
       toast.success("消费记录已添加");
-      setVisitDialog(false);
+      setVisitDate(new Date().toISOString().split('T')[0]);
       setVisitRemark("");
       visitCountQuery.refetch();
+      // 切换到记录tab
+      setVisitTab('log');
     },
     onError: (err) => toast.error(err.message),
   });
 
-  // 构建客户ID -> 卡信息的映射
+  const updateVisitMutation = trpc.beauty.visit.updateVisit.useMutation({
+    onSuccess: () => {
+      toast.success("消费记录已更新");
+      setEditVisitDialog(false);
+      visitLogQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteVisitMutation = trpc.beauty.visit.deleteVisit.useMutation({
+    onSuccess: () => {
+      toast.success("消费记录已删除");
+      setDeleteVisitConfirmDialog(false);
+      visitCountQuery.refetch();
+      visitLogQuery.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ===== 映射 =====
   const cardMap = useMemo(() => {
     const map: Record<number, typeof cardsQuery.data extends (infer T)[] ? T : never> = {};
     (cardsQuery.data ?? []).forEach(card => {
@@ -181,7 +214,6 @@ export default function BeautyClients() {
     return map;
   }, [cardsQuery.data]);
 
-  // 构建客户ID -> 消费次数的映射
   const visitCountMap = useMemo(() => {
     const map: Record<number, number> = {};
     (visitCountQuery.data ?? []).forEach(row => {
@@ -205,11 +237,11 @@ export default function BeautyClients() {
       )
     : clients;
 
-  // 打开积分管理弹窗
-  function openPoints(userId: number, userName: string) {
+  // ===== 积分管理 =====
+  function openPoints(userId: number, userName: string, tab: PointsTab = 'add') {
     setPointsUserId(userId);
     setPointsUserName(userName);
-    setPointsType("add");
+    setPointsTab(tab);
     setPointsAmount("");
     setPointsRemark("");
     setPointsDialog(true);
@@ -224,31 +256,23 @@ export default function BeautyClients() {
     }
     adjustMutation.mutate({
       userId: pointsUserId,
-      amount: pointsType === "add" ? num : -num,
+      amount: pointsTab === 'add' ? num : -num,
       remark: pointsRemark || undefined,
     });
   }
 
-  function openLog(userId: number, userName: string) {
-    setLogUserId(userId);
-    setLogUserName(userName);
-    setLogDialog(true);
-  }
-
-  // 打开消费卡管理弹窗
+  // ===== 消费卡管理 =====
   function openCardManage(userId: number, userName: string) {
     setCardUserId(userId);
     setCardUserName(userName);
     const existingCard = cardMap[userId];
     if (existingCard) {
-      // 有卡：进入管理模式（可编辑/删除）
       setCardDialogMode('manage');
       setEditCardId(existingCard.id);
       setSelectedCardType(existingCard.cardType as CardType);
       setCardStartDate(existingCard.startDate);
       setCardRemark(existingCard.remark || "");
     } else {
-      // 无卡：直接进入添加模式
       setCardDialogMode('add');
       setEditCardId(null);
       setSelectedCardType('monthly');
@@ -256,11 +280,6 @@ export default function BeautyClients() {
       setCardRemark("");
     }
     setCardDialog(true);
-  }
-
-  // 切换到编辑模式
-  function switchToEditMode() {
-    setCardDialogMode('edit');
   }
 
   function handleCardSubmit() {
@@ -282,19 +301,11 @@ export default function BeautyClients() {
     }
   }
 
-  function confirmDeleteCard(cardId: number) {
-    setDeleteCardId(cardId);
-    setDeleteConfirmDialog(true);
-  }
-
-  function handleDeleteCard() {
-    if (!deleteCardId) return;
-    deleteCardMutation.mutate({ cardId: deleteCardId });
-  }
-
-  function openVisit(userId: number, userName: string) {
+  // ===== 消费次数管理 =====
+  function openVisitManage(userId: number, userName: string, tab: VisitTab = 'add') {
     setVisitUserId(userId);
     setVisitUserName(userName);
+    setVisitTab(tab);
     setVisitDate(new Date().toISOString().split('T')[0]);
     setVisitRemark("");
     setVisitDialog(true);
@@ -309,9 +320,33 @@ export default function BeautyClients() {
     });
   }
 
-  const logs = logQuery.data ?? [];
+  function openEditVisit(visitId: number, currentDate: string, currentRemark: string) {
+    setEditVisitId(visitId);
+    setEditVisitDate(currentDate || new Date().toISOString().split('T')[0]);
+    setEditVisitRemark(currentRemark || "");
+    setEditVisitDialog(true);
+  }
 
-  // 渲染卡状态标签
+  function handleUpdateVisit() {
+    if (!editVisitId) return;
+    updateVisitMutation.mutate({
+      visitId: editVisitId,
+      visitDate: editVisitDate,
+      remark: editVisitRemark || undefined,
+    });
+  }
+
+  function confirmDeleteVisit(visitId: number) {
+    setDeleteVisitId(visitId);
+    setDeleteVisitConfirmDialog(true);
+  }
+
+  function handleDeleteVisit() {
+    if (!deleteVisitId) return;
+    deleteVisitMutation.mutate({ visitId: deleteVisitId });
+  }
+
+  // ===== 渲染卡状态标签 =====
   function renderCardBadge(userId: number) {
     const card = cardMap[userId];
     if (!card) return null;
@@ -333,13 +368,15 @@ export default function BeautyClients() {
     );
   }
 
-  // 计算预计到期日
   function calcEndDate(startDate: string, cardType: CardType): string {
     const days = CARD_TYPES.find(c => c.value === cardType)?.days ?? 30;
     const end = new Date(startDate);
     end.setDate(end.getDate() + days);
     return end.toLocaleDateString('zh-CN');
   }
+
+  const logs = logQuery.data ?? [];
+  const visitLogs = visitLogQuery.data ?? [];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
@@ -355,7 +392,7 @@ export default function BeautyClients() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">我的客户</h1>
-            <p className="text-white/60 text-xs mt-1">管理客户积分与优惠券</p>
+            <p className="text-white/60 text-xs mt-1">管理客户积分与消费记录</p>
           </div>
           <button
             onClick={() => setShareDialog(true)}
@@ -412,12 +449,10 @@ export default function BeautyClients() {
                     <p className="text-xs text-gray-400 mt-0.5">
                       加入: {client.invitedAt ? new Date(client.invitedAt).toLocaleDateString('zh-CN') : '-'}
                     </p>
-                    {/* 卡状态标签 */}
                     <div className="mt-1.5">
                       {renderCardBadge(client.id)}
                     </div>
                   </div>
-                  {/* 右侧数据 */}
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <div className="text-right">
                       <p className="text-base font-bold text-amber-500">{client.pointsBalance}</p>
@@ -430,21 +465,14 @@ export default function BeautyClients() {
                   </div>
                 </div>
 
-                {/* 第一行操作按钮：积分管理 + 记录 + 优惠券 */}
+                {/* 第一行：积分管理 + 优惠券 */}
                 <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2">
                   <button
-                    onClick={() => openPoints(client.id, clientName)}
+                    onClick={() => openPoints(client.id, clientName, 'add')}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-rose-50 text-rose-500 text-xs font-medium active:bg-rose-100 transition-colors"
                   >
                     <Star className="w-3.5 h-3.5" />
                     积分管理
-                  </button>
-                  <button
-                    onClick={() => openLog(client.id, clientName)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-50 text-gray-500 text-xs font-medium active:bg-gray-100 transition-colors"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    记录
                   </button>
                   <button
                     onClick={() => toast.info("优惠券功能即将上线")}
@@ -455,7 +483,7 @@ export default function BeautyClients() {
                   </button>
                 </div>
 
-                {/* 第二行操作按钮：消费卡管理 & 消费次数 */}
+                {/* 第二行：消费卡管理 + 消费次数管理 */}
                 <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2">
                   <button
                     onClick={() => openCardManage(client.id, clientName)}
@@ -469,11 +497,11 @@ export default function BeautyClients() {
                     消费卡管理
                   </button>
                   <button
-                    onClick={() => openVisit(client.id, clientName)}
+                    onClick={() => openVisitManage(client.id, clientName, 'add')}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-medium active:bg-emerald-100 transition-colors"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
-                    添加消费次数
+                    消费次数管理
                   </button>
                 </div>
               </div>
@@ -482,118 +510,120 @@ export default function BeautyClients() {
         )}
       </div>
 
-      {/* 积分管理弹窗（加减合一） */}
+      {/* ===== 积分管理弹窗（三tab：加积分 / 减积分 / 记录） ===== */}
       <Dialog open={pointsDialog} onOpenChange={setPointsDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <DialogTitle className="text-base">积分管理 - {pointsUserName}</DialogTitle>
-            <DialogDescription className="text-xs text-gray-400">
-              为客户增加或扣减奢贝积分
-            </DialogDescription>
+            <DialogDescription className="sr-only">管理客户积分</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* 加减切换 */}
-            <div className="flex rounded-xl overflow-hidden border border-gray-100">
-              <button
-                onClick={() => setPointsType("add")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-                  pointsType === "add"
-                    ? "bg-rose-500 text-white"
-                    : "bg-gray-50 text-gray-500 active:bg-gray-100"
-                }`}
-              >
-                <Plus className="w-4 h-4" />
-                加积分
-              </button>
-              <button
-                onClick={() => setPointsType("subtract")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-                  pointsType === "subtract"
-                    ? "bg-gray-600 text-white"
-                    : "bg-gray-50 text-gray-500 active:bg-gray-100"
-                }`}
-              >
-                <Minus className="w-4 h-4" />
-                减积分
-              </button>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">积分数量</Label>
-              <Input
-                type="number"
-                min="1"
-                placeholder="请输入积分数量"
-                value={pointsAmount}
-                onChange={(e) => setPointsAmount(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">备注（选填）</Label>
-              <Input
-                placeholder="如：消费赠送、活动奖励等"
-                value={pointsRemark}
-                onChange={(e) => setPointsRemark(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPointsDialog(false)} className="flex-1">
-              取消
-            </Button>
-            <Button
-              onClick={handlePointsSubmit}
-              disabled={adjustMutation.isPending || !pointsAmount}
-              className={`flex-1 ${pointsType === "add" ? "bg-rose-500 hover:bg-rose-600" : "bg-gray-600 hover:bg-gray-700"}`}
+
+          {/* Tab 切换 */}
+          <div className="flex rounded-xl overflow-hidden border border-gray-100">
+            <button
+              onClick={() => setPointsTab('add')}
+              className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                pointsTab === 'add' ? 'bg-rose-500 text-white' : 'bg-gray-50 text-gray-500 active:bg-gray-100'
+              }`}
             >
-              {adjustMutation.isPending ? "处理中..." : "确认"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 积分日志弹窗 */}
-      <Dialog open={logDialog} onOpenChange={setLogDialog}>
-        <DialogContent className="max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base">积分记录 - {logUserName}</DialogTitle>
-            <DialogDescription className="text-xs text-gray-400">
-              查看该客户的积分变动历史
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            {logQuery.isLoading ? (
-              <p className="text-center text-gray-400 text-sm py-6">加载中...</p>
-            ) : logs.length === 0 ? (
-              <p className="text-center text-gray-400 text-sm py-6">暂无积分记录</p>
-            ) : (
-              logs.map((log) => (
-                <div key={log.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-bold ${log.amount > 0 ? "text-rose-500" : "text-gray-500"}`}>
-                        {log.amount > 0 ? `+${log.amount}` : log.amount}
-                      </span>
-                      <Star className="w-3 h-3 text-amber-400" />
-                    </div>
-                    {log.remark && (
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{log.remark}</p>
-                    )}
-                    <p className="text-[10px] text-gray-300 mt-0.5">
-                      {new Date(log.createdAt).toLocaleString('zh-CN')}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs text-gray-400">余额</p>
-                    <p className="text-sm font-medium text-gray-700">{log.balanceAfter}</p>
-                  </div>
-                </div>
-              ))
-            )}
+              <Plus className="w-3.5 h-3.5" />
+              加积分
+            </button>
+            <button
+              onClick={() => setPointsTab('subtract')}
+              className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                pointsTab === 'subtract' ? 'bg-gray-600 text-white' : 'bg-gray-50 text-gray-500 active:bg-gray-100'
+              }`}
+            >
+              <Minus className="w-3.5 h-3.5" />
+              减积分
+            </button>
+            <button
+              onClick={() => setPointsTab('log')}
+              className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                pointsTab === 'log' ? 'bg-indigo-500 text-white' : 'bg-gray-50 text-gray-500 active:bg-gray-100'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              记录
+            </button>
           </div>
+
+          {/* 加积分 / 减积分 表单 */}
+          {(pointsTab === 'add' || pointsTab === 'subtract') && (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label className="text-sm">积分数量</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="请输入积分数量"
+                    value={pointsAmount}
+                    onChange={(e) => setPointsAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">备注（选填）</Label>
+                  <Input
+                    placeholder="如：消费赠送、活动奖励等"
+                    value={pointsRemark}
+                    onChange={(e) => setPointsRemark(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPointsDialog(false)} className="flex-1">
+                  取消
+                </Button>
+                <Button
+                  onClick={handlePointsSubmit}
+                  disabled={adjustMutation.isPending || !pointsAmount}
+                  className={`flex-1 ${pointsTab === 'add' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-gray-600 hover:bg-gray-700'}`}
+                >
+                  {adjustMutation.isPending ? "处理中..." : "确认"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* 积分记录 */}
+          {pointsTab === 'log' && (
+            <div className="max-h-[50vh] overflow-y-auto space-y-1 py-1">
+              {logQuery.isLoading ? (
+                <p className="text-center text-gray-400 text-sm py-6">加载中...</p>
+              ) : logs.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">暂无积分记录</p>
+              ) : (
+                logs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${log.amount > 0 ? "text-rose-500" : "text-gray-500"}`}>
+                          {log.amount > 0 ? `+${log.amount}` : log.amount}
+                        </span>
+                        <Star className="w-3 h-3 text-amber-400" />
+                      </div>
+                      {log.remark && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{log.remark}</p>
+                      )}
+                      <p className="text-[10px] text-gray-300 mt-0.5">
+                        {new Date(log.createdAt).toLocaleString('zh-CN')}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs text-gray-400">余额</p>
+                      <p className="text-sm font-medium text-gray-700">{log.balanceAfter}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* 消费卡管理弹窗（增删改合一） */}
+      {/* ===== 消费卡管理弹窗 ===== */}
       <Dialog open={cardDialog} onOpenChange={setCardDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
@@ -610,16 +640,12 @@ export default function BeautyClients() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* 管理模式：显示当前卡信息，提供编辑/删除按钮 */}
           {cardDialogMode === 'manage' && cardUserId && cardMap[cardUserId] && (
             <div className="py-2 space-y-4">
-              {/* 当前卡信息展示 */}
               <div className="bg-indigo-50 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-indigo-400">卡类型</span>
-                  <span className="text-sm font-semibold text-indigo-700">
-                    {getCardLabel(cardMap[cardUserId].cardType)}
-                  </span>
+                  <span className="text-sm font-semibold text-indigo-700">{getCardLabel(cardMap[cardUserId].cardType)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-indigo-400">开始日期</span>
@@ -647,17 +673,16 @@ export default function BeautyClients() {
                   </div>
                 )}
               </div>
-              {/* 操作按钮 */}
               <div className="flex gap-2">
                 <button
-                  onClick={switchToEditMode}
+                  onClick={() => setCardDialogMode('edit')}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-indigo-50 text-indigo-600 text-sm font-medium active:bg-indigo-100 transition-colors"
                 >
                   <Edit2 className="w-4 h-4" />
                   编辑
                 </button>
                 <button
-                  onClick={() => confirmDeleteCard(cardMap[cardUserId!]!.id)}
+                  onClick={() => { setDeleteCardId(cardMap[cardUserId!]!.id); setDeleteCardConfirmDialog(true); }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-50 text-red-500 text-sm font-medium active:bg-red-100 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -667,10 +692,8 @@ export default function BeautyClients() {
             </div>
           )}
 
-          {/* 添加/编辑模式：显示表单 */}
           {(cardDialogMode === 'add' || cardDialogMode === 'edit') && (
             <div className="space-y-4 py-2">
-              {/* 卡类型选择 */}
               <div className="space-y-2">
                 <Label className="text-sm">卡类型</Label>
                 <div className="grid grid-cols-4 gap-2">
@@ -689,7 +712,6 @@ export default function BeautyClients() {
                   ))}
                 </div>
               </div>
-              {/* 开始日期 */}
               <div className="space-y-2">
                 <Label className="text-sm flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
@@ -701,7 +723,6 @@ export default function BeautyClients() {
                   onChange={(e) => setCardStartDate(e.target.value)}
                 />
               </div>
-              {/* 预览到期日 */}
               {cardStartDate && (
                 <div className="bg-indigo-50 rounded-xl px-4 py-3">
                   <p className="text-xs text-indigo-400">预计到期日</p>
@@ -710,7 +731,6 @@ export default function BeautyClients() {
                   </p>
                 </div>
               )}
-              {/* 备注 */}
               <div className="space-y-2">
                 <Label className="text-sm">备注（选填）</Label>
                 <Input
@@ -722,12 +742,9 @@ export default function BeautyClients() {
             </div>
           )}
 
-          {/* 底部按钮 */}
           {cardDialogMode === 'manage' ? (
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCardDialog(false)} className="w-full">
-                关闭
-              </Button>
+              <Button variant="outline" onClick={() => setCardDialog(false)} className="w-full">关闭</Button>
             </DialogFooter>
           ) : (
             <DialogFooter>
@@ -750,8 +767,8 @@ export default function BeautyClients() {
         </DialogContent>
       </Dialog>
 
-      {/* 删除消费卡确认弹窗 */}
-      <Dialog open={deleteConfirmDialog} onOpenChange={setDeleteConfirmDialog}>
+      {/* 删除消费卡确认 */}
+      <Dialog open={deleteCardConfirmDialog} onOpenChange={setDeleteCardConfirmDialog}>
         <DialogContent className="max-w-xs mx-auto">
           <DialogHeader>
             <DialogTitle className="text-base">确认删除</DialogTitle>
@@ -760,11 +777,9 @@ export default function BeautyClients() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmDialog(false)} className="flex-1">
-              取消
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteCardConfirmDialog(false)} className="flex-1">取消</Button>
             <Button
-              onClick={handleDeleteCard}
+              onClick={() => deleteCardId && deleteCardMutation.mutate({ cardId: deleteCardId })}
               disabled={deleteCardMutation.isPending}
               className="flex-1 bg-red-500 hover:bg-red-600"
             >
@@ -774,63 +789,192 @@ export default function BeautyClients() {
         </DialogContent>
       </Dialog>
 
-      {/* 添加消费次数弹窗（含日期选择） */}
+      {/* ===== 消费次数管理弹窗（两tab：添加 / 记录） ===== */}
       <Dialog open={visitDialog} onOpenChange={setVisitDialog}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">添加消费记录 - {visitUserName}</DialogTitle>
-            <DialogDescription className="text-xs text-gray-400">
-              记录客户到店消费，累计消费次数加1
-            </DialogDescription>
+            <DialogTitle className="text-base">消费次数管理 - {visitUserName}</DialogTitle>
+            <DialogDescription className="sr-only">管理客户消费次数</DialogDescription>
+          </DialogHeader>
+
+          {/* Tab 切换 */}
+          <div className="flex rounded-xl overflow-hidden border border-gray-100">
+            <button
+              onClick={() => setVisitTab('add')}
+              className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                visitTab === 'add' ? 'bg-emerald-500 text-white' : 'bg-gray-50 text-gray-500 active:bg-gray-100'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              添加记录
+            </button>
+            <button
+              onClick={() => setVisitTab('log')}
+              className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+                visitTab === 'log' ? 'bg-emerald-500 text-white' : 'bg-gray-50 text-gray-500 active:bg-gray-100'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              历史记录
+            </button>
+          </div>
+
+          {/* 添加记录 */}
+          {visitTab === 'add' && (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="bg-emerald-50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-emerald-700">确认本次到店消费</p>
+                    <p className="text-xs text-emerald-500 mt-0.5">
+                      当前消费次数: {visitCountMap[visitUserId ?? 0] ?? 0} 次
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    消费日期
+                    <span className="text-gray-400 text-xs font-normal">（默认今天，可修改）</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={visitDate}
+                    onChange={(e) => setVisitDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">备注（选填）</Label>
+                  <Input
+                    placeholder="如：红光养护、经络疏通等"
+                    value={visitRemark}
+                    onChange={(e) => setVisitRemark(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setVisitDialog(false)} className="flex-1">取消</Button>
+                <Button
+                  onClick={handleAddVisit}
+                  disabled={addVisitMutation.isPending}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                >
+                  {addVisitMutation.isPending ? "处理中..." : "确认记录"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* 历史记录 */}
+          {visitTab === 'log' && (
+            <div className="max-h-[50vh] overflow-y-auto space-y-1 py-1">
+              {visitLogQuery.isLoading ? (
+                <p className="text-center text-gray-400 text-sm py-6">加载中...</p>
+              ) : visitLogs.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">暂无消费记录</p>
+              ) : (
+                visitLogs.map((log, index) => (
+                  <div key={log.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">
+                          第 {visitLogs.length - index} 次
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {log.visitDate || new Date(log.createdAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      </div>
+                      {log.remark && (
+                        <p className="text-xs text-gray-400 mt-1 truncate">{log.remark}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                      <button
+                        onClick={() => openEditVisit(log.id, log.visitDate || new Date(log.createdAt).toISOString().split('T')[0], log.remark || "")}
+                        className="p-1.5 rounded-lg bg-gray-50 text-gray-400 active:bg-gray-100 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => confirmDeleteVisit(log.id)}
+                        className="p-1.5 rounded-lg bg-red-50 text-red-400 active:bg-red-100 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 编辑消费记录弹窗 */}
+      <Dialog open={editVisitDialog} onOpenChange={setEditVisitDialog}>
+        <DialogContent className="max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">编辑消费记录</DialogTitle>
+            <DialogDescription className="text-xs text-gray-400">修改消费日期和备注</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="bg-emerald-50 rounded-xl px-4 py-3 flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-emerald-700">确认本次到店消费</p>
-                <p className="text-xs text-emerald-500 mt-0.5">
-                  当前消费次数: {visitCountMap[visitUserId ?? 0] ?? 0} 次
-                </p>
-              </div>
-            </div>
-            {/* 消费日期 */}
             <div className="space-y-2">
               <Label className="text-sm flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
                 消费日期
-                <span className="text-gray-400 text-xs font-normal">（默认今天，可修改）</span>
               </Label>
               <Input
                 type="date"
-                value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
+                value={editVisitDate}
+                onChange={(e) => setEditVisitDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label className="text-sm">备注（选填）</Label>
               <Input
                 placeholder="如：红光养护、经络疏通等"
-                value={visitRemark}
-                onChange={(e) => setVisitRemark(e.target.value)}
+                value={editVisitRemark}
+                onChange={(e) => setEditVisitRemark(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setVisitDialog(false)} className="flex-1">
-              取消
-            </Button>
+            <Button variant="outline" onClick={() => setEditVisitDialog(false)} className="flex-1">取消</Button>
             <Button
-              onClick={handleAddVisit}
-              disabled={addVisitMutation.isPending}
+              onClick={handleUpdateVisit}
+              disabled={updateVisitMutation.isPending}
               className="flex-1 bg-emerald-500 hover:bg-emerald-600"
             >
-              {addVisitMutation.isPending ? "处理中..." : "确认记录"}
+              {updateVisitMutation.isPending ? "保存中..." : "保存修改"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 分享邀请弹窗 */}
+      {/* 删除消费记录确认 */}
+      <Dialog open={deleteVisitConfirmDialog} onOpenChange={setDeleteVisitConfirmDialog}>
+        <DialogContent className="max-w-xs mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">确认删除</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
+              确定要删除这条消费记录吗？删除后消费次数将减少1次。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteVisitConfirmDialog(false)} className="flex-1">取消</Button>
+            <Button
+              onClick={handleDeleteVisit}
+              disabled={deleteVisitMutation.isPending}
+              className="flex-1 bg-red-500 hover:bg-red-600"
+            >
+              {deleteVisitMutation.isPending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== 分享邀请弹窗 ===== */}
       <Dialog open={shareDialog} onOpenChange={setShareDialog}>
         <DialogContent className="max-w-sm mx-auto p-0 overflow-hidden rounded-2xl border-0">
           <div className="bg-gradient-to-br from-rose-500 via-red-400 to-rose-400 px-6 pt-6 pb-5 text-white relative overflow-hidden">
@@ -845,7 +989,6 @@ export default function BeautyClients() {
           </div>
 
           <div className="px-5 py-5 space-y-4">
-            {/* 邀请码 */}
             <div className="bg-gradient-to-r from-rose-50 to-amber-50 rounded-xl p-4 border border-rose-100/50">
               <p className="text-xs text-rose-400 font-medium">我的邀请码</p>
               <div className="flex items-center justify-between mt-2">
@@ -862,7 +1005,6 @@ export default function BeautyClients() {
               </div>
             </div>
 
-            {/* 邀请链接 */}
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-xs text-gray-400 font-medium">邀请链接</p>
               <div className="flex items-center gap-2 mt-2">
@@ -879,7 +1021,6 @@ export default function BeautyClients() {
               </div>
             </div>
 
-            {/* 二维码 */}
             <div className="flex flex-col items-center pt-1">
               <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
                 {qrCodeQuery.isLoading ? (
@@ -887,11 +1028,7 @@ export default function BeautyClients() {
                     <p className="text-xs text-gray-400">加载中...</p>
                   </div>
                 ) : qrCodeQuery.data?.qrCodeDataUrl ? (
-                  <img
-                    src={qrCodeQuery.data.qrCodeDataUrl}
-                    alt="邀请二维码"
-                    className="w-36 h-36"
-                  />
+                  <img src={qrCodeQuery.data.qrCodeDataUrl} alt="邀请二维码" className="w-36 h-36" />
                 ) : (
                   <div className="w-36 h-36 flex items-center justify-center bg-gray-50 rounded">
                     <p className="text-xs text-gray-400">暂无二维码</p>
