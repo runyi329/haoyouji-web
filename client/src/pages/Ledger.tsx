@@ -851,16 +851,7 @@ export default function Ledger() {
                         >
                           封存
                         </button>
-                        <button
-                          className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAssigningLedgerId(ledger.id);
-                            setShowAssignGroupDialog(true);
-                          }}
-                        >
-                          分组：{ledgerGroupMap[ledger.id] ? (groups.find(g => g.id === ledgerGroupMap[ledger.id])?.name || '已分组') : '未分组'}
-                        </button>
+
                       </>
                     )}
                     {activeTab === "archived" && (
@@ -952,7 +943,7 @@ export default function Ledger() {
                                   <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenExportDialog(ledger.id); }}>导出</button>
                                   <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/settings`); }}>设置</button>
                                   <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setArchivingLedgerId(ledger.id); setShowArchiveDialog(true); }}>封存</button>
-                                  <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3" onClick={(e) => { e.stopPropagation(); setAssigningLedgerId(ledger.id); setShowAssignGroupDialog(true); }}>分组：{groups.find(g => g.id === ledgerGroupMap[ledger.id])?.name || '已分组'}</button>
+
                                 </div>
                               )}
                             </div>
@@ -1009,7 +1000,7 @@ export default function Ledger() {
                                 <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenExportDialog(ledger.id); }}>导出</button>
                                 <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/settings`); }}>设置</button>
                                 <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setArchivingLedgerId(ledger.id); setShowArchiveDialog(true); }}>封存</button>
-                                <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors col-span-3" onClick={(e) => { e.stopPropagation(); setAssigningLedgerId(ledger.id); setShowAssignGroupDialog(true); }}>分组：未分组</button>
+
                               </div>
                             )}
                           </div>
