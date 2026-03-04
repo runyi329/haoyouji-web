@@ -55,6 +55,11 @@ export default function BeautyHome() {
   const [, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // 查询奢贝积分和权限
+  const pointsQuery = trpc.beauty.points.getMyBalance.useQuery();
+  const canManageQuery = trpc.beauty.points.canManage.useQuery();
+  const myPoints = pointsQuery.data?.balance ?? 0;
+  const canManage = canManageQuery.data?.canManage ?? false;
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -101,28 +106,46 @@ export default function BeautyHome() {
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
             </div>
             <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
-              {/* 可点击头像 */}
-              <button
-                onClick={() => setMenuOpen(v => !v)}
-                className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center active:scale-95 transition-transform"
-              >
-                {user?.avatar ? (
-                  <img src={user.avatar} alt={user.username ?? ''} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-white text-xl font-bold">
-                    {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
-                  </span>
-                )}
-              </button>
+              {/* 头像区域 */}
+              {canManage ? (
+                /* 有权限用户：可点击弹出菜单 */
+                <button
+                  onClick={() => setMenuOpen(v => !v)}
+                  className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt={user.username ?? ''} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xl font-bold">
+                      {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                /* 普通用户：头像不可点击 */
+                <div className="w-14 h-14 rounded-full border-2 border-white/40 overflow-hidden bg-white/20 flex items-center justify-center">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt={user.username ?? ''} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xl font-bold">
+                      {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* 用户名 */}
               {user?.username && (
                 <span className="text-white/50 text-[10px] tracking-wide select-none">{user.username}</span>
               )}
-
-              {/* 下拉菜单 */}
-              {menuOpen && (
-                <div className="absolute top-16 right-0 z-50 bg-white rounded-2xl shadow-xl overflow-hidden min-w-[140px] border border-gray-100">
+              {/* 积分显示 */}
+              <div className="flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5">
+                <span className="text-amber-200 text-[10px] font-medium">{myPoints} 积分</span>
+              </div>
+              {/* 下拉菜单（仅有权限用户） */}
+              {menuOpen && canManage && (
+                <div className="absolute top-20 right-0 z-50 bg-white rounded-2xl shadow-xl overflow-hidden min-w-[140px] border border-gray-100">
                   <button
-                    onClick={() => { setMenuOpen(false); setLocation('/profile'); }}
+                    onClick={() => { setMenuOpen(false); setLocation('/beauty/profile'); }}
                     className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-rose-50 active:bg-rose-100 transition-colors text-sm font-medium"
                   >
                     <User className="w-4 h-4 text-rose-400" />

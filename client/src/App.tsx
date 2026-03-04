@@ -173,6 +173,8 @@ const BeautyCart = lazy(() => import("./pages/beauty/BeautyCart"));
 const BeautyProductDetail = lazy(() => import("./pages/beauty/BeautyProductDetail"));
 const BeautyHealth = lazy(() => import("./pages/beauty/BeautyHealth"));
 const BeautyAiDiet = lazy(() => import("./pages/beauty/BeautyAiDiet"));
+const BeautyProfile = lazy(() => import("./pages/beauty/BeautyProfile"));
+const BeautyClients = lazy(() => import("./pages/beauty/BeautyClients"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -344,6 +346,8 @@ function Router() {
         <Route path="/beauty/product/:id" component={BeautyProductDetail} />
         <Route path="/beauty/health" component={BeautyHealth} />
         <Route path="/beauty/ai-diet" component={BeautyAiDiet} />
+        <Route path="/beauty/profile" component={BeautyProfile} />
+        <Route path="/beauty/clients" component={BeautyClients} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />
