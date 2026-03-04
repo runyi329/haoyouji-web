@@ -152,8 +152,9 @@ export default function LedgerDetailAA({
     }
 
     const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
-    const lastDate = sorted[sorted.length - 1].date;
-    const latestBalance = cumulativeMap.get(lastDate) ?? 0;
+    const lastRecord = sorted[sorted.length - 1];
+    // 最新余额 = 最后一条记录本身的登记金额（income - expense 即为该条记录的值）
+    const latestBalance = lastRecord.income - lastRecord.expense;
     const recordDays = filteredTransactions.length;
 
     // 初始金额：从 description 中解析 "起始金额:XXXXX"
