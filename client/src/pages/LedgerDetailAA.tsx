@@ -342,7 +342,7 @@ export default function LedgerDetailAA({
                     border: "1px solid rgba(255,255,255,0.4)",
                   }}
                 >
-                  <span>{selectedTag ? selectedTag.name : "选择被记录者"}</span>
+                  <span>{selectedTag ? selectedTag.name : "切换"}</span>
                   <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
                 </button>
 
