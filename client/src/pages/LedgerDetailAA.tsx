@@ -246,13 +246,21 @@ export default function LedgerDetailAA({
     today.getMonth() === calendarDate.month &&
     today.getDate() === day;
 
-  // 点击日历格子跳转添加账目，带上日期和标签分类
+  // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
-    if (!canEdit) return; // 普通用户不可添加
+    if (!canEdit) return; // 普通用户不可操作
     const dateStr = getDateStr(day);
-    let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
-    if (selectedTagId) url += `&categoryId=${selectedTagId}`;
-    setLocation(url);
+    const existing = dayMap.get(dateStr);
+    if (existing && existing.records.length > 0) {
+      // 已有记录：跳转编辑第一条记录
+      const recordId = existing.records[0].id;
+      setLocation(`/ledger/${ledgerId}/add?edit=${recordId}`);
+    } else {
+      // 无记录：跳转新增
+      let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
+      if (selectedTagId) url += `&categoryId=${selectedTagId}`;
+      setLocation(url);
+    }
   };
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
