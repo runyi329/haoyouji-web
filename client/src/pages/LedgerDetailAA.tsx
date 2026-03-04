@@ -78,16 +78,20 @@ export default function LedgerDetailAA({
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
   // 获取账本一级分类（标签）
-  const { data: categories } = trpc.ledger.getCategories.useQuery(
+  const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null },
     { enabled: !!ledgerId }
   );
-
+  // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
+  const categories = useMemo(() => {
+    if (!rawCategories) return [];
+    return rawCategories.filter((c: any) => !c.isDefault);
+  }, [rawCategories]);
   // 当前选中的标签名
   const selectedTag = useMemo(() => {
     if (!selectedTagId || !categories) return null;
     return categories.find((c: any) => c.id === selectedTagId) || null;
-  }, [selectedTagId, categories]);
+  }, [selectedTagId, categories]);;
 
   // ─── 按标签筛选 transactionsData ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
