@@ -190,6 +190,7 @@ export default function LedgerDetailAA({
     const lastRecord = sorted[sorted.length - 1];
     // 最新余额 = 最后一天所有记录的绝对金额（expense + income 绝对値）
     const latestBalance = Math.abs(lastRecord.income - lastRecord.expense);
+    const latestDate = lastRecord.date; // 最新余额登记日期
     const recordDays = filteredTransactions.length;
     // 初始金额：从 initialBalancesData 接口数据读取（当前选中标签对应的初始金额）
     let initialBalance = 0;
@@ -207,11 +208,17 @@ export default function LedgerDetailAA({
         ratio = Number(ratioVal) / 100;
       }
     }
+    // 开始日期（从 initialBalancesData 读取 tagName__startDate）
+    let startDate = "";
+    if (selectedTag?.name && initialBalancesData?.balances) {
+      const sd = initialBalancesData.balances[`${selectedTag.name}__startDate`];
+      if (sd) startDate = String(sd);
+    }
     // 负债视角：最新余额变大表示亏损（-），变小表示盈利（+），乘以权重
     const rawPnl = initialBalance - latestBalance;
     const totalPnl = rawPnl * ratio;
     const returnRate = initialBalance > 0 ? (rawPnl / initialBalance) * 100 : 0;
-    return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
+    return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, startDate };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
 
   // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────────
@@ -519,6 +526,14 @@ export default function LedgerDetailAA({
             <div className="text-base font-bold">
               ¥{stats.latestBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
+            {stats.latestDate && (
+              <div className="text-xs opacity-60 mt-0.5">
+                {(() => {
+                  const [y, m, d] = stats.latestDate.split("-");
+                  return `${y}年${m}月${d}日`;
+                })()}
+              </div>
+            )}
           </div>
 
           {/* 收益率 */}
@@ -545,6 +560,14 @@ export default function LedgerDetailAA({
                 return '¥' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               })()}
             </div>
+            {stats.startDate && (
+              <div className="text-xs opacity-60 mt-0.5">
+                {(() => {
+                  const [y, m, d] = stats.startDate.split("-");
+                  return `${y}年${m}月${d}日`;
+                })()}
+              </div>
+            )}
           </div>
 
           {/* 累计盈亏 */}
