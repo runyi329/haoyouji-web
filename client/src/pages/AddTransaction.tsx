@@ -220,6 +220,16 @@ const AddTransaction = () => {
   // 当真实分类加载完成后，更新选中状态（仅在非编辑模式下）
   useEffect(() => {
     if (!isEditMode && topCategories.length > 0) {
+      // 优先使用 URL 中的 categoryId 参数（从详情页传入的当前选中标签）
+      const urlCategoryId = urlParams.get('categoryId');
+      if (urlCategoryId) {
+        const catId = parseInt(urlCategoryId);
+        const found = topCategories.find((c: any) => c.id === catId);
+        if (found) {
+          setSelectedCategoryPath([catId]);
+          return;
+        }
+      }
       setSelectedCategoryPath([topCategories[0].id]);
     }
   }, [isEditMode, topCategories.length > 0 ? topCategories[0]?.id : null]);
