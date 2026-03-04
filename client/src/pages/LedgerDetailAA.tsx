@@ -24,7 +24,7 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   AreaChart,
@@ -485,19 +485,22 @@ export default function LedgerDetailAA({
             {/* 视图切换 */}
             <div className="flex items-center gap-1 flex-nowrap justify-end">
               {(["balance", "daily", "monthly", "yearly"] as const).map((mode) => {
-                const labels = { balance: "余额", daily: "日", monthly: "月", yearly: "年" };
                 const active = calendarMode === mode;
                 return (
                   <button
                     key={mode}
                     onClick={() => setCalendarMode(mode)}
-                    className="px-2 py-1 rounded-lg text-xs font-medium transition-all"
+                    className="px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center"
                     style={{
                       backgroundColor: active ? "#D32F2F" : "#F5F5F5",
                       color: active ? "#FFFFFF" : "#757575",
                     }}
                   >
-                    {labels[mode]}
+                    {mode === "balance" ? (
+                      <CircleDollarSign className="w-3.5 h-3.5" />
+                    ) : (
+                      { daily: "日", monthly: "月", yearly: "年" }[mode]
+                    )}
                   </button>
                 );
               })}
