@@ -58,6 +58,7 @@ export default function LedgerDetailAA({
   ledgerData,
   transactionsData,
   user,
+  membersData,
 }: Props) {
   const [, setLocation] = useLocation();
 
@@ -67,9 +68,11 @@ export default function LedgerDetailAA({
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
-  // 日历视图模式
-  const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
+  // 日历视图模  // 权限判断：owner 或 admin 才能操作
+  const userRole = (ledgerData as any)?.userRole;
+  const canEdit = userRole === 'owner' || userRole === 'admin';
 
+  const [calendarMode, setCalendarMode] = useState<"balance" | "dayPnL" | "monthPnL" | "yearPnL">("balance");
   // 标签（被记录者）选择
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
@@ -241,6 +244,7 @@ export default function LedgerDetailAA({
 
   // 点击日历格子跳转添加账目，带上日期和标签分类
   const handleDayClick = (day: number) => {
+    if (!canEdit) return; // 普通用户不可添加
     const dateStr = getDateStr(day);
     let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
     if (selectedTagId) url += `&categoryId=${selectedTagId}`;
@@ -265,27 +269,33 @@ export default function LedgerDetailAA({
             {ledgerData?.name || "定制账本"}
           </h1>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-              className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            >
-              <Search className="w-4 h-4 text-white" />
-            </button>
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-              className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            >
-              <BarChart3 className="w-4 h-4 text-white" />
-            </button>
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-              className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            >
-              <Settings className="w-4 h-4 text-white" />
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+                className="w-9 h-9 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              >
+                <Search className="w-4 h-4 text-white" />
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
+                className="w-9 h-9 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              >
+                <BarChart3 className="w-4 h-4 text-white" />
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                className="w-9 h-9 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              >
+                <Settings className="w-4 h-4 text-white" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -624,18 +634,20 @@ export default function LedgerDetailAA({
         </div>
       </div>
 
-      {/* ── 悬浮加号按钮 ── */}
-      <button
-        onClick={() => {
-          let url = `/ledger/${ledgerId}/add`;
-          if (selectedTagId) url += `?categoryId=${selectedTagId}`;
-          setLocation(url);
-        }}
-        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
-        style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}
-      >
-        <Plus className="w-6 h-6 text-white" />
-      </button>
+      {/* ── 悬浮加号按钮（仅管理员/创建者可见） ── */}
+      {canEdit && (
+        <button
+          onClick={() => {
+            let url = `/ledger/${ledgerId}/add`;
+            if (selectedTagId) url += `?categoryId=${selectedTagId}`;
+            setLocation(url);
+          }}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+          style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}
+        >
+          <Plus className="w-6 h-6 text-white" />
+        </button>
+      )}
     </div>
   );
 }
