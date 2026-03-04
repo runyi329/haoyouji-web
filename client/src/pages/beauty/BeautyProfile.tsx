@@ -21,7 +21,6 @@ export default function BeautyProfile() {
     refetchOnMount: 'always',
   });
   const clientsQuery = trpc.beauty.points.getMyClients.useQuery(undefined, {
-    enabled: canManageQuery.data?.canManage === true,
     refetchOnMount: 'always',
   });
 
