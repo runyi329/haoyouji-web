@@ -376,8 +376,45 @@ const AddTransaction = () => {
     return days;
   };
 
+  // ===== A股非交易日判断（与 LedgerDetailAA 保持一致）=====
+  const HOLIDAYS_2026: Record<string, string> = {
+    '2026-01-01': '元旦', '2026-01-02': '元旦', '2026-01-03': '元旦',
+    '2026-02-15': '春节', '2026-02-16': '春节', '2026-02-17': '春节',
+    '2026-02-18': '春节', '2026-02-19': '春节', '2026-02-20': '春节',
+    '2026-02-21': '春节', '2026-02-22': '春节', '2026-02-23': '春节',
+    '2026-04-04': '清明节', '2026-04-05': '清明节', '2026-04-06': '清明节',
+    '2026-05-01': '劳动节', '2026-05-02': '劳动节', '2026-05-03': '劳动节',
+    '2026-05-04': '劳动节', '2026-05-05': '劳动节',
+    '2026-06-19': '端午节', '2026-06-20': '端午节', '2026-06-21': '端午节',
+    '2026-09-25': '中秋节', '2026-09-26': '中秋节', '2026-09-27': '中秋节',
+    '2026-10-01': '国庆节', '2026-10-02': '国庆节', '2026-10-03': '国庆节',
+    '2026-10-04': '国庆节', '2026-10-05': '国庆节', '2026-10-06': '国庆节',
+    '2026-10-07': '国庆节',
+  };
+
+  const isNonTradingDay = (date: Date): string | null => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${d}`;
+    // 法定节假日
+    if (HOLIDAYS_2026[key]) return HOLIDAYS_2026[key];
+    // 周六周日一律休市
+    const dow = date.getDay();
+    if (dow === 0) return '周日';
+    if (dow === 6) return '周六';
+    return null;
+  };
+  // ===================================================
+
   // 处理日期选择
   const handleDateSelect = (date: Date) => {
+    // 非交易日不可选
+    if (isNonTradingDay(date)) {
+      const label = isNonTradingDay(date);
+      toast.error(`${label}为A股休市日，无法录入数据`);
+      return;
+    }
     if (isToday(date)) {
       // 如果选择今天，直接设置
       setSelectedDate(date);
@@ -986,20 +1023,26 @@ const AddTransaction = () => {
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                 const isSelected = isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
+                const nonTradingLabel = isCurrentMonth ? isNonTradingDay(day) : null;
 
                 return (
                   <button
                     key={index}
                     onClick={() => handleDateSelect(day)}
+                    disabled={!!nonTradingLabel}
                     className={`
-                      h-9 sm:h-10 flex items-center justify-center text-sm rounded
-                      ${!isCurrentMonth ? "text-gray-300" : "text-[#222222]"}
-                      ${isSelected ? "bg-[#D32F2F] text-white font-semibold" : ""}
-                      ${isTodayDate && !isSelected ? "border border-[#D32F2F]" : ""}
-                      ${isCurrentMonth && !isSelected ? "hover:bg-gray-100" : ""}
+                      h-9 sm:h-10 flex flex-col items-center justify-center text-sm rounded
+                      ${!isCurrentMonth ? "text-gray-300" : ""}
+                      ${nonTradingLabel ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}
+                      ${isSelected && !nonTradingLabel ? "bg-[#D32F2F] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected && !nonTradingLabel ? "border border-[#D32F2F]" : ""}
+                      ${isCurrentMonth && !isSelected && !nonTradingLabel ? "hover:bg-gray-100 text-[#222222]" : ""}
                     `}
                   >
-                    {day.getDate()}
+                    <span className="leading-none">{day.getDate()}</span>
+                    {nonTradingLabel && (
+                      <span className="text-[9px] leading-none mt-0.5 text-gray-400">{nonTradingLabel}</span>
+                    )}
                   </button>
                 );
               })}
