@@ -310,15 +310,15 @@ export default function LedgerDetailAA({
             )}
           </div>
 
-          {/* 用户名 + 标签下拉 */}
-          <div className="flex-1 min-w-0">
+          {/* 用户名 + 标签下拉（同行） */}
+          <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
             <div className="text-base font-semibold truncate">
               {user?.nickname || user?.username || "用户"}
             </div>
 
-            {/* 标签下拉选择器 */}
+            {/* 标签下拉选择器 - 靠右 */}
             {categories && categories.length > 0 && (
-              <div className="relative mt-1.5">
+              <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowTagDropdown(!showTagDropdown)}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all"
@@ -371,7 +371,6 @@ export default function LedgerDetailAA({
                             borderBottom: "1px solid #F5F5F5",
                           }}
                         >
-                          {cat.icon && <span className="mr-1.5">{cat.icon}</span>}
                           {cat.name}
                         </button>
                       ))}
