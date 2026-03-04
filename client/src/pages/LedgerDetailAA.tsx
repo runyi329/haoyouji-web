@@ -174,19 +174,18 @@ export default function LedgerDetailAA({
     // 最新余额 = 最后一天所有记录的绝对金额（expense + income 绝对値）
     const latestBalance = Math.abs(lastRecord.income - lastRecord.expense);
     const recordDays = filteredTransactions.length;
-
-    // 初始金额：从 description 中解析 "起始金额:XXXXX"
+    // 初始金额：从 initialBalancesData 接口数据读取（当前选中标签对应的初始金额）
     let initialBalance = 0;
-    const descMatch = ledgerData?.description?.match(/起始[金额]*[:：]\s*([\d,.]+)/);
-    if (descMatch) {
-      initialBalance = parseFloat(descMatch[1].replace(/,/g, ""));
+    if (selectedTag?.name && initialBalancesData?.balances) {
+      const val = initialBalancesData.balances[selectedTag.name];
+      if (val !== undefined && val !== null) {
+        initialBalance = Number(val);
+      }
     }
-
     const totalPnl = latestBalance - initialBalance;
     const returnRate = initialBalance > 0 ? (totalPnl / initialBalance) * 100 : 0;
-
     return { latestBalance, returnRate, recordDays, totalPnl, initialBalance };
-  }, [filteredTransactions, cumulativeMap, ledgerData]);
+  }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
 
   // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────────
   const chartData = useMemo(() => {
