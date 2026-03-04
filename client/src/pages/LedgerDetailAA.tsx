@@ -692,12 +692,12 @@ export default function LedgerDetailAA({
                   const cellValue = getCellValue(day);
                   const hasRecord = cellValue !== null;
                   const todayMark = isToday(day);
-                  // 字体颜色根据当天数值的正负：正数→红色，负数→绿色，背景统一不变
+                  // 字体颜色逻辑
                   let valueColor = "#D32F2F";
                   if (hasRecord) {
                     const dateStr = getDateStr(day);
                     if (calendarMode === "daily") {
-                      // 日模式：当天金额与前一天差值的正负
+                      // 日模式：当天金额与前一天差値的正负
                       const todayData = dayMap.get(dateStr);
                       const allDates = Array.from(dayMap.keys()).sort();
                       const idx2 = allDates.indexOf(dateStr);
@@ -706,14 +706,27 @@ export default function LedgerDetailAA({
                         const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
                         valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
                       } else {
-                        valueColor = "#9E9E9E"; // 第一条数据用灰色
+                        valueColor = "#9E9E9E";
                       }
                     } else {
-                      // 余额模式：当天金额本身（支出为负，收入为正）
-                      const dayData = dayMap.get(dateStr);
-                      if (dayData) {
-                        const net = dayData.income - dayData.expense;
-                        valueColor = net >= 0 ? "#D32F2F" : "#4CAF50";
+                      // 余额模式：初始日黑色，之后每天与前一天比较
+                      const allDates = Array.from(dayMap.keys()).sort();
+                      const idx2 = allDates.indexOf(dateStr);
+                      // 判断是否为初始日：该标签的 startDate，或者是第一条数据
+                      const tagStartDate = selectedTag?.name && initialBalancesData?.balances
+                        ? String(initialBalancesData.balances[`${selectedTag.name}__startDate`] ?? '')
+                        : '';
+                      const isFirstRecord = idx2 === 0;
+                      const isStartDate = tagStartDate && dateStr === tagStartDate;
+                      if (isFirstRecord || isStartDate) {
+                        valueColor = "#222222"; // 初始日黑色
+                      } else if (idx2 > 0) {
+                        const todayData = dayMap.get(dateStr)!;
+                        const prevData = dayMap.get(allDates[idx2 - 1])!;
+                        const todayTotal = todayData.expense + todayData.income;
+                        const prevTotal = prevData.expense + prevData.income;
+                        const diff = todayTotal - prevTotal;
+                        valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
                       }
                     }
                   }
