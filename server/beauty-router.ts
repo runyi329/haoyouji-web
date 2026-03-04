@@ -20,6 +20,8 @@ import {
   beautyOrderItems,
   beautyPoints,
   beautyPointsLog,
+  beautyMemberCards,
+  beautyVisitLogs,
   users,
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
@@ -632,6 +634,157 @@ export const beautyRouter = router({
           .from(beautyPointsLog)
           .where(eq(beautyPointsLog.userId, input.userId))
           .orderBy(desc(beautyPointsLog.createdAt));
+      }),
+  }),
+
+  // ===== 消费卡 & 消费记录 =====
+  card: router({
+    // 获取指定客户的当前有效卡
+    getClientCard: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) return null;
+        const [card] = await db
+          .select()
+          .from(beautyMemberCards)
+          .where(and(eq(beautyMemberCards.userId, input.userId), eq(beautyMemberCards.isActive, 1)))
+          .orderBy(desc(beautyMemberCards.createdAt))
+          .limit(1);
+        return card ?? null;
+      }),
+
+    // 批量获取多个客户的卡信息（用于客户列表页）
+    getClientsCards: protectedProcedure
+      .input(z.object({ userIds: z.array(z.number()) }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db || input.userIds.length === 0) return [];
+        return await db
+          .select()
+          .from(beautyMemberCards)
+          .where(and(
+            sql`${beautyMemberCards.userId} IN (${sql.join(input.userIds.map(id => sql`${id}`), sql`, `)})`,
+            eq(beautyMemberCards.isActive, 1)
+          ))
+          .orderBy(desc(beautyMemberCards.createdAt));
+      }),
+
+    // 添加/更新消费卡（新卡会将旧卡设为失效）
+    addCard: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        cardType: z.enum(['monthly', 'quarterly', 'semiannual', 'annual']),
+        startDate: z.string(), // YYYY-MM-DD
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 验证是自己的邀请人
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        // 计算到期日
+        const start = new Date(input.startDate);
+        const daysMap: Record<string, number> = {
+          monthly: 30,
+          quarterly: 90,
+          semiannual: 180,
+          annual: 365,
+        };
+        const endDate = new Date(start);
+        endDate.setDate(endDate.getDate() + daysMap[input.cardType]);
+        const endDateStr = endDate.toISOString().split('T')[0];
+        // 将旧卡设为失效
+        await db
+          .update(beautyMemberCards)
+          .set({ isActive: 0 })
+          .where(and(eq(beautyMemberCards.userId, input.userId), eq(beautyMemberCards.isActive, 1)));
+        // 插入新卡
+        await db.insert(beautyMemberCards).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          cardType: input.cardType,
+          startDate: input.startDate,
+          endDate: endDateStr,
+          isActive: 1,
+          remark: input.remark || null,
+        });
+        return { success: true, endDate: endDateStr };
+      }),
+  }),
+
+  // ===== 消费次数 =====
+  visit: router({
+    // 批量获取多个客户的消费次数
+    getClientsVisitCount: protectedProcedure
+      .input(z.object({ userIds: z.array(z.number()) }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db || input.userIds.length === 0) return [];
+        const rows = await db
+          .select({
+            userId: beautyVisitLogs.userId,
+            count: sql<number>`COUNT(*)`,
+          })
+          .from(beautyVisitLogs)
+          .where(sql`${beautyVisitLogs.userId} IN (${sql.join(input.userIds.map(id => sql`${id}`), sql`, `)})`)
+          .groupBy(beautyVisitLogs.userId);
+        return rows;
+      }),
+
+    // 添加一次消费记录
+    addVisit: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db.insert(beautyVisitLogs).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          remark: input.remark || null,
+        });
+        return { success: true };
+      }),
+
+    // 获取某客户的消费记录
+    getVisitLog: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.userId, input.userId))
+          .orderBy(desc(beautyVisitLogs.createdAt));
       }),
   }),
 });
