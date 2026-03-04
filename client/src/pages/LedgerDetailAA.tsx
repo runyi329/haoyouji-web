@@ -434,9 +434,7 @@ export default function LedgerDetailAA({
             <div className="text-xs opacity-75 mb-0.5">收益率</div>
             <div
               className="text-base font-bold"
-              style={{
-                color: stats.returnRate > 0 ? "#4CAF50" : stats.returnRate < 0 ? "#F44336" : "#FFFFFF",
-              }}
+              style={{ color: "#FFFFFF" }}
             >
               {stats.returnRate >= 0 ? "+" : ""}
               {stats.returnRate.toFixed(2)}%
@@ -454,9 +452,7 @@ export default function LedgerDetailAA({
             <div className="text-xs opacity-75 mb-0.5">累计盈亏</div>
             <div
               className="text-base font-bold"
-              style={{
-                color: stats.totalPnl > 0 ? "#4CAF50" : stats.totalPnl < 0 ? "#F44336" : "#FFFFFF",
-              }}
+              style={{ color: "#FFFFFF" }}
             >
               {stats.totalPnl >= 0 ? "+" : ""}¥
               {Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
