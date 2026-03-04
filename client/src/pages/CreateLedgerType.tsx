@@ -94,9 +94,9 @@ export default function CreateLedgerType() {
         <span>请选择账本类型</span>
       </div>
 
-      {/* 账本类型列表 */}
+      {/* 账本类型列表（custom_aa 定制账本仅管理员可创建，此处不展示） */}
       <div className="px-4 space-y-3">
-        {ledgerTypes.map((type) => {
+        {ledgerTypes.filter(t => t.id !== 'custom_aa').map((type) => {
           const Icon = type.icon;
           return (
             <button
