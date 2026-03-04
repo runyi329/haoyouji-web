@@ -151,3 +151,27 @@ export const beautyOrderItems = mysqlTable("beauty_order_items", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ===== 奢贝积分系统 =====
+
+// 奢贝积分账户（每个用户一条记录）
+export const beautyPoints = mysqlTable("beauty_points", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  balance: int("balance").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BeautyPointAccount = typeof beautyPoints.$inferSelect;
+
+// 奢贝积分变动日志
+export const beautyPointsLog = mysqlTable("beauty_points_log", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  operatorId: int("operatorId").notNull(),
+  amount: int("amount").notNull(),
+  balanceAfter: int("balanceAfter").notNull(),
+  remark: varchar("remark", { length: 200 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyPointLog = typeof beautyPointsLog.$inferSelect;

@@ -18,8 +18,12 @@ import {
   beautyCartItems,
   beautyOrders,
   beautyOrderItems,
+  beautyPoints,
+  beautyPointsLog,
+  users,
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
+import { hasFeaturePermission } from "./db-permissions";
 import { nanoid } from "nanoid";
 
 // 超管权限检查（复用脉动网的 super_admin 角色）
@@ -497,6 +501,131 @@ export const beautyRouter = router({
         } catch {
           return [];
         }
+      }),
+  }),
+
+  // ===== 奢贝积分系统 =====
+  points: router({
+    // 获取当前用户的积分余额
+    getMyBalance: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return { balance: 0 };
+      const [account] = await db
+        .select({ balance: beautyPoints.balance })
+        .from(beautyPoints)
+        .where(eq(beautyPoints.userId, ctx.user.id));
+      return { balance: account?.balance ?? 0 };
+    }),
+
+    // 检查当前用户是否有积分管理权限
+    canManage: protectedProcedure.query(async ({ ctx }) => {
+      const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+      return { canManage };
+    }),
+
+    // 获取我的客户列表（我邀请的用户 + 他们的积分）
+    getMyClients: protectedProcedure.query(async ({ ctx }) => {
+      const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+      if (!canManage) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+      }
+      const db = await getDb();
+      if (!db) return [];
+      const invitedUsers = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatar: users.avatar,
+          invitedAt: users.invitedAt,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.invitedByUserId, ctx.user.id))
+        .orderBy(sql`${users.invitedAt} DESC`);
+
+      const result = await Promise.all(
+        invitedUsers.map(async (u) => {
+          const [account] = await db
+            .select({ balance: beautyPoints.balance })
+            .from(beautyPoints)
+            .where(eq(beautyPoints.userId, u.id));
+          return { ...u, pointsBalance: account?.balance ?? 0 };
+        })
+      );
+      return result;
+    }),
+
+    // 加减积分
+    adjustPoints: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        amount: z.number().int(),
+        remark: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+        }
+        if (input.amount === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '变动数量不能为0' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证目标用户是自己的邀请人
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户的积分' });
+        }
+        // 获取或创建积分账户
+        let [account] = await db
+          .select()
+          .from(beautyPoints)
+          .where(eq(beautyPoints.userId, input.userId));
+        if (!account) {
+          await db.insert(beautyPoints).values({ userId: input.userId, balance: 0 });
+          [account] = await db
+            .select()
+            .from(beautyPoints)
+            .where(eq(beautyPoints.userId, input.userId));
+        }
+        const newBalance = account.balance + input.amount;
+        if (newBalance < 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '积分不足，无法扣减' });
+        }
+        await db
+          .update(beautyPoints)
+          .set({ balance: newBalance })
+          .where(eq(beautyPoints.userId, input.userId));
+        await db.insert(beautyPointsLog).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          amount: input.amount,
+          balanceAfter: newBalance,
+          remark: input.remark || null,
+        });
+        return { success: true, newBalance };
+      }),
+
+    // 获取某用户的积分变动日志
+    getPointsLog: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+        }
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyPointsLog)
+          .where(eq(beautyPointsLog.userId, input.userId))
+          .orderBy(desc(beautyPointsLog.createdAt));
       }),
   }),
 });

@@ -40,7 +40,7 @@ export async function hasFeaturePermission(userId: number, featureKey: string): 
   // 如果没有记录，根据功能类型决定默认值
   if (result.length === 0) {
     // 这些新功能默认关闭
-    const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet'];
+      const defaultOffFeatures = ['my-equity', 'node-growth', 'my-points', 'ai-assistant', 'wallet', 'beauty-points-manage'];
     if (defaultOffFeatures.includes(featureKey)) {
       return false;
     }
@@ -115,5 +115,6 @@ export function getAllFeatures() {
     { key: "social", name: "社交", description: "社交功能" },
     { key: "exercise", name: "锻炼计数", description: "健康锻炼记录系统" },
     { key: "reading", name: "阅读", description: "阅读故事功能" },
+    { key: "beauty-points-manage", name: "奢贝积分管理", description: "可给邀请的客户加减积分和赠送优惠券" },
   ];
 }
