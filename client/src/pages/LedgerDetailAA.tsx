@@ -292,7 +292,7 @@ export default function LedgerDetailAA({
       const prevData = dayMap.get(prevDate)!;
       const prevTotal = prevData.expense + prevData.income;
       const diff = todayTotal - prevTotal;
-      const sign = diff > 0 ? "+" : "";
+      const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
       return sign + formatMoney(Math.abs(diff));
     }
     if (calendarMode === "monthly") {
