@@ -201,6 +201,19 @@ export default function LedgerDetailAA({
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   };
 
+  // 获取某天相对上一个有数据日期的差値
+  const getDailyDiff = (dateStr: string): number | null => {
+    if (!cumulativeMap.has(dateStr)) return null;
+    const currentVal = cumulativeMap.get(dateStr)!;
+    // 按日期升序排列所有有数据的日期
+    const allDates = Array.from(cumulativeMap.keys()).sort();
+    const idx = allDates.indexOf(dateStr);
+    if (idx <= 0) return null; // 第一条数据无差値
+    const prevDate = allDates[idx - 1];
+    const prevVal = cumulativeMap.get(prevDate)!;
+    return currentVal - prevVal;
+  };
+
   const getCellValue = (day: number): string | null => {
     const dateStr = getDateStr(day);
     const data = dayMap.get(dateStr);
@@ -211,8 +224,10 @@ export default function LedgerDetailAA({
       return cum !== undefined ? formatMoney(cum) : null;
     }
     if (calendarMode === "daily") {
-      const pnl = data.income - data.expense;
-      return formatMoney(pnl);
+      const diff = getDailyDiff(dateStr);
+      if (diff === null) return null;
+      const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+      return sign + String(Math.floor(Math.abs(diff)));
     }
     if (calendarMode === "monthly") {
       const { year, month } = calendarDate;
@@ -535,7 +550,14 @@ export default function LedgerDetailAA({
               const todayMark = isToday(day);
 
               let valueColor = "#D32F2F";
-              if (calendarMode !== "balance" && pnl !== null) {
+              if (calendarMode === "daily") {
+                // daily模式：根据差値正负显示绿色/红色
+                const dateStr = getDateStr(day);
+                const diff = getDailyDiff(dateStr);
+                if (diff !== null) {
+                  valueColor = diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E";
+                }
+              } else if (calendarMode !== "balance" && pnl !== null) {
                 valueColor = pnl >= 0 ? "#4CAF50" : "#F44336";
               }
 
