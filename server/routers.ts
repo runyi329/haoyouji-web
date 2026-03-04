@@ -1097,6 +1097,7 @@ export const appRouter = router({
           
           return { 
             success: true,
+            sessionToken,  // 返回新token，供前端更新localStorage
             user: {
               id: targetUser.id,
               username: targetUser.username,
@@ -1138,6 +1139,7 @@ export const appRouter = router({
           
           return { 
             success: true,
+            sessionToken,  // 返回新token，供前端更新localStorage
             user: {
               id: targetUser.id,
               username: targetUser.username,
@@ -1195,6 +1197,7 @@ export const appRouter = router({
           
           return { 
             success: true,
+            sessionToken,  // 返回新token，供前端更新localStorage
             user: {
               id: targetUser.id,
               username: targetUser.username,
