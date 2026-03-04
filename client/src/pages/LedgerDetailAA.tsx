@@ -257,7 +257,7 @@ export default function LedgerDetailAA({
 
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 导航栏 */}
@@ -304,7 +304,7 @@ export default function LedgerDetailAA({
         </div>
 
         {/* 用户信息行 + 标签下拉 */}
-        <div className="px-4 pb-4 flex items-center gap-3">
+        <div className="px-4 pb-2 flex items-center gap-3">
           {/* 头像 */}
           <div className="flex-shrink-0">
             {user ? (
@@ -397,20 +397,20 @@ export default function LedgerDetailAA({
         </div>
 
         {/* 4个统计卡片 */}
-        <div className="px-4 pb-5 grid grid-cols-2 gap-2.5">
+        <div className="px-4 pb-3 grid grid-cols-2 gap-2">
           {/* 最新余额 */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-1">最新余额</div>
-            <div className="text-lg font-bold">
+          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="text-xs opacity-75 mb-0.5">最新余额</div>
+            <div className="text-base font-bold">
               ¥{stats.latestBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
           {/* 收益率 */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-1">收益率</div>
+          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="text-xs opacity-75 mb-0.5">收益率</div>
             <div
-              className="text-lg font-bold"
+              className="text-base font-bold"
               style={{
                 color: stats.returnRate > 0 ? "#4CAF50" : stats.returnRate < 0 ? "#F44336" : "#FFFFFF",
               }}
@@ -421,16 +421,16 @@ export default function LedgerDetailAA({
           </div>
 
           {/* 记录天数 */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-1">记录天数</div>
-            <div className="text-lg font-bold">{stats.recordDays} 天</div>
+          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="text-xs opacity-75 mb-0.5">记录天数</div>
+            <div className="text-base font-bold">{stats.recordDays} 天</div>
           </div>
 
           {/* 累计盈亏 */}
-          <div className="rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-1">累计盈亏</div>
+          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="text-xs opacity-75 mb-0.5">累计盈亏</div>
             <div
-              className="text-lg font-bold"
+              className="text-base font-bold"
               style={{
                 color: stats.totalPnl > 0 ? "#4CAF50" : stats.totalPnl < 0 ? "#F44336" : "#FFFFFF",
               }}
@@ -443,10 +443,10 @@ export default function LedgerDetailAA({
       </div>
 
       {/* ── 日历视图 ── */}
-      <div className="mx-3 mt-3 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
-        <div className="px-4 pt-4 pb-3">
+      <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm flex-shrink-0" style={{ backgroundColor: "#FFFFFF" }}>
+        <div className="px-3 pt-3 pb-2">
           {/* 月份导航 + 视图切换 */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <button
                 onClick={() =>
@@ -456,10 +456,10 @@ export default function LedgerDetailAA({
                     return { year: y, month: m };
                   })
                 }
-                className="w-7 h-7 rounded-full flex items-center justify-center"
+                className="w-6 h-6 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "#FFEBEE" }}
               >
-                <ChevronLeft className="w-4 h-4" style={{ color: "#D32F2F" }} />
+                <ChevronLeft className="w-3.5 h-3.5" style={{ color: "#D32F2F" }} />
               </button>
               <span
                 className="text-sm font-semibold"
@@ -475,10 +475,10 @@ export default function LedgerDetailAA({
                     return { year: y, month: m };
                   })
                 }
-                className="w-7 h-7 rounded-full flex items-center justify-center"
+                className="w-6 h-6 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "#FFEBEE" }}
               >
-                <ChevronRight className="w-4 h-4" style={{ color: "#D32F2F" }} />
+                <ChevronRight className="w-3.5 h-3.5" style={{ color: "#D32F2F" }} />
               </button>
             </div>
 
@@ -505,7 +505,7 @@ export default function LedgerDetailAA({
           </div>
 
           {/* 星期标题 */}
-          <div className="grid grid-cols-7 mb-1">
+          <div className="grid grid-cols-7 mb-0.5">
             {["日", "一", "二", "三", "四", "五", "六"].map((d) => (
               <div key={d} className="text-center text-xs py-1" style={{ color: "#757575" }}>
                 {d}
@@ -514,9 +514,9 @@ export default function LedgerDetailAA({
           </div>
 
           {/* 日历格子 */}
-          <div className="grid grid-cols-7 gap-0.5">
+          <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
             {calendarCells.map((day, idx) => {
-              if (day === null) return <div key={`empty-${idx}`} className="aspect-square" />;
+              if (day === null) return <div key={`empty-${idx}`} style={{ height: '36px' }} />;
 
               const cellValue = getCellValue(day);
               const pnl = getCellPnl(day);
@@ -532,8 +532,9 @@ export default function LedgerDetailAA({
                 <button
                   key={day}
                   onClick={() => handleDayClick(day)}
-                  className="aspect-square rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
+                  className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                   style={{
+                    height: '36px',
                     backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
                     border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
                   }}
@@ -561,11 +562,11 @@ export default function LedgerDetailAA({
 
       {/* ── 余额变化曲线 ── */}
       <div
-        className="mx-3 mt-3 rounded-2xl overflow-hidden shadow-sm mb-24"
+        className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm mb-20 flex-1 min-h-0"
         style={{ backgroundColor: "#FFFFFF" }}
       >
-        <div className="px-4 pt-4 pb-4">
-          <div className="text-sm font-semibold mb-0.5" style={{ color: "#222222" }}>
+        <div className="px-3 pt-3 pb-3 h-full flex flex-col">
+          <div className="text-xs font-semibold mb-0.5" style={{ color: "#222222" }}>
             余额变化曲线
             {selectedTag && (
               <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
@@ -573,7 +574,7 @@ export default function LedgerDetailAA({
               </span>
             )}
           </div>
-          <div className="text-xs mb-4" style={{ color: "#757575" }}>
+          <div className="text-xs mb-2" style={{ color: "#757575" }}>
             展示账户余额随时间的变化趋势
           </div>
 
@@ -585,7 +586,7 @@ export default function LedgerDetailAA({
               {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={110}>
               <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="aaBalanceGradient" x1="0" y1="0" x2="0" y2="1">
