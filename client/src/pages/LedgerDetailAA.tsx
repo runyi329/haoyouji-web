@@ -528,8 +528,7 @@ export default function LedgerDetailAA({
               className="text-base font-bold"
               style={{ color: "#FFFFFF" }}
             >
-              {stats.totalPnl >= 0 ? "+" : ""}¥
-              {Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "-" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
