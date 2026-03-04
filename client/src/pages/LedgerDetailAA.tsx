@@ -462,8 +462,8 @@ export default function LedgerDetailAA({
                 <ChevronLeft className="w-3.5 h-3.5" style={{ color: "#D32F2F" }} />
               </button>
               <span
-                className="text-sm font-semibold"
-                style={{ color: "#222222", minWidth: "80px", textAlign: "center" }}
+                className="text-sm font-semibold whitespace-nowrap"
+                style={{ color: "#222222", minWidth: "72px", textAlign: "center" }}
               >
                 {calendarDate.year}年{calendarDate.month + 1}月
               </span>
@@ -483,9 +483,9 @@ export default function LedgerDetailAA({
             </div>
 
             {/* 视图切换 */}
-            <div className="flex items-center gap-1 flex-wrap justify-end">
+            <div className="flex items-center gap-1 flex-nowrap justify-end">
               {(["balance", "daily", "monthly", "yearly"] as const).map((mode) => {
-                const labels = { balance: "余额", daily: "日盈亏", monthly: "月盈亏", yearly: "年盈亏" };
+                const labels = { balance: "余额", daily: "日", monthly: "月", yearly: "年" };
                 const active = calendarMode === mode;
                 return (
                   <button
