@@ -175,3 +175,30 @@ export const beautyPointsLog = mysqlTable("beauty_points_log", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type BeautyPointLog = typeof beautyPointsLog.$inferSelect;
+
+// ===== 奢贝消费卡系统 =====
+
+// 消费卡表（每个客户一张有效卡，新增时覆盖旧卡）
+export const beautyMemberCards = mysqlTable("beauty_member_cards", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),           // 持卡客户
+  operatorId: int("operatorId").notNull(),   // 开卡操作人
+  cardType: varchar("cardType", { length: 20 }).notNull(), // monthly/quarterly/semiannual/annual
+  startDate: varchar("startDate", { length: 20 }).notNull(), // YYYY-MM-DD
+  endDate: varchar("endDate", { length: 20 }).notNull(),     // YYYY-MM-DD（自动计算）
+  isActive: int("isActive").default(1).notNull(),            // 1=有效 0=已作废
+  remark: varchar("remark", { length: 200 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BeautyMemberCard = typeof beautyMemberCards.$inferSelect;
+
+// 消费记录表（累积消费次数）
+export const beautyVisitLogs = mysqlTable("beauty_visit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),           // 消费客户
+  operatorId: int("operatorId").notNull(),   // 记录操作人
+  remark: varchar("remark", { length: 200 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyVisitLog = typeof beautyVisitLogs.$inferSelect;
