@@ -574,24 +574,42 @@ export default function LedgerDetailAA({
             </>
           )}
 
-          {/* 月视图：12个月份格 */}
+          {/* 月视图：12个月份格 - 显示该月最后一条与上一个有数据月的最后一条的差値 */}
           {calendarMode === "monthly" && (() => {
             const { year } = calendarDate;
             const months = Array.from({ length: 12 }, (_, i) => i + 1);
+            // 按日期升序排列所有数据
+            const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
+            // 整个账本只有一条数据时，所有月都不显示差値
+            const totalCount = sorted.length;
+            // 每个月的最后一条数据的累计余额
+            const monthLastCum = new Map<string, number>();
+            sorted.forEach((d) => {
+              const ym = d.date.slice(0, 7);
+              monthLastCum.set(ym, cumulativeMap.get(d.date) ?? 0);
+            });
+            // 所有有数据的月份（升序）
+            const allMonths = Array.from(monthLastCum.keys()).sort();
             return (
               <div className="grid grid-cols-4 gap-1.5">
                 {months.map((m) => {
-                  const prefix = `${year}-${String(m).padStart(2, "0")}`;
-                  let total = 0;
-                  filteredTransactions.forEach((d) => {
-                    if (d.date && d.date.startsWith(prefix)) total += d.income - d.expense;
-                  });
-                  const hasData = filteredTransactions.some((d) => d.date && d.date.startsWith(prefix));
-                  const sign = total > 0 ? "+" : total < 0 ? "-" : "";
-                  const color = total > 0 ? "#4CAF50" : total < 0 ? "#F44336" : "#9E9E9E";
+                  const ym = `${year}-${String(m).padStart(2, "0")}`;
+                  const hasData = monthLastCum.has(ym);
                   const nowM = new Date().getMonth() + 1;
                   const nowY = new Date().getFullYear();
                   const isCurrent = year === nowY && m === nowM;
+                  // 计算差値：该月最后一条 - 上一个有数据月的最后一条
+                  let diff: number | null = null;
+                  if (hasData && totalCount > 1) {
+                    const idx = allMonths.indexOf(ym);
+                    if (idx > 0) {
+                      const prevYm = allMonths[idx - 1];
+                      diff = (monthLastCum.get(ym) ?? 0) - (monthLastCum.get(prevYm) ?? 0);
+                    }
+                    // idx === 0 表示是第一个月，但如果还有后续月也不显示（无前序可比）
+                  }
+                  const sign = diff !== null ? (diff > 0 ? "+" : diff < 0 ? "-" : "") : "";
+                  const color = diff !== null ? (diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E") : "#9E9E9E";
                   return (
                     <div
                       key={m}
@@ -603,9 +621,9 @@ export default function LedgerDetailAA({
                       }}
                     >
                       <span className="text-xs font-medium" style={{ color: isCurrent ? "#D32F2F" : "#222222" }}>{m}月</span>
-                      {hasData && (
+                      {diff !== null && (
                         <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
-                          {sign}{String(Math.floor(Math.abs(total)))}
+                          {sign}{String(Math.floor(Math.abs(diff)))}
                         </span>
                       )}
                     </div>
@@ -615,22 +633,30 @@ export default function LedgerDetailAA({
             );
           })()}
 
-          {/* 年视图：显示所有有数据的年份 */}
+          {/* 年视图：显示所有有数据的年份 - 显示该年最后一条与上一年最后一条的差値 */}
           {calendarMode === "yearly" && (() => {
-            const allYears = Array.from(
-              new Set(filteredTransactions.map((d) => d.date?.slice(0, 4)).filter(Boolean))
-            ).sort() as string[];
+            const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
+            const totalCount = sorted.length;
+            // 每个年的最后一条数据的累计余额
+            const yearLastCum = new Map<string, number>();
+            sorted.forEach((d) => {
+              const y = d.date.slice(0, 4);
+              yearLastCum.set(y, cumulativeMap.get(d.date) ?? 0);
+            });
+            const allYears = Array.from(yearLastCum.keys()).sort();
             if (allYears.length === 0) return <div className="text-xs text-gray-400 py-4 text-center">暂无数据</div>;
+            const nowY = String(new Date().getFullYear());
             return (
               <div className="grid grid-cols-3 gap-1.5">
-                {allYears.map((y) => {
-                  let total = 0;
-                  filteredTransactions.forEach((d) => {
-                    if (d.date && d.date.startsWith(y)) total += d.income - d.expense;
-                  });
-                  const sign = total > 0 ? "+" : total < 0 ? "-" : "";
-                  const color = total > 0 ? "#4CAF50" : total < 0 ? "#F44336" : "#9E9E9E";
-                  const nowY = String(new Date().getFullYear());
+                {allYears.map((y, idx) => {
+                  // 整个账本只有一条或该年是第一年且无前序：不显示差値
+                  let diff: number | null = null;
+                  if (totalCount > 1 && idx > 0) {
+                    const prevY = allYears[idx - 1];
+                    diff = (yearLastCum.get(y) ?? 0) - (yearLastCum.get(prevY) ?? 0);
+                  }
+                  const sign = diff !== null ? (diff > 0 ? "+" : diff < 0 ? "-" : "") : "";
+                  const color = diff !== null ? (diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E") : "#9E9E9E";
                   return (
                     <div
                       key={y}
@@ -642,9 +668,11 @@ export default function LedgerDetailAA({
                       }}
                     >
                       <span className="text-xs font-medium" style={{ color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
-                      <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
-                        {sign}{String(Math.floor(Math.abs(total)))}
-                      </span>
+                      {diff !== null && (
+                        <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
+                          {sign}{String(Math.floor(Math.abs(diff)))}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
