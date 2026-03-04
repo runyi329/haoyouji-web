@@ -437,6 +437,14 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}/${ledgerData?.type === 'diet' ? 'member-info' : 'approval-settings'}`)}
           />
         )}
+        {/* 定制账本(AA)：初始金额管理入口，仅owner/admin可见 */}
+        {ledgerData?.type === 'custom_aa' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+          <SettingItem
+            label="初始金额管理"
+            showIcon
+            onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
+          />
+        )}
         {ledgerData?.type !== 'diet' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
       </div>
 
