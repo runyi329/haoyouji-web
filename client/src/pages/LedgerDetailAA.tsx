@@ -242,8 +242,11 @@ export default function LedgerDetailAA({
     if (!data) return null;
 
     if (calendarMode === "balance") {
-      const cum = cumulativeMap.get(dateStr);
-      return cum !== undefined ? formatMoney(cum) : null;
+      // 显示当天绝对金额（当天支出+收入的绝对值之和）
+      const dayData = dayMap.get(dateStr);
+      if (!dayData) return null;
+      const dayTotal = dayData.expense + dayData.income;
+      return dayTotal > 0 ? formatMoney(dayTotal) : null;
     }
     if (calendarMode === "daily") {
       const diff = getDailyDiff(dateStr);
