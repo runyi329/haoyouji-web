@@ -59,6 +59,7 @@ import MasterLibraryManager from "./admin/MasterLibraryManager";
 import UserPermissionsManager from "./admin/UserPermissionsManager";
 import PointsManagement from "./admin/PointsManagement";
 import DataSecurityPanel from "./admin/DataSecurityPanel";
+import CustomAAManager from "./admin/CustomAAManager";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -337,6 +338,10 @@ export default function Admin() {
             <TabsTrigger value="sentia" className="text-xs sm:text-sm">
               <Coins className="w-4 h-4 mr-1 hidden sm:inline" />
               Sentia
+            </TabsTrigger>
+            <TabsTrigger value="customAA" className="text-xs sm:text-sm">
+              <BookMarked className="w-4 h-4 mr-1 hidden sm:inline" />
+              定制账本
             </TabsTrigger>
           </TabsList>
 
@@ -1042,6 +1047,11 @@ export default function Admin() {
                 </p>
               </div>
             </Card>
+          </TabsContent>
+
+          {/* 定制账本(AA) 管理 */}
+          <TabsContent value="customAA">
+            <CustomAAManager />
           </TabsContent>
         </Tabs>
       </main>

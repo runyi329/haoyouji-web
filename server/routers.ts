@@ -7935,6 +7935,69 @@ export const appRouter = router({
 
         return { count: successCount };
       }),
+
+    // ===== 定制账本(AA) 管理员专用接口 =====
+    // 创建定制账本（仅管理员）
+    createCustomAA: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建定制账本' });
+        }
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: 'custom_aa',
+          createdBy: ctx.user.id,
+        });
+        return ledger;
+      }),
+
+    // 获取所有定制账本列表（仅管理员）
+    listCustomAA: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看定制账本列表' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const rows = await db
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            description: ledgers.description,
+            createdAt: ledgers.createdAt,
+          })
+          .from(ledgers)
+          .where(eq(ledgers.type, 'custom_aa'))
+          .orderBy(desc(ledgers.createdAt));
+        return rows;
+      }),
+
+    // 邀请用户加入定制账本（仅管理员，通过用户名）
+    inviteToCustomAA: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        username: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请用户加入定制账本' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [ledger] = await db
+          .select({ id: ledgers.id, type: ledgers.type })
+          .from(ledgers)
+          .where(eq(ledgers.id, input.ledgerId));
+        if (!ledger || ledger.type !== 'custom_aa') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是定制账本' });
+        }
+        return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
+      }),
   }),
   
   // 银行列表管理
