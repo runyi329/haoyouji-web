@@ -716,8 +716,7 @@ export default function LedgerDetailAA({
       </div>
 
       {/* ── 可滚动内容区域（全部模式下隐藏） ── */}
-      {selectedTagId !== null && (
-      <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', display: selectedTagId === null ? 'none' : undefined }}>
 
       {/* ── 日历视图 ── */}
       <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
@@ -1108,7 +1107,6 @@ export default function LedgerDetailAA({
       </div>
 
       </div>{/* end 可滚动内容区域 */}
-      )}{/* end selectedTagId !== null */}
 
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见） ── */}
       {canEdit && (
