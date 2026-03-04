@@ -536,15 +536,26 @@ export default function LedgerDetailAA({
             )}
           </div>
 
-          {/* 收益率 */}
+          {/* 保证金 + 比例 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">收益率</div>
-            <div
-              className="text-base font-bold"
-              style={{ color: "#FFFFFF" }}
-            >
-              {stats.returnRate >= 0 ? "+" : ""}
-              {stats.returnRate.toFixed(2)}%
+            <div className="text-xs opacity-75 mb-0.5">保证金</div>
+            <div className="text-base font-bold">
+              {(() => {
+                const tagName = selectedTag?.name;
+                if (!tagName || !initialBalancesData?.balances) return '未设置';
+                const val = initialBalancesData.balances[`${tagName}__margin`];
+                if (val === undefined || val === null) return '未设置';
+                return '¥' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              })()}
+            </div>
+            <div className="text-xs opacity-60 mt-0.5">
+              {(() => {
+                const tagName = selectedTag?.name;
+                if (!tagName || !initialBalancesData?.balances) return '';
+                const val = initialBalancesData.balances[`${tagName}__ratio`];
+                if (val === undefined || val === null) return '';
+                return `比例 ${Number(val).toFixed(0)}%`;
+              })()}
             </div>
           </div>
 
@@ -578,6 +589,9 @@ export default function LedgerDetailAA({
               style={{ color: "#FFFFFF" }}
             >
               {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "-" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs opacity-60 mt-0.5">
+              收益率 {stats.returnRate >= 0 ? "+" : ""}{stats.returnRate.toFixed(2)}%
             </div>
           </div>
         </div>
