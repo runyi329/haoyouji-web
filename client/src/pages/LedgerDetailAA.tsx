@@ -586,7 +586,7 @@ export default function LedgerDetailAA({
               {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={110}>
+            <ResponsiveContainer width="100%" height={138}>
               <AreaChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="aaBalanceGradient" x1="0" y1="0" x2="0" y2="1">
