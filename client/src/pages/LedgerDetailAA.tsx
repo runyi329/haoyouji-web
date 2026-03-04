@@ -530,66 +530,127 @@ export default function LedgerDetailAA({
             </div>
           </div>
 
-          {/* 星期标题 */}
-          <div className="grid grid-cols-7 mb-0.5">
-            {["日", "一", "二", "三", "四", "五", "六"].map((d) => (
-              <div key={d} className="text-center text-xs py-1" style={{ color: "#757575" }}>
-                {d}
+          {/* 日视图 / 月视图 / 年视图 */}
+          {(calendarMode === "balance" || calendarMode === "daily") && (
+            <>
+              {/* 星期标题 */}
+              <div className="grid grid-cols-7 mb-0.5">
+                {["日", "一", "二", "三", "四", "五", "六"].map((d) => (
+                  <div key={d} className="text-center text-xs py-1" style={{ color: "#757575" }}>
+                    {d}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-
-          {/* 日历格子 */}
-          <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
-            {calendarCells.map((day, idx) => {
-              if (day === null) return <div key={`empty-${idx}`} style={{ height: '36px' }} />;
-
-              const cellValue = getCellValue(day);
-              const pnl = getCellPnl(day);
-              const hasRecord = cellValue !== null;
-              const todayMark = isToday(day);
-
-              let valueColor = "#D32F2F";
-              if (calendarMode === "daily") {
-                // daily模式：根据差値正负显示绿色/红色
-                const dateStr = getDateStr(day);
-                const diff = getDailyDiff(dateStr);
-                if (diff !== null) {
-                  valueColor = diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E";
-                }
-              } else if (calendarMode !== "balance" && pnl !== null) {
-                valueColor = pnl >= 0 ? "#4CAF50" : "#F44336";
-              }
-
-              return (
-                <button
-                  key={day}
-                  onClick={() => handleDayClick(day)}
-                  className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
-                  style={{
-                    height: '36px',
-                    backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
-                    border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
-                  }}
-                >
-                  <span
-                    className="text-xs font-medium leading-none mb-0.5"
-                    style={{ color: todayMark ? "#D32F2F" : "#222222" }}
-                  >
-                    {day}
-                  </span>
-                  {hasRecord && (
-                    <span
-                      className="leading-none font-semibold"
-                      style={{ fontSize: "9px", color: valueColor }}
+              {/* 日历格子 */}
+              <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
+                {calendarCells.map((day, idx) => {
+                  if (day === null) return <div key={`empty-${idx}`} style={{ height: '36px' }} />;
+                  const cellValue = getCellValue(day);
+                  const hasRecord = cellValue !== null;
+                  const todayMark = isToday(day);
+                  let valueColor = "#D32F2F";
+                  if (calendarMode === "daily") {
+                    const dateStr = getDateStr(day);
+                    const diff = getDailyDiff(dateStr);
+                    if (diff !== null) valueColor = diff > 0 ? "#4CAF50" : diff < 0 ? "#F44336" : "#9E9E9E";
+                  }
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => handleDayClick(day)}
+                      className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
+                      style={{
+                        height: '36px',
+                        backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
+                        border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                      }}
                     >
-                      {cellValue}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                      <span className="text-xs font-medium leading-none mb-0.5" style={{ color: todayMark ? "#D32F2F" : "#222222" }}>{day}</span>
+                      {hasRecord && <span className="leading-none font-semibold" style={{ fontSize: "9px", color: valueColor }}>{cellValue}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* 月视图：12个月份格 */}
+          {calendarMode === "monthly" && (() => {
+            const { year } = calendarDate;
+            const months = Array.from({ length: 12 }, (_, i) => i + 1);
+            return (
+              <div className="grid grid-cols-4 gap-1.5">
+                {months.map((m) => {
+                  const prefix = `${year}-${String(m).padStart(2, "0")}`;
+                  let total = 0;
+                  filteredTransactions.forEach((d) => {
+                    if (d.date && d.date.startsWith(prefix)) total += d.income - d.expense;
+                  });
+                  const hasData = filteredTransactions.some((d) => d.date && d.date.startsWith(prefix));
+                  const sign = total > 0 ? "+" : total < 0 ? "-" : "";
+                  const color = total > 0 ? "#4CAF50" : total < 0 ? "#F44336" : "#9E9E9E";
+                  const nowM = new Date().getMonth() + 1;
+                  const nowY = new Date().getFullYear();
+                  const isCurrent = year === nowY && m === nowM;
+                  return (
+                    <div
+                      key={m}
+                      className="rounded-lg flex flex-col items-center justify-center py-2"
+                      style={{
+                        height: '52px',
+                        backgroundColor: hasData ? "#FFEBEE" : "#F9F9F9",
+                        border: isCurrent ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                      }}
+                    >
+                      <span className="text-xs font-medium" style={{ color: isCurrent ? "#D32F2F" : "#222222" }}>{m}月</span>
+                      {hasData && (
+                        <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
+                          {sign}{String(Math.floor(Math.abs(total)))}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* 年视图：显示所有有数据的年份 */}
+          {calendarMode === "yearly" && (() => {
+            const allYears = Array.from(
+              new Set(filteredTransactions.map((d) => d.date?.slice(0, 4)).filter(Boolean))
+            ).sort() as string[];
+            if (allYears.length === 0) return <div className="text-xs text-gray-400 py-4 text-center">暂无数据</div>;
+            return (
+              <div className="grid grid-cols-3 gap-1.5">
+                {allYears.map((y) => {
+                  let total = 0;
+                  filteredTransactions.forEach((d) => {
+                    if (d.date && d.date.startsWith(y)) total += d.income - d.expense;
+                  });
+                  const sign = total > 0 ? "+" : total < 0 ? "-" : "";
+                  const color = total > 0 ? "#4CAF50" : total < 0 ? "#F44336" : "#9E9E9E";
+                  const nowY = String(new Date().getFullYear());
+                  return (
+                    <div
+                      key={y}
+                      className="rounded-lg flex flex-col items-center justify-center py-2"
+                      style={{
+                        height: '52px',
+                        backgroundColor: "#FFEBEE",
+                        border: y === nowY ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
+                      }}
+                    >
+                      <span className="text-xs font-medium" style={{ color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
+                      <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
+                        {sign}{String(Math.floor(Math.abs(total)))}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
