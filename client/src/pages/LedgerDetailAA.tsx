@@ -587,14 +587,29 @@ export default function LedgerDetailAA({
                   const cellValue = getCellValue(day);
                   const hasRecord = cellValue !== null;
                   const todayMark = isToday(day);
-                  // 所有模式都根据当天对比上一次数据的正负显示颜色
-                  // 正数（盈）→ 红色，负数（亏）→ 绿色
+                  // 字体颜色根据当天数值的正负：正数→红色，负数→绿色，背景统一不变
                   let valueColor = "#D32F2F";
                   if (hasRecord) {
                     const dateStr = getDateStr(day);
-                    const diff = getDailyDiff(dateStr);
-                    if (diff !== null) {
-                      valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
+                    if (calendarMode === "daily") {
+                      // 日模式：当天金额与前一天差值的正负
+                      const todayData = dayMap.get(dateStr);
+                      const allDates = Array.from(dayMap.keys()).sort();
+                      const idx2 = allDates.indexOf(dateStr);
+                      if (todayData && idx2 > 0) {
+                        const prevData = dayMap.get(allDates[idx2 - 1])!;
+                        const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
+                        valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
+                      } else {
+                        valueColor = "#9E9E9E"; // 第一条数据用灰色
+                      }
+                    } else {
+                      // 余额模式：当天金额本身（支出为负，收入为正）
+                      const dayData = dayMap.get(dateStr);
+                      if (dayData) {
+                        const net = dayData.income - dayData.expense;
+                        valueColor = net >= 0 ? "#D32F2F" : "#4CAF50";
+                      }
                     }
                   }
                   return (
@@ -604,7 +619,7 @@ export default function LedgerDetailAA({
                       className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                       style={{
                         height: '44px',
-                        backgroundColor: hasRecord ? "#FFEBEE" : todayMark ? "#FFF3E0" : "#F9F9F9",
+                        backgroundColor: todayMark ? "#FFF3E0" : "#F9F9F9",
                         border: todayMark ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
                         padding: '2px 1px',
                       }}
