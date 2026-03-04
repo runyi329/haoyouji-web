@@ -89,14 +89,31 @@ export default function LedgerDetailAA({
     { enabled: !!ledgerId }
   );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
-  const categories = useMemo(() => {
+  const allCategories = useMemo(() => {
     if (!rawCategories) return [];
     return rawCategories.filter((c: any) => !c.isDefault);
   }, [rawCategories]);
-  // categories加载后默认选中第1个标签
+
+  // 根据 initialBalancesData 中的 visible 字段，过滤掉对当前用户隐藏的标签
+  const categories = useMemo(() => {
+    if (!initialBalancesData?.balances) return allCategories;
+    return allCategories.filter((c: any) => {
+      const visibleVal = initialBalancesData.balances[`${c.name}__visible`];
+      // 未设置时默认显示；设置为 0 则隐藏
+      if (visibleVal === undefined || visibleVal === null) return true;
+      return Number(visibleVal) !== 0;
+    });
+  }, [allCategories, initialBalancesData]);
+
+  // categories加载后默认选中第1个可见标签
   useEffect(() => {
     if (categories && categories.length > 0 && selectedTagId === null) {
       setSelectedTagId(categories[0].id);
+    }
+    // 若当前选中标签已被隐藏，切换到第一个可见标签
+    if (selectedTagId !== null && categories.length > 0) {
+      const stillVisible = categories.find((c: any) => c.id === selectedTagId);
+      if (!stillVisible) setSelectedTagId(categories[0].id);
     }
   }, [categories]);
 

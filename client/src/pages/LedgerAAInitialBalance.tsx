@@ -3,11 +3,19 @@
  * 定制账本(AA) 初始金额管理页
  * 仅账本创建人(owner)和管理员(admin)可访问
  *
- * 功能：
- * - 列出账本所有真实成员
- * - 每个成员下列出所有标签（账本一级分类）
- * - 可为每个成员的每个标签设置初始比例（0%~100%）和初始金额
- * - 保存时调用 adminSetMemberInitialBalances 接口
+ * 每个成员 × 每个标签 可设置：
+ *  - 显示开关（visible）：是否在该用户界面显示该标签
+ *  - 开始日期（startDate）：该标签对该用户生效的起始日期
+ *  - 初始比例（ratio）：0%~100%
+ *  - 初始金额（amount）：¥
+ *  - 初始保证金（margin）：¥
+ *
+ * JSON key 规则（存入 ledger_members.initial_balances）：
+ *   tagName            → 初始金额
+ *   tagName__ratio     → 初始比例
+ *   tagName__margin    → 初始保证金
+ *   tagName__startDate → 开始日期 (YYYY-MM-DD)
+ *   tagName__visible   → 显示开关 (1 = 显示, 0 = 隐藏)
  */
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
@@ -16,51 +24,78 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 
+interface TagEntry {
+  amount: string;
+  ratio: string;
+  margin: string;
+  startDate: string;
+  visible: boolean;
+}
+
+const defaultEntry = (): TagEntry => ({
+  amount: "",
+  ratio: "",
+  margin: "",
+  startDate: "",
+  visible: true,
+});
+
 export default function LedgerAAInitialBalance() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
-  // 获取账本详情（验证类型和权限）
-  const { data: ledgerData } = trpc.ledger.getById.useQuery({ ledgerId }, { enabled: !!ledgerId });
+  const { data: ledgerData } = trpc.ledger.getById.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
 
-  // 获取账本一级分类（标签）
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null },
     { enabled: !!ledgerId }
   );
   const categories = useMemo(() => {
     if (!rawCategories) return [];
-    return rawCategories.filter((c: any) => !c.isDefault);
+    return (rawCategories as any[]).filter((c) => !c.isDefault);
   }, [rawCategories]);
 
-  // 获取所有成员及其初始金额
-  const { data: allBalancesData, refetch } = trpc.ledger.adminGetAllInitialBalances.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId }
-  );
+  const { data: allBalancesData, refetch } =
+    trpc.ledger.adminGetAllInitialBalances.useQuery(
+      { ledgerId },
+      { enabled: !!ledgerId }
+    );
 
-  // 本地编辑状态：{ [userId]: { [categoryName]: { amount: string, ratio: string } } }
-  const [editState, setEditState] = useState<Record<number, Record<string, { amount: string; ratio: string }>>>({});
-  // 追踪哪些用户有未保存的修改
+  const [editState, setEditState] = useState<
+    Record<number, Record<string, TagEntry>>
+  >({});
   const [dirtyUsers, setDirtyUsers] = useState<Set<number>>(new Set());
-  // 追踪正在保存的用户
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
 
-  // 当数据加载完成后，初始化编辑状态
   useEffect(() => {
     if (!allBalancesData) return;
-    const initial: Record<number, Record<string, { amount: string; ratio: string }>> = {};
-    for (const member of allBalancesData.members) {
-      const balances = allBalancesData.balancesMap[member.userId] ?? {};
+    const initial: Record<number, Record<string, TagEntry>> = {};
+    for (const member of (allBalancesData as any).members) {
+      const balances =
+        (allBalancesData as any).balancesMap[member.userId] ?? {};
       initial[member.userId] = {};
       for (const cat of categories) {
-        const val = balances[cat.name];
-        // ratio 存储在 key `${cat.name}__ratio` 中
-        const ratioVal = balances[`${cat.name}__ratio`];
-        initial[member.userId][cat.name] = {
-          amount: val !== undefined ? String(val) : "",
-          ratio: ratioVal !== undefined ? String(ratioVal) : "",
+        const n = cat.name;
+        initial[member.userId][n] = {
+          amount:
+            balances[n] !== undefined ? String(balances[n]) : "",
+          ratio:
+            balances[`${n}__ratio`] !== undefined
+              ? String(balances[`${n}__ratio`])
+              : "",
+          margin:
+            balances[`${n}__margin`] !== undefined
+              ? String(balances[`${n}__margin`])
+              : "",
+          startDate: balances[`${n}__startDate`] ?? "",
+          visible:
+            balances[`${n}__visible`] !== undefined
+              ? balances[`${n}__visible`] !== 0
+              : true,
         };
       }
     }
@@ -80,7 +115,7 @@ export default function LedgerAAInitialBalance() {
         next.delete(variables.targetUserId);
         return next;
       });
-      toast.success("初始金额已保存");
+      toast.success("已保存");
       refetch();
     },
     onError: (err, variables) => {
@@ -89,39 +124,22 @@ export default function LedgerAAInitialBalance() {
         next.delete(variables.targetUserId);
         return next;
       });
-      toast.error(err.message || "保存失败");
+      toast.error((err as any).message || "保存失败");
     },
   });
 
-  const handleAmountChange = (userId: number, catName: string, value: string) => {
+  const updateEntry = (
+    userId: number,
+    catName: string,
+    patch: Partial<TagEntry>
+  ) => {
     setEditState((prev) => ({
       ...prev,
       [userId]: {
         ...(prev[userId] ?? {}),
         [catName]: {
-          ...(prev[userId]?.[catName] ?? { amount: "", ratio: "" }),
-          amount: value,
-        },
-      },
-    }));
-    setDirtyUsers((prev) => new Set(prev).add(userId));
-  };
-
-  const handleRatioChange = (userId: number, catName: string, value: string) => {
-    // 限制 0~100
-    let num = parseFloat(value);
-    if (!isNaN(num)) {
-      if (num < 0) num = 0;
-      if (num > 100) num = 100;
-      value = String(num);
-    }
-    setEditState((prev) => ({
-      ...prev,
-      [userId]: {
-        ...(prev[userId] ?? {}),
-        [catName]: {
-          ...(prev[userId]?.[catName] ?? { amount: "", ratio: "" }),
-          ratio: value,
+          ...(prev[userId]?.[catName] ?? defaultEntry()),
+          ...patch,
         },
       },
     }));
@@ -130,34 +148,45 @@ export default function LedgerAAInitialBalance() {
 
   const handleSaveMember = (userId: number) => {
     const userEdit = editState[userId] ?? {};
-    const balances: Record<string, number> = {};
+    const balances: Record<string, number | string> = {};
     for (const cat of categories) {
-      const entry = userEdit[cat.name];
-      if (entry?.amount !== undefined && entry.amount !== "") {
+      const n = cat.name;
+      const entry = userEdit[n] ?? defaultEntry();
+
+      if (entry.amount !== "") {
         const num = parseFloat(entry.amount);
-        if (!isNaN(num)) {
-          balances[cat.name] = num;
-        }
+        if (!isNaN(num)) balances[n] = num;
       }
-      // 比例存储在 key `${cat.name}__ratio`
-      if (entry?.ratio !== undefined && entry.ratio !== "") {
-        const ratioNum = parseFloat(entry.ratio);
-        if (!isNaN(ratioNum)) {
-          balances[`${cat.name}__ratio`] = ratioNum;
-        }
+      if (entry.ratio !== "") {
+        const num = parseFloat(entry.ratio);
+        if (!isNaN(num)) balances[`${n}__ratio`] = Math.min(100, Math.max(0, num));
       }
+      if (entry.margin !== "") {
+        const num = parseFloat(entry.margin);
+        if (!isNaN(num)) balances[`${n}__margin`] = num;
+      }
+      if (entry.startDate) {
+        balances[`${n}__startDate`] = entry.startDate;
+      }
+      balances[`${n}__visible`] = entry.visible ? 1 : 0;
     }
     setSavingUsers((prev) => new Set(prev).add(userId));
-    setMutation.mutate({ ledgerId, targetUserId: userId, balances });
+    setMutation.mutate({
+      ledgerId,
+      targetUserId: userId,
+      balances: balances as Record<string, number>,
+    });
   };
 
-  // 权限检查
   const canAccess =
     ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin";
 
   if (!ledgerData) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#FAF3ED" }}>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: "#FAF3ED" }}
+      >
         <div className="text-gray-400">加载中...</div>
       </div>
     );
@@ -165,13 +194,16 @@ export default function LedgerAAInitialBalance() {
 
   if (!canAccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#FAF3ED" }}>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: "#FAF3ED" }}
+      >
         <div className="text-gray-500">无权限访问</div>
       </div>
     );
   }
 
-  const members = allBalancesData?.members ?? [];
+  const members = (allBalancesData as any)?.members ?? [];
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
@@ -186,15 +218,16 @@ export default function LedgerAAInitialBalance() {
         >
           <ChevronLeft size={22} />
         </button>
-        <h1 className="text-white font-semibold text-base flex-1">初始金额管理</h1>
+        <h1 className="text-white font-semibold text-base flex-1">
+          初始金额管理
+        </h1>
       </div>
 
       {/* 说明文字 */}
       <div className="mx-4 mt-3 mb-2 text-xs text-gray-500 leading-relaxed">
-        为每位成员设置各标签的初始比例（0%~100%）和初始金额。初始金额用于计算收益率和累计盈亏。
+        为每位成员设置各标签的显示开关、开始日期、初始比例（0%~100%）、初始金额和初始保证金。
       </div>
 
-      {/* 标签列表 */}
       {categories.length === 0 ? (
         <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
           该账本暂无标签，请先在分类管理中添加标签
@@ -202,7 +235,9 @@ export default function LedgerAAInitialBalance() {
       ) : (
         <div className="pb-8">
           {members.length === 0 ? (
-            <div className="mx-4 mt-6 text-center text-gray-400 text-sm">暂无成员</div>
+            <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
+              暂无成员
+            </div>
           ) : (
             members.map((member: any) => {
               const userId = member.userId;
@@ -241,14 +276,15 @@ export default function LedgerAAInitialBalance() {
                         </div>
                       </div>
                     </div>
-                    {/* 保存按钮 */}
                     <button
                       onClick={() => handleSaveMember(userId)}
                       disabled={!isDirty || isSaving}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                       style={{
-                        backgroundColor: isDirty && !isSaving ? "#D32F2F" : "#E0E0E0",
-                        color: isDirty && !isSaving ? "#FFFFFF" : "#9E9E9E",
+                        backgroundColor:
+                          isDirty && !isSaving ? "#D32F2F" : "#E0E0E0",
+                        color:
+                          isDirty && !isSaving ? "#FFFFFF" : "#9E9E9E",
                       }}
                     >
                       <Save size={12} />
@@ -256,72 +292,170 @@ export default function LedgerAAInitialBalance() {
                     </button>
                   </div>
 
-                  {/* 列头 */}
-                  <div
-                    className="flex items-center px-4 py-1.5 text-xs text-gray-400"
-                    style={{ borderBottom: "1px solid #F5F0EB" }}
-                  >
-                    <div className="flex-1">标签</div>
-                    <div className="w-20 text-center">初始比例</div>
-                    <div className="w-28 text-right">初始金额</div>
-                  </div>
-
                   {/* 标签行 */}
-                  <div className="px-4 py-2 space-y-2">
+                  <div className="px-4 py-2 space-y-4">
                     {categories.map((cat: any) => {
-                      const entry = userEdit[cat.name] ?? { amount: "", ratio: "" };
+                      const entry = userEdit[cat.name] ?? defaultEntry();
                       return (
-                        <div key={cat.id} className="flex items-center py-1">
-                          {/* 标签名 */}
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: cat.color || "#D32F2F" }}
-                            />
-                            <span className="text-sm text-gray-700 truncate">{cat.name}</span>
+                        <div
+                          key={cat.id}
+                          className="rounded-xl py-3 px-3 space-y-2"
+                          style={{ backgroundColor: "#FAF3ED" }}
+                        >
+                          {/* 行1：标签名 + 显示开关 */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{
+                                  backgroundColor: cat.color || "#D32F2F",
+                                }}
+                              />
+                              <span className="text-sm font-semibold text-gray-800">
+                                {cat.name}
+                              </span>
+                            </div>
+                            {/* 显示开关 */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">
+                                {entry.visible ? "显示" : "隐藏"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateEntry(userId, cat.name, {
+                                    visible: !entry.visible,
+                                  })
+                                }
+                                className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
+                                style={{
+                                  backgroundColor: entry.visible
+                                    ? "#D32F2F"
+                                    : "#D1D5DB",
+                                }}
+                              >
+                                <span
+                                  className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                                  style={{
+                                    transform: entry.visible
+                                      ? "translateX(18px)"
+                                      : "translateX(2px)",
+                                  }}
+                                />
+                              </button>
+                            </div>
                           </div>
 
-                          {/* 初始比例输入框 */}
-                          <div className="flex items-center gap-0.5 w-20 justify-center">
+                          {/* 行2：开始日期 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
+                              开始日期
+                            </span>
                             <input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="0"
-                              min={0}
-                              max={100}
-                              value={entry.ratio}
-                              onChange={(e) => handleRatioChange(userId, cat.name, e.target.value)}
-                              className="w-12 text-right text-sm border rounded-lg px-1.5 py-1 outline-none focus:border-red-400"
+                              type="date"
+                              value={entry.startDate}
+                              onChange={(e) =>
+                                updateEntry(userId, cat.name, {
+                                  startDate: e.target.value,
+                                })
+                              }
+                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
                               style={{
                                 borderColor: "#E0E0E0",
-                                backgroundColor: "#FAFAFA",
+                                backgroundColor: "#FFFFFF",
                                 color: "#222222",
                               }}
                             />
-                            <span className="text-xs text-gray-400">%</span>
                           </div>
 
-                          {/* 初始金额输入框 */}
-                          <div className="flex items-center gap-1 w-28 justify-end">
-                            <span className="text-sm text-gray-400">¥</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="0"
-                              value={entry.amount}
-                              onChange={(e) => handleAmountChange(userId, cat.name, e.target.value)}
-                              className="w-24 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                              style={{
-                                borderColor: "#E0E0E0",
-                                backgroundColor: "#FAFAFA",
-                                color: "#222222",
-                              }}
-                            />
+                          {/* 行3：初始比例 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
+                              初始比例
+                            </span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="0"
+                                min={0}
+                                max={100}
+                                value={entry.ratio}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    ratio: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                style={{
+                                  borderColor: "#E0E0E0",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#222222",
+                                }}
+                              />
+                              <span className="text-xs text-gray-400">%</span>
+                            </div>
+                          </div>
+
+                          {/* 行4：初始金额 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
+                              初始金额
+                            </span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-xs text-gray-400">¥</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="0"
+                                value={entry.amount}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    amount: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                style={{
+                                  borderColor: "#E0E0E0",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#222222",
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* 行5：初始保证金 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
+                              初始保证金
+                            </span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-xs text-gray-400">¥</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="0"
+                                value={entry.margin}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    margin: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                style={{
+                                  borderColor: "#E0E0E0",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#222222",
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+
+                  <div className="h-3" />
                 </div>
               );
             })
