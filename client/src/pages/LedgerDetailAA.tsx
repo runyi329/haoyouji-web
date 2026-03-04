@@ -21,7 +21,7 @@
  *   Array<{ date: string; records: any[]; income: number; expense: number; balance: number }>
  *   注意：balance 是当天 income - expense，不是累计余额
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign } from "lucide-react";
@@ -76,14 +76,36 @@ export default function LedgerDetailAA({
   // 标签（被记录者）选择
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
+  // 成员切换：默认选第1个真人成员
+  const realMembers = useMemo(() => (membersData || []).filter((m: any) => m.memberType !== 'ai'), [membersData]);
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
+
+  // membersData加载完成后，默认选中第1个成员
+  useEffect(() => {
+    if (realMembers.length > 0 && selectedMemberId === null) {
+      setSelectedMemberId(realMembers[0].userId);
+    }
+  }, [realMembers]);
+
+  const selectedMember = useMemo(() => {
+    if (selectedMemberId !== null) return realMembers.find((m: any) => m.userId === selectedMemberId) || realMembers[0] || null;
+    return realMembers[0] || null;
+  }, [selectedMemberId, realMembers]);
+
+  // 获取当前查看成员的交易数据
+  const { data: memberTransactionsData } = trpc.ledger.getTransactions.useQuery(
+    { ledgerId, memberId: selectedMember?.userId, limit: 500 },
+    { enabled: !!ledgerId && !!selectedMember?.userId }
+  );
 
   // 获取账本一级分类（标签）
   const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
     { ledgerId, parentId: null },
     { enabled: !!ledgerId }
   );
-  // 获取当前用户的初始金额配置
-  const { data: initialBalancesData } = trpc.ledger.getMyInitialBalances.useQuery(
+  // 获取所有成员初始金额（管理员接口，用于展示选中成员的初始金额）
+  const { data: initialBalancesData } = trpc.ledger.adminGetAllInitialBalances.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
@@ -98,13 +120,18 @@ export default function LedgerDetailAA({
     return categories.find((c: any) => c.id === selectedTagId) || null;
   }, [selectedTagId, categories]);;
 
-  // ─── 按标签筛选 transactionsData ────────────────────────────────────────
-  const filteredTransactions = useMemo(() => {
-    if (!selectedTagId || !categories) return transactionsData || [];
-    const tagName = selectedTag?.name;
-    if (!tagName) return transactionsData || [];
+  // 当前成员的交易数据（优先用内部查询结果）
+  const activeMemberTransactions = useMemo(() => {
+    return (memberTransactionsData as any[]) || transactionsData || [];
+  }, [memberTransactionsData, transactionsData]);
 
-    return (transactionsData || []).map((day) => {
+  // ─── 按标签筛选 activeMemberTransactions ────────────────────────────────────────
+  const filteredTransactions = useMemo(() => {
+    if (!selectedTagId || !categories) return activeMemberTransactions;
+    const tagName = selectedTag?.name;
+    if (!tagName) return activeMemberTransactions;
+
+    return (activeMemberTransactions || []).map((day) => {
       // 筛选该标签下的记录（category 字段包含标签名）
       const filtered = day.records.filter((r: any) =>
         r.category && r.category.includes(tagName)
@@ -125,7 +152,7 @@ export default function LedgerDetailAA({
         balance: income - expense,
       };
     }).filter(Boolean) as DayGroup[];
-  }, [transactionsData, selectedTagId, selectedTag, categories]);
+  }, [activeMemberTransactions, selectedTagId, selectedTag, categories]);
 
   // ─── 将分组数据转换为按日期索引的 Map ────────────────────────────────────
   const dayMap = useMemo(() => {
@@ -337,29 +364,64 @@ export default function LedgerDetailAA({
 
         {/* 用户信息行 + 标签下拉 */}
         <div className="px-4 pb-2 flex items-center gap-3">
-          {/* 头像 */}
-          <div className="flex-shrink-0">
-            {user ? (
-              <UserAvatar
-                username={user.username}
-                avatar={user.avatar}
-                nickname={user.nickname}
-                size="lg"
-              />
-            ) : (
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold"
-                style={{ backgroundColor: "rgba(255,255,255,0.3)" }}
-              >
-                ?
-              </div>
+          {/* 头像（点击切换成员） */}
+          <div className="flex-shrink-0 relative">
+            <button onClick={() => realMembers.length > 1 && setShowMemberDropdown(!showMemberDropdown)} className="relative">
+              {selectedMember ? (
+                <UserAvatar
+                  username={selectedMember.username}
+                  avatar={selectedMember.avatar}
+                  nickname={selectedMember.nickname}
+                  size="lg"
+                />
+              ) : (
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold"
+                  style={{ backgroundColor: "rgba(255,255,255,0.3)" }}
+                >
+                  ?
+                </div>
+              )}
+              {realMembers.length > 1 && (
+                <div
+                  className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.9)", border: "1px solid #D32F2F" }}
+                >
+                  <ChevronDown style={{ width: 10, height: 10, color: "#D32F2F" }} />
+                </div>
+              )}
+            </button>
+            {showMemberDropdown && realMembers.length > 1 && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMemberDropdown(false)} />
+                <div
+                  className="absolute left-0 top-full mt-1 rounded-xl shadow-lg z-50 overflow-hidden"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E0E0E0", minWidth: "160px" }}
+                >
+                  {realMembers.map((m: any) => (
+                    <button
+                      key={m.userId}
+                      onClick={() => { setSelectedMemberId(m.userId); setShowMemberDropdown(false); }}
+                      className="w-full px-3 py-2.5 flex items-center gap-2 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
+                      style={{
+                        color: selectedMemberId === m.userId ? "#D32F2F" : "#222222",
+                        fontWeight: selectedMemberId === m.userId ? 600 : 400,
+                        borderBottom: "1px solid #F5F5F5",
+                      }}
+                    >
+                      <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
+                      <span className="truncate">{m.nickname || m.username || "未知"}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
           {/* 用户名 + 标签下拉（同行） */}
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
             <div className="text-base font-semibold truncate">
-              {user?.nickname || user?.username || "用户"}
+              {selectedMember?.nickname || selectedMember?.username || "用户"}
             </div>
 
             {/* 标签下拉选择器 - 靠右 */}
@@ -456,8 +518,11 @@ export default function LedgerDetailAA({
             <div className="text-base font-bold">
               {(() => {
                 const tagName = selectedTag?.name;
-                if (!tagName || !initialBalancesData?.balances) return '未设置';
-                const val = initialBalancesData.balances[tagName];
+                const memberId = selectedMember?.userId;
+                if (!tagName || !memberId || !initialBalancesData?.balancesMap) return '未设置';
+                const memberBalances = initialBalancesData.balancesMap[memberId];
+                if (!memberBalances) return '未设置';
+                const val = memberBalances[tagName];
                 if (val === undefined || val === null) return '未设置';
                 return '¥' + Math.floor(val).toLocaleString('zh-CN');
               })()}
