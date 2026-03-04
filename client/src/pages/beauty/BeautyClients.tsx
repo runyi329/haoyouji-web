@@ -9,7 +9,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Plus, Minus, History, Gift, Search, Star, Share2, Copy, Download
+  ArrowLeft, Plus, Minus, History, Gift, Search, Star, Share2, Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,9 @@ export default function BeautyClients() {
   const [logUserName, setLogUserName] = useState("");
 
   // 查询
-  const clientsQuery = trpc.beauty.points.getMyClients.useQuery();
+  const clientsQuery = trpc.beauty.points.getMyClients.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
   const logQuery = trpc.beauty.points.getPointsLog.useQuery(
     { userId: logUserId! },
     { enabled: logDialog && !!logUserId }
@@ -74,14 +76,6 @@ export default function BeautyClients() {
     }).catch(() => {
       toast.error("复制失败");
     });
-  }
-
-  function downloadQRCode() {
-    if (!qrCodeQuery.data?.qrCodeDataUrl) return;
-    const link = document.createElement('a');
-    link.href = qrCodeQuery.data.qrCodeDataUrl;
-    link.download = `invite-${inviteInfoQuery.data?.inviteCode}.png`;
-    link.click();
   }
 
   const clients = clientsQuery.data ?? [];
@@ -322,56 +316,32 @@ export default function BeautyClients() {
         </DialogContent>
       </Dialog>
 
-      {/* 分享邀请弹窗 */}
+      {/* 分享邀请弹窗 - 红金白配色 */}
       <Dialog open={shareDialog} onOpenChange={setShareDialog}>
-        <DialogContent className="max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base">分享邀请</DialogTitle>
-            <DialogDescription className="text-xs text-gray-400">
-              通过以下方式邀请新客户加入
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-5 py-2">
-            {/* 二维码 */}
-            <div className="flex flex-col items-center">
-              {qrCodeQuery.isLoading ? (
-                <div className="w-40 h-40 bg-gray-100 rounded-xl flex items-center justify-center">
-                  <p className="text-xs text-gray-400">加载中...</p>
-                </div>
-              ) : qrCodeQuery.data?.qrCodeDataUrl ? (
-                <div className="relative">
-                  <img
-                    src={qrCodeQuery.data.qrCodeDataUrl}
-                    alt="邀请二维码"
-                    className="w-40 h-40 rounded-xl border border-gray-100"
-                  />
-                  <button
-                    onClick={downloadQRCode}
-                    className="absolute -bottom-2 -right-2 w-8 h-8 bg-rose-500 rounded-full flex items-center justify-center text-white shadow-md active:bg-rose-600"
-                  >
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-40 h-40 bg-gray-100 rounded-xl flex items-center justify-center">
-                  <p className="text-xs text-gray-400">暂无二维码</p>
-                </div>
-              )}
-              <p className="text-xs text-gray-400 mt-3">扫码注册加入</p>
-            </div>
+        <DialogContent className="max-w-sm mx-auto p-0 overflow-hidden rounded-2xl border-0">
+          {/* 顶部红金渐变头 */}
+          <div className="bg-gradient-to-br from-rose-500 via-red-400 to-rose-400 px-6 pt-6 pb-5 text-white relative overflow-hidden">
+            <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-amber-300/15" />
+            <div className="absolute bottom-2 left-4 w-12 h-12 rounded-full bg-amber-200/10" />
+            <DialogHeader className="relative">
+              <DialogTitle className="text-lg font-bold text-white">分享邀请</DialogTitle>
+              <DialogDescription className="text-white/60 text-xs mt-1">
+                通过以下方式邀请新客户加入
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
+          <div className="px-5 py-5 space-y-4">
             {/* 邀请码 */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-400">我的邀请码</p>
-                  <p className="text-lg font-bold text-gray-800 mt-0.5 tracking-widest">
-                    {inviteInfoQuery.data?.inviteCode || "------"}
-                  </p>
-                </div>
+            <div className="bg-gradient-to-r from-rose-50 to-amber-50 rounded-xl p-4 border border-rose-100/50">
+              <p className="text-xs text-rose-400 font-medium">我的邀请码</p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-2xl font-bold text-gray-800 tracking-[0.2em]">
+                  {inviteInfoQuery.data?.inviteCode || "------"}
+                </p>
                 <button
                   onClick={() => inviteInfoQuery.data?.inviteCode && copyToClipboard(inviteInfoQuery.data.inviteCode, "邀请码")}
-                  className="flex items-center gap-1 bg-rose-500 text-white rounded-lg px-3 py-1.5 text-xs font-medium active:bg-rose-600"
+                  className="flex items-center gap-1.5 bg-rose-500 text-white rounded-full px-4 py-2 text-xs font-medium active:bg-rose-600 shadow-sm"
                 >
                   <Copy className="w-3 h-3" />
                   复制
@@ -381,19 +351,42 @@ export default function BeautyClients() {
 
             {/* 邀请链接 */}
             <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-1.5">邀请链接</p>
-              <div className="flex items-center gap-2">
-                <p className="flex-1 text-xs text-gray-600 truncate">
+              <p className="text-xs text-gray-400 font-medium">邀请链接</p>
+              <div className="flex items-center gap-2 mt-2">
+                <p className="flex-1 text-xs text-gray-600 truncate bg-white rounded-lg px-3 py-2 border border-gray-100">
                   {inviteInfoQuery.data?.inviteLink || "------"}
                 </p>
                 <button
                   onClick={() => inviteInfoQuery.data?.inviteLink && copyToClipboard(inviteInfoQuery.data.inviteLink, "邀请链接")}
-                  className="flex items-center gap-1 bg-gray-200 text-gray-600 rounded-lg px-3 py-1.5 text-xs font-medium active:bg-gray-300 flex-shrink-0"
+                  className="flex items-center gap-1.5 bg-gray-200 text-gray-600 rounded-full px-4 py-2 text-xs font-medium active:bg-gray-300 flex-shrink-0"
                 >
                   <Copy className="w-3 h-3" />
                   复制
                 </button>
               </div>
+            </div>
+
+            {/* 二维码 */}
+            <div className="flex flex-col items-center pt-1">
+              <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                {qrCodeQuery.isLoading ? (
+                  <div className="w-36 h-36 flex items-center justify-center">
+                    <p className="text-xs text-gray-400">加载中...</p>
+                  </div>
+                ) : qrCodeQuery.data?.qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeQuery.data.qrCodeDataUrl}
+                    alt="邀请二维码"
+                    className="w-36 h-36"
+                  />
+                ) : (
+                  <div className="w-36 h-36 flex items-center justify-center bg-gray-50 rounded">
+                    <p className="text-xs text-gray-400">暂无二维码</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">扫码注册加入</p>
+              <p className="text-[10px] text-gray-300 mt-1">长按保存二维码</p>
             </div>
           </div>
         </DialogContent>

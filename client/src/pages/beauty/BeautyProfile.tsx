@@ -14,10 +14,15 @@ import BottomNav from "@/components/BottomNav";
 export default function BeautyProfile() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const pointsQuery = trpc.beauty.points.getMyBalance.useQuery();
-  const canManageQuery = trpc.beauty.points.canManage.useQuery();
+  const pointsQuery = trpc.beauty.points.getMyBalance.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
+  const canManageQuery = trpc.beauty.points.canManage.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
   const clientsQuery = trpc.beauty.points.getMyClients.useQuery(undefined, {
     enabled: canManageQuery.data?.canManage === true,
+    refetchOnMount: 'always',
   });
 
   const myPoints = pointsQuery.data?.balance ?? 0;
@@ -118,30 +123,6 @@ export default function BeautyProfile() {
             ))}
           </div>
         </div>
-
-        {/* 我的客户（仅有权限时显示） */}
-        {canManage && (
-          <button
-            onClick={() => setLocation('/beauty/clients')}
-            className="w-full bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center">
-                <Users className="w-4.5 h-4.5 text-amber-500" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-medium text-gray-800">我的客户</p>
-                <p className="text-xs text-gray-400 mt-0.5">管理客户积分与优惠券</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-amber-500 font-medium">{clientCount}人</span>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
-            </div>
-          </button>
-        )}
-
-
 
 
       </div>
