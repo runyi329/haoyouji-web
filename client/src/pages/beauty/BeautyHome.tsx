@@ -56,9 +56,15 @@ export default function BeautyHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   // 查询奢贝积分和权限
-  const pointsQuery = trpc.beauty.points.getMyBalance.useQuery();
-  const canManageQuery = trpc.beauty.points.canManage.useQuery();
-  const canProfileQuery = trpc.beauty.points.canAccessProfile.useQuery();
+  const pointsQuery = trpc.beauty.points.getMyBalance.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
+  const canManageQuery = trpc.beauty.points.canManage.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
+  const canProfileQuery = trpc.beauty.points.canAccessProfile.useQuery(undefined, {
+    refetchOnMount: 'always',
+  });
   const myPoints = pointsQuery.data?.balance ?? 0;
   const canManage = canManageQuery.data?.canManage ?? false;
   const canAccessProfile = canProfileQuery.data?.canAccess ?? false;
