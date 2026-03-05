@@ -24,6 +24,7 @@ import {
   beautyVisitLogs,
   users,
 } from "../drizzle/schema";
+import { merchantProducts } from "../drizzle/merchant-schema";
 import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
 import { hasFeaturePermission } from "./db-permissions";
 import { nanoid } from "nanoid";
@@ -260,21 +261,37 @@ export const beautyRouter = router({
         return rows[0] ?? null;
       }),
 
-    // 商品列表
+    // 商品列表（从商品库 merchant_products 读取，ownerMerchantId=2 为奢贝美容院）
     products: publicProcedure
       .input(z.object({ brandId: z.number().optional(), categoryId: z.number().optional() }).optional())
       .query(async ({ input }) => {
         const db = await getDb();
         if (!db) return [];
-        let query = db
+        const rows = await db
           .select()
-          .from(beautyProducts)
-          .where(eq(beautyProducts.isActive, 1))
-          .orderBy(asc(beautyProducts.sortOrder));
-        return query;
+          .from(merchantProducts)
+          .where(and(
+            eq(merchantProducts.ownerMerchantId, 2),
+            eq(merchantProducts.status, 'active')
+          ))
+          .orderBy(asc(merchantProducts.sortOrder));
+        // 映射字段以兼容前端现有结构
+        return rows.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description ?? '',
+          price: p.basePrice,
+          imageUrl: p.mainImageUrl ?? '',
+          specification: p.subtitle ?? '',
+          stock: p.stock,
+          isActive: p.status === 'active' ? 1 : 0,
+          sortOrder: p.sortOrder,
+          brandId: 1,
+          categoryId: 1,
+        }));
       }),
 
-    // 商品详情
+    // 商品详情（从商品库读取）
     getProduct: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
@@ -282,10 +299,27 @@ export const beautyRouter = router({
         if (!db) return null;
         const rows = await db
           .select()
-          .from(beautyProducts)
-          .where(eq(beautyProducts.id, input.id))
+          .from(merchantProducts)
+          .where(and(
+            eq(merchantProducts.id, input.id),
+            eq(merchantProducts.ownerMerchantId, 2)
+          ))
           .limit(1);
-        return rows[0] ?? null;
+        if (!rows[0]) return null;
+        const p = rows[0];
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description ?? '',
+          price: p.basePrice,
+          imageUrl: p.mainImageUrl ?? '',
+          specification: p.subtitle ?? '',
+          stock: p.stock,
+          isActive: p.status === 'active' ? 1 : 0,
+          sortOrder: p.sortOrder,
+          brandId: 1,
+          categoryId: 1,
+        };
       }),
 
     // 商品分类
