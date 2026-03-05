@@ -157,23 +157,20 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               onClick={handlePlusClick}
               className="relative -mt-6"
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${centerBtnBg}`}>
+              <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-lg transition-all duration-200 ${centerBtnBg}`}>
                 {isLiulifan ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
                 ) : isCx8618 ? (
-                  <Wine className="w-6 h-6 text-[#C9A84C]" />
+                  <>
+                    <Wine className="w-5 h-5 text-[#C9A84C]" />
+                    <span className={`text-[10px] font-bold leading-none mt-0.5 ${
+                      isWinePage ? 'text-[#C9A84C]' : 'text-[#8a7a6a]'
+                    }`}>红酒</span>
+                  </>
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
               </div>
-              {/* 红酒页面：中间按钮下方标签 */}
-              {(isCx8618 || isWinePage) && (
-                <span className={`absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-bold whitespace-nowrap ${
-                  isWinePage ? 'text-[#C9A84C]' : 'text-gray-400'
-                }`}>
-                  红酒
-                </span>
-              )}
             </button>
 
             {/* 钱脉按钮 */}
