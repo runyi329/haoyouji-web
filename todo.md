@@ -1624,3 +1624,9 @@
 - [ ] 商品分类管理
 - [ ] 商品共享配置（选择商家，把商品共享给他）
 - [ ] 在 Admin.tsx 中新增「商品库」Tab
+
+## 商品库架构简化 - 去掉平台总库（2026-03-05）
+- [ ] 去掉后台 Admin.tsx 中的"平台总库" Tab 和路由
+- [ ] 迁移数据库中 ownerMerchantId=NULL 的商品到管理员商家账号
+- [ ] 更新后端 merchant-router.ts，移除 getPlatformProducts/createPlatformProduct 等平台总库专用接口
+- [ ] 更新 PRODUCT_RULES.md 文档，明确"所有商品必须归属于具体商家"规则
