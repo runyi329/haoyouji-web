@@ -1,18 +1,20 @@
 /**
  * 飞腾干红葡萄酒 FIDENCIO RESERVA - 商品详情页
  * 路径: /wine/product/fidencio
- * 
+ *
  * 架构规则：
  * - 独立商品详情页，沿用红酒商会主题色（#8B1A1A / #C9A84C）
  * - 包含：酒庄介绍、产品规格、酒评、建议配餐、购买按钮
- * - 底部保留 BottomNav 脉动导航
+ * - 图片均存储于腾讯云COS（ap-shanghai），压缩为WebP格式
  */
 import { useLocation } from "wouter";
-import { ArrowLeft, Share2, ShoppingCart, Wine, MapPin, Calendar, Droplets, Package, Award, ChefHat } from "lucide-react";
+import { ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
-const FIDENCIO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/fidencio-bottle_613bd133.jpg";
+const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
+const FIDENCIO_HERO = `${COS_BASE}/wine-products/fidencio-hero.webp`;
+const FIDENCIO_PAIRING = `${COS_BASE}/wine-products/fidencio-pairing.webp`;
 
 const SPECS = [
   { label: "国  家", value: "西班牙 🇪🇸" },
@@ -63,21 +65,20 @@ export default function WineProductFidencio() {
           <p className="text-[#8a7a6a] text-[10px] mt-0.5">VIRGEN DE LAS VIÑAS</p>
         </div>
         <p className="text-[#a09080] text-xs leading-relaxed flex-1">
-          圣女酒庄坐落于西班牙拉曼恰产区，其历史可追溯到1961年，它作为工坊而被建立，1995年始，得益于政府的帮助，开始生产并酿造葡萄酒至今。在其50多年的历史中，巧妙地将传统生产工艺与尖端技术相结合，跻身于葡萄酒行业前列。
+          圣女酒庄坐落于西班牙拉曼恰产区，其历史可追溯到1961年，1995年始得益于政府帮助开始酿造葡萄酒。50多年历史中，巧妙地将传统工艺与尖端技术相结合，跻身于葡萄酒行业前列。
         </p>
       </div>
 
       {/* 主图区域 */}
-      <div className="relative bg-gradient-to-b from-[#1a0a0a] to-[#0d0505] flex justify-center items-end pt-6 pb-0 overflow-hidden" style={{ minHeight: 280 }}>
-        {/* 背景光晕 */}
+      <div className="relative bg-gradient-to-b from-[#1a0a0a] to-[#0d0505] flex justify-center items-end pt-6 pb-0 overflow-hidden" style={{ minHeight: 300 }}>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-48 rounded-full bg-[#8B1A1A]/10 blur-3xl" />
+          <div className="w-56 h-56 rounded-full bg-[#8B1A1A]/15 blur-3xl" />
         </div>
         <img
-          src={FIDENCIO_IMG}
+          src={FIDENCIO_HERO}
           alt="飞腾干红葡萄酒 FIDENCIO RESERVA"
           className="relative z-10 object-contain drop-shadow-2xl"
-          style={{ height: 260, width: "auto", maxWidth: "100%" }}
+          style={{ height: 280, width: "auto", maxWidth: "90%" }}
         />
       </div>
 
@@ -93,7 +94,7 @@ export default function WineProductFidencio() {
             <p className="text-[#8a7a6a] text-xs line-through">¥238</p>
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3 flex-wrap">
           <span className="bg-[#8B1A1A]/30 border border-[#8B1A1A]/50 text-[#C9A84C] text-xs px-2 py-0.5 rounded-full">RESERVA级</span>
           <span className="bg-[#8B1A1A]/30 border border-[#8B1A1A]/50 text-[#C9A84C] text-xs px-2 py-0.5 rounded-full">100%丹魄</span>
           <span className="bg-[#8B1A1A]/30 border border-[#8B1A1A]/50 text-[#C9A84C] text-xs px-2 py-0.5 rounded-full">橡木桶陈酿</span>
@@ -129,11 +130,19 @@ export default function WineProductFidencio() {
         </div>
       </div>
 
-      {/* 建议配餐 */}
-      <div className="px-4 pt-2 pb-4">
+      {/* 配餐场景图 */}
+      <div className="px-4 pt-2 pb-3">
         <div className="flex items-center gap-2 mb-3">
           <ChefHat className="w-4 h-4 text-[#C9A84C]" />
           <h3 className="text-sm font-semibold text-[#C9A84C]">建议配餐</h3>
+        </div>
+        <div className="rounded-xl overflow-hidden border border-[#8B1A1A]/20 mb-3">
+          <img
+            src={FIDENCIO_PAIRING}
+            alt="飞腾干红配餐场景"
+            className="w-full object-cover"
+            style={{ height: 200 }}
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           {["奶酪", "牛排", "各种肉类", "烤羊排", "硬质奶酪"].map((food) => (

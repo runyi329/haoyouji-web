@@ -10,7 +10,9 @@ import { ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat, Star, Grape } fr
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
-const ROMANICO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-bottle_916866b6.png";
+const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
+const ROMANICO_HERO = `${COS_BASE}/wine-products/romanico-hero.webp`;
+const ROMANICO_PAIRING = `${COS_BASE}/wine-products/romanico-pairing.webp`;
 
 const SPECS = [
   { label: "国  家", value: "西班牙 🇪🇸" },
@@ -83,10 +85,10 @@ export default function WineProductRomanico() {
         {/* 背景光晕 */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-56 h-32 bg-[#8B1A1A]/20 blur-3xl rounded-full pointer-events-none" />
         <img
-          src={ROMANICO_IMG}
+          src={ROMANICO_HERO}
           alt="罗马尼克 ROMANICO"
           className="relative z-10 object-contain drop-shadow-2xl"
-          style={{ height: 280, width: "auto", maxWidth: "50%" }}
+          style={{ height: 290, width: "auto", maxWidth: "60%" }}
         />
       </div>
 
@@ -204,6 +206,14 @@ export default function WineProductRomanico() {
         <div className="flex items-center gap-2 mb-3">
           <ChefHat className="w-4 h-4 text-[#C9A84C]" />
           <h3 className="text-sm font-semibold text-[#C9A84C]">建议配餐</h3>
+        </div>
+        <div className="rounded-xl overflow-hidden border border-[#C9A84C]/20 mb-3">
+          <img
+            src={ROMANICO_PAIRING}
+            alt="罗马尼克配餐场景"
+            className="w-full object-cover"
+            style={{ height: 200 }}
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           {["烤牛排", "红烧肉", "硬质奶酪", "烤羊腿", "伊比利亚火腿"].map((food) => (
