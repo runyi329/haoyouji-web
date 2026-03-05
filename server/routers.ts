@@ -35,6 +35,7 @@ import { partnershipRouter } from "./partnership-router";
 import { posterFavoritesRouter } from "./poster-favorites-router";
 import { beautyRouter } from "./beauty-router";
 import { dietRouter } from "./diet-router";
+import { merchantRouter } from "./merchant-router";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -51,6 +52,7 @@ export const appRouter = router({
   partnership: partnershipRouter,
   beauty: beautyRouter,
   diet: dietRouter,
+  merchant: merchantRouter,
 
   // 支付账户管理
   paymentAccounts: router({
@@ -8225,7 +8227,7 @@ export const appRouter = router({
   workGroups: workGroupsRouter,
 
   // ==================== 管理员功能 ====================
-  adminFeature: adminFeatureRouter,
+  // adminFeature: adminFeatureRouter, // 已移至文件底部定义，在下方单独导出
 
   // ==================== 账本分组管理 ====================
   ledgerGroup: router({

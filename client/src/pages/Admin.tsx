@@ -28,6 +28,7 @@ import {
   Coins,
   Briefcase,
   Wallet,
+  Package,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -60,6 +61,7 @@ import UserPermissionsManager from "./admin/UserPermissionsManager";
 import PointsManagement from "./admin/PointsManagement";
 import DataSecurityPanel from "./admin/DataSecurityPanel";
 import CustomAAManager from "./admin/CustomAAManager";
+import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -342,6 +344,10 @@ export default function Admin() {
             <TabsTrigger value="customAA" className="text-xs sm:text-sm">
               <BookMarked className="w-4 h-4 mr-1 hidden sm:inline" />
               定制账本
+            </TabsTrigger>
+            <TabsTrigger value="productLibrary" className="text-xs sm:text-sm">
+              <Package className="w-4 h-4 mr-1 hidden sm:inline" />
+              商品库
             </TabsTrigger>
           </TabsList>
 
@@ -1052,6 +1058,11 @@ export default function Admin() {
           {/* 定制账本(AA) 管理 */}
           <TabsContent value="customAA">
             <CustomAAManager />
+          </TabsContent>
+
+          {/* 脉动共享商盟 - 商品库管理 */}
+          <TabsContent value="productLibrary">
+            <ProductLibraryManager />
           </TabsContent>
         </Tabs>
       </main>
