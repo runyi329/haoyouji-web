@@ -15,8 +15,9 @@ import {
   merchantProductSpecs,
   merchantShopProducts,
   wineRegions,
+  productImportRequests,
 } from "../drizzle/schema";
-import { eq, desc, and, asc } from "drizzle-orm";
+import { eq, desc, and, asc, isNull } from "drizzle-orm";
 import { storagePut } from "./storage";
 import sharp from "sharp";
 
@@ -499,5 +500,334 @@ export const merchantRouter = router({
         .where(eq(merchants.userId, input.userId))
         .limit(1);
       return rows && rows.length > 0 ? rows[0] : null;
+    }),
+
+  // ===== 平台总商品库接口（统一使用 merchantProducts，ownerMerchantId=NULL 表示平台总库商品）=====
+
+  // 获取平台总库商品列表（ownerMerchantId IS NULL，管理员+商家均可浏览）
+  getPlatformProducts: protectedProcedure
+    .input(z.object({
+      keyword: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select()
+        .from(merchantProducts)
+        .where(and(
+          isNull(merchantProducts.ownerMerchantId),
+          eq(merchantProducts.status, "active")
+        ))
+        .orderBy(desc(merchantProducts.createdAt))
+        .limit(200);
+      if (input?.keyword) {
+        const kw = input.keyword.toLowerCase();
+        return rows.filter((r: any) =>
+          (r.name || "").toLowerCase().includes(kw) ||
+          (r.subtitle || "").toLowerCase().includes(kw)
+        );
+      }
+      return rows;
+    }),
+
+  // 创建平台总库商品（ownerMerchantId=NULL）
+  createPlatformProduct: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      subtitle: z.string().optional(),
+      basePrice: z.string(),
+      mainImageUrl: z.string().optional(),
+      description: z.string().optional(),
+      extendedFields: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const [result] = await db.insert(merchantProducts).values({
+        ownerMerchantId: null, // NULL = 平台总库商品
+        name: input.name,
+        subtitle: input.subtitle || null,
+        basePrice: input.basePrice,
+        mainImageUrl: input.mainImageUrl || null,
+        description: input.description || null,
+        extendedFields: input.extendedFields || null,
+        sourceType: "platform",
+        status: "active",
+        isShareable: 1,
+      });
+      return { id: (result as any).insertId };
+    }),
+
+  // 更新平台总库商品
+  updatePlatformProduct: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      subtitle: z.string().optional(),
+      basePrice: z.string().optional(),
+      mainImageUrl: z.string().optional(),
+      description: z.string().optional(),
+      extendedFields: z.string().optional(),
+      status: z.enum(["active", "inactive", "draft"]).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const { id, ...updates } = input;
+      const clean: Record<string, unknown> = {};
+      Object.entries(updates).forEach(([k, v]) => { if (v !== undefined) clean[k] = v; });
+      if (Object.keys(clean).length > 0) {
+        await db.update(merchantProducts).set(clean as any).where(eq(merchantProducts.id, id));
+      }
+      return { success: true };
+    }),
+
+  // 下架平台总库商品（软删除）
+  deletePlatformProduct: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await db.update(merchantProducts)
+        .set({ status: "inactive" })
+        .where(eq(merchantProducts.id, input.id));
+      return { success: true };
+    }),
+
+  // 平台主动推送商品给商家（admin_push，直接进入商家私库，未上架状态）
+  pushProductToMerchant: protectedProcedure
+    .input(z.object({
+      productId: z.number(),       // merchant_products.id（平台总库商品）
+      merchantCode: z.string(),
+      message: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const merchantRows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.merchantCode, input.merchantCode))
+        .limit(1);
+      if (!merchantRows || merchantRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "商家不存在" });
+      }
+      const merchantId = merchantRows[0].id;
+      // 检查是否已推送过（避免重复）
+      const existing = await db
+        .select({ id: productImportRequests.id })
+        .from(productImportRequests)
+        .where(and(
+          eq(productImportRequests.productId, input.productId),
+          eq(productImportRequests.merchantId, merchantId),
+          eq(productImportRequests.status, "approved")
+        ))
+        .limit(1);
+      if (existing && existing.length > 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "该商品已推送给此商家" });
+      }
+      // 获取平台总库商品
+      const ppRows = await db
+        .select()
+        .from(merchantProducts)
+        .where(and(eq(merchantProducts.id, input.productId), isNull(merchantProducts.ownerMerchantId)))
+        .limit(1);
+      if (!ppRows || ppRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "平台总库商品不存在" });
+      }
+      const pp = ppRows[0];
+      // 在商家私库中创建商品副本
+      const [insertResult] = await db.insert(merchantProducts).values({
+        ownerMerchantId: merchantId,
+        name: pp.name,
+        subtitle: pp.subtitle,
+        description: pp.description,
+        mainImageUrl: pp.mainImageUrl,
+        basePrice: pp.basePrice,
+        extendedFields: pp.extendedFields,
+        sourceType: "platform",
+        status: "inactive",
+        isShareable: 0,
+      });
+      const newProductId = (insertResult as any).insertId;
+      // 记录推送历史
+      await db.insert(productImportRequests).values({
+        productId: input.productId,
+        merchantId,
+        merchantCode: input.merchantCode,
+        requestType: "admin_push",
+        status: "approved",
+        message: input.message,
+        reviewedBy: ctx.user.id,
+        reviewedAt: new Date(),
+        merchantProductId: newProductId,
+      });
+      return { success: true, merchantProductId: newProductId };
+    }),
+
+  // 商家申请从平台总库导入商品
+  applyImportProduct: protectedProcedure
+    .input(z.object({
+      productId: z.number(),       // merchant_products.id（平台总库商品）
+      merchantCode: z.string(),
+      message: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const merchantRows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.merchantCode, input.merchantCode))
+        .limit(1);
+      if (!merchantRows || merchantRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "商家不存在" });
+      }
+      const merchantId = merchantRows[0].id;
+      const existing = await db
+        .select({ id: productImportRequests.id, status: productImportRequests.status })
+        .from(productImportRequests)
+        .where(and(
+          eq(productImportRequests.productId, input.productId),
+          eq(productImportRequests.merchantId, merchantId)
+        ))
+        .limit(1);
+      if (existing && existing.length > 0) {
+        const s = existing[0].status;
+        if (s === "pending") throw new TRPCError({ code: "CONFLICT", message: "已有待审核的申请" });
+        if (s === "approved") throw new TRPCError({ code: "CONFLICT", message: "该商品已导入" });
+      }
+      await db.insert(productImportRequests).values({
+        productId: input.productId,
+        merchantId,
+        merchantCode: input.merchantCode,
+        requestType: "merchant_apply",
+        status: "pending",
+        message: input.message,
+      });
+      return { success: true };
+    }),
+
+  // 获取导入申请列表（管理员审核用）
+  getImportRequests: protectedProcedure
+    .input(z.object({
+      status: z.string().optional(),
+      merchantCode: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: productImportRequests.id,
+          productId: productImportRequests.productId,
+          merchantId: productImportRequests.merchantId,
+          merchantCode: productImportRequests.merchantCode,
+          requestType: productImportRequests.requestType,
+          status: productImportRequests.status,
+          message: productImportRequests.message,
+          replyMessage: productImportRequests.replyMessage,
+          reviewedAt: productImportRequests.reviewedAt,
+          merchantProductId: productImportRequests.merchantProductId,
+          createdAt: productImportRequests.createdAt,
+          productName: merchantProducts.name,
+          productSubtitle: merchantProducts.subtitle,
+          productImageUrl: merchantProducts.mainImageUrl,
+          merchantName: merchants.shopName,
+        })
+        .from(productImportRequests)
+        .leftJoin(merchantProducts, eq(productImportRequests.productId, merchantProducts.id))
+        .leftJoin(merchants, eq(productImportRequests.merchantId, merchants.id))
+        .orderBy(desc(productImportRequests.createdAt))
+        .limit(200);
+      if (input?.status) return rows.filter((r: any) => r.status === input.status);
+      if (input?.merchantCode) return rows.filter((r: any) => r.merchantCode === input.merchantCode);
+      return rows;
+    }),
+
+  // 获取商家自己的申请列表
+  getMerchantImportRequests: protectedProcedure
+    .input(z.object({ merchantCode: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return await db
+        .select({
+          id: productImportRequests.id,
+          productId: productImportRequests.productId,
+          status: productImportRequests.status,
+          requestType: productImportRequests.requestType,
+          message: productImportRequests.message,
+          replyMessage: productImportRequests.replyMessage,
+          reviewedAt: productImportRequests.reviewedAt,
+          createdAt: productImportRequests.createdAt,
+          productName: merchantProducts.name,
+          productSubtitle: merchantProducts.subtitle,
+          productImageUrl: merchantProducts.mainImageUrl,
+        })
+        .from(productImportRequests)
+        .leftJoin(merchantProducts, eq(productImportRequests.productId, merchantProducts.id))
+        .where(eq(productImportRequests.merchantCode, input.merchantCode))
+        .orderBy(desc(productImportRequests.createdAt))
+        .limit(100);
+    }),
+
+  // 审核导入申请（管理员）
+  reviewImportRequest: protectedProcedure
+    .input(z.object({
+      requestId: z.number(),
+      action: z.enum(["approve", "reject"]),
+      replyMessage: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const reqRows = await db
+        .select()
+        .from(productImportRequests)
+        .where(eq(productImportRequests.id, input.requestId))
+        .limit(1);
+      if (!reqRows || reqRows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "申请不存在" });
+      }
+      const req = reqRows[0];
+      if (req.status !== "pending") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "申请已处理" });
+      }
+      if (input.action === "approve") {
+        // 获取平台总库商品
+        const ppRows = await db
+          .select()
+          .from(merchantProducts)
+          .where(and(eq(merchantProducts.id, req.productId), isNull(merchantProducts.ownerMerchantId)))
+          .limit(1);
+        if (!ppRows || ppRows.length === 0) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "平台商品不存在" });
+        }
+        const pp = ppRows[0];
+        const [insertResult] = await db.insert(merchantProducts).values({
+          ownerMerchantId: req.merchantId,
+          name: pp.name,
+          subtitle: pp.subtitle,
+          description: pp.description,
+          mainImageUrl: pp.mainImageUrl,
+          basePrice: pp.basePrice,
+          extendedFields: pp.extendedFields,
+          sourceType: "platform",
+          status: "inactive",
+          isShareable: 0,
+        });
+        const newProductId = (insertResult as any).insertId;
+        await db.update(productImportRequests)
+          .set({ status: "approved", replyMessage: input.replyMessage, reviewedBy: ctx.user.id, reviewedAt: new Date(), merchantProductId: newProductId })
+          .where(eq(productImportRequests.id, input.requestId));
+        return { success: true, merchantProductId: newProductId };
+      } else {
+        await db.update(productImportRequests)
+          .set({ status: "rejected", replyMessage: input.replyMessage, reviewedBy: ctx.user.id, reviewedAt: new Date() })
+          .where(eq(productImportRequests.id, input.requestId));
+        return { success: true };
+      }
     }),
 });

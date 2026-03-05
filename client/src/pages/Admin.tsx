@@ -62,6 +62,7 @@ import PointsManagement from "./admin/PointsManagement";
 import DataSecurityPanel from "./admin/DataSecurityPanel";
 import CustomAAManager from "./admin/CustomAAManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
+import PlatformProductLibrary from "./admin/PlatformProductLibrary";
 
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -348,6 +349,10 @@ export default function Admin() {
             <TabsTrigger value="productLibrary" className="text-xs sm:text-sm">
               <Package className="w-4 h-4 mr-1 hidden sm:inline" />
               商品库
+            </TabsTrigger>
+            <TabsTrigger value="platformLibrary" className="text-xs sm:text-sm">
+              <Package className="w-4 h-4 mr-1 hidden sm:inline" />
+              平台总库
             </TabsTrigger>
           </TabsList>
 
@@ -1063,6 +1068,17 @@ export default function Admin() {
           {/* 脉动共享商盟 - 商品库管理 */}
           <TabsContent value="productLibrary">
             <ProductLibraryManager />
+          </TabsContent>
+
+          {/* 平台总商品库管理 */}
+          <TabsContent value="platformLibrary">
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold">平台总商品库</h2>
+                <p className="text-xs text-muted-foreground">管理平台总库商品，推送给商家，审核导入申请</p>
+              </div>
+              <PlatformProductLibrary />
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
