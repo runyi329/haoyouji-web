@@ -86,7 +86,7 @@ export default function MyCoupons() {
       {activeTab === 'products' && (
         <div className="p-4">
           <button
-            onClick={() => setLocation('/membership')}
+            onClick={() => setLocation('/products')}
             className="w-full bg-[#D32F2F] text-white py-3 rounded-lg flex items-center justify-center gap-2 font-medium"
           >
             <Plus size={20} />
