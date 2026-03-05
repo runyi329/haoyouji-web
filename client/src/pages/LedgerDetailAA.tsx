@@ -71,10 +71,8 @@ export default function LedgerDetailAA({
   // 日历视图模  // 权限判断：owner 或 admin 才能操作
   const userRole = (ledgerData as any)?.userRole;
   const canEdit = userRole === 'owner' || userRole === 'admin';
-  // 账本名称（用于特殊账本的定制逻辑）
-  const ledgerName = (ledgerData as any)?.name || '';
-  // 「2026 AA」私人定制账本：隐藏悬浮+按钮，仅保留点击日历格子添加记录
-  const hideFloatingAddButton = ledgerName === '2026 AA';
+  // 隐藏悬浮+按钮：账本 ID=37（"2026 AA"私人定制账本）对所有人隐藏，仅保留点击日历格子添加记录
+  const hideFloatingAddButton = ledgerId === 37;
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
   // 标签（被记录者）选择
