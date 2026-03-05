@@ -186,6 +186,9 @@ const WineBrands = lazy(() => import("./pages/wine/WineBrands"));
 const WineProfile = lazy(() => import("./pages/wine/WineProfile"));
 const WineAdmin = lazy(() => import("./pages/wine/WineAdmin"));
 const WineSettings = lazy(() => import("./pages/wine/WineSettings"));
+const WineProductFidencio = lazy(() => import("./pages/wine/products/WineProductFidencio"));
+const WineProductMarthu = lazy(() => import("./pages/wine/products/WineProductMarthu"));
+const WineProductRomanico = lazy(() => import("./pages/wine/products/WineProductRomanico"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -373,6 +376,10 @@ function Router() {
         <Route path="/wine/profile" component={WineProfile} />
         <Route path="/wine/admin" component={WineAdmin} />
         <Route path="/wine/settings" component={WineSettings} />
+        {/* 红酒商品详情页 */}
+        <Route path="/wine/product/fidencio" component={WineProductFidencio} />
+        <Route path="/wine/product/marthu" component={WineProductMarthu} />
+        <Route path="/wine/product/romanico" component={WineProductRomanico} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />

@@ -1,11 +1,30 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Upload, Camera, Globe, Phone, MessageCircle, FileText, Image } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { ChevronLeft, Upload, Camera, Globe, Phone, MessageCircle, FileText, Image, Wine } from "lucide-react";
 import { toast } from "sonner";
 
 export default function WineSettings() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+
+  // 权限拦截：仅 cx8618 可访问商家设置（§9.3 数据隔离规则）
+  if (!user || user.username !== 'cx8618') {
+    return (
+      <div className="min-h-screen bg-[#1a0a0a] flex flex-col items-center justify-center gap-4 px-6">
+        <Wine className="w-12 h-12 text-[#8B1A1A]/40" />
+        <p className="text-[#8a7a6a] text-center">此页面仅限商家管理员访问</p>
+        <button
+          onClick={() => setLocation('/wine')}
+          className="bg-[#8B1A1A] text-white px-6 py-2.5 rounded-xl text-sm"
+        >
+          返回首页
+        </button>
+      </div>
+    );
+  }
+
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
