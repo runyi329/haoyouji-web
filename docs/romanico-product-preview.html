@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ROMANICO 罗马尼克干红 - 商品详情</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  /* 手机端模拟容器 */
+  body {
+    background: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  }
+  
+  .phone-frame {
+    width: 390px;
+    background: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+    border-radius: 40px;
+  }
+
+  /* ============================================
+     铁规 §1：主图轮播区
+     宽度 100vw（此处 390px），正方形 1:1
+  ============================================ */
+  .product-carousel {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #111;
+  }
+  
+  .carousel-slides {
+    display: flex;
+    width: 400%; /* 4张图 */
+    height: 100%;
+    transition: transform 0.35s ease;
+  }
+  
+  .carousel-slides img {
+    width: 25%;
+    height: 100%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  
+  .carousel-dots {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+  }
+  
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .dot.active {
+    width: 18px;
+    border-radius: 3px;
+    background: #fff;
+  }
+  
+  .carousel-counter {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    background: rgba(0,0,0,0.45);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* ============================================
+     铁规 §2：价格 + 标题区
+  ============================================ */
+  .price-title-block {
+    padding: 14px 16px 12px;
+    background: #fff;
+    border-bottom: 1px solid #f2f2f2;
+  }
+  
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .price-current {
+    font-size: 28px;
+    font-weight: 700;
+    color: #E02020;
+    line-height: 1;
+  }
+  
+  .price-current .unit {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  
+  .price-original {
+    font-size: 14px;
+    color: #999;
+    text-decoration: line-through;
+  }
+  
+  .price-tag {
+    background: #fff0f0;
+    color: #E02020;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #ffcccc;
+    margin-left: auto;
+  }
+  
+  .product-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  
+  .product-subtitle {
+    font-size: 13px;
+    color: #888;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ============================================
+     铁规 §3：规格选择区
+  ============================================ */
+  .spec-block {
+    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 8px solid #f5f5f5;
+  }
+  
+  .spec-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+    cursor: pointer;
+  }
+  
+  .spec-row:last-child { border-bottom: none; }
+  
+  .spec-label {
+    font-size: 14px;
+    color: #333;
+    min-width: 60px;
+  }
+  
+  .spec-value {
+    font-size: 13px;
+    color: #666;
+    flex: 1;
+    text-align: right;
+    margin-right: 8px;
+  }
+  
+  .spec-arrow {
+    color: #ccc;
+    font-size: 14px;
+  }
+  
+  .spec-selected-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1.5px solid #8B1A1A;
+    border-radius: 4px;
+    color: #8B1A1A;
+    font-size: 13px;
+    background: #fff8f8;
+    margin-right: 8px;
+  }
+
+  /* ============================================
+     商家自由装修区 §5
+  ============================================ */
+  .merchant-section {
+    background: #fff;
+    margin-top: 8px;
+  }
+  
+  .section-header {
+    padding: 16px 16px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a1a;
+    border-bottom: 2px solid #8B1A1A;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .section-header::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 16px;
+    background: #8B1A1A;
+    border-radius: 2px;
+  }
+
+  /* 评分展示区 */
+  .scores-section {
+    padding: 16px;
+    background: #1a1a1a;
+    color: #fff;
+  }
+  
+  .scores-title {
+    text-align: center;
+    font-size: 13px;
+    color: #c9a96e;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+  
+  .scores-grid {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 16px;
+  }
+  
+  .score-item {
+    text-align: center;
+  }
+  
+  .score-badge {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 2px solid #c9a96e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+    background: rgba(201, 169, 110, 0.1);
+  }
+  
+  .score-num {
+    font-size: 26px;
+    font-weight: 700;
+    color: #c9a96e;
+    line-height: 1;
+  }
+  
+  .score-org {
+    font-size: 9px;
+    color: #c9a96e;
+    opacity: 0.8;
+  }
+  
+  .score-name {
+    font-size: 10px;
+    color: #999;
+    line-height: 1.3;
+    text-align: center;
+    max-width: 72px;
+  }
+  
+  .score-quote {
+    text-align: center;
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.7;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(201, 169, 110, 0.3);
+    font-style: italic;
+  }
+  
+  .score-quote-source {
+    font-size: 11px;
+    color: #c9a96e;
+    margin-top: 4px;
+  }
+
+  /* 产品参数区 */
+  .params-section {
+    padding: 16px;
+    background: #fff;
+    margin-top: 8px;
+  }
+  
+  .params-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  
+  .param-item {
+    padding: 12px 14px;
+    border-right: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .param-item:nth-child(2n) { border-right: none; }
+  .param-item:nth-last-child(-n+2) { border-bottom: none; }
+  
+  .param-label {
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 4px;
+  }
+  
+  .param-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  /* 产区故事区 */
+  .story-section {
+    background: #fff;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  
+  .story-vineyard-img {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+  }
+  
+  .story-content {
+    padding: 16px;
+  }
+  
+  .story-region-badge {
+    display: inline-block;
+    background: #8B1A1A;
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+  
+  .story-text {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.8;
+  }
+
+  /* ============================================
+     铁规 §6：商品详情图区
+  ============================================ */
+  .detail-images-section {
+    margin-top: 8px;
+    background: #fff;
+  }
+  
+  .detail-images-section .section-header {
+    margin-bottom: 0;
+  }
+  
+  .detail-img {
+    width: 100%;
+    display: block;
+    /* 无间距拼接 */
+  }
+
+  /* ============================================
+     铁规 §4：购买操作区（吸底）
+  ============================================ */
+  .buy-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: #fff;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 10px;
+    z-index: 100;
+  }
+  
+  .buy-icon-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 36px;
+    cursor: pointer;
+  }
+  
+  .buy-icon-btn span:first-child {
+    font-size: 20px;
+  }
+  
+  .buy-icon-btn span:last-child {
+    font-size: 10px;
+    color: #666;
+  }
+  
+  .buy-divider {
+    width: 1px;
+    height: 28px;
+    background: #eee;
+  }
+  
+  .btn-cart {
+    flex: 1;
+    height: 40px;
+    border-radius: 20px;
+    border: 1.5px solid #8B1A1A;
+    background: #fff;
+    color: #8B1A1A;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .btn-buy {
+    flex: 1.2;
+    height: 40px;
+    border-radius: 20px;
+    border: none;
+    background: linear-gradient(135deg, #8B1A1A, #c0392b);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* 底部安全区 */
+  .safe-area {
+    height: 34px;
+    background: #fff;
+  }
+  
+  /* 顶部导航栏 */
+  .top-nav {
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    height: 44px;
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  
+  .nav-back {
+    font-size: 22px;
+    color: #333;
+    cursor: pointer;
+    margin-right: auto;
+  }
+  
+  .nav-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .nav-share {
+    font-size: 20px;
+    color: #333;
+    cursor: pointer;
+    margin-left: auto;
+  }
+
+  /* 滚动容器 */
+  .scroll-body {
+    overflow-y: auto;
+    height: calc(100vh - 44px - 56px);
+    max-height: 780px;
+  }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+  <!-- 顶部导航 -->
+  <div class="top-nav">
+    <span class="nav-back">‹</span>
+    <span class="nav-title">商品详情</span>
+    <span class="nav-share">⋯</span>
+  </div>
+
+  <!-- 滚动内容区 -->
+  <div class="scroll-body" id="scrollBody">
+
+    <!-- ① 主图轮播区（铁规：100%宽，1:1正方形，object-fit:cover） -->
+    <div class="product-carousel">
+      <div class="carousel-slides" id="carouselSlides">
+        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-main-square-Q4xQjKSfZ72zcj4mvWfiMK.webp" alt="ROMANICO 主图">
+        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-label-closeup-QJ4zBX6VPML4htb6NGWWJM.webp" alt="酒标细节">
+        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/wine-products/romanico-pairing.webp" alt="配餐场景">
+        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-vineyard-4s4HB3PTqKbNRi6kR4EGCw.webp" alt="托罗产区">
+      </div>
+      <div class="carousel-dots">
+        <div class="dot active" onclick="goSlide(0)"></div>
+        <div class="dot" onclick="goSlide(1)"></div>
+        <div class="dot" onclick="goSlide(2)"></div>
+        <div class="dot" onclick="goSlide(3)"></div>
+      </div>
+      <div class="carousel-counter" id="carouselCounter">1/4</div>
+    </div>
+
+    <!-- ② 价格 + 标题区（铁规：现价28px红色#E02020，名称16px最多2行） -->
+    <div class="price-title-block">
+      <div class="price-row">
+        <div class="price-current"><span class="unit">¥</span>328</div>
+        <div class="price-original">¥468</div>
+        <div class="price-tag">限时特惠</div>
+      </div>
+      <div class="product-name">ROMANICO 罗马尼克干红葡萄酒 750ml</div>
+      <div class="product-subtitle">Teso La Monja酒庄 · 西班牙托罗产区 · 2020年份 · 100%丹魄</div>
+    </div>
+
+    <!-- ③ 规格选择区（铁规：13px，选中态跟随商家主题色） -->
+    <div class="spec-block">
+      <div class="spec-row">
+        <span class="spec-label">规格</span>
+        <span class="spec-value">
+          <span class="spec-selected-tag">750ml × 1瓶</span>
+        </span>
+        <span class="spec-arrow">›</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-label">配送</span>
+        <span class="spec-value">顺丰快递 · 全国包邮</span>
+        <span class="spec-arrow">›</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-label">库存</span>
+        <span class="spec-value" style="color:#E02020;">仅剩 12 件</span>
+        <span class="spec-arrow"></span>
+      </div>
+    </div>
+
+    <!-- ⑤ 商家自由装修区 -->
+    
+    <!-- 评分展示 -->
+    <div class="scores-section">
+      <div class="scores-title">· 权威评分认证 ·</div>
+      <div class="scores-grid">
+        <div class="score-item">
+          <div class="score-badge">
+            <div class="score-num">92</div>
+            <div class="score-org">RP</div>
+          </div>
+          <div class="score-name">罗伯特·帕克<br>葡萄酒倡导家</div>
+        </div>
+        <div class="score-item">
+          <div class="score-badge">
+            <div class="score-num">91</div>
+            <div class="score-org">ST</div>
+          </div>
+          <div class="score-name">葡萄酒观察家<br>Wine Spectator</div>
+        </div>
+        <div class="score-item">
+          <div class="score-badge">
+            <div class="score-num">92</div>
+            <div class="score-org">Peña</div>
+          </div>
+          <div class="score-name">西班牙<br>Guia Peñin</div>
+        </div>
+      </div>
+      <div class="score-quote">
+        "酒体饱满，余味悠长，堪比50美元以上价位的葡萄酒"
+        <div class="score-quote-source">——《葡萄酒倡导家》杂志</div>
+      </div>
+    </div>
+
+    <!-- 产品参数 -->
+    <div class="params-section">
+      <div class="section-header">产品参数</div>
+      <div class="params-grid">
+        <div class="param-item">
+          <div class="param-label">产区</div>
+          <div class="param-value">托罗 DO</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">年份</div>
+          <div class="param-value">2020</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">葡萄品种</div>
+          <div class="param-value">100% 丹魄</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">酒精度</div>
+          <div class="param-value">14.5%vol</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">容量</div>
+          <div class="param-value">750ml</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">橡木桶陈酿</div>
+          <div class="param-value">6 个月</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">酿造工艺</div>
+          <div class="param-value">传统 · 100%去梗</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">瓶中成年</div>
+          <div class="param-value">2 个月</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 产区故事 -->
+    <div class="story-section">
+      <div class="section-header">产区故事</div>
+      <img class="story-vineyard-img" 
+           src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-vineyard-4s4HB3PTqKbNRi6kR4EGCw.webp" 
+           alt="托罗产区葡萄园">
+      <div class="story-content">
+        <span class="story-region-badge">西班牙 · 托罗产区</span>
+        <p class="story-text">
+          托罗（Toro）产区位于西班牙萨莫拉省，是伊比利亚半岛最古老的葡萄酒产区之一。这里的葡萄园海拔750-850米，年平均气温21℃，昼夜温差大，有机土壤赋予葡萄酒独特的矿物感。
+          <br><br>
+          Teso La Monja 酒庄的老藤丹魄（Tinta de Toro）在这片干旱的卡斯蒂利亚土地上深根生长，低产量带来高度浓缩的果味，造就了这款令国际评论家惊叹的佳酿。
+        </p>
+      </div>
+    </div>
+
+    <!-- ⑥ 商品详情图区（铁规：宽度100%，无间距拼接） -->
+    <div class="detail-images-section">
+      <div class="section-header">图文详情</div>
+      <img class="detail-img" 
+           src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-detail-scores-cxJ3VmtjLL2ffmGjkDaoV8.webp" 
+           alt="评分详情">
+      <img class="detail-img" 
+           src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-detail-winery-Gwdvx3LZ4ZXWeNREVmbCf2.webp" 
+           alt="酿造工艺">
+      <img class="detail-img" 
+           src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/romanico-detail-pairing-QVENyqABbPfTr4Rm3h6jJi.webp" 
+           alt="配餐建议">
+    </div>
+
+    <div class="safe-area"></div>
+  </div><!-- /scroll-body -->
+
+  <!-- ④ 购买操作区（铁规：吸底56px，圆角20px，主题色按钮） -->
+  <div class="buy-bar">
+    <div class="buy-icon-btn">
+      <span>🏠</span>
+      <span>首页</span>
+    </div>
+    <div class="buy-icon-btn">
+      <span>🛒</span>
+      <span>购物车</span>
+    </div>
+    <div class="buy-divider"></div>
+    <button class="btn-cart">加入购物车</button>
+    <button class="btn-buy">立即购买</button>
+  </div>
+
+</div><!-- /phone-frame -->
+
+<script>
+  let currentSlide = 0;
+  const totalSlides = 4;
+  
+  function goSlide(index) {
+    currentSlide = index;
+    document.getElementById('carouselSlides').style.transform = `translateX(-${index * 25}%)`;
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === index);
+    });
+    document.getElementById('carouselCounter').textContent = `${index + 1}/${totalSlides}`;
+  }
+  
+  // 触摸滑动支持
+  let startX = 0;
+  const carousel = document.querySelector('.product-carousel');
+  carousel.addEventListener('touchstart', e => { startX = e.touches[0].clientX; });
+  carousel.addEventListener('touchend', e => {
+    const diff = startX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0 && currentSlide < totalSlides - 1) goSlide(currentSlide + 1);
+      else if (diff < 0 && currentSlide > 0) goSlide(currentSlide - 1);
+    }
+  });
+</script>
+</body>
+</html>
