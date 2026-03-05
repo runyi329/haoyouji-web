@@ -830,4 +830,139 @@ export const merchantRouter = router({
         return { success: true };
       }
     }),
+
+  // ===== 商家设置接口 =====
+
+  // 获取当前用户的商家设置
+  getMerchantSettings: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return null;
+    const rows = await db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.userId, ctx.user.id))
+      .limit(1);
+    if (!rows || rows.length === 0) return null;
+    const m = rows[0] as any;
+    return {
+      id: m.id,
+      shopName: m.shopName,
+      shopDescription: m.shopDescription,
+      shopLogoUrl: m.shopLogoUrl,
+      shareTitle: m.share_title,
+      shareLogo: m.share_logo,
+      shareCoverImage: m.share_cover_image,
+      shareDescription: m.share_description,
+      contactWechat: m.contact_wechat || m.contactWechat,
+      contactPhone: m.contact_phone || m.contactPhone,
+      aboutUs: m.about_us,
+      officialWebsite: m.official_website,
+    };
+  }),
+
+  // 获取指定商家代码的分享信息（公开接口，用于前台Meta标签注入）
+  getMerchantShareInfo: publicProcedure
+    .input(z.object({ merchantCode: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.merchantCode, input.merchantCode))
+        .limit(1);
+      if (!rows || rows.length === 0) return null;
+      const m = rows[0] as any;
+      return {
+        shareTitle: m.share_title || m.shopName,
+        shareLogo: m.share_logo || m.shopLogoUrl,
+        shareCoverImage: m.share_cover_image,
+        shareDescription: m.share_description || m.shopDescription,
+      };
+    }),
+
+  // 更新商家设置（文字信息）
+  updateMerchantSettings: protectedProcedure
+    .input(z.object({
+      shareTitle: z.string().max(50).optional(),
+      shareDescription: z.string().max(100).optional(),
+      contactWechat: z.string().max(50).optional(),
+      contactPhone: z.string().max(20).optional(),
+      aboutUs: z.string().optional(),
+      officialWebsite: z.string().max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!rows || rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      }
+      const merchantId = rows[0].id;
+      await (db as any).execute(
+        `UPDATE merchants SET share_title=?, share_description=?, contact_wechat=?, contact_phone=?, about_us=?, official_website=?, updatedAt=NOW() WHERE id=?`,
+        [input.shareTitle ?? null, input.shareDescription ?? null, input.contactWechat ?? null, input.contactPhone ?? null, input.aboutUs ?? null, input.officialWebsite ?? null, merchantId]
+      );
+      return { success: true };
+    }),
+
+  // 上传商家分享Logo（400x400，WebP压缩）
+  uploadMerchantLogo: protectedProcedure
+    .input(z.object({
+      base64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!rows || rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const merchantId = rows[0].id;
+
+      const buffer = Buffer.from(input.base64, 'base64');
+      const compressed = await sharp(buffer)
+        .resize({ width: 400, height: 400, fit: 'cover' })
+        .webp({ quality: 85 })
+        .toBuffer();
+      const key = `merchant-logos/${merchantId}-logo-${Date.now()}.webp`;
+      const { url } = await storagePut(key, compressed, 'image/webp');
+      await (db as any).execute(`UPDATE merchants SET share_logo=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
+      return { url };
+    }),
+
+  // 上传商家分享封面图（1200x630，WebP压缩）
+  uploadMerchantCover: protectedProcedure
+    .input(z.object({
+      base64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!rows || rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const merchantId = rows[0].id;
+
+      const buffer = Buffer.from(input.base64, 'base64');
+      const compressed = await sharp(buffer)
+        .resize({ width: 1200, height: 630, fit: 'cover' })
+        .webp({ quality: 85 })
+        .toBuffer();
+      const key = `merchant-covers/${merchantId}-cover-${Date.now()}.webp`;
+      const { url } = await storagePut(key, compressed, 'image/webp');
+      await (db as any).execute(`UPDATE merchants SET share_cover_image=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
+      return { url };
+    }),
 });

@@ -48,6 +48,7 @@ export default function WineProfile() {
         { icon: <Wine className="w-4 h-4" />, label: "商品管理", badge: null, href: "/wine/admin" },
         { icon: <Package className="w-4 h-4" />, label: "订单管理", badge: "3", href: null },
         { icon: <Star className="w-4 h-4" />, label: "评价管理", badge: null, href: null },
+        { icon: <Settings className="w-4 h-4" />, label: "商家设置", badge: null, href: "/wine/settings" },
       ],
     },
     {
@@ -55,6 +56,13 @@ export default function WineProfile() {
       items: [
         { icon: <Bell className="w-4 h-4" />, label: "消息通知", badge: null },
         { icon: <Settings className="w-4 h-4" />, label: "账号设置", badge: null },
+      ],
+    },
+    {
+      title: "关于",
+      items: [
+        { icon: <Heart className="w-4 h-4" />, label: "联系客服", badge: null, href: null },
+        { icon: <Wine className="w-4 h-4" />, label: "关于我们", badge: null, href: null },
       ],
     },
   ];
