@@ -917,10 +917,16 @@ export const merchantRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
       }
       const merchantId = rows[0].id;
-      await (db as any).execute(
-        `UPDATE merchants SET share_title=?, share_description=?, contact_wechat=?, contact_phone=?, about_us=?, official_website=?, updatedAt=NOW() WHERE id=?`,
-        [input.shareTitle ?? null, input.shareDescription ?? null, input.contactWechat ?? null, input.contactPhone ?? null, input.aboutUs ?? null, input.officialWebsite ?? null, merchantId]
-      );
+      const updateData: Record<string, unknown> = {};
+      if (input.shareTitle !== undefined) updateData.share_title = input.shareTitle;
+      if (input.shareDescription !== undefined) updateData.share_description = input.shareDescription;
+      if (input.contactWechat !== undefined) updateData.contact_wechat = input.contactWechat;
+      if (input.contactPhone !== undefined) updateData.contact_phone = input.contactPhone;
+      if (input.aboutUs !== undefined) updateData.about_us = input.aboutUs;
+      if (input.officialWebsite !== undefined) updateData.official_website = input.officialWebsite;
+      if (Object.keys(updateData).length > 0) {
+        await db.update(merchants).set(updateData as any).where(eq(merchants.id, merchantId));
+      }
       return { success: true };
     }),
 
@@ -948,7 +954,7 @@ export const merchantRouter = router({
         .toBuffer();
       const key = `merchant-logos/${merchantId}-logo-${Date.now()}.webp`;
       const url = await uploadImageToCOS(compressed, 'avatars', key);
-      await (db as any).execute(`UPDATE merchants SET share_logo=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
+      await db.update(merchants).set({ share_logo: url }).where(eq(merchants.id, merchantId));
       return { url };
     }),
 
@@ -976,7 +982,7 @@ export const merchantRouter = router({
         .toBuffer();
       const key = `merchant-covers/${merchantId}-cover-${Date.now()}.webp`;
       const url = await uploadImageToCOS(compressed, 'avatars', key);
-      await (db as any).execute(`UPDATE merchants SET share_cover_image=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
+      await db.update(merchants).set({ share_cover_image: url }).where(eq(merchants.id, merchantId));
       return { url };
     }),
 });
