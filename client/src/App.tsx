@@ -158,6 +158,8 @@ const PartnershipDashboardManage = lazy(() => import("./pages/PartnershipDashboa
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
+const ProductStore = lazy(() => import("./pages/ProductStore"));
+const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 const SentiaBuy = lazy(() => import("./pages/SentiaBuy"));
 const SentiaWhitepaper = lazy(() => import("./pages/SentiaWhitepaper"));
@@ -230,6 +232,10 @@ function Router() {
         <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
         <Route path="/admin/recharge/orders" component={RechargeOrders} />
         <Route path="/admin/migration" component={lazy(() => import("./pages/AdminMigration"))} />
+
+        {/* 商品商店 */}
+        <Route path="/products" component={ProductStore} />
+        <Route path="/products/:id" component={ProductDetail} />
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
