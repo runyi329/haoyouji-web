@@ -121,9 +121,31 @@ pm2 startOrRestart /root/haoyouji-web/ecosystem.config.cjs --env production
 
 ---
 
-## §5 数据库规则
+## §5 商品库规则
 
-### §5.1 商家表（merchants）
+### §5.1 商品归属原则（重要）
+
+**规则**：平台上的所有商品必须归属于具体的商家账号，不存在"平台无主商品"。
+
+| 场景 | 处理方式 |
+|------|----------|
+| 普通商家上传商品 | `ownerMerchantId = 该商家 ID` |
+| 管理员上传商品 | 管理员必须以自己的商家账号身份上传，`ownerMerchantId = 管理员的商家 ID` |
+| 平台总库商品（已废弃） | `ownerMerchantId = NULL`，此设计已废弃，**禁止新增** |
+
+**数据库约束**：`merchant_products.ownerMerchantId` 不允许为 NULL（新数据），所有商品必须有明确的归属商家。
+
+### §5.2 后台商品库 Tab
+
+后台管理页面（`/admin`）只有一个"商品库" Tab（`value="productLibrary"`），由 `ProductLibraryManager.tsx` 组件管理。
+
+"平台总库" Tab 已于 2026-03-05 移除，相关后端接口（`getPlatformProducts`、`createPlatformProduct` 等）保留但标记为废弃，不再对外暴露。
+
+---
+
+## §6 数据库规则
+
+### §6.1 商家表（merchants）
 
 关键字段：
 - `merchantCode`：商家唯一标识（如 `cx8618`）
