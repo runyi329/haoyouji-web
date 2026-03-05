@@ -9,7 +9,9 @@ import { ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat } from "lucide-re
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
 
-const MARTHU_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/marthu-bottle_1ee8d1f1.jpg";
+const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
+const MARTHU_HERO = `${COS_BASE}/wine-products/marthu-hero.webp`;
+const MARTHU_PAIRING = `${COS_BASE}/wine-products/marthu-pairing.webp`;
 
 const SPECS = [
   { label: "国  家", value: "西班牙 🇪🇸" },
@@ -77,10 +79,10 @@ export default function WineProductMarthu() {
           <div className="w-40 h-40 rounded-full bg-[#8B1A1A]/15 blur-3xl" />
         </div>
         <img
-          src={MARTHU_IMG}
+          src={MARTHU_HERO}
           alt="玛莎干红葡萄酒 MARTHU"
           className="relative z-10 object-contain drop-shadow-2xl"
-          style={{ height: 260, width: "auto", maxWidth: "100%" }}
+          style={{ height: 280, width: "auto", maxWidth: "90%" }}
         />
       </div>
 
@@ -137,6 +139,14 @@ export default function WineProductMarthu() {
         <div className="flex items-center gap-2 mb-3">
           <ChefHat className="w-4 h-4 text-[#C9A84C]" />
           <h3 className="text-sm font-semibold text-[#C9A84C]">建议配餐</h3>
+        </div>
+        <div className="rounded-xl overflow-hidden border border-[#8B1A1A]/20 mb-3">
+          <img
+            src={MARTHU_PAIRING}
+            alt="玛莎干红配餐场景"
+            className="w-full object-cover"
+            style={{ height: 200 }}
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           {["奶酪", "牛排", "各种肉类", "烤猪排", "西班牙火腿"].map((food) => (
