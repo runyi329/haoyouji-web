@@ -183,3 +183,51 @@ export const wineRegions = mysqlTable("wine_regions", {
 ]);
 export type WineRegion = typeof wineRegions.$inferSelect;
 export type InsertWineRegion = typeof wineRegions.$inferInsert;
+
+// ===== 平台总商品库（Platform Product Library）=====
+// 脉动平台维护的公共商品池，管理员录入，可推送给各商家
+export const platformProducts = mysqlTable("platform_products", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),          // 商品名称
+  subtitle: varchar("subtitle", { length: 300 }),            // 副标题/产地描述
+  category: varchar("category", { length: 50 }).default("wine").notNull(), // 商品类别
+  basePrice: decimal("basePrice", { precision: 10, scale: 2 }).notNull(), // 建议零售价
+  mainImageUrl: text("mainImageUrl"),                        // 主图URL（S3）
+  description: text("description"),                          // 商品描述
+  extendedFields: text("extendedFields"),                    // JSON扩展字段（酒庄/年份/产区等）
+  tags: text("tags"),                                        // JSON标签数组
+  status: varchar("status", { length: 20 }).default("active").notNull(), // active/inactive
+  createdBy: int("createdBy"),                               // 创建管理员的userId
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("pp_category_idx").on(table.category),
+  index("pp_status_idx").on(table.status),
+]);
+export type PlatformProduct = typeof platformProducts.$inferSelect;
+export type InsertPlatformProduct = typeof platformProducts.$inferInsert;
+
+// ===== 商家导入申请表（Product Import Requests）=====
+// 商家申请将平台总库商品导入自己的私库，或平台主动推送给商家
+export const productImportRequests = mysqlTable("product_import_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),                     // 平台总库商品ID（merchant_products.id，ownerMerchantId=NULL）
+  merchantId: int("merchantId").notNull(),                   // 目标商家ID
+  merchantCode: varchar("merchantCode", { length: 50 }).notNull(), // 商家代码（如cx8618）
+  requestType: varchar("requestType", { length: 20 }).default("merchant_apply").notNull(), // merchant_apply / admin_push
+  status: varchar("status", { length: 20 }).default("pending").notNull(), // pending/approved/rejected
+  message: text("message"),                                  // 申请留言
+  replyMessage: text("replyMessage"),                        // 审核回复
+  reviewedBy: int("reviewedBy"),                             // 审核管理员userId
+  reviewedAt: timestamp("reviewedAt"),                       // 审核时间
+  merchantProductId: int("merchantProductId"),               // 审核通过后在merchantProducts中创建的商品ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("pir_productId_idx").on(table.productId),
+  index("pir_merchantId_idx").on(table.merchantId),
+  index("pir_status_idx").on(table.status),
+  index("pir_merchantCode_idx").on(table.merchantCode),
+]);
+export type ProductImportRequest = typeof productImportRequests.$inferSelect;
+export type InsertProductImportRequest = typeof productImportRequests.$inferInsert;

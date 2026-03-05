@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Edit2, Trash2, Upload, X, Package, MapPin, Eye, EyeOff, Wine } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, Upload, X, Package, MapPin, Eye, EyeOff, Wine, Download, Clock, CheckCircle2 } from "lucide-react";
 
 const MERCHANT_CODE = "cx8618";
 
@@ -23,7 +23,7 @@ const PRESET_REGIONS = [
   { country: "阿根廷", flagEmoji: "🇦🇷", subRegions: ["门多萨", "萨尔塔"] },
 ];
 
-type Tab = "products" | "regions";
+type Tab = "products" | "regions" | "import";
 
 export default function WineAdmin() {
   const [, setLocation] = useLocation();
@@ -37,6 +37,11 @@ export default function WineAdmin() {
   // 产区管理状态
   const [showRegionForm, setShowRegionForm] = useState(false);
   const [editingRegion, setEditingRegion] = useState<any>(null);
+
+  // 导入相关状态
+  const [importKeyword, setImportKeyword] = useState("");
+  const [showImportConfirm, setShowImportConfirm] = useState<any>(null);
+  const [importMessage, setImportMessage] = useState("");
 
   // 获取商家信息
   const { data: merchant } = trpc.merchant.getMerchantByCode.useQuery({ merchantCode: MERCHANT_CODE });
@@ -80,6 +85,20 @@ export default function WineAdmin() {
     onError: (e) => toast.error(e.message),
   });
 
+  // 平台总库
+  const { data: platformProducts = [] } = trpc.merchant.getPlatformProducts.useQuery(
+    { keyword: importKeyword || undefined },
+    { enabled: activeTab === "import" }
+  );
+  const { data: myRequests = [], refetch: refetchMyRequests } = trpc.merchant.getMerchantImportRequests.useQuery(
+    { merchantCode: MERCHANT_CODE },
+    { enabled: activeTab === "import" }
+  );
+  const applyImport = trpc.merchant.applyImportProduct.useMutation({
+    onSuccess: () => { toast.success("申请已提交，等待平台审核"); setShowImportConfirm(null); setImportMessage(""); refetchMyRequests(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   // 图片上传
   const uploadImage = trpc.merchant.uploadProductImage.useMutation();
 
@@ -113,7 +132,13 @@ export default function WineAdmin() {
           onClick={() => setActiveTab("regions")}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === "regions" ? "text-[#C9A84C] border-b-2 border-[#C9A84C]" : "text-[#8a6a4a]"}`}
         >
-          <MapPin className="w-4 h-4" /> 产区管理 ({regions.length})
+          <MapPin className="w-4 h-4" /> 产区 ({regions.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("import")}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === "import" ? "text-[#C9A84C] border-b-2 border-[#C9A84C]" : "text-[#8a6a4a]"}`}
+        >
+          <Download className="w-4 h-4" /> 平台导入
         </button>
       </div>
 
@@ -180,6 +205,96 @@ export default function WineAdmin() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 从平台导入 Tab */}
+        {activeTab === "import" && (
+          <div>
+            {/* 搜索框 */}
+            <div className="mb-4">
+              <input
+                value={importKeyword}
+                onChange={e => setImportKeyword(e.target.value)}
+                placeholder="搜索平台商品名称..."
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
+              />
+            </div>
+
+            {/* 我的申请记录 */}
+            {(myRequests as any[]).length > 0 && (
+              <div className="mb-4 p-3 bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl">
+                <p className="text-xs text-[#8a6a4a] mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> 我的申请记录</p>
+                <div className="space-y-2">
+                  {(myRequests as any[]).slice(0, 3).map((req: any) => (
+                    <div key={req.id} className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                        {req.productImageUrl ? <img src={req.productImageUrl} alt="" className="w-full h-full object-cover" /> : <Wine className="w-4 h-4 m-auto text-[#5a1e1e]" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-[#e8d5b7] truncate">{req.productName}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        req.status === "pending" ? "bg-yellow-900/50 text-yellow-300 border border-yellow-700" :
+                        req.status === "approved" ? "bg-green-900/50 text-green-300 border border-green-700" :
+                        "bg-red-900/50 text-red-300 border border-red-700"
+                      }`}>
+                        {req.status === "pending" ? "审核中" : req.status === "approved" ? "已通过" : "已拒绝"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 平台总库商品列表 */}
+            {(platformProducts as any[]).length === 0 ? (
+              <div className="text-center py-16 text-[#8a6a4a]">
+                <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">平台总库暂无可导入商品</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-[#8a6a4a]">平台精选商品，申请后由平台审核，通过后自动加入您的商品库</p>
+                {(platformProducts as any[]).map((p: any) => {
+                  const ext = p.extendedFields ? (() => { try { return JSON.parse(p.extendedFields); } catch { return {}; } })() : {};
+                  const myReq = (myRequests as any[]).find((r: any) => r.productId === p.id);
+                  return (
+                    <div key={p.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3 flex gap-3">
+                      <div className="w-14 h-14 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                        {p.mainImageUrl ? <img src={p.mainImageUrl} alt={p.name} className="w-full h-full object-cover" /> : <Wine className="w-6 h-6 m-auto text-[#5a1e1e]" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-[#e8d5b7] truncate">{p.name}</p>
+                        <p className="text-xs text-[#8a6a4a] truncate">{p.subtitle || (ext.region ? ext.region : "")}</p>
+                        {(ext.winery || ext.vintage) && (
+                          <p className="text-xs text-[#8a6a4a]">{ext.winery}{ext.vintage ? ` · ${ext.vintage}年` : ""}</p>
+                        )}
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-[#C9A84C] font-bold text-sm">¥{p.basePrice}</span>
+                          {myReq ? (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              myReq.status === "pending" ? "bg-yellow-900/50 text-yellow-300 border border-yellow-700" :
+                              myReq.status === "approved" ? "bg-green-900/50 text-green-300 border border-green-700" :
+                              "bg-gray-800 text-gray-400 border border-gray-600"
+                            }`}>
+                              {myReq.status === "pending" ? "审核中" : myReq.status === "approved" ? <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />已导入</span> : "已拒绝"}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => { setShowImportConfirm(p); setImportMessage(""); }}
+                              className="text-xs px-3 py-1 rounded-lg bg-[#722F37] text-[#e8d5b7] flex items-center gap-1"
+                            >
+                              <Download className="w-3 h-3" /> 申请导入
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -268,6 +383,56 @@ export default function WineAdmin() {
           onClose={() => { setShowRegionForm(false); setEditingRegion(null); }}
           saving={createRegion.isPending || updateRegion.isPending}
         />
+      )}
+
+      {/* 申请导入确认弹窗 */}
+      {showImportConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+          <div className="w-full bg-[#1a0a0a] rounded-t-2xl">
+            <div className="sticky top-0 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center justify-between">
+              <h2 className="font-bold text-[#e8d5b7]">申请导入商品</h2>
+              <button onClick={() => setShowImportConfirm(null)}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl">
+                <div className="w-14 h-14 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                  {showImportConfirm.mainImageUrl ? <img src={showImportConfirm.mainImageUrl} alt={showImportConfirm.name} className="w-full h-full object-cover" /> : <Wine className="w-6 h-6 m-auto text-[#5a1e1e]" />}
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-[#e8d5b7]">{showImportConfirm.name}</p>
+                  <p className="text-xs text-[#8a6a4a]">{showImportConfirm.subtitle || ""}</p>
+                  <p className="text-[#C9A84C] font-bold text-sm">¥{showImportConfirm.basePrice}</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-[#8a6a4a] mb-1 block">留言（可选）</label>
+                <input
+                  value={importMessage}
+                  onChange={e => setImportMessage(e.target.value)}
+                  placeholder="如：希望导入此款红酒到我的商品库"
+                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
+                />
+              </div>
+              <p className="text-xs text-[#8a6a4a]">申请后由平台审核，审核通过后商品自动加入您的商品库（未上架状态）</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowImportConfirm(null)}
+                  className="flex-1 py-3 rounded-xl border border-[#5a1e1e] text-[#8a6a4a] text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => applyImport.mutate({ productId: showImportConfirm.id, merchantCode: MERCHANT_CODE, message: importMessage || undefined })}
+                  disabled={applyImport.isPending}
+                  className="flex-1 py-3 rounded-xl bg-[#722F37] text-[#e8d5b7] text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  {applyImport.isPending ? "提交中..." : "确认申请"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
