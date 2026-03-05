@@ -11,6 +11,7 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
 import {
   Share2, User, ChevronRight, Wine, Globe, Award, Users, LogOut, Settings
 } from "lucide-react";
@@ -48,6 +49,57 @@ export default function WineHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // 加载商家设置（分享配置）
+  const { data: merchantSettings } = trpc.merchant.getMerchantSettings.useQuery();
+
+  // 动态注入 Meta 标签，实现分享显示商家信息
+  useEffect(() => {
+    const shareTitle = merchantSettings?.shareTitle || WINE_INFO.name;
+    const shareDesc = merchantSettings?.shareDescription || WINE_INFO.slogan;
+    const shareLogo = merchantSettings?.shareLogo || merchantSettings?.shopLogoUrl || "";
+    const shareCover = merchantSettings?.shareCoverImage || "";
+
+    // 更新页面标题
+    document.title = shareTitle;
+
+    // 更新或创建 Open Graph meta 标签
+    const setMeta = (property: string, content: string) => {
+      let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute("property", property);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+    const setMetaName = (name: string, content: string) => {
+      let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute("name", name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+
+    setMeta("og:title", shareTitle);
+    setMeta("og:description", shareDesc);
+    setMeta("og:type", "website");
+    setMeta("og:url", `${window.location.origin}/wine`);
+    if (shareCover) setMeta("og:image", shareCover);
+    else if (shareLogo) setMeta("og:image", shareLogo);
+    setMetaName("description", shareDesc);
+    setMetaName("twitter:card", "summary_large_image");
+    setMetaName("twitter:title", shareTitle);
+    setMetaName("twitter:description", shareDesc);
+    if (shareCover) setMetaName("twitter:image", shareCover);
+
+    // 离开页面时恢复默认标题
+    return () => {
+      document.title = "脉动";
+    };
+  }, [merchantSettings]);
+
   // 点击外部关闭菜单
   useEffect(() => {
     if (!menuOpen) return;
@@ -60,13 +112,15 @@ export default function WineHome() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
-  // 分享功能
+  // 分享功能（使用商家设置的标题和描述）
   const handleShare = () => {
     const shareUrl = `${window.location.origin}/wine`;
+    const shareTitle = merchantSettings?.shareTitle || WINE_INFO.name;
+    const shareText = merchantSettings?.shareDescription || WINE_INFO.slogan;
     if (navigator.share) {
       navigator.share({
-        title: WINE_INFO.name,
-        text: WINE_INFO.slogan,
+        title: shareTitle,
+        text: shareText,
         url: shareUrl,
       });
     } else {

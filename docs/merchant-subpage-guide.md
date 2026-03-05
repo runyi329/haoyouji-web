@@ -1,6 +1,6 @@
 # 脉动平台 · 商家子页面开发规范
 
-> 版本：v1.0 | 更新日期：2026-03-05
+> 版本：v1.1 | 更新日期：2026-03-05
 > 适用范围：所有接入脉动平台的商家专属子页面开发
 
 ---
@@ -107,30 +107,126 @@ client/src/pages/
 
 ### 3.3 底部导航在商家页面内的状态
 
-当用户进入商家子页面（如 `/wine/*`）时，主 App 底部导航的三个按钮文字/颜色需要同步更新：
+当用户进入商家子页面（如 `/wine/*`）时，主 App 底部导航的三个按钮文字/颜色需要同步更新，切换为商家主题色。
+
+---
+
+## 四、商家个人中心（Profile 页）规范
+
+### 4.1 固定配置项（每个商家必须实现）
+
+以下功能项是**所有商家个人中心页面的标准配置**，开发时必须包含，不可省略：
+
+| 功能项 | 说明 | 入口位置 |
+|--------|------|----------|
+| **商家设置** | 配置商家基础信息（见第五章） | 个人中心顶部或菜单第一项 |
+| **商品管理** | 跳转至 `/{name}/admin` 后台 | 菜单项 |
+| **联系客服** | 商家自定义的客服联系方式 | 菜单项 |
+| **关于我们** | 商家简介页面 | 菜单项 |
+
+### 4.2 可选配置项（商家按需选择）
+
+| 功能项 | 说明 |
+|--------|------|
+| 会员等级 | 展示用户在该商家的会员级别 |
+| 我的订单 | 历史购买记录 |
+| 收货地址 | 物流配送地址管理 |
+| 优惠券 | 商家发放的优惠券 |
+| 积分中心 | 商家积分体系 |
+
+---
+
+## 五、商家设置模块规范
+
+### 5.1 功能说明
+
+"商家设置"是每个商家**必须配置**的基础信息模块，配置完成后影响：
+1. **分享卡片**：用户分享商家任意页面时，微信/浏览器显示商家自己的名称、Logo 和封面图
+2. **页面标题**：浏览器 Tab 显示商家名称
+3. **顶部展示**：商家首页顶部的名称和 Logo
+
+### 5.2 配置项清单
+
+#### 必填项（未配置时分享将显示脉动默认信息）
+
+| 字段名 | 数据库字段 | 说明 | 格式要求 |
+|--------|-----------|------|----------|
+| 商家名称 | `shareTitle` | 分享卡片标题、页面 `<title>` | 最多 20 字 |
+| 商家 Logo | `shareLogo` | 分享卡片左侧小图标 | 正方形，建议 200×200px，JPG/PNG/WebP，≤2MB |
+| 分享封面图 | `shareCoverImage` | 分享卡片大图 | 建议 1200×630px（16:9），JPG/PNG/WebP，≤5MB |
+| 分享描述语 | `shareDescription` | 分享卡片副标题 | 最多 30 字 |
+
+#### 选填项
+
+| 字段名 | 数据库字段 | 说明 |
+|--------|-----------|------|
+| 商家联系微信 | `contactWeChat` | 客服微信号 |
+| 商家联系电话 | `contactPhone` | 客服电话 |
+| 商家简介 | `aboutUs` | 关于我们页面的正文内容 |
+| 商家官网 | `officialWebsite` | 外链跳转 |
+
+### 5.3 图片上传规范
+
+所有商家上传的图片，系统自动处理：
+- **压缩**：最大宽度 1200px，质量 80%，格式转为 WebP
+- **存储**：上传至 S3，数据库只保存 CDN URL
+- **展示**：前端使用 `object-fit: contain`，避免变形
+
+### 5.4 分享 Meta 标签注入逻辑
+
+商家页面加载时，前端自动读取商家设置，动态注入以下 `<meta>` 标签：
 
 ```tsx
-// 在 BottomNav.tsx 中，isWinePage 为 true 时：
-// - 左侧"人脉"按钮：文字颜色变为商家主题色（如 #8a7a6a）
-// - 中间按钮：激活状态，显示商家主题色
-// - 右侧"钱脉"按钮：文字颜色变为商家主题色
+// 在商家首页组件中（useEffect）
+useEffect(() => {
+  if (merchantSettings) {
+    // 修改页面标题
+    document.title = merchantSettings.shareTitle || '脉动';
+
+    // 注入 Open Graph 标签
+    setMetaTag('og:title', merchantSettings.shareTitle);
+    setMetaTag('og:description', merchantSettings.shareDescription);
+    setMetaTag('og:image', merchantSettings.shareCoverImage);
+    setMetaTag('og:type', 'website');
+  }
+
+  // 离开商家页面时恢复默认值
+  return () => {
+    document.title = '脉动';
+    setMetaTag('og:title', '脉动');
+    setMetaTag('og:image', DEFAULT_LOGO_URL);
+  };
+}, [merchantSettings]);
+```
+
+### 5.5 数据库字段（merchants 表扩展）
+
+```sql
+ALTER TABLE merchants ADD COLUMN share_title VARCHAR(50);
+ALTER TABLE merchants ADD COLUMN share_logo TEXT;
+ALTER TABLE merchants ADD COLUMN share_cover_image TEXT;
+ALTER TABLE merchants ADD COLUMN share_description VARCHAR(100);
+ALTER TABLE merchants ADD COLUMN contact_wechat VARCHAR(50);
+ALTER TABLE merchants ADD COLUMN contact_phone VARCHAR(20);
+ALTER TABLE merchants ADD COLUMN about_us TEXT;
+ALTER TABLE merchants ADD COLUMN official_website VARCHAR(200);
 ```
 
 ---
 
-## 四、商品库架构规范
+## 六、商品库架构规范
 
 脉动平台采用**双层商品库**架构：
 
 ```
 脉动平台总库（merchant_products，ownerMerchantId = NULL）
-    ↓ 平台主动推送 / 商家申请导入
+    ↓ 平台主动推送 / 商家申请导入（product_import_requests）
 商家私库（merchant_products，ownerMerchantId = 商家ID）
     ↓ 上架 / 下架
 商家前台商城（只展示 status = 'active' 的商品）
 ```
 
-### 4.1 商品来源标记
+### 6.1 商品来源标记
 
 | `sourceType` 值 | 含义 |
 |----------------|------|
@@ -138,14 +234,14 @@ client/src/pages/
 | `merchant` | 商家自己录入的商品 |
 | `shared` | 从平台导入到商家私库的商品 |
 
-### 4.2 商品状态
+### 6.2 商品状态
 
 | `status` 值 | 含义 | 前台可见 |
 |------------|------|---------|
 | `active` | 已上架 | ✅ 是 |
 | `inactive` | 未上架 | ❌ 否 |
 
-### 4.3 图片上传规范
+### 6.3 图片上传规范
 
 - 上传后自动压缩：最大宽度 800px，格式转为 WebP，质量 80%
 - 存储至 S3，数据库只保存 URL
@@ -153,7 +249,7 @@ client/src/pages/
 
 ---
 
-## 五、路由注册规范
+## 七、路由注册规范
 
 在 `client/src/App.tsx` 中，商家子页面路由使用 `lazy` 懒加载：
 
@@ -175,25 +271,39 @@ const WineAdmin = lazy(() => import('./pages/wine/WineAdmin'));
 
 ---
 
-## 六、新商家接入检查清单
+## 八、新商家接入检查清单
 
 接入一个新商家时，按以下顺序操作：
 
+**基础配置**
 - [ ] 确认商家用户名（`username`），用于 BottomNav 识别
 - [ ] 确认商家品牌名称（≤ 2 个汉字，用于中间按钮文字）
 - [ ] 确认商家主题色（主色、辅色）
 - [ ] 确认商家品类图标（从 `lucide-react` 选取）
+
+**代码开发**
 - [ ] 创建商家页面目录 `client/src/pages/{name}/`
 - [ ] 创建 5 个页面文件（Home / News / Brands / Profile / Admin）
-- [ ] 在 `App.tsx` 注册路由
+- [ ] Profile 页面包含"商家设置"入口（必填）
+- [ ] Admin 页面包含商品管理、产区管理功能
+- [ ] 在 `App.tsx` 注册路由（5个）
 - [ ] 在 `BottomNav.tsx` 添加用户名判断和中间按钮样式
 - [ ] 在 `BottomNav.tsx` 添加 `is{Name}Page` 判断（用于激活状态）
-- [ ] 在数据库中为该商家创建商家记录（`merchants` 表）
-- [ ] 测试：底部导航切换、商品上架流程、图片上传
+
+**数据库**
+- [ ] 在 `merchants` 表中为该商家创建记录
+- [ ] 确认 `merchants` 表已有商家设置字段（shareTitle 等）
+
+**测试验证**
+- [ ] 底部导航切换正常（激活/非激活状态）
+- [ ] 中间按钮文字/图标在圆形内部显示完整
+- [ ] 商品上架流程正常
+- [ ] 图片上传压缩正常
+- [ ] 商家设置保存后，分享卡片显示商家信息（非脉动默认）
 
 ---
 
-## 七、已接入商家列表
+## 九、已接入商家列表
 
 | 商家 | 用户名 | 路由前缀 | 中间按钮 | 主题色 | 接入日期 |
 |------|--------|----------|----------|--------|----------|
@@ -201,4 +311,4 @@ const WineAdmin = lazy(() => import('./pages/wine/WineAdmin'));
 
 ---
 
-*本文档由开发团队维护，每次新增商家后需同步更新"已接入商家列表"。*
+*本文档由开发团队维护，每次新增商家后需同步更新"已接入商家列表"及检查清单。*
