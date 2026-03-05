@@ -35,8 +35,9 @@ jobs:
             pnpm run build
             echo "📊 执行数据库迁移..."
             bash scripts/post-deploy-migration.sh || true
-            echo "🔄 重启服务..."
-            pm2 restart haoyouji-web
+            echo "🔄 重启服务（使用 ecosystem.config.cjs 确保 COS 环境变量持久化）..."
+            pm2 startOrRestart /root/haoyouji-web/ecosystem.config.cjs --env production
+            pm2 save
             echo "✅ 部署完成！"
           ENDSSH
       
