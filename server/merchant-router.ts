@@ -19,6 +19,7 @@ import {
 } from "../drizzle/schema";
 import { eq, desc, and, asc, isNull } from "drizzle-orm";
 import { storagePut } from "./storage";
+import { uploadImageToCOS } from "./cos-upload";
 import sharp from "sharp";
 
 // ===== 商品路由 =====
@@ -218,7 +219,8 @@ export const merchantRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      await db.insert(merchantProducts).values({
+      // Step 1: 写入商品总库
+      const [result] = await db.insert(merchantProducts).values({
         name: input.name,
         subtitle: input.subtitle || null,
         basePrice: input.basePrice,
@@ -235,7 +237,19 @@ export const merchantRouter = router({
         description: input.description || null,
       });
 
-      return { success: true };
+      // Step 2: 如果是商家自有商品（有 ownerMerchantId），自动写入 merchantShopProducts
+      // 这样商家在后台录入商品后，前台商城立即可见，无需额外操作
+      if (input.ownerMerchantId && result.insertId) {
+        await db.insert(merchantShopProducts).values({
+          merchantId: input.ownerMerchantId,
+          productId: result.insertId,
+          isOwned: 1,
+          isVisible: input.status === 'active' ? 1 : 0,
+          customSortOrder: 0,
+        });
+      }
+
+      return { success: true, productId: result.insertId };
     }),
 
   // 更新商品（管理员）
@@ -460,10 +474,10 @@ export const merchantRouter = router({
         .resize({ width: 800, withoutEnlargement: true })
         .webp({ quality: 80 })
         .toBuffer();
-      // 上传到S3
+      // 上传到腾讯云COS
       const suffix = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
       const key = `wine-products/${suffix}.webp`;
-      const { url } = await storagePut(key, compressed, 'image/webp');
+      const url = await uploadImageToCOS(compressed, 'avatars', key);
       return { url, key };
     }),
 
@@ -933,7 +947,7 @@ export const merchantRouter = router({
         .webp({ quality: 85 })
         .toBuffer();
       const key = `merchant-logos/${merchantId}-logo-${Date.now()}.webp`;
-      const { url } = await storagePut(key, compressed, 'image/webp');
+      const url = await uploadImageToCOS(compressed, 'avatars', key);
       await (db as any).execute(`UPDATE merchants SET share_logo=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
       return { url };
     }),
@@ -961,7 +975,7 @@ export const merchantRouter = router({
         .webp({ quality: 85 })
         .toBuffer();
       const key = `merchant-covers/${merchantId}-cover-${Date.now()}.webp`;
-      const { url } = await storagePut(key, compressed, 'image/webp');
+      const url = await uploadImageToCOS(compressed, 'avatars', key);
       await (db as any).execute(`UPDATE merchants SET share_cover_image=?, updatedAt=NOW() WHERE id=?`, [url, merchantId]);
       return { url };
     }),

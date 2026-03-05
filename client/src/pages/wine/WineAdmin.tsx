@@ -102,6 +102,22 @@ export default function WineAdmin() {
   // 图片上传
   const uploadImage = trpc.merchant.uploadProductImage.useMutation();
 
+  // 权限拦截：仅 cx8618 可访问后台管理（§9.3 数据隔离规则）
+  if (!user || user.username !== MERCHANT_CODE) {
+    return (
+      <div className="min-h-screen bg-[#1a0a0a] flex flex-col items-center justify-center gap-4 px-6">
+        <Wine className="w-12 h-12 text-[#8B1A1A]/40" />
+        <p className="text-[#8a7a6a] text-center">此页面仅限商家管理员访问</p>
+        <button
+          onClick={() => setLocation("/wine")}
+          className="bg-[#8B1A1A] text-white px-6 py-2.5 rounded-xl text-sm"
+        >
+          返回首页
+        </button>
+      </div>
+    );
+  }
+
   const statusLabel = (s: string) => {
     if (s === "active") return <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 border border-green-700">已上架</span>;
     if (s === "inactive") return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-600">已下架</span>;

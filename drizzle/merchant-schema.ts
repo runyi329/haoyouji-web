@@ -37,6 +37,15 @@ export const merchants = mysqlTable("merchants", {
   status: mysqlEnum("status", ["active", "inactive", "suspended"]).default("active").notNull(),
   isVerified: tinyint("isVerified").default(0).notNull(),   // 是否已实名认证
   depositAmount: decimal("depositAmount", { precision: 10, scale: 2 }).default("0.00"), // 保证金
+  // 商家设置字段（v1.3 新增，对应架构规范 §11.5）
+  share_title: varchar("share_title", { length: 50 }),         // 分享标题
+  share_logo: text("share_logo"),                              // 分享 Logo URL
+  share_cover_image: text("share_cover_image"),                // 分享封面图 URL
+  share_description: varchar("share_description", { length: 100 }), // 分享描述语
+  contact_wechat: varchar("contact_wechat", { length: 50 }),   // 商家客服微信
+  contact_phone: varchar("contact_phone", { length: 20 }),     // 商家客服电话
+  about_us: text("about_us"),                                  // 关于我们正文
+  official_website: varchar("official_website", { length: 200 }), // 商家官网
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [

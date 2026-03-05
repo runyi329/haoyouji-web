@@ -49,8 +49,8 @@ export default function WineHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 加载商家设置（分享配置）
-  const { data: merchantSettings } = trpc.merchant.getMerchantSettings.useQuery();
+  // 加载商家分享信息（公开接口，访客无需登录即可获取，§11.5 分享Meta标签注入）
+  const { data: merchantSettings } = trpc.merchant.getMerchantShareInfo.useQuery({ merchantCode: 'cx8618' });
 
   // 动态注入 Meta 标签，实现分享显示商家信息
   useEffect(() => {

@@ -26,8 +26,8 @@ export default function WineBrands() {
   const [cartCount, setCartCount] = useState(0);
   const [searchText, setSearchText] = useState("");
 
-  // 从数据库获取已上架商品
-  const { data: products = [], isLoading } = trpc.merchant.getPublicProducts.useQuery({
+  // 从数据库获取已上架商品（走 merchantShopProducts 店铺陈列层）
+  const { data: products = [], isLoading } = trpc.merchant.getShopProducts.useQuery({
     merchantCode: MERCHANT_CODE,
   });
 
@@ -67,6 +67,23 @@ export default function WineBrands() {
     }
     return true;
   });
+
+  // 静态产品路由映射（三款已制作详情页的产品）
+  const STATIC_PRODUCT_ROUTES: Record<string, string> = {
+    fidencio: "/wine/product/fidencio",
+    marthu: "/wine/product/marthu",
+    romanico: "/wine/product/romanico",
+  };
+
+  const getProductRoute = (product: any): string => {
+    const name = (product.name || "").toLowerCase();
+    const subtitle = (product.subtitle || "").toLowerCase();
+    const combined = name + " " + subtitle;
+    for (const [key, route] of Object.entries(STATIC_PRODUCT_ROUTES)) {
+      if (combined.includes(key)) return route;
+    }
+    return `/wine/product/${product.id}`;
+  };
 
   const handleAddToCart = (e: React.MouseEvent, productId: number) => {
     e.stopPropagation();
@@ -175,7 +192,7 @@ export default function WineBrands() {
                   <div
                     key={product.id}
                     className="bg-[#1a0a0a] border border-[#8B1A1A]/30 rounded-xl overflow-hidden hover:border-[#C9A84C]/40 transition-colors cursor-pointer"
-                    onClick={() => setLocation(`/wine/product/${product.id}`)}
+                    onClick={() => setLocation(getProductRoute(product))}
                   >
                     {/* ① 商品主图 */}
                     <div className="relative aspect-square bg-[#2d0d0d]">
