@@ -71,6 +71,10 @@ export default function LedgerDetailAA({
   // 日历视图模  // 权限判断：owner 或 admin 才能操作
   const userRole = (ledgerData as any)?.userRole;
   const canEdit = userRole === 'owner' || userRole === 'admin';
+  // 账本名称（用于特殊账本的定制逻辑）
+  const ledgerName = (ledgerData as any)?.name || '';
+  // 「2026 AA」私人定制账本：隐藏悬浮+按钮，仅保留点击日历格子添加记录
+  const hideFloatingAddButton = ledgerName === '2026 AA';
 
   const [calendarMode, setCalendarMode] = useState<"balance" | "daily" | "monthly" | "yearly">("balance");
   // 标签（被记录者）选择
@@ -1135,8 +1139,8 @@ export default function LedgerDetailAA({
 
       </div>{/* end 可滚动内容区域 */}
 
-      {/* ── 悬浮加号按鈕（仅管理员/创建者可见） ── */}
-      {canEdit && (
+      {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外） ── */}
+      {canEdit && !hideFloatingAddButton && (
         <button
           onClick={() => {
             let url = `/ledger/${ledgerId}/add`;
