@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Users, Wallet, Plus } from "lucide-react";
+import { Users, Wallet, Plus, Wine } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 interface BottomNavProps {
@@ -18,10 +18,12 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
   const { data: user } = trpc.auth.me.useQuery();
   const isLiulifan = user?.username === 'liulifan';
+  const isCx8618 = user?.username === 'cx8618';
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
   const isBeautyPage = location.startsWith('/beauty');
+  const isWinePage = location.startsWith('/wine');
   const isHomePage = location === '/' || location === '';
 
   const handleNavigation = (path: string) => {
@@ -29,12 +31,16 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     setLocation(path);
   };
 
-  // 加号/奢贝按钮点击逻辑
+  // 加号/奢贝/红酒按钮点击逻辑
   const handlePlusClick = () => {
     if (isLiulifan) {
       // liulifan：跳转到奢贝首页
       setShowLedgerMenu(false);
       setLocation('/beauty');
+    } else if (isCx8618) {
+      // cx8618：跳转到红酒商会首页
+      setShowLedgerMenu(false);
+      setLocation('/wine');
     } else if (isLedgerPage) {
       // 钱脉页面：弹出选项菜单
       setShowLedgerMenu(!showLedgerMenu);
@@ -45,9 +51,18 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     }
   };
 
-  // 判断激活状态（在奢贝页面时，人脉和钱脉都不激活）
-  const isContactsActive = !isLedgerPage && !isBeautyPage;
+  // 判断激活状态
+  const isContactsActive = !isLedgerPage && !isBeautyPage && !isWinePage;
   const isLedgerActive = isLedgerPage;
+
+  // 中间按钮样式：红酒页面用深色酒红+金色
+  const centerBtnBg = isWinePage
+    ? 'bg-[#8B1A1A] border-4 border-[#C9A84C]/40 ring-2 ring-[#C9A84C]/30'
+    : isBeautyPage
+    ? 'bg-[#D32F2F] border-4 border-rose-200 ring-2 ring-rose-300'
+    : showLedgerMenu
+    ? 'bg-gray-600 rotate-45 border-4 border-white'
+    : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white';
 
   return (
     <>
@@ -107,42 +122,58 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       )}
 
       {/* 底部导航栏 */}
-      <nav className="fixed bottom-0 left-0 right-0 safe-area-inset-bottom z-50">
+      <nav className={`fixed bottom-0 left-0 right-0 safe-area-inset-bottom z-50`}>
         <div className="max-w-md mx-auto">
-          <div className="bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] px-6 py-3 flex justify-around items-center relative">
+          <div className={`px-6 py-3 flex justify-around items-center relative ${
+            isWinePage
+              ? 'bg-[#0d0505] border-t border-[#8B1A1A]/40 shadow-[0_-4px_20px_rgba(139,26,26,0.3)]'
+              : 'bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]'
+          }`}>
             {/* 人脉按钮 */}
             <button
               onClick={() => handleNavigation('/')}
               className="flex flex-col items-center space-y-1 min-w-[60px]"
             >
               <Users className={`w-6 h-6 transition-colors duration-200 ${
-                isContactsActive ? 'text-[#D32F2F]' : 'text-gray-400'
+                isContactsActive
+                  ? 'text-[#D32F2F]'
+                  : isWinePage
+                  ? 'text-[#8a7a6a]'
+                  : 'text-gray-400'
               }`} />
               <span className={`text-xs transition-colors duration-200 ${
-                isContactsActive ? 'text-[#D32F2F] font-bold' : 'text-gray-400 font-medium'
+                isContactsActive
+                  ? 'text-[#D32F2F] font-bold'
+                  : isWinePage
+                  ? 'text-[#8a7a6a] font-medium'
+                  : 'text-gray-400 font-medium'
               }`}>
                 人脉
               </span>
             </button>
 
-            {/* 加号/奢贝按钮 */}
+            {/* 加号/奢贝/红酒中间按钮 */}
             <button
               onClick={handlePlusClick}
               className="relative -mt-6"
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
-                showLedgerMenu 
-                  ? 'bg-gray-600 rotate-45 border-4 border-white' 
-                  : isBeautyPage
-                  ? 'bg-[#D32F2F] border-4 border-rose-200 ring-2 ring-rose-300'
-                  : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white'
-              }`}>
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${centerBtnBg}`}>
                 {isLiulifan ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
+                ) : isCx8618 ? (
+                  <Wine className="w-6 h-6 text-[#C9A84C]" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
               </div>
+              {/* 红酒页面：中间按钮下方标签 */}
+              {(isCx8618 || isWinePage) && (
+                <span className={`absolute -bottom-5 left-1/2 -translate-x-1/2 text-xs font-bold whitespace-nowrap ${
+                  isWinePage ? 'text-[#C9A84C]' : 'text-gray-400'
+                }`}>
+                  红酒
+                </span>
+              )}
             </button>
 
             {/* 钱脉按钮 */}
@@ -151,10 +182,18 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               className="flex flex-col items-center space-y-1 min-w-[60px]"
             >
               <Wallet className={`w-6 h-6 transition-colors duration-200 ${
-                isLedgerActive ? 'text-[#D32F2F]' : 'text-gray-400'
+                isLedgerActive
+                  ? 'text-[#D32F2F]'
+                  : isWinePage
+                  ? 'text-[#8a7a6a]'
+                  : 'text-gray-400'
               }`} />
               <span className={`text-xs transition-colors duration-200 ${
-                isLedgerActive ? 'text-[#D32F2F] font-bold' : 'text-gray-400 font-medium'
+                isLedgerActive
+                  ? 'text-[#D32F2F] font-bold'
+                  : isWinePage
+                  ? 'text-[#8a7a6a] font-medium'
+                  : 'text-gray-400 font-medium'
               }`}>
                 钱脉
               </span>

@@ -251,7 +251,11 @@ export function startScanner() {
     lastScanTimestamp = Date.now() - 60 * 1000; // 保留１分钟重叠
     
     // 清理过期订单
-    await dbRecharge.cleanExpiredOrders();
+    try {
+      await dbRecharge.cleanExpiredOrders();
+    } catch (err) {
+      console.warn('[Scanner] cleanExpiredOrders failed (table may not exist):', (err as Error).message);
+    }
     
   }, 60 * 1000);
 

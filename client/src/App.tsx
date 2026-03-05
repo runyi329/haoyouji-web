@@ -179,6 +179,12 @@ const BeautyHealth = lazy(() => import("./pages/beauty/BeautyHealth"));
 const BeautyAiDiet = lazy(() => import("./pages/beauty/BeautyAiDiet"));
 const BeautyProfile = lazy(() => import("./pages/beauty/BeautyProfile"));
 const BeautyClients = lazy(() => import("./pages/beauty/BeautyClients"));
+// 红酒文化商会（cx8618）
+const WineHome = lazy(() => import("./pages/wine/WineHome"));
+const WineNews = lazy(() => import("./pages/wine/WineNews"));
+const WineBrands = lazy(() => import("./pages/wine/WineBrands"));
+const WineProfile = lazy(() => import("./pages/wine/WineProfile"));
+const WineAdmin = lazy(() => import("./pages/wine/WineAdmin"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -358,6 +364,13 @@ function Router() {
         <Route path="/beauty/ai-diet" component={BeautyAiDiet} />
         <Route path="/beauty/profile" component={BeautyProfile} />
         <Route path="/beauty/clients" component={BeautyClients} />
+
+        {/* 红酒文化商会（cx8618） */}
+        <Route path="/wine" component={WineHome} />
+        <Route path="/wine/news" component={WineNews} />
+        <Route path="/wine/brands" component={WineBrands} />
+        <Route path="/wine/profile" component={WineProfile} />
+        <Route path="/wine/admin" component={WineAdmin} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />

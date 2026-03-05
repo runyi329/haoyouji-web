@@ -1489,3 +1489,6 @@ export type InsertSntTransfer = typeof sntTransfers.$inferInsert;
 
 // ===== 奢贝美容院模块（独立文件，便于迁移）=====
 export * from "./beauty-schema";
+
+// ===== 脉动共享商盟 - 商品库模块 =====
+export * from "./merchant-schema";
