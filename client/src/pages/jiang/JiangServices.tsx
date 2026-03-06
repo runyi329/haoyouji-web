@@ -4,6 +4,7 @@
  */
 import { useLocation } from "wouter";
 import JiangTabBar from "./JiangTabBar";
+import BottomNav from "@/components/BottomNav";
 import { Users, BookOpen, Globe, ChevronRight, CheckCircle2 } from "lucide-react";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
@@ -164,20 +165,21 @@ export default function JiangServices() {
           ))}
         </div>
 
-        {/* 底部咨询 */}
+        {/* 底部咋询 */}
         <div className="px-4 mt-6">
           <div className="bg-gradient-to-br from-[#D32F2F]/10 to-[#7C3AED]/10 border border-[#D32F2F]/20 rounded-2xl p-5 text-center">
             <div className="text-sm font-bold text-white mb-1">需要定制方案？</div>
-            <div className="text-[11px] text-[#666680] mb-4">以上服务均可根据您的具体需求定制，欢迎咨询</div>
+            <div className="text-[11px] text-[#666680] mb-4">以上服务均可根据您的具体需求定制，欢迎咋询</div>
             <button
               onClick={() => setLocation("/jiang/about")}
               className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white text-sm font-semibold px-8 py-2.5 rounded-xl transition-colors"
             >
-              联系咨询
+              联系咋询
             </button>
           </div>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }

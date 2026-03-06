@@ -4,6 +4,7 @@
  */
 import { useLocation } from "wouter";
 import JiangTabBar from "./JiangTabBar";
+import BottomNav from "@/components/BottomNav";
 import { Cpu, Zap, Code2, Layers, ArrowRight, ChevronRight } from "lucide-react";
 
 // CDN 资源
@@ -230,6 +231,7 @@ export default function JiangHome() {
           </div>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }
