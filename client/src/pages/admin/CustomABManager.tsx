@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   Plus, MessageSquare, QrCode, Star, ChevronDown, ChevronUp,
-  Store, Table2, Eye, RefreshCw, Lightbulb, ArrowLeft, Building2
+  Store, Table2, Eye, RefreshCw, Lightbulb, ArrowLeft, Building2, Gem
 } from "lucide-react";
 import QRCode from "qrcode";
 
@@ -118,6 +118,7 @@ function EntriesView({ bookId, bookName, onBack }: { bookId: number; bookName: s
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <Badge variant="outline" className="text-xs px-1.5 py-0 h-5">{e.table_code}</Badge>
+                    {e.branch_name && <span className="text-xs text-[#D32F2F]">{e.branch_name}</span>}
                     {e.location && <span className="text-xs text-gray-400">{e.location}</span>}
                     {e.guest_name && <span className="text-xs text-gray-500">· {e.guest_name}</span>}
                   </div>
@@ -143,10 +144,61 @@ function EntriesView({ bookId, bookName, onBack }: { bookId: number; bookName: s
   );
 }
 
+// ===== 分店下拉选择器（参考AA账本右上角样式）=====
+function BranchSelector({
+  branches, selectedBranch, onSelect
+}: {
+  branches: any[];
+  selectedBranch: string | null;
+  onSelect: (branch: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const label = selectedBranch === null ? '全部' : selectedBranch;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-3 py-1 text-xs font-medium text-gray-700 shadow-sm"
+      >
+        <Building2 className="w-3 h-3 text-[#D32F2F]" />
+        <span className="max-w-[60px] truncate">{label}</span>
+        <ChevronDown className="w-3 h-3 text-gray-400" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 min-w-[110px] overflow-hidden">
+          <button
+            onClick={() => { onSelect(null); setOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${selectedBranch === null ? 'bg-[#D32F2F] text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+          >全部分店</button>
+          {branches.map((b: any) => (
+            <button
+              key={b.branch_name}
+              onClick={() => { onSelect(b.branch_name); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${selectedBranch === b.branch_name ? 'bg-[#D32F2F] text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              {b.branch_name}
+              <span className={`ml-1 text-xs ${selectedBranch === b.branch_name ? 'text-red-200' : 'text-gray-400'}`}>({b.table_count})</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== 分店+桌号管理展开区 =====
-function TableManager({ book }: { book: any }) {
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+function TableManager({ book, selectedBranch }: { book: any; selectedBranch: string | null }) {
   const [newBranchName, setNewBranchName] = useState("");
   const [showAddBranch, setShowAddBranch] = useState(false);
   const [batchPrefix, setBatchPrefix] = useState("");
@@ -155,7 +207,6 @@ function TableManager({ book }: { book: any }) {
   const [qrModal, setQrModal] = useState<any>(null);
 
   const utils = trpc.useUtils();
-  const { data: branches } = trpc.opinionBook.getBranches.useQuery({ bookId: book.id });
   const { data: tables } = trpc.opinionBook.getTables.useQuery({ bookId: book.id });
 
   const batchMutation = trpc.opinionBook.addTablesBatch.useMutation({
@@ -170,13 +221,8 @@ function TableManager({ book }: { book: any }) {
 
   const filteredTables = tables ? tables.filter((t: any) => {
     if (selectedBranch === null) return true;
-    if (selectedBranch === '__none__') return !t.branch_name;
     return t.branch_name === selectedBranch;
   }) : [];
-
-  const selectedBranchLabel = selectedBranch === null ? '全部分店'
-    : selectedBranch === '__none__' ? '未分配'
-    : selectedBranch;
 
   return (
     <div className="border-t bg-gray-50 p-4 space-y-4">
@@ -186,21 +232,17 @@ function TableManager({ book }: { book: any }) {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5 text-[#D32F2F]" />
-            <span className="text-xs font-semibold text-gray-700">分店管理</span>
-            {branches && branches.length > 0 && (
-              <span className="text-xs text-gray-400">（{branches.length} 个）</span>
-            )}
+            <span className="text-xs font-semibold text-gray-700">添加分店</span>
           </div>
           <button
             onClick={() => setShowAddBranch(!showAddBranch)}
             className="flex items-center gap-1 text-xs text-[#D32F2F] font-medium"
           >
             <Plus className="w-3 h-3" />
-            添加分店
+            新增分店
           </button>
         </div>
 
-        {/* 添加分店表单 */}
         {showAddBranch && (
           <div className="bg-white rounded-lg p-3 border mb-2 flex gap-2">
             <Input
@@ -215,32 +257,12 @@ function TableManager({ book }: { book: any }) {
               onClick={() => {
                 if (!newBranchName.trim()) { toast.error("请输入分店名称"); return; }
                 toast.success(`分店「${newBranchName.trim()}」已添加，请在下方为该分店生成桌号`);
-                setSelectedBranch(newBranchName.trim());
                 setShowAddBranch(false);
                 setNewBranchName("");
               }}
             >确认</Button>
             <Button variant="outline" size="sm" className="h-8 text-xs px-3"
               onClick={() => { setShowAddBranch(false); setNewBranchName(""); }}>取消</Button>
-          </div>
-        )}
-
-        {/* 分店标签列表 */}
-        {branches && branches.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setSelectedBranch(null)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${selectedBranch === null ? 'bg-[#D32F2F] text-white border-[#D32F2F]' : 'bg-white text-gray-600 border-gray-200'}`}
-            >全部</button>
-            {branches.map((b: any) => (
-              <button
-                key={b.branch_name || '__none__'}
-                onClick={() => setSelectedBranch(b.branch_name || '__none__')}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${selectedBranch === (b.branch_name || '__none__') ? 'bg-[#D32F2F] text-white border-[#D32F2F]' : 'bg-white text-gray-600 border-gray-200'}`}
-              >
-                {b.branch_name || '未分配'} <span className="opacity-60">({b.table_count})</span>
-              </button>
-            ))}
           </div>
         )}
       </div>
@@ -250,21 +272,17 @@ function TableManager({ book }: { book: any }) {
         <div className="flex items-center gap-1.5 mb-2">
           <Table2 className="w-3.5 h-3.5 text-[#D32F2F]" />
           <span className="text-xs font-semibold text-gray-700">
-            桌号管理
-            {selectedBranch && selectedBranch !== '__none__' && (
+            批量生成桌号
+            {selectedBranch && (
               <span className="text-[#D32F2F] ml-1">· {selectedBranch}</span>
             )}
           </span>
         </div>
 
-        {/* 批量生成桌号 */}
         <div className="bg-white rounded-lg p-3 border mb-3">
-          <p className="text-xs font-medium text-gray-600 mb-2">
-            批量生成桌号
-            {selectedBranch && selectedBranch !== '__none__' && (
-              <span className="text-[#D32F2F] ml-1">（归属：{selectedBranch}）</span>
-            )}
-          </p>
+          {selectedBranch && (
+            <p className="text-xs text-[#D32F2F] mb-2 font-medium">归属分店：{selectedBranch}</p>
+          )}
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs text-gray-500">前缀</Label>
@@ -275,8 +293,8 @@ function TableManager({ book }: { book: any }) {
               <Input type="number" value={batchCount} onChange={e => setBatchCount(e.target.value)} placeholder="10" className="h-8 text-xs mt-1" />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">位置描述</Label>
-              <Input value={batchLocation} onChange={e => setBatchLocation(e.target.value)} placeholder="如 一楼大厅" className="h-8 text-xs mt-1" />
+              <Label className="text-xs text-gray-500">位置</Label>
+              <Input value={batchLocation} onChange={e => setBatchLocation(e.target.value)} placeholder="如 一楼" className="h-8 text-xs mt-1" />
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-1">
@@ -289,11 +307,11 @@ function TableManager({ book }: { book: any }) {
             onClick={() => {
               const count = parseInt(batchCount);
               if (!count || count < 1) { toast.error("请输入有效数量"); return; }
-              const branchToUse = (selectedBranch && selectedBranch !== '__none__') ? selectedBranch : undefined;
+              const branchToUse = selectedBranch || undefined;
               batchMutation.mutate({ bookId: book.id, branchName: branchToUse, prefix: batchPrefix, count, location: batchLocation || undefined });
             }}
           >
-            {batchMutation.isPending ? "生成中..." : `批量生成 ${batchCount || 10} 个桌号二维码`}
+            {batchMutation.isPending ? "生成中..." : `批量生成 ${batchCount || 10} 个桌号`}
           </Button>
         </div>
 
@@ -323,7 +341,7 @@ function TableManager({ book }: { book: any }) {
           </div>
         ) : (
           <p className="text-xs text-gray-400 text-center py-2">
-            {selectedBranch !== null ? `${selectedBranchLabel}下暂无桌号` : '暂无桌号，请先批量生成'}
+            {selectedBranch ? `${selectedBranch}下暂无桌号` : '暂无桌号，请先批量生成'}
           </p>
         )}
       </div>
@@ -333,13 +351,89 @@ function TableManager({ book }: { book: any }) {
   );
 }
 
+// ===== 意见本卡片 =====
+function BookCard({
+  book,
+  onViewEntries,
+}: {
+  book: any;
+  onViewEntries: (book: { id: number; name: string }) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const { data: branches } = trpc.opinionBook.getBranches.useQuery({ bookId: book.id });
+
+  const hasBranches = branches && branches.length > 0;
+
+  return (
+    <Card className="overflow-hidden">
+      {/* 卡片头部 */}
+      <div className="p-4">
+        {/* 第一行：图标+名称 / 分店切换 */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Gem className="w-4 h-4 text-[#CBA471] flex-shrink-0" strokeWidth={2} />
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm leading-tight truncate">{book.name}</p>
+              {book.store_name && (
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{book.store_name}</p>
+              )}
+            </div>
+          </div>
+          {/* 右上角：分店切换（有分店时显示） */}
+          {hasBranches && (
+            <BranchSelector
+              branches={branches}
+              selectedBranch={selectedBranch}
+              onSelect={setSelectedBranch}
+            />
+          )}
+        </div>
+
+        {/* 第二行：统计信息 */}
+        <p className="text-xs text-gray-400 mb-3">
+          共 <span className="text-gray-600 font-medium">{book.entry_count}</span> 条意见
+          {selectedBranch && <span className="text-[#D32F2F] ml-1">· {selectedBranch}</span>}
+          <span className="mx-1">·</span>
+          {new Date(book.created_at).toLocaleDateString('zh-CN')}
+        </p>
+
+        {/* 第三行：操作按钮 */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline" size="sm"
+            className="text-xs h-8 flex-1"
+            onClick={() => onViewEntries({ id: book.id, name: book.name })}
+          >
+            <Eye className="w-3 h-3 mr-1" />
+            查看意见
+            {book.entry_count > 0 && (
+              <span className="ml-1.5 bg-[#D32F2F] text-white text-xs rounded-full px-1.5 leading-4 inline-block">{book.entry_count}</span>
+            )}
+          </Button>
+          <Button
+            variant="outline" size="sm"
+            className="text-xs h-8 flex-1"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <Building2 className="w-3 h-3 mr-1" />
+            分店/桌号
+            {expanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+          </Button>
+        </div>
+      </div>
+
+      {expanded && <TableManager book={book} selectedBranch={selectedBranch} />}
+    </Card>
+  );
+}
+
 // ===== 主页面 =====
 export default function CustomABManager() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newStoreName, setNewStoreName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [expandedBookId, setExpandedBookId] = useState<number | null>(null);
   const [viewingEntriesBook, setViewingEntriesBook] = useState<{ id: number; name: string } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -372,7 +466,7 @@ export default function CustomABManager() {
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 min-w-0">
-            <MessageSquare className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
+            <Gem className="w-5 h-5 text-[#CBA471] flex-shrink-0" strokeWidth={2} />
             <div className="min-w-0">
               <h2 className="font-bold text-sm leading-tight">定制账本 (AB)</h2>
               <p className="text-xs text-gray-400 leading-tight">客户想要 老板知道</p>
@@ -403,7 +497,7 @@ export default function CustomABManager() {
         {showGuide && (
           <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-100 text-xs text-amber-700 space-y-1.5">
             <p><span className="font-semibold">典型场景：</span>连锁餐厅老板创建一个意见本，添加多个分店，每个分店下批量生成桌号二维码，顾客扫码免注册即可留言。</p>
-            <p><span className="font-semibold">操作流程：</span>创建意见本 → 添加分店 → 各分店下批量生成桌号 → 下载二维码贴桌上 → 实时查看反馈</p>
+            <p><span className="font-semibold">操作流程：</span>创建意见本 → 展开「分店/桌号」→ 添加分店 → 各分店下批量生成桌号 → 下载二维码贴桌上 → 实时查看反馈</p>
             <p><span className="font-semibold">推广话术：</span><span className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声。"</span></p>
           </div>
         )}
@@ -448,47 +542,11 @@ export default function CustomABManager() {
         </Card>
       ) : (
         books.map((book: any) => (
-          <Card key={book.id} className="overflow-hidden">
-            <div className="p-4">
-              <div className="flex items-start gap-2">
-                <Store className="w-4 h-4 text-[#D32F2F] flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm leading-tight truncate">{book.name}</p>
-                  {book.store_name && (
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{book.store_name}</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">
-                    共 <span className="text-gray-600 font-medium">{book.entry_count}</span> 条意见 · {new Date(book.created_at).toLocaleDateString('zh-CN')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-3">
-                <Button
-                  variant="outline" size="sm"
-                  className="text-xs h-8 flex-1"
-                  onClick={() => setViewingEntriesBook({ id: book.id, name: book.name })}
-                >
-                  <Eye className="w-3 h-3 mr-1" />
-                  查看意见
-                  {book.entry_count > 0 && (
-                    <span className="ml-1.5 bg-[#D32F2F] text-white text-xs rounded-full px-1.5 leading-4 inline-block">{book.entry_count}</span>
-                  )}
-                </Button>
-                <Button
-                  variant="outline" size="sm"
-                  className="text-xs h-8 flex-1"
-                  onClick={() => setExpandedBookId(expandedBookId === book.id ? null : book.id)}
-                >
-                  <Building2 className="w-3 h-3 mr-1" />
-                  分店/桌号
-                  {expandedBookId === book.id ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
-                </Button>
-              </div>
-            </div>
-
-            {expandedBookId === book.id && <TableManager book={book} />}
-          </Card>
+          <BookCard
+            key={book.id}
+            book={book}
+            onViewEntries={setViewingEntriesBook}
+          />
         ))
       )}
     </div>
