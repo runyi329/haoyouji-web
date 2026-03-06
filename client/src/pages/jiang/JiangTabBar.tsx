@@ -4,13 +4,14 @@
  * 主题色：深黑 #0A0A0F + 红色 #D32F2F
  */
 import { Link, useLocation } from "wouter";
-import { Home, Cpu, ShoppingBag, Info } from "lucide-react";
+import { Home, Cpu, ShoppingBag, Info, User } from "lucide-react";
 
 const TABS = [
   { label: "首页", href: "/jiang", icon: <Home className="w-4 h-4" /> },
   { label: "服务", href: "/jiang/services", icon: <Cpu className="w-4 h-4" /> },
   { label: "商城", href: "/jiang/shop", icon: <ShoppingBag className="w-4 h-4" /> },
   { label: "关于", href: "/jiang/about", icon: <Info className="w-4 h-4" /> },
+  { label: "我的", href: "/jiang/profile", icon: <User className="w-4 h-4" /> },
 ];
 
 export default function JiangTabBar() {
