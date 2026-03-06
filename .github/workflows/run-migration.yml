@@ -1,18 +1,14 @@
-name: 手动执行数据库迁移
+name: 执行数据库迁移-opinion表
 
 on:
-  workflow_dispatch:
-    inputs:
-      confirm:
-        description: '输入 yes 确认执行迁移'
-        required: true
-        default: 'no'
+  push:
+    branches:
+      - migration-opinion-tables
 
 jobs:
   migrate:
-    name: 执行数据库迁移
+    name: 创建opinion相关表
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.confirm == 'yes' }}
     
     steps:
       - name: 🔑 配置SSH密钥
@@ -22,10 +18,9 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
       
-      - name: 📊 执行 opinion 表迁移
+      - name: 📊 在服务器上创建opinion表
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            set -e
             echo "📊 开始创建 opinion 相关表..."
             
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db << 'EOSQL'
