@@ -318,7 +318,7 @@ export default function CustomShowcase() {
             const r = isCenter ? BASE_R * 1.15 : BASE_R * 0.96;
             const pts = hexPoints(px, py, r - 0.8);
             const delay = Math.min(ring * 50, 600);
-            const showText = opacity >= 0.22;
+            const showText = true; // 所有节点都显示文字，边缘被截断也没关系
 
             // 标签处理：超过4字换行
             const labelLines = label.length <= 4
@@ -329,7 +329,7 @@ export default function CustomShowcase() {
 
             return (
               <g key={`h${idx}`}
-                onClick={() => opacity >= 0.28 && setSelected({ label, icon: Icon, color, desc })}
+                onClick={() => opacity >= 0.35 && setSelected({ label, icon: Icon, color, desc })}
                 style={{
                   cursor: opacity >= 0.28 ? "pointer" : "default",
                   opacity: revealed ? opacity : 0,
