@@ -193,6 +193,8 @@ const WineProductRomanico = lazy(() => import("./pages/wine/products/WineProduct
 const WineProductRomanicoShare = lazy(() => import("./pages/wine/products/WineProductRomanicoShare"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
+// 私人定制展示页
+const CustomShowcase = lazy(() => import("./pages/CustomShowcase"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -284,6 +286,7 @@ function Router() {
         <Route path="/tools" component={Tools} />
         <Route path="/tools/contract" component={ContractTool} />
         <Route path="/exchange-rate" component={ExchangeRate} />
+        <Route path="/custom-showcase" component={CustomShowcase} />
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/my-equity" component={MyEquityRedWhite} />
