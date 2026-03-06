@@ -10,6 +10,7 @@
 import { useState, useRef } from "react";
 import ShareSheet from "@/components/ShareSheet";
 import { useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat,
   Star, Grape, Thermometer, Package, MapPin, ChevronRight,
@@ -57,8 +58,11 @@ export default function WineProductRomanico() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showShare, setShowShare] = useState(false);
   const touchStartX = useRef(0);
+  const { user } = useAuth();
 
-  const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
+  // 动态邀请码：已登录用户用自己的inviteCode，未登录时用商城默认邀请码
+  const refCode = user?.inviteCode || 'cx8618';
+  const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=${refCode}`;
 
   const handleShare = () => {
     setShowShare(true);
@@ -374,6 +378,8 @@ export default function WineProductRomanico() {
         shareUrl={SHARE_URL}
         title="ROMANICO 罗马尼克干红葡萄酒 750ml"
         description="RP 92分 · 西班牙托罗产区 · ¥328"
+        inviteCode={user?.inviteCode}
+        isLoggedIn={!!user}
       />
     </div>
   );
