@@ -6690,7 +6690,39 @@ export const appRouter = router({
         isArchived: z.boolean().optional().default(false),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
+        const regularLedgers = await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
+        // 如果是归档列表，意见本不展示
+        if (input.isArchived) return regularLedgers;
+        // 将管理员自己的 opinion_books 也并入账本列表
+        try {
+          const dbConn = await getDbConnection();
+          if (dbConn) {
+            const [opinionRows] = await dbConn.execute(
+              `SELECT id, name, store_name, description, created_at FROM opinion_books WHERE owner_id = ? AND is_active = 1 ORDER BY created_at DESC`,
+              [ctx.user.id]
+            ) as any;
+            const opinionLedgers = (opinionRows as any[]).map((ob: any) => ({
+              id: `opinion_${ob.id}`,
+              name: ob.name,
+              description: ob.store_name ? `门店：${ob.store_name}` : (ob.description || ''),
+              type: 'opinion_book',
+              members: [],
+              memberCount: 1,
+              recordCount: 0,
+              userRole: 'owner',
+              isArchived: false,
+              isVip: false,
+              lastActivityAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
+              createdAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
+              updatedAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
+              opinionBookId: ob.id,
+            }));
+            return [...regularLedgers, ...opinionLedgers];
+          }
+        } catch (e) {
+          console.error('[ledger.list] 获取opinion_books失败:', e);
+        }
+        return regularLedgers;
       }),
 
 
