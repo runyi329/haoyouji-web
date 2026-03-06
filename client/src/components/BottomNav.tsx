@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Users, Wallet, Plus, Wine } from "lucide-react";
+import { Users, Wallet, Plus, Wine, Cpu } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 interface BottomNavProps {
@@ -19,11 +19,13 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const { data: user } = trpc.auth.me.useQuery();
   const isLiulifan = user?.username === 'liulifan';
   const isCx8618 = user?.username === 'cx8618';
+  const isJiang = user?.username === 'jiang';
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
   const isBeautyPage = location.startsWith('/beauty');
   const isWinePage = location.startsWith('/wine');
+  const isJiangPage = location.startsWith('/jiang');
   const isHomePage = location === '/' || location === '';
 
   const handleNavigation = (path: string) => {
@@ -31,7 +33,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     setLocation(path);
   };
 
-  // 加号/奢贝/红酒按钮点击逻辑
+  // 加号/奢贝/红酒/润仪按鈕点击逻辑
   const handlePlusClick = () => {
     if (isLiulifan) {
       // liulifan：跳转到奢贝首页
@@ -41,6 +43,10 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // cx8618：跳转到红酒商会首页
       setShowLedgerMenu(false);
       setLocation('/wine');
+    } else if (isJiang) {
+      // jiang：跳转到润仪算力研发中心
+      setShowLedgerMenu(false);
+      setLocation('/jiang');
     } else if (isLedgerPage) {
       // 钱脉页面：弹出选项菜单
       setShowLedgerMenu(!showLedgerMenu);
@@ -52,14 +58,16 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   };
 
   // 判断激活状态
-  const isContactsActive = !isLedgerPage && !isBeautyPage && !isWinePage;
+  const isContactsActive = !isLedgerPage && !isBeautyPage && !isWinePage && !isJiangPage;
   const isLedgerActive = isLedgerPage;
 
-  // 中间按钮样式：红酒页面用深色酒红+金色
+  // 中间按鈕样式
   const centerBtnBg = isWinePage
     ? 'bg-[#8B1A1A] border-4 border-[#C9A84C]/40 ring-2 ring-[#C9A84C]/30'
     : isBeautyPage
     ? 'bg-[#D32F2F] border-4 border-rose-200 ring-2 ring-rose-300'
+    : isJiangPage
+    ? 'bg-[#D32F2F] border-4 border-[#D32F2F]/30 ring-2 ring-[#D32F2F]/20'
     : showLedgerMenu
     ? 'bg-gray-600 rotate-45 border-4 border-white'
     : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white';
@@ -162,6 +170,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
                 ) : isCx8618 ? (
                   <Wine className="w-7 h-7 text-[#C9A84C]" />
+                ) : isJiang ? (
+                  <Cpu className="w-7 h-7 text-white" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}

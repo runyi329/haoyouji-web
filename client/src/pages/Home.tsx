@@ -13,7 +13,9 @@ import {
   User,
   LogOut,
   UserCircle,
-  Bell
+  Bell,
+  Cpu,
+  ChevronRight
 } from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 import {
@@ -460,6 +462,26 @@ export default function Home() {
 
 
 
+
+      {/* 润仪算力研发中心入口（jiang用户专属） */}
+      {user?.username === 'jiang' && (
+        <div className="px-4 mt-3">
+          <div
+            onClick={() => navigate('/jiang')}
+            className="cursor-pointer bg-gradient-to-r from-[#1a0505] to-[#0d0d1a] border border-[#D32F2F]/30 rounded-2xl p-4 flex items-center gap-3 shadow-lg active:opacity-80"
+          >
+            <div className="w-12 h-12 rounded-xl bg-[#D32F2F]/20 border border-[#D32F2F]/40 flex items-center justify-center flex-shrink-0">
+              <Cpu className="w-6 h-6 text-[#D32F2F]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white leading-tight">润仪算力研发中心</div>
+              <div className="text-[11px] text-[#D32F2F] mt-0.5">Runyi AI Compute Lab</div>
+              <div className="text-[10px] text-[#666680] mt-0.5">AI 全链路驱动 · 算力加工 · 快速交付</div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <BottomNav />
