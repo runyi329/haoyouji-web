@@ -281,7 +281,7 @@ export default function CustomShowcase() {
 
     let label: string, icon: any, color: string, desc: string;
     if (q === 0 && r === 0) {
-      label = "底层账本引擎"; icon = Gem; color = "#C62828"; desc = "多人实时共享账本，数据永久留存，权限精细管控。AI分析行为模式，自动识别异常、预测趋势。";
+      label = "前麦"; icon = Gem; color = "#C62828"; desc = "多人实时共享账本，数据永久留存，权限精细管控。AI分析行为模式，自动识别异常、预测趋势。";
     } else {
       const scene = SCENE_LIST[sceneIdx % SCENE_LIST.length];
       sceneIdx++;
@@ -385,8 +385,7 @@ export default function CustomShowcase() {
             </button>
           </Link>
           <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#CBA471" }}>私人定制账本</div>
-            <div style={{ fontSize: 11, color: "#8B7355", marginTop: 1 }}>无限蜂巢 · 点击任意场景了解详情</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#CBA471" }}>私人定制</div>
           </div>
           <div style={{ width: 40 }} />
         </div>
