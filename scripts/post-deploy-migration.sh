@@ -55,6 +55,7 @@ MIGRATIONS=(
   "drizzle/migrations/add_soft_delete.sql"
   "drizzle/migrations/create_record_logs.sql"
   "drizzle/migrations/create_beauty_tables.sql"
+  "drizzle/migrations/create_opinion_tables.sql"
 )
 
 # 执行每个迁移文件
