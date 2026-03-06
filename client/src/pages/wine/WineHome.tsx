@@ -113,20 +113,57 @@ export default function WineHome() {
   }, [menuOpen]);
 
   // 分享功能（使用商家设置的标题和描述）
-  const handleShare = () => {
-    const shareUrl = `${window.location.origin}/wine`;
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/wine?ref=cx8618`;
     const shareTitle = merchantSettings?.shareTitle || WINE_INFO.name;
     const shareText = merchantSettings?.shareDescription || WINE_INFO.slogan;
-    if (navigator.share) {
-      navigator.share({
-        title: shareTitle,
-        text: shareText,
-        url: shareUrl,
-      });
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+
+    if (isWeChat) {
+      // 微信内置浏览器：先复制链接，再唤起微信
+      let copied = false;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(shareUrl);
+          copied = true;
+        }
+      } catch {}
+      if (!copied) {
+        try {
+          const el = document.createElement("textarea");
+          el.value = shareUrl;
+          el.style.cssText = "position:fixed;top:-9999px;opacity:0;";
+          document.body.appendChild(el);
+          el.focus(); el.select();
+          copied = document.execCommand("copy");
+          document.body.removeChild(el);
+        } catch {}
+      }
+      if (copied) {
+        // 显示提示后跳转微信
+        const div = document.createElement("div");
+        div.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#fff;padding:16px 24px;border-radius:12px;font-size:14px;text-align:center;z-index:9999;";
+        div.innerHTML = "链接已复制<br/><span style='font-size:12px;opacity:0.7'>即将打开微信，请粘贴给好友</span>";
+        document.body.appendChild(div);
+        setTimeout(() => {
+          document.body.removeChild(div);
+          window.location.href = "weixin://";
+        }, 1200);
+      } else {
+        alert("请手动复制链接：" + shareUrl);
+      }
+    } else if (navigator.share) {
+      // Safari/Chrome：系统分享菜单（可直接选微信）
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+      } catch {}
     } else {
-      navigator.clipboard.writeText(shareUrl).then(() => {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
         alert("链接已复制，快去分享吧！");
-      });
+      } catch {
+        alert("请手动复制：" + shareUrl);
+      }
     }
   };
 
