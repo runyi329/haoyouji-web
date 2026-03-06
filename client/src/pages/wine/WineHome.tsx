@@ -119,7 +119,22 @@ export default function WineHome() {
   const shareUrl = `${window.location.origin}/wine?ref=${refCode}`;
   const shareTitle = merchantSettings?.shareTitle || WINE_INFO.name;
   const shareDescription = merchantSettings?.shareDescription || WINE_INFO.slogan;
-  const handleShare = () => setShareOpen(true);
+
+  const handleShare = async () => {
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    if (isWeChat) {
+      // 微信内置浏览器：弹出 ShareSheet 面板（微信内不支持 navigator.share）
+      setShareOpen(true);
+    } else if (navigator.share) {
+      // Safari/Chrome：直接调用系统分享菜单（必须在用户手势里直接调用，不能套一层）
+      try {
+        await navigator.share({ title: shareTitle, text: shareDescription, url: shareUrl });
+      } catch {}
+    } else {
+      // 其他浏览器：弹出面板复制链接
+      setShareOpen(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0d0505] text-white pb-24">
