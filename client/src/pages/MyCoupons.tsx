@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
 import { trpc } from '@/lib/trpc';
 import { Ticket, Plus, ChevronLeft, ChevronRight, Users, BookOpen, Cpu, Check, Shield, Clock, Headphones, Zap, X } from 'lucide-react';
 
@@ -56,14 +58,44 @@ const fmt = (price: number) => price % 1 === 0 ? price.toString() : price.toFixe
 function PaymentModal({ product, onClose }: { product: any; onClose: () => void }) {
   const [selected, setSelected] = useState<'alipay' | 'wechat'>('alipay');
   const [confirming, setConfirming] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
-  const handlePay = () => {
+  const handlePay = async () => {
+    if (selected === 'wechat') {
+      alert('微信支付暂未开通，请使用支付宝支付');
+      return;
+    }
+    if (!isAuthenticated) {
+      window.location.href = getLoginUrl() + '?returnUrl=' + encodeURIComponent(window.location.pathname);
+      return;
+    }
     setConfirming(true);
-    setTimeout(() => {
+    setErrorMsg(null);
+    try {
+      const token = localStorage.getItem('auth-token');
+      const res = await fetch('/api/alipay/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          productId: product.id,
+          productName: product.name,
+          amount: product.price,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '创建订单失败');
+      }
+      window.location.href = data.payUrl;
+    } catch (err: any) {
       setConfirming(false);
-      alert(`支付功能接入中，请联系客服完成购买\n商品：${product.name}\n金额：¥${fmt(product.price)}`);
-      onClose();
-    }, 800);
+      setErrorMsg(err?.message || '支付失败，请重试');
+    }
   };
 
   return (
