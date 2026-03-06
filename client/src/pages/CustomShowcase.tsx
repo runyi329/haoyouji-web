@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { Share2 } from "lucide-react";
 import {
-  ChevronLeft, Gem, X, TrendingUp, Heart, GraduationCap,
+  ChevronLeft, Gem, X, TrendingUp, Heart, GraduationCap, Share2 as _Share2,
   Home, Briefcase, Utensils, Car, Dumbbell, Music, Building2, Users, Star,
   ArrowRight, Zap, Rocket, Plane, Coffee, Pill, Wrench, PiggyBank,
   BookOpen, Bike, Package, Hotel, Leaf, Baby, Gamepad2, Scissors,
@@ -5226,7 +5227,7 @@ function DetailCard({ scene, onClose }: {
   );
 }
 
-export default function CustomShowcase() {
+export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: boolean }) {
   const [selected, setSelected] = useState<SceneDetail | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -5384,15 +5385,37 @@ export default function CustomShowcase() {
       {/* 顶部导航叠加层 */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, padding: "48px 16px 16px", background: "linear-gradient(to bottom,rgba(13,8,0,0.92) 55%,transparent)", pointerEvents: "none" }}>
         <div style={{ display: "flex", alignItems: "center", pointerEvents: "auto" }}>
-          <Link href="/ledger">
-            <button style={{ padding: "8px", marginLeft: "-8px", background: "none", border: "none", cursor: "pointer" }}>
-              <ChevronLeft style={{ width: 24, height: 24, color: "#CBA471" }} />
-            </button>
-          </Link>
+          {!isShareMode ? (
+            <Link href="/ledger">
+              <button style={{ padding: "8px", marginLeft: "-8px", background: "none", border: "none", cursor: "pointer" }}>
+                <ChevronLeft style={{ width: 24, height: 24, color: "#CBA471" }} />
+              </button>
+            </Link>
+          ) : (
+            <div style={{ width: 40 }} />
+          )}
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: "#CBA471" }}>私人定制</div>
           </div>
-          <div style={{ width: 40 }} />
+          {!isShareMode ? (
+            <button
+              onClick={() => {
+                const shareUrl = `${window.location.origin}/custom-showcase/share`;
+                if (navigator.share) {
+                  navigator.share({ title: '私人定制账本', text: '钱脉长，万物生 · 点击探索你的专属场景', url: shareUrl });
+                } else {
+                  navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert('分享链接已复制到剪贴板');
+                  });
+                }
+              }}
+              style={{ padding: "8px", background: "none", border: "none", cursor: "pointer", marginRight: -8 }}
+            >
+              <Share2 style={{ width: 20, height: 20, color: "#CBA471" }} />
+            </button>
+          ) : (
+            <div style={{ width: 40 }} />
+          )}
         </div>
       </div>
 
@@ -5410,4 +5433,14 @@ export default function CustomShowcase() {
       `}</style>
     </div>
   );
+}
+
+// 默认导出：带返回按钮的正常版本
+export default function CustomShowcase() {
+  return <CustomShowcaseView isShareMode={false} />;
+}
+
+// 分享页：无返回按钮，任何人可访问
+export function CustomShowcaseShare() {
+  return <CustomShowcaseView isShareMode={true} />;
 }

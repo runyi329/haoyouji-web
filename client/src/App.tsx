@@ -195,6 +195,7 @@ const WineProductRomanicoShare = lazy(() => import("./pages/wine/products/WinePr
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // 私人定制展示页
 const CustomShowcase = lazy(() => import("./pages/CustomShowcase"));
+const CustomShowcaseShare = lazy(() => import("./pages/CustomShowcase").then(m => ({ default: m.CustomShowcaseShare })));
 
 // 加载中组件
 function LoadingFallback() {
@@ -287,6 +288,7 @@ function Router() {
         <Route path="/tools/contract" component={ContractTool} />
         <Route path="/exchange-rate" component={ExchangeRate} />
         <Route path="/custom-showcase" component={CustomShowcase} />
+        <Route path="/custom-showcase/share" component={CustomShowcaseShare} />
         <Route path="/parent/ai-management" component={AIManagement} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/my-equity" component={MyEquityRedWhite} />
