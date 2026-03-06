@@ -161,12 +161,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                 {isLiulifan ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
                 ) : isCx8618 ? (
-                  <>
-                    <Wine className="w-5 h-5 text-[#C9A84C]" />
-                    <span className={`text-[10px] font-bold leading-none mt-0.5 ${
-                      isWinePage ? 'text-[#C9A84C]' : 'text-[#8a7a6a]'
-                    }`}>红酒</span>
-                  </>
+                  <Wine className="w-7 h-7 text-[#C9A84C]" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
