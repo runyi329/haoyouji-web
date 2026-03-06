@@ -191,11 +191,11 @@ export default function WineBrands() {
                 return (
                   <div
                     key={product.id}
-                    className="bg-[#1a0a0a] border border-[#8B1A1A]/30 rounded-xl overflow-hidden hover:border-[#C9A84C]/40 transition-colors cursor-pointer"
+                    className="bg-[#0d0505] border border-[#333]/40 rounded-xl overflow-hidden hover:border-[#C9A84C]/40 transition-colors cursor-pointer"
                     onClick={() => setLocation(getProductRoute(product))}
                   >
                     {/* ① 商品主图 */}
-                    <div className="relative aspect-square bg-[#2d0d0d]">
+                    <div className="relative aspect-square bg-black">
                       {product.mainImageUrl ? (
                         <img
                           src={product.mainImageUrl}
