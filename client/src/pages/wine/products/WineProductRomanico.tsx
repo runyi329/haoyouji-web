@@ -64,8 +64,24 @@ export default function WineProductRomanico() {
   const refCode = user?.inviteCode || 'cx8618';
   const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=${refCode}`;
 
-  const handleShare = () => {
-    setShowShare(true);
+  const handleShare = async () => {
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    if (isWeChat) {
+      // 微信内置浏览器：弹出 ShareSheet 面板
+      setShowShare(true);
+    } else if (navigator.share) {
+      // Safari/Chrome：直接调用系统分享菜单（必须在用户手势里直接调用）
+      try {
+        await navigator.share({
+          title: 'ROMANICO 罗马尼克干红葡萄酒 750ml',
+          text: 'RP 92分 · 西班牙托罗产区 · ¥328',
+          url: SHARE_URL,
+        });
+      } catch {}
+    } else {
+      // 其他浏览器：弹出面板复制链接
+      setShowShare(true);
+    }
   };
 
   const handleBuy = () => {
