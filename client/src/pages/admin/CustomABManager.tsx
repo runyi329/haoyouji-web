@@ -214,27 +214,32 @@ export default function CustomABManager() {
     <div className="space-y-4">
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-[#D32F2F]" />
-            <h2 className="font-bold text-base whitespace-nowrap">定制账本 (AB) · 客户想要 老板知道</h2>
-            <button
-              onClick={() => setShowGuide(!showGuide)}
-              className="flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
-            >
-              <Lightbulb className="w-3 h-3" />
-              场景说明
-              {showGuide ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
+        {/* 第一行：标题 + 新建按钮 */}
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
+            <h2 className="font-bold text-sm">定制账本 (AB) · 客户想要 老板知道</h2>
           </div>
           <Button
             size="sm"
-            className="bg-[#D32F2F] hover:bg-red-700 text-white"
+            className="bg-[#D32F2F] hover:bg-red-700 text-white flex-shrink-0 ml-2"
             onClick={() => setShowCreate(!showCreate)}
           >
             <Plus className="w-4 h-4 mr-1" />
-            新建意见本
+            新建
           </Button>
+        </div>
+        {/* 第二行：描述 + 场景说明按钮 */}
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-500">扫码免注册提意见，适用于餐厅、门店等场景</p>
+          <button
+            onClick={() => setShowGuide(!showGuide)}
+            className="flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0 ml-2"
+          >
+            <Lightbulb className="w-3 h-3" />
+            场景说明
+            {showGuide ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
         </div>
         {/* 场景说明下拉（仅后台可见）*/}
         {showGuide && (
