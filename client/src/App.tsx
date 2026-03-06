@@ -175,6 +175,7 @@ const BeautyAppointments = lazy(() => import("./pages/beauty/BeautyAppointments"
 const BeautyShop = lazy(() => import("./pages/beauty/BeautyShop"));
 const BeautyCart = lazy(() => import("./pages/beauty/BeautyCart"));
 const BeautyProductDetail = lazy(() => import("./pages/beauty/BeautyProductDetail"));
+const BeautyProductShare = lazy(() => import("./pages/beauty/BeautyProductShare"));
 const BeautyHealth = lazy(() => import("./pages/beauty/BeautyHealth"));
 const BeautyAiDiet = lazy(() => import("./pages/beauty/BeautyAiDiet"));
 const BeautyProfile = lazy(() => import("./pages/beauty/BeautyProfile"));
@@ -364,6 +365,7 @@ function Router() {
         <Route path="/beauty/shop" component={BeautyShop} />
         <Route path="/beauty/cart" component={BeautyCart} />
         <Route path="/beauty/product/:id" component={BeautyProductDetail} />
+        <Route path="/share/beauty/product/:id" component={BeautyProductShare} />
         <Route path="/beauty/health" component={BeautyHealth} />
         <Route path="/beauty/ai-diet" component={BeautyAiDiet} />
         <Route path="/beauty/profile" component={BeautyProfile} />
