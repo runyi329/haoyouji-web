@@ -65,6 +65,56 @@ import CustomAAManager from "./admin/CustomAAManager";
 import CustomABManager from "./admin/CustomABManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
+// 定制账本类型配置表（新增类型只需在此添加）
+const CUSTOM_LEDGER_TYPES = [
+  {
+    key: "AA",
+    label: "AA 型",
+    name: "定制账本",
+    desc: "管理员可创建，普通用户需被邀请才能进入",
+    component: CustomAAManager,
+  },
+  {
+    key: "AB",
+    label: "AB 型",
+    name: "客户想要 老板知道",
+    desc: "扫码免注册提意见，适用于餐厅、门店等场景",
+    component: CustomABManager,
+  },
+];
+
+function CustomLedgerPanel() {
+  const [activeType, setActiveType] = useState("AA");
+  const current = CUSTOM_LEDGER_TYPES.find(t => t.key === activeType)!;
+  const ActiveComponent = current.component;
+
+  return (
+    <div className="space-y-4">
+      {/* 类型切换栏 */}
+      <div className="flex gap-2 flex-wrap">
+        {CUSTOM_LEDGER_TYPES.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveType(t.key)}
+            className={`flex flex-col items-start px-4 py-2.5 rounded-xl border text-left transition-colors ${
+              activeType === t.key
+                ? "bg-[#D32F2F] border-[#D32F2F] text-white"
+                : "bg-white border-gray-200 text-gray-700 hover:border-[#D32F2F]"
+            }`}
+          >
+            <span className="font-bold text-sm">{t.label}</span>
+            <span className={`text-xs mt-0.5 ${activeType === t.key ? "text-red-100" : "text-gray-400"}`}>{t.name}</span>
+          </button>
+        ))}
+      </div>
+      {/* 当前类型说明条 */}
+      <p className="text-xs text-gray-400 px-1">{current.desc}</p>
+      {/* 内容区 */}
+      <ActiveComponent />
+    </div>
+  );
+}
+
 export default function Admin() {
   const [, setLocation] = useLocation();
   const { user, loading } = useAuth();
@@ -1059,12 +1109,9 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          {/* 定制账本管理：AA + AB 并列 */}
+          {/* 定制账本管理：二级类型切换 */}
           <TabsContent value="customAA">
-            <div className="space-y-6">
-              <CustomAAManager />
-              <CustomABManager />
-            </div>
+            <CustomLedgerPanel />
           </TabsContent>
 
           {/* 脉动共享商盟 - 商品库管理 */}
