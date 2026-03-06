@@ -202,6 +202,9 @@ async function startServer() {
   app.use('/api/valuation', valuationModule.default);
   const adminValuationModule = await import('../admin-valuation-api.js');
   app.use('/api/admin/valuation', adminValuationModule.default);
+  // 支付宝 WAP 支付路由
+  const alipayRouterModule = await import('../alipay-router.js');
+  app.use(alipayRouterModule.default);
 
   // tRPC API
   app.use(

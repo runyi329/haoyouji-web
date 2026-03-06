@@ -160,6 +160,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
 const ProductStore = lazy(() => import("./pages/ProductStore"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 const SentiaBuy = lazy(() => import("./pages/SentiaBuy"));
 const SentiaWhitepaper = lazy(() => import("./pages/SentiaWhitepaper"));
@@ -253,6 +254,7 @@ function Router() {
         {/* 商品商店 */}
         <Route path="/products" component={ProductStore} />
         <Route path="/products/:id" component={ProductDetail} />
+        <Route path="/payment/result" component={PaymentResult} />
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
