@@ -281,7 +281,7 @@ export default function CustomShowcase() {
 
     let label: string, icon: any, color: string, desc: string;
     if (q === 0 && r === 0) {
-      label = "前麦"; icon = Gem; color = "#C62828"; desc = "多人实时共享账本，数据永久留存，权限精细管控。AI分析行为模式，自动识别异常、预测趋势。";
+      label = "钱脉"; icon = Gem; color = "#C62828"; desc = "多人实时共享账本，数据永久留存，权限精细管控。AI分析行为模式，自动识别异常、预测趋势。";
     } else {
       const scene = SCENE_LIST[sceneIdx % SCENE_LIST.length];
       sceneIdx++;
@@ -356,10 +356,10 @@ export default function CustomShowcase() {
                       width: "100%", height: "100%", display: "flex", flexDirection: "column",
                       alignItems: "center", justifyContent: "center", color: "#fff", gap: "1px"
                     }}>
-                      <Icon size={isCenter ? 15 : ring <= 1 ? 12 : 10} strokeWidth={2} />
+                      <Icon size={isCenter ? 17 : ring <= 1 ? 14 : 12} strokeWidth={2} />
                       {labelLines.map((line, i) => (
                         <div key={i} style={{
-                          fontSize: isCenter ? 9 : ring <= 1 ? 8.5 : ring <= 3 ? 8 : 7.5,
+                          fontSize: isCenter ? 11 : ring <= 1 ? 10.5 : ring <= 3 ? 10 : 9.5,
                           fontWeight: 800,
                           lineHeight: 1.1,
                           textAlign: "center",
