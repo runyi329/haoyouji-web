@@ -21,7 +21,7 @@ function ScenarioGuide() {
         <Lightbulb className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-amber-800 text-sm">📋 AB 账本 · 共享意见本 — 使用场景说明</h3>
+            <h3 className="font-bold text-amber-800 text-sm">📋 AB 账本 · 客户想要 老板知道 — 使用场景说明</h3>
             <button
               onClick={() => setExpanded(!expanded)}
               className="text-amber-600 text-xs flex items-center gap-1"
@@ -61,7 +61,7 @@ function ScenarioGuide() {
               </div>
               <div className="bg-white rounded-lg p-3 border border-amber-100">
                 <p className="font-semibold text-amber-800 mb-1">💡 推广话术</p>
-                <p className="italic">"我们的共享意见本，让每一桌顾客的声音都能被听见。扫码3秒留言，老板实时收到，让服务越来越好。"</p>
+                <p className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声，让服务越来越好。"</p>
               </div>
             </div>
           )}
@@ -275,7 +275,7 @@ export default function CustomABManager() {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-[#D32F2F]" />
-            <h2 className="font-bold text-base">定制账本 (AB) · 共享意见本</h2>
+            <h2 className="font-bold text-base">定制账本 (AB) · 客户想要 老板知道</h2>
           </div>
           <Button
             size="sm"
