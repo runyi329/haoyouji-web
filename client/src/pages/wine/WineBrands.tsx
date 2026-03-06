@@ -97,9 +97,9 @@ export default function WineBrands() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0505] text-white pb-24">
+    <div className="min-h-screen bg-black text-white pb-24">
       {/* 顶部标题栏 */}
-      <div className="bg-[#1a0a0a] border-b border-[#8B1A1A]/30 px-4 py-4 flex items-center justify-between">
+      <div className="bg-black border-b border-[#333]/30 px-4 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-white font-bold text-lg">品牌中心</h1>
           <p className="text-[#8a7a6a] text-xs">商会认可 · 品质保证</p>
@@ -120,7 +120,7 @@ export default function WineBrands() {
 
       {/* 搜索栏 */}
       <div className="px-4 pt-3 pb-1">
-        <div className="flex items-center gap-2 bg-[#1a0a0a] border border-[#8B1A1A]/30 rounded-xl px-3 py-2.5">
+        <div className="flex items-center gap-2 bg-[#111] border border-[#333]/30 rounded-xl px-3 py-2.5">
           <Search className="w-4 h-4 text-[#8a7a6a] flex-shrink-0" />
           <input
             value={searchText}
@@ -144,7 +144,7 @@ export default function WineBrands() {
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 activeCountry === country
                   ? "bg-[#8B1A1A] text-white"
-                  : "bg-[#1a0a0a] border border-[#8B1A1A]/30 text-[#8a7a6a]"
+                  : "bg-[#111] border border-[#333]/30 text-[#8a7a6a]"
               }`}
             >
               {country !== "全部" && regions.find((r: any) => r.country === country)?.flagEmoji
@@ -191,11 +191,11 @@ export default function WineBrands() {
                 return (
                   <div
                     key={product.id}
-                    className="bg-[#0d0505] border border-[#333]/40 rounded-xl overflow-hidden hover:border-[#C9A84C]/40 transition-colors cursor-pointer"
+                    className="bg-black border border-[#222] rounded-lg overflow-hidden hover:border-[#C9A84C]/40 transition-colors cursor-pointer"
                     onClick={() => setLocation(getProductRoute(product))}
                   >
                     {/* ① 商品主图 */}
-                    <div className="relative aspect-square bg-black">
+                    <div className="relative aspect-square bg-black overflow-hidden">
                       {product.mainImageUrl ? (
                         <img
                           src={product.mainImageUrl}
