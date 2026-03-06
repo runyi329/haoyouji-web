@@ -419,6 +419,15 @@ export default function Ledger() {
           </Link>
           <h1 className="flex-1 text-lg font-medium text-center text-[#222222]">共享账本</h1>
           <div className="flex items-center gap-1">
+            {/* 私人定制按钮 */}
+            <Link href="/custom-showcase">
+              <button
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="私人定制账本"
+              >
+                <Gem className="w-5 h-5 text-[#CBA471]" strokeWidth={2} />
+              </button>
+            </Link>
             {/* 汇率计算器按钮 */}
             <Link href="/exchange-rate">
               <button
