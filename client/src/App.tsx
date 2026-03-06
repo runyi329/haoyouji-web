@@ -192,6 +192,11 @@ const WineProductFidencio = lazy(() => import("./pages/wine/products/WineProduct
 const WineProductMarthu = lazy(() => import("./pages/wine/products/WineProductMarthu"));
 const WineProductRomanico = lazy(() => import("./pages/wine/products/WineProductRomanico"));
 const WineProductRomanicoShare = lazy(() => import("./pages/wine/products/WineProductRomanicoShare"));
+// 润仪算力研发中心（jiang）
+const JiangHome = lazy(() => import("./pages/jiang/JiangHome"));
+const JiangServices = lazy(() => import("./pages/jiang/JiangServices"));
+const JiangShop = lazy(() => import("./pages/jiang/JiangShop"));
+const JiangAbout = lazy(() => import("./pages/jiang/JiangAbout"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // 私人定制展示页
@@ -381,6 +386,11 @@ function Router() {
         <Route path="/beauty/profile" component={BeautyProfile} />
         <Route path="/beauty/clients" component={BeautyClients} />
 
+        {/* 润仪算力研发中心（jiang） */}
+        <Route path="/jiang" component={JiangHome} />
+        <Route path="/jiang/services" component={JiangServices} />
+        <Route path="/jiang/shop" component={JiangShop} />
+        <Route path="/jiang/about" component={JiangAbout} />
         {/* 红酒文化商会（cx8618） */}
         <Route path="/wine" component={WineHome} />
         <Route path="/wine/news" component={WineNews} />
