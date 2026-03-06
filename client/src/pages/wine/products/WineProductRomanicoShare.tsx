@@ -11,9 +11,9 @@
  */
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Share2, Star, Award, MapPin } from "lucide-react";
-import { toast } from "sonner";
+import { Share2, Star, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import ShareSheet from "@/components/ShareSheet";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
@@ -58,6 +58,9 @@ export default function WineProductRomanicoShare() {
     refetchOnWindowFocus: false,
   });
 
+  const [showShare, setShowShare] = useState(false);
+  const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
+
   // 存储 ref 邀请码到 localStorage（有效期7天）
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -78,29 +81,9 @@ export default function WineProductRomanicoShare() {
     if (Math.abs(diff) > 40) { diff > 0 ? goSlide(currentSlide + 1) : goSlide(currentSlide - 1); }
   };
 
-  // 继续分享（生成带邀请码的分享链接）
+  // 继续分享
   const handleShare = () => {
-    const shareUrl = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
-    // 微信内置浏览器不支持 navigator.share，直接显示链接让用户复制
-    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
-    if (!isWeChat && navigator.share) {
-      navigator.share({
-        title: "ROMANICO 罗马尼克干红葡萄酒 · RP 92分",
-        text: "来自西班牙托罗产区，酒体饱满丰腴，余味悠长，物超所值",
-        url: shareUrl,
-      }).catch(() => {});
-    } else {
-      // 微信/不支持share的环境：复制链接
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          toast.success("分享链接已复制", { description: "请粘贴到微信或朋友圈分享" });
-        }).catch(() => {
-          toast.info("分享链接", { description: shareUrl });
-        });
-      } else {
-        toast.info("复制以下链接分享", { description: shareUrl, duration: 6000 });
-      }
-    }
+    setShowShare(true);
   };
 
   // 点击购买
@@ -300,6 +283,15 @@ export default function WineProductRomanicoShare() {
           {currentUser ? "立即咨询购买" : "登录后立即购买"}
         </button>
       </div>
+
+      {/* 分享底部弹出面板 */}
+      <ShareSheet
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        shareUrl={SHARE_URL}
+        title="ROMANICO 罗马尼克干红葡萄酒 750ml"
+        description="RP 92分 · 西班牙托罗产区 · ¥328"
+      />
     </div>
   );
 }

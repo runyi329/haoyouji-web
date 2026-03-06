@@ -8,6 +8,7 @@
  * - 主图区：1:1 正方形轮播，支持触摸滑动
  */
 import { useState, useRef } from "react";
+import ShareSheet from "@/components/ShareSheet";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat,
@@ -54,28 +55,13 @@ const SCORES = [
 export default function WineProductRomanico() {
   const [, setLocation] = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [showShare, setShowShare] = useState(false);
   const touchStartX = useRef(0);
 
+  const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
+
   const handleShare = () => {
-    // 分享链接指向分享页（免登录），并携带邀请码
-    const shareUrl = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
-    // 微信内置浏览器不支持 navigator.share，改为复制链接
-    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
-    if (!isWeChat && navigator.share) {
-      navigator.share({
-        title: "ROMANICO 罗马尼克干红葡萄酒 · RP 92分",
-        text: "来自西班牙托罗产区，酒体饱满丰腴，余味悠长，物超所值",
-        url: shareUrl,
-      }).catch(() => {});
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        toast.success("分享链接已复制", { description: "请粘贴到微信或朋友圈分享" });
-      }).catch(() => {
-        toast.info("复制以下链接分享", { description: shareUrl, duration: 6000 });
-      });
-    } else {
-      toast.info("复制以下链接分享", { description: shareUrl, duration: 6000 });
-    }
+    setShowShare(true);
   };
 
   const handleBuy = () => {
@@ -380,6 +366,15 @@ export default function WineProductRomanico() {
       </div>
 
       <BottomNav merchantCode="cx8618" activeTab="brands" />
+
+      {/* 分享底部弹出面板 */}
+      <ShareSheet
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        shareUrl={SHARE_URL}
+        title="ROMANICO 罗马尼克干红葡萄酒 750ml"
+        description="RP 92分 · 西班牙托罗产区 · ¥328"
+      />
     </div>
   );
 }
