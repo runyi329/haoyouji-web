@@ -6690,39 +6690,8 @@ export const appRouter = router({
         isArchived: z.boolean().optional().default(false),
       }))
       .query(async ({ ctx, input }) => {
-        const regularLedgers = await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
-        // 如果是归档列表，意见本不展示
-        if (input.isArchived) return regularLedgers;
-        // 将管理员自己的 opinion_books 也并入账本列表
-        try {
-          const dbConn = await getDbConnection();
-          if (dbConn) {
-            const [opinionRows] = await dbConn.execute(
-              `SELECT id, name, store_name, description, created_at FROM opinion_books WHERE owner_id = ? AND is_active = 1 ORDER BY created_at DESC`,
-              [ctx.user.id]
-            ) as any;
-            const opinionLedgers = (opinionRows as any[]).map((ob: any) => ({
-              id: `opinion_${ob.id}`,
-              name: ob.name,
-              description: ob.store_name ? `门店：${ob.store_name}` : (ob.description || ''),
-              type: 'opinion_book',
-              members: [],
-              memberCount: 1,
-              recordCount: 0,
-              userRole: 'owner',
-              isArchived: false,
-              isVip: false,
-              lastActivityAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
-              createdAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
-              updatedAt: ob.created_at instanceof Date ? ob.created_at.toISOString() : String(ob.created_at),
-              opinionBookId: ob.id,
-            }));
-            return [...regularLedgers, ...opinionLedgers];
-          }
-        } catch (e) {
-          console.error('[ledger.list] 获取opinion_books失败:', e);
-        }
-        return regularLedgers;
+        // opinion_book类型账本已在ledgers表中，getUserLedgers会自然包含，无需手动合并
+        return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
       }),
 
 
@@ -8414,13 +8383,23 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建意见本' });
         }
+        // 先在ledgers表创建记录（与AA账本相同方案，数据永久保存）
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: 'opinion_book',
+          currency: 'CNY',
+          createdBy: ctx.user.id,
+        });
+        const ledgerId = ledger.id;
+        // 再在opinion_books表创建记录，关联ledger_id
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [result] = await dbConn.execute(
-          `INSERT INTO opinion_books (name, store_name, description, owner_id) VALUES (?, ?, ?, ?)`,
-          [input.name, input.storeName || null, input.description || null, ctx.user.id]
+          `INSERT INTO opinion_books (ledger_id, name, store_name, description, owner_id) VALUES (?, ?, ?, ?, ?)`,
+          [ledgerId, input.name, input.storeName || null, input.description || null, ctx.user.id]
         ) as any;
-        return { id: (result as any).insertId, name: input.name };
+        return { id: (result as any).insertId, ledgerId, name: input.name };
       }),
 
     // 获取意见本列表（仅管理员）
@@ -8432,7 +8411,7 @@ export const appRouter = router({
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [rows] = await dbConn.execute(
-          `SELECT b.id, b.name, b.store_name, b.description, b.is_active, b.created_at,
+          `SELECT b.id, b.ledger_id, b.name, b.store_name, b.description, b.is_active, b.created_at,
                   COUNT(e.id) as entry_count 
            FROM opinion_books b 
            LEFT JOIN opinion_entries e ON e.book_id = b.id 
