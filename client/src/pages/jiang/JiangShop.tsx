@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import JiangTabBar from "./JiangTabBar";
+import BottomNav from "@/components/BottomNav";
 import { ShoppingCart, ChevronRight, Tag } from "lucide-react";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
@@ -301,13 +302,14 @@ export default function JiangShop() {
               <div className="space-y-1">
                 <p className="text-[11px] text-[#888899]">• 算力包永不过期，可随时使用</p>
                 <p className="text-[11px] text-[#888899]">• 定制版购买后，工作人员将在 1-3 个工作日内联系您完成配置</p>
-                <p className="text-[11px] text-[#888899]">• 主页定制服务请先咨询，确认需求后再下单</p>
+                <p className="text-[11px] text-[#888899]">• 主页定制服务请先咋询，确认需求后再下单</p>
                 <p className="text-[11px] text-[#888899]">• 支持支付宝付款，安全有保障</p>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }

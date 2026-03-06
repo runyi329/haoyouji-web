@@ -3,6 +3,7 @@
  * 路由：/jiang/about
  */
 import JiangTabBar from "./JiangTabBar";
+import BottomNav from "@/components/BottomNav";
 import { MessageCircle, Phone, Mail, MapPin, Cpu, Zap, Shield } from "lucide-react";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
@@ -149,6 +150,7 @@ export default function JiangAbout() {
           </div>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }
