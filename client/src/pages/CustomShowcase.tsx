@@ -383,18 +383,21 @@ function DetailCard({ scene, onClose }: {
           </div>
         )}
 
-        {/* 底部CTA */}
+        {/* 底部定制信息 */}
         <div style={{
-          padding: "14px 16px", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px", borderRadius: 14,
           background: "linear-gradient(135deg,rgba(203,164,113,0.2),rgba(198,40,40,0.15))",
           border: "1px solid rgba(203,164,113,0.25)"
         }}>
-          <div>
-            <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 3 }}>想要这个场景的定制账本？</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#CBA471" }}>联系管理员进行私人定制</div>
-          </div>
-          <div style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: "#CBA471", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 14px rgba(203,164,113,0.5)", flexShrink: 0 }}>
-            <ArrowRight size={16} color="#1A1000" />
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 10, backgroundColor: "rgba(0,0,0,0.25)" }}>
+              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>定制周期</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#CBA471", lineHeight: 1 }}>24<span style={{ fontSize: 13, fontWeight: 600, marginLeft: 2 }}>小时</span></div>
+            </div>
+            <div style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 10, backgroundColor: "rgba(0,0,0,0.25)" }}>
+              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>定制费用</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#CBA471", lineHeight: 1 }}>免费</div>
+            </div>
           </div>
         </div>
       </div>
