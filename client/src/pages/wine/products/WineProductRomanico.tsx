@@ -57,11 +57,24 @@ export default function WineProductRomanico() {
   const touchStartX = useRef(0);
 
   const handleShare = () => {
-    const url = `${window.location.origin}/wine/product/romanico`;
-    if (navigator.share) {
-      navigator.share({ title: "罗马尼克 ROMANICO · Teso La Monja", text: "RP 92分！来自西班牙托罗产区，酒体饱满丰腴，余味悠长", url });
+    // 分享链接指向分享页（免登录），并携带邀请码
+    const shareUrl = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
+    // 微信内置浏览器不支持 navigator.share，改为复制链接
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    if (!isWeChat && navigator.share) {
+      navigator.share({
+        title: "ROMANICO 罗马尼克干红葡萄酒 · RP 92分",
+        text: "来自西班牙托罗产区，酒体饱满丰腴，余味悠长，物超所值",
+        url: shareUrl,
+      }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        toast.success("分享链接已复制", { description: "请粘贴到微信或朋友圈分享" });
+      }).catch(() => {
+        toast.info("复制以下链接分享", { description: shareUrl, duration: 6000 });
+      });
     } else {
-      navigator.clipboard.writeText(url).then(() => toast.success("链接已复制"));
+      toast.info("复制以下链接分享", { description: shareUrl, duration: 6000 });
     }
   };
 
