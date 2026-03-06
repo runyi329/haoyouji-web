@@ -23,7 +23,7 @@ import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
-import { getDb } from "./db";
+import { getDb, getDbConnection } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
@@ -8382,7 +8382,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建意见本' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [result] = await dbConn.execute(
           `INSERT INTO opinion_books (name, store_name, description, owner_id) VALUES (?, ?, ?, ?)`,
@@ -8397,7 +8397,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [rows] = await dbConn.execute(
           `SELECT b.id, b.name, b.store_name, b.description, b.is_active, b.created_at,
@@ -8423,7 +8423,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [books] = await dbConn.execute(`SELECT id FROM opinion_books WHERE id=? AND owner_id=?`, [input.bookId, ctx.user.id]) as any;
         if (!(books as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
@@ -8446,7 +8446,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [books] = await dbConn.execute(`SELECT id FROM opinion_books WHERE id=? AND owner_id=?`, [input.bookId, ctx.user.id]) as any;
         if (!(books as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
@@ -8469,7 +8469,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [rows] = await dbConn.execute(
           `SELECT t.id, t.table_code, t.location, t.is_active, t.created_at,
@@ -8496,7 +8496,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
         }
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const offset = (input.page - 1) * input.pageSize;
         let query = `SELECT e.id, e.content, e.rating, e.guest_name, e.is_read, e.created_at,
@@ -8532,7 +8532,7 @@ export const appRouter = router({
         guestName: z.string().max(50).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [tables] = await dbConn.execute(
           `SELECT id FROM opinion_tables WHERE id=? AND book_id=? AND is_active=1`,
@@ -8555,7 +8555,7 @@ export const appRouter = router({
         tableId: z.number(),
       }))
       .query(async ({ input }) => {
-        const dbConn = await getDb();
+        const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [books] = await dbConn.execute(
           `SELECT id, name, store_name FROM opinion_books WHERE id=? AND is_active=1`,
