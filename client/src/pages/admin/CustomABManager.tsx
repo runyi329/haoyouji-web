@@ -217,7 +217,7 @@ export default function CustomABManager() {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-[#D32F2F]" />
-            <h2 className="font-bold text-base">定制账本 (AB) · 客户想要 老板知道</h2>
+            <h2 className="font-bold text-base whitespace-nowrap">定制账本 (AB) · 客户想要 老板知道</h2>
             <button
               onClick={() => setShowGuide(!showGuide)}
               className="flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
@@ -239,9 +239,9 @@ export default function CustomABManager() {
         {/* 场景说明下拉（仅后台可见）*/}
         {showGuide && (
           <div className="mt-2 mb-3 p-3 bg-amber-50 rounded-lg border border-amber-100 text-xs text-amber-700 space-y-2">
-            <p><span className="font-semibold">🍽️ 典型场景：</span>连锁餐厅老板在每张桌子上放置专属二维码，顾客用餐后扫码即可留下意见和评分。老板可实时查看所有门店、所有桌号的顾客反馈，无需顾客注册账号。</p>
-            <p><span className="font-semibold">🔧 操作流程：</span>创建意见本 → 批量生成桌号 → 下载二维码贴桌上 → 顾客扫码免注册直接提意见 → 老板实时查看反馈</p>
-            <p><span className="font-semibold">💡 推广话术：</span><span className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声。"</span></p>
+            <p><span className="font-semibold">典型场景：</span>连锁餐厅老板在每张桌子上放置专属二维码，顾客用餐后扫码即可留下意见和评分。老板可实时查看所有门店、所有桌号的顾客反馈，无需顾客注册账号。</p>
+            <p><span className="font-semibold">操作流程：</span>创建意见本 → 批量生成桌号 → 下载二维码贴桌上 → 顾客扫码免注册直接提意见 → 老板实时查看反馈</p>
+            <p><span className="font-semibold">推广话术：</span><span className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声。"</span></p>
           </div>
         )}
         <p className="text-xs text-gray-500">
