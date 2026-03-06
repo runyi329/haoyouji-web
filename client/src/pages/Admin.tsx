@@ -347,10 +347,7 @@ export default function Admin() {
               <BookMarked className="w-4 h-4 mr-1 hidden sm:inline" />
               定制账本
             </TabsTrigger>
-            <TabsTrigger value="customAB" className="text-xs sm:text-sm">
-              <MessageSquare className="w-4 h-4 mr-1 hidden sm:inline" />
-              意见本
-            </TabsTrigger>
+
             <TabsTrigger value="productLibrary" className="text-xs sm:text-sm">
               <Package className="w-4 h-4 mr-1 hidden sm:inline" />
               商品库
@@ -1062,13 +1059,12 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          {/* 定制账本(AA) 管理 */}
+          {/* 定制账本管理：AA + AB 并列 */}
           <TabsContent value="customAA">
-            <CustomAAManager />
-          </TabsContent>
-          {/* 定制账本(AB) - 共享意见本 */}
-          <TabsContent value="customAB">
-            <CustomABManager />
+            <div className="space-y-6">
+              <CustomAAManager />
+              <CustomABManager />
+            </div>
           </TabsContent>
 
           {/* 脉动共享商盟 - 商品库管理 */}

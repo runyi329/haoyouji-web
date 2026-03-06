@@ -12,64 +12,7 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 
-// ===== 使用场景说明卡片（仅后台可见）=====
-function ScenarioGuide() {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <Card className="p-4 bg-amber-50 border-amber-200">
-      <div className="flex items-start gap-3">
-        <Lightbulb className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-amber-800 text-sm">📋 AB 账本 · 客户想要 老板知道 — 使用场景说明</h3>
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-amber-600 text-xs flex items-center gap-1"
-            >
-              {expanded ? "收起" : "展开"}
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-          </div>
-          <p className="text-amber-700 text-xs mt-1">
-            适用场景：连锁餐厅、咖啡店、门店等需要收集顾客实时反馈的场所
-          </p>
-          {expanded && (
-            <div className="mt-3 space-y-2 text-xs text-amber-700">
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
-                <p className="font-semibold text-amber-800 mb-1">🍽️ 典型应用场景</p>
-                <p>连锁餐厅老板在每张桌子上放置专属二维码，顾客用餐后扫码即可留下意见和评分。老板可实时查看所有门店、所有桌号的顾客反馈，无需顾客注册账号。</p>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
-                <p className="font-semibold text-amber-800 mb-1">🔧 操作流程</p>
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>创建意见本（填写品牌名/门店名）</li>
-                  <li>批量生成桌号（如：A01~A20）</li>
-                  <li>下载/打印每张桌子的二维码，贴在桌上</li>
-                  <li>顾客扫码后免注册直接提意见</li>
-                  <li>老板在此页面实时查看所有反馈</li>
-                </ol>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
-                <p className="font-semibold text-amber-800 mb-1">✨ 核心优势</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>顾客无需下载APP或注册账号，扫码即用</li>
-                  <li>支持1-5星评分 + 文字意见</li>
-                  <li>可按门店/桌号筛选查看</li>
-                  <li>实时汇总，老板一目了然</li>
-                  <li>可扩展：多门店、多品牌统一管理</li>
-                </ul>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-amber-100">
-                <p className="font-semibold text-amber-800 mb-1">💡 推广话术</p>
-                <p className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声，让服务越来越好。"</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
+// ScenarioGuide 已内联到主卡片标题行
 
 // ===== 二维码生成弹窗 =====
 function QRCodeModal({
@@ -265,17 +208,24 @@ export default function CustomABManager() {
     );
   }
 
+  const [showGuide, setShowGuide] = useState(false);
+
   return (
     <div className="space-y-4">
-      {/* 使用场景说明（仅后台可见）*/}
-      <ScenarioGuide />
-
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-[#D32F2F]" />
             <h2 className="font-bold text-base">定制账本 (AB) · 客户想要 老板知道</h2>
+            <button
+              onClick={() => setShowGuide(!showGuide)}
+              className="flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
+            >
+              <Lightbulb className="w-3 h-3" />
+              场景说明
+              {showGuide ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
           </div>
           <Button
             size="sm"
@@ -286,6 +236,14 @@ export default function CustomABManager() {
             新建意见本
           </Button>
         </div>
+        {/* 场景说明下拉（仅后台可见）*/}
+        {showGuide && (
+          <div className="mt-2 mb-3 p-3 bg-amber-50 rounded-lg border border-amber-100 text-xs text-amber-700 space-y-2">
+            <p><span className="font-semibold">🍽️ 典型场景：</span>连锁餐厅老板在每张桌子上放置专属二维码，顾客用餐后扫码即可留下意见和评分。老板可实时查看所有门店、所有桌号的顾客反馈，无需顾客注册账号。</p>
+            <p><span className="font-semibold">🔧 操作流程：</span>创建意见本 → 批量生成桌号 → 下载二维码贴桌上 → 顾客扫码免注册直接提意见 → 老板实时查看反馈</p>
+            <p><span className="font-semibold">💡 推广话术：</span><span className="italic">"客户想要，老板知道。扫码3秒留言，实时收到每一桌的心声。"</span></p>
+          </div>
+        )}
         <p className="text-xs text-gray-500">
           为每个门店/品牌创建意见本，生成桌号二维码，顾客扫码免注册即可留言。
         </p>
