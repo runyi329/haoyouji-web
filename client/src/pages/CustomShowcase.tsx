@@ -485,7 +485,7 @@ export default function CustomShowcase() {
       {/* 蜂巢全屏 */}
       <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
         <svg width={CANVAS_W} height={CANVAS_H} style={{ position: "absolute", top: 0, left: 0, overflow: "visible" }}>
-          {hexList.map(({ px, py, ring, label, icon: Icon, color, desc, idx }) => {
+          {hexList.map(({ px, py, ring, label, icon: Icon, color, desc, sceneRef, idx }) => {
             const isCenter = ring === 0;
             const isSelected = selected?.label === label && selected?.color === color;
             const opacity = getOpacity(px, py);
@@ -505,8 +505,11 @@ export default function CustomShowcase() {
               <g key={`h${idx}`}
                 onClick={() => {
                   if (opacity < 0.35) return;
-                  const fullScene = sceneRef || { label, icon: Icon, color, desc };
-                  setSelected(fullScene as SceneDetail & { icon: any });
+                  if (sceneRef) {
+                    setSelected(sceneRef);
+                  } else {
+                    setSelected({ label, icon: Icon, color, desc });
+                  }
                 }}
                 style={{
                   cursor: opacity >= 0.28 ? "pointer" : "default",
