@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
-  ChevronLeft, Gem, X, MessageSquare, TrendingUp, Heart, GraduationCap,
+  ChevronLeft, Gem, X, TrendingUp, Heart, GraduationCap,
   Home, Briefcase, Utensils, Car, Dumbbell, Music, Building2, Users, Star,
   ArrowRight, Zap, Rocket, Plane, Coffee, Pill, Wrench, PiggyBank,
   BookOpen, Bike, Package, Hotel, Leaf, Baby, Gamepad2, Scissors,
@@ -9,7 +9,6 @@ import {
   Globe, Headphones, MapPin, Monitor, Shield, Shirt, Tent, Trophy, Tv, Wine
 } from "lucide-react";
 
-// ===== 场景数据 =====
 const SCENARIOS: Record<string, {
   id: string; label: string; icon: any; color: string;
   aiDesc: string; current: string; future: string; examples: string[];
@@ -62,7 +61,7 @@ const SCENARIOS: Record<string, {
   logistics: { id: "logistics", label: "仓储\n管理", icon: Package, color: "#4E342E", aiDesc: "「库存生命体征监测仪」——每次货物进出都是仓储系统的一次呼吸。", current: "货物进出记录，收支追踪，租金分摊管理。", future: "AI分析库存周转率，预测滞销风险，优化仓储空间利用率。", examples: ["货物进出", "收支追踪", "租金分摊"] },
 };
 
-// ===== 蜂巢网格（axial 坐标）=====
+// 蜂巢网格（axial 坐标，pointy-top）
 const HEX_GRID = [
   { q: 0, r: 0, id: "core" },
   // 第一圈
@@ -91,7 +90,7 @@ const HEX_GRID = [
   { q: 1, r: 3, id: "startup" }, { q: 2, r: 2, id: "music2" }, { q: 3, r: 1, id: "dental" },
 ];
 
-// ===== 详情弹窗 =====
+// 详情弹窗
 function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string]; onClose: () => void }) {
   const Icon = scenario.icon;
   return (
@@ -100,10 +99,13 @@ function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string];
       <div className="w-full max-w-md rounded-t-3xl pb-10"
         style={{ background: "linear-gradient(160deg,#1A1000,#0D0800)", border: "1px solid rgba(203,164,113,0.25)", animation: "slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1)" }}
         onClick={e => e.stopPropagation()}>
-        <div className="flex justify-center pt-3 pb-1"><div className="w-10 h-1 rounded-full" style={{ backgroundColor: "rgba(203,164,113,0.35)" }} /></div>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "rgba(203,164,113,0.35)" }} />
+        </div>
         <div className="flex items-center justify-between px-5 pt-3 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ backgroundColor: scenario.color, boxShadow: `0 0 16px ${scenario.color}55` }}>
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: scenario.color, boxShadow: `0 0 16px ${scenario.color}55` }}>
               <Icon size={22} color="#fff" strokeWidth={2} />
             </div>
             <div>
@@ -111,7 +113,8 @@ function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string];
               <p className="text-xs" style={{ color: "#8B7355" }}>私人定制账本场景</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(203,164,113,0.12)" }}>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: "rgba(203,164,113,0.12)" }}>
             <X size={16} style={{ color: "#8B7355" }} />
           </button>
         </div>
@@ -128,12 +131,14 @@ function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string];
             {scenario.examples.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {scenario.examples.map((ex, i) => (
-                  <span key={i} className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ border: "1px solid #CBA471", color: "#CBA471", backgroundColor: "rgba(203,164,113,0.1)" }}>{ex}</span>
+                  <span key={i} className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                    style={{ border: "1px solid #CBA471", color: "#CBA471", backgroundColor: "rgba(203,164,113,0.1)" }}>{ex}</span>
                 ))}
               </div>
             )}
           </div>
-          <div className="rounded-2xl p-4" style={{ background: "linear-gradient(135deg,rgba(203,164,113,0.12),rgba(180,80,30,0.08))", border: "1px solid rgba(203,164,113,0.18)" }}>
+          <div className="rounded-2xl p-4"
+            style={{ background: "linear-gradient(135deg,rgba(203,164,113,0.12),rgba(180,80,30,0.08))", border: "1px solid rgba(203,164,113,0.18)" }}>
             <div className="flex items-center gap-2 mb-2">
               <Rocket size={14} style={{ color: "#CBA471" }} />
               <span className="text-xs font-bold" style={{ color: "#CBA471" }}>🚀 未来 AI 升级</span>
@@ -141,12 +146,14 @@ function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string];
             <p className="text-xs leading-relaxed italic" style={{ color: "#CBA471" }}>[预言家模式]：{scenario.future}</p>
           </div>
           {scenario.id !== "core" && (
-            <div className="rounded-2xl p-4 flex items-center justify-between" style={{ background: "linear-gradient(135deg,rgba(203,164,113,0.18),rgba(198,40,40,0.12))", border: "1px solid rgba(203,164,113,0.2)" }}>
+            <div className="rounded-2xl p-4 flex items-center justify-between"
+              style={{ background: "linear-gradient(135deg,rgba(203,164,113,0.18),rgba(198,40,40,0.12))", border: "1px solid rgba(203,164,113,0.2)" }}>
               <div>
                 <p className="text-xs" style={{ color: "#8B7355" }}>想要这个场景的定制账本？</p>
                 <p className="text-sm font-semibold mt-0.5" style={{ color: "#CBA471" }}>联系管理员进行私人定制</p>
               </div>
-              <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: "#CBA471", boxShadow: "0 0 12px rgba(203,164,113,0.5)" }}>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "#CBA471", boxShadow: "0 0 12px rgba(203,164,113,0.5)" }}>
                 <ArrowRight size={16} color="#1A1000" />
               </div>
             </div>
@@ -157,43 +164,38 @@ function DetailCard({ scenario, onClose }: { scenario: typeof SCENARIOS[string];
   );
 }
 
-// ===== 主页面 =====
 export default function CustomShowcase() {
   const [selected, setSelected] = useState<typeof SCENARIOS[string] | null>(null);
   const [revealed, setRevealed] = useState(false);
-
-  // 球体拖拽状态：offset = 蜂巢中心相对于屏幕中心的偏移
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ startX: number; startY: number; startOX: number; startOY: number; dragging: boolean; moved: boolean } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   useEffect(() => {
     const t = setTimeout(() => setRevealed(true), 100);
-    return () => clearTimeout(t);
-  }, []);
-
-  // 基础六边形半径（稍微放大）
-  const BASE_R = 40;
-  const GAP = 1.04;
-
-  // 屏幕尺寸
-  const [screenW, setScreenW] = useState(window.innerWidth);
-  const [screenH, setScreenH] = useState(window.innerHeight);
-  useEffect(() => {
-    const fn = () => { setScreenW(window.innerWidth); setScreenH(window.innerHeight); };
-    window.addEventListener("resize", fn);
-    return () => window.removeEventListener("resize", fn);
+    const onResize = () => setDims({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => { clearTimeout(t); window.removeEventListener("resize", onResize); };
   }, []);
 
   const NAV_H = 88;
-  const CANVAS_H = screenH - NAV_H;
-  const CX = screenW / 2;
+  const CANVAS_W = dims.w;
+  const CANVAS_H = dims.h - NAV_H;
+
+  // 自动计算六边形尺寸：让蜂巢（4圈，宽9格，高9格）恰好铺满画布
+  // 4圈蜂巢宽度 = 9 * hex_w，高度 = 9 * hex_h（pointy-top）
+  // hex_w = sqrt(3) * R, hex_h = 2 * R, row_height = 1.5 * R
+  // 水平方向：9 * sqrt(3) * R <= CANVAS_W => R <= CANVAS_W / (9 * sqrt(3))
+  // 垂直方向：(4*2+1) * 1.5 * R <= CANVAS_H => R <= CANVAS_H / (9 * 1.5)
+  const R_from_W = CANVAS_W / (9 * Math.sqrt(3));
+  const R_from_H = CANVAS_H / (9 * 1.5);
+  // 取较小值，保证不溢出；再乘以1.05让边缘稍微溢出（无边界感）
+  const BASE_R = Math.min(R_from_W, R_from_H) * 1.08;
+
+  // 间距系数：紧密排列，无间隙（像上一版）
+  const GAP = 1.0;
+
+  const CX = CANVAS_W / 2;
   const CY = CANVAS_H / 2;
 
-  // 球体效果参数
-  const SPHERE_RADIUS = Math.min(screenW, CANVAS_H) * 0.42; // 球体感知半径
-
-  // pointy-top 六边形顶点
   function hexPoints(cx: number, cy: number, r: number) {
     return Array.from({ length: 6 }, (_, i) => {
       const a = (Math.PI / 3) * i - Math.PI / 6;
@@ -201,109 +203,48 @@ export default function CustomShowcase() {
     }).join(" ");
   }
 
-  // 计算每个六边形的像素坐标（基于轴坐标）
   const hexList = HEX_GRID.map(({ q, r, id }, idx) => {
-    const baseX = BASE_R * Math.sqrt(3) * GAP * (q + r / 2);
-    const baseY = BASE_R * 1.5 * GAP * r;
-    // 加上拖拽偏移
-    const px = CX + baseX + offset.x;
-    const py = CY + baseY + offset.y;
+    const px = CX + BASE_R * Math.sqrt(3) * GAP * (q + r / 2);
+    const py = CY + BASE_R * 1.5 * GAP * r;
     const scenario = SCENARIOS[id];
     const ring = Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
-    return { q, r, px, py, baseX, baseY, scenario, ring, idx, id };
+    return { q, r, px, py, scenario, ring, idx, id };
   });
 
-  // 球体效果：根据距离屏幕中心的距离计算缩放和亮度
-  function getSphereProps(px: number, py: number) {
-    const dx = px - CX;
-    const dy = py - CY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const t = Math.min(dist / SPHERE_RADIUS, 1); // 0=中心 1=边缘
-    // 球面投影：中心最大，边缘缩小（模拟球体曲率）
-    const scale = 1 - t * 0.38; // 中心1.0，边缘0.62
-    const brightness = 1 - t * 0.55; // 中心1.0，边缘0.45
-    const blur = t * 1.5; // 边缘轻微模糊
-    return { scale, brightness, blur };
+  // 球体亮度：中心亮，边缘暗（不缩放，只调亮度）
+  const SPHERE_R = Math.min(CANVAS_W, CANVAS_H) * 0.45;
+  function getBrightness(px: number, py: number) {
+    const dist = Math.sqrt((px - CX) ** 2 + (py - CY) ** 2);
+    return Math.max(0.28, 1 - (dist / SPHERE_R) * 0.68);
   }
-
-  // 触摸/鼠标事件处理
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // 如果点击的是六边形，不启动拖拽（让点击事件处理）
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startOX: offset.x,
-      startOY: offset.y,
-      dragging: true,
-      moved: false,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }, [offset]);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current?.dragging) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-      dragRef.current.moved = true;
-    }
-    if (dragRef.current.moved) {
-      // 弹性边界：限制拖拽范围，不让蜂巢飞太远
-      const maxOffset = SPHERE_RADIUS * 0.8;
-      const newX = Math.max(-maxOffset, Math.min(maxOffset, dragRef.current.startOX + dx));
-      const newY = Math.max(-maxOffset, Math.min(maxOffset, dragRef.current.startOY + dy));
-      setOffset({ x: newX, y: newY });
-    }
-  }, [SPHERE_RADIUS]);
-
-  const handlePointerUp = useCallback(() => {
-    if (dragRef.current) {
-      dragRef.current.dragging = false;
-    }
-  }, []);
-
-  // 点击六边形（区分拖拽和点击）
-  const handleHexClick = useCallback((scenario: typeof SCENARIOS[string]) => {
-    if (dragRef.current?.moved) return; // 拖拽中不触发点击
-    setSelected(prev => prev?.id === scenario.id ? null : scenario);
-  }, []);
 
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden", background: "linear-gradient(160deg,#0D0800 0%,#1A0F00 40%,#0D0D0D 100%)", position: "relative" }}>
       {/* 顶部导航 */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, padding: "48px 16px 12px", background: "linear-gradient(to bottom,rgba(13,8,0,0.97) 65%,transparent)", pointerEvents: "none" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, padding: "48px 16px 12px", background: "linear-gradient(to bottom,rgba(13,8,0,0.97) 65%,transparent)" }}>
         <div style={{ display: "flex", alignItems: "center" }}>
-          <div style={{ pointerEvents: "auto" }}>
-            <Link href="/ledger">
-              <button style={{ padding: "8px", marginLeft: "-8px", background: "none", border: "none", cursor: "pointer" }}>
-                <ChevronLeft style={{ width: 24, height: 24, color: "#CBA471" }} />
-              </button>
-            </Link>
-          </div>
+          <Link href="/ledger">
+            <button style={{ padding: "8px", marginLeft: "-8px", background: "none", border: "none", cursor: "pointer" }}>
+              <ChevronLeft style={{ width: 24, height: 24, color: "#CBA471" }} />
+            </button>
+          </Link>
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#CBA471" }}>私人定制账本</div>
-            <div style={{ fontSize: 11, color: "#8B7355", marginTop: 1 }}>无限蜂巢 · 拖动探索 · 点击了解详情</div>
+            <div style={{ fontSize: 11, color: "#8B7355", marginTop: 1 }}>无限蜂巢 · 点击任意场景了解详情</div>
           </div>
           <div style={{ width: 40 }} />
         </div>
       </div>
 
-      {/* 蜂巢画布 */}
-      <div
-        ref={containerRef}
-        style={{ position: "absolute", top: NAV_H, left: 0, right: 0, bottom: 0, touchAction: "none", cursor: "grab" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-      >
+      {/* 蜂巢区域 */}
+      <div style={{ position: "absolute", top: NAV_H, left: 0, right: 0, bottom: 0, overflow: "hidden" }}>
         {/* 边缘消融遮罩 */}
         <div style={{
           position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
-          background: `radial-gradient(ellipse 58% 52% at 50% 50%, transparent 28%, rgba(13,8,0,0.5) 58%, rgba(13,8,0,0.92) 80%, #0D0800 100%)`
+          background: `radial-gradient(ellipse 56% 50% at 50% 50%, transparent 30%, rgba(13,8,0,0.55) 60%, rgba(13,8,0,0.92) 82%, #0D0800 100%)`
         }} />
 
-        <svg width={screenW} height={CANVAS_H} style={{ position: "absolute", zIndex: 1, overflow: "visible" }}>
+        <svg width={CANVAS_W} height={CANVAS_H} style={{ position: "absolute", zIndex: 1, overflow: "visible" }}>
           {/* 连接线 */}
           {hexList.filter(h => h.ring >= 1 && h.ring <= 3).map(h => {
             const neighbors = [
@@ -313,11 +254,11 @@ export default function CustomShowcase() {
             ];
             const parent = hexList.find(p => p.ring === h.ring - 1 && neighbors.some(n => n.q === p.q && n.r === p.r));
             if (!parent) return null;
-            const { brightness } = getSphereProps(h.px, h.py);
+            const b = getBrightness(h.px, h.py);
             return (
               <line key={`line-${h.idx}`}
                 x1={parent.px} y1={parent.py} x2={h.px} y2={h.py}
-                stroke={`rgba(203,164,113,${0.06 * brightness})`}
+                stroke={`rgba(203,164,113,${0.07 * b})`}
                 strokeWidth={0.8} strokeDasharray="3,5" />
             );
           })}
@@ -327,63 +268,59 @@ export default function CustomShowcase() {
             if (!scenario) return null;
             const isCenter = ring === 0;
             const isSelected = selected?.id === scenario.id;
-            const { scale, brightness, blur } = getSphereProps(px, py);
-
-            // 基础半径（圈越外越小，再叠加球体缩放）
-            const baseR = isCenter ? BASE_R * 1.2 : ring <= 1 ? BASE_R * 1.05 : ring === 2 ? BASE_R * 0.93 : ring === 3 ? BASE_R * 0.84 : BASE_R * 0.76;
-            const r = baseR * scale;
-            const pts = hexPoints(px, py, r - 1.2);
+            // 圈越外半径越小（保持上一版的层级感）
+            const r = isCenter ? BASE_R * 1.18 : ring === 1 ? BASE_R * 1.02 : ring === 2 ? BASE_R * 0.90 : ring === 3 ? BASE_R * 0.82 : BASE_R * 0.75;
+            const pts = hexPoints(px, py, r - 1.0);
+            const b = getBrightness(px, py);
             const Icon = scenario.icon;
-
-            // 亮度调整：边缘变暗
-            const colorOpacity = Math.max(0.25, brightness);
-            const fillColor = ring >= 3 ? `${scenario.color}${Math.round(colorOpacity * 200).toString(16).padStart(2, "0")}` :
-              ring === 2 ? `${scenario.color}${Math.round(colorOpacity * 220).toString(16).padStart(2, "0")}` :
-                scenario.color;
 
             return (
               <g key={`hex-${idx}`}
-                onClick={() => handleHexClick(scenario)}
+                onClick={() => setSelected(prev => prev?.id === scenario.id ? null : scenario)}
                 style={{
                   cursor: "pointer",
                   opacity: revealed ? 1 : 0,
-                  transition: `opacity 0.6s ease ${Math.min(idx * 18, 700)}ms`,
-                  filter: blur > 0.5 ? `blur(${blur * 0.4}px)` : undefined
+                  transition: `opacity 0.55s ease ${Math.min(idx * 18, 700)}ms`
                 }}>
                 {/* 呼吸光晕（中心） */}
                 {isCenter && (
-                  <polygon points={hexPoints(px, py, r + 8)} fill="none"
+                  <polygon points={hexPoints(px, py, r + 7)} fill="none"
                     stroke="#CBA471" strokeWidth={2.5}
                     style={{ filter: "drop-shadow(0 0 12px #CBA471)" }}
                     className="hex-pulse" />
                 )}
                 {/* 选中光晕 */}
                 {isSelected && (
-                  <polygon points={hexPoints(px, py, r + 5)} fill="none"
+                  <polygon points={hexPoints(px, py, r + 4)} fill="none"
                     stroke="#CBA471" strokeWidth={2}
                     style={{ filter: "drop-shadow(0 0 8px #CBA471)", opacity: 0.9 }} />
                 )}
                 {/* 主体 */}
                 <polygon points={pts}
-                  fill={fillColor}
-                  stroke={isSelected ? "#CBA471" : `rgba(203,164,113,${0.15 * brightness})`}
-                  strokeWidth={isSelected ? 1.5 : 0.6}
+                  fill={scenario.color}
+                  stroke={isSelected ? "#CBA471" : `rgba(203,164,113,${0.18 * b})`}
+                  strokeWidth={isSelected ? 1.5 : 0.7}
                   style={{
+                    opacity: Math.max(0.22, b * (ring >= 3 ? 0.75 : 1)),
                     filter: isCenter
-                      ? "drop-shadow(0 4px 18px rgba(0,0,0,0.9))"
-                      : `drop-shadow(0 2px ${Math.round(6 * brightness)}px rgba(0,0,0,${0.4 + (1 - brightness) * 0.4}))`,
+                      ? "drop-shadow(0 4px 18px rgba(0,0,0,0.85))"
+                      : "drop-shadow(0 2px 5px rgba(0,0,0,0.5))",
                     transition: "all 0.15s ease"
                   }} />
                 {/* AI金边 */}
                 <polygon points={pts} fill="none"
-                  stroke={`rgba(203,164,113,${0.18 * brightness})`} strokeWidth={0.6} />
+                  stroke={`rgba(203,164,113,${0.2 * b})`} strokeWidth={0.6} />
                 {/* 图标+文字 */}
                 <foreignObject x={px - r} y={py - r} width={r * 2} height={r * 2} style={{ pointerEvents: "none" }}>
-                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#fff", padding: "2px", opacity: Math.max(0.3, brightness) }}>
-                    <Icon size={isCenter ? 18 : ring <= 1 ? 14 : ring === 2 ? 11 : 9} strokeWidth={2} />
+                  <div style={{
+                    width: "100%", height: "100%", display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center", color: "#fff", padding: "2px",
+                    opacity: Math.max(0.3, b)
+                  }}>
+                    <Icon size={isCenter ? 17 : ring <= 1 ? 13 : ring === 2 ? 10 : 8} strokeWidth={2} />
                     {scenario.label.split("\n").map((line, i) => (
                       <div key={i} style={{
-                        fontSize: isCenter ? 9 : ring <= 1 ? 8 : ring === 2 ? 7 : 6,
+                        fontSize: isCenter ? 8.5 : ring <= 1 ? 7.5 : ring === 2 ? 6.5 : 5.5,
                         fontWeight: 700, lineHeight: 1.2, textAlign: "center", marginTop: i === 0 ? 2 : 0,
                         textShadow: "0 0 4px rgba(203,164,113,0.5),0 1px 2px rgba(0,0,0,0.9)"
                       }}>{line}</div>
@@ -396,7 +333,6 @@ export default function CustomShowcase() {
         </svg>
       </div>
 
-      {/* 详情弹窗 */}
       {selected && <DetailCard scenario={selected} onClose={() => setSelected(null)} />}
 
       <style>{`
