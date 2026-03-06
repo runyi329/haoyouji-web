@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useParams } from 'wouter';
+import { useAuth } from '@/_core/hooks/useAuth';
+import { getLoginUrl } from '@/const';
 import { ChevronLeft, Check, Shield, Clock, Headphones, Zap, Users, BookOpen, Cpu, X, Smartphone, CreditCard } from 'lucide-react';
 
 // ============================================================
@@ -289,10 +291,16 @@ function PaymentModal({
   const [selected, setSelected] = useState<'alipay' | 'wechat'>('alipay');
   const [confirming, setConfirming] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
   const handlePay = async () => {
     if (selected === 'wechat') {
       alert('微信支付暂未开通，请使用支付宝支付');
+      return;
+    }
+    // 未登录时跳转登录页，登录后返回当前页
+    if (!isAuthenticated) {
+      window.location.href = getLoginUrl() + '?returnUrl=' + encodeURIComponent(window.location.pathname);
       return;
     }
     setConfirming(true);
