@@ -14,6 +14,7 @@ import { useLocation } from "wouter";
 import { Share2, Star, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import ShareSheet from "@/components/ShareSheet";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
@@ -60,6 +61,13 @@ export default function WineProductRomanicoShare() {
 
   const [showShare, setShowShare] = useState(false);
   const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=cx8618`;
+
+  // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
+  useMerchantOG('cx8618', {
+    title: 'ROMANICO 罗马尼克干红葡萄酒 750ml',
+    desc: 'RP 92分 · 西班牙托罗产区 · ¥328',
+    url: `${window.location.origin}/share/wine/product/romanico`,
+  });
 
   // 存储 ref 邀请码到 localStorage（有效期7天）
   useEffect(() => {
