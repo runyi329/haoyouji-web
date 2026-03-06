@@ -6,7 +6,7 @@
  * 作为所有新商家建站的底层依据
  */
 import { useLocation } from "wouter";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import BottomNav from "@/components/BottomNav";
 
@@ -143,6 +143,13 @@ export default function JiangBuildRules() {
                   <span className="text-[10px] text-[#444466]">2026-03-05</span>
                   <span className="text-[10px] bg-[#D32F2F]/20 text-[#D32F2F] px-2 py-0.5 rounded-full">权威文档</span>
                 </div>
+                <button
+                  onClick={() => setLocation("/jiang/architecture-doc")}
+                  className="mt-3 w-full flex items-center justify-center gap-2 bg-[#D32F2F] hover:bg-[#B71C1C] text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  查看完整文档（2800行原文）
+                </button>
               </div>
             </div>
           </div>

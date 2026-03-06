@@ -8656,6 +8656,30 @@ export const adminFeatureRouter = router({
       return result;
     }),
 
+  // 获取脱动共享商盟完整架构文档（建站规则页使用）
+  getMerchantArchitectureDoc: publicProcedure
+    .query(async () => {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        // 文档存放在项目根目录（与 server 同级）
+        const docPath = path.resolve(process.cwd(), 'maidong-merchant-architecture.md');
+        const content = await fs.readFile(docPath, 'utf-8');
+        return { content, updatedAt: new Date() };
+      } catch {
+        // 如果文件不在项目目录，尝试上级目录
+        try {
+          const fs = await import('fs/promises');
+          const path = await import('path');
+          const docPath = path.resolve(process.cwd(), '..', 'maidong-merchant-architecture.md');
+          const content = await fs.readFile(docPath, 'utf-8');
+          return { content, updatedAt: new Date() };
+        } catch {
+          return { content: '文档加载失败，请联系管理员', updatedAt: new Date() };
+        }
+      }
+    }),
+
 });
 
 export type AppRouter = typeof appRouter;
