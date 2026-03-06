@@ -36,7 +36,7 @@ interface SceneDetail {
 const SCENE_LIST: SceneDetail[] = [
   // ===== 第1圈：超高频生活场景 =====
   {
-    label: "共享建议簿",
+    label: "建议本",
     icon: MessageCircle,
     color: "#C62828",
     desc: "老板穿透管理层，实时掌握一线顾客真实声音",
