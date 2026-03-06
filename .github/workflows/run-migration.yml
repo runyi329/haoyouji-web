@@ -1,0 +1,73 @@
+name: 手动执行数据库迁移
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '输入 yes 确认执行迁移'
+        required: true
+        default: 'no'
+
+jobs:
+  migrate:
+    name: 执行数据库迁移
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'yes' }}
+    
+    steps:
+      - name: 🔑 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: 📊 执行 opinion 表迁移
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            echo "📊 开始创建 opinion 相关表..."
+            
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db << 'EOSQL'
+CREATE TABLE IF NOT EXISTS opinion_books (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  store_name VARCHAR(100),
+  description TEXT,
+  owner_id INT NOT NULL,
+  is_active TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX opinion_books_owner_idx (owner_id)
+);
+
+CREATE TABLE IF NOT EXISTS opinion_tables (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT NOT NULL,
+  table_code VARCHAR(50) NOT NULL,
+  location VARCHAR(100),
+  is_active TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX opinion_tables_book_idx (book_id)
+);
+
+CREATE TABLE IF NOT EXISTS opinion_entries (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  book_id INT NOT NULL,
+  table_id INT NOT NULL,
+  content TEXT NOT NULL,
+  rating TINYINT,
+  guest_name VARCHAR(50),
+  guest_ip VARCHAR(45),
+  is_read TINYINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX opinion_entries_book_idx (book_id),
+  INDEX opinion_entries_table_idx (table_id),
+  INDEX opinion_entries_created_idx (created_at)
+);
+EOSQL
+            
+            echo "✅ 验证表是否创建成功..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SHOW TABLES LIKE 'opinion%';"
+            echo "✅ opinion 表迁移完成！"
+          ENDSSH
