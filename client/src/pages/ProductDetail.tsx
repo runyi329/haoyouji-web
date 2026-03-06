@@ -306,9 +306,14 @@ function PaymentModal({
     setConfirming(true);
     setErrorMsg(null);
     try {
+      // 从 localStorage 读取 token，与 tRPC 请求保持一致
+      const token = localStorage.getItem('auth-token');
       const res = await fetch('/api/alipay/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         credentials: 'include',
         body: JSON.stringify({
           productId: product.id,
