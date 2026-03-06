@@ -8,7 +8,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useEffect } from "react";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2
 } from "lucide-react";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
@@ -36,6 +36,7 @@ function getCategory(title: string): { label: string; color: string; bg: string 
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+import { toast } from "sonner";
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -101,6 +102,21 @@ export default function BeautyHome() {
   const healthNews = healthQuery.data ?? [];
   const newsLoading = healthQuery.isLoading;
 
+  const handleShare = () => {
+    const shareUrl = `${window.location.origin}/beauty?ref=liulifan`;
+    const shareTitle = '奢贝美容院';
+    const shareText = '高端美容、健康管理一站式服务，为您定制专属美丽方案';
+    if (navigator.share) {
+      navigator.share({ title: shareTitle, text: shareText, url: shareUrl }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        toast.success('分享链接已复制');
+      }).catch(() => {
+        toast.info('分享链接', { description: shareUrl });
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       {/* 顶部 Banner */}
@@ -115,6 +131,15 @@ export default function BeautyHome() {
               <p className="text-white/80 text-sm mb-1">欢迎光临</p>
               <h1 className="text-2xl font-bold tracking-wide">{STORE_INFO.name}</h1>
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* 分享按钮 */}
+              <button
+                onClick={handleShare}
+                className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+              >
+                <Share2 className="w-4 h-4 text-white/80" />
+              </button>
             </div>
             <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
               {/* 头像区域 */}
