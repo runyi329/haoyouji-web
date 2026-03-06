@@ -111,6 +111,9 @@ export default function FeedbackPage() {
         </div>
         <h1 className="text-2xl font-bold">您好！</h1>
         <p className="text-sm opacity-80 mt-1">
+          {(info.table as any).branch_name && (
+            <span className="font-semibold">{(info.table as any).branch_name} · </span>
+          )}
           桌号 <span className="font-semibold">{info.table.table_code}</span>
           {info.table.location && <span> · {info.table.location}</span>}
         </p>

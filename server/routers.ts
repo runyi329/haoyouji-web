@@ -8448,6 +8448,7 @@ export const appRouter = router({
     addTable: protectedProcedure
       .input(z.object({
         bookId: z.number(),
+        branchName: z.string().max(100).optional(),
         tableCode: z.string().min(1).max(50),
         location: z.string().max(100).optional(),
       }))
@@ -8460,8 +8461,8 @@ export const appRouter = router({
         const [books] = await dbConn.execute(`SELECT id FROM opinion_books WHERE id=? AND owner_id=?`, [input.bookId, ctx.user.id]) as any;
         if (!(books as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
         const [result] = await dbConn.execute(
-          `INSERT INTO opinion_tables (book_id, table_code, location) VALUES (?, ?, ?)`,
-          [input.bookId, input.tableCode, input.location || null]
+          `INSERT INTO opinion_tables (book_id, branch_name, table_code, location) VALUES (?, ?, ?, ?)`,
+          [input.bookId, input.branchName || null, input.tableCode, input.location || null]
         ) as any;
         return { id: (result as any).insertId, tableCode: input.tableCode };
       }),
@@ -8470,6 +8471,7 @@ export const appRouter = router({
     addTablesBatch: protectedProcedure
       .input(z.object({
         bookId: z.number(),
+        branchName: z.string().max(100).optional(),
         prefix: z.string().max(20).default(''),
         count: z.number().min(1).max(100),
         location: z.string().max(100).optional(),
@@ -8486,8 +8488,8 @@ export const appRouter = router({
         for (let i = 1; i <= input.count; i++) {
           const tableCode = `${input.prefix}${String(i).padStart(2, '0')}`;
           const [result] = await dbConn.execute(
-            `INSERT INTO opinion_tables (book_id, table_code, location) VALUES (?, ?, ?)`,
-            [input.bookId, tableCode, input.location || null]
+            `INSERT INTO opinion_tables (book_id, branch_name, table_code, location) VALUES (?, ?, ?, ?)`,
+            [input.bookId, input.branchName || null, tableCode, input.location || null]
           ) as any;
           ids.push((result as any).insertId);
         }
@@ -8504,18 +8506,33 @@ export const appRouter = router({
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [rows] = await dbConn.execute(
-          `SELECT t.id, t.table_code, t.location, t.is_active, t.created_at,
+          `SELECT t.id, t.branch_name, t.table_code, t.location, t.is_active, t.created_at,
                   COUNT(e.id) as entry_count 
            FROM opinion_tables t 
            LEFT JOIN opinion_entries e ON e.table_id = t.id 
            WHERE t.book_id = ? AND t.is_active = 1 
            GROUP BY t.id 
-           ORDER BY t.created_at ASC`,
+           ORDER BY t.branch_name ASC, t.created_at ASC`,
           [input.bookId]
         ) as any;
         return rows as any[];
       }),
 
+    // 获取意见本的分店列表（一级标签，仅管理员）
+    getBranches: protectedProcedure
+      .input(z.object({ bookId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [rows] = await dbConn.execute(
+          `SELECT DISTINCT branch_name, COUNT(*) as table_count FROM opinion_tables WHERE book_id=? AND is_active=1 GROUP BY branch_name ORDER BY branch_name ASC`,
+          [input.bookId]
+        ) as any;
+        return rows as Array<{ branch_name: string | null; table_count: number }>;
+      }),
     // 获取意见列表（仅管理员）
     getEntries: protectedProcedure
       .input(z.object({
@@ -8595,7 +8612,7 @@ export const appRouter = router({
         ) as any;
         if (!(books as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '意见本不存在' });
         const [tables] = await dbConn.execute(
-          `SELECT id, table_code, location FROM opinion_tables WHERE id=? AND book_id=? AND is_active=1`,
+          `SELECT id, table_code, location, branch_name FROM opinion_tables WHERE id=? AND book_id=? AND is_active=1`,
           [input.tableId, input.bookId]
         ) as any;
         if (!(tables as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '桌号不存在' });
