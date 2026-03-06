@@ -288,15 +288,36 @@ function PaymentModal({
 }) {
   const [selected, setSelected] = useState<'alipay' | 'wechat'>('alipay');
   const [confirming, setConfirming] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handlePay = () => {
+  const handlePay = async () => {
+    if (selected === 'wechat') {
+      alert('微信支付暂未开通，请使用支付宝支付');
+      return;
+    }
     setConfirming(true);
-    // TODO: 接入真实支付接口
-    setTimeout(() => {
+    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/alipay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          productId: product.id,
+          productName: product.name,
+          amount: product.price,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '创建订单失败');
+      }
+      // 跳转到支付宝支付页面
+      window.location.href = data.payUrl;
+    } catch (err: any) {
       setConfirming(false);
-      alert(`支付功能接入中，请联系客服完成购买\n商品：${product.name}\n金额：¥${product.price}`);
-      onClose();
-    }, 800);
+      setErrorMsg(err?.message || '支付失败，请重试');
+    }
   };
 
   return (
@@ -373,6 +394,13 @@ function PaymentModal({
           <span>支付安全由支付宝/微信保障，信息加密传输</span>
         </div>
 
+        {/* 错误提示 */}
+        {errorMsg && (
+          <div className="mx-5 mb-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{errorMsg}</p>
+          </div>
+        )}
+
         {/* 确认支付按钮 */}
         <div className="px-5 pb-8">
           <button
@@ -380,7 +408,7 @@ function PaymentModal({
             disabled={confirming}
             className="w-full py-4 bg-[#D32F2F] text-white font-semibold text-base rounded-xl active:opacity-90 disabled:opacity-60 transition-opacity"
           >
-            {confirming ? '处理中...' : `确认支付 ¥${product.price % 1 === 0 ? product.price : product.price.toFixed(1)}`}
+            {confirming ? '正在跳转支付宝...' : `支付宝支付 ¥${product.price % 1 === 0 ? product.price : product.price.toFixed(1)}`}
           </button>
         </div>
       </div>
