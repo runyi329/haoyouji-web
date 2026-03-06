@@ -5,6 +5,10 @@
  * - Safari/Chrome（非微信）：调用 navigator.share() 弹出系统级分享菜单，可直接选择微信/朋友圈
  * - 微信内置浏览器：显示引导提示，告知用户点右上角「···」→「发送给朋友」/「分享到朋友圈」
  *   同时提供「复制链接」备用
+ *
+ * 邀请码规则：
+ * - shareUrl 应已包含 ?ref={inviteCode}，由调用方动态拼接
+ * - inviteCode 用于在面板顶部展示提示，让用户知道邀请码已包含在链接中
  */
 import { useEffect } from "react";
 import { X, Copy, MessageCircle, Users, Share2 } from "lucide-react";
@@ -16,6 +20,10 @@ interface ShareSheetProps {
   shareUrl: string;
   title?: string;
   description?: string;
+  /** 当前登录用户的邀请码，用于在面板顶部显示提示 */
+  inviteCode?: string | null;
+  /** 当前是否已登录 */
+  isLoggedIn?: boolean;
 }
 
 const isWeChatBrowser = () => /MicroMessenger/i.test(navigator.userAgent);
@@ -42,7 +50,7 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
   }
 };
 
-export default function ShareSheet({ open, onClose, shareUrl, title, description }: ShareSheetProps) {
+export default function ShareSheet({ open, onClose, shareUrl, title, description, inviteCode, isLoggedIn }: ShareSheetProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -106,7 +114,7 @@ export default function ShareSheet({ open, onClose, shareUrl, title, description
         </div>
 
         {/* 标题 */}
-        <div style={{ padding: "8px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ padding: "8px 20px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <p style={{ fontSize: 15, fontWeight: 600, color: "#e8d5b7", marginBottom: 2 }}>
             {title || "分享"}
           </p>
@@ -117,19 +125,54 @@ export default function ShareSheet({ open, onClose, shareUrl, title, description
           )}
         </div>
 
+        {/* 邀请码提示栏 */}
+        <div style={{ padding: "12px 20px 0" }}>
+          {isLoggedIn && inviteCode ? (
+            <div style={{
+              background: "rgba(201,168,76,0.1)",
+              border: "1px solid rgba(201,168,76,0.25)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>🎁</span>
+              <p style={{ fontSize: 12, color: "rgba(232,213,183,0.85)", lineHeight: 1.5 }}>
+                已包含您的邀请码 <strong style={{ color: "#C9A84C", letterSpacing: 1 }}>{inviteCode}</strong>，好友注册后自动成为您的人脉
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>🔗</span>
+              <p style={{ fontSize: 12, color: "rgba(232,213,183,0.55)", lineHeight: 1.5 }}>
+                好友通过此链接注册后，将绑定本商城
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* 微信内：引导提示 */}
         {inWeChat && (
-          <div style={{ padding: "20px 20px 8px" }}>
+          <div style={{ padding: "12px 20px 0" }}>
             <div style={{
               background: "rgba(7,193,96,0.1)",
               border: "1px solid rgba(7,193,96,0.3)",
               borderRadius: 12,
-              padding: "16px",
+              padding: "14px",
               display: "flex",
               alignItems: "flex-start",
               gap: 12,
             }}>
-              <div style={{ fontSize: 28, lineHeight: 1 }}>☝️</div>
+              <div style={{ fontSize: 24, lineHeight: 1 }}>☝️</div>
               <div>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "#07C160", marginBottom: 4 }}>
                   点右上角「···」分享
