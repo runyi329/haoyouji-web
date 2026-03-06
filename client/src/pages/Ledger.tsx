@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, Gem, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator } from "lucide-react";
+import { Crown, Notebook, Gem, MessageSquare, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -692,6 +692,10 @@ export default function Ledger() {
               key={ledger.id}
               className="cursor-pointer"
               onClick={() => {
+                if ((ledger as any).type === 'opinion_book') {
+                  setLocation('/admin/custom-ab');
+                  return;
+                }
                 handleLedgerClick(ledger.id);
                 setLocation(`/ledger/${ledger.id}`);
               }}
@@ -702,7 +706,7 @@ export default function Ledger() {
                   <div className="mb-3">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                        {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                         <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                         {ledger.isVip === true && (
                           <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
@@ -796,8 +800,8 @@ export default function Ledger() {
                     )}
                   </div>
 
-                  {/* 操作按钮区 - 默认折叠 */}
-                  {expandedLedgerIds.has(ledger.id) && (
+                  {/* 操作按钮区 - 默认折叠，opinion_book类型不显示 */}
+                  {expandedLedgerIds.has(ledger.id) && (ledger as any).type !== 'opinion_book' && (
                   <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                     {activeTab === "active" && (
                       <>
@@ -925,7 +929,7 @@ export default function Ledger() {
                               <div className="mb-3">
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                                    {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                     <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
@@ -986,7 +990,7 @@ export default function Ledger() {
                             <div className="mb-3">
                               <div className="flex items-center justify-between gap-2 mb-1.5">
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                                  {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                   <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                   {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                 </div>
