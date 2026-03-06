@@ -40,9 +40,14 @@ jobs:
               CREATE TABLE IF NOT EXISTS opinion_books (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, store_name VARCHAR(100), description TEXT, owner_id INT NOT NULL, is_active TINYINT NOT NULL DEFAULT 1, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX opinion_books_owner_idx (owner_id));
               CREATE TABLE IF NOT EXISTS opinion_tables (id INT AUTO_INCREMENT PRIMARY KEY, book_id INT NOT NULL, branch_name VARCHAR(100) DEFAULT NULL COMMENT '分店名称（一级标签）', table_code VARCHAR(50) NOT NULL, location VARCHAR(100), is_active TINYINT NOT NULL DEFAULT 1, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX opinion_tables_book_idx (book_id));
               CREATE TABLE IF NOT EXISTS opinion_entries (id INT AUTO_INCREMENT PRIMARY KEY, book_id INT NOT NULL, table_id INT NOT NULL, content TEXT NOT NULL, rating TINYINT, guest_name VARCHAR(50), guest_ip VARCHAR(45), is_read TINYINT NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX opinion_entries_book_idx (book_id), INDEX opinion_entries_table_idx (table_id), INDEX opinion_entries_created_idx (created_at));
-              ALTER TABLE opinion_tables ADD COLUMN IF NOT EXISTS branch_name VARCHAR(100) DEFAULT NULL COMMENT '分店名称（一级标签）';
               SHOW TABLES LIKE 'opinion%';
             "
+            # 安全添加branch_name字段（如果不存在）
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='opinion_tables' AND COLUMN_NAME='branch_name';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE opinion_tables ADD COLUMN branch_name VARCHAR(100) DEFAULT NULL COMMENT \"\u5206\u5e97\u540d\u79f0\"', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
             echo "✅ opinion表结构更新完成"
             echo "📊 查看opinion_books当前数据..."
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT id, name, owner_id, created_at FROM opinion_books;"
