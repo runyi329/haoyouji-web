@@ -177,7 +177,54 @@ const SCENE_LIST: [string, any, string, string][] = [
   ["物联网", Server,          "#37474F", "设备采购，运维费用，服务收益"],
   ["生物科技", Microscope,    "#2E7D32", "研发费用，试验成本，专利管理"],
   ["新材料", Layers,          "#4E342E", "研发费用，原料采购，销售收支"],
+  // ===== 补充场景：消除可见范围内重复 =====
+  ["印刷包装", Printer,        "#4E342E", "印刷收支，材料采购，客户管理"],
+  ["广播电视", Radio,          "#311B92", "广告收益，制作成本，版权管理"],
+  ["展会策划", Palette,        "#006064", "展位收支，布展费用，参展管理"],
+  ["旅行社",   Globe,          "#004D40", "团费收支，供应商管理，导游分成"],
+  ["婚庆公司", Flower2,        "#AD1457", "婚礼收支，供应商管理，员工分成"],
+  ["殡葬服务", Umbrella,       "#37474F", "服务收支，物资采购，员工管理"],
+  ["搬家公司", Truck,          "#E65100", "搬运收支，车辆费用，员工分成"],
+  ["家政服务", Home,           "#2E7D32", "服务收支，员工管理，客户追踪"],
+  ["月嫂中心", Baby,           "#880E4F", "服务收费，员工管理，客户反馈"],
+  ["宠物医院", Stethoscope,    "#1B5E20", "诊费收支，药品采购，客户档案"],
+  ["汽车租赁", Car,            "#BF360C", "租金收支，车辆维护，保险管理"],
+  ["共享单车", Bike,           "#283593", "运营收支，维修费用，投放管理"],
+  ["停车场",   MapPin,         "#37474F", "停车收费，运营成本，设备维护"],
+  ["加油站",   ZapIcon,        "#E65100", "油品收支，运营成本，员工管理"],
+  ["洗车店",   Car,            "#1565C0", "洗车收支，耗材采购，员工分成"],
+  ["充电桩",   ZapIcon,        "#1A237E", "充电收益，运维费用，设备管理"],
+  ["无人零售", ShoppingCart,   "#4E342E", "销售收支，补货追踪，设备维护"],
+  ["自动贩卖", Package,        "#006064", "销售收支，补货追踪，机器维护"],
+  ["快闪店",   Star,           "#BF360C", "活动收支，场地费用，销售追踪"],
+  ["跳蚤市场", ShoppingCart,   "#4A148C", "摊位收支，进货追踪，销售记录"],
+  ["拍卖行",   Landmark,       "#3E2723", "拍卖收支，佣金追踪，客户管理"],
+  ["当铺典当", DollarSign,     "#37474F", "典当收支，利息追踪，物品管理"],
+  ["彩票代理", Target,         "#B71C1C", "销售收支，佣金追踪，日流水"],
+  ["彩妆品牌", Sparkles,       "#AD1457", "产品收支，渠道分成，库存追踪"],
+  ["香薰蜡烛", Flame,          "#4A148C", "产品收支，原料采购，客户管理"],
+  ["手工皮具", Scissors,       "#4E342E", "产品收支，材料采购，定制追踪"],
+  ["陶瓷工坊", PenTool,        "#BF360C", "产品收支，材料采购，展销管理"],
+  ["木工定制", Hammer,         "#3E2723", "定制收支，材料采购，工时追踪"],
+  ["刺绣工坊", Scissors,       "#880E4F", "产品收支，材料采购，订单管理"],
+  ["茶叶经营", Coffee,         "#2E7D32", "进货记录，销售收支，会员管理"],
+  ["红酒庄园", Wine,           "#4A148C", "酒品收支，酒窖管理，会员追踪"],
+  ["有机蔬菜", Leaf,           "#1B5E20", "种植成本，销售收支，会员配送"],
+  ["蜂蜜农场", Feather,        "#E65100", "养殖成本，销售收支，品牌管理"],
+  ["民间借贷", DollarSign,     "#1A237E", "借贷记录，利息追踪，还款管理"],
+  ["互助基金", Users2,         "#283593", "基金收支，成员管理，分红追踪"],
+  ["合会标会", Users,          "#6A1B9A", "会款记录，成员管理，得标追踪"],
+  ["众包平台", Globe,          "#004D40", "任务收支，佣金追踪，接单管理"],
+  ["直播电商", Tv,             "#311B92", "直播收益，货品成本，平台分成"],
+  ["短视频带货", Video,        "#4A148C", "带货收益，样品成本，佣金追踪"],
+  ["知识付费", BookOpen,       "#1A237E", "课程收益，平台分成，内容成本"],
+  ["会员订阅", CreditCard,     "#283593", "订阅收益，运营成本，续费追踪"],
+  ["NFT创作", Hash,            "#311B92", "创作收益，版税追踪，平台费用"],
+  ["碳交易",   Leaf,           "#1B5E20", "碳配额收支，交易记录，核查费用"],
+  ["废旧金属", Recycle,        "#37474F", "收购记录，销售收支，运输费用"],
+  ["旧书回收", BookOpen,       "#4E342E", "收购记录，销售收支，分类追踪"],
 ];
+
 
 // 程序化生成蜂巢网格
 function generateHexGrid(maxRing: number) {
@@ -273,7 +320,12 @@ export default function CustomShowcase() {
 
   const hexGrid = generateHexGrid(ringsNeeded);
 
-  // 场景分配：按圈顺序分配，中心最热门
+  // 场景分配：按圈顺序唯一分配，不循环，超出场景库的节点用占位样式
+  // 先过滤出屏幕内可见节点，再按距离中心的顺序分配场景
+  const EXTRA_COLORS = ["#37474F","#4E342E","#1A237E","#2E7D32","#311B92","#006064","#4A148C","#880E4F","#BF360C","#283593"];
+  const EXTRA_ICONS = [Package, Box, Layers, Globe, Server, Database, Cpu, Wallet, Landmark, Shield];
+  const EXTRA_LABELS = ["待开发","待定制","待探索","待解锁","待激活","待配置","待开通","待升级","待接入","待评估"];
+
   let sceneIdx = 0;
   const hexList = hexGrid.map(({ q, r, ring }, idx) => {
     const px = CX + BASE_R * Math.sqrt(3) * (q + r / 2);
@@ -282,10 +334,18 @@ export default function CustomShowcase() {
     let label: string, icon: any, color: string, desc: string;
     if (q === 0 && r === 0) {
       label = "钱脉"; icon = Gem; color = "#C62828"; desc = "多人实时共享账本，数据永久留存，权限精细管控。AI分析行为模式，自动识别异常、预测趋势。";
-    } else {
-      const scene = SCENE_LIST[sceneIdx % SCENE_LIST.length];
+    } else if (sceneIdx < SCENE_LIST.length) {
+      // 场景库内：唯一分配
+      [label, icon, color, desc] = SCENE_LIST[sceneIdx];
       sceneIdx++;
-      [label, icon, color, desc] = scene;
+    } else {
+      // 超出场景库：用占位样式，显示为待开发状态
+      const ei = (sceneIdx - SCENE_LIST.length) % EXTRA_COLORS.length;
+      label = EXTRA_LABELS[ei % EXTRA_LABELS.length];
+      icon = EXTRA_ICONS[ei];
+      color = EXTRA_COLORS[ei];
+      desc = "此场景正在开发中，敌请期待。";
+      sceneIdx++;
     }
 
     return { q, r, px, py, ring, label, icon, color, desc, idx };
