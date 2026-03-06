@@ -287,7 +287,7 @@ function DetailCard({ scene, onClose }: {
             <ChevronLeft size={24} style={{ color: "#CBA471" }} />
           </button>
           <div style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: "#8B7355" }}>定制案例</div>
+            <div style={{ fontSize: 13, color: "#8B7355", letterSpacing: 2 }}>钱脉长，万物生</div>
           </div>
           <div style={{ width: 40 }} />
         </div>
@@ -306,8 +306,8 @@ function DetailCard({ scene, onClose }: {
             <Icon size={26} color="#fff" strokeWidth={2} />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>定制案例</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginTop: 2 }}>{scene.label}</div>
+            <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 3 }}>定制案例</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
           </div>
         </div>
 
