@@ -8427,6 +8427,208 @@ export const adminFeatureRouter = router({
       
       return result;
     }),
+
+  // ===== AB 定制账本 - 共享意见本 =====
+  opinionBook: router({
+    // 创建意见本（仅管理员）
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(100),
+        storeName: z.string().max(100).optional(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建意见本' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await dbConn.execute(
+          `INSERT INTO opinion_books (name, store_name, description, owner_id) VALUES (?, ?, ?, ?)`,
+          [input.name, input.storeName || null, input.description || null, ctx.user.id]
+        ) as any;
+        return { id: (result as any).insertId, name: input.name };
+      }),
+
+    // 获取意见本列表（仅管理员）
+    list: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [rows] = await dbConn.execute(
+          `SELECT b.id, b.name, b.store_name, b.description, b.is_active, b.created_at,
+                  COUNT(e.id) as entry_count 
+           FROM opinion_books b 
+           LEFT JOIN opinion_entries e ON e.book_id = b.id 
+           WHERE b.owner_id = ? 
+           GROUP BY b.id 
+           ORDER BY b.created_at DESC`,
+          [ctx.user.id]
+        ) as any;
+        return rows as any[];
+      }),
+
+    // 添加桌号（仅管理员）
+    addTable: protectedProcedure
+      .input(z.object({
+        bookId: z.number(),
+        tableCode: z.string().min(1).max(50),
+        location: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [books] = await dbConn.execute(`SELECT id FROM opinion_books WHERE id=? AND owner_id=?`, [input.bookId, ctx.user.id]) as any;
+        if (!(books as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
+        const [result] = await dbConn.execute(
+          `INSERT INTO opinion_tables (book_id, table_code, location) VALUES (?, ?, ?)`,
+          [input.bookId, input.tableCode, input.location || null]
+        ) as any;
+        return { id: (result as any).insertId, tableCode: input.tableCode };
+      }),
+
+    // 批量添加桌号（仅管理员）
+    addTablesBatch: protectedProcedure
+      .input(z.object({
+        bookId: z.number(),
+        prefix: z.string().max(20).default(''),
+        count: z.number().min(1).max(100),
+        location: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [books] = await dbConn.execute(`SELECT id FROM opinion_books WHERE id=? AND owner_id=?`, [input.bookId, ctx.user.id]) as any;
+        if (!(books as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
+        const ids: number[] = [];
+        for (let i = 1; i <= input.count; i++) {
+          const tableCode = `${input.prefix}${String(i).padStart(2, '0')}`;
+          const [result] = await dbConn.execute(
+            `INSERT INTO opinion_tables (book_id, table_code, location) VALUES (?, ?, ?)`,
+            [input.bookId, tableCode, input.location || null]
+          ) as any;
+          ids.push((result as any).insertId);
+        }
+        return { count: ids.length, ids };
+      }),
+
+    // 获取意见本的所有桌号（仅管理员）
+    getTables: protectedProcedure
+      .input(z.object({ bookId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [rows] = await dbConn.execute(
+          `SELECT t.id, t.table_code, t.location, t.is_active, t.created_at,
+                  COUNT(e.id) as entry_count 
+           FROM opinion_tables t 
+           LEFT JOIN opinion_entries e ON e.table_id = t.id 
+           WHERE t.book_id = ? AND t.is_active = 1 
+           GROUP BY t.id 
+           ORDER BY t.created_at ASC`,
+          [input.bookId]
+        ) as any;
+        return rows as any[];
+      }),
+
+    // 获取意见列表（仅管理员）
+    getEntries: protectedProcedure
+      .input(z.object({
+        bookId: z.number(),
+        tableId: z.number().optional(),
+        page: z.number().default(1),
+        pageSize: z.number().default(20),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const offset = (input.page - 1) * input.pageSize;
+        let query = `SELECT e.id, e.content, e.rating, e.guest_name, e.is_read, e.created_at,
+                            t.table_code, t.location 
+                     FROM opinion_entries e 
+                     JOIN opinion_tables t ON t.id = e.table_id 
+                     WHERE e.book_id = ?`;
+        const params: any[] = [input.bookId];
+        if (input.tableId) {
+          query += ` AND e.table_id = ?`;
+          params.push(input.tableId);
+        }
+        query += ` ORDER BY e.created_at DESC LIMIT ? OFFSET ?`;
+        params.push(input.pageSize, offset);
+        const [rows] = await dbConn.execute(query, params) as any;
+        let countQuery = `SELECT COUNT(*) as total FROM opinion_entries e WHERE e.book_id = ?`;
+        const countParams: any[] = [input.bookId];
+        if (input.tableId) {
+          countQuery += ` AND e.table_id = ?`;
+          countParams.push(input.tableId);
+        }
+        const [countRows] = await dbConn.execute(countQuery, countParams) as any;
+        return { entries: rows as any[], total: (countRows as any[])[0].total };
+      }),
+
+    // 游客提交意见（公开接口，无需登录）
+    submitEntry: publicProcedure
+      .input(z.object({
+        bookId: z.number(),
+        tableId: z.number(),
+        content: z.string().min(1).max(1000),
+        rating: z.number().min(1).max(5).optional(),
+        guestName: z.string().max(50).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [tables] = await dbConn.execute(
+          `SELECT id FROM opinion_tables WHERE id=? AND book_id=? AND is_active=1`,
+          [input.tableId, input.bookId]
+        ) as any;
+        if (!(tables as any[]).length) throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的桌号' });
+        const req = (ctx as any).req;
+        const guestIp = req?.ip || req?.headers?.['x-forwarded-for'] || null;
+        await dbConn.execute(
+          `INSERT INTO opinion_entries (book_id, table_id, content, rating, guest_name, guest_ip) VALUES (?, ?, ?, ?, ?, ?)`,
+          [input.bookId, input.tableId, input.content, input.rating || null, input.guestName || null, guestIp]
+        );
+        return { success: true };
+      }),
+
+    // 获取意见本公开信息（游客扫码时获取门店名和桌号）
+    getPublicInfo: publicProcedure
+      .input(z.object({
+        bookId: z.number(),
+        tableId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [books] = await dbConn.execute(
+          `SELECT id, name, store_name FROM opinion_books WHERE id=? AND is_active=1`,
+          [input.bookId]
+        ) as any;
+        if (!(books as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '意见本不存在' });
+        const [tables] = await dbConn.execute(
+          `SELECT id, table_code, location FROM opinion_tables WHERE id=? AND book_id=? AND is_active=1`,
+          [input.tableId, input.bookId]
+        ) as any;
+        if (!(tables as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '桌号不存在' });
+        return { book: (books as any[])[0], table: (tables as any[])[0] };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

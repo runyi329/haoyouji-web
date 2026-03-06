@@ -29,6 +29,7 @@ import {
   Briefcase,
   Wallet,
   Package,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -61,6 +62,7 @@ import UserPermissionsManager from "./admin/UserPermissionsManager";
 import PointsManagement from "./admin/PointsManagement";
 import DataSecurityPanel from "./admin/DataSecurityPanel";
 import CustomAAManager from "./admin/CustomAAManager";
+import CustomABManager from "./admin/CustomABManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 export default function Admin() {
@@ -344,6 +346,10 @@ export default function Admin() {
             <TabsTrigger value="customAA" className="text-xs sm:text-sm">
               <BookMarked className="w-4 h-4 mr-1 hidden sm:inline" />
               定制账本
+            </TabsTrigger>
+            <TabsTrigger value="customAB" className="text-xs sm:text-sm">
+              <MessageSquare className="w-4 h-4 mr-1 hidden sm:inline" />
+              意见本
             </TabsTrigger>
             <TabsTrigger value="productLibrary" className="text-xs sm:text-sm">
               <Package className="w-4 h-4 mr-1 hidden sm:inline" />
@@ -1059,6 +1065,10 @@ export default function Admin() {
           {/* 定制账本(AA) 管理 */}
           <TabsContent value="customAA">
             <CustomAAManager />
+          </TabsContent>
+          {/* 定制账本(AB) - 共享意见本 */}
+          <TabsContent value="customAB">
+            <CustomABManager />
           </TabsContent>
 
           {/* 脉动共享商盟 - 商品库管理 */}

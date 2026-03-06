@@ -1492,3 +1492,6 @@ export * from "./beauty-schema";
 
 // ===== 脉动共享商盟 - 商品库模块 =====
 export * from "./merchant-schema";
+
+// ===== AB 定制账本 - 共享意见本模块 =====
+export * from "./opinion-schema";

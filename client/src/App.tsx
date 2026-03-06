@@ -191,6 +191,8 @@ const WineProductFidencio = lazy(() => import("./pages/wine/products/WineProduct
 const WineProductMarthu = lazy(() => import("./pages/wine/products/WineProductMarthu"));
 const WineProductRomanico = lazy(() => import("./pages/wine/products/WineProductRomanico"));
 const WineProductRomanicoShare = lazy(() => import("./pages/wine/products/WineProductRomanicoShare"));
+// AB 共享意见本 - 游客扫码页面
+const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -384,6 +386,8 @@ function Router() {
         <Route path="/wine/product/marthu" component={WineProductMarthu} />
         <Route path="/wine/product/romanico" component={WineProductRomanico} />
         <Route path="/share/wine/product/romanico" component={WineProductRomanicoShare} />
+        {/* AB 共享意见本 - 游客扫码页面 */}
+        <Route path="/feedback/:bookId/:tableId" component={FeedbackPage} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />
