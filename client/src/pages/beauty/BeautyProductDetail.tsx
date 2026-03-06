@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import { Link, useParams, useLocation } from "wouter";
 import {
   ChevronLeft, ShoppingCart, Gift, Shield, ChevronDown,
-  ChevronUp, Phone
+  ChevronUp, Phone, Share2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -159,6 +159,25 @@ export default function BeautyProductDetail() {
     FALLBACK_PRODUCTS.find(p => p.id === numericId) ?? null
   ));
   const isFallback = !dbProduct;
+
+  // 分享功能：生成带 ?ref=liulifan 的分享页链接
+  const handleShare = () => {
+    const shareId = isFallbackRoute ? `fallback-${fallbackId}` : id;
+    const shareUrl = `${window.location.origin}/share/beauty/product/${shareId}?ref=liulifan`;
+    if (navigator.share) {
+      navigator.share({
+        title: product?.name ?? "奢贝美容院 · 商品分享",
+        text: `${product?.name ?? "精选商品"} ¥${Number(product?.price ?? 0).toLocaleString()}`,
+        url: shareUrl,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        toast.success("分享链接已复制", { description: "可粘贴到微信、朋友圈分享" });
+      }).catch(() => {
+        toast.info("分享链接", { description: shareUrl });
+      });
+    }
+  };
 
   const addToCart = trpc.beauty.shop.addToCart.useMutation({
     onSuccess: () => {
@@ -595,11 +614,12 @@ export default function BeautyProductDetail() {
         style={{ background: "rgba(10,10,10,0.95)", backdropFilter: "blur(16px)", borderTop: "1px solid rgba(255,255,255,0.08)" }}
       >
         <button
-          onClick={() => toast.info("请联系客服咨询")}
+          onClick={handleShare}
           className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+          title="分享商品"
         >
-          <Phone className="w-5 h-5 text-white/60" />
+          <Share2 className="w-5 h-5 text-white/60" />
         </button>
         <Link href="/beauty/cart" className="flex-1">
           <button
