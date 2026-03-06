@@ -167,6 +167,7 @@ export default function CustomABManager() {
   const [expandedBookId, setExpandedBookId] = useState<number | null>(null);
   const [viewingEntriesBook, setViewingEntriesBook] = useState<{ id: number; name: string } | null>(null);
   const [qrModal, setQrModal] = useState<{ bookId: number; tableId: number; tableCode: string; storeName?: string; bookName: string } | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
   // 批量添加桌号
   const [batchPrefix, setBatchPrefix] = useState("");
   const [batchCount, setBatchCount] = useState("10");
@@ -207,8 +208,6 @@ export default function CustomABManager() {
       />
     );
   }
-
-  const [showGuide, setShowGuide] = useState(false);
 
   return (
     <div className="space-y-4">
