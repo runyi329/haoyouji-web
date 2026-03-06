@@ -6,6 +6,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useEffect } from "react";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 import {
   Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut
 } from "lucide-react";
@@ -55,6 +56,8 @@ export default function BeautyHome() {
   const [, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
+  useMerchantOG('liulifan', { url: `${window.location.origin}/beauty` });
   // 查询奢贝积分和权限
   const pointsQuery = trpc.beauty.points.getMyBalance.useQuery(undefined, {
     refetchOnMount: 'always',

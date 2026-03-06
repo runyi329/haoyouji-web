@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Share2, ShoppingCart, Wine, Award, ChefHat } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 
 const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
 const MARTHU_HERO = `${COS_BASE}/wine-products/marthu-hero.webp`;
@@ -25,6 +26,12 @@ const SPECS = [
 
 export default function WineProductMarthu() {
   const [, setLocation] = useLocation();
+  // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
+  useMerchantOG('cx8618', {
+    title: '玛莎干红葡萄酒 MARTHU',
+    desc: '西班牙里奥哈DOC产区 · 石榴红色泽 · ¥198',
+    url: `${window.location.origin}/wine/product/marthu`,
+  });
 
   const handleShare = () => {
     const url = `${window.location.origin}/wine/product/marthu`;

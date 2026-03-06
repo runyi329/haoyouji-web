@@ -8,6 +8,7 @@
  * - 访客无需登录即可浏览
  */
 import { useState, useRef, useEffect } from "react";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -51,56 +52,11 @@ export default function WineHome() {
   const [shareOpen, setShareOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 加载商家分享信息（公开接口，访客无需登录即可获取，§11.5 分享Meta标签注入）
+  // 动态注入商家 OG Meta 标签（分享显示商家设置的标题/图片/描述）
+  useMerchantOG('cx8618', { url: `${window.location.origin}/wine` });
+
+  // 读取商家分享信息（用于分享按钮文案）
   const { data: merchantSettings } = trpc.merchant.getMerchantShareInfo.useQuery({ merchantCode: 'cx8618' });
-
-  // 动态注入 Meta 标签，实现分享显示商家信息
-  useEffect(() => {
-    const shareTitle = merchantSettings?.shareTitle || WINE_INFO.name;
-    const shareDesc = merchantSettings?.shareDescription || WINE_INFO.slogan;
-    const shareLogo = merchantSettings?.shareLogo || merchantSettings?.shopLogoUrl || "";
-    const shareCover = merchantSettings?.shareCoverImage || "";
-
-    // 更新页面标题
-    document.title = shareTitle;
-
-    // 更新或创建 Open Graph meta 标签
-    const setMeta = (property: string, content: string) => {
-      let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
-      if (!el) {
-        el = document.createElement("meta");
-        el.setAttribute("property", property);
-        document.head.appendChild(el);
-      }
-      el.setAttribute("content", content);
-    };
-    const setMetaName = (name: string, content: string) => {
-      let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
-      if (!el) {
-        el = document.createElement("meta");
-        el.setAttribute("name", name);
-        document.head.appendChild(el);
-      }
-      el.setAttribute("content", content);
-    };
-
-    setMeta("og:title", shareTitle);
-    setMeta("og:description", shareDesc);
-    setMeta("og:type", "website");
-    setMeta("og:url", `${window.location.origin}/wine`);
-    if (shareCover) setMeta("og:image", shareCover);
-    else if (shareLogo) setMeta("og:image", shareLogo);
-    setMetaName("description", shareDesc);
-    setMetaName("twitter:card", "summary_large_image");
-    setMetaName("twitter:title", shareTitle);
-    setMetaName("twitter:description", shareDesc);
-    if (shareCover) setMetaName("twitter:image", shareCover);
-
-    // 离开页面时恢复默认标题
-    return () => {
-      document.title = "脉动";
-    };
-  }, [merchantSettings]);
 
   // 点击外部关闭菜单
   useEffect(() => {

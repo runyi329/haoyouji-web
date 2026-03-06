@@ -8,6 +8,7 @@
  * - 主图区：1:1 正方形轮播，支持触摸滑动
  */
 import { useState, useRef } from "react";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 import ShareSheet from "@/components/ShareSheet";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -63,6 +64,13 @@ export default function WineProductRomanico() {
   // 动态邀请码：已登录用户用自己的inviteCode，未登录时用商城默认邀请码
   const refCode = user?.inviteCode || 'cx8618';
   const SHARE_URL = `${window.location.origin}/share/wine/product/romanico?ref=${refCode}`;
+
+  // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
+  useMerchantOG('cx8618', {
+    title: 'ROMANICO 罗马尼克干红葡萄酒 750ml',
+    desc: 'RP 92分 · 西班牙托罗产区 · ¥328',
+    url: `${window.location.origin}/wine/product/romanico`,
+  });
 
   const handleShare = async () => {
     const isWeChat = /MicroMessenger/i.test(navigator.userAgent);

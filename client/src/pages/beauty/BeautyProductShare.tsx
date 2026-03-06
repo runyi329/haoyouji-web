@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
+import { useMerchantOG } from "@/hooks/useMerchantOG";
 import { Share2, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
@@ -130,6 +131,14 @@ export default function BeautyProductShare() {
   const product = dbProduct ?? (isFallbackRoute ? fallbackProduct : (
     FALLBACK_PRODUCTS.find(p => p.id === numericId) ?? null
   ));
+
+  // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
+  useMerchantOG('liulifan', {
+    title: product?.name ? `${product.name} · 奢贝美容院` : '奢贝美容院',
+    desc: product ? `${product.name} ¥${Number(product.price).toLocaleString()}` : '',
+    image: product?.imageUrl || undefined,
+    url: `${window.location.origin}/share/beauty/product/${id}`,
+  });
 
   // 点击购买按钮
   const handleBuy = () => {
