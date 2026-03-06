@@ -9,6 +9,8 @@ import viteConfig from "../../vite.config";
 // 商家路径到 merchantCode 的映射
 const MERCHANT_PATH_MAP: Record<string, string> = {
   '/wine': 'cx8618',
+  '/jiang': 'jiang',
+  '/share/jiang': 'jiang',
 };
 
 // 从数据库获取商家分享信息（用于服务端 OG meta 注入）
