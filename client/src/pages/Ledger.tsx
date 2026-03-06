@@ -706,7 +706,7 @@ export default function Ledger() {
                   <div className="mb-3">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                        {((ledger as any).type === 'custom_aa' || (ledger as any).type === 'opinion_book') ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                         <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                         {ledger.isVip === true && (
                           <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
@@ -929,7 +929,7 @@ export default function Ledger() {
                               <div className="mb-3">
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                                    {((ledger as any).type === 'custom_aa' || (ledger as any).type === 'opinion_book') ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                     <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
@@ -990,7 +990,7 @@ export default function Ledger() {
                             <div className="mb-3">
                               <div className="flex items-center justify-between gap-2 mb-1.5">
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : (ledger as any).type === 'opinion_book' ? <MessageSquare className="w-5 h-5 flex-shrink-0 text-[#2196F3]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
+                                  {((ledger as any).type === 'custom_aa' || (ledger as any).type === 'opinion_book') ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                   <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                   {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                 </div>
@@ -1351,7 +1351,7 @@ export default function Ledger() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {(ledger as any).type === 'custom_aa' ? <Gem className="w-5 h-5 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 text-[#D32F2F]" />}
+                      {((ledger as any).type === 'custom_aa' || (ledger as any).type === 'opinion_book') ? <Gem className="w-5 h-5 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 text-[#D32F2F]" />}
                       <div className="flex-1">
                         <div className="font-medium text-gray-900">{ledger.name}</div>
                         <div className="text-sm text-gray-500">
