@@ -17,7 +17,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "food",
     label: "菜品质量",
-    emoji: "🍽️",
+    emoji: "",
     desc: "口味、食材、分量",
     subItems: [
       { id: "food_salty", label: "太咸" },
@@ -37,7 +37,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "service",
     label: "服务表现",
-    emoji: "👨‍💼",
+    emoji: "",
     desc: "态度、响应、专业度",
     subItems: [
       { id: "svc_slow", label: "响应太慢" },
@@ -55,7 +55,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "env",
     label: "环境氛围",
-    emoji: "🏠",
+    emoji: "",
     desc: "装修、舒适度、噪音",
     subItems: [
       { id: "env_noise", label: "噪音太大" },
@@ -71,7 +71,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "hygiene",
     label: "卫生安全",
-    emoji: "🧼",
+    emoji: "",
     desc: "餐具、桌面、洗手间",
     subItems: [
       { id: "hyg_utensil", label: "餐具不干净" },
@@ -85,7 +85,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "efficiency",
     label: "运营效率",
-    emoji: "⏱️",
+    emoji: "",
     desc: "上菜速度、预约流程",
     subItems: [
       { id: "eff_dish", label: "上菜太慢" },
@@ -98,7 +98,7 @@ const OPINION_DIMENSIONS = [
   {
     id: "value",
     label: "价值感",
-    emoji: "💰",
+    emoji: "",
     desc: "性价比、定价合理性",
     subItems: [
       { id: "val_price", label: "整体偏贵" },
@@ -375,7 +375,6 @@ export default function FeedbackPage() {
                             : "bg-gray-50 border-gray-100 active:bg-gray-100"
                         }`}
                       >
-                        <span className="text-xl mb-0.5">{dim.emoji}</span>
                         <span className={`text-xs font-semibold leading-tight ${isSelected ? "text-[#D32F2F]" : "text-gray-700"}`}>
                           {dim.label}
                         </span>
@@ -412,7 +411,6 @@ export default function FeedbackPage() {
                           onClick={() => setExpandedDimension(isExpanded ? null : dimId)}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-base">{dim.emoji}</span>
                             <span className="text-sm font-semibold text-gray-700">{dim.label}</span>
                             {selectedCount > 0 && (
                               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>
