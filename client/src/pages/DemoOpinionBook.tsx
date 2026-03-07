@@ -773,15 +773,10 @@ export default function DemoOpinionBook() {
   return (
     <div className="flex flex-col h-screen">
       {/* 角色切换栏（固定在顶部） */}
-      <div className="flex-none z-50 shadow-md" style={{ backgroundColor: "#1A1A1A" }}>
-        <div className="flex items-center px-3 py-2 gap-2">
-          {/* 演示标签 */}
-          <div className="flex-shrink-0 px-2 py-1 rounded-md text-xs font-bold tracking-wide" style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
-            DEMO
-          </div>
-
-          {/* 角色切换按钮 */}
-          <div className="flex-1 flex gap-1">
+      <div className="flex-none z-50" style={{ backgroundColor: "#111111" }}>
+        <div className="flex items-center px-3 py-2.5 gap-2">
+          {/* 角色切换按钮 - 只保留文字 */}
+          <div className="flex-1 flex gap-2">
             {(Object.keys(ROLE_CONFIG) as Role[]).map(r => {
               const cfg = ROLE_CONFIG[r];
               const isActive = role === r;
@@ -789,28 +784,27 @@ export default function DemoOpinionBook() {
                 <button
                   key={r}
                   onClick={() => setRole(r)}
-                  className="flex-1 flex flex-col items-center py-1.5 rounded-lg transition-all"
+                  className="flex-1 py-2 rounded-lg transition-all text-sm font-semibold"
                   style={{
-                    backgroundColor: isActive ? "#D32F2F" : "rgba(255,255,255,0.08)",
-                    color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.5)",
+                    backgroundColor: isActive ? "#D32F2F" : "rgba(255,255,255,0.07)",
+                    color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.45)",
                   }}
                 >
-                  <cfg.icon className="w-4 h-4" />
-                  <span className="text-xs font-semibold mt-0.5">{cfg.label}</span>
+                  {cfg.label}
                 </button>
               );
             })}
           </div>
 
           {/* 分享按钮 */}
-          <button onClick={handleShare} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
-            <Share2 className="w-4 h-4" style={{ color: "rgba(255,255,255,0.6)" }} />
+          <button onClick={handleShare} className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.07)" }}>
+            <Share2 className="w-4 h-4" style={{ color: "rgba(255,255,255,0.5)" }} />
           </button>
         </div>
 
-        {/* 角色说明 */}
-        <div className="px-3 pb-1.5 text-center">
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{ROLE_CONFIG[role].desc}</p>
+        {/* 角色说明 - 细分隔线 */}
+        <div className="px-3 pb-2 text-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{ROLE_CONFIG[role].desc}</p>
         </div>
       </div>
 
