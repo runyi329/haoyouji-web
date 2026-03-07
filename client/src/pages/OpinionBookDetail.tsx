@@ -320,39 +320,41 @@ export default function OpinionBookDetail() {
               {stats.dimPieData.length === 0 ? (
                 <div className="text-xs flex-1 flex items-center" style={{ color: "rgba(255,255,255,0.5)" }}>暂无维度数据</div>
               ) : (
-                <div className="flex-1 flex items-center gap-1.5 overflow-hidden">
-                  {/* SVG 饼图 */}
-                  <svg viewBox="0 0 40 40" className="flex-shrink-0" style={{ width: "44px", height: "44px" }}>
-                    {(() => {
-                      const total = stats.dimPieData.reduce((s, d) => s + d.count, 0);
-                      let startAngle = -Math.PI / 2;
-                      return stats.dimPieData.map((seg, i) => {
-                        const angle = (seg.count / total) * 2 * Math.PI;
-                        const endAngle = startAngle + angle;
-                        const r = 18;
-                        const cx = 20, cy = 20;
-                        const x1 = cx + r * Math.cos(startAngle);
-                        const y1 = cy + r * Math.sin(startAngle);
-                        const x2 = cx + r * Math.cos(endAngle);
-                        const y2 = cy + r * Math.sin(endAngle);
-                        const largeArc = angle > Math.PI ? 1 : 0;
-                        const d = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`;
-                        const el = <path key={seg.id} d={d} fill={seg.color} stroke="rgba(211,47,47,0.6)" strokeWidth="0.5" />;
-                        startAngle = endAngle;
-                        return el;
-                      });
-                    })()}
-                    {/* 中心圆 */}
-                    <circle cx="20" cy="20" r="9" fill="rgba(211,47,47,0.7)" />
-                    <text x="20" y="22" textAnchor="middle" fontSize="5" fill="rgba(255,255,255,0.9)" fontWeight="bold">{stats.dimTotal}</text>
-                  </svg>
-                  {/* 右侧图例 */}
-                  <div className="flex flex-col gap-0.5 flex-1 overflow-hidden justify-around">
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* 上半：SVG 饼图居中 */}
+                  <div className="flex justify-center items-center" style={{ flex: "0 0 auto", paddingTop: "2px" }}>
+                    <svg viewBox="0 0 80 80" style={{ width: "72px", height: "72px" }}>
+                      {(() => {
+                        const total = stats.dimPieData.reduce((s, d) => s + d.count, 0);
+                        let startAngle = -Math.PI / 2;
+                        return stats.dimPieData.map((seg) => {
+                          const angle = (seg.count / total) * 2 * Math.PI;
+                          const endAngle = startAngle + angle;
+                          const r = 36;
+                          const cx = 40, cy = 40;
+                          const x1 = cx + r * Math.cos(startAngle);
+                          const y1 = cy + r * Math.sin(startAngle);
+                          const x2 = cx + r * Math.cos(endAngle);
+                          const y2 = cy + r * Math.sin(endAngle);
+                          const largeArc = angle > Math.PI ? 1 : 0;
+                          const pathD = `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${largeArc},1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
+                          const el = <path key={seg.id} d={pathD} fill={seg.color} stroke="rgba(211,47,47,0.5)" strokeWidth="0.8" />;
+                          startAngle = endAngle;
+                          return el;
+                        });
+                      })()}
+                      <circle cx="40" cy="40" r="18" fill="rgba(180,30,30,0.85)" />
+                      <text x="40" y="37" textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.7)" fontWeight="normal">总计</text>
+                      <text x="40" y="49" textAnchor="middle" fontSize="12" fill="#FFFFFF" fontWeight="bold">{stats.dimTotal}</text>
+                    </svg>
+                  </div>
+                  {/* 下半：图例列表 */}
+                  <div className="flex flex-col gap-0.5 overflow-hidden" style={{ flex: "1 1 0", justifyContent: "center", display: "flex", flexDirection: "column" }}>
                     {stats.dimPieData.slice(0, 4).map((seg) => (
-                      <div key={seg.id} className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color }} />
-                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.85)", fontSize: "10px", maxWidth: "38px" }}>{seg.label}</span>
-                        <span className="text-xs font-semibold ml-auto flex-shrink-0" style={{ color: "rgba(255,255,255,0.95)", fontSize: "10px" }}>{seg.pct}%</span>
+                      <div key={seg.id} className="flex items-center gap-1 px-1">
+                        <div className="rounded-sm flex-shrink-0" style={{ width: "8px", height: "8px", backgroundColor: seg.color, border: "1px solid rgba(255,255,255,0.3)" }} />
+                        <span className="flex-1 truncate" style={{ color: "rgba(255,255,255,0.9)", fontSize: "10px" }}>{seg.label}</span>
+                        <span className="font-bold flex-shrink-0" style={{ color: "#FFFFFF", fontSize: "11px", minWidth: "32px", textAlign: "right" }}>{seg.pct}%</span>
                       </div>
                     ))}
                   </div>
