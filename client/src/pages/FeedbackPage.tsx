@@ -144,10 +144,38 @@ export default function FeedbackPage() {
     ? (parseFloat(amount) * 0.95).toFixed(2)
     : null;
 
-  // 支付宝链接（模拟）
-  const alipayUrl = discountedAmount
-    ? `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(`https://qr.alipay.com/mock?amount=${discountedAmount}`)}`
-    : null;
+  // 支付状态
+  const [payLoading, setPayLoading] = useState(false);
+
+  // 创建支付宝订单并跳转
+  const handleAlipayPay = async () => {
+    if (!discountedAmount) {
+      toast.error("请先输入消费金额");
+      return;
+    }
+    setPayLoading(true);
+    try {
+      const res = await fetch("/api/alipay/feedback-pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: parseFloat(discountedAmount),
+          ledgerId,
+          subject: `${info?.ledgerName || "好友记"}-意见反馈95折优惠`,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.payUrl) {
+        window.location.href = data.payUrl;
+      } else {
+        toast.error(data.error || "创建支付订单失败");
+      }
+    } catch (e) {
+      toast.error("网络错误，请重试");
+    } finally {
+      setPayLoading(false);
+    }
+  };
 
   // ===== 加载中 =====
   if (isLoading) {
@@ -213,19 +241,17 @@ export default function FeedbackPage() {
                 <p className="text-xs text-gray-400 mt-1">优惠了 ¥{(parseFloat(amount) - parseFloat(discountedAmount)).toFixed(2)}</p>
               </div>
             )}
-            <a
-              href={alipayUrl || "#"}
-              onClick={e => {
-                if (!discountedAmount) { e.preventDefault(); toast.error("请先输入消费金额"); }
-              }}
+            <button
+              onClick={handleAlipayPay}
+              disabled={!discountedAmount || payLoading}
               className={`block w-full py-3 rounded-xl text-center font-bold text-white text-base transition-all ${
-                discountedAmount
+                discountedAmount && !payLoading
                   ? "bg-[#1677FF] active:bg-blue-700 shadow-md"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              支付宝付款 {discountedAmount ? `¥${discountedAmount}` : ""}
-            </a>
+              {payLoading ? "订单创建中...请稍候" : `支付宝付款${discountedAmount ? ` ¥${discountedAmount}` : ""}`}
+            </button>
             <p className="text-xs text-gray-400 text-center mt-2">点击后将跳转至支付宝完成付款</p>
           </div>
 
