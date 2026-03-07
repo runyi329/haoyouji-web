@@ -334,7 +334,13 @@ export default function OpinionBookDetail() {
 
               {/* 设置按钮 */}
               <button
-                onClick={() => setShowSettings(true)}
+                onClick={() => {
+                  if (book?.ledger_id) {
+                    setLocation(`/ledger/${book.ledger_id}/settings`);
+                  } else {
+                    setShowSettings(true);
+                  }
+                }}
                 className="w-7 h-7 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
               >
