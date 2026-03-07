@@ -361,14 +361,12 @@ export default function OpinionBookDetail() {
                 返回
               </button>
 
-              {/* 分店下拉（有分店时显示） */}
-              {hasBranches && (
-                <BranchDropdown
-                  branches={branches}
-                  selectedBranch={selectedBranch}
-                  onSelect={(b) => { setSelectedBranch(b); setPage(1); }}
-                />
-              )}
+              {/* 分店下拉（始终显示） */}
+              <BranchDropdown
+                branches={branches ?? []}
+                selectedBranch={selectedBranch}
+                onSelect={(b) => { setSelectedBranch(b); setPage(1); }}
+              />
             </div>
           </div>
         </div>
