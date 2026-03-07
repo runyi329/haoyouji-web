@@ -2,26 +2,35 @@
  * QrCodeManager.tsx - 意见本二维码管理
  * 路由：/ledger/:id/qrcodes
  *
- * 数据加载方式 100% 复制自 LedgerCategories.tsx（分店管理页）：
- *   trpc.ledger.getCategories.useQuery({ ledgerId: Number(id) })
- *   然后前端过滤 parentId===null && !isDefault 得到分店列表
+ * 持久化：生成记录存入 localStorage，下次进入自动恢复并重新渲染二维码
  */
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Download, QrCode, RefreshCw, ChevronDown } from "lucide-react";
+import { ArrowLeft, Download, QrCode, RefreshCw, ChevronDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 
-/* ─── 二维码绘制工具 ─────────────────────────────────────────── */
+/* ─── 持久化 key ─────────────────────────────────────────────── */
+function storageKey(ledgerId: number, branchId: number) {
+  return `qr_config_${ledgerId}_${branchId}`;
+}
 
+interface SavedConfig {
+  branchId: number;
+  branchName: string;
+  tableCount: number;
+  savedAt: number; // timestamp
+}
+
+/* ─── 二维码绘制工具 ─────────────────────────────────────────── */
 async function generateQrCanvas(
   url: string,
   storeName: string,
   branchName: string,
-  tableLabel: string
+  label: string
 ): Promise<HTMLCanvasElement> {
   const SIZE = 320;
   const HEADER = 64;
@@ -37,7 +46,6 @@ async function generateQrCanvas(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 顶部红色区域
   ctx.fillStyle = "#D32F2F";
   ctx.fillRect(0, 0, SIZE, HEADER);
 
@@ -48,7 +56,7 @@ async function generateQrCanvas(
 
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 28px sans-serif";
-  ctx.fillText(tableLabel, SIZE / 2, 52, SIZE - 20);
+  ctx.fillText(label, SIZE / 2, 52, SIZE - 20);
 
   const qrCanvas = document.createElement("canvas");
   await QRCode.toCanvas(qrCanvas, url, {
@@ -82,27 +90,20 @@ function tableLabel(index: number): string {
 }
 
 /* ─── 组件 ───────────────────────────────────────────────────── */
-
 export default function QrCodeManager() {
   const { id } = useParams<{ id: string }>();
   const ledgerId = Number(id);
   const [, setLocation] = useLocation();
 
-  /* ── 数据加载：与 LedgerCategories.tsx 完全一致 ─────────────── */
-
-  // 账本信息（参数名用 id，与分店管理页一致）
+  /* ── 数据加载（与分店管理页完全一致）─────────────────────────── */
   const { data: ledgerInfo } = trpc.ledger.getLedger.useQuery(
     { id: ledgerId },
     { enabled: ledgerId > 0 }
   );
-
-  // 分类列表（不传 type / parentId，与分店管理页一致）
   const { data: categoriesData, isLoading: catLoading } = trpc.ledger.getCategories.useQuery(
     { ledgerId },
     { enabled: ledgerId > 0 }
   );
-
-  // 前端过滤：parentId===null 且不是预设分类（isDefault）→ 分店
   const branches = useMemo(() => {
     if (!categoriesData) return [];
     return (categoriesData as any[]).filter(
@@ -121,20 +122,59 @@ export default function QrCodeManager() {
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const selectedBranch = branches.find((b: any) => b.id === selectedBranchId);
 
+  /* ── 恢复持久化配置 ─────────────────────────────────────────── */
+  // 当分店列表加载完成后，检查是否有已保存的配置
+  useEffect(() => {
+    if (branches.length === 0) return;
+    // 找到最近一次保存的配置
+    let latest: SavedConfig | null = null;
+    for (const branch of branches) {
+      const raw = localStorage.getItem(storageKey(ledgerId, branch.id));
+      if (!raw) continue;
+      try {
+        const cfg: SavedConfig = JSON.parse(raw);
+        if (!latest || cfg.savedAt > latest.savedAt) latest = cfg;
+      } catch {}
+    }
+    if (!latest) return;
+    // 恢复选中分店和数量
+    setSelectedBranchId(latest.branchId);
+    setTableCount(String(latest.tableCount));
+    // 自动重新生成二维码
+    autoRestore(latest, storeName, ledgerId, baseUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branches.length]);
+
+  const autoRestore = useCallback(
+    async (cfg: SavedConfig, sName: string, lId: number, bUrl: string) => {
+      setGenerating(true);
+      setConfirmedCount(cfg.tableCount);
+      setQrCanvases(new Map());
+      const map = new Map<number, HTMLCanvasElement>();
+      for (let i = 1; i <= cfg.tableCount; i++) {
+        const label = tableLabel(i);
+        const url = `${bUrl}/feedback/${lId}?branch=${encodeURIComponent(cfg.branchName)}&table=${encodeURIComponent(label)}`;
+        try {
+          const canvas = await generateQrCanvas(url, sName, cfg.branchName, label);
+          map.set(i, canvas);
+        } catch {}
+      }
+      setQrCanvases(new Map(map));
+      setGenerating(false);
+    },
+    []
+  );
+
   /* ── 生成二维码 ─────────────────────────────────────────────── */
   const handleGenerate = useCallback(async () => {
-    if (!selectedBranch) {
-      toast.error("请先选择分店");
-      return;
-    }
+    if (!selectedBranch) { toast.error("请先选择分店"); return; }
     const count = parseInt(tableCount);
-    if (isNaN(count) || count < 1 || count > 200) {
-      toast.error("请输入1~200之间的数量");
-      return;
-    }
+    if (isNaN(count) || count < 1 || count > 200) { toast.error("请输入1~200之间的数量"); return; }
+
     setConfirmedCount(count);
     setGenerating(true);
     setQrCanvases(new Map());
@@ -146,14 +186,32 @@ export default function QrCodeManager() {
       try {
         const canvas = await generateQrCanvas(url, storeName, selectedBranch.name, label);
         map.set(i, canvas);
-      } catch (e) {
-        console.error("QR error", e);
-      }
+      } catch (e) { console.error("QR error", e); }
     }
     setQrCanvases(new Map(map));
     setGenerating(false);
-    toast.success(`已生成 ${count} 张二维码`);
+
+    // 持久化保存配置
+    const cfg: SavedConfig = {
+      branchId: selectedBranch.id,
+      branchName: selectedBranch.name,
+      tableCount: count,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(storageKey(ledgerId, selectedBranch.id), JSON.stringify(cfg));
+    toast.success(`已生成 ${count} 张二维码，下次进入将自动恢复`);
   }, [selectedBranch, tableCount, storeName, ledgerId, baseUrl]);
+
+  /* ── 清空当前分店的二维码 ────────────────────────────────────── */
+  const handleClear = () => {
+    if (selectedBranch) {
+      localStorage.removeItem(storageKey(ledgerId, selectedBranch.id));
+    }
+    setQrCanvases(new Map());
+    setConfirmedCount(0);
+    setShowClearConfirm(false);
+    toast.success("已清空，可重新生成");
+  };
 
   /* ── 批量下载 ───────────────────────────────────────────────── */
   const handleDownloadAll = async () => {
@@ -168,9 +226,6 @@ export default function QrCodeManager() {
     setDownloading(false);
     toast.success(`已下载 ${entries.length} 张二维码`);
   };
-
-  /* ── 调试信息（开发时可打开） ────────────────────────────────── */
-  // console.log("[QrCodeManager] ledgerId:", ledgerId, "catLoading:", catLoading, "categoriesData:", categoriesData, "branches:", branches);
 
   /* ── 渲染 ───────────────────────────────────────────────────── */
   return (
@@ -226,8 +281,21 @@ export default function QrCodeManager() {
                         onClick={() => {
                           setSelectedBranchId(b.id);
                           setShowPicker(false);
-                          setQrCanvases(new Map());
-                          setConfirmedCount(0);
+                          // 切换分店时，检查是否有该分店的已保存配置
+                          const raw = localStorage.getItem(storageKey(ledgerId, b.id));
+                          if (raw) {
+                            try {
+                              const cfg: SavedConfig = JSON.parse(raw);
+                              setTableCount(String(cfg.tableCount));
+                              setConfirmedCount(0);
+                              setQrCanvases(new Map());
+                              // 自动恢复
+                              autoRestore(cfg, storeName, ledgerId, baseUrl);
+                            } catch {}
+                          } else {
+                            setQrCanvases(new Map());
+                            setConfirmedCount(0);
+                          }
                         }}
                       >
                         {b.name}
@@ -259,21 +327,14 @@ export default function QrCodeManager() {
                   className="bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl px-5 text-sm gap-1.5 shrink-0"
                 >
                   {generating ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      生成中
-                    </>
+                    <><RefreshCw className="w-4 h-4 animate-spin" />生成中</>
                   ) : (
-                    <>
-                      <QrCode className="w-4 h-4" />
-                      生成
-                    </>
+                    <><QrCode className="w-4 h-4" />生成</>
                   )}
                 </Button>
               </div>
               <p className="text-xs text-gray-400 mt-1.5">
-                将为 {selectedBranch?.name} 生成 01桌 ~ {String(parseInt(tableCount) || 0).padStart(2, "0")}桌，共{" "}
-                {parseInt(tableCount) || 0} 张
+                将为 {selectedBranch?.name} 生成 01桌 ~ {String(parseInt(tableCount) || 0).padStart(2, "0")}桌，共 {parseInt(tableCount) || 0} 张
               </p>
             </div>
           )}
@@ -288,26 +349,37 @@ export default function QrCodeManager() {
                   {selectedBranch?.name} · 桌号二维码
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {generating ? "生成中..." : `共 ${qrCanvases.size} 张`}
+                  {generating ? "恢复中..." : `共 ${qrCanvases.size} 张 · 已自动保存`}
                 </p>
               </div>
               {!generating && qrCanvases.size > 0 && (
-                <Button
-                  size="sm"
-                  className="bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl h-8 px-3 text-xs gap-1"
-                  onClick={handleDownloadAll}
-                  disabled={downloading}
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  {downloading ? "下载中..." : "全部下载"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl h-8 px-3 text-xs gap-1 text-red-500 border-red-200 hover:bg-red-50"
+                    onClick={() => setShowClearConfirm(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    清空
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl h-8 px-3 text-xs gap-1"
+                    onClick={handleDownloadAll}
+                    disabled={downloading}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {downloading ? "下载中..." : "全部下载"}
+                  </Button>
+                </div>
               )}
             </div>
 
             {generating ? (
               <div className="p-10 text-center">
                 <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-400">正在生成二维码...</p>
+                <p className="text-sm text-gray-400">正在恢复二维码...</p>
                 <p className="text-xs text-gray-300 mt-1">共 {confirmedCount} 张</p>
               </div>
             ) : (
@@ -329,9 +401,7 @@ export default function QrCodeManager() {
                       {canvas && (
                         <button
                           className="w-full py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 flex items-center justify-center gap-1 active:bg-gray-100"
-                          onClick={() =>
-                            downloadCanvas(canvas, `${storeName}-${selectedBranch?.name}-${label}.png`)
-                          }
+                          onClick={() => downloadCanvas(canvas, `${storeName}-${selectedBranch?.name}-${label}.png`)}
                         >
                           <Download className="w-3 h-3" />
                           下载
@@ -351,12 +421,39 @@ export default function QrCodeManager() {
           <ul className="space-y-1.5 text-xs text-gray-400 leading-relaxed">
             <li>· 分店列表来自"分店管理"，如需添加分店请先前往分店管理</li>
             <li>· 选择分店后输入桌号数量，点击"生成"即可批量生成二维码</li>
-            <li>· 二维码自动编号：01桌、02桌…，顶部显示店名和桌号</li>
+            <li>· 生成后自动保存，下次进入会自动恢复，无需重新生成</li>
+            <li>· 点击"清空"可删除当前分店的二维码，然后重新生成</li>
             <li>· 顾客扫码提交意见后，支付页面会显示分店、桌号和扫码时间</li>
             <li>· 二维码永久有效，打印后贴在对应桌位即可长期使用</li>
           </ul>
         </div>
       </div>
+
+      {/* 清空确认弹窗 */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="text-base font-semibold text-gray-800 mb-2">确认清空？</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              将清空 <span className="font-medium text-gray-700">{selectedBranch?.name}</span> 的所有二维码，清空后可重新生成。
+            </p>
+            <div className="flex gap-3">
+              <button
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600"
+                onClick={() => setShowClearConfirm(false)}
+              >
+                取消
+              </button>
+              <button
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium"
+                onClick={handleClear}
+              >
+                确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
