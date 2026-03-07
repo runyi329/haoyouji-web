@@ -38,6 +38,11 @@ export default function FeedbackPage() {
   const ledgerId = parseInt(params.ledgerId || "0");
   const categoryId = params.categoryId ? parseInt(params.categoryId) : undefined;
 
+  // 从URL query参数读取分店名和桌号（二维码管理生成的链接）
+  const urlSearch = new URLSearchParams(window.location.search);
+  const urlBranch = urlSearch.get("branch") || "";
+  const urlTable = urlSearch.get("table") || "";
+
   // 意见填写展开状态（默认展开）
   const [opinionOpen, setOpinionOpen] = useState(true);
   // 意见分类
@@ -438,18 +443,20 @@ export default function FeedbackPage() {
           </div>
 
           <div className="px-5 pb-5">
-            {/* 扫码信息：分店 / 桂号 / 扫码时间 */}
+            {/* 扫码信息：分店 / 桌号 / 扫码时间 */}
             <div className="mb-4 bg-gray-50 rounded-xl px-4 py-3 space-y-2">
-              {info?.branch && (
+              {/* 分店名：优先URL参数，其次接口返回 */}
+              {(urlBranch || info?.branch) && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">分店</span>
-                  <span className="text-gray-700 font-medium">{info.book.name}</span>
+                  <span className="text-gray-700 font-medium">{urlBranch || info?.branch?.name || info?.book?.name}</span>
                 </div>
               )}
-              {categoryId && (
+              {/* 桌号：优先URL参数，其次categoryId */}
+              {(urlTable || categoryId) && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">桂号</span>
-                  <span className="text-gray-700 font-medium">{info?.branch?.name || `桂号 #${categoryId}`}</span>
+                  <span className="text-gray-400">桌号</span>
+                  <span className="text-gray-700 font-medium">{urlTable || `#${categoryId}`}</span>
                 </div>
               )}
               <div className="flex items-center justify-between text-xs">
