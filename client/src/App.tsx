@@ -201,6 +201,7 @@ const JiangProfile = lazy(() => import("./pages/jiang/JiangProfile"));
 const JiangBuildRules = lazy(() => import("./pages/jiang/JiangBuildRules"));
 const JiangShare = lazy(() => import("./pages/jiang/JiangShare"));
 const JiangSettings = lazy(() => import("./pages/jiang/JiangSettings"));
+const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // 私人定制展示页
@@ -398,6 +399,7 @@ function Router() {
         <Route path="/jiang/profile" component={JiangProfile} />
         <Route path="/jiang/build-rules" component={JiangBuildRules} />
         <Route path="/jiang/settings" component={JiangSettings} />
+        <Route path="/jiang/merchants" component={JiangMerchants} />
         {/* 润仪算力研发中心 - 分享页（无需登录，参见§24） */}
         <Route path="/share/jiang" component={JiangShare} />
         {/* 红酒文化商会（cx8618） */}

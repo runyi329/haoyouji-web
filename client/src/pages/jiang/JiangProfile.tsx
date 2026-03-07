@@ -24,7 +24,7 @@ import { trpc } from "@/lib/trpc";
 import {
   User, Share2, Settings, ShoppingBag, MessageCircle, Info,
   ChevronRight, LogIn, LogOut, Cpu, BookOpen, ExternalLink,
-  ShoppingCart
+  ShoppingCart, Store
 } from "lucide-react";
 import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
@@ -97,6 +97,12 @@ export default function JiangProfile() {
           label: "商品管理",
           desc: "管理算力包、服务商品",
           onPress: () => toast.info("商品管理功能即将上线"),
+        },
+        {
+          icon: <Store className="w-4 h-4" />,
+          label: "商户管理",
+          desc: "全部商户一览，点击进入商户首页",
+          onPress: () => setLocation("/jiang/merchants"),
         },
         {
           icon: <BookOpen className="w-4 h-4" />,
