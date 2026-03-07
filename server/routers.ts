@@ -8537,18 +8537,9 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-
-        // 权限检查：super_admin 可看全部，admin 需是账本成员
+        // 允许 super_admin、admin 或账本 owner 查看
         let isOwner = ctx.user.role === 'super_admin';
-        if (ctx.user.role === 'admin') {
-          // 检查是否是 owner
-          const [ownerCheck] = await dbConn.execute(
-            `SELECT id FROM ledgers WHERE id=? AND ownerId=?`,
-            [input.ledgerId, ctx.user.id]
-          ) as any;
-          isOwner = (ownerCheck as any[]).length > 0;
-        } else if (ctx.user.role !== 'super_admin') {
-          // 普通用户需是 owner
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           const [ownerRows] = await dbConn.execute(
             `SELECT id FROM ledgers WHERE id=? AND ownerId=? AND isArchived=0`,
             [input.ledgerId, ctx.user.id]
@@ -8556,36 +8547,78 @@ export const appRouter = router({
           if (!(ownerRows as any[]).length) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
           }
-          isOwner = true;
+          isOwner = true; // 通过了 owner 检查，说明是账本 owner
+        } else if (ctx.user.role === 'admin') {
+          // admin 不是 owner，需额外检查是否是账本成员
+          const [memberRows] = await dbConn.execute(
+            `SELECT id FROM ledger_members WHERE ledgerId=? AND userId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          if (!(memberRows as any[]).length) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
+          }
+          // 检查是否是 owner
+          const [ownerCheck] = await dbConn.execute(
+            `SELECT id FROM ledgers WHERE id=? AND ownerId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          isOwner = (ownerCheck as any[]).length > 0;
         }
-
         const offset = (input.page - 1) * input.pageSize;
-        // 只有 owner 和 super_admin 能看到隐私字段
-        const guestFields = isOwner
-          ? `r.guest_name, r.guest_wechat`
-          : `NULL as guest_name, NULL as guest_wechat`;
-
-        const query = `SELECT r.id, r.description as content, r.rating, ${guestFields}, r.is_read,
-                        r.createdAt as created_at, r.categoryId as category_id,
-                        c.name as branch_name
-                 FROM ledger_records r
-                 LEFT JOIN ledger_categories c ON c.id = r.categoryId
-                 WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)
-                 ${input.categoryId !== undefined ? 'AND r.categoryId = ?' : ''}
-                 ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
-
+        // 动态检测意见本字段是否存在（容错处理）
+        let hasOpinionColumns = true;
+        try {
+          const [colRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'rating'`
+          ) as any;
+          hasOpinionColumns = (colRows as any[])[0].cnt > 0;
+        } catch (e) {
+          hasOpinionColumns = false;
+        }
+        let query: string;
+        if (hasOpinionColumns) {
+          // 只有 owner 才能看到 guest_name 和 guest_wechat
+          const guestFields = isOwner
+            ? `r.guest_name, r.guest_wechat`
+            : `NULL as guest_name, NULL as guest_wechat`;
+          query = `SELECT r.id, r.description as content, r.rating, ${guestFields}, r.is_read,
+                          r.createdAt as created_at, r.categoryId as category_id,
+                          c.name as branch_name
+                   FROM ledger_records r
+                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                   WHERE r.ledgerId = ?`;
+        } else {
+          // 字段不存在时用 NULL 代替
+          query = `SELECT r.id, r.description as content, NULL as rating, NULL as guest_name, NULL as guest_wechat, 0 as is_read,
+                          r.createdAt as created_at, r.categoryId as category_id,
+                          c.name as branch_name
+                   FROM ledger_records r
+                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                   WHERE r.ledgerId = ?`;
+        }
         const params: any[] = [input.ledgerId];
-        if (input.categoryId !== undefined) params.push(input.categoryId);
+        // deleted_at 字段存在时才加过滤条件
+        if (hasOpinionColumns) {
+          query += ` AND (r.deleted_at IS NULL)`;
+        }
+        if (input.categoryId !== undefined) {
+          query += ` AND r.categoryId = ?`;
+          params.push(input.categoryId);
+        }
+        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
         params.push(input.pageSize, offset);
         const [rows] = await dbConn.execute(query, params) as any;
-
-        const countQuery = `SELECT COUNT(*) as total FROM ledger_records r
-                 WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)
-                 ${input.categoryId !== undefined ? 'AND r.categoryId = ?' : ''}`;
+        let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ?`;
         const countParams: any[] = [input.ledgerId];
-        if (input.categoryId !== undefined) countParams.push(input.categoryId);
+        if (hasOpinionColumns) {
+          countQuery += ` AND (r.deleted_at IS NULL)`;
+        }
+        if (input.categoryId !== undefined) {
+          countQuery += ` AND r.categoryId = ?`;
+          countParams.push(input.categoryId);
+        }
         const [countRows] = await dbConn.execute(countQuery, countParams) as any;
-
         return { entries: rows as any[], total: (countRows as any[])[0].total };
       }),
 
