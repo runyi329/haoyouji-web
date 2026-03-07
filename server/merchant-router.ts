@@ -847,15 +847,43 @@ export const merchantRouter = router({
 
   // ===== 商家设置接口 =====
 
-  // 获取当前用户的商家设置
+  // 获取当前用户的商家设置（若无记录则自动初始化）
   getMerchantSettings: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return null;
-    const rows = await db
+    let rows = await db
       .select()
       .from(merchants)
       .where(eq(merchants.userId, ctx.user.id))
       .limit(1);
+
+    // 方案A：查不到记录时，自动以 username 作为 merchantCode 创建默认商家记录
+    if (!rows || rows.length === 0) {
+      const username = ctx.user.username || ctx.user.openId || `user_${ctx.user.id}`;
+      const shopName = username;
+      try {
+        await db.insert(merchants).values({
+          userId: ctx.user.id,
+          merchantCode: username,
+          shopName,
+          status: 'active',
+          isVerified: 0,
+        });
+        rows = await db
+          .select()
+          .from(merchants)
+          .where(eq(merchants.userId, ctx.user.id))
+          .limit(1);
+      } catch (e) {
+        // merchantCode 可能已存在（并发创建），再查一次
+        rows = await db
+          .select()
+          .from(merchants)
+          .where(eq(merchants.userId, ctx.user.id))
+          .limit(1);
+      }
+    }
+
     if (!rows || rows.length === 0) return null;
     const m = rows[0] as any;
     return {
