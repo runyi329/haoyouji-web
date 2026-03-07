@@ -185,4 +185,50 @@ router.get("/api/alipay/order-status", async (req: Request, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// POST /api/alipay/feedback-pay
+// 意见本客户端支付（公开接口，无需登录）
+// Body: { amount, ledgerId, subject? }
+// ─────────────────────────────────────────────
+router.post("/api/alipay/feedback-pay", async (req: Request, res: Response) => {
+  try {
+    const { amount, ledgerId, subject } = req.body as {
+      amount?: number;
+      ledgerId?: string | number;
+      subject?: string;
+    };
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "请输入有效的消费金额" });
+    }
+
+    // 生成唯一订单号
+    const orderId = `FB${Date.now()}${nanoid(6)}`;
+
+    // 构建回调地址
+    const host = req.headers.origin || `https://${req.headers.host}`;
+    const notifyUrl = `${host}/api/alipay/notify`;
+    const returnUrl = `${host}/feedback/${ledgerId || ""}?paid=1&orderId=${orderId}`;
+
+    const paySubject = subject || "好友记-意见反馈95折优惠";
+
+    // 生成支付宝 WAP 支付链接
+    const payUrl = createWapPayUrl({
+      orderId,
+      subject: paySubject,
+      totalAmount: amount,
+      returnUrl,
+      notifyUrl,
+      body: paySubject,
+    });
+
+    console.log(`[Alipay] feedback-pay 订单创建: ${orderId}, 金额: ${amount}, ledgerId: ${ledgerId}`);
+
+    return res.json({ success: true, orderId, payUrl });
+  } catch (err: any) {
+    console.error("[Alipay] feedback-pay error:", err);
+    return res.status(500).json({ error: err?.message || "创建支付订单失败" });
+  }
+});
+
 export default router;
