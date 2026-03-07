@@ -2,10 +2,10 @@
  * OpinionBookDetail.tsx - AB 型定制账本（意见本）管理者查看页面
  * 数据架构已统一：
  *   - 分店 → ledger_categories (type='branch')
- *   - 意见记录 → ledger_records (rating/guest_name/guest_ip/is_read 字段)
+ *   - 意见记录 → ledger_records（复用 ledger.getTransactions 通用接口）
  * 布局：顶部红色区域（头像+用户名+搜索+设置+返回+分店下拉）+ 意见列表
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -32,7 +32,7 @@ function BranchDropdown({
   selectedBranchId,
   onSelect,
 }: {
-  branches: Array<{ id: number; name: string; entry_count: number }>;
+  branches: Array<{ id: number; name: string }>;
   selectedBranchId: number | null;
   onSelect: (id: number | null) => void;
 }) {
@@ -49,35 +49,35 @@ function BranchDropdown({
           backgroundColor:
             selectedBranchId !== null
               ? "rgba(255,255,255,0.9)"
-              : "rgba(255,255,255,0.2)",
+              : "rgba(255,255,255,0.15)",
           color: selectedBranchId !== null ? "#D32F2F" : "#FFFFFF",
-          border: "1px solid rgba(255,255,255,0.4)",
+          border:
+            selectedBranchId !== null
+              ? "1px solid rgba(255,255,255,0.4)"
+              : "1px solid rgba(255,255,255,0.2)",
+          minWidth: "80px",
+          justifyContent: "center",
         }}
       >
-        <span className="max-w-[80px] truncate">{label}</span>
+        <span className="truncate max-w-[80px]">{label}</span>
         <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
       </button>
+
       {open && (
         <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            className="absolute right-0 top-full mt-1 z-50 rounded-xl shadow-lg overflow-hidden"
-            style={{
-              backgroundColor: "#FFFFFF",
-              border: "1px solid #E0E0E0",
-              minWidth: "120px",
-            }}
+            className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-lg border border-gray-100 py-1 min-w-[140px] max-h-[240px] overflow-y-auto"
+            style={{ backgroundColor: "#FFFFFF" }}
           >
             <button
               onClick={() => { onSelect(null); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+              className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                 selectedBranchId === null
-                  ? "bg-[#D32F2F] text-white"
+                  ? "font-semibold"
                   : "text-gray-700 hover:bg-gray-50"
               }`}
+              style={selectedBranchId === null ? { color: "#D32F2F", backgroundColor: "#FFF5F5" } : {}}
             >
               全部分店
             </button>
@@ -85,20 +85,14 @@ function BranchDropdown({
               <button
                 key={b.id}
                 onClick={() => { onSelect(b.id); setOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                   selectedBranchId === b.id
-                    ? "bg-[#D32F2F] text-white"
+                    ? "font-semibold"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
+                style={selectedBranchId === b.id ? { color: "#D32F2F", backgroundColor: "#FFF5F5" } : {}}
               >
                 {b.name}
-                <span
-                  className={`ml-1 text-xs ${
-                    selectedBranchId === b.id ? "text-red-200" : "text-gray-400"
-                  }`}
-                >
-                  ({b.entry_count})
-                </span>
               </button>
             ))}
           </div>
@@ -108,55 +102,42 @@ function BranchDropdown({
   );
 }
 
-// ─── 搜索弹窗 ─────────────────────────────────────────────────────────────────
+// ─── 搜索弹窗 ────────────────────────────────────────────────────────────────
 function SearchDialog({
-  onClose,
-  onSearch,
   keyword,
+  onSearch,
+  onClose,
 }: {
-  onClose: () => void;
-  onSearch: (kw: string) => void;
   keyword: string;
+  onSearch: (kw: string) => void;
+  onClose: () => void;
 }) {
-  const [input, setInput] = useState(keyword);
+  const [value, setValue] = useState(keyword);
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl overflow-hidden shadow-xl"
-        style={{ backgroundColor: "#FFFFFF" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-4">
-          <p className="text-sm font-semibold text-gray-700 mb-3">搜索意见内容</p>
-          <input
-            autoFocus
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { onSearch(input); onClose(); }
-            }}
-            placeholder="输入关键词..."
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-[#D32F2F]"
-          />
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2 rounded-xl text-sm text-gray-500 border border-gray-200"
-            >
-              取消
-            </button>
-            <button
-              onClick={() => { onSearch(input); onClose(); }}
-              className="flex-1 py-2 rounded-xl text-sm text-white font-medium"
-              style={{ backgroundColor: "#D32F2F" }}
-            >
-              搜索
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-[90%] max-w-sm p-4">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { onSearch(value); onClose(); } }}
+          placeholder="搜索意见内容..."
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-red-400"
+        />
+        <div className="flex gap-2 mt-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 text-sm text-gray-500 rounded-lg hover:bg-gray-50"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => { onSearch(value); onClose(); }}
+            className="px-4 py-1.5 text-sm text-white rounded-lg"
+            style={{ backgroundColor: "#D32F2F" }}
+          >
+            搜索
+          </button>
         </div>
       </div>
     </div>
@@ -175,16 +156,15 @@ export default function OpinionBookDetail() {
   // 搜索关键词
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  // 分页
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
 
   // 当前用户
   const { data: user } = trpc.auth.me.useQuery();
 
-  // 账本信息（从意见本列表接口获取）
-  const { data: books } = trpc.opinionBook.list.useQuery();
-  const book = books?.find((b: any) => b.id === ledgerId);
+  // 账本信息（直接用通用接口获取账本详情）
+  const { data: ledgerData } = trpc.ledger.getById.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
 
   // 分店列表（复用通用分类接口，一级分类 = 分店）
   const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery(
@@ -194,26 +174,48 @@ export default function OpinionBookDetail() {
   // 只取一级分类（parentId === null）且非默认分类作为分店
   const branches = (allCategories as any[]).filter(
     (c: any) => c.parentId === null && !c.isDefault
-  ).map((c: any) => ({ id: c.id, name: c.name, entry_count: 0 }));
+  ).map((c: any) => ({ id: c.id, name: c.name }));
 
-  // 意见列表（从 ledger_records 读取）
+  // ★ 核心改动：复用通用账本的 getTransactions 接口，与通用账本一样秒出
   const {
-    data: entriesData,
+    data: transactionsData,
     isLoading,
     refetch,
-  } = trpc.opinionBook.getEntries.useQuery(
+  } = trpc.ledger.getTransactions.useQuery(
     {
       ledgerId,
       categoryId: selectedBranchId !== null ? selectedBranchId : undefined,
-      page,
-      pageSize: PAGE_SIZE,
+      limit: 200,
     },
     { enabled: ledgerId > 0 }
   );
 
-  const entries = entriesData?.entries || [];
-  const total = entriesData?.total || 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  // 将通用账本的按日期分组数据，展平为意见列表
+  const { entries, total } = useMemo(() => {
+    if (!transactionsData || !Array.isArray(transactionsData)) {
+      return { entries: [], total: 0 };
+    }
+    const allEntries: any[] = [];
+    transactionsData.forEach((day: any) => {
+      if (day.records) {
+        day.records.forEach((record: any) => {
+          allEntries.push({
+            id: record.id,
+            content: record.description || "",
+            created_at: record.createdAt,
+            branch_name: record.category !== "未分类" ? record.category : null,
+            // 通用接口不返回 rating/guest_name/guest_wechat/is_read
+            // 这些字段在意见本中暂时不使用，后续可以通过扩展通用接口来支持
+            rating: null,
+            guest_name: null,
+            guest_wechat: null,
+            is_read: false,
+          });
+        });
+      }
+    });
+    return { entries: allEntries, total: allEntries.length };
+  }, [transactionsData]);
 
   // 关键词过滤（前端过滤）
   const filteredEntries = searchKeyword
@@ -257,9 +259,9 @@ export default function OpinionBookDetail() {
               <div className="text-base font-semibold truncate">
                 {user?.nickname || user?.username || "用户"}
               </div>
-              {book && (
+              {ledgerData && (
                 <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.75)" }}>
-                  {book.name}
+                  {(ledgerData as any).name}
                 </div>
               )}
             </div>
@@ -302,7 +304,7 @@ export default function OpinionBookDetail() {
               <BranchDropdown
                 branches={branches}
                 selectedBranchId={selectedBranchId}
-                onSelect={(id) => { setSelectedBranchId(id); setPage(1); }}
+                onSelect={(id) => { setSelectedBranchId(id); }}
               />
             </div>
           </div>
@@ -362,13 +364,13 @@ export default function OpinionBookDetail() {
           <div className="px-4 pt-3 pb-4">
             {/* 流水账时间轴 */}
             <div className="relative">
-              {/* 左侧绿色竖线 */}
+              {/* 左侧竖线 */}
               <div
                 className="absolute left-[7px] top-0 bottom-0 w-0.5"
                 style={{ backgroundColor: "#E0E0E0" }}
               />
               <div className="space-y-0">
-                {filteredEntries.map((entry: any, idx: number) => (
+                {filteredEntries.map((entry: any) => (
                   <div key={entry.id} className="relative flex gap-3 pb-3">
                     {/* 时间轴圆点 */}
                     <div
@@ -429,29 +431,6 @@ export default function OpinionBookDetail() {
                 ))}
               </div>
             </div>
-
-            {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 pt-2 pb-4">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200 disabled:opacity-30"
-                >
-                  <ChevronLeft className="w-4 h-4 text-gray-600" />
-                </button>
-                <span className="text-sm text-gray-500">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200 disabled:opacity-30"
-                >
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -460,7 +439,7 @@ export default function OpinionBookDetail() {
       {showSearch && (
         <SearchDialog
           keyword={searchKeyword}
-          onSearch={(kw) => { setSearchKeyword(kw); setPage(1); }}
+          onSearch={(kw) => { setSearchKeyword(kw); }}
           onClose={() => setShowSearch(false)}
         />
       )}
