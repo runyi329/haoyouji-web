@@ -14,10 +14,11 @@ import {
   merchantProductCategories,
   merchantProductSpecs,
   merchantShopProducts,
+  merchantProductShareRequests,
   wineRegions,
   productImportRequests,
 } from "../drizzle/schema";
-import { eq, desc, and, asc, isNull } from "drizzle-orm";
+import { eq, desc, and, asc, isNull, ne } from "drizzle-orm";
 import { storagePut } from "./storage";
 import { uploadImageToCOS } from "./cos-upload";
 import sharp from "sharp";
@@ -1012,5 +1013,304 @@ export const merchantRouter = router({
       const url = await uploadImageToCOS(compressed, 'avatars', key);
       await db.update(merchants).set({ share_cover_image: url }).where(eq(merchants.id, merchantId));
       return { url };
+    }),
+
+  // ===== 共享商品接口 =====
+
+  // 搜索其他商家（用于发起共享申请）
+  searchMerchantsForSharing: protectedProcedure
+    .input(z.object({
+      keyword: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const myMerchantId = myMerchant[0].id;
+      const allMerchants = await db.select({
+        id: merchants.id,
+        merchantCode: merchants.merchantCode,
+        shopName: merchants.shopName,
+        shopLogoUrl: merchants.shopLogoUrl,
+        shopType: merchants.shopType,
+        shopDescription: merchants.shopDescription,
+      })
+        .from(merchants)
+        .where(and(
+          ne(merchants.id, myMerchantId),
+          eq(merchants.status, "active")
+        ))
+        .orderBy(asc(merchants.shopName));
+      const keyword = input.keyword?.trim().toLowerCase();
+      const result = keyword
+        ? allMerchants.filter(m =>
+            m.shopName.toLowerCase().includes(keyword) ||
+            m.merchantCode.toLowerCase().includes(keyword)
+          )
+        : allMerchants;
+      return result;
+    }),
+
+  // 获取某商家的可共享商品列表
+  getMerchantShareableProducts: protectedProcedure
+    .input(z.object({
+      ownerMerchantId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const myMerchantId = myMerchant[0].id;
+      const products = await db.select()
+        .from(merchantProducts)
+        .where(and(
+          eq(merchantProducts.ownerMerchantId, input.ownerMerchantId),
+          eq(merchantProducts.status, "active"),
+          eq(merchantProducts.isShareable, 1)
+        ))
+        .orderBy(desc(merchantProducts.createdAt));
+      const myRequests = await db.select()
+        .from(merchantProductShareRequests)
+        .where(and(
+          eq(merchantProductShareRequests.requesterMerchantId, myMerchantId),
+          eq(merchantProductShareRequests.ownerMerchantId, input.ownerMerchantId)
+        ));
+      return { products, myRequests };
+    }),
+
+  // 发起共享商品申请
+  applyProductShare: protectedProcedure
+    .input(z.object({
+      ownerMerchantId: z.number(),
+      productId: z.number().optional(),
+      proposedCommissionRate: z.number().min(0).max(100).optional(),
+      message: z.string().max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const myMerchantId = myMerchant[0].id;
+      if (myMerchantId === input.ownerMerchantId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "不能申请共享自己的商品" });
+      }
+      const existing = await db.select({ id: merchantProductShareRequests.id })
+        .from(merchantProductShareRequests)
+        .where(and(
+          eq(merchantProductShareRequests.requesterMerchantId, myMerchantId),
+          eq(merchantProductShareRequests.ownerMerchantId, input.ownerMerchantId),
+          input.productId
+            ? eq(merchantProductShareRequests.productId, input.productId)
+            : isNull(merchantProductShareRequests.productId),
+          eq(merchantProductShareRequests.status, "pending")
+        ))
+        .limit(1);
+      if (existing.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "已有待审核的申请，请等待对方处理" });
+      }
+      await db.insert(merchantProductShareRequests).values({
+        requesterMerchantId: myMerchantId,
+        ownerMerchantId: input.ownerMerchantId,
+        productId: input.productId ?? null,
+        proposedCommissionRate: input.proposedCommissionRate != null ? String(input.proposedCommissionRate) : null,
+        message: input.message ?? null,
+        status: "pending",
+      });
+      return { success: true };
+    }),
+
+  // 获取我发出的共享申请列表
+  getMyShareRequests: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) return [];
+      const myMerchantId = myMerchant[0].id;
+      const requests = await db.select({
+        id: merchantProductShareRequests.id,
+        ownerMerchantId: merchantProductShareRequests.ownerMerchantId,
+        productId: merchantProductShareRequests.productId,
+        proposedCommissionRate: merchantProductShareRequests.proposedCommissionRate,
+        agreedCommissionRate: merchantProductShareRequests.agreedCommissionRate,
+        status: merchantProductShareRequests.status,
+        message: merchantProductShareRequests.message,
+        replyMessage: merchantProductShareRequests.replyMessage,
+        createdAt: merchantProductShareRequests.createdAt,
+        ownerShopName: merchants.shopName,
+        ownerMerchantCode: merchants.merchantCode,
+        ownerShopLogoUrl: merchants.shopLogoUrl,
+      })
+        .from(merchantProductShareRequests)
+        .leftJoin(merchants, eq(merchantProductShareRequests.ownerMerchantId, merchants.id))
+        .where(eq(merchantProductShareRequests.requesterMerchantId, myMerchantId))
+        .orderBy(desc(merchantProductShareRequests.createdAt));
+      const withProducts = await Promise.all(requests.map(async (req) => {
+        if (!req.productId) return { ...req, product: null };
+        const prods = await db.select({
+          id: merchantProducts.id,
+          name: merchantProducts.name,
+          mainImageUrl: merchantProducts.mainImageUrl,
+          basePrice: merchantProducts.basePrice,
+        })
+          .from(merchantProducts)
+          .where(eq(merchantProducts.id, req.productId))
+          .limit(1);
+        return { ...req, product: prods[0] ?? null };
+      }));
+      return withProducts;
+    }),
+
+  // 获取收到的共享申请（对方审批用）
+  getReceivedShareRequests: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) return [];
+      const myMerchantId = myMerchant[0].id;
+      const requests = await db.select({
+        id: merchantProductShareRequests.id,
+        requesterMerchantId: merchantProductShareRequests.requesterMerchantId,
+        productId: merchantProductShareRequests.productId,
+        proposedCommissionRate: merchantProductShareRequests.proposedCommissionRate,
+        status: merchantProductShareRequests.status,
+        message: merchantProductShareRequests.message,
+        createdAt: merchantProductShareRequests.createdAt,
+        requesterShopName: merchants.shopName,
+        requesterMerchantCode: merchants.merchantCode,
+        requesterShopLogoUrl: merchants.shopLogoUrl,
+      })
+        .from(merchantProductShareRequests)
+        .leftJoin(merchants, eq(merchantProductShareRequests.requesterMerchantId, merchants.id))
+        .where(eq(merchantProductShareRequests.ownerMerchantId, myMerchantId))
+        .orderBy(desc(merchantProductShareRequests.createdAt));
+      const withProducts = await Promise.all(requests.map(async (req) => {
+        if (!req.productId) return { ...req, product: null };
+        const prods = await db.select({
+          id: merchantProducts.id,
+          name: merchantProducts.name,
+          mainImageUrl: merchantProducts.mainImageUrl,
+          basePrice: merchantProducts.basePrice,
+        })
+          .from(merchantProducts)
+          .where(eq(merchantProducts.id, req.productId))
+          .limit(1);
+        return { ...req, product: prods[0] ?? null };
+      }));
+      return withProducts;
+    }),
+
+  // 审批共享申请（同意/拒绝）
+  respondShareRequest: protectedProcedure
+    .input(z.object({
+      requestId: z.number(),
+      action: z.enum(["approved", "rejected"]),
+      agreedCommissionRate: z.number().min(0).max(100).optional(),
+      replyMessage: z.string().max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const myMerchantId = myMerchant[0].id;
+      const req = await db.select()
+        .from(merchantProductShareRequests)
+        .where(and(
+          eq(merchantProductShareRequests.id, input.requestId),
+          eq(merchantProductShareRequests.ownerMerchantId, myMerchantId),
+          eq(merchantProductShareRequests.status, "pending")
+        ))
+        .limit(1);
+      if (!req.length) throw new TRPCError({ code: "NOT_FOUND", message: "申请不存在或已处理" });
+      await db.update(merchantProductShareRequests)
+        .set({
+          status: input.action,
+          agreedCommissionRate: input.agreedCommissionRate != null ? String(input.agreedCommissionRate) : null,
+          replyMessage: input.replyMessage ?? null,
+        })
+        .where(eq(merchantProductShareRequests.id, input.requestId));
+      if (input.action === "approved") {
+        const shareReq = req[0];
+        let productIds: number[] = [];
+        if (shareReq.productId) {
+          productIds = [shareReq.productId];
+        } else {
+          const allProds = await db.select({ id: merchantProducts.id })
+            .from(merchantProducts)
+            .where(and(
+              eq(merchantProducts.ownerMerchantId, myMerchantId),
+              eq(merchantProducts.status, "active"),
+              eq(merchantProducts.isShareable, 1)
+            ));
+          productIds = allProds.map(p => p.id);
+        }
+        for (const productId of productIds) {
+          const existing = await db.select({ id: merchantShopProducts.id })
+            .from(merchantShopProducts)
+            .where(and(
+              eq(merchantShopProducts.merchantId, shareReq.requesterMerchantId),
+              eq(merchantShopProducts.productId, productId)
+            ))
+            .limit(1);
+          if (!existing.length) {
+            await db.insert(merchantShopProducts).values({
+              merchantId: shareReq.requesterMerchantId,
+              productId,
+              isOwned: 0,
+              sharedFromMerchantId: myMerchantId,
+              commissionRate: input.agreedCommissionRate != null
+                ? String(input.agreedCommissionRate)
+                : shareReq.proposedCommissionRate,
+              isVisible: 0,
+            });
+          }
+        }
+      }
+      return { success: true };
+    }),
+
+  // 取消共享申请
+  cancelShareRequest: protectedProcedure
+    .input(z.object({ requestId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const myMerchant = await db.select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!myMerchant.length) throw new TRPCError({ code: "NOT_FOUND" });
+      const myMerchantId = myMerchant[0].id;
+      await db.update(merchantProductShareRequests)
+        .set({ status: "cancelled" })
+        .where(and(
+          eq(merchantProductShareRequests.id, input.requestId),
+          eq(merchantProductShareRequests.requesterMerchantId, myMerchantId),
+          eq(merchantProductShareRequests.status, "pending")
+        ));
+      return { success: true };
     }),
 });
