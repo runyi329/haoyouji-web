@@ -942,7 +942,7 @@ export default function Ledger() {
                   {!isCollapsed && (
                     <div className="space-y-3">
                       {groupLedgers.map(ledger => (
-                        <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                        <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
                           <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]">
                             <div className="px-4 py-4">
                               <div className="mb-3">
@@ -1003,7 +1003,7 @@ export default function Ledger() {
                   )}
                   <div className="space-y-3">
                     {ungrouped.map(ledger => (
-                      <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                      <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                           <div className="px-4 py-4">
                             <div className="mb-3">
