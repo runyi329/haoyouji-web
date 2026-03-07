@@ -8480,6 +8480,7 @@ export const appRouter = router({
            FROM ledger_categories c
            LEFT JOIN ledger_records r ON r.categoryId = c.id AND r.deleted_at IS NULL
            WHERE c.ledgerId = ? AND (c.isDefault = 0 OR c.isDefault IS NULL)
+             AND c.parentId IS NULL
            GROUP BY c.id, c.name, c.sort_order
            ORDER BY c.sort_order ASC, c.id ASC`,
           [input.ledgerId]
