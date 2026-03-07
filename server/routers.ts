@@ -8800,7 +8800,7 @@ export const appRouter = router({
             branchIds.push((existBranch as any[])[0].id);
           } else {
             const [r] = await dbConn.execute(
-              `INSERT INTO ledger_categories (ledgerId, name, type, icon, color, isDefault, sortOrder) VALUES (?, ?, 'expense', '🏪', '#E8472A', 0, ?)`,
+              `INSERT INTO ledger_categories (ledgerId, name, type, icon, color, isDefault, sortOrder) VALUES (?, ?, 'expense', '', '#E8472A', 0, ?)`,
               [ledgerId, BRANCHES[i], i + 1]
             ) as any;
             branchIds.push((r as any).insertId);
@@ -8813,8 +8813,14 @@ export const appRouter = router({
           [ledgerId]
         ) as any;
         const existCount = Number((countRows as any[])[0].cnt);
+        // 清除所有门店分类的表情图标
+        await dbConn.execute(
+          `UPDATE ledger_categories SET icon='' WHERE ledgerId=? AND icon IS NOT NULL AND icon!=''`,
+          [ledgerId]
+        );
+
         if (existCount >= 300) {
-          return { ledgerId, created: false, message: '演示数据已存在' };
+          return { ledgerId, created: false, message: '演示数据已存在，图标已清除' };
         }
 
         // 插入300条模拟点评
