@@ -9,6 +9,27 @@ import { getLoginUrl } from "./const";
 import "./index.css";
 import "./styles/red-white-dual-engine.css";
 
+// 启动时：如果localStorage中没有auth-token，尝试从Cookie中恢复
+// 解决微信WebView关闭后localStorage被清空的问题
+(function restoreTokenFromCookie() {
+  try {
+    const hasToken = localStorage.getItem('auth-token');
+    if (!hasToken) {
+      // 从Cookie中读取app_session_id
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)app_session_id=([^;]+)/);
+      if (cookieMatch && cookieMatch[1]) {
+        const tokenFromCookie = decodeURIComponent(cookieMatch[1]);
+        if (tokenFromCookie && tokenFromCookie.length > 10) {
+          localStorage.setItem('auth-token', tokenFromCookie);
+          console.log('[Auth] 从Cookie恢复auth-token到localStorage，无需重新登录');
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Auth] 恢复token失败:', e);
+  }
+})();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
