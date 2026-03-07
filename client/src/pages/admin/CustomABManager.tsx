@@ -70,8 +70,11 @@ function EntriesView({ ledgerId, bookName, onBack }: { ledgerId: number; bookNam
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>();
   const [page, setPage] = useState(1);
 
-  // 从 ledger_categories 读取分店列表
-  const { data: branches = [] } = trpc.opinionBook.getBranches.useQuery({ ledgerId });
+  // 从通用分类接口读取分店列表（一级分类 = 分店）
+  const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery({ ledgerId });
+  const branches = (allCategories as any[]).filter(
+    (c: any) => c.parentId === null && !c.isDefault
+  ).map((c: any) => ({ id: c.id, name: c.name, entry_count: 0 }));
   // 从 ledger_records 读取意见列表
   const { data: entriesData, isLoading, refetch } = trpc.opinionBook.getEntries.useQuery({
     ledgerId, categoryId: selectedCategoryId, page, pageSize: 20
@@ -168,25 +171,28 @@ function BranchManager({ book }: { book: any }) {
 
   const utils = trpc.useUtils();
 
-  // 从 ledger_categories 读取分店列表
-  const { data: branches = [] } = trpc.opinionBook.getBranches.useQuery({ ledgerId: book.id });
+  // 从通用分类接口读取分店列表（一级分类 = 分店）
+  const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery({ ledgerId: book.id });
+  const branches = (allCategories as any[]).filter(
+    (c: any) => c.parentId === null && !c.isDefault
+  ).map((c: any) => ({ id: c.id, name: c.name, entry_count: 0 }));
 
-  // 添加分店（写入 ledger_categories）
-  const addBranchMutation = trpc.opinionBook.addBranch.useMutation({
-    onSuccess: (data) => {
-      toast.success(`分店「${data.name}」已添加`);
+  // 添加分店（用通用 addCategory 接口）
+  const addBranchMutation = trpc.ledger.addCategory.useMutation({
+    onSuccess: () => {
+      toast.success(`分店已添加`);
       setShowAddBranch(false);
       setNewBranchName("");
-      utils.opinionBook.getBranches.invalidate({ ledgerId: book.id });
+      utils.ledger.getCategories.invalidate({ ledgerId: book.id });
     },
     onError: (e) => toast.error(e.message),
   });
 
-  // 删除分店
-  const deleteBranchMutation = trpc.opinionBook.deleteBranch.useMutation({
+  // 删除分店（用通用 deleteCategory 接口）
+  const deleteBranchMutation = trpc.ledger.deleteCategory.useMutation({
     onSuccess: () => {
       toast.success("分店已删除");
-      utils.opinionBook.getBranches.invalidate({ ledgerId: book.id });
+      utils.ledger.getCategories.invalidate({ ledgerId: book.id });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -218,7 +224,7 @@ function BranchManager({ book }: { book: any }) {
               className="h-8 text-xs flex-1"
               onKeyDown={e => {
                 if (e.key === 'Enter' && newBranchName.trim()) {
-                  addBranchMutation.mutate({ ledgerId: book.id, name: newBranchName.trim() });
+                  addBranchMutation.mutate({ ledgerId: book.id, name: newBranchName.trim(), type: 'expense' as const, icon: '📝', color: '#ef4444' });
                 }
               }}
             />
@@ -228,7 +234,7 @@ function BranchManager({ book }: { book: any }) {
               disabled={addBranchMutation.isPending}
               onClick={() => {
                 if (!newBranchName.trim()) { toast.error("请输入分店名称"); return; }
-                addBranchMutation.mutate({ ledgerId: book.id, name: newBranchName.trim() });
+                addBranchMutation.mutate({ ledgerId: book.id, name: newBranchName.trim(), type: 'expense' as const, icon: '📝', color: '#ef4444' });
               }}
             >确认</Button>
             <Button variant="outline" size="sm" className="h-8 text-xs px-3"
@@ -263,7 +269,7 @@ function BranchManager({ book }: { book: any }) {
                         return;
                       }
                       if (confirm(`确定删除分店「${b.name}」？`)) {
-                        deleteBranchMutation.mutate({ categoryId: b.id });
+                        deleteBranchMutation.mutate({ categoryId: b.id, cascade: true });
                       }
                     }}
                     title="删除分店"

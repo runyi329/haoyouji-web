@@ -186,11 +186,15 @@ export default function OpinionBookDetail() {
   const { data: books } = trpc.opinionBook.list.useQuery();
   const book = books?.find((b: any) => b.id === ledgerId);
 
-  // 分店列表（从 ledger_categories 读取，type='branch'）
-  const { data: branches = [] } = trpc.opinionBook.getBranches.useQuery(
+  // 分店列表（复用通用分类接口，一级分类 = 分店）
+  const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery(
     { ledgerId },
     { enabled: ledgerId > 0 }
   );
+  // 只取一级分类（parentId === null）且非默认分类作为分店
+  const branches = (allCategories as any[]).filter(
+    (c: any) => c.parentId === null && !c.isDefault
+  ).map((c: any) => ({ id: c.id, name: c.name, entry_count: 0 }));
 
   // 意见列表（从 ledger_records 读取）
   const {
