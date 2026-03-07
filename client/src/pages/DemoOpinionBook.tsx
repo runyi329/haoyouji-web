@@ -313,7 +313,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
           <div className="flex-1 min-w-0">
             <p className="text-white/70 text-xs mb-0.5 truncate">麻六记 · 演示账本</p>
             <h1 className="text-white text-lg font-bold leading-tight">欢迎提意见</h1>
-            <p className="text-white/70 text-xs mt-0.5">提交后享 <span className="text-yellow-300 font-semibold">95折</span> 优惠</p>
+
           </div>
           <div className="ml-3 flex-shrink-0">
             <img src="https://cdn-us.manus.space/webdev-static/maluji-logo.png" alt="麻六记" className="w-16 h-16 object-contain drop-shadow-lg rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -802,10 +802,7 @@ export default function DemoOpinionBook() {
           </button>
         </div>
 
-        {/* 角色说明 - 细分隔线 */}
-        <div className="px-3 pb-2 text-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>{ROLE_CONFIG[role].desc}</p>
-        </div>
+
       </div>
 
       {/* 内容区域 */}

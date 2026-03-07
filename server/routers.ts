@@ -6940,7 +6940,7 @@ export const appRouter = router({
         if (!dbConn) return [];
         const [rows] = await dbConn.execute(
           `SELECT id, name, parentId, isDefault FROM ledger_categories
-           WHERE ledgerId=? AND (deleted_at IS NULL OR deleted_at=0)
+           WHERE ledgerId=?
            ORDER BY sortOrder ASC, id ASC`,
           [input.ledgerId]
         ) as any;
