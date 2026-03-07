@@ -214,169 +214,34 @@ const LedgerCategories = () => {
     setIsAddDialogOpen(true);
   };
 
-  // ─── opinion_book 类型：渲染分店管理界面 ────────────────────────────────────
-  // 分店管理状态（仅 opinion_book 使用）
-  const [showAddBranchDialog, setShowAddBranchDialog] = useState(false);
-  const [newBranchName, setNewBranchName] = useState("");
-  const [branchToDelete, setBranchToDelete] = useState<{ id: number; name: string; entry_count: number } | null>(null);
-  const [showDeleteBranchConfirm, setShowDeleteBranchConfirm] = useState(false);
+  // ─── 文字标签映射：opinion_book 时用分店/桌号替代分类 ─────────────────────
+  const label = {
+    pageTitle: isOpinionBook ? '分店管理' : '账本分类管理',
+    level1: isOpinionBook ? '分店' : '一级分类',
+    level2: isOpinionBook ? '桌号' : '二级分类',
+    level3: isOpinionBook ? '三级分类' : '三级分类',
+    addLevel1: isOpinionBook ? '添加分店' : '增加一级分类',
+    addLevel2: isOpinionBook ? '添加桌号' : '增加二级分类',
+    addLevel3: isOpinionBook ? '增加三级分类' : '增加三级分类',
+    inputLabel: isOpinionBook ? '名称' : '分类名称',
+    inputPlaceholder: isOpinionBook ? '请输入名称' : '请输入分类名称',
+    deleteTitle: isOpinionBook ? '确认删除' : '确认删除',
+    deleteMsg: (name: string) => isOpinionBook ? `确认要删除 "${name}" 吗？` : `确认要删除分类 "${name}" 吗？`,
+    cascadeWarning: isOpinionBook ? '⚠️ 一旦删除，下面的桌号将全部被删除' : '⚠️ 一旦删除，下面的子分类将全部被删除',
+    addDialogTitle: isOpinionBook ? '添加' : '添加分类',
+  };
 
-  const { data: branchesData = [], refetch: refetchBranches } = trpc.opinionBook.getBranches.useQuery(
-    { ledgerId: Number(id) },
-    { enabled: isOpinionBook && Number(id) > 0 }
-  );
-
-  const addBranchMutation = trpc.opinionBook.addBranch.useMutation({
-    onSuccess: () => {
-      toast.success("分店添加成功");
-      refetchBranches();
-      setShowAddBranchDialog(false);
-      setNewBranchName("");
-    },
-    onError: (error) => toast.error(`添加失败: ${error.message}`),
-  });
-
-  const deleteBranchMutation = trpc.opinionBook.deleteBranch.useMutation({
-    onSuccess: () => {
-      toast.success("分店删除成功");
-      refetchBranches();
-      setShowDeleteBranchConfirm(false);
-      setBranchToDelete(null);
-    },
-    onError: (error) => toast.error(`删除失败: ${error.message}`),
-  });
-
-  if (isOpinionBook) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* 顶部导航 */}
-        <div className="bg-white p-4 flex items-center justify-between border-b sticky top-0 z-10">
-          <button onClick={() => setLocation(`/ledger/${id}/settings`)}>
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold">分店管理</h1>
-          <button
-            onClick={() => setShowAddBranchDialog(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-[#D32F2F] text-white"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* 分店列表 */}
-        <div className="p-4 space-y-2">
-          {(branchesData as any[]).length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <Store className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">暂无分店，点击右上角 + 添加</p>
-            </div>
-          ) : (
-            (branchesData as any[]).map((branch: any) => (
-              <div
-                key={branch.id}
-                className="bg-white rounded-xl px-4 py-3 flex items-center justify-between shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <Store className="w-4 h-4 text-[#D32F2F]" />
-                  <span className="font-medium text-gray-800">{branch.name}</span>
-                  <span className="text-xs text-gray-400">{branch.entry_count || 0} 条意见</span>
-                </div>
-                <button
-                  onClick={() => { setBranchToDelete(branch); setShowDeleteBranchConfirm(true); }}
-                  className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-[#D32F2F] transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* 添加分店对话框 */}
-        <Dialog open={showAddBranchDialog} onOpenChange={setShowAddBranchDialog}>
-          <DialogContent className="top-[20%] translate-y-0">
-            <DialogHeader>
-              <DialogTitle>添加分店</DialogTitle>
-            </DialogHeader>
-            <div className="py-2 space-y-4">
-              <div>
-                <Label htmlFor="branchName">分店名称</Label>
-                <Input
-                  id="branchName"
-                  value={newBranchName}
-                  onChange={(e) => setNewBranchName(e.target.value)}
-                  placeholder="请输入分店名称"
-                  className="mt-1"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newBranchName.trim()) {
-                      addBranchMutation.mutate({ ledgerId: Number(id), name: newBranchName.trim() });
-                    }
-                  }}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => { setShowAddBranchDialog(false); setNewBranchName(""); }}
-                >
-                  取消
-                </Button>
-                <Button
-                  className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
-                  disabled={!newBranchName.trim() || addBranchMutation.isPending}
-                  onClick={() => addBranchMutation.mutate({ ledgerId: Number(id), name: newBranchName.trim() })}
-                >
-                  {addBranchMutation.isPending ? "添加中..." : "确定"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* 删除分店确认对话框 */}
-        <Dialog open={showDeleteBranchConfirm} onOpenChange={setShowDeleteBranchConfirm}>
-          <DialogContent className="top-[20%] translate-y-0">
-            <DialogHeader>
-              <DialogTitle>确认删除</DialogTitle>
-            </DialogHeader>
-            <div className="py-2 space-y-4">
-              <p className="text-gray-700">
-                确认删除分店 <strong>"{branchToDelete?.name}"</strong> 吗？
-              </p>
-              <p className="text-sm text-gray-400">该分店下的意见记录不会被删除，仅解除分店关联。</p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => { setShowDeleteBranchConfirm(false); setBranchToDelete(null); }}
-                >
-                  取消
-                </Button>
-                <Button
-                  className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C]"
-                  disabled={deleteBranchMutation.isPending}
-                  onClick={() => branchToDelete && deleteBranchMutation.mutate({ categoryId: branchToDelete.id })}
-                >
-                  {deleteBranchMutation.isPending ? "删除中..." : "确认删除"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
+  // opinion_book 返回设置页，普通账本返回账本详情
+  const backPath = isOpinionBook ? `/ledger/${id}/settings` : `/ledger/${id}`;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
       <div className="bg-white p-4 flex items-center justify-between border-b sticky top-0 z-10">
-        <button onClick={() => setLocation(`/ledger/${id}`)}>
+        <button onClick={() => setLocation(backPath)}>
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-semibold">账本分类管理</h1>
+        <h1 className="text-lg font-semibold">{label.pageTitle}</h1>
         <div className="w-5" />
       </div>
 
@@ -386,7 +251,7 @@ const LedgerCategories = () => {
           <div key={category.id}>
             <div>
               {/* 一级分类标题 */}
-              <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">一级分类</div>
+              <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">{label.level1}</div>
               
               {/* 一级分类 */}
               <div className="bg-white p-1">
@@ -449,7 +314,7 @@ const LedgerCategories = () => {
               <div>
                 <div>
                   {/* 二级分类标题 */}
-                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">二级分类</div>
+                  <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">{label.level2}</div>
                 </div>
                 
                 {category.children.map((child) => (
@@ -504,7 +369,7 @@ const LedgerCategories = () => {
                     {/* 三级分类 */}
                     {expandedSubCategories.has(child.id) && child.children && child.children.length > 0 && (
                       <div>
-                        <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">三级分类</div>
+                        <div className="bg-gray-100 px-3 py-1 text-xs text-gray-600">{label.level3}</div>
                         {child.children.map((grandchild) => (
                           <div key={grandchild.id} className="bg-white p-1">
                             <div className="flex items-center justify-between">
@@ -558,7 +423,7 @@ const LedgerCategories = () => {
       }}>
         <DialogContent className="top-[5%] translate-y-0">
           <DialogHeader>
-            <DialogTitle>添加分类</DialogTitle>
+            <DialogTitle>{label.addDialogTitle}</DialogTitle>
           </DialogHeader>
           
           {/* 选择分类级别 */}
@@ -568,21 +433,21 @@ const LedgerCategories = () => {
                 onClick={() => setSelectedAction('level1')}
                 className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
               >
-                增加一级分类
+                {label.addLevel1}
               </button>
               <div className="border-t border-gray-200"></div>
               <button
                 onClick={() => setSelectedAction('level2')}
                 className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
               >
-                增加二级分类
+                {label.addLevel2}
               </button>
               <div className="border-t border-gray-200"></div>
               <button
                 onClick={() => setSelectedAction('level3')}
                 className="w-full px-4 py-4 text-center text-lg hover:bg-gray-50"
               >
-                增加三级分类
+                {label.addLevel3}
               </button>
             </div>
           )}
@@ -591,12 +456,12 @@ const LedgerCategories = () => {
           {(selectedAction === 'level1' || selectedAction === 'level2') && (
             <div className="py-4 space-y-4">
               <div>
-                <Label htmlFor="categoryName">分类名称</Label>
+                <Label htmlFor="categoryName">{label.inputLabel}</Label>
                 <Input
                   id="categoryName"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="请输入分类名称"
+                  placeholder={label.inputPlaceholder}
                 />
               </div>
               <div className="flex gap-2">
@@ -681,7 +546,7 @@ const LedgerCategories = () => {
                   </button>
                   <div className="border-t border-gray-200"></div>
                 </div>
-              )) || <div className="text-center text-gray-400 py-4">暂无二级分类</div>}
+              )) || <div className="text-center text-gray-400 py-4">{isOpinionBook ? '暂无桌号' : '暂无二级分类'}</div>}
             </div>
           )}
           
@@ -689,12 +554,12 @@ const LedgerCategories = () => {
           {selectedAction === 'level3' && showSubCategorySelect && (
             <div className="py-4 space-y-4">
               <div>
-                <Label htmlFor="categoryName">分类名称</Label>
+                <Label htmlFor="categoryName">{label.inputLabel}</Label>
                 <Input
                   id="categoryName"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="请输入分类名称"
+                  placeholder={label.inputPlaceholder}
                 />
               </div>
               <div className="flex gap-2">
@@ -752,7 +617,7 @@ const LedgerCategories = () => {
           
           <div className="py-4 space-y-4">
             <p className="text-gray-700">
-              确认要删除分类 "{categoryToDelete?.name}" 吗？
+              {label.deleteMsg(categoryToDelete?.name || '')}
             </p>
             
             {/* 如果是一级或二级分类，显示级联删除提示 */}
@@ -762,7 +627,7 @@ const LedgerCategories = () => {
             ) && (
               <div className="bg-[#FAF3ED] border border-yellow-200 rounded p-3">
                 <p className="text-sm text-yellow-800">
-                  ⚠️ 一旦删除，下面的子分类将全部被删除
+                  {label.cascadeWarning}
                 </p>
               </div>
             )}
