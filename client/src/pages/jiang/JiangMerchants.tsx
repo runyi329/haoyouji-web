@@ -59,7 +59,7 @@ function MerchantCard({ config, onPress }: {
 }) {
   const { data: shareInfo } = trpc.merchant.getMerchantShareInfo.useQuery(
     { merchantCode: config.id },
-    { staleTime: 60_000 }
+    { staleTime: 0, refetchOnWindowFocus: true }
   );
 
   const logo = (shareInfo as any)?.shareLogo;
