@@ -8517,6 +8517,7 @@ export const appRouter = router({
       .input(z.object({
         bookId: z.number(),
         tableId: z.number().optional(),
+        branchName: z.string().optional(),
         page: z.number().default(1),
         pageSize: z.number().default(20),
       }))
@@ -8528,7 +8529,7 @@ export const appRouter = router({
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const offset = (input.page - 1) * input.pageSize;
         let query = `SELECT e.id, e.content, e.rating, e.guest_name, e.is_read, e.created_at,
-                            t.table_code, t.location 
+                            t.table_code, t.location, t.branch_name 
                      FROM opinion_entries e 
                      JOIN opinion_tables t ON t.id = e.table_id 
                      WHERE e.book_id = ?`;
@@ -8537,14 +8538,30 @@ export const appRouter = router({
           query += ` AND e.table_id = ?`;
           params.push(input.tableId);
         }
+        if (input.branchName !== undefined) {
+          if (input.branchName === '') {
+            query += ` AND (t.branch_name IS NULL OR t.branch_name = '')`;
+          } else {
+            query += ` AND t.branch_name = ?`;
+            params.push(input.branchName);
+          }
+        }
         query += ` ORDER BY e.created_at DESC LIMIT ? OFFSET ?`;
         params.push(input.pageSize, offset);
         const [rows] = await dbConn.execute(query, params) as any;
-        let countQuery = `SELECT COUNT(*) as total FROM opinion_entries e WHERE e.book_id = ?`;
+        let countQuery = `SELECT COUNT(*) as total FROM opinion_entries e JOIN opinion_tables t ON t.id = e.table_id WHERE e.book_id = ?`;
         const countParams: any[] = [input.bookId];
         if (input.tableId) {
           countQuery += ` AND e.table_id = ?`;
           countParams.push(input.tableId);
+        }
+        if (input.branchName !== undefined) {
+          if (input.branchName === '') {
+            countQuery += ` AND (t.branch_name IS NULL OR t.branch_name = '')`;
+          } else {
+            countQuery += ` AND t.branch_name = ?`;
+            countParams.push(input.branchName);
+          }
         }
         const [countRows] = await dbConn.execute(countQuery, countParams) as any;
         return { entries: rows as any[], total: (countRows as any[])[0].total };
