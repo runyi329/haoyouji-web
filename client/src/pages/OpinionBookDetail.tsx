@@ -286,7 +286,7 @@ export default function OpinionBookDetail() {
 
               {/* 返回按钮 */}
               <button
-                onClick={() => setLocation("/admin")}
+                onClick={() => setLocation("/ledger")}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
