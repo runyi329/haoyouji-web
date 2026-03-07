@@ -22,17 +22,17 @@ import { toast } from "sonner";
 const OPINION_CATEGORIES = [
   {
     id: "food",
-    label: "🍽️ 菜品",
+    label: "菜品",
     tags: ["太咸", "太淡", "太油腻", "料太少", "份量不足", "不新鲜", "口味一般", "温度不对"],
   },
   {
     id: "service",
-    label: "👨‍💼 服务",
+    label: "服务",
     tags: ["上菜太慢", "服务态度差", "点单出错", "服务不周到", "等待时间长", "结账麻烦"],
   },
   {
     id: "environment",
-    label: "🏠 环境",
+    label: "环境",
     tags: ["卫生较差", "噪音太大", "座位不舒适", "停车不便", "装修一般", "空调太冷/热"],
   },
 ];
@@ -189,7 +189,7 @@ export default function FeedbackPage() {
           {/* 专属优惠 */}
           <div className="mt-6 bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl p-4 text-white shadow-lg">
             <p className="text-xs opacity-80 mb-1">感谢您的宝贵意见</p>
-            <p className="text-2xl font-bold">🎁 专属 95 折优惠</p>
+            <p className="text-2xl font-bold">专属 95 折优惠</p>
             <p className="text-xs opacity-80 mt-1">本次消费享受折扣，请在下方输入金额付款</p>
           </div>
 
@@ -224,7 +224,6 @@ export default function FeedbackPage() {
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
-              <span className="mr-1">💙</span>
               支付宝付款 {discountedAmount ? `¥${discountedAmount}` : ""}
             </a>
             <p className="text-xs text-gray-400 text-center mt-2">点击后将跳转至支付宝完成付款</p>
@@ -273,7 +272,7 @@ export default function FeedbackPage() {
           </div>
           <h1 className="text-2xl font-bold leading-tight">欢迎提意见</h1>
           <p className="text-sm opacity-80 mt-1.5 leading-relaxed">
-            您的意见，老板会亲自看到 👀<br />
+            您的意见，老板会亲自看到<br />
             <span className="text-xs opacity-70">提交后享受 95 折优惠</span>
           </p>
         </div>
@@ -440,12 +439,12 @@ export default function FeedbackPage() {
               提交中...
             </span>
           ) : (
-            "✅ 提交意见，领取 95 折优惠"
+            "提交意见，领取 95 折优惠"
           )}
         </Button>
 
         <p className="text-xs text-center text-gray-400 pb-4">
-          您的意见将匿名提交，感谢您的参与 🙏
+          您的意见将匿名提交，感谢您的参与
         </p>
       </div>
     </div>
