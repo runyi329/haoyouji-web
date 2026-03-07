@@ -130,6 +130,7 @@ export default function FeedbackPage() {
       content: finalContent,
       rating: rating || undefined,
       guestName: guestName.trim() || undefined,
+      guestWechat: guestWechat.trim() || undefined,
     });
   };
 

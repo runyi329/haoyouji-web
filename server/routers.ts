@@ -8521,14 +8521,21 @@ export const appRouter = router({
         pageSize: z.number().default(20),
       }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
-        }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 允许 super_admin、admin 或账本 owner 查看
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          const [ownerRows] = await dbConn.execute(
+            `SELECT id FROM ledgers WHERE id=? AND ownerId=? AND isArchived=0`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          if (!(ownerRows as any[]).length) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
+          }
+        }
         const offset = (input.page - 1) * input.pageSize;
-        let query = `SELECT r.id, r.description as content, r.rating, r.guest_name, r.is_read,
-                            r.created_at, r.category_id,
+        let query = `SELECT r.id, r.description as content, r.rating, r.guest_name, r.guest_wechat, r.is_read,
+                            r.createdAt as created_at, r.categoryId as category_id,
                             c.name as branch_name
                      FROM ledger_records r
                      LEFT JOIN ledger_categories c ON c.id = r.categoryId
@@ -8538,7 +8545,7 @@ export const appRouter = router({
           query += ` AND r.categoryId = ?`;
           params.push(input.categoryId);
         }
-        query += ` ORDER BY r.created_at DESC LIMIT ? OFFSET ?`;
+        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
         params.push(input.pageSize, offset);
         const [rows] = await dbConn.execute(query, params) as any;
         let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ? AND r.deleted_at IS NULL`;
@@ -8559,6 +8566,7 @@ export const appRouter = router({
         content: z.string().min(1).max(1000),
         rating: z.number().min(1).max(5).optional(),
         guestName: z.string().max(50).optional(),
+        guestWechat: z.string().max(100).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
@@ -8582,10 +8590,10 @@ export const appRouter = router({
         const today = new Date().toISOString().split('T')[0];
         // 直接插入 ledger_records，owner_id=0 表示游客
         await dbConn.execute(
-          `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_ip, is_read)
-           VALUES (?, 'expense', '0.00', ?, ?, ?, 0, ?, ?, ?, 0)`,
+          `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_wechat, guest_ip, is_read)
+           VALUES (?, 'expense', '0.00', ?, ?, ?, 0, ?, ?, ?, ?, 0)`,
           [input.ledgerId, input.categoryId || null, input.content, today,
-           input.rating || null, input.guestName || null, guestIp]
+           input.rating || null, input.guestName || null, input.guestWechat || null, guestIp]
         );
         return { success: true };
       }),
