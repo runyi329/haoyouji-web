@@ -1,16 +1,16 @@
 /**
- * QrCodeManager.tsx - 意见本二维码管理（纯前端，无需数据库）
+ * QrCodeManager.tsx - 意见本二维码管理
  * 路由：/ledger/:id/qrcodes
  * 功能：
- *   - 手动输入分店名称
- *   - 输入桌号数量（如30）
- *   - 自动生成 01桌 ~ 30桌 的带标注二维码（Canvas绘制）
+ *   - 从 trpc.ledger.getCategories 获取分店列表（与分店管理页同一接口）
+ *   - 选择分店后输入桌号数量
+ *   - 自动生成 01桌 ~ N桌 的带标注二维码
  *   - 支持单张下载 / 全部下载
- *   - 二维码URL：/feedback/:ledgerId?branch=分店名&table=01桌
  */
 import { useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Download, QrCode, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { ArrowLeft, Download, QrCode, RefreshCw, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -34,7 +34,6 @@ async function generateQrCanvas(
   canvas.height = SIZE + HEADER + FOOTER;
   const ctx = canvas.getContext("2d")!;
 
-  // 白色背景
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -88,98 +87,63 @@ function tableLabel(index: number): string {
   return String(index).padStart(2, "0") + "桌";
 }
 
-// 本地存储key
-const STORAGE_KEY = "qr_branches";
-
-interface BranchConfig {
-  id: string;
-  name: string;
-  tableCount: string;
-}
-
 export default function QrCodeManager() {
   const params = useParams<{ id: string }>();
   const ledgerId = parseInt(params.id || "0");
   const [, setLocation] = useLocation();
 
-  // 从localStorage恢复分店配置
-  const loadBranches = (): BranchConfig[] => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY + "_" + ledgerId);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [{ id: "1", name: "", tableCount: "10" }];
-  };
+  // 账本信息
+  const { data: ledgerData } = trpc.ledger.getLedger.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
 
-  const [branches, setBranches] = useState<BranchConfig[]>(loadBranches);
-  const [selectedBranch, setSelectedBranch] = useState<BranchConfig | null>(null);
+  // 分店列表：用 trpc.ledger.getCategories，与分店管理页同一接口
+  // type='expense'，parentId=null（只取一级分类/分店）
+  const { data: categoriesData, isLoading: branchLoading } = trpc.ledger.getCategories.useQuery(
+    { ledgerId, type: "expense", parentId: null },
+    { enabled: ledgerId > 0 }
+  );
+
+  // 过滤掉预设分类（ledgerId=0 的），只保留用户自定义的分店
+  const branches = (categoriesData || []).filter((c: any) => c.ledgerId === ledgerId && !c.isDefault);
+
+  const storeName = (ledgerData as any)?.name || "好友记";
+  const baseUrl = window.location.origin;
+
+  // 选中的分店
+  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // 桌号数量
+  const [tableCount, setTableCount] = useState<string>("10");
+
+  // 已生成的二维码
   const [qrCanvases, setQrCanvases] = useState<Map<number, HTMLCanvasElement>>(new Map());
+  const [confirmedCount, setConfirmedCount] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  // 账本名（用于二维码标注）
-  const [storeName] = useState(() => {
-    // 从URL或localStorage读取，默认"好友记"
-    return localStorage.getItem("ledger_name_" + ledgerId) || "好友记";
-  });
-
-  const baseUrl = window.location.origin;
-
-  // 保存分店配置到localStorage
-  const saveBranches = (list: BranchConfig[]) => {
-    localStorage.setItem(STORAGE_KEY + "_" + ledgerId, JSON.stringify(list));
-  };
-
-  const updateBranch = (id: string, field: keyof BranchConfig, value: string) => {
-    const updated = branches.map(b => b.id === id ? { ...b, [field]: value } : b);
-    setBranches(updated);
-    saveBranches(updated);
-  };
-
-  const addBranch = () => {
-    const newBranch: BranchConfig = {
-      id: Date.now().toString(),
-      name: "",
-      tableCount: "10",
-    };
-    const updated = [...branches, newBranch];
-    setBranches(updated);
-    saveBranches(updated);
-  };
-
-  const removeBranch = (id: string) => {
-    if (branches.length <= 1) { toast.error("至少保留一个分店"); return; }
-    const updated = branches.filter(b => b.id !== id);
-    setBranches(updated);
-    saveBranches(updated);
-    if (selectedBranch?.id === id) {
-      setSelectedBranch(null);
-      setQrCanvases(new Map());
-    }
-  };
+  const selectedBranch = branches.find((b: any) => b.id === selectedBranchId);
 
   // 生成二维码
-  const handleGenerate = useCallback(async (branch: BranchConfig) => {
-    if (!branch.name.trim()) {
-      toast.error("请先输入分店名称");
-      return;
-    }
-    const count = parseInt(branch.tableCount);
+  const handleGenerate = useCallback(async () => {
+    if (!selectedBranch) { toast.error("请先选择分店"); return; }
+    const count = parseInt(tableCount);
     if (isNaN(count) || count < 1 || count > 200) {
-      toast.error("桌号数量请填写1~200之间的数字");
+      toast.error("请输入1~200之间的数量");
       return;
     }
-
-    setSelectedBranch(branch);
+    setConfirmedCount(count);
     setGenerating(true);
     setQrCanvases(new Map());
 
     const map = new Map<number, HTMLCanvasElement>();
     for (let i = 1; i <= count; i++) {
       const label = tableLabel(i);
-      const url = `${baseUrl}/feedback/${ledgerId}?branch=${encodeURIComponent(branch.name)}&table=${encodeURIComponent(label)}`;
+      const url = `${baseUrl}/feedback/${ledgerId}?branch=${encodeURIComponent(selectedBranch.name)}&table=${encodeURIComponent(label)}`;
       try {
-        const canvas = await generateQrCanvas(url, storeName, branch.name, label);
+        const canvas = await generateQrCanvas(url, storeName, selectedBranch.name, label);
         map.set(i, canvas);
       } catch (e) {
         console.error("QR error", e);
@@ -188,7 +152,7 @@ export default function QrCodeManager() {
     setQrCanvases(new Map(map));
     setGenerating(false);
     toast.success(`已生成 ${count} 张二维码`);
-  }, [storeName, ledgerId, baseUrl]);
+  }, [selectedBranch, tableCount, storeName, ledgerId, baseUrl]);
 
   // 批量下载
   const handleDownloadAll = async () => {
@@ -213,79 +177,105 @@ export default function QrCodeManager() {
         </button>
         <div className="flex-1">
           <h1 className="font-semibold text-base leading-tight">二维码管理</h1>
-          <p className="text-white/70 text-xs">每桌一码，扫码提意见享95折</p>
+          <p className="text-white/70 text-xs">{storeName}</p>
         </div>
         <QrCode className="w-5 h-5 opacity-60" />
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-4 pb-10 space-y-4">
 
-        {/* 分店配置区 */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold text-gray-800">分店配置</p>
-            <button
-              onClick={addBranch}
-              className="flex items-center gap-1 text-xs text-[#D32F2F] font-medium"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              添加分店
-            </button>
+        {/* 选择分店 + 输入数量 */}
+        <div className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          {/* 选择分店 */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-2">选择分店</p>
+            {branchLoading ? (
+              <div className="h-10 bg-gray-100 rounded-xl animate-pulse" />
+            ) : branches.length === 0 ? (
+              <div className="text-center py-3">
+                <p className="text-sm text-gray-400">暂无分店，请先在"分店管理"中添加分店</p>
+                <button
+                  className="mt-1.5 text-xs text-[#D32F2F] underline"
+                  onClick={() => setLocation(`/ledger/${ledgerId}/categories`)}
+                >
+                  前往分店管理
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <button
+                  className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm"
+                  onClick={() => setShowPicker(v => !v)}
+                >
+                  <span className={selectedBranch ? "text-gray-800 font-medium" : "text-gray-400"}>
+                    {selectedBranch ? selectedBranch.name : "请选择分店"}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showPicker ? "rotate-180" : ""}`} />
+                </button>
+                {showPicker && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+                    {branches.map((b: any) => (
+                      <button
+                        key={b.id}
+                        className={`w-full text-left px-4 py-3 text-sm border-b border-gray-50 last:border-0 ${
+                          selectedBranchId === b.id ? "bg-red-50 text-[#D32F2F] font-medium" : "text-gray-700"
+                        }`}
+                        onClick={() => {
+                          setSelectedBranchId(b.id);
+                          setShowPicker(false);
+                          setQrCanvases(new Map());
+                          setConfirmedCount(0);
+                        }}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="divide-y divide-gray-50">
-            {branches.map((branch, idx) => (
-              <div key={branch.id} className="px-4 py-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 shrink-0 w-12">分店{idx + 1}</span>
-                  <Input
-                    value={branch.name}
-                    onChange={e => updateBranch(branch.id, "name", e.target.value)}
-                    placeholder="输入分店名称（如：西三环分店）"
-                    className="flex-1 h-9 text-sm rounded-xl border-gray-200"
-                  />
-                  {branches.length > 1 && (
-                    <button onClick={() => removeBranch(branch.id)} className="p-1 text-gray-300 active:text-red-400">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+          {/* 输入桌号数量 */}
+          {selectedBranchId !== null && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">生成桌号数量</p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={tableCount}
+                  onChange={e => setTableCount(e.target.value)}
+                  placeholder="输入桌号数量（如30）"
+                  className="flex-1 rounded-xl border-gray-200 text-sm"
+                />
+                <Button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl px-5 text-sm gap-1.5 shrink-0"
+                >
+                  {generating ? (
+                    <><RefreshCw className="w-4 h-4 animate-spin" />生成中</>
+                  ) : (
+                    <><QrCode className="w-4 h-4" />生成</>
                   )}
-                </div>
-                <div className="flex items-center gap-2 pl-14">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={branch.tableCount}
-                    onChange={e => updateBranch(branch.id, "tableCount", e.target.value)}
-                    placeholder="桌号数量"
-                    className="w-28 h-9 text-sm rounded-xl border-gray-200"
-                  />
-                  <span className="text-xs text-gray-400">张（01桌~{String(parseInt(branch.tableCount)||0).padStart(2,"0")}桌）</span>
-                  <Button
-                    size="sm"
-                    onClick={() => handleGenerate(branch)}
-                    disabled={generating}
-                    className="ml-auto bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl h-9 px-4 text-xs gap-1 shrink-0"
-                  >
-                    {generating && selectedBranch?.id === branch.id ? (
-                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" />生成中</>
-                    ) : (
-                      <><QrCode className="w-3.5 h-3.5" />生成</>
-                    )}
-                  </Button>
-                </div>
+                </Button>
               </div>
-            ))}
-          </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                将为 {selectedBranch?.name} 生成 01桌 ~ {String(parseInt(tableCount) || 0).padStart(2, "0")}桌，共 {parseInt(tableCount) || 0} 张
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* 二维码预览区 */}
-        {selectedBranch && (
+        {/* 二维码列表 */}
+        {confirmedCount > 0 && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-800">
-                  {selectedBranch.name} · 桌号二维码
+                  {selectedBranch?.name} · 桌号二维码
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {generating ? "生成中..." : `共 ${qrCanvases.size} 张`}
@@ -308,11 +298,11 @@ export default function QrCodeManager() {
               <div className="p-10 text-center">
                 <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-sm text-gray-400">正在生成二维码...</p>
-                <p className="text-xs text-gray-300 mt-1">共 {selectedBranch.tableCount} 张</p>
+                <p className="text-xs text-gray-300 mt-1">共 {confirmedCount} 张</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 p-4">
-                {Array.from({ length: parseInt(selectedBranch.tableCount) || 0 }, (_, i) => i + 1).map(idx => {
+                {Array.from({ length: confirmedCount }, (_, i) => i + 1).map(idx => {
                   const canvas = qrCanvases.get(idx);
                   const label = tableLabel(idx);
                   return (
@@ -329,7 +319,7 @@ export default function QrCodeManager() {
                       {canvas && (
                         <button
                           className="w-full py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-600 flex items-center justify-center gap-1 active:bg-gray-100"
-                          onClick={() => downloadCanvas(canvas, `${storeName}-${selectedBranch.name}-${label}.png`)}
+                          onClick={() => downloadCanvas(canvas, `${storeName}-${selectedBranch?.name}-${label}.png`)}
                         >
                           <Download className="w-3 h-3" />
                           下载
@@ -347,10 +337,10 @@ export default function QrCodeManager() {
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <p className="text-xs font-semibold text-gray-500 mb-2">使用说明</p>
           <ul className="space-y-1.5 text-xs text-gray-400 leading-relaxed">
-            <li>· 输入分店名称和桌号数量，点击"生成"即可批量生成二维码</li>
+            <li>· 分店列表来自"分店管理"，如需添加分店请先前往分店管理</li>
+            <li>· 选择分店后输入桌号数量，点击"生成"即可批量生成二维码</li>
             <li>· 二维码自动编号：01桌、02桌…，顶部显示店名和桌号，不会混淆</li>
             <li>· 顾客扫码提交意见后，支付页面会显示分店、桌号和扫码时间</li>
-            <li>· 分店配置会自动保存，下次进入无需重新输入</li>
             <li>· 二维码永久有效，打印后贴在对应桌位即可长期使用</li>
           </ul>
         </div>
