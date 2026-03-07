@@ -207,6 +207,8 @@ const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // AB 意见本 - 管理者查看页面
 const OpinionBookDetail = lazy(() => import("./pages/OpinionBookDetail"));
+// AB 意见本 - 二维码管理
+const QrCodeManager = lazy(() => import("./pages/QrCodeManager"));
 // 私人定制展示页
 const CustomShowcase = lazy(() => import("./pages/CustomShowcase"));
 const CustomShowcaseShare = lazy(() => import("./pages/CustomShowcase").then(m => ({ default: m.CustomShowcaseShare })));
@@ -423,6 +425,7 @@ function Router() {
         <Route path="/feedback/:ledgerId" component={FeedbackPage} />
         {/* AB 意见本 - 管理者查看页面 */}
         <Route path="/opinion/:bookId" component={OpinionBookDetail} />
+        <Route path="/ledger/:id/qrcodes" component={QrCodeManager} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />

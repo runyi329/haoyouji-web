@@ -495,6 +495,9 @@ export default function LedgerSettings() {
         {ledgerData?.type === 'opinion_book' && (
           <SettingItem label="前端面板设置" showIcon onClick={() => setLocation(`/feedback/${ledgerId}`)} />
         )}
+        {ledgerData?.type === 'opinion_book' && (
+          <SettingItem label="二维码管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/qrcodes`)} />
+        )}
         <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
         <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
