@@ -313,6 +313,24 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         ? new Date(Math.max(new Date(latestRecord).getTime(), new Date(ledger.updatedAt).getTime()))
         : new Date(ledger.updatedAt);
 
+      // 对于opinion_book类型，额外查询opinion_books表获取opinionBookId
+      let opinionBookId: number | null = null;
+      if ((ledger as any).type === 'opinion_book') {
+        try {
+          const dbConn = await getDbConnection();
+          if (dbConn) {
+            const [rows] = await dbConn.execute(
+              'SELECT id FROM opinion_books WHERE ledger_id = ? LIMIT 1',
+              [ledger.id]
+            ) as any;
+            if (rows && rows.length > 0) {
+              opinionBookId = rows[0].id;
+            }
+          }
+        } catch (e) {
+          // 查询失败不影响主流程
+        }
+      }
       return {
         ...ledger,
         members,
@@ -320,6 +338,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         recordCount,
         userRole,
         lastActivityAt: lastActivityAt.toISOString(),
+        opinionBookId,
       };
     })
   );
