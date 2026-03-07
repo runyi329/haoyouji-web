@@ -79,6 +79,8 @@ export default function MerchantSettingsPage({
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading, refetch } = trpc.merchant.getMerchantSettings.useQuery();
+  const utils = trpc.useUtils();
+  const invalidateShareInfo = () => utils.merchant.getMerchantShareInfo.invalidate({ merchantCode });
 
   const [form, setForm] = useState({
     shareTitle: "",
@@ -106,17 +108,18 @@ export default function MerchantSettingsPage({
     onSuccess: () => {
       toast.success("保存成功", { description: "商家设置已更新" });
       refetch();
+      invalidateShareInfo();
     },
     onError: (e) => toast.error("保存失败", { description: e.message }),
   });
 
   const uploadLogoMutation = trpc.merchant.uploadMerchantLogo.useMutation({
-    onSuccess: () => { toast.success("Logo 上传成功"); refetch(); },
+    onSuccess: () => { toast.success("Logo 上传成功"); refetch(); invalidateShareInfo(); },
     onError: (e) => toast.error("上传失败", { description: e.message }),
   });
 
   const uploadCoverMutation = trpc.merchant.uploadMerchantCover.useMutation({
-    onSuccess: () => { toast.success("封面图上传成功"); refetch(); },
+    onSuccess: () => { toast.success("封面图上传成功"); refetch(); invalidateShareInfo(); },
     onError: (e) => toast.error("上传失败", { description: e.message }),
   });
 
