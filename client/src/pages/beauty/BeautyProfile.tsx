@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
-  ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList
+  ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList, Settings
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
@@ -125,6 +125,27 @@ export default function BeautyProfile() {
 
 
       </div>
+
+      {/* 管理员专属：商户设置 */}
+      {user?.username === 'liulifan' && (
+        <div className="px-4 mt-3">
+          <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-50">
+              <h3 className="font-bold text-gray-800 text-sm">商家管理</h3>
+            </div>
+            <button
+              onClick={() => setLocation('/beauty/settings')}
+              className="w-full px-5 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-full bg-rose-50 flex items-center justify-center text-rose-400 flex-shrink-0">
+                <Settings className="w-4.5 h-4.5" />
+              </div>
+              <span className="flex-1 text-left text-sm text-gray-700">商户设置</span>
+              <ChevronRight className="w-4 h-4 text-gray-300" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </div>
