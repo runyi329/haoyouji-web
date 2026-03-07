@@ -190,6 +190,69 @@ async function ensureLedgerFeaturesColumns() {
 // 在模块加载时执行迁移
 ensureLedgerFeaturesColumns().catch(console.error);
 
+// ========== AB型意见本字段迁移（统一到ledger_categories + ledger_records）==========
+let _opinionBookMigrated = false;
+async function ensureOpinionBookColumns() {
+  if (_opinionBookMigrated) return;
+  const db = await getLedgerDb();
+  if (!db) return;
+
+  // 1. ledger_categories.type 枚举新增 'branch'（分店）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_categories MODIFY COLUMN type ENUM('income','expense','branch') NOT NULL`);
+    console.log('[ensureOpinionBookColumns] ledger_categories.type 枚举已更新');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate') && !e.message?.includes('already exists')) {
+      console.error('[ensureOpinionBookColumns] type enum error:', e.message);
+    }
+  }
+
+  // 2. ledger_records 新增 rating 字段（评分 1-5）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN rating TINYINT NULL DEFAULT NULL COMMENT 'AB型意见本评分 1-5'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.rating 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] rating error:', e.message);
+    }
+  }
+
+  // 3. ledger_records 新增 guest_name 字段（访客昵称）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN guest_name VARCHAR(50) NULL DEFAULT NULL COMMENT 'AB型意见本访客昵称'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.guest_name 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] guest_name error:', e.message);
+    }
+  }
+
+  // 4. ledger_records 新增 guest_ip 字段（访客IP，防刷）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN guest_ip VARCHAR(45) NULL DEFAULT NULL COMMENT 'AB型意见本访客IP'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.guest_ip 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] guest_ip error:', e.message);
+    }
+  }
+
+  // 5. ledger_records 新增 is_read 字段（是否已读）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN is_read TINYINT DEFAULT 0 COMMENT 'AB型意见本是否已读（0=未读，1=已读）'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.is_read 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] is_read error:', e.message);
+    }
+  }
+
+  _opinionBookMigrated = true;
+  console.log('[ensureOpinionBookColumns] AB型意见本字段迁移完成');
+}
+// 在模块加载时执行迁移
+ensureOpinionBookColumns().catch(console.error);
+
 /**
  * 获取用户的所有账本（包括自己创建的和参与的）
  */
@@ -313,24 +376,7 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         ? new Date(Math.max(new Date(latestRecord).getTime(), new Date(ledger.updatedAt).getTime()))
         : new Date(ledger.updatedAt);
 
-      // 对于opinion_book类型，额外查询opinion_books表获取opinionBookId
-      let opinionBookId: number | null = null;
-      if ((ledger as any).type === 'opinion_book') {
-        try {
-          const dbConn = await getDbConnection();
-          if (dbConn) {
-            const [rows] = await dbConn.execute(
-              'SELECT id FROM opinion_books WHERE ledger_id = ? LIMIT 1',
-              [ledger.id]
-            ) as any;
-            if (rows && rows.length > 0) {
-              opinionBookId = rows[0].id;
-            }
-          }
-        } catch (e) {
-          // 查询失败不影响主流程
-        }
-      }
+      // 统一架构后：opinion_book 类型直接用 ledger.id 跳转，不再需要 opinionBookId
       return {
         ...ledger,
         members,
@@ -338,7 +384,6 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         recordCount,
         userRole,
         lastActivityAt: lastActivityAt.toISOString(),
-        opinionBookId,
       };
     })
   );

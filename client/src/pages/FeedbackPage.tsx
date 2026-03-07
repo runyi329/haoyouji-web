@@ -1,3 +1,10 @@
+/**
+ * FeedbackPage.tsx - 游客扫码提交意见页面（公开，无需登录）
+ * 数据架构统一后：
+ *   - 路由参数：/feedback/:ledgerId/:categoryId? （ledgerId=意见本ID，categoryId=分店ID，可选）
+ *   - 提交到 ledger_records 表（通过 opinionBook.submitEntry 接口）
+ *   - 公开信息从 opinionBook.getPublicInfo 接口获取
+ */
 import { useState } from "react";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -9,9 +16,10 @@ import { Star, CheckCircle, MessageSquare, Store } from "lucide-react";
 import { toast } from "sonner";
 
 export default function FeedbackPage() {
-  const params = useParams<{ bookId: string; tableId: string }>();
-  const bookId = parseInt(params.bookId || "0");
-  const tableId = parseInt(params.tableId || "0");
+  // 路由参数：ledgerId（意见本ID），categoryId（分店ID，可选）
+  const params = useParams<{ ledgerId: string; categoryId: string }>();
+  const ledgerId = parseInt(params.ledgerId || "0");
+  const categoryId = params.categoryId ? parseInt(params.categoryId) : undefined;
 
   const [content, setContent] = useState("");
   const [rating, setRating] = useState<number>(0);
@@ -19,11 +27,13 @@ export default function FeedbackPage() {
   const [guestName, setGuestName] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  // 获取意见本公开信息（门店名 + 分店名）
   const { data: info, isLoading, error } = trpc.opinionBook.getPublicInfo.useQuery(
-    { bookId, tableId },
-    { enabled: bookId > 0 && tableId > 0 }
+    { ledgerId, categoryId },
+    { enabled: ledgerId > 0 }
   );
 
+  // 提交意见
   const submitMutation = trpc.opinionBook.submitEntry.useMutation({
     onSuccess: () => {
       setSubmitted(true);
@@ -37,8 +47,8 @@ export default function FeedbackPage() {
       return;
     }
     submitMutation.mutate({
-      bookId,
-      tableId,
+      ledgerId,
+      categoryId,
       content: content.trim(),
       rating: rating || undefined,
       guestName: guestName.trim() || undefined,
@@ -81,8 +91,10 @@ export default function FeedbackPage() {
             您的意见已收到，我们会认真改进，为您提供更好的服务。
           </p>
           <div className="mt-6 p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-400">{info.book.store_name || info.book.name}</p>
-            <p className="text-sm font-medium text-gray-600 mt-1">桌号 {info.table.table_code}</p>
+            <p className="text-xs text-gray-400">{info.book.name}</p>
+            {info.branch && (
+              <p className="text-sm font-medium text-gray-600 mt-1">{info.branch.name}</p>
+            )}
           </div>
           <Button
             variant="outline"
@@ -107,16 +119,14 @@ export default function FeedbackPage() {
       <div className="bg-[#D32F2F] text-white px-6 pt-12 pb-8">
         <div className="flex items-center gap-2 mb-1">
           <Store className="w-5 h-5 opacity-80" />
-          <span className="text-sm opacity-90">{info.book.store_name || info.book.name}</span>
+          <span className="text-sm opacity-90">{info.book.name}</span>
         </div>
         <h1 className="text-2xl font-bold">您好！</h1>
-        <p className="text-sm opacity-80 mt-1">
-          {(info.table as any).branch_name && (
-            <span className="font-semibold">{(info.table as any).branch_name} · </span>
-          )}
-          桌号 <span className="font-semibold">{info.table.table_code}</span>
-          {info.table.location && <span> · {info.table.location}</span>}
-        </p>
+        {info.branch && (
+          <p className="text-sm opacity-80 mt-1">
+            <span className="font-semibold">{info.branch.name}</span>
+          </p>
+        )}
         <p className="text-xs opacity-70 mt-2">您的意见对我们非常重要，请留下您的宝贵建议</p>
       </div>
 
@@ -161,7 +171,7 @@ export default function FeedbackPage() {
           <Textarea
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder="请分享您的用餐体验、服务感受或改进建议..."
+            placeholder="请分享您的体验、服务感受或改进建议..."
             className="min-h-[120px] text-sm resize-none"
             maxLength={500}
           />

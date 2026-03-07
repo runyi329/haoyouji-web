@@ -474,7 +474,7 @@ export const ledgerCategories = mysqlTable("ledger_categories", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
 	name: varchar({ length: 50 }).notNull(),
-	type: mysqlEnum(['income','expense']).notNull(),
+	type: mysqlEnum(['income','expense','branch']).notNull(),
 	parentId: int(),
 	icon: text(),
 	color: varchar({ length: 20 }),
@@ -525,6 +525,11 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	reimbursementVoucherUrl: text('reimbursement_voucher_url'),
 	pendingType: mysqlEnum('pending_type', ['receivable','payable']),
 	pendingIncludeStats: tinyint('pending_include_stats').default(1),
+	// AB型意见本专用字段（顾客扫码提意见时使用，普通账本为null）
+	rating: tinyint('rating'),                                    // 评分 1-5
+	guestName: varchar('guest_name', { length: 50 }),             // 访客昵称
+	guestIp: varchar('guest_ip', { length: 45 }),                 // 访客IP（防刷）
+	isRead: tinyint('is_read').default(0),                        // 是否已读
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),
