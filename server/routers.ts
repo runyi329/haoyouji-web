@@ -8614,9 +8614,20 @@ export const appRouter = router({
                    WHERE r.ledgerId = ?`;
         }
         const params: any[] = [input.ledgerId];
-        // deleted_at 字段存在时才加过滤条件
+        // deleted_at 字段存在时才加过滤条件（只过滤明确已删除的记录）
         if (hasOpinionColumns) {
-          query += ` AND (r.deleted_at IS NULL)`;
+          // 先检查 deleted_at 字段是否真的存在
+          try {
+            const [delColRows] = await dbConn.execute(
+              `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'deleted_at'`
+            ) as any;
+            if ((delColRows as any[])[0].cnt > 0) {
+              query += ` AND (r.deleted_at IS NULL)`;
+            }
+          } catch (e) {
+            // 字段不存在，不加过滤
+          }
         }
         if (input.categoryId !== undefined) {
           query += ` AND r.categoryId = ?`;
@@ -8629,7 +8640,17 @@ export const appRouter = router({
         let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ?`;
         const countParams: any[] = [input.ledgerId];
         if (hasOpinionColumns) {
-          countQuery += ` AND (r.deleted_at IS NULL)`;
+          try {
+            const [delColRows2] = await dbConn.execute(
+              `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'deleted_at'`
+            ) as any;
+            if ((delColRows2 as any[])[0].cnt > 0) {
+              countQuery += ` AND (r.deleted_at IS NULL)`;
+            }
+          } catch (e) {
+            // 字段不存在，不加过滤
+          }
         }
         if (input.categoryId !== undefined) {
           countQuery += ` AND r.categoryId = ?`;
