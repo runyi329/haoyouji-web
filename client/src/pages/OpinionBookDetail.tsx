@@ -320,21 +320,21 @@ export default function OpinionBookDetail() {
               {stats.dimPieData.length === 0 ? (
                 <div className="text-xs flex-1 flex items-center" style={{ color: "rgba(255,255,255,0.5)" }}>暂无数据</div>
               ) : (
-                <div className="flex-1 flex flex-col justify-around gap-1 overflow-hidden">
-                  {stats.dimPieData.slice(0, 5).map((seg, idx) => {
+                <div className="flex-1 flex flex-col justify-around overflow-hidden" style={{ gap: "2px" }}>
+                  {stats.dimPieData.slice(0, 6).map((seg, idx) => {
                     const maxPct = stats.dimPieData[0].pct;
-                    const barW = Math.max(8, Math.round((seg.pct / maxPct) * 100));
+                    const barW = Math.max(6, Math.round((seg.pct / maxPct) * 100));
                     const isTop = idx === 0;
                     return (
-                      <div key={seg.id} className="flex flex-col gap-0.5">
+                      <div key={seg.id} className="flex flex-col" style={{ gap: "2px" }}>
                         <div className="flex items-center justify-between">
-                          <span style={{ color: isTop ? "#FFFFFF" : "rgba(255,255,255,0.8)", fontSize: "10px", fontWeight: isTop ? 700 : 400 }}>
-                            {isTop && <span style={{ marginRight: "3px", fontSize: "9px" }}>&#9650;</span>}
+                          <span style={{ color: isTop ? "#FFFFFF" : "rgba(255,255,255,0.8)", fontSize: "9.5px", fontWeight: isTop ? 700 : 400, lineHeight: 1.2 }}>
+                            {isTop && <span style={{ marginRight: "2px", fontSize: "8px" }}>&#9650;</span>}
                             {seg.label}
                           </span>
-                          <span style={{ color: isTop ? "#FFFFFF" : "rgba(255,255,255,0.85)", fontSize: "11px", fontWeight: isTop ? 700 : 600 }}>{seg.pct}%</span>
+                          <span style={{ color: isTop ? "#FFFFFF" : "rgba(255,255,255,0.85)", fontSize: "10px", fontWeight: isTop ? 700 : 600 }}>{seg.pct}%</span>
                         </div>
-                        <div className="w-full rounded-full overflow-hidden" style={{ height: isTop ? "7px" : "5px", backgroundColor: "rgba(255,255,255,0.15)" }}>
+                        <div className="w-full rounded-full overflow-hidden" style={{ height: isTop ? "5px" : "4px", backgroundColor: "rgba(255,255,255,0.15)" }}>
                           <div
                             className="h-full rounded-full"
                             style={{
