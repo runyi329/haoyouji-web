@@ -187,7 +187,7 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
           <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
           <div
             className="fixed rounded-xl shadow-xl overflow-hidden"
-            style={{ backgroundColor: "#FFFFFF", zIndex: 9999, minWidth: "140px", top: dropPos.top, right: dropPos.right }}
+            style={{ backgroundColor: "#FFFFFF", zIndex: 9999, width: "max-content", top: dropPos.top, right: dropPos.right }}
           >
             <button
               className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
