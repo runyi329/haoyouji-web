@@ -309,7 +309,7 @@ export default function LedgerSettings() {
       <div className="bg-white border-b border-divider sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">
           <button
-            onClick={() => setLocation(`/ledger/${ledgerId}`)}
+            onClick={() => setLocation(ledgerData?.type === 'opinion_book' ? `/opinion/${ledgerId}` : `/ledger/${ledgerId}`)}
             className="p-2 -ml-2"
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
