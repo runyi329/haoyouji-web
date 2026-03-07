@@ -60,6 +60,8 @@ export default function FeedbackPage() {
   // 支付
   const [amount, setAmount] = useState("");
   const [payLoading, setPayLoading] = useState(false);
+  // 扫码时间（页面加载时记录，不随重渲染变化）
+  const [scanTime] = useState(() => new Date());
 
   // 获取意见本公开信息
   const { data: info, isLoading, error } = trpc.opinionBook.getPublicInfo.useQuery(
@@ -436,6 +438,28 @@ export default function FeedbackPage() {
           </div>
 
           <div className="px-5 pb-5">
+            {/* 扫码信息：分店 / 桂号 / 扫码时间 */}
+            <div className="mb-4 bg-gray-50 rounded-xl px-4 py-3 space-y-2">
+              {info?.branch && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">分店</span>
+                  <span className="text-gray-700 font-medium">{info.book.name}</span>
+                </div>
+              )}
+              {categoryId && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">桂号</span>
+                  <span className="text-gray-700 font-medium">{info?.branch?.name || `桂号 #${categoryId}`}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400">扫码时间</span>
+                <span className="text-gray-700">
+                  {scanTime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </div>
+
             {/* 金额输入 —— 支付宝大字风格 */}
             <div className="flex items-end gap-1 mb-4 border-b border-gray-100 pb-3">
               <span className="text-gray-500 text-xl mb-0.5">¥</span>
