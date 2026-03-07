@@ -400,7 +400,7 @@ export default function LedgerSettings() {
       {/* 基本设置 */}
       <div className="bg-white mt-3">
         <SettingItem 
-          label="减肥账本名称" 
+          label={ledgerData?.type === 'opinion_book' ? '店铺名称' : '减肥账本名称'} 
           value={ledgerData.name} 
           showIcon 
           onClick={() => setLocation(`/ledger/${ledgerId}/edit-name`)}
@@ -414,22 +414,24 @@ export default function LedgerSettings() {
 
 
 
+        {ledgerData?.type !== 'opinion_book' && (
+          <SettingItem 
+            label="AI 分身" 
+            showIcon 
+            hasHelp 
+            onClick={() => setLocation(`/ledger/${ledgerId}/ai-employees`)}
+          />
+        )}
         <SettingItem 
-          label="AI 分身" 
-          showIcon 
-          hasHelp 
-          onClick={() => setLocation(`/ledger/${ledgerId}/ai-employees`)}
-        />
-        <SettingItem 
-          label="成员权限设置" 
+          label={ledgerData?.type === 'opinion_book' ? '全成员权限设置' : '成员权限设置'} 
           showIcon 
           hasHelp 
           onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
         />
 
 
-        {/* 只有账本创建人(owner)和管理员(admin)才能看到 */}
-        {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+        {/* 只有账本创建人(owner)和管理员(admin)才能看到，opinion_book不显示 */}
+        {ledgerData?.type !== 'opinion_book' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
           <SettingItem 
             label={ledgerData?.type === 'diet' ? '成员信息设置' : '成员记账审批'} 
             showIcon 
@@ -453,11 +455,11 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}/admin-transactions`)}
           />
         )}
-        {ledgerData?.type !== 'diet' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
+        {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
       </div>
 
       {/* 高级设置 */}
-      {ledgerData?.type !== 'diet' && (
+      {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
       <div className="bg-white mt-3">
         <SettingItem 
           label="账本结算币种" 
@@ -486,7 +488,9 @@ export default function LedgerSettings() {
 
 
 
-        <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
+        {ledgerData?.type !== 'opinion_book' && (
+          <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
+        )}
         <SettingItem label="分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
         <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
@@ -510,8 +514,8 @@ export default function LedgerSettings() {
         }} />
       </div>
 
-      {/* 导入导出功能 - 减肥账本不显示 */}
-      {ledgerData?.type !== 'diet' && (
+      {/* 导入导出功能 - 减肥账本和意见本不显示 */}
+      {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
       <div className="bg-white mt-3">
         <SettingItem 
           label="表格导入账单" 
