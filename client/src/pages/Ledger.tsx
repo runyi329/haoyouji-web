@@ -701,6 +701,10 @@ export default function Ledger() {
               key={ledger.id}
               className="cursor-pointer"
               onClick={() => {
+                if ((ledger as any).type === 'opinion_book_demo') {
+                  setLocation(`/demo/opinion/${ledger.id}`);
+                  return;
+                }
                 if ((ledger as any).type === 'opinion_book') {
                   // AB型意见本：直接用 ledger.id 跳转（已统一架构）
                   setLocation(`/opinion/${ledger.id}`);
@@ -721,6 +725,11 @@ export default function Ledger() {
                         {ledger.isVip === true && (
                           <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
                             VIP
+                          </Badge>
+                        )}
+                        {(ledger as any).type === 'opinion_book_demo' && (
+                          <Badge variant="secondary" className="bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
+                            演示
                           </Badge>
                         )}
                       </div>
