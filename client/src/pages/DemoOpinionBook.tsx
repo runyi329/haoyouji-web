@@ -9,7 +9,8 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   Search, Star, ChevronDown, MessageSquare, RefreshCw,
-  CheckCircle, Camera, X, ChevronUp, ChevronRight, Share2, Eye, EyeOff
+  CheckCircle, Camera, X, ChevronUp, ChevronRight, Share2, Eye, EyeOff,
+  User, Briefcase, Crown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -194,9 +195,9 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
 type Role = "guest" | "manager" | "owner";
 
 const ROLE_CONFIG = {
-  guest: { label: "顾客", emoji: "👤", desc: "填写意见，享95折优惠" },
-  manager: { label: "店长", emoji: "👔", desc: "查看意见，隐私保护" },
-  owner: { label: "老板", emoji: "👑", desc: "完整数据，全局统计" },
+  guest: { label: "顾客", icon: User, desc: "填写意见，享95折优惠" },
+  manager: { label: "店长", icon: Briefcase, desc: "查看意见，隐私保护" },
+  owner: { label: "老板", icon: Crown, desc: "完整数据，全局统计" },
 };
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
@@ -570,8 +571,8 @@ function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwne
       <div className="flex-none overflow-hidden flex flex-col" style={{ height: "40vh", backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         <div className="px-4 pt-3 pb-2 flex items-center gap-3 flex-shrink-0">
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
-              {isOwner ? "👑" : "👔"}
+            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
+              {isOwner ? <Crown className="w-6 h-6 text-white" /> : <Briefcase className="w-6 h-6 text-white" />}
             </div>
           </div>
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
@@ -794,7 +795,7 @@ export default function DemoOpinionBook() {
                     color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.5)",
                   }}
                 >
-                  <span className="text-base leading-none">{cfg.emoji}</span>
+                  <cfg.icon className="w-4 h-4" />
                   <span className="text-xs font-semibold mt-0.5">{cfg.label}</span>
                 </button>
               );
