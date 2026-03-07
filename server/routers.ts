@@ -8728,8 +8728,16 @@ export const appRouter = router({
         tableCount: z.number().min(1).max(200),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 验证用户是该账本的成员（任意成员均可操作）
+        const memberConn = await getDbConnection();
+        if (memberConn) {
+          const [memberRows] = await memberConn.execute(
+            'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          if (!memberRows || (memberRows as any[]).length === 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+          }
         }
         // 获取该分店下已有的桌号二级分类
         const existing = await dbLedger.getLedgerCategories(input.ledgerId);
@@ -8747,17 +8755,20 @@ export const appRouter = router({
           if (!existingNumbers.includes(i)) toCreate.push(i);
         }
         const created: Array<{ tableNumber: number; categoryId: number; name: string }> = [];
+        const insertConn = await getDbConnection();
+        if (!insertConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         for (const num of toCreate) {
           const name = String(num).padStart(2, '0') + '桌';
-          const result = await dbLedger.addLedgerCategory({
-            ledgerId: input.ledgerId,
-            name,
-            type: 'branch',
-            parentId: input.branchId,
-            icon: '🪑',
-            createdBy: ctx.user.id,
-          });
-          created.push({ tableNumber: num, categoryId: result.id, name });
+          // 直接用 SQL 插入，避免 Drizzle .$returningId() 在某些 MySQL 版本不兼容
+          const [insertResult] = await insertConn.execute(
+            `INSERT INTO ledger_categories (ledgerId, name, type, parentId, icon, color, sortOrder, isDefault, createdBy)
+             VALUES (?, ?, 'branch', ?, '🪑', '#888888', ?, 0, ?)`,
+            [input.ledgerId, name, input.branchId, num, ctx.user.id]
+          ) as any;
+          const newId = (insertResult as any).insertId;
+          if (newId) {
+            created.push({ tableNumber: num, categoryId: newId, name });
+          }
         }
         // 返回所有桌号（包含已有的和新建的）
         const allCategories = await dbLedger.getLedgerCategories(input.ledgerId);
