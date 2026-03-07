@@ -205,17 +205,23 @@ export default function OpinionBookDetail() {
   const [showSearch, setShowSearch] = useState(false);
 
   const { data: user } = trpc.auth.me.useQuery();
-  const { data: ledgerData } = trpc.ledger.getById.useQuery({ ledgerId }, { enabled: ledgerId > 0 });
-  const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery({ ledgerId }, { enabled: ledgerId > 0 });
+  const { data: ledgerData, error: ledgerError, isLoading: ledgerLoading } = trpc.ledger.getById.useQuery({ ledgerId }, { enabled: ledgerId > 0, retry: 1 });
+  const { data: allCategories = [] } = trpc.ledger.getCategories.useQuery({ ledgerId }, { enabled: ledgerId > 0, retry: 1 });
 
   const branches = (allCategories as any[])
     .filter((c: any) => c.parentId === null && !c.isDefault)
     .map((c: any) => ({ id: c.id, name: c.name }));
 
-  const { data: entriesData, isLoading, refetch } = trpc.opinionBook.getEntries.useQuery(
+  const { data: entriesData, isLoading, error: entriesError, refetch } = trpc.opinionBook.getEntries.useQuery(
     { ledgerId, pageSize: 500 },
-    { enabled: ledgerId > 0 }
+    { enabled: ledgerId > 0, retry: 1 }
   );
+
+  // 错误处理：如果任何API调用失败，显示错误信息
+  const apiError = ledgerError || entriesError;
+  if (apiError) {
+    console.error('[OpinionBookDetail] API错误:', apiError);
+  }
 
   // 展平所有意见记录
   const entries = useMemo(() => {
@@ -494,7 +500,13 @@ export default function OpinionBookDetail() {
 
         {/* 意见时间轴 */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {apiError ? (
+            <div className="flex flex-col items-center justify-center py-16 text-red-400">
+              <MessageSquare className="w-10 h-10 mb-3 opacity-30" />
+              <p className="text-sm text-red-500 mb-2">{(apiError as any)?.message || '加载失败'}</p>
+              <button onClick={() => refetch()} className="text-xs px-4 py-1.5 rounded-full" style={{ backgroundColor: '#FFEBEE', color: '#D32F2F' }}>重试</button>
+            </div>
+          ) : isLoading || ledgerLoading ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-400">
               <RefreshCw className="w-6 h-6 animate-spin mb-2" />
               <p className="text-sm">加载中...</p>

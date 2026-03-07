@@ -585,23 +585,40 @@ export async function getLedgerById(ledgerId: number, userId: number) {
     }
     console.log('[getLedgerById] 数据库连接成功');
     
-    // 检查用户是否是账本成员
-    console.log('[getLedgerById] 开始检查成员权限...');
-    const member = await db
-      .select()
-      .from(ledgerMembers)
-      .where(
-        and(
-          eq(ledgerMembers.ledgerId, ledgerId),
-          eq(ledgerMembers.userId, userId)
-        )
-      )
+    // 先查用户角色
+    const userRows = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
       .limit(1);
+    const userRole = userRows[0]?.role;
+    console.log('[getLedgerById] 用户角色:', userRole);
+    
+    // super_admin 和 admin 跳过成员检查
+    let memberRole = 'viewer';
+    if (userRole === 'super_admin' || userRole === 'admin') {
+      console.log('[getLedgerById] 管理员角色，跳过成员检查');
+      memberRole = 'owner'; // 管理员视为 owner 权限
+    } else {
+      // 检查用户是否是账本成员
+      console.log('[getLedgerById] 开始检查成员权限...');
+      const member = await db
+        .select()
+        .from(ledgerMembers)
+        .where(
+          and(
+            eq(ledgerMembers.ledgerId, ledgerId),
+            eq(ledgerMembers.userId, userId)
+          )
+        )
+        .limit(1);
 
-    console.log('[getLedgerById] 成员检查结果:', member);
-    if (member.length === 0) {
-      console.log('[getLedgerById] 用户不是账本成员');
-      throw new Error("您不是该账本的成员");
+      console.log('[getLedgerById] 成员检查结果:', member);
+      if (member.length === 0) {
+        console.log('[getLedgerById] 用户不是账本成员');
+        throw new Error("您不是该账本的成员");
+      }
+      memberRole = member[0].role;
     }
 
     // 获取账本信息
@@ -635,7 +652,7 @@ export async function getLedgerById(ledgerId: number, userId: number) {
     const result = {
       ...ledger[0],
       members,
-      userRole: member[0].role,
+      userRole: memberRole,
     };
     console.log('[getLedgerById] 返回结果:', result);
     return result;
