@@ -8416,36 +8416,43 @@ export const appRouter = router({
         return rows as any[];
       }),
 
-    // 添加分店（仅管理员）- 存入 ledger_categories，type='branch'
+    // ═══ 分店管理（全部用原始SQL，不依赖type字段值，不依赖ORM） ═══
+
+    // 添加分店 - 直接INSERT到ledger_categories
     addBranch: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
         name: z.string().min(1).max(100),
-        sortOrder: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        // 验证账本归属
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证账本归属
         const [ledgerRows] = await dbConn.execute(
           `SELECT id FROM ledgers WHERE id=? AND ownerId=? AND type='opinion_book'`,
           [input.ledgerId, ctx.user.id]
         ) as any;
         if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作此意见本' });
-        const result = await dbLedger.addLedgerCategory({
-          ledgerId: input.ledgerId,
-          name: input.name,
-          type: 'branch' as any,
-          sortOrder: input.sortOrder,
-          createdBy: ctx.user.id,
-        });
-        return { id: result.id, name: input.name };
+        // 获取当前最大排序值
+        const [maxRows] = await dbConn.execute(
+          `SELECT COALESCE(MAX(sort_order), 0) as maxSort FROM ledger_categories WHERE ledgerId=?`,
+          [input.ledgerId]
+        ) as any;
+        const nextSort = ((maxRows as any[])[0]?.maxSort || 0) + 1;
+        // 直接INSERT，type用'expense'（兼容旧枚举），isDefault=0标识为用户创建的分店
+        const [result] = await dbConn.execute(
+          `INSERT INTO ledger_categories (ledgerId, name, type, icon, color, sort_order, isDefault, createdBy)
+           VALUES (?, ?, 'expense', '🏪', '#D32F2F', ?, 0, ?)`,
+          [input.ledgerId, input.name, nextSort, ctx.user.id]
+        ) as any;
+        console.log(`[addBranch] 新增分店: ledgerId=${input.ledgerId}, name=${input.name}, insertId=${result.insertId}`);
+        return { id: result.insertId, name: input.name };
       }),
 
-    // 获取分店列表（仅管理员）- 从 ledger_categories 查，type='branch'
+    // 获取分店列表 - 查该账本下所有isDefault=0的分类（不依赖type字段）
     getBranches: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -8454,29 +8461,41 @@ export const appRouter = router({
         }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 查 ledger_categories 中 type='branch' 的分店记录
-        // 注：服务器启动时 ensureOpinionBookColumns 已将旧数据的 expense/income 改为 branch
         const [rows] = await dbConn.execute(
           `SELECT c.id, c.name, c.sort_order,
                   COUNT(r.id) as entry_count
            FROM ledger_categories c
            LEFT JOIN ledger_records r ON r.categoryId = c.id AND r.deleted_at IS NULL
-           WHERE c.ledgerId = ? AND c.type = 'branch'
-           GROUP BY c.id
+           WHERE c.ledgerId = ? AND (c.isDefault = 0 OR c.isDefault IS NULL)
+           GROUP BY c.id, c.name, c.sort_order
            ORDER BY c.sort_order ASC, c.id ASC`,
           [input.ledgerId]
         ) as any;
+        console.log(`[getBranches] ledgerId=${input.ledgerId}, 查到 ${(rows as any[]).length} 个分店`);
         return rows as Array<{ id: number; name: string; sort_order: number; entry_count: number }>;
       }),
 
-    // 删除分店（仅管理员）
+    // 删除分店 - 直接DELETE
     deleteBranch: protectedProcedure
       .input(z.object({ categoryId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        return await dbLedger.deleteLedgerCategory(input.categoryId, ctx.user.id, false);
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 先把该分店下的意见记录的categoryId置空（保留记录，只解除关联）
+        await dbConn.execute(
+          `UPDATE ledger_records SET categoryId = NULL WHERE categoryId = ?`,
+          [input.categoryId]
+        );
+        // 删除分店
+        await dbConn.execute(
+          `DELETE FROM ledger_categories WHERE id = ?`,
+          [input.categoryId]
+        );
+        console.log(`[deleteBranch] 删除分店: categoryId=${input.categoryId}`);
+        return { success: true };
       }),
 
     // 获取意见列表（仅管理员）- 从 ledger_records 查
@@ -8539,7 +8558,7 @@ export const appRouter = router({
         // 如果指定了分店，验证分店存在
         if (input.categoryId) {
           const [catRows] = await dbConn.execute(
-            `SELECT id FROM ledger_categories WHERE id=? AND ledgerId=? AND type='branch'`,
+            `SELECT id FROM ledger_categories WHERE id=? AND ledgerId=?`,
             [input.categoryId, input.ledgerId]
           ) as any;
           if (!(catRows as any[]).length) throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的分店' });
@@ -8574,7 +8593,7 @@ export const appRouter = router({
         let branch = null;
         if (input.categoryId) {
           const [catRows] = await dbConn.execute(
-            `SELECT id, name FROM ledger_categories WHERE id=? AND ledgerId=? AND type='branch'`,
+            `SELECT id, name FROM ledger_categories WHERE id=? AND ledgerId=?`,
             [input.categoryId, input.ledgerId]
           ) as any;
           branch = (catRows as any[])[0] || null;
