@@ -2,11 +2,98 @@
  * OpinionBookDetail.tsx - AB 型定制账本（意见本）管理者查看页面
  * 布局：红色区域 2/5（头像+操作栏+数据概览）+ 意见列表 3/5
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Search, Settings, Star, ChevronDown, MessageSquare, RefreshCw } from "lucide-react";
+
+// ─── 词云组件（螺旋扩散，最大词在中心）─────────────────────────────────────────
+function WordCloud({ tags }: { tags: Array<{ tag: string; count: number }> }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [placed, setPlaced] = useState<Array<{ tag: string; x: number; y: number; fontSize: number; opacity: number; fontWeight: number }>>([]);
+
+  useEffect(() => {
+    if (!containerRef.current || tags.length === 0) { setPlaced([]); return; }
+    const W = containerRef.current.offsetWidth;
+    const H = containerRef.current.offsetHeight;
+    if (W === 0 || H === 0) return;
+
+    const maxCount = tags[0].count;
+    const cx = W / 2;
+    const cy = H / 2;
+
+    // 碰撞检测矩形列表
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+
+    const result: typeof placed = [];
+
+    tags.forEach(({ tag, count }) => {
+      const ratio = count / maxCount;
+      const fontSize = Math.round(10 + ratio * 10); // 10px ~ 20px
+      const opacity = 0.5 + ratio * 0.5;
+      const fontWeight = ratio >= 0.8 ? 700 : ratio >= 0.5 ? 600 : 400;
+      // 估算文字宽高（中文字符约 fontSize*0.95 宽）
+      const tw = tag.length * fontSize * 0.95;
+      const th = fontSize * 1.4;
+
+      // 螺旋搜索：从中心向外
+      let placed_ok = false;
+      const step = 2;
+      const maxR = Math.min(W, H) * 0.52;
+      for (let r = 0; r <= maxR && !placed_ok; r += step) {
+        // 每圈均匀分布角度，r越大角度越多
+        const angleCount = r === 0 ? 1 : Math.max(8, Math.round(2 * Math.PI * r / (fontSize * 1.2)));
+        // 加一个随机偏移让每圈起始角不同
+        const angleOffset = (count * 137.5 * Math.PI) / 180;
+        for (let ai = 0; ai < angleCount && !placed_ok; ai++) {
+          const angle = angleOffset + (ai / angleCount) * 2 * Math.PI;
+          const x = cx + r * Math.cos(angle) - tw / 2;
+          const y = cy + r * Math.sin(angle) - th / 2;
+          // 边界检查
+          if (x < 0 || y < 0 || x + tw > W || y + th > H) continue;
+          // 碰撞检查
+          const overlap = rects.some(rc =>
+            x < rc.x + rc.w + 2 && x + tw + 2 > rc.x &&
+            y < rc.y + rc.h + 2 && y + th + 2 > rc.y
+          );
+          if (!overlap) {
+            rects.push({ x, y, w: tw, h: th });
+            result.push({ tag, x, y, fontSize, opacity, fontWeight });
+            placed_ok = true;
+          }
+        }
+      }
+      // 放不下就跳过
+    });
+
+    setPlaced(result);
+  }, [tags, containerRef.current?.offsetWidth, containerRef.current?.offsetHeight]);
+
+  return (
+    <div ref={containerRef} className="relative w-full flex-1 overflow-hidden">
+      {placed.map((item, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            left: item.x,
+            top: item.y,
+            fontSize: item.fontSize,
+            opacity: item.opacity,
+            fontWeight: item.fontWeight,
+            color: "#FFFFFF",
+            lineHeight: 1.4,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          {item.tag}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // ─── 星级展示 ─────────────────────────────────────────────────────────────────
 function StarRating({ rating }: { rating?: number }) {
@@ -375,40 +462,12 @@ export default function OpinionBookDetail() {
             </div>
 
             {/* 右：近7天趋势 */}
-            <div className="rounded-xl px-2 py-2 flex flex-col overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="rounded-xl px-2 py-2 flex flex-col overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)", minHeight: "120px" }}>
               <div className="text-xs font-medium flex-shrink-0 mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>热词</div>
               {stats.tagCloud.length === 0 ? (
                 <div className="text-xs flex-1 flex items-center justify-center" style={{ color: "rgba(255,255,255,0.4)" }}>暂无标签</div>
               ) : (
-                <div className="flex-1 flex flex-wrap content-start gap-1 overflow-hidden">
-                  {(() => {
-                    const maxCount = stats.tagCloud[0].count;
-                    return stats.tagCloud.map(({ tag, count }, i) => {
-                      const ratio = count / maxCount;
-                      // 字号：9px ~ 15px
-                      const fontSize = Math.round(9 + ratio * 6);
-                      // 不透明度：0.45 ~ 1.0
-                      const opacity = 0.45 + ratio * 0.55;
-                      // 出现最多的加粗
-                      const fontWeight = ratio >= 0.8 ? 700 : ratio >= 0.5 ? 600 : 400;
-                      return (
-                        <span
-                          key={i}
-                          style={{
-                            fontSize: `${fontSize}px`,
-                            opacity,
-                            fontWeight,
-                            color: "#FFFFFF",
-                            lineHeight: 1.3,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {tag}
-                        </span>
-                      );
-                    });
-                  })()}
-                </div>
+                <WordCloud tags={stats.tagCloud} />
               )}
             </div>
           </div>
