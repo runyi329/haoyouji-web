@@ -359,51 +359,76 @@ export default function OpinionBookDetail() {
             </p>
           </div>
         ) : (
-          <div className="p-4 space-y-3">
-            {filteredEntries.map((entry: any) => (
+          <div className="px-4 pt-3 pb-4">
+            {/* 流水账时间轴 */}
+            <div className="relative">
+              {/* 左侧绿色竖线 */}
               <div
-                key={entry.id}
-                className="rounded-2xl p-4 shadow-sm"
-                style={{ backgroundColor: "#FFFFFF" }}
-              >
-                {/* 头部：分店 + 时间 */}
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {entry.branch_name && (
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
-                      >
-                        {entry.branch_name}
-                      </span>
-                    )}
+                className="absolute left-[7px] top-0 bottom-0 w-0.5"
+                style={{ backgroundColor: "#E0E0E0" }}
+              />
+              <div className="space-y-0">
+                {filteredEntries.map((entry: any, idx: number) => (
+                  <div key={entry.id} className="relative flex gap-3 pb-3">
+                    {/* 时间轴圆点 */}
+                    <div
+                      className="flex-shrink-0 w-3.5 h-3.5 rounded-full mt-2 z-10 border-2"
+                      style={{
+                        backgroundColor: entry.is_read ? "#E0E0E0" : "#D32F2F",
+                        borderColor: "#FAF3ED",
+                      }}
+                    />
+                    {/* 卡片内容 */}
+                    <div
+                      className="flex-1 rounded-xl p-3 shadow-sm"
+                      style={{ backgroundColor: "#FFFFFF" }}
+                    >
+                      {/* 第一行：时间 + 分店 + 星级 */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs text-gray-400">
+                            {new Date(entry.created_at).toLocaleString("zh-CN", {
+                              month: "numeric",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {entry.branch_name && (
+                            <span
+                              className="text-xs font-medium px-1.5 py-0.5 rounded-full"
+                              style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
+                            >
+                              {entry.branch_name}
+                            </span>
+                          )}
+                        </div>
+                        {entry.rating && <StarRating rating={entry.rating} />}
+                      </div>
+
+                      {/* 意见内容 */}
+                      <p className="text-sm text-gray-800 leading-relaxed">{entry.content}</p>
+
+                      {/* 底部：访客称谓 + 微信号 */}
+                      {(entry.guest_name || entry.guest_wechat) && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
+                          {entry.guest_name && (
+                            <span className="text-xs text-gray-400">
+                              👤 {entry.guest_name}
+                            </span>
+                          )}
+                          {entry.guest_wechat && (
+                            <span className="text-xs text-gray-400">
+                              💬 {entry.guest_wechat}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                    {new Date(entry.created_at).toLocaleString("zh-CN", {
-                      month: "numeric",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-
-                {/* 星级 */}
-                {entry.rating && (
-                  <div className="mb-2">
-                    <StarRating rating={entry.rating} />
-                  </div>
-                )}
-
-                {/* 意见内容 */}
-                <p className="text-sm text-gray-800 leading-relaxed">{entry.content}</p>
-
-                {/* 底部：访客名 */}
-                {entry.guest_name && (
-                  <p className="text-xs text-gray-400 mt-2">— {entry.guest_name}</p>
-                )}
+                ))}
               </div>
-            ))}
+            </div>
 
             {/* 分页 */}
             {totalPages > 1 && (
