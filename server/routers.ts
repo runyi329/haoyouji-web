@@ -8896,6 +8896,29 @@ export const appRouter = router({
         return { ledgerId, created: true, message: '演示账本初始化成功，已创建300条模拟点评' };
       }),
 
+    // 修复演示账本成员（仅超级管理员，幂等）
+    fixDemoMember: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 找到演示账本
+        const [rows] = await dbConn.execute(
+          `SELECT id FROM ledgers WHERE type='opinion_book_demo' LIMIT 1`
+        ) as any;
+        if (!(rows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '演示账本不存在' });
+        const ledgerId = (rows as any[])[0].id;
+        // 确保当前用户（jiang）在成员表里
+        await dbConn.execute(
+          `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, memberType, nickname, permissionView, permissionAdd, permissionEdit, permissionDelete, canEdit, canDelete, canInvite)
+           VALUES (?, ?, 'owner', 'real', '麻六记管理员', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+          [ledgerId, ctx.user.id]
+        );
+        return { ledgerId, userId: ctx.user.id, message: '成员记录已修复' };
+      }),
+
     // 演示账本公开获取意见列表（无需登录）
     getDemoEntries: publicProcedure
       .input(z.object({
