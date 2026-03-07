@@ -491,7 +491,7 @@ export default function LedgerSettings() {
         {ledgerData?.type !== 'opinion_book' && (
           <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
         )}
-        <SettingItem label="分类管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
+        <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
         <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
         <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />

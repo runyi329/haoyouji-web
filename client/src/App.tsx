@@ -418,8 +418,9 @@ function Router() {
         <Route path="/wine/product/marthu" component={WineProductMarthu} />
         <Route path="/wine/product/romanico" component={WineProductRomanico} />
         <Route path="/share/wine/product/romanico" component={WineProductRomanicoShare} />
-        {/* AB 共享意见本 - 游客扫码页面 */}
-        <Route path="/feedback/:bookId/:tableId" component={FeedbackPage} />
+        {/* AB 共享意见本 - 游客扫码页面（新架构：ledgerId + categoryId） */}
+        <Route path="/feedback/:ledgerId/:categoryId" component={FeedbackPage} />
+        <Route path="/feedback/:ledgerId" component={FeedbackPage} />
         {/* AB 意见本 - 管理者查看页面 */}
         <Route path="/opinion/:bookId" component={OpinionBookDetail} />
 

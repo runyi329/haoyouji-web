@@ -1,15 +1,15 @@
 /**
  * OpinionBookDetail.tsx - AB 型定制账本（意见本）管理者查看页面
- * 布局参照 LedgerDetailAA，顶部红色区域：
- *   头像 + 用户名 | 搜索 + 设置 + 返回 + 分店下拉
- * 内容区：意见反馈列表，可按分店过滤
+ * 数据架构已统一：
+ *   - 分店 → ledger_categories (type='branch')
+ *   - 意见记录 → ledger_records (rating/guest_name/guest_ip/is_read 字段)
+ * 布局：顶部红色区域（头像+用户名+搜索+设置+返回+分店下拉）+ 意见列表
  */
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Search, Settings, Star, ChevronDown, MessageSquare, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
 
 // ─── 星级展示 ─────────────────────────────────────────────────────────────────
 function StarRating({ rating }: { rating?: number }) {
@@ -29,18 +29,16 @@ function StarRating({ rating }: { rating?: number }) {
 // ─── 分店下拉选择器 ────────────────────────────────────────────────────────────
 function BranchDropdown({
   branches,
-  selectedBranch,
+  selectedBranchId,
   onSelect,
 }: {
-  branches: Array<{ branch_name: string | null; table_count: number }>;
-  selectedBranch: string | null;
-  onSelect: (branch: string | null) => void;
+  branches: Array<{ id: number; name: string; entry_count: number }>;
+  selectedBranchId: number | null;
+  onSelect: (id: number | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const label =
-    selectedBranch === null
-      ? "全部分店"
-      : selectedBranch || "未分组";
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId);
+  const label = selectedBranchId === null ? "全部分店" : (selectedBranch?.name || "未知分店");
 
   return (
     <div className="relative flex-shrink-0">
@@ -49,10 +47,10 @@ function BranchDropdown({
         className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all"
         style={{
           backgroundColor:
-            selectedBranch !== null
+            selectedBranchId !== null
               ? "rgba(255,255,255,0.9)"
               : "rgba(255,255,255,0.2)",
-          color: selectedBranch !== null ? "#D32F2F" : "#FFFFFF",
+          color: selectedBranchId !== null ? "#D32F2F" : "#FFFFFF",
           border: "1px solid rgba(255,255,255,0.4)",
         }}
       >
@@ -76,7 +74,7 @@ function BranchDropdown({
             <button
               onClick={() => { onSelect(null); setOpen(false); }}
               className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                selectedBranch === null
+                selectedBranchId === null
                   ? "bg-[#D32F2F] text-white"
                   : "text-gray-700 hover:bg-gray-50"
               }`}
@@ -85,23 +83,21 @@ function BranchDropdown({
             </button>
             {branches.map((b) => (
               <button
-                key={b.branch_name ?? "__null__"}
-                onClick={() => { onSelect(b.branch_name ?? ""); setOpen(false); }}
+                key={b.id}
+                onClick={() => { onSelect(b.id); setOpen(false); }}
                 className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                  selectedBranch === (b.branch_name ?? "")
+                  selectedBranchId === b.id
                     ? "bg-[#D32F2F] text-white"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                {b.branch_name || "未分组"}
+                {b.name}
                 <span
                   className={`ml-1 text-xs ${
-                    selectedBranch === (b.branch_name ?? "")
-                      ? "text-red-200"
-                      : "text-gray-400"
+                    selectedBranchId === b.id ? "text-red-200" : "text-gray-400"
                   }`}
                 >
-                  ({b.table_count})
+                  ({b.entry_count})
                 </span>
               </button>
             ))}
@@ -167,75 +163,18 @@ function SearchDialog({
   );
 }
 
-// ─── 设置弹窗（占位，可扩展） ─────────────────────────────────────────────────
-function SettingsDialog({
-  book,
-  onClose,
-}: {
-  book: any;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg rounded-t-2xl overflow-hidden shadow-xl pb-8"
-        style={{ backgroundColor: "#FFFFFF" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-5">
-          <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
-          <p className="text-base font-bold text-gray-800 mb-1">{book?.name || "意见本"}</p>
-          {book?.store_name && (
-            <p className="text-sm text-gray-400 mb-4">{book.store_name}</p>
-          )}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-sm text-gray-600">意见本名称</span>
-              <span className="text-sm text-gray-800 font-medium">{book?.name}</span>
-            </div>
-            {book?.store_name && (
-              <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">品牌名称</span>
-                <span className="text-sm text-gray-800 font-medium">{book.store_name}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center py-2">
-              <span className="text-sm text-gray-600">创建时间</span>
-              <span className="text-sm text-gray-800">
-                {book?.created_at
-                  ? new Date(book.created_at).toLocaleDateString("zh-CN")
-                  : "—"}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="mt-5 w-full py-3 rounded-xl text-sm text-gray-500 border border-gray-200"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 export default function OpinionBookDetail() {
+  // 路由参数：bookId 实际上是 ledgerId（两者统一后相同）
   const params = useParams<{ bookId: string }>();
-  const bookId = parseInt(params.bookId || "0");
+  const ledgerId = parseInt(params.bookId || "0");
   const [, setLocation] = useLocation();
 
-  // 分店过滤
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  // 分店过滤（存储 ledger_categories.id）
+  const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   // 搜索关键词
   const [searchKeyword, setSearchKeyword] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   // 分页
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -243,29 +182,29 @@ export default function OpinionBookDetail() {
   // 当前用户
   const { data: user } = trpc.auth.me.useQuery();
 
-  // 意见本信息（从列表接口获取）
+  // 账本信息（从意见本列表接口获取）
   const { data: books } = trpc.opinionBook.list.useQuery();
-  const book = books?.find((b: any) => b.id === bookId);
+  const book = books?.find((b: any) => b.id === ledgerId);
 
-  // 分店列表
-  const { data: branches } = trpc.opinionBook.getBranches.useQuery(
-    { bookId },
-    { enabled: bookId > 0 }
+  // 分店列表（从 ledger_categories 读取，type='branch'）
+  const { data: branches = [] } = trpc.opinionBook.getBranches.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
   );
 
-  // 意见列表
+  // 意见列表（从 ledger_records 读取）
   const {
     data: entriesData,
     isLoading,
     refetch,
   } = trpc.opinionBook.getEntries.useQuery(
     {
-      bookId,
-      branchName: selectedBranch !== null ? selectedBranch : undefined,
+      ledgerId,
+      categoryId: selectedBranchId !== null ? selectedBranchId : undefined,
       page,
       pageSize: PAGE_SIZE,
     },
-    { enabled: bookId > 0 }
+    { enabled: ledgerId > 0 }
   );
 
   const entries = entriesData?.entries || [];
@@ -278,11 +217,11 @@ export default function OpinionBookDetail() {
         (e: any) =>
           e.content?.includes(searchKeyword) ||
           e.guest_name?.includes(searchKeyword) ||
-          e.table_code?.includes(searchKeyword)
+          e.branch_name?.includes(searchKeyword)
       )
     : entries;
 
-  const hasBranches = branches && branches.length > 0;
+  const selectedBranch = branches.find((b: any) => b.id === selectedBranchId);
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
@@ -316,7 +255,7 @@ export default function OpinionBookDetail() {
               </div>
               {book && (
                 <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.75)" }}>
-                  {book.store_name || book.name}
+                  {book.name}
                 </div>
               )}
             </div>
@@ -334,13 +273,7 @@ export default function OpinionBookDetail() {
 
               {/* 设置按钮 */}
               <button
-                onClick={() => {
-                  if (book?.ledger_id) {
-                    setLocation(`/ledger/${book.ledger_id}/settings`);
-                  } else {
-                    setShowSettings(true);
-                  }
-                }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                 className="w-7 h-7 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
               >
@@ -363,9 +296,9 @@ export default function OpinionBookDetail() {
 
               {/* 分店下拉（始终显示） */}
               <BranchDropdown
-                branches={branches ?? []}
-                selectedBranch={selectedBranch}
-                onSelect={(b) => { setSelectedBranch(b); setPage(1); }}
+                branches={branches}
+                selectedBranchId={selectedBranchId}
+                onSelect={(id) => { setSelectedBranchId(id); setPage(1); }}
               />
             </div>
           </div>
@@ -380,12 +313,12 @@ export default function OpinionBookDetail() {
             共{" "}
             <span className="text-white font-semibold">{total}</span> 条意见
           </span>
-          {selectedBranch !== null && (
+          {selectedBranchId !== null && selectedBranch && (
             <span
               className="px-2 py-0.5 rounded-full text-xs font-medium"
               style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#FFFFFF" }}
             >
-              {selectedBranch || "未分组"}
+              {selectedBranch.name}
             </span>
           )}
           {searchKeyword && (
@@ -429,18 +362,16 @@ export default function OpinionBookDetail() {
                 className="rounded-2xl p-4 shadow-sm"
                 style={{ backgroundColor: "#FFFFFF" }}
               >
-                {/* 头部：桌号 + 分店 + 时间 */}
+                {/* 头部：分店 + 时间 */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
-                    >
-                      {entry.branch_name ? `${entry.branch_name} · ` : ""}
-                      {entry.table_code}
-                    </span>
-                    {entry.location && (
-                      <span className="text-xs text-gray-400">{entry.location}</span>
+                    {entry.branch_name && (
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
+                      >
+                        {entry.branch_name}
+                      </span>
                     )}
                   </div>
                   <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
@@ -503,9 +434,6 @@ export default function OpinionBookDetail() {
           onSearch={(kw) => { setSearchKeyword(kw); setPage(1); }}
           onClose={() => setShowSearch(false)}
         />
-      )}
-      {showSettings && (
-        <SettingsDialog book={book} onClose={() => setShowSettings(false)} />
       )}
     </div>
   );
