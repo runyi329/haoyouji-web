@@ -1,13 +1,13 @@
 /**
  * 红酒文化商会 - 后台管理页面
- * 功能：商品库管理（增删改查）+ 产区管理 + 图片上传（含压缩）
+ * 功能：商品库管理（增删改查）+ 产区管理 + 共享商品（商家间申请共享）
  */
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Edit2, Trash2, Upload, X, Package, MapPin, Eye, EyeOff, Wine, Download, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, Upload, X, Package, MapPin, Eye, EyeOff, Wine, Share2, Clock, CheckCircle2, Search, ChevronRight, XCircle, Users } from "lucide-react";
 
 const MERCHANT_CODE = "cx8618";
 
@@ -23,7 +23,9 @@ const PRESET_REGIONS = [
   { country: "阿根廷", flagEmoji: "🇦🇷", subRegions: ["门多萨", "萨尔塔"] },
 ];
 
-type Tab = "products" | "regions" | "import";
+type Tab = "products" | "regions" | "sharing";
+// 共享Tab子视图
+type SharingView = "my_requests" | "received_requests" | "browse_merchants" | "merchant_products";
 
 export default function WineAdmin() {
   const [, setLocation] = useLocation();
@@ -38,10 +40,13 @@ export default function WineAdmin() {
   const [showRegionForm, setShowRegionForm] = useState(false);
   const [editingRegion, setEditingRegion] = useState<any>(null);
 
-  // 导入相关状态
-  const [importKeyword, setImportKeyword] = useState("");
-  const [showImportConfirm, setShowImportConfirm] = useState<any>(null);
-  const [importMessage, setImportMessage] = useState("");
+  // 共享商品状态
+  const [sharingView, setSharingView] = useState<SharingView>("my_requests");
+  const [merchantSearchKeyword, setMerchantSearchKeyword] = useState("");
+  const [selectedMerchant, setSelectedMerchant] = useState<any>(null);
+  const [showShareConfirm, setShowShareConfirm] = useState<any>(null); // { type: 'product'|'all', product?: any, merchant: any }
+  const [shareMessage, setShareMessage] = useState("");
+  const [showRespondModal, setShowRespondModal] = useState<any>(null); // 收到的申请，点击审批
 
   // 获取商家信息
   const { data: merchant } = trpc.merchant.getMerchantByCode.useQuery({ merchantCode: MERCHANT_CODE });
@@ -66,10 +71,6 @@ export default function WineAdmin() {
     onSuccess: () => { refetchProducts(); setEditingProduct(null); toast.success("商品已更新"); },
     onError: (e) => toast.error(e.message),
   });
-  const deleteProduct = trpc.merchant.deleteProduct.useMutation({
-    onSuccess: () => { refetchProducts(); toast.success("商品已下架"); },
-    onError: (e) => toast.error(e.message),
-  });
 
   // 产区操作
   const createRegion = trpc.merchant.createWineRegion.useMutation({
@@ -85,17 +86,42 @@ export default function WineAdmin() {
     onError: (e) => toast.error(e.message),
   });
 
-  // 平台总库
-  const { data: platformProducts = [] } = trpc.merchant.getPlatformProducts.useQuery(
-    { keyword: importKeyword || undefined },
-    { enabled: activeTab === "import" }
+  // 共享商品接口
+  const { data: otherMerchants = [], isLoading: loadingMerchants } = trpc.merchant.searchMerchantsForSharing.useQuery(
+    { keyword: merchantSearchKeyword || undefined },
+    { enabled: activeTab === "sharing" && sharingView === "browse_merchants" }
   );
-  const { data: myRequests = [], refetch: refetchMyRequests } = trpc.merchant.getMerchantImportRequests.useQuery(
-    { merchantCode: MERCHANT_CODE },
-    { enabled: activeTab === "import" }
+  const { data: shareableData, isLoading: loadingShareable } = trpc.merchant.getMerchantShareableProducts.useQuery(
+    { ownerMerchantId: selectedMerchant?.id ?? 0 },
+    { enabled: !!selectedMerchant?.id && sharingView === "merchant_products" }
   );
-  const applyImport = trpc.merchant.applyImportProduct.useMutation({
-    onSuccess: () => { toast.success("申请已提交，等待平台审核"); setShowImportConfirm(null); setImportMessage(""); refetchMyRequests(); },
+  const { data: myShareRequests = [], refetch: refetchMyShareRequests } = trpc.merchant.getMyShareRequests.useQuery(
+    undefined,
+    { enabled: activeTab === "sharing" && sharingView === "my_requests" }
+  );
+  const { data: receivedShareRequests = [], refetch: refetchReceivedRequests } = trpc.merchant.getReceivedShareRequests.useQuery(
+    undefined,
+    { enabled: activeTab === "sharing" && sharingView === "received_requests" }
+  );
+  const applyProductShare = trpc.merchant.applyProductShare.useMutation({
+    onSuccess: () => {
+      toast.success("共享申请已发送，等待对方审批");
+      setShowShareConfirm(null);
+      setShareMessage("");
+      refetchMyShareRequests();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const respondShareRequest = trpc.merchant.respondShareRequest.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.action === "approved" ? "已同意共享申请，商品已加入对方商品库" : "已拒绝共享申请");
+      setShowRespondModal(null);
+      refetchReceivedRequests();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelShareRequest = trpc.merchant.cancelShareRequest.useMutation({
+    onSuccess: () => { toast.success("已取消申请"); refetchMyShareRequests(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -122,6 +148,13 @@ export default function WineAdmin() {
     if (s === "active") return <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 border border-green-700">已上架</span>;
     if (s === "inactive") return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-600">已下架</span>;
     return <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-300 border border-yellow-700">草稿</span>;
+  };
+
+  const shareReqStatusBadge = (status: string) => {
+    if (status === "pending") return <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/50 text-yellow-300 border border-yellow-700 flex items-center gap-1"><Clock className="w-3 h-3" />待审批</span>;
+    if (status === "approved") return <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 border border-green-700 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />已同意</span>;
+    if (status === "rejected") return <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 border border-red-700 flex items-center gap-1"><XCircle className="w-3 h-3" />已拒绝</span>;
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-600">已取消</span>;
   };
 
   return (
@@ -151,10 +184,10 @@ export default function WineAdmin() {
           <MapPin className="w-4 h-4" /> 产区 ({regions.length})
         </button>
         <button
-          onClick={() => setActiveTab("import")}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === "import" ? "text-[#C9A84C] border-b-2 border-[#C9A84C]" : "text-[#8a6a4a]"}`}
+          onClick={() => { setActiveTab("sharing"); setSharingView("my_requests"); }}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === "sharing" ? "text-[#C9A84C] border-b-2 border-[#C9A84C]" : "text-[#8a6a4a]"}`}
         >
-          <Download className="w-4 h-4" /> 平台导入
+          <Share2 className="w-4 h-4" /> 共享商品
         </button>
       </div>
 
@@ -181,7 +214,6 @@ export default function WineAdmin() {
               <div className="space-y-3">
                 {products.map((p: any) => (
                   <div key={p.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3 flex gap-3">
-                    {/* 商品图片 */}
                     <div className="w-16 h-16 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
                       {p.mainImageUrl ? (
                         <img src={p.mainImageUrl} alt={p.name} className="w-full h-full object-cover" />
@@ -191,7 +223,6 @@ export default function WineAdmin() {
                         </div>
                       )}
                     </div>
-                    {/* 商品信息 */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-sm text-[#e8d5b7] truncate">{p.name}</p>
@@ -204,7 +235,6 @@ export default function WineAdmin() {
                         <span className="text-[#8a6a4a] text-xs">库存 {p.stock}</span>
                       </div>
                     </div>
-                    {/* 操作按钮 */}
                     <div className="flex flex-col gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => { setEditingProduct(p); setShowProductForm(true); }}
@@ -226,91 +256,245 @@ export default function WineAdmin() {
           </div>
         )}
 
-        {/* 从平台导入 Tab */}
-        {activeTab === "import" && (
+        {/* 共享商品 Tab */}
+        {activeTab === "sharing" && (
           <div>
-            {/* 搜索框 */}
-            <div className="mb-4">
-              <input
-                value={importKeyword}
-                onChange={e => setImportKeyword(e.target.value)}
-                placeholder="搜索平台商品名称..."
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-              />
-            </div>
-
-            {/* 我的申请记录 */}
-            {(myRequests as any[]).length > 0 && (
-              <div className="mb-4 p-3 bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl">
-                <p className="text-xs text-[#8a6a4a] mb-2 flex items-center gap-1"><Clock className="w-3 h-3" /> 我的申请记录</p>
-                <div className="space-y-2">
-                  {(myRequests as any[]).slice(0, 3).map((req: any) => (
-                    <div key={req.id} className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
-                        {req.productImageUrl ? <img src={req.productImageUrl} alt="" className="w-full h-full object-cover" /> : <Wine className="w-4 h-4 m-auto text-[#5a1e1e]" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-[#e8d5b7] truncate">{req.productName}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        req.status === "pending" ? "bg-yellow-900/50 text-yellow-300 border border-yellow-700" :
-                        req.status === "approved" ? "bg-green-900/50 text-green-300 border border-green-700" :
-                        "bg-red-900/50 text-red-300 border border-red-700"
-                      }`}>
-                        {req.status === "pending" ? "审核中" : req.status === "approved" ? "已通过" : "已拒绝"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {/* 子视图导航（我的申请 / 收到的申请 / 浏览商家） */}
+            {sharingView !== "merchant_products" && (
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setSharingView("my_requests")}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium ${sharingView === "my_requests" ? "bg-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border border-[#5a1e1e] text-[#8a6a4a]"}`}
+                >
+                  我的申请
+                </button>
+                <button
+                  onClick={() => setSharingView("received_requests")}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium ${sharingView === "received_requests" ? "bg-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border border-[#5a1e1e] text-[#8a6a4a]"}`}
+                >
+                  收到的申请
+                </button>
+                <button
+                  onClick={() => setSharingView("browse_merchants")}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium ${sharingView === "browse_merchants" ? "bg-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border border-[#5a1e1e] text-[#8a6a4a]"}`}
+                >
+                  浏览商家
+                </button>
               </div>
             )}
 
-            {/* 平台总库商品列表 */}
-            {(platformProducts as any[]).length === 0 ? (
-              <div className="text-center py-16 text-[#8a6a4a]">
-                <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">平台总库暂无可导入商品</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-[#8a6a4a]">平台精选商品，申请后由平台审核，通过后自动加入您的商品库</p>
-                {(platformProducts as any[]).map((p: any) => {
-                  const ext = p.extendedFields ? (() => { try { return JSON.parse(p.extendedFields); } catch { return {}; } })() : {};
-                  const myReq = (myRequests as any[]).find((r: any) => r.productId === p.id);
-                  return (
-                    <div key={p.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3 flex gap-3">
-                      <div className="w-14 h-14 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
-                        {p.mainImageUrl ? <img src={p.mainImageUrl} alt={p.name} className="w-full h-full object-cover" /> : <Wine className="w-6 h-6 m-auto text-[#5a1e1e]" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-[#e8d5b7] truncate">{p.name}</p>
-                        <p className="text-xs text-[#8a6a4a] truncate">{p.subtitle || (ext.region ? ext.region : "")}</p>
-                        {(ext.winery || ext.vintage) && (
-                          <p className="text-xs text-[#8a6a4a]">{ext.winery}{ext.vintage ? ` · ${ext.vintage}年` : ""}</p>
-                        )}
-                        <div className="flex items-center justify-between mt-1.5">
-                          <span className="text-[#C9A84C] font-bold text-sm">¥{p.basePrice}</span>
-                          {myReq ? (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              myReq.status === "pending" ? "bg-yellow-900/50 text-yellow-300 border border-yellow-700" :
-                              myReq.status === "approved" ? "bg-green-900/50 text-green-300 border border-green-700" :
-                              "bg-gray-800 text-gray-400 border border-gray-600"
-                            }`}>
-                              {myReq.status === "pending" ? "审核中" : myReq.status === "approved" ? <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />已导入</span> : "已拒绝"}
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => { setShowImportConfirm(p); setImportMessage(""); }}
-                              className="text-xs px-3 py-1 rounded-lg bg-[#722F37] text-[#e8d5b7] flex items-center gap-1"
-                            >
-                              <Download className="w-3 h-3" /> 申请导入
-                            </button>
-                          )}
+            {/* 我的申请 */}
+            {sharingView === "my_requests" && (
+              <div>
+                <p className="text-xs text-[#8a6a4a] mb-3">您向其他商家发起的共享商品申请</p>
+                {(myShareRequests as any[]).length === 0 ? (
+                  <div className="text-center py-16 text-[#8a6a4a]">
+                    <Share2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">暂无申请记录</p>
+                    <button
+                      onClick={() => setSharingView("browse_merchants")}
+                      className="mt-4 text-xs text-[#C9A84C] underline"
+                    >
+                      去浏览其他商家的商品
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(myShareRequests as any[]).map((req: any) => (
+                      <div key={req.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-7 h-7 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                            {req.ownerShopLogoUrl ? <img src={req.ownerShopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-3.5 h-3.5 m-auto text-[#5a1e1e]" />}
+                          </div>
+                          <span className="text-xs text-[#e8d5b7] font-medium">{req.ownerShopName || req.ownerMerchantCode}</span>
+                          <div className="ml-auto">{shareReqStatusBadge(req.status)}</div>
                         </div>
+                        {req.product ? (
+                          <div className="flex items-center gap-2 p-2 bg-[#1a0a0a] rounded-lg">
+                            <div className="w-8 h-8 rounded bg-[#2d0d0d] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                              {req.product.mainImageUrl ? <img src={req.product.mainImageUrl} alt="" className="w-full h-full object-cover" /> : <Wine className="w-4 h-4 m-auto text-[#5a1e1e]" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-[#e8d5b7] truncate">{req.product.name}</p>
+                              <p className="text-xs text-[#C9A84C]">¥{req.product.basePrice}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#8a6a4a] px-2">申请共享全部商品</p>
+                        )}
+                        {req.message && <p className="text-xs text-[#8a6a4a] mt-1.5 px-1">留言：{req.message}</p>}
+                        {req.replyMessage && <p className="text-xs text-[#C9A84C] mt-1 px-1">回复：{req.replyMessage}</p>}
+                        {req.status === "pending" && (
+                          <button
+                            onClick={() => cancelShareRequest.mutate({ requestId: req.id })}
+                            className="mt-2 text-xs text-red-400 underline"
+                          >
+                            取消申请
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 收到的申请 */}
+            {sharingView === "received_requests" && (
+              <div>
+                <p className="text-xs text-[#8a6a4a] mb-3">其他商家向您发起的共享商品申请</p>
+                {(receivedShareRequests as any[]).length === 0 ? (
+                  <div className="text-center py-16 text-[#8a6a4a]">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">暂无收到的申请</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(receivedShareRequests as any[]).map((req: any) => (
+                      <div key={req.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-7 h-7 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                            {req.requesterShopLogoUrl ? <img src={req.requesterShopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-3.5 h-3.5 m-auto text-[#5a1e1e]" />}
+                          </div>
+                          <span className="text-xs text-[#e8d5b7] font-medium">{req.requesterShopName || req.requesterMerchantCode}</span>
+                          <div className="ml-auto">{shareReqStatusBadge(req.status)}</div>
+                        </div>
+                        {req.product ? (
+                          <div className="flex items-center gap-2 p-2 bg-[#1a0a0a] rounded-lg">
+                            <div className="w-8 h-8 rounded bg-[#2d0d0d] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                              {req.product.mainImageUrl ? <img src={req.product.mainImageUrl} alt="" className="w-full h-full object-cover" /> : <Wine className="w-4 h-4 m-auto text-[#5a1e1e]" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-[#e8d5b7] truncate">{req.product.name}</p>
+                              <p className="text-xs text-[#C9A84C]">¥{req.product.basePrice}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#8a6a4a] px-2">申请共享全部商品</p>
+                        )}
+                        {req.message && <p className="text-xs text-[#8a6a4a] mt-1.5 px-1">留言：{req.message}</p>}
+                        {req.status === "pending" && (
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => setShowRespondModal(req)}
+                              className="flex-1 py-2 rounded-lg bg-[#722F37] text-[#e8d5b7] text-xs font-medium"
+                            >
+                              处理申请
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 浏览商家 */}
+            {sharingView === "browse_merchants" && (
+              <div>
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5a3a2a]" />
+                  <input
+                    value={merchantSearchKeyword}
+                    onChange={e => setMerchantSearchKeyword(e.target.value)}
+                    placeholder="搜索商家名称或编号..."
+                    className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg pl-9 pr-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
+                  />
+                </div>
+                {loadingMerchants ? (
+                  <div className="text-center py-12 text-[#8a6a4a] text-sm">加载中...</div>
+                ) : (otherMerchants as any[]).length === 0 ? (
+                  <div className="text-center py-16 text-[#8a6a4a]">
+                    <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">暂无其他商家</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(otherMerchants as any[]).map((m: any) => (
+                      <button
+                        key={m.id}
+                        onClick={() => { setSelectedMerchant(m); setSharingView("merchant_products"); }}
+                        className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3 flex items-center gap-3 text-left"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                          {m.shopLogoUrl ? <img src={m.shopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-5 h-5 m-auto text-[#5a1e1e]" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-[#e8d5b7]">{m.shopName}</p>
+                          <p className="text-xs text-[#8a6a4a]">{m.shopType || "商家"} · {m.merchantCode}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-[#5a3a2a] flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 某商家的可共享商品 */}
+            {sharingView === "merchant_products" && selectedMerchant && (
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={() => { setSharingView("browse_merchants"); setSelectedMerchant(null); }}
+                    className="text-[#C9A84C]"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <div className="w-7 h-7 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] overflow-hidden flex-shrink-0">
+                    {selectedMerchant.shopLogoUrl ? <img src={selectedMerchant.shopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-3.5 h-3.5 m-auto text-[#5a1e1e]" />}
+                  </div>
+                  <span className="text-sm font-medium text-[#e8d5b7]">{selectedMerchant.shopName}</span>
+                  {/* 申请共享全部 */}
+                  <button
+                    onClick={() => { setShowShareConfirm({ type: "all", merchant: selectedMerchant }); setShareMessage(""); }}
+                    className="ml-auto text-xs px-2.5 py-1.5 rounded-lg bg-[#722F37] text-[#e8d5b7] flex items-center gap-1"
+                  >
+                    <Share2 className="w-3 h-3" /> 申请全部
+                  </button>
+                </div>
+                {loadingShareable ? (
+                  <div className="text-center py-12 text-[#8a6a4a] text-sm">加载中...</div>
+                ) : !shareableData || (shareableData.products as any[]).length === 0 ? (
+                  <div className="text-center py-16 text-[#8a6a4a]">
+                    <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">该商家暂无可共享的商品</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-[#8a6a4a]">可申请共享的商品（{(shareableData.products as any[]).length}款）</p>
+                    {(shareableData.products as any[]).map((p: any) => {
+                      const ext = p.extendedFields ? (() => { try { return JSON.parse(p.extendedFields); } catch { return {}; } })() : {};
+                      const myReq = (shareableData.myRequests as any[]).find((r: any) => r.productId === p.id);
+                      return (
+                        <div key={p.id} className="bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl p-3 flex gap-3">
+                          <div className="w-14 h-14 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                            {p.mainImageUrl ? <img src={p.mainImageUrl} alt={p.name} className="w-full h-full object-cover" /> : <Wine className="w-6 h-6 m-auto text-[#5a1e1e]" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-[#e8d5b7] truncate">{p.name}</p>
+                            <p className="text-xs text-[#8a6a4a] truncate">{p.subtitle || (ext.region ? ext.region : "")}</p>
+                            {(ext.winery || ext.vintage) && (
+                              <p className="text-xs text-[#8a6a4a]">{ext.winery}{ext.vintage ? ` · ${ext.vintage}年` : ""}</p>
+                            )}
+                            <div className="flex items-center justify-between mt-1.5">
+                              <span className="text-[#C9A84C] font-bold text-sm">¥{p.basePrice}</span>
+                              {myReq ? shareReqStatusBadge(myReq.status) : (
+                                <button
+                                  onClick={() => { setShowShareConfirm({ type: "product", product: p, merchant: selectedMerchant }); setShareMessage(""); }}
+                                  className="text-xs px-3 py-1 rounded-lg bg-[#722F37] text-[#e8d5b7] flex items-center gap-1"
+                                >
+                                  <Share2 className="w-3 h-3" /> 申请共享
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -401,49 +585,107 @@ export default function WineAdmin() {
         />
       )}
 
-      {/* 申请导入确认弹窗 */}
-      {showImportConfirm && (
+      {/* 申请共享确认弹窗 */}
+      {showShareConfirm && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
           <div className="w-full bg-[#1a0a0a] rounded-t-2xl">
             <div className="sticky top-0 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center justify-between">
-              <h2 className="font-bold text-[#e8d5b7]">申请导入商品</h2>
-              <button onClick={() => setShowImportConfirm(null)}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
+              <h2 className="font-bold text-[#e8d5b7]">
+                {showShareConfirm.type === "all" ? "申请共享全部商品" : "申请共享商品"}
+              </h2>
+              <button onClick={() => setShowShareConfirm(null)}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
             </div>
             <div className="p-4 space-y-4">
+              {/* 商家信息 */}
               <div className="flex items-center gap-3 p-3 bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl">
-                <div className="w-14 h-14 rounded-lg bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
-                  {showImportConfirm.mainImageUrl ? <img src={showImportConfirm.mainImageUrl} alt={showImportConfirm.name} className="w-full h-full object-cover" /> : <Wine className="w-6 h-6 m-auto text-[#5a1e1e]" />}
+                <div className="w-10 h-10 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                  {showShareConfirm.merchant.shopLogoUrl ? <img src={showShareConfirm.merchant.shopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-5 h-5 m-auto text-[#5a1e1e]" />}
                 </div>
                 <div>
-                  <p className="font-medium text-sm text-[#e8d5b7]">{showImportConfirm.name}</p>
-                  <p className="text-xs text-[#8a6a4a]">{showImportConfirm.subtitle || ""}</p>
-                  <p className="text-[#C9A84C] font-bold text-sm">¥{showImportConfirm.basePrice}</p>
+                  <p className="font-medium text-sm text-[#e8d5b7]">{showShareConfirm.merchant.shopName}</p>
+                  {showShareConfirm.type === "all" ? (
+                    <p className="text-xs text-[#8a6a4a]">申请共享该商家的全部可共享商品</p>
+                  ) : (
+                    <p className="text-xs text-[#C9A84C]">{showShareConfirm.product?.name}</p>
+                  )}
                 </div>
               </div>
               <div>
                 <label className="text-xs text-[#8a6a4a] mb-1 block">留言（可选）</label>
                 <input
-                  value={importMessage}
-                  onChange={e => setImportMessage(e.target.value)}
-                  placeholder="如：希望导入此款红酒到我的商品库"
+                  value={shareMessage}
+                  onChange={e => setShareMessage(e.target.value)}
+                  placeholder="如：希望合作共享红酒商品"
                   className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
                 />
               </div>
-              <p className="text-xs text-[#8a6a4a]">申请后由平台审核，审核通过后商品自动加入您的商品库（未上架状态）</p>
+              <p className="text-xs text-[#8a6a4a]">申请后由对方商家审批，同意后商品自动加入您的商品库（未上架状态，需手动上架）</p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowImportConfirm(null)}
+                  onClick={() => setShowShareConfirm(null)}
                   className="flex-1 py-3 rounded-xl border border-[#5a1e1e] text-[#8a6a4a] text-sm"
                 >
                   取消
                 </button>
                 <button
-                  onClick={() => applyImport.mutate({ productId: showImportConfirm.id, merchantCode: MERCHANT_CODE, message: importMessage || undefined })}
-                  disabled={applyImport.isPending}
+                  onClick={() => applyProductShare.mutate({
+                    ownerMerchantId: showShareConfirm.merchant.id,
+                    productId: showShareConfirm.type === "product" ? showShareConfirm.product?.id : undefined,
+                    message: shareMessage || undefined,
+                  })}
+                  disabled={applyProductShare.isPending}
                   className="flex-1 py-3 rounded-xl bg-[#722F37] text-[#e8d5b7] text-sm font-medium flex items-center justify-center gap-2"
                 >
-                  <Download className="w-4 h-4" />
-                  {applyImport.isPending ? "提交中..." : "确认申请"}
+                  <Share2 className="w-4 h-4" />
+                  {applyProductShare.isPending ? "提交中..." : "确认申请"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 处理收到的申请弹窗 */}
+      {showRespondModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+          <div className="w-full bg-[#1a0a0a] rounded-t-2xl">
+            <div className="sticky top-0 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center justify-between">
+              <h2 className="font-bold text-[#e8d5b7]">处理共享申请</h2>
+              <button onClick={() => setShowRespondModal(null)}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-[#2d0d0d] border border-[#5a1e1e] rounded-xl">
+                <div className="w-10 h-10 rounded-full bg-[#1a0a0a] border border-[#5a1e1e] flex-shrink-0 overflow-hidden">
+                  {showRespondModal.requesterShopLogoUrl ? <img src={showRespondModal.requesterShopLogoUrl} alt="" className="w-full h-full object-cover" /> : <Users className="w-5 h-5 m-auto text-[#5a1e1e]" />}
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-[#e8d5b7]">{showRespondModal.requesterShopName || showRespondModal.requesterMerchantCode}</p>
+                  {showRespondModal.product ? (
+                    <p className="text-xs text-[#8a6a4a]">申请共享：{showRespondModal.product.name}</p>
+                  ) : (
+                    <p className="text-xs text-[#8a6a4a]">申请共享全部商品</p>
+                  )}
+                </div>
+              </div>
+              {showRespondModal.message && (
+                <p className="text-xs text-[#8a6a4a] px-1">对方留言：{showRespondModal.message}</p>
+              )}
+              <p className="text-xs text-[#8a6a4a]">同意后，商品将自动加入对方商品库（未上架状态）</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => respondShareRequest.mutate({ requestId: showRespondModal.id, action: "rejected" })}
+                  disabled={respondShareRequest.isPending}
+                  className="flex-1 py-3 rounded-xl border border-red-800 text-red-400 text-sm"
+                >
+                  拒绝
+                </button>
+                <button
+                  onClick={() => respondShareRequest.mutate({ requestId: showRespondModal.id, action: "approved" })}
+                  disabled={respondShareRequest.isPending}
+                  className="flex-1 py-3 rounded-xl bg-[#722F37] text-[#e8d5b7] text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {respondShareRequest.isPending ? "处理中..." : "同意共享"}
                 </button>
               </div>
             </div>
@@ -484,7 +726,7 @@ function ProductFormModal({ merchant, regions, product, uploadImage, onSave, onC
         const base64 = ev.target?.result as string;
         setImagePreview(base64);
         const result = await uploadImage.mutateAsync({ base64, mimeType: file.type, filename: file.name });
-        setForm(f => ({ ...f, mainImageUrl: result.url }));
+        setForm((f: any) => ({ ...f, mainImageUrl: result.url }));
         setImagePreview(result.url);
         toast.success("图片上传成功（已压缩）");
         setUploading(false);
@@ -500,171 +742,146 @@ function ProductFormModal({ merchant, regions, product, uploadImage, onSave, onC
     if (!form.name.trim()) { toast.error("请填写商品名称"); return; }
     if (!form.basePrice) { toast.error("请填写销售价格"); return; }
     onSave({
-      name: form.name,
-      subtitle: form.subtitle || null,
-      basePrice: String(form.basePrice),
-      originalPrice: form.originalPrice ? String(form.originalPrice) : null,
+      name: form.name.trim(),
+      subtitle: form.subtitle.trim() || undefined,
+      basePrice: form.basePrice,
+      originalPrice: form.originalPrice || undefined,
       stock: Number(form.stock),
       status: form.status,
-      mainImageUrl: form.mainImageUrl || null,
-      description: form.description || null,
+      mainImageUrl: form.mainImageUrl || undefined,
+      description: form.description.trim() || undefined,
       extendedFields: JSON.stringify(form.extendedFields),
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
-      <div className="w-full bg-[#1a0a0a] rounded-t-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end overflow-y-auto">
+      <div className="w-full bg-[#1a0a0a] rounded-t-2xl max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center justify-between z-10">
           <h2 className="font-bold text-[#e8d5b7]">{product ? "编辑商品" : "添加商品"}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 pb-8">
           {/* 图片上传 */}
           <div>
             <label className="text-xs text-[#8a6a4a] mb-2 block">商品主图（自动压缩至适合手机显示）</label>
             <div
               onClick={() => fileRef.current?.click()}
-              className="w-full h-40 rounded-xl border-2 border-dashed border-[#5a1e1e] flex items-center justify-center cursor-pointer overflow-hidden bg-[#2d0d0d]"
+              className="w-full h-36 rounded-xl border-2 border-dashed border-[#5a1e1e] flex flex-col items-center justify-center cursor-pointer overflow-hidden bg-[#2d0d0d]"
             >
-              {uploading ? (
-                <div className="text-[#C9A84C] text-sm">上传中...</div>
-              ) : imagePreview ? (
+              {imagePreview ? (
                 <img src={imagePreview} alt="预览" className="w-full h-full object-contain" />
               ) : (
-                <div className="text-center text-[#8a6a4a]">
-                  <Upload className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm">点击上传图片</p>
-                  <p className="text-xs mt-1">支持 JPG/PNG/WebP，最大10MB</p>
+                <>
+                  <Upload className="w-8 h-8 text-[#5a1e1e] mb-2" />
+                  <p className="text-xs text-[#8a6a4a]">点击上传图片</p>
+                  <p className="text-xs text-[#5a3a2a]">支持JPG/PNG/WebP，最大10MB</p>
+                </>
+              )}
+              {uploading && (
+                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <p className="text-xs text-white">上传中...</p>
                 </div>
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
           </div>
 
-          {/* 基本信息 */}
-          <div className="space-y-3">
+          {/* 基础信息 */}
+          <div>
+            <label className="text-xs text-[#8a6a4a] mb-1 block">商品名称 *</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="如：拉菲古堡 2018"
+              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+          </div>
+          <div>
+            <label className="text-xs text-[#8a6a4a] mb-1 block">副标题</label>
+            <input value={form.subtitle} onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))}
+              placeholder="如：法国·波尔多·梅多克"
+              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#8a6a4a] mb-1 block">商品名称 *</label>
-              <input
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="如：拉菲古堡 2018"
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-              />
+              <label className="text-xs text-[#8a6a4a] mb-1 block">销售价格 *</label>
+              <input value={form.basePrice} onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))}
+                type="number" placeholder="0.00"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
             </div>
             <div>
-              <label className="text-xs text-[#8a6a4a] mb-1 block">副标题</label>
-              <input
-                value={form.subtitle}
-                onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))}
-                placeholder="如：法国·波尔多·梅多克"
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-              />
+              <label className="text-xs text-[#8a6a4a] mb-1 block">划线原价</label>
+              <input value={form.originalPrice} onChange={e => setForm(f => ({ ...f, originalPrice: e.target.value }))}
+                type="number" placeholder="0.00"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">销售价格 *</label>
-                <input
-                  type="number"
-                  value={form.basePrice}
-                  onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))}
-                  placeholder="0.00"
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">划线原价</label>
-                <input
-                  type="number"
-                  value={form.originalPrice}
-                  onChange={e => setForm(f => ({ ...f, originalPrice: e.target.value }))}
-                  placeholder="0.00"
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                />
-              </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[#8a6a4a] mb-1 block">库存数量</label>
+              <input value={form.stock} onChange={e => setForm(f => ({ ...f, stock: Number(e.target.value) }))}
+                type="number" placeholder="999"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">库存数量</label>
-                <input
-                  type="number"
-                  value={form.stock}
-                  onChange={e => setForm(f => ({ ...f, stock: Number(e.target.value) }))}
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7]"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">上架状态</label>
-                <select
-                  value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7]"
-                >
-                  <option value="active">已上架</option>
-                  <option value="inactive">已下架</option>
-                  <option value="draft">草稿</option>
-                </select>
-              </div>
+            <div>
+              <label className="text-xs text-[#8a6a4a] mb-1 block">上架状态</label>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7]">
+                <option value="active">已上架</option>
+                <option value="inactive">已下架</option>
+                <option value="draft">草稿</option>
+              </select>
             </div>
           </div>
 
-          {/* 红酒专属字段 */}
-          <div className="border-t border-[#5a1e1e] pt-4">
-            <p className="text-xs text-[#C9A84C] mb-3 font-medium">红酒专属信息</p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-[#8a6a4a] mb-1 block">酒庄</label>
-                  <input
-                    value={form.extendedFields.winery}
-                    onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, winery: e.target.value } }))}
-                    placeholder="如：拉菲古堡"
-                    className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[#8a6a4a] mb-1 block">年份</label>
-                  <input
-                    value={form.extendedFields.vintage}
-                    onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, vintage: e.target.value } }))}
-                    placeholder="如：2018"
-                    className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                  />
-                </div>
+          {/* 红酒专属信息 */}
+          <div className="pt-2 border-t border-[#5a1e1e]">
+            <p className="text-xs font-medium text-[#C9A84C] mb-3">红酒专属信息</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[#8a6a4a] mb-1 block">酒庄</label>
+                <input value={form.extendedFields.winery}
+                  onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, winery: e.target.value } }))}
+                  placeholder="如：拉菲古堡"
+                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
               </div>
               <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">产区</label>
-                <select
-                  value={form.extendedFields.region}
-                  onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, region: e.target.value } }))}
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7]"
-                >
-                  <option value="">选择产区</option>
-                  {regions.map((r: any) => (
-                    <option key={r.id} value={r.name}>{r.flagEmoji} {r.name}</option>
-                  ))}
-                </select>
+                <label className="text-xs text-[#8a6a4a] mb-1 block">年份</label>
+                <input value={form.extendedFields.vintage}
+                  onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, vintage: e.target.value } }))}
+                  placeholder="如：2018"
+                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-[#8a6a4a] mb-1 block">葡萄品种</label>
-                  <input
-                    value={form.extendedFields.grapeVariety}
-                    onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, grapeVariety: e.target.value } }))}
-                    placeholder="如：赤霞珠"
-                    className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[#8a6a4a] mb-1 block">酒精度</label>
-                  <input
-                    value={form.extendedFields.alcoholContent}
-                    onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, alcoholContent: e.target.value } }))}
-                    placeholder="如：13.5%"
-                    className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                  />
-                </div>
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-[#8a6a4a] mb-1 block">产区</label>
+              <div className="flex gap-2 flex-wrap mb-2">
+                {regions.slice(0, 6).map((r: any) => (
+                  <button key={r.id} type="button"
+                    onClick={() => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, region: r.name } }))}
+                    className={`text-xs px-2 py-1 rounded-lg border ${form.extendedFields.region === r.name ? "bg-[#722F37] border-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border-[#5a1e1e] text-[#8a6a4a]"}`}
+                  >
+                    {r.flagEmoji} {r.name}
+                  </button>
+                ))}
+              </div>
+              <input value={form.extendedFields.region}
+                onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, region: e.target.value } }))}
+                placeholder="选择产区或手动输入"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="text-xs text-[#8a6a4a] mb-1 block">葡萄品种</label>
+                <input value={form.extendedFields.grapeVariety}
+                  onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, grapeVariety: e.target.value } }))}
+                  placeholder="如：赤霞珠"
+                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+              </div>
+              <div>
+                <label className="text-xs text-[#8a6a4a] mb-1 block">酒精度</label>
+                <input value={form.extendedFields.alcoholContent}
+                  onChange={e => setForm(f => ({ ...f, extendedFields: { ...f.extendedFields, alcoholContent: e.target.value } }))}
+                  placeholder="如：13.5%"
+                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
               </div>
             </div>
           </div>
@@ -672,23 +889,24 @@ function ProductFormModal({ merchant, regions, product, uploadImage, onSave, onC
           {/* 商品描述 */}
           <div>
             <label className="text-xs text-[#8a6a4a] mb-1 block">商品描述</label>
-            <textarea
-              value={form.description}
+            <textarea value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="介绍这款红酒的特点、口感、适饮场合..."
               rows={3}
-              placeholder="描述这款酒的特点、口感、适饮场合..."
-              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a] resize-none"
-            />
+              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a] resize-none" />
           </div>
 
-          {/* 保存按钮 */}
-          <button
-            onClick={handleSubmit}
-            disabled={saving || uploading}
-            className="w-full bg-[#722F37] text-[#e8d5b7] py-3 rounded-xl font-bold text-base disabled:opacity-50"
-          >
-            {saving ? "保存中..." : product ? "保存修改" : "添加到商品库"}
-          </button>
+          {/* 提交按钮 */}
+          <div className="flex gap-3 pt-2">
+            <button onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-[#5a1e1e] text-[#8a6a4a] text-sm">
+              取消
+            </button>
+            <button onClick={handleSubmit} disabled={saving || uploading}
+              className="flex-1 py-3 rounded-xl bg-[#722F37] text-[#e8d5b7] text-sm font-medium disabled:opacity-50">
+              {saving ? "保存中..." : product ? "保存修改" : "添加商品"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -701,24 +919,28 @@ function RegionFormModal({ merchant, region, onSave, onClose, saving }: any) {
     name: region?.name || "",
     country: region?.country || "",
     subRegion: region?.subRegion || "",
-    description: region?.description || "",
     flagEmoji: region?.flagEmoji || "",
-    sortOrder: region?.sortOrder ?? 0,
+    description: region?.description || "",
   });
-  const [selectedPreset, setSelectedPreset] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string>("");
 
-  const handlePreset = (preset: typeof PRESET_REGIONS[0]) => {
-    setForm(f => ({ ...f, country: preset.country, flagEmoji: preset.flagEmoji }));
+  const handlePresetSelect = (preset: typeof PRESET_REGIONS[0]) => {
     setSelectedPreset(preset.country);
+    setForm(f => ({ ...f, country: preset.country, flagEmoji: preset.flagEmoji }));
   };
 
   const handleSubmit = () => {
     if (!form.name.trim()) { toast.error("请填写产区名称"); return; }
     if (!form.country.trim()) { toast.error("请填写国家"); return; }
-    onSave(form);
+    onSave({
+      name: form.name.trim(),
+      country: form.country.trim(),
+      subRegion: form.subRegion.trim() || undefined,
+      flagEmoji: form.flagEmoji || undefined,
+      description: form.description.trim() || undefined,
+      merchantId: merchant?.id,
+    });
   };
-
-  const currentPreset = PRESET_REGIONS.find(p => p.country === form.country);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
@@ -727,105 +949,75 @@ function RegionFormModal({ merchant, region, onSave, onClose, saving }: any) {
           <h2 className="font-bold text-[#e8d5b7]">{region ? "编辑产区" : "添加产区"}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-[#8a6a4a]" /></button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 pb-8">
           {/* 快速选择国家 */}
           <div>
             <label className="text-xs text-[#8a6a4a] mb-2 block">快速选择国家</label>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_REGIONS.map(p => (
-                <button
-                  key={p.country}
-                  onClick={() => handlePreset(p)}
-                  className={`px-3 py-1.5 rounded-full text-sm border ${form.country === p.country ? "bg-[#722F37] border-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border-[#5a1e1e] text-[#8a6a4a]"}`}
+            <div className="flex gap-2 flex-wrap">
+              {PRESET_REGIONS.map(preset => (
+                <button key={preset.country} type="button"
+                  onClick={() => handlePresetSelect(preset)}
+                  className={`text-xs px-2.5 py-1.5 rounded-lg border ${selectedPreset === preset.country ? "bg-[#722F37] border-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border-[#5a1e1e] text-[#8a6a4a]"}`}
                 >
-                  {p.flagEmoji} {p.country}
+                  {preset.flagEmoji} {preset.country}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 子产区快速选择 */}
-          {currentPreset && (
+          {selectedPreset && (
             <div>
-              <label className="text-xs text-[#8a6a4a] mb-2 block">快速选择子产区</label>
-              <div className="flex flex-wrap gap-2">
-                {currentPreset.subRegions.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      setForm(f => ({
-                        ...f,
-                        subRegion: s,
-                        name: `${form.country}·${s}`,
-                      }));
-                    }}
-                    className={`px-3 py-1.5 rounded-full text-sm border ${form.subRegion === s ? "bg-[#722F37] border-[#722F37] text-[#e8d5b7]" : "bg-[#2d0d0d] border-[#5a1e1e] text-[#8a6a4a]"}`}
+              <label className="text-xs text-[#8a6a4a] mb-2 block">快速填充子产区</label>
+              <div className="flex gap-2 flex-wrap">
+                {PRESET_REGIONS.find(p => p.country === selectedPreset)?.subRegions.map(sub => (
+                  <button key={sub} type="button"
+                    onClick={() => setForm(f => ({ ...f, name: sub, subRegion: sub }))}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-[#2d0d0d] border border-[#5a1e1e] text-[#8a6a4a]"
                   >
-                    {s}
+                    {sub}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="space-y-3">
+          <div>
+            <label className="text-xs text-[#8a6a4a] mb-1 block">产区名称 *</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="如：波尔多"
+              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#8a6a4a] mb-1 block">产区名称 *</label>
-              <input
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="如：法国·波尔多"
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">国家 *</label>
-                <input
-                  value={form.country}
-                  onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
-                  placeholder="如：法国"
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#8a6a4a] mb-1 block">国旗Emoji</label>
-                <input
-                  value={form.flagEmoji}
-                  onChange={e => setForm(f => ({ ...f, flagEmoji: e.target.value }))}
-                  placeholder="🇫🇷"
-                  className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-                />
-              </div>
+              <label className="text-xs text-[#8a6a4a] mb-1 block">国家 *</label>
+              <input value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
+                placeholder="如：法国"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
             </div>
             <div>
-              <label className="text-xs text-[#8a6a4a] mb-1 block">子产区</label>
-              <input
-                value={form.subRegion}
-                onChange={e => setForm(f => ({ ...f, subRegion: e.target.value }))}
-                placeholder="如：梅多克"
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-[#8a6a4a] mb-1 block">产区描述</label>
-              <textarea
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={2}
-                placeholder="简单描述这个产区的特点..."
-                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a] resize-none"
-              />
+              <label className="text-xs text-[#8a6a4a] mb-1 block">国旗 Emoji</label>
+              <input value={form.flagEmoji} onChange={e => setForm(f => ({ ...f, flagEmoji: e.target.value }))}
+                placeholder="🇫🇷"
+                className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-[#8a6a4a] mb-1 block">子产区</label>
+            <input value={form.subRegion} onChange={e => setForm(f => ({ ...f, subRegion: e.target.value }))}
+              placeholder="如：梅多克"
+              className="w-full bg-[#2d0d0d] border border-[#5a1e1e] rounded-lg px-3 py-2.5 text-sm text-[#e8d5b7] placeholder-[#5a3a2a]" />
+          </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={saving}
-            className="w-full bg-[#722F37] text-[#e8d5b7] py-3 rounded-xl font-bold text-base disabled:opacity-50"
-          >
-            {saving ? "保存中..." : region ? "保存修改" : "添加产区"}
-          </button>
+          <div className="flex gap-3 pt-2">
+            <button onClick={onClose}
+              className="flex-1 py-3 rounded-xl border border-[#5a1e1e] text-[#8a6a4a] text-sm">
+              取消
+            </button>
+            <button onClick={handleSubmit} disabled={saving}
+              className="flex-1 py-3 rounded-xl bg-[#722F37] text-[#e8d5b7] text-sm font-medium disabled:opacity-50">
+              {saving ? "保存中..." : region ? "保存修改" : "添加产区"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
