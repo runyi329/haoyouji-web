@@ -8547,20 +8547,13 @@ export const appRouter = router({
         categoryId: z.number().optional(),  // 分店ID（ledger_categories.id）
         page: z.number().default(1),
         pageSize: z.number().default(20),
-        // 多角色体验模式：传入此参数时按角色返回数据（不需要真实权限）
-        demoRole: z.enum(['owner', 'manager']).optional(),
-        // 体验版账本关联的原始账本 ID（体验版本身没有数据，读原始账本）
-        sourceLedgerId: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 实际查询的账本 ID：体验模式下读原始账本的数据
-        const queryLedgerId = input.sourceLedgerId || input.ledgerId;
         // 允许 super_admin、admin 或账本 owner 查看
         let isOwner = ctx.user.role === 'super_admin';
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
-          // 检查对当前账本（体验版或原始账本）的访问权限
           const [ownerRows] = await dbConn.execute(
             `SELECT id FROM ledgers WHERE id=? AND ownerId=? AND isArchived=0`,
             [input.ledgerId, ctx.user.id]
@@ -8568,8 +8561,9 @@ export const appRouter = router({
           if (!(ownerRows as any[]).length) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
           }
-          isOwner = true;
+          isOwner = true; // 通过了 owner 检查，说明是账本 owner
         } else if (ctx.user.role === 'admin') {
+          // admin 不是 owner，需额外检查是否是账本成员
           const [memberRows] = await dbConn.execute(
             `SELECT id FROM ledger_members WHERE ledgerId=? AND userId=?`,
             [input.ledgerId, ctx.user.id]
@@ -8577,15 +8571,13 @@ export const appRouter = router({
           if (!(memberRows as any[]).length) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
           }
+          // 检查是否是 owner
           const [ownerCheck] = await dbConn.execute(
             `SELECT id FROM ledgers WHERE id=? AND ownerId=?`,
             [input.ledgerId, ctx.user.id]
           ) as any;
           isOwner = (ownerCheck as any[]).length > 0;
         }
-        // 体验模式：用 demoRole 覆盖实际权限
-        if (input.demoRole === 'owner') isOwner = true;
-        if (input.demoRole === 'manager') isOwner = false;
         const offset = (input.page - 1) * input.pageSize;
 
         // 动态检测意见本字段是否存在（容错处理）
@@ -8621,7 +8613,7 @@ export const appRouter = router({
                    LEFT JOIN ledger_categories c ON c.id = r.categoryId
                    WHERE r.ledgerId = ?`;
         }
-        const params: any[] = [queryLedgerId];
+        const params: any[] = [input.ledgerId];
         // deleted_at 字段存在时才加过滤条件
         if (hasOpinionColumns) {
           query += ` AND (r.deleted_at IS NULL)`;
@@ -8635,7 +8627,7 @@ export const appRouter = router({
         const [rows] = await dbConn.execute(query, params) as any;
 
         let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ?`;
-        const countParams: any[] = [queryLedgerId];
+        const countParams: any[] = [input.ledgerId];
         if (hasOpinionColumns) {
           countQuery += ` AND (r.deleted_at IS NULL)`;
         }
@@ -8829,200 +8821,6 @@ export const appRouter = router({
             return a.name.localeCompare(b.name);
           });
         return { tables };
-      }),
-
-    // 复制账本为多角色体验版 Demo
-    cloneAsDemo: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),  // 要复制的原始账本 ID
-      }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        }
-        const dbConn = await getDbConnection();
-        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-
-        // 1. 查询原始账本
-        const [ledgerRows] = await dbConn.execute(
-          `SELECT id, name, description, type FROM ledgers WHERE id=? AND isArchived=0`,
-          [input.ledgerId]
-        ) as any;
-        if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '账本不存在' });
-        const srcLedger = (ledgerRows as any[])[0];
-
-        // 2. 检查是否已有 demo 账本
-        const demoName = `${srcLedger.name}·多角色体验版`;
-        const [existRows] = await dbConn.execute(
-          `SELECT id FROM ledgers WHERE name=? AND type='opinion_book' AND isArchived=0`,
-          [demoName]
-        ) as any;
-        if ((existRows as any[]).length > 0) {
-          // 已存在，直接返回已有 demo 的 id
-          return { demoLedgerId: (existRows as any[])[0].id, created: false };
-        }
-
-        // 3. 创建 Demo 账本
-        const [insertResult] = await dbConn.execute(
-          `INSERT INTO ledgers (name, description, type, currency, ownerId, isArchived, createdAt, updatedAt)
-           SELECT ?, ?, type, currency, ownerId, 0, NOW(), NOW()
-           FROM ledgers WHERE id=?`,
-          [demoName, `多角色体验版：老板/店长/客人三重视角演示。${srcLedger.description || ''}`, input.ledgerId]
-        ) as any;
-        const demoLedgerId = (insertResult as any).insertId;
-
-        // 4. 复制分类（分店+桌号），记录旧ID到新ID的映射
-        const [catRows] = await dbConn.execute(
-          `SELECT id, name, parentId, isDefault, sortOrder FROM ledger_categories WHERE ledgerId=? ORDER BY id`,
-          [input.ledgerId]
-        ) as any;
-        const catIdMap: Record<number, number> = {};
-        // 先创建一级分类（parentId=null）
-        for (const cat of (catRows as any[])) {
-          if (cat.parentId === null) {
-            const [r] = await dbConn.execute(
-              `INSERT INTO ledger_categories (ledgerId, name, parentId, isDefault, sortOrder, createdAt, updatedAt)
-               VALUES (?, ?, NULL, ?, ?, NOW(), NOW())`,
-              [demoLedgerId, cat.name, cat.isDefault, cat.sortOrder]
-            ) as any;
-            catIdMap[cat.id] = (r as any).insertId;
-          }
-        }
-        // 再创建二级分类（parentId不为null）
-        for (const cat of (catRows as any[])) {
-          if (cat.parentId !== null) {
-            const newParentId = catIdMap[cat.parentId] || null;
-            const [r] = await dbConn.execute(
-              `INSERT INTO ledger_categories (ledgerId, name, parentId, isDefault, sortOrder, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
-              [demoLedgerId, cat.name, newParentId, cat.isDefault, cat.sortOrder]
-            ) as any;
-            catIdMap[cat.id] = (r as any).insertId;
-          }
-        }
-
-        // 5. 复制意见记录（最多 200 条）
-        let hasOpinionColumns = true;
-        try {
-          const [colRows] = await dbConn.execute(
-            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'rating'`
-          ) as any;
-          hasOpinionColumns = (colRows as any[])[0].cnt > 0;
-        } catch (e) { hasOpinionColumns = false; }
-
-        const [recRows] = await dbConn.execute(
-          `SELECT * FROM ledger_records WHERE ledgerId=? ORDER BY createdAt DESC LIMIT 200`,
-          [input.ledgerId]
-        ) as any;
-        for (const rec of (recRows as any[])) {
-          const newCatId = rec.categoryId ? (catIdMap[rec.categoryId] || null) : null;
-          if (hasOpinionColumns) {
-            await dbConn.execute(
-              `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_wechat, guest_ip, is_read, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [demoLedgerId, rec.type, rec.amount, newCatId, rec.description, rec.recordDate,
-               rec.createdBy, rec.rating, rec.guest_name, rec.guest_wechat, rec.guest_ip, rec.is_read,
-               rec.createdAt, rec.updatedAt]
-            );
-          } else {
-            await dbConn.execute(
-              `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [demoLedgerId, rec.type, rec.amount, newCatId, rec.description, rec.recordDate,
-               rec.createdBy, rec.createdAt, rec.updatedAt]
-            );
-          }
-        }
-
-        // 6. 将 demo 账本标记为 demo 类型（在 description 中添加标识）
-        await dbConn.execute(
-          `UPDATE ledgers SET description=CONCAT(IFNULL(description,''), ' [DEMO_LEDGER]') WHERE id=?`,
-          [demoLedgerId]
-        );
-
-        return { demoLedgerId, created: true, recordCount: (recRows as any[]).length };
-      }),
-
-    // 获取 Demo 账本的多角色视角数据
-    // role: 'owner' | 'manager' | 'guest'
-    getDemoView: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        role: z.enum(['owner', 'manager', 'guest']),
-        page: z.number().default(1),
-        pageSize: z.number().default(50),
-      }))
-      .query(async ({ ctx, input }) => {
-        const dbConn = await getDbConnection();
-        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 验证账本存在
-        const [ledgerRows] = await dbConn.execute(
-          `SELECT id, name, description, ownerId FROM ledgers WHERE id=? AND isArchived=0`,
-          [input.ledgerId]
-        ) as any;
-        if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '账本不存在' });
-        const ledger = (ledgerRows as any[])[0];
-
-        // 客人视角：返回公开信息（分店列表）
-        if (input.role === 'guest') {
-          const [catRows] = await dbConn.execute(
-            `SELECT id, name FROM ledger_categories WHERE ledgerId=? AND parentId IS NULL AND isDefault=0 ORDER BY sortOrder`,
-            [input.ledgerId]
-          ) as any;
-          return {
-            role: 'guest',
-            ledger: { id: ledger.id, name: ledger.name },
-            branches: catRows as any[],
-            entries: [],
-            total: 0,
-          };
-        }
-
-        // 老板/店长视角：返回意见列表
-        let hasOpinionColumns = true;
-        try {
-          const [colRows] = await dbConn.execute(
-            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'rating'`
-          ) as any;
-          hasOpinionColumns = (colRows as any[])[0].cnt > 0;
-        } catch (e) { hasOpinionColumns = false; }
-
-        const offset = (input.page - 1) * input.pageSize;
-        // owner 能看到隐私信息，manager 看不到
-        const guestFields = input.role === 'owner'
-          ? `r.guest_name, r.guest_wechat`
-          : `NULL as guest_name, NULL as guest_wechat`;
-        let query: string;
-        if (hasOpinionColumns) {
-          query = `SELECT r.id, r.description as content, r.rating, ${guestFields}, r.is_read,
-                          r.createdAt as created_at, r.categoryId as category_id,
-                          c.name as branch_name
-                   FROM ledger_records r
-                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
-                   WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)
-                   ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
-        } else {
-          query = `SELECT r.id, r.description as content, NULL as rating, NULL as guest_name, NULL as guest_wechat, 0 as is_read,
-                          r.createdAt as created_at, r.categoryId as category_id,
-                          c.name as branch_name
-                   FROM ledger_records r
-                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
-                   WHERE r.ledgerId = ?
-                   ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
-        }
-        const [rows] = await dbConn.execute(query, [input.ledgerId, input.pageSize, offset]) as any;
-        const [countRows] = await dbConn.execute(
-          `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ?${hasOpinionColumns ? ' AND (r.deleted_at IS NULL)' : ''}`,
-          [input.ledgerId]
-        ) as any;
-        return {
-          role: input.role,
-          ledger: { id: ledger.id, name: ledger.name },
-          entries: rows as any[],
-          total: (countRows as any[])[0].total,
-        };
       }),
   }),
 });
