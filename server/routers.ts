@@ -8694,14 +8694,101 @@ export const appRouter = router({
         ) as any;
         if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '意见本不存在' });
         let branch = null;
+        let tableName = null;
         if (input.categoryId) {
           const [catRows] = await dbConn.execute(
-            `SELECT id, name FROM ledger_categories WHERE id=? AND ledgerId=?`,
+            `SELECT id, name, parentId FROM ledger_categories WHERE id=? AND ledgerId=?`,
             [input.categoryId, input.ledgerId]
           ) as any;
-          branch = (catRows as any[])[0] || null;
+          const cat = (catRows as any[])[0] || null;
+          if (cat) {
+            if (cat.parentId) {
+              // categoryId 是桌号（二级分类），查父分类（分店）
+              tableName = cat.name;
+              const [parentRows] = await dbConn.execute(
+                `SELECT id, name FROM ledger_categories WHERE id=?`,
+                [cat.parentId]
+              ) as any;
+              branch = (parentRows as any[])[0] || null;
+            } else {
+              // categoryId 是分店（一级分类）
+              branch = cat;
+            }
+          }
         }
-        return { book: (ledgerRows as any[])[0], branch };
+        return { book: (ledgerRows as any[])[0], branch, tableName };
+      }),
+
+    // 批量创建桌号二级分类（意见本二维码管理用）
+    // 给指定分店批量创建桌号，返回每个桌号的 categoryId
+    ensureTables: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        branchId: z.number(),   // 一级分类（分店）ID
+        tableCount: z.number().min(1).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        // 获取该分店下已有的桌号二级分类
+        const existing = await dbLedger.getLedgerCategories(input.ledgerId);
+        const existingTables = existing.filter(
+          (c: any) => c.parentId === input.branchId
+        );
+        // 计算已有桌号的最大序号
+        const existingNumbers = existingTables
+          .map((c: any) => parseInt(c.name))
+          .filter((n: number) => !isNaN(n));
+        const maxExisting = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+        // 只创建不存在的桌号
+        const toCreate: number[] = [];
+        for (let i = 1; i <= input.tableCount; i++) {
+          if (!existingNumbers.includes(i)) toCreate.push(i);
+        }
+        const created: Array<{ tableNumber: number; categoryId: number; name: string }> = [];
+        for (const num of toCreate) {
+          const name = String(num).padStart(2, '0') + '桌';
+          const result = await dbLedger.addLedgerCategory({
+            ledgerId: input.ledgerId,
+            name,
+            type: 'branch',
+            parentId: input.branchId,
+            icon: '🪑',
+            createdBy: ctx.user.id,
+          });
+          created.push({ tableNumber: num, categoryId: result.id, name });
+        }
+        // 返回所有桌号（包含已有的和新建的）
+        const allCategories = await dbLedger.getLedgerCategories(input.ledgerId);
+        const allTables = allCategories
+          .filter((c: any) => c.parentId === input.branchId)
+          .map((c: any) => ({ categoryId: c.id, name: c.name }))
+          .sort((a: any, b: any) => {
+            const na = parseInt(a.name); const nb = parseInt(b.name);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.name.localeCompare(b.name);
+          });
+        return { tables: allTables, created: created.length };
+      }),
+
+    // 获取分店下的桌号列表（用于二维码管理页展示）
+    getTables: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        branchId: z.number(),
+      }))
+      .query(async ({ input }) => {
+        const allCategories = await dbLedger.getLedgerCategories(input.ledgerId);
+        const tables = allCategories
+          .filter((c: any) => c.parentId === input.branchId)
+          .map((c: any) => ({ categoryId: c.id, name: c.name }))
+          .sort((a: any, b: any) => {
+            const na = parseInt(a.name); const nb = parseInt(b.name);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.name.localeCompare(b.name);
+          });
+        return { tables };
       }),
   }),
 });

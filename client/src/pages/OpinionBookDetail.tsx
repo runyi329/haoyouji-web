@@ -385,26 +385,40 @@ export default function OpinionBookDetail() {
                       className="flex-1 rounded-xl p-3 shadow-sm"
                       style={{ backgroundColor: "#FFFFFF" }}
                     >
-                      {/* 第一行：时间 + 分店 + 星级 */}
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs text-gray-400">
-                            {new Date(entry.created_at).toLocaleString("zh-CN", {
-                              month: "numeric",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          {entry.branch_name && (
-                            <span
-                              className="text-xs font-medium px-1.5 py-0.5 rounded-full"
-                              style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
-                            >
-                              {entry.branch_name}
+                      {/* 第一行：日期时间（左）+ 分店·桌号（右） */}
+                      <div className="flex items-center justify-between mb-1.5 gap-2">
+                        {/* 左：日期时间 */}
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {(() => {
+                            const d = new Date(entry.created_at);
+                            return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                          })()}
+                        </span>
+                        {/* 右：分店·桌号 */}
+                        {entry.branch_name && entry.branch_name !== "未分类" && (() => {
+                          // category 格式为 "分店-桌号" 或 "分店"
+                          const parts = entry.branch_name.split('-');
+                          const storeName = parts[0];
+                          const tableName = parts[1] || null;
+                          return (
+                            <span className="text-xs flex items-center gap-1 flex-shrink-0">
+                              <span
+                                className="font-medium px-1.5 py-0.5 rounded-full"
+                                style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}
+                              >
+                                {storeName}
+                              </span>
+                              {tableName && (
+                                <span
+                                  className="font-medium px-1.5 py-0.5 rounded-full"
+                                  style={{ backgroundColor: "#FFF3E0", color: "#E65100" }}
+                                >
+                                  {tableName}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </div>
+                          );
+                        })()}
                         {entry.rating && <StarRating rating={entry.rating} />}
                       </div>
 
