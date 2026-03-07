@@ -106,15 +106,31 @@ export default function CustomABManager() {
       ) : (
         <div className="space-y-3">
           {books.map((book: any) => (
-            <Card key={book.id} className="p-4">
+            <Card
+              key={book.id}
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => {
+                if (book.type === 'opinion_book_demo') {
+                  window.location.href = `/demo/opinion/${book.id}`;
+                } else {
+                  window.location.href = `/opinion/${book.id}`;
+                }
+              }}
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-[#D32F2F]" />
                     <span className="font-medium">{book.name}</span>
-                    <span className="text-xs bg-red-50 text-[#D32F2F] px-2 py-0.5 rounded-full">
-                      定制AB
-                    </span>
+                    {book.type === 'opinion_book_demo' ? (
+                      <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                        演示账本
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-red-50 text-[#D32F2F] px-2 py-0.5 rounded-full">
+                        定制AB
+                      </span>
+                    )}
                   </div>
                   {book.description && (
                     <p className="text-xs text-gray-500 mt-1 ml-6">{book.description}</p>

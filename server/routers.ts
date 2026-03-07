@@ -26,7 +26,7 @@ import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
@@ -8417,16 +8417,17 @@ export const appRouter = router({
         }
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // super_admin 和 admin 都能看到全部 opinion_book 账本
+        // super_admin 和 admin 都能看到全部 opinion_book 和 opinion_book_demo 账本
         const rows = await db
           .select({
             id: ledgers.id,
             name: ledgers.name,
             description: ledgers.description,
+            type: ledgers.type,
             createdAt: ledgers.createdAt,
           })
           .from(ledgers)
-          .where(and(eq(ledgers.type, 'opinion_book'), eq(ledgers.isArchived, false)))
+          .where(and(inArray(ledgers.type, ['opinion_book', 'opinion_book_demo']), eq(ledgers.isArchived, false)))
           .orderBy(desc(ledgers.createdAt));
         return rows;
       }),
@@ -8762,6 +8763,12 @@ export const appRouter = router({
         let ledgerId: number;
         if ((existRows as any[]).length > 0) {
           ledgerId = (existRows as any[])[0].id;
+          // 确保owner成员记录存在（可能因为初次创建失败导致成员未插入）
+          await dbConn.execute(
+            `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, memberType, nickname, permissionView, permissionAdd, permissionEdit, permissionDelete, canEdit, canDelete, canInvite)
+             VALUES (?, ?, 'owner', 'real', '麻六记管理员', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+            [ledgerId, ownerId]
+          );
         } else {
           // 创建演示账本
           const [res] = await dbConn.execute(
