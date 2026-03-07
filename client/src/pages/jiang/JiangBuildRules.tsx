@@ -717,18 +717,18 @@ function ArticleItem({ article }: { article: Article }) {
       </div>
 
       {open && (
-        <div className="px-4 pb-4 pl-[3.25rem]">
+        <div className="px-4 pb-4">
           {Array.isArray(article.content) ? (
             <ul className="space-y-2">
               {article.content.map((item, i) => (
                 <li key={i} className="flex gap-2 text-xs text-[#9999bb] leading-relaxed">
                   <span className="text-[#D32F2F] shrink-0 mt-0.5">·</span>
-                  <span>{item}</span>
+                  <span className="flex-1 min-w-0 break-words">{item}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-[#9999bb] leading-relaxed">{article.content}</p>
+            <p className="text-xs text-[#9999bb] leading-relaxed break-words">{article.content}</p>
           )}
         </div>
       )}
@@ -766,7 +766,7 @@ function ChapterSection({ chapter }: { chapter: Chapter }) {
       </div>
 
       {open && (
-        <div className="mt-1 bg-[#0d0d1a] border border-[#1e1e35] rounded-2xl overflow-hidden">
+        <div className="mt-1 bg-[#0d0d1a] border border-[#1e1e35] rounded-2xl">
           {chapter.articles.map(article => (
             <ArticleItem key={article.id} article={article} />
           ))}
