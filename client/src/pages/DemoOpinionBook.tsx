@@ -164,23 +164,23 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
     <div className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center justify-center gap-1 px-2 h-7 rounded-full text-xs font-medium"
-        style={{ backgroundColor: "rgba(255,255,255,0.15)", color: "#FFFFFF", minWidth: "60px" }}
+        className="flex items-center justify-center gap-1 px-3 h-7 rounded-full text-xs font-medium whitespace-nowrap"
+        style={{ backgroundColor: "rgba(255,255,255,0.15)", color: "#FFFFFF", minWidth: "90px" }}
       >
-        <span className="truncate max-w-[60px]">{selected ? selected.name : "全部分店"}</span>
+        <span className="whitespace-nowrap">{selected ? selected.name : "全部分店"}</span>
         <ChevronDown className="w-3 h-3 flex-shrink-0" />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-50 rounded-xl shadow-lg overflow-hidden min-w-[120px]" style={{ backgroundColor: "#FFFFFF" }}>
+        <div className="absolute right-0 top-9 rounded-xl shadow-xl overflow-hidden" style={{ backgroundColor: "#FFFFFF", zIndex: 9999, minWidth: "140px" }}>
           <button
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50"
+            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
             style={{ color: selectedBranchId === null ? "#D32F2F" : "#333" }}
             onClick={() => { onSelect(null); setOpen(false); }}
           >全部分店</button>
           {branches.map(b => (
             <button
               key={b.id}
-              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50"
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
               style={{ color: selectedBranchId === b.id ? "#D32F2F" : "#333" }}
               onClick={() => { onSelect(b.id); setOpen(false); }}
             >{b.name}</button>
