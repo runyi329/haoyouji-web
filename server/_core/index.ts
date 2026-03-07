@@ -175,6 +175,10 @@ async function startServer() {
   // 初始化红立方商品
   await initRedCubeProduct();
   
+  // 初始化数据库（确保意见本等功能所需字段存在）
+  const { initDatabase } = await import('../db-init');
+  await initDatabase();
+  
   // 添加管理员为企业成员
   const { addAdminAsMember } = await import('../add-admin-member');
   await addAdminAsMember();
