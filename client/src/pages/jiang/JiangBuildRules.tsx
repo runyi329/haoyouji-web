@@ -438,6 +438,67 @@ const CHAPTERS: Chapter[] = [
     ],
   },
   {
+    num: "十",
+    title: "通用商家设置组件规范",
+    articles: [
+      {
+        id: "10.1",
+        title: "通用设置组件原则（核心规范）",
+        type: "list",
+        content: [
+          "所有商家共用同一套 MerchantSettingsPage 组件，UI 布局和功能字段完全相同。",
+          "通过 merchantCode 参数区分数据，每个商家的设置数据互相独立，互不影响。",
+          "新增商家时，只需创建一个薄包装页（如 JiangSettings.tsx），传入 merchantCode 等参数即可，无需重新开发设置页。",
+          "组件路径：client/src/components/MerchantSettingsPage.tsx",
+        ],
+      },
+      {
+        id: "10.2",
+        title: "设置组件必须包含的字段",
+        type: "list",
+        content: [
+          "分享配置（必填）：商家 Logo（建议 400×400px）、分享封面图（建议 1200×630px）、分享标题（最多 50 字）、分享描述语（最多 100 字）。",
+          "联系方式（可选）：微信号、联系电话、官网地址。",
+          "关于我们（可选）：品牌/团队/服务介绍（最多 500 字）。",
+          "图片上传：自动压缩为 WebP 格式，存储至 S3，禁止将图片字节存入数据库。",
+        ],
+      },
+      {
+        id: "10.3",
+        title: "商家设置路由规范",
+        type: "list",
+        content: [
+          "路由格式：/{merchantCode}/settings，如 /jiang/settings、/wine/settings。",
+          "仅管理员可访问，权限判断：user.username === adminUsername。",
+          "非管理员访问时显示权限拦截页，不跳转，不报错。",
+          "返回按钮默认指向 /{merchantCode}/profile（个人中心）。",
+        ],
+      },
+      {
+        id: "10.4",
+        title: "薄包装页写法（新商家接入示例）",
+        type: "list",
+        content: [
+          "在 pages/{name}/ 目录下创建 {Name}Settings.tsx，内容只需引入 MerchantSettingsPage 并传入参数。",
+          "必须传入的参数：merchantCode（商家编码）、adminUsername（管理员用户名）。",
+          "可选参数：accentColor（主题色）、bgColor（背景色）、cardBgColor（卡片色）、backPath（返回路径）。",
+          "在 App.tsx 中注册路由：<Route path=\"/{name}/settings\" component={NameSettings} />",
+        ],
+      },
+      {
+        id: "10.5",
+        title: "设置数据生效范围",
+        type: "list",
+        content: [
+          "保存后立即生效：分享链接的 OG 标签（og:title、og:description、og:image）。",
+          "保存后立即生效：商家首页顶部的名称和 Logo 展示。",
+          "保存后立即生效：微信/浏览器分享卡片显示商家自己的信息。",
+          "服务端 MERCHANT_PATH_MAP 必须包含该商家路径，否则 OG 标签不会注入。",
+        ],
+      },
+    ],
+  },
+  {
     num: "十一",
     title: "开发规则",
     articles: [
