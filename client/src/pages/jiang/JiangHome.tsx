@@ -3,6 +3,9 @@
  * 路由：/jiang
  */
 import { useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
+import { LogIn } from "lucide-react";
 import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
 import { Cpu, Zap, Code2, Layers, ArrowRight, ChevronRight } from "lucide-react";
@@ -68,6 +71,7 @@ const CASES = [
 
 export default function JiangHome() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
@@ -75,10 +79,20 @@ export default function JiangHome() {
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <img src={SENTIA_ICON} alt="润仪" className="w-8 h-8 rounded-full" />
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-bold text-white leading-tight">润仪算力研发中心</div>
             <div className="text-[10px] text-[#D32F2F] leading-tight">Runyi AI Compute Lab</div>
           </div>
+          {/* §9.2 未登录时顶部角落显示登录按钮 */}
+          {!user && (
+            <button
+              onClick={() => window.location.href = getLoginUrl()}
+              className="flex items-center gap-1 text-[11px] text-[#888899] hover:text-white border border-[#333355] rounded-full px-2.5 py-1 transition-colors"
+            >
+              <LogIn className="w-3 h-3" />
+              登录
+            </button>
+          )}
         </div>
         <JiangTabBar />
       </div>

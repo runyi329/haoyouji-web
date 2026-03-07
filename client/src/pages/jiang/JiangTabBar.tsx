@@ -2,20 +2,29 @@
  * 润仪算力研发中心 - 顶部 Tab 栏
  * 路由：/jiang/*
  * 主题色：深黑 #0A0A0F + 红色 #D32F2F
+ *
+ * §9.2 规范：未登录用户不显示「我的」Tab
  */
 import { Link, useLocation } from "wouter";
 import { Home, Cpu, ShoppingBag, Info, User } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
-const TABS = [
+const BASE_TABS = [
   { label: "首页", href: "/jiang", icon: <Home className="w-4 h-4" /> },
   { label: "服务", href: "/jiang/services", icon: <Cpu className="w-4 h-4" /> },
   { label: "商城", href: "/jiang/shop", icon: <ShoppingBag className="w-4 h-4" /> },
   { label: "关于", href: "/jiang/about", icon: <Info className="w-4 h-4" /> },
-  { label: "我的", href: "/jiang/profile", icon: <User className="w-4 h-4" /> },
 ];
+
+const MY_TAB = { label: "我的", href: "/jiang/profile", icon: <User className="w-4 h-4" /> };
 
 export default function JiangTabBar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  // §9.2：未登录用户不显示「我的」Tab
+  const tabs = user ? [...BASE_TABS, MY_TAB] : BASE_TABS;
+
   const isActive = (href: string) => {
     if (href === "/jiang") return location === "/jiang";
     return location.startsWith(href);
@@ -24,7 +33,7 @@ export default function JiangTabBar() {
   return (
     <div className="bg-[#0d0d14]/95 border-b border-[#D32F2F]/20 backdrop-blur-sm">
       <div className="flex max-w-lg mx-auto">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = isActive(tab.href);
           return (
             <Link key={tab.label} href={tab.href} className="flex-1">
