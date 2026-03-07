@@ -8456,11 +8456,24 @@ export const appRouter = router({
     getBranches: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
-        }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 允许：平台管理员 或 该账本的 owner/admin
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          const [ownerRows] = await dbConn.execute(
+            `SELECT id FROM ledgers WHERE id=? AND ownerId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          const [memberRows] = await dbConn.execute(
+            `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          const isOwner = (ownerRows as any[]).length > 0;
+          const memberRole = (memberRows as any[])[0]?.role;
+          if (!isOwner && memberRole !== 'owner' && memberRole !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+          }
+        }
         const [rows] = await dbConn.execute(
           `SELECT c.id, c.name, c.sort_order,
                   COUNT(r.id) as entry_count
