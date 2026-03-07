@@ -396,91 +396,88 @@ export default function FeedbackPage() {
             </div>
           )}
 
-          {/* 提交成功后的简洁提示 */}
+          {/* 提交成功后的合并提示 */}
           {submitted && (
-            <div className="px-4 pb-4 border-t border-gray-50">
-              <div className="pt-3 text-center">
-                <p className="text-sm text-gray-500">您的意见已收到，老板会亲自查看</p>
-                <button
-                  className="mt-2 text-xs text-[#D32F2F] underline underline-offset-2"
-                  onClick={() => {
-                    setSubmitted(false);
-                    setSelectedCategory(null);
-                    setSelectedTags([]);
-                    setContent("");
-                    setRating(0);
-                    setGuestName("");
-                    setGuestWechat("");
-                    setImages([]);
-                    setImageFiles([]);
-                    setOpinionOpen(true);
-                  }}
-                >
-                  再次提交意见
-                </button>
-              </div>
+            <div className="px-5 py-4 border-t border-gray-50">
+              <p className="text-[15px] font-medium text-gray-700 leading-snug">
+                感谢您的反馈，您的意见已收到，老板会亲自查看。
+              </p>
+              <button
+                className="mt-3 text-xs text-gray-400"
+                onClick={() => {
+                  setSubmitted(false);
+                  setSelectedCategory(null);
+                  setSelectedTags([]);
+                  setContent("");
+                  setRating(0);
+                  setGuestName("");
+                  setGuestWechat("");
+                  setImages([]);
+                  setImageFiles([]);
+                  setOpinionOpen(true);
+                }}
+              >
+                再次提交意见
+              </button>
             </div>
           )}
         </div>
 
         {/* ══════════════════════════════════════
-            第二区：支付（动线下方）
+            第二区：支付（支付宝风格，动线下方）
         ══════════════════════════════════════ */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {/* 标题栏 */}
-          <div className="bg-gradient-to-r from-[#D32F2F] to-rose-500 px-4 py-2.5 flex items-center justify-between">
-            <span className="text-white font-semibold text-sm">本次消费付款</span>
-            {submitted ? (
-              <span className="flex items-center gap-1 text-yellow-300 text-xs font-medium">
-                <CheckCircle className="w-3.5 h-3.5" />
-                意见已提交，享95折
-              </span>
-            ) : (
-              <span className="text-white/70 text-xs">提交意见后享95折</span>
-            )}
+          <div className="px-5 pt-5 pb-2">
+            <p className="text-xs text-gray-400 mb-1">
+              {submitted ? "已享95折优惠" : "提交意见后享95折优惠"}
+            </p>
+            <p className="text-[13px] font-semibold text-gray-700">本次消费金额</p>
           </div>
 
-          <div className="p-4">
-            {/* 金额输入 */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-gray-400 text-2xl font-light">¥</span>
+          <div className="px-5 pb-5">
+            {/* 金额输入 —— 支付宝大字风格 */}
+            <div className="flex items-end gap-1 mb-4 border-b border-gray-100 pb-3">
+              <span className="text-gray-500 text-xl mb-0.5">¥</span>
               <input
                 type="number"
                 inputMode="decimal"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                placeholder="输入消费金额"
-                className="flex-1 text-3xl font-bold text-gray-800 bg-transparent border-0 border-b-2 border-gray-200 focus:border-[#D32F2F] outline-none pb-1 placeholder:text-gray-200 placeholder:text-2xl"
+                placeholder="0.00"
+                className="flex-1 text-[40px] font-light text-gray-900 bg-transparent border-0 outline-none leading-none placeholder:text-gray-200"
               />
             </div>
 
-            {/* 折扣展示 */}
+            {/* 折扣明细 */}
             {discountedAmount ? (
-              <div className="flex items-center justify-between bg-red-50 rounded-xl px-4 py-2.5 mb-3">
-                <div>
-                  <p className="text-xs text-gray-400">95折优惠后实付</p>
-                  <p className="text-2xl font-bold text-[#D32F2F]">¥{discountedAmount}</p>
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">原价</span>
+                  <span className="text-gray-700">¥{parseFloat(amount).toFixed(2)}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-400">节省</p>
-                  <p className="text-base font-semibold text-orange-500">
-                    ¥{(parseFloat(amount) - parseFloat(discountedAmount)).toFixed(2)}
-                  </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500">95折优惠</span>
+                  <span className="text-[#1677FF]">-¥{(parseFloat(amount) - parseFloat(discountedAmount)).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+                  <span className="text-sm font-semibold text-gray-800">实付金额</span>
+                  <span className="text-xl font-bold text-gray-900">¥{discountedAmount}</span>
                 </div>
               </div>
             ) : (
-              <div className="bg-gray-50 rounded-xl px-4 py-2.5 mb-3 text-center">
-                <p className="text-xs text-gray-400">输入金额后自动计算95折优惠</p>
+              <div className="mb-4 text-center py-2">
+                <p className="text-sm text-gray-400">输入金额后自动计算95折优惠</p>
               </div>
             )}
 
-            {/* 支付按钮 */}
+            {/* 支付按钮 —— 支付宝蓝 */}
             <button
               onClick={handleAlipayPay}
               disabled={!discountedAmount || payLoading || !submitted}
-              className={`w-full py-3.5 rounded-xl font-bold text-base transition-all ${
+              className={`w-full py-3.5 rounded-full font-semibold text-[15px] transition-all ${
                 discountedAmount && !payLoading && submitted
-                  ? "bg-[#1677FF] text-white shadow-md active:bg-blue-700"
+                  ? "bg-[#1677FF] text-white active:opacity-80"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
             >
