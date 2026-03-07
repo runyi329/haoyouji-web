@@ -7,9 +7,72 @@
  * 以后有新规则直接告知加在第几条
  */
 import { useLocation } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronRight, BookOpen } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, ChevronDown, ChevronRight, BookOpen, Copy, Check } from "lucide-react";
+import { useState, useCallback } from "react";
 import BottomNav from "@/components/BottomNav";
+
+// ─────────────────────────────────────────────
+// 工具函数：将条款内容转为纯文本
+// ─────────────────────────────────────────────
+function articleToText(article: Article): string {
+  const lines: string[] = [`§${article.id} ${article.title}`];
+  if (Array.isArray(article.content)) {
+    article.content.forEach(item => lines.push(`· ${item}`));
+  } else {
+    lines.push(article.content);
+  }
+  return lines.join("\n");
+}
+
+function chapterToText(chapter: Chapter): string {
+  const lines: string[] = [`【第${chapter.num}章 · ${chapter.title}】`];
+  chapter.articles.forEach(a => {
+    lines.push("");
+    lines.push(articleToText(a));
+  });
+  return lines.join("\n");
+}
+
+// ─────────────────────────────────────────────
+// 子组件：复制按钮
+// ─────────────────────────────────────────────
+function CopyBtn({ getText }: { getText: () => string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const text = getText();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      // fallback for older browsers
+      const el = document.createElement("textarea");
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [getText]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-all ${
+        copied
+          ? "bg-green-500/20 text-green-400"
+          : "bg-[#1e1e35] text-[#666688] hover:bg-[#D32F2F]/20 hover:text-[#D32F2F]"
+      }`}
+      title="复制此条款"
+    >
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      <span>{copied ? "已复制" : "复制"}</span>
+    </button>
+  );
+}
 
 // ─────────────────────────────────────────────
 // 文档数据结构
@@ -546,22 +609,26 @@ const CHAPTERS: Chapter[] = [
 // ─────────────────────────────────────────────
 function ArticleItem({ article }: { article: Article }) {
   const [open, setOpen] = useState(false);
+  const getText = useCallback(() => articleToText(article), [article]);
 
   return (
     <div className="border-b border-[#1a1a2e] last:border-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left"
-      >
-        <span className="text-[#D32F2F] text-xs font-mono font-bold mt-0.5 shrink-0 w-8">
-          {article.id}
-        </span>
-        <span className="text-[#ccccdd] text-sm flex-1 leading-snug">{article.title}</span>
-        {open
-          ? <ChevronDown className="w-4 h-4 text-[#444466] shrink-0 mt-0.5" />
-          : <ChevronRight className="w-4 h-4 text-[#444466] shrink-0 mt-0.5" />
-        }
-      </button>
+      <div className="flex items-start gap-2 px-4 py-3">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-start gap-3 flex-1 text-left min-w-0"
+        >
+          <span className="text-[#D32F2F] text-xs font-mono font-bold mt-0.5 shrink-0 w-8">
+            {article.id}
+          </span>
+          <span className="text-[#ccccdd] text-sm flex-1 leading-snug">{article.title}</span>
+          {open
+            ? <ChevronDown className="w-4 h-4 text-[#444466] shrink-0 mt-0.5" />
+            : <ChevronRight className="w-4 h-4 text-[#444466] shrink-0 mt-0.5" />
+          }
+        </button>
+        <CopyBtn getText={getText} />
+      </div>
 
       {open && (
         <div className="px-4 pb-4 pl-[3.25rem]">
@@ -588,25 +655,29 @@ function ArticleItem({ article }: { article: Article }) {
 // ─────────────────────────────────────────────
 function ChapterSection({ chapter }: { chapter: Chapter }) {
   const [open, setOpen] = useState(false);
+  const getText = useCallback(() => chapterToText(chapter), [chapter]);
 
   return (
     <div className="mb-3">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-[#0d0d1a] border border-[#1e1e35] rounded-2xl"
-      >
-        <div className="w-8 h-8 rounded-full bg-[#D32F2F]/20 flex items-center justify-center shrink-0">
-          <span className="text-[#D32F2F] text-[10px] font-bold">{chapter.num}</span>
-        </div>
-        <span className="text-white text-sm font-semibold flex-1 text-left">
-          第{chapter.num}章 · {chapter.title}
-        </span>
-        <span className="text-[#444466] text-[10px] mr-1">{chapter.articles.length}条</span>
-        {open
-          ? <ChevronDown className="w-4 h-4 text-[#444466] shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-[#444466] shrink-0" />
-        }
-      </button>
+      <div className="flex items-center gap-2 bg-[#0d0d1a] border border-[#1e1e35] rounded-2xl px-4 py-3">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+        >
+          <div className="w-8 h-8 rounded-full bg-[#D32F2F]/20 flex items-center justify-center shrink-0">
+            <span className="text-[#D32F2F] text-[10px] font-bold">{chapter.num}</span>
+          </div>
+          <span className="text-white text-sm font-semibold flex-1">
+            第{chapter.num}章 · {chapter.title}
+          </span>
+          <span className="text-[#444466] text-[10px]">{chapter.articles.length}条</span>
+          {open
+            ? <ChevronDown className="w-4 h-4 text-[#444466] shrink-0" />
+            : <ChevronRight className="w-4 h-4 text-[#444466] shrink-0" />
+          }
+        </button>
+        <CopyBtn getText={getText} />
+      </div>
 
       {open && (
         <div className="mt-1 bg-[#0d0d1a] border border-[#1e1e35] rounded-2xl overflow-hidden">
