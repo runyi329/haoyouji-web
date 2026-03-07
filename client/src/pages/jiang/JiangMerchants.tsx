@@ -33,7 +33,7 @@ const MERCHANT_CONFIGS = [
     ),
   },
   {
-    id: "wine",
+    id: "cx8618",
     defaultName: "红酒商会",
     defaultSubtitle: "精品葡萄酒",
     href: "/wine",
@@ -42,7 +42,7 @@ const MERCHANT_CONFIGS = [
     defaultIcon: <Wine className="w-9 h-9 text-[#C9A84C]" />,
   },
   {
-    id: "beauty",
+    id: "liulifan",
     defaultName: "奢贝美容",
     defaultSubtitle: "高端美容护肤",
     href: "/beauty",
