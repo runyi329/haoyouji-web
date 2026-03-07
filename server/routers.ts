@@ -8568,8 +8568,7 @@ export const appRouter = router({
           query += ` AND r.categoryId = ?`;
           params.push(input.categoryId);
         }
-        query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
-        params.push(input.pageSize, offset);
+        query += ` ORDER BY r.createdAt DESC LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`;
         const [rows] = await dbConn.execute(query, params) as any;
         let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)`;
         const countParams: any[] = [input.ledgerId];
