@@ -212,33 +212,25 @@ export default function OpinionBookDetail() {
     .filter((c: any) => c.parentId === null && !c.isDefault)
     .map((c: any) => ({ id: c.id, name: c.name }));
 
-  const { data: transactionsData, isLoading, refetch } = trpc.ledger.getTransactions.useQuery(
-    { ledgerId, limit: 500 },
+  const { data: entriesData, isLoading, refetch } = trpc.opinionBook.getEntries.useQuery(
+    { ledgerId, pageSize: 500 },
     { enabled: ledgerId > 0 }
   );
 
   // 展平所有意见记录
   const entries = useMemo(() => {
-    if (!transactionsData || !Array.isArray(transactionsData)) return [];
-    const all: any[] = [];
-    transactionsData.forEach((day: any) => {
-      if (day.records) {
-        day.records.forEach((record: any) => {
-          all.push({
-            id: record.id,
-            content: record.description || "",
-            created_at: record.createdAt,
-            branch_name: record.category !== "未分类" ? record.category : null,
-            rating: null,
-            guest_name: null,
-            guest_wechat: null,
-            is_read: false,
-          });
-        });
-      }
-    });
-    return all;
-  }, [transactionsData]);
+    if (!entriesData || !Array.isArray((entriesData as any).entries)) return [];
+    return (entriesData as any).entries.map((e: any) => ({
+      id: e.id,
+      content: e.content || "",
+      created_at: e.created_at,
+      branch_name: e.branch_name || null,
+      rating: e.rating || null,
+      guest_name: e.guest_name || null,
+      guest_wechat: e.guest_wechat || null,
+      is_read: e.is_read || false,
+    }));
+  }, [entriesData]);
 
   // ─── 六大维度定义 ────────────────────────────────────────────────────────────
   const DIMENSIONS = [
@@ -549,9 +541,13 @@ export default function OpinionBookDetail() {
                         </div>
                         <p className="text-sm text-gray-800 leading-relaxed">{entry.content}</p>
                         {(entry.guest_name || entry.guest_wechat) && (
-                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
-                            {entry.guest_name && <span className="text-xs text-gray-400">👤 {entry.guest_name}</span>}
-                            {entry.guest_wechat && <span className="text-xs text-gray-400">💬 {entry.guest_wechat}</span>}
+                          <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
+                            {entry.guest_name && (
+                              <span className="text-xs" style={{ color: "#9E9E9E" }}>称谓：{entry.guest_name}</span>
+                            )}
+                            {entry.guest_wechat && (
+                              <span className="text-xs" style={{ color: "#9E9E9E" }}>微信：{entry.guest_wechat}</span>
+                            )}
                           </div>
                         )}
                       </div>
