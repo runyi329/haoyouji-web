@@ -15,9 +15,13 @@ import BottomNav from "@/components/BottomNav";
 // 工具函数：将条款内容转为纯文本
 // ─────────────────────────────────────────────
 function articleToText(article: Article): string {
-  const lines: string[] = [`§${article.id} ${article.title}`];
+  const lines: string[] = [article.title];
   if (Array.isArray(article.content)) {
-    article.content.forEach(item => lines.push(`· ${item}`));
+    article.content.forEach(item => {
+      // 去掉前缀符号如【强制】【入口①】等方括号内容的标记符，保留文字
+      const clean = item.replace(/^【[^】]*】\s*/, "").replace(/^入口[①②③④⑤⑥]【[^】]*】：?\s*/, "");
+      lines.push(clean);
+    });
   } else {
     lines.push(article.content);
   }
@@ -25,7 +29,7 @@ function articleToText(article: Article): string {
 }
 
 function chapterToText(chapter: Chapter): string {
-  const lines: string[] = [`【第${chapter.num}章 · ${chapter.title}】`];
+  const lines: string[] = [`第${chapter.num}章 ${chapter.title}`];
   chapter.articles.forEach(a => {
     lines.push("");
     lines.push(articleToText(a));
@@ -41,12 +45,13 @@ function CopyBtn({ getText }: { getText: () => string }) {
 
   const handleCopy = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     const text = getText();
+    if (navigator.vibrate) navigator.vibrate(50);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {
-      // fallback for older browsers
       const el = document.createElement("textarea");
       el.value = text;
       document.body.appendChild(el);
@@ -60,16 +65,15 @@ function CopyBtn({ getText }: { getText: () => string }) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] transition-all ${
-        copied
-          ? "bg-green-500/20 text-green-400"
-          : "bg-[#1e1e35] text-[#666688] hover:bg-[#D32F2F]/20 hover:text-[#D32F2F]"
-      }`}
-      title="复制此条款"
+      className="p-1.5 hover:bg-[#1e1e35] rounded transition-colors flex-shrink-0 cursor-pointer active:scale-95"
+      title="复制"
     >
-      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-      <span>{copied ? "已复制" : "复制"}</span>
+      {copied
+        ? <Check className="w-4 h-4 text-green-400" />
+        : <Copy className="w-4 h-4 text-[#555577] hover:text-[#888899]" />
+      }
     </button>
   );
 }
