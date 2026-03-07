@@ -163,7 +163,7 @@ export default function Login() {
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
       {/* 主内容区域 */}
-      <main className="flex-1 flex flex-col px-6 pt-8 overflow-y-auto touch-pan-y">
+      <main className="flex-1 flex flex-col items-center px-6 pt-8 overflow-y-auto touch-pan-y">
         <div className="w-full max-w-md">
           {/* 登录/注册卡片 */}
           <div className="bg-white rounded-3xl p-6 shadow-2xl">
@@ -409,10 +409,7 @@ export default function Login() {
             )}
           </div>
 
-          {/* 底部特效区域 - 预留给后续特效 */}
-          <div className="flex-1 flex items-center justify-center mt-12">
-            {/* 特效占位区域 */}
-          </div>
+
         </div>
       </main>
     </div>
