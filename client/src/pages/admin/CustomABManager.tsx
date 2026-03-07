@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -354,13 +355,12 @@ function TableManager({ book, selectedBranch }: { book: any; selectedBranch: str
 // ===== 意见本卡片 =====
 function BookCard({
   book,
-  onViewEntries,
 }: {
   book: any;
-  onViewEntries: (book: { id: number; name: string }) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [, setLocation] = useLocation();
   const { data: branches } = trpc.opinionBook.getBranches.useQuery({ bookId: book.id });
 
   const hasBranches = branches && branches.length > 0;
@@ -403,7 +403,7 @@ function BookCard({
           <Button
             variant="outline" size="sm"
             className="text-xs h-8 flex-1"
-            onClick={() => onViewEntries({ id: book.id, name: book.name })}
+            onClick={() => setLocation(`/opinion/${book.id}`)}
           >
             <Eye className="w-3 h-3 mr-1" />
             查看意见
@@ -434,8 +434,8 @@ export default function CustomABManager() {
   const [newName, setNewName] = useState("");
   const [newStoreName, setNewStoreName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [viewingEntriesBook, setViewingEntriesBook] = useState<{ id: number; name: string } | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [, setLocation] = useLocation();
 
   const utils = trpc.useUtils();
   const { data: books, isLoading } = trpc.opinionBook.list.useQuery();
@@ -449,16 +449,6 @@ export default function CustomABManager() {
     },
     onError: (e) => toast.error(e.message),
   });
-
-  if (viewingEntriesBook) {
-    return (
-      <EntriesView
-        bookId={viewingEntriesBook.id}
-        bookName={viewingEntriesBook.name}
-        onBack={() => setViewingEntriesBook(null)}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -545,7 +535,6 @@ export default function CustomABManager() {
           <BookCard
             key={book.id}
             book={book}
-            onViewEntries={setViewingEntriesBook}
           />
         ))
       )}

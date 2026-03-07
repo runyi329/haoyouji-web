@@ -205,6 +205,8 @@ const JiangSettings = lazy(() => import("./pages/jiang/JiangSettings"));
 const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
+// AB 意见本 - 管理者查看页面
+const OpinionBookDetail = lazy(() => import("./pages/OpinionBookDetail"));
 // 私人定制展示页
 const CustomShowcase = lazy(() => import("./pages/CustomShowcase"));
 const CustomShowcaseShare = lazy(() => import("./pages/CustomShowcase").then(m => ({ default: m.CustomShowcaseShare })));
@@ -418,6 +420,8 @@ function Router() {
         <Route path="/share/wine/product/romanico" component={WineProductRomanicoShare} />
         {/* AB 共享意见本 - 游客扫码页面 */}
         <Route path="/feedback/:bookId/:tableId" component={FeedbackPage} />
+        {/* AB 意见本 - 管理者查看页面 */}
+        <Route path="/opinion/:bookId" component={OpinionBookDetail} />
 
         {/* 404 */}
         <Route path="/404" component={NotFound} />
