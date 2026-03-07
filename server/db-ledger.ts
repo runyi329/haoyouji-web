@@ -484,6 +484,32 @@ export async function createLedger(data: {
     canInvite: 1,
   });
 
+  // 定制账本（AA/AB类型）自动将管理员 jiang（userId:870413）加入成员列表
+  // 这样不管是谁创建的定制账本，jiang 都能在账本列表中看到并管理
+  const ADMIN_JIANG_ID = 870413;
+  const isCustomType = ['custom_aa', 'opinion_book', 'opinion_book_demo'].includes(data.type ?? '');
+  if (isCustomType && data.createdBy !== ADMIN_JIANG_ID) {
+    try {
+      await db.insert(ledgerMembers).values({
+        ledgerId: newLedgerId,
+        userId: ADMIN_JIANG_ID,
+        role: 'owner',
+        memberType: 'real',
+        nickname: 'jiang',
+        permissionView: 'all',
+        permissionAdd: 'all',
+        permissionEdit: 'all',
+        permissionDelete: 'all',
+        canEdit: 1,
+        canDelete: 1,
+        canInvite: 1,
+      });
+    } catch (e) {
+      // 忽略重复插入错误（INSERT IGNORE 效果）
+      console.warn('[createLedger] 添加jiang为成员时出错（可忽略）:', e);
+    }
+  }
+
   // 不再创建默认分类，用户可以自己添加或使用全局预设分类（ledgerId=0）
 
   return { id: newLedgerId, name: data.name };
