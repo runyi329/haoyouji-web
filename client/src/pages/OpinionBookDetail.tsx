@@ -215,7 +215,31 @@ export default function OpinionBookDetail() {
       color: DIM_COLORS[i],
     })).filter(d => d.count > 0).sort((a, b) => b.count - a.count);
 
-    return { total, todayCount, weekCount, last7Days, dimPieData, dimTotal };
+    // 子标签词频统计
+    // 意见内容格式：《维度》子标签1、子标签2 《维度》子标签3
+    const tagCountMap: Record<string, number> = {};
+    entries.forEach((e: any) => {
+      const content = e.content || "";
+      // 提取每个《维度》后面的内容，直到下一个《或结尾
+      const segments = content.split(/【[^】]+】/);
+      segments.forEach((seg: string) => {
+        if (!seg.trim()) return;
+        // 分隔符可能是、，空格
+        const tags = seg.split(/[、，,\s]+/).map((t: string) => t.trim()).filter((t: string) => t.length > 0 && t.length <= 12);
+        tags.forEach((tag: string) => {
+          // 过滤掉过长的自由输入文本（超过12字算自由输入，不算标签）
+          if (tag.length >= 2) {
+            tagCountMap[tag] = (tagCountMap[tag] || 0) + 1;
+          }
+        });
+      });
+    });
+    const tagCloud = Object.entries(tagCountMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([tag, count]) => ({ tag, count }));
+
+    return { total, todayCount, weekCount, last7Days, dimPieData, dimTotal, tagCloud };
   }, [entries]);
 
   // ─── 分店筛选 ──────────────────────────────────────────────────────────────
@@ -351,22 +375,41 @@ export default function OpinionBookDetail() {
             </div>
 
             {/* 右：近7天趋势 */}
-            <div className="rounded-xl px-3 py-2 flex flex-col gap-1 overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-              <div className="text-xs font-medium flex-shrink-0" style={{ color: "rgba(255,255,255,0.85)" }}>近7天趋势</div>
-              <div className="flex-1 flex items-end gap-0.5">
-                {stats.last7Days.map((day, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                    <div
-                      className="w-full rounded-sm"
-                      style={{
-                        height: `${Math.max(4, Math.round((day.count / maxDay7Count) * 40))}px`,
-                        backgroundColor: day.count > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.2)",
-                      }}
-                    />
-                    <span className="text-center leading-none" style={{ fontSize: "8px", color: "rgba(255,255,255,0.6)" }}>{day.label.split('/')[1]}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="rounded-xl px-2 py-2 flex flex-col overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+              <div className="text-xs font-medium flex-shrink-0 mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>热词</div>
+              {stats.tagCloud.length === 0 ? (
+                <div className="text-xs flex-1 flex items-center justify-center" style={{ color: "rgba(255,255,255,0.4)" }}>暂无标签</div>
+              ) : (
+                <div className="flex-1 flex flex-wrap content-start gap-1 overflow-hidden">
+                  {(() => {
+                    const maxCount = stats.tagCloud[0].count;
+                    return stats.tagCloud.map(({ tag, count }, i) => {
+                      const ratio = count / maxCount;
+                      // 字号：9px ~ 15px
+                      const fontSize = Math.round(9 + ratio * 6);
+                      // 不透明度：0.45 ~ 1.0
+                      const opacity = 0.45 + ratio * 0.55;
+                      // 出现最多的加粗
+                      const fontWeight = ratio >= 0.8 ? 700 : ratio >= 0.5 ? 600 : 400;
+                      return (
+                        <span
+                          key={i}
+                          style={{
+                            fontSize: `${fontSize}px`,
+                            opacity,
+                            fontWeight,
+                            color: "#FFFFFF",
+                            lineHeight: 1.3,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         </div>
