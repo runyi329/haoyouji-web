@@ -286,8 +286,8 @@ export default function MerchantSettingsPage({
                 )}
               </div>
               <div className="flex-1">
-                <p className="text-xs text-gray-400">建议尺寸：400×400px</p>
-                <p className="text-xs text-gray-500 mt-0.5">上传后可裁剪选取区域</p>
+                <p className="text-xs text-gray-400">建议尺寸：<span className="font-mono">400×400px</span></p>
+                <p className="text-xs text-gray-500 mt-0.5">正方形 · 上传后可裁剪</p>
                 <button
                   onClick={() => logoInputRef.current?.click()}
                   disabled={isUploading}
@@ -313,7 +313,7 @@ export default function MerchantSettingsPage({
               {settings?.shareCoverImage ? (
                 <>
                   <img src={settings.shareCoverImage} alt="封面图" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
                     <Crop className="w-6 h-6 text-white" />
                     <span className="text-white text-xs">点击更换/裁剪</span>
                   </div>
@@ -326,7 +326,10 @@ export default function MerchantSettingsPage({
                 </>
               )}
             </div>
-            {uploadCoverMutation.isPending && <p className="text-xs mt-1" style={{ color: accentColor }}>上传中...</p>}
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-xs text-gray-500">建议尺寸：<span className="font-mono text-gray-400">1200×630px</span> · 横版 · 上传后可裁剪</p>
+              {uploadCoverMutation.isPending && <p className="text-xs" style={{ color: accentColor }}>上传中...</p>}
+            </div>
             <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
               onChange={(e) => { if (e.target.files?.[0]) { handleFileSelect(e.target.files[0], "cover"); e.target.value = ""; } }} />
           </div>
