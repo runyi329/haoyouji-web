@@ -2,9 +2,12 @@
  * 润仪算力研发中心 - 关于/联系页
  * 路由：/jiang/about
  */
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
+import { toast } from "sonner";
 import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
-import { MessageCircle, Phone, Mail, MapPin, Cpu, Zap, Shield } from "lucide-react";
+import { MessageCircle, Phone, Mail, MapPin, Cpu, Zap, Shield, LogIn, Share2 } from "lucide-react";
 
 const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
 
@@ -30,16 +33,44 @@ const VALUES = [
 ];
 
 export default function JiangAbout() {
+  const { user } = useAuth();
+
+  const handleShare = () => {
+    const inviteCode = (user as any)?.inviteCode || "jiang";
+    const shareUrl = `${window.location.origin}/jiang?ref=${inviteCode}`;
+    if (navigator.share) {
+      navigator.share({ title: "润仪算力研发中心", text: "AI 全链路驱动，算力加工，让 AI 为你落地", url: shareUrl });
+    } else {
+      navigator.clipboard.writeText(shareUrl).then(() => toast.success("链接已复制！已包含您的邀请码"));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       {/* 顶部 Header */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <img src={SENTIA_ICON} alt="润仪" className="w-8 h-8 rounded-full" />
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-bold text-white leading-tight">润仪算力研发中心</div>
             <div className="text-[10px] text-[#D32F2F] leading-tight">Runyi AI Compute Lab</div>
           </div>
+          {!user ? (
+            <button
+              onClick={() => window.location.href = getLoginUrl()}
+              className="flex items-center gap-1 text-[11px] text-[#888899] hover:text-white border border-[#333355] rounded-full px-2.5 py-1 transition-colors"
+            >
+              <LogIn className="w-3 h-3" />
+              登录
+            </button>
+          ) : (
+            <button
+              onClick={handleShare}
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-[#333355] text-[#888899] hover:text-white hover:border-[#D32F2F]/50 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <JiangTabBar />
       </div>
