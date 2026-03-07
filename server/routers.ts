@@ -8400,52 +8400,19 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
         }
-        const dbConn = await getDbConnection();
-        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 检测 deleted_at 字段是否存在
-        let hasDeletedAt = true;
-        try {
-          const [colRows] = await dbConn.execute(
-            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'deleted_at'`
-          ) as any;
-          hasDeletedAt = (colRows as any[])[0].cnt > 0;
-        } catch (e) {
-          hasDeletedAt = false;
-        }
-        const joinCondition = hasDeletedAt
-          ? `r.ledgerId = l.id AND r.deleted_at IS NULL`
-          : `r.ledgerId = l.id`;
-        // 从 ledgers 表查 opinion_book 类型
-        // super_admin 看全部，admin 看自己创建的 + 自己是成员的
-        let rows: any[];
-        if (ctx.user.role === 'super_admin') {
-          const [r] = await dbConn.execute(
-            `SELECT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
-                    COUNT(r.id) as entry_count
-             FROM ledgers l
-             LEFT JOIN ledger_records r ON ${joinCondition}
-             WHERE l.type = 'opinion_book' AND l.isArchived = 0
-             GROUP BY l.id
-             ORDER BY l.created_at DESC`
-          ) as any;
-          rows = r as any[];
-        } else {
-          // admin：自己是 owner 或自己是成员
-          const [r] = await dbConn.execute(
-            `SELECT DISTINCT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
-                    COUNT(r.id) as entry_count
-             FROM ledgers l
-             LEFT JOIN ledger_records r ON ${joinCondition}
-             LEFT JOIN ledger_members lm ON lm.ledgerId = l.id AND lm.userId = ?
-             WHERE l.type = 'opinion_book' AND l.isArchived = 0
-               AND (l.ownerId = ? OR lm.userId IS NOT NULL)
-             GROUP BY l.id
-             ORDER BY l.created_at DESC`,
-            [ctx.user.id, ctx.user.id]
-          ) as any;
-          rows = r as any[];
-        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // super_admin 和 admin 都能看到全部 opinion_book 账本
+        const rows = await db
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            description: ledgers.description,
+            createdAt: ledgers.createdAt,
+          })
+          .from(ledgers)
+          .where(and(eq(ledgers.type, 'opinion_book'), eq(ledgers.isArchived, false)))
+          .orderBy(desc(ledgers.createdAt));
         return rows;
       }),
 
