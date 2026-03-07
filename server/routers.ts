@@ -8402,12 +8402,26 @@ export const appRouter = router({
         }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 检测 deleted_at 字段是否存在
+        let hasDeletedAt = true;
+        try {
+          const [colRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'deleted_at'`
+          ) as any;
+          hasDeletedAt = (colRows as any[])[0].cnt > 0;
+        } catch (e) {
+          hasDeletedAt = false;
+        }
+        const joinCondition = hasDeletedAt
+          ? `r.ledgerId = l.id AND r.deleted_at IS NULL`
+          : `r.ledgerId = l.id`;
         // 从 ledgers 表查 opinion_book 类型，同时统计 ledger_records 中的意见数量
         const [rows] = await dbConn.execute(
           `SELECT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
                   COUNT(r.id) as entry_count
            FROM ledgers l
-           LEFT JOIN ledger_records r ON r.ledgerId = l.id AND r.deleted_at IS NULL
+           LEFT JOIN ledger_records r ON ${joinCondition}
            WHERE l.type = 'opinion_book' AND l.ownerId = ? AND l.isArchived = 0
            GROUP BY l.id
            ORDER BY l.created_at DESC`,
@@ -8474,11 +8488,25 @@ export const appRouter = router({
             throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
           }
         }
+        // 检测 deleted_at 字段是否存在
+        let hasDeletedAt = true;
+        try {
+          const [colRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'deleted_at'`
+          ) as any;
+          hasDeletedAt = (colRows as any[])[0].cnt > 0;
+        } catch (e) {
+          hasDeletedAt = false;
+        }
+        const joinCond = hasDeletedAt
+          ? `r.categoryId = c.id AND r.deleted_at IS NULL`
+          : `r.categoryId = c.id`;
         const [rows] = await dbConn.execute(
           `SELECT c.id, c.name, c.sort_order,
                   COUNT(r.id) as entry_count
            FROM ledger_categories c
-           LEFT JOIN ledger_records r ON r.categoryId = c.id AND r.deleted_at IS NULL
+           LEFT JOIN ledger_records r ON ${joinCond}
            WHERE c.ledgerId = ? AND (c.isDefault = 0 OR c.isDefault IS NULL)
              AND c.parentId IS NULL
            GROUP BY c.id, c.name, c.sort_order
@@ -8534,13 +8562,41 @@ export const appRouter = router({
           }
         }
         const offset = (input.page - 1) * input.pageSize;
-        let query = `SELECT r.id, r.description as content, r.rating, r.guest_name, r.guest_wechat, r.is_read,
-                            r.createdAt as created_at, r.categoryId as category_id,
-                            c.name as branch_name
-                     FROM ledger_records r
-                     LEFT JOIN ledger_categories c ON c.id = r.categoryId
-                     WHERE r.ledgerId = ? AND r.deleted_at IS NULL`;
+
+        // 动态检测意见本字段是否存在（容错处理）
+        let hasOpinionColumns = true;
+        try {
+          const [colRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'rating'`
+          ) as any;
+          hasOpinionColumns = (colRows as any[])[0].cnt > 0;
+        } catch (e) {
+          hasOpinionColumns = false;
+        }
+
+        let query: string;
+        if (hasOpinionColumns) {
+          query = `SELECT r.id, r.description as content, r.rating, r.guest_name, r.guest_wechat, r.is_read,
+                          r.createdAt as created_at, r.categoryId as category_id,
+                          c.name as branch_name
+                   FROM ledger_records r
+                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                   WHERE r.ledgerId = ?`;
+        } else {
+          // 字段不存在时用 NULL 代替
+          query = `SELECT r.id, r.description as content, NULL as rating, NULL as guest_name, NULL as guest_wechat, 0 as is_read,
+                          r.createdAt as created_at, r.categoryId as category_id,
+                          c.name as branch_name
+                   FROM ledger_records r
+                   LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                   WHERE r.ledgerId = ?`;
+        }
         const params: any[] = [input.ledgerId];
+        // deleted_at 字段存在时才加过滤条件
+        if (hasOpinionColumns) {
+          query += ` AND (r.deleted_at IS NULL)`;
+        }
         if (input.categoryId !== undefined) {
           query += ` AND r.categoryId = ?`;
           params.push(input.categoryId);
@@ -8548,8 +8604,12 @@ export const appRouter = router({
         query += ` ORDER BY r.createdAt DESC LIMIT ? OFFSET ?`;
         params.push(input.pageSize, offset);
         const [rows] = await dbConn.execute(query, params) as any;
-        let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ? AND r.deleted_at IS NULL`;
+
+        let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ?`;
         const countParams: any[] = [input.ledgerId];
+        if (hasOpinionColumns) {
+          countQuery += ` AND (r.deleted_at IS NULL)`;
+        }
         if (input.categoryId !== undefined) {
           countQuery += ` AND r.categoryId = ?`;
           countParams.push(input.categoryId);
@@ -8588,13 +8648,34 @@ export const appRouter = router({
         const req = (ctx as any).req;
         const guestIp = req?.ip || req?.headers?.['x-forwarded-for'] || null;
         const today = new Date().toISOString().split('T')[0];
-        // 直接插入 ledger_records，owner_id=0 表示游客
-        await dbConn.execute(
-          `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_wechat, guest_ip, is_read)
-           VALUES (?, 'expense', '0.00', ?, ?, ?, 0, ?, ?, ?, ?, 0)`,
-          [input.ledgerId, input.categoryId || null, input.content, today,
-           input.rating || null, input.guestName || null, input.guestWechat || null, guestIp]
-        );
+        // 检测意见本字段是否存在
+        let hasOpinionColumns = true;
+        try {
+          const [colRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ledger_records' AND COLUMN_NAME = 'rating'`
+          ) as any;
+          hasOpinionColumns = (colRows as any[])[0].cnt > 0;
+        } catch (e) {
+          hasOpinionColumns = false;
+        }
+        if (hasOpinionColumns) {
+          // 字段存在，写入完整信息
+          await dbConn.execute(
+            `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_wechat, guest_ip, is_read)
+             VALUES (?, 'expense', '0.00', ?, ?, ?, 0, ?, ?, ?, ?, 0)`,
+            [input.ledgerId, input.categoryId || null, input.content, today,
+             input.rating || null, input.guestName || null, input.guestWechat || null, guestIp]
+          );
+        } else {
+          // 字段不存在，只写入基本字段（内容放在 description 中）
+          const descWithMeta = input.guestName ? `【${input.guestName}】${input.content}` : input.content;
+          await dbConn.execute(
+            `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy)
+             VALUES (?, 'expense', '0.00', ?, ?, ?, 0)`,
+            [input.ledgerId, input.categoryId || null, descWithMeta, today]
+          );
+        }
         return { success: true };
       }),
 
