@@ -177,6 +177,7 @@ export default function OpinionBookDetail() {
   ).map((c: any) => ({ id: c.id, name: c.name }));
 
   // ★ 核心改动：复用通用账本的 getTransactions 接口，与通用账本一样秒出
+  // 注意：不传 categoryId 给后端，因为分店筛选需要包含该分店下所有桌号的记录，改用前端按 branch_name 筛选
   const {
     data: transactionsData,
     isLoading,
@@ -184,8 +185,7 @@ export default function OpinionBookDetail() {
   } = trpc.ledger.getTransactions.useQuery(
     {
       ledgerId,
-      categoryId: selectedBranchId !== null ? selectedBranchId : undefined,
-      limit: 200,
+      limit: 500,
     },
     { enabled: ledgerId > 0 }
   );
@@ -217,15 +217,31 @@ export default function OpinionBookDetail() {
     return { entries: allEntries, total: allEntries.length };
   }, [transactionsData]);
 
+  // 分店过滤（前端过滤）
+  // branch_name 格式是 "分店名-桌号" 或 "分店名"，用 startsWith 匹配
+  const selectedBranchName = selectedBranchId !== null
+    ? branches.find((b: any) => b.id === selectedBranchId)?.name
+    : null;
+
+  const branchFilteredEntries = selectedBranchName
+    ? entries.filter((e: any) => {
+        if (!e.branch_name) return false;
+        // branch_name 可能是 "分店名-桌号" 或直接是 "分店名"
+        return e.branch_name === selectedBranchName ||
+               e.branch_name.startsWith(selectedBranchName + '-') ||
+               e.branch_name.startsWith(selectedBranchName + '·');
+      })
+    : entries;
+
   // 关键词过滤（前端过滤）
   const filteredEntries = searchKeyword
-    ? entries.filter(
+    ? branchFilteredEntries.filter(
         (e: any) =>
           e.content?.includes(searchKeyword) ||
           e.guest_name?.includes(searchKeyword) ||
           e.branch_name?.includes(searchKeyword)
       )
-    : entries;
+    : branchFilteredEntries;
 
   const selectedBranch = branches.find((b: any) => b.id === selectedBranchId);
 
