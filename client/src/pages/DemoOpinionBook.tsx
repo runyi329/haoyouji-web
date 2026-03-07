@@ -159,11 +159,23 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
   onSelect: (id: number | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
   const selected = branches.find(b => b.id === selectedBranchId);
+
+  const handleOpen = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    }
+    setOpen(v => !v);
+  };
+
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={btnRef}
+        onClick={handleOpen}
         className="flex items-center justify-center gap-1 px-3 h-7 rounded-full text-xs font-medium whitespace-nowrap"
         style={{ backgroundColor: "rgba(255,255,255,0.15)", color: "#FFFFFF", minWidth: "90px" }}
       >
@@ -171,21 +183,27 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
         <ChevronDown className="w-3 h-3 flex-shrink-0" />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 rounded-xl shadow-xl overflow-hidden" style={{ backgroundColor: "#FFFFFF", zIndex: 9999, minWidth: "140px" }}>
-          <button
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
-            style={{ color: selectedBranchId === null ? "#D32F2F" : "#333" }}
-            onClick={() => { onSelect(null); setOpen(false); }}
-          >全部分店</button>
-          {branches.map(b => (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpen(false)} />
+          <div
+            className="fixed rounded-xl shadow-xl overflow-hidden"
+            style={{ backgroundColor: "#FFFFFF", zIndex: 9999, minWidth: "140px", top: dropPos.top, right: dropPos.right }}
+          >
             <button
-              key={b.id}
               className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
-              style={{ color: selectedBranchId === b.id ? "#D32F2F" : "#333" }}
-              onClick={() => { onSelect(b.id); setOpen(false); }}
-            >{b.name}</button>
-          ))}
-        </div>
+              style={{ color: selectedBranchId === null ? "#D32F2F" : "#333" }}
+              onClick={() => { onSelect(null); setOpen(false); }}
+            >全部分店</button>
+            {branches.map(b => (
+              <button
+                key={b.id}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 whitespace-nowrap"
+                style={{ color: selectedBranchId === b.id ? "#D32F2F" : "#333" }}
+                onClick={() => { onSelect(b.id); setOpen(false); }}
+              >{b.name}</button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
