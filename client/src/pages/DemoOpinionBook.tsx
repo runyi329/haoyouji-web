@@ -195,9 +195,9 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
 type Role = "guest" | "manager" | "owner";
 
 const ROLE_CONFIG = {
-  guest: { label: "顾客", icon: User, desc: "填写意见，享95折优惠" },
-  manager: { label: "店长", icon: Briefcase, desc: "查看意见，隐私保护" },
-  owner: { label: "老板", icon: Crown, desc: "完整数据，全局统计" },
+  guest: { label: "顾客视角", icon: User, desc: "填写意见，享95折优惠" },
+  manager: { label: "店长视角", icon: Briefcase, desc: "查看意见，隐私保护" },
+  owner: { label: "老板视角", icon: Crown, desc: "完整数据，全局统计" },
 };
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
@@ -322,24 +322,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
       </div>
 
       {/* 分店选择 */}
-      {branches.length > 0 && (
-        <div className="bg-white px-4 py-3 border-b border-gray-100">
-          <p className="text-xs text-gray-500 mb-2">选择您所在的门店（可选）</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedBranchId(undefined)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedBranchId === undefined ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200"}`}
-            >不指定门店</button>
-            {branches.map(b => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBranchId(b.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedBranchId === b.id ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200"}`}
-              >{b.name}</button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 顾客视角不显示门店选择（顾客扫码时已自动识别门店） */}
 
       <div className="max-w-lg mx-auto px-4 pt-4 pb-10 space-y-3">
         {/* 意见填写区 */}
