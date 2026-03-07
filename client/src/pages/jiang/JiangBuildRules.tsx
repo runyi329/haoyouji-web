@@ -494,6 +494,7 @@ const CHAPTERS: Chapter[] = [
           "保存后立即生效：商家首页顶部的名称和 Logo 展示。",
           "保存后立即生效：微信/浏览器分享卡片显示商家自己的信息。",
           "服务端 MERCHANT_PATH_MAP 必须包含该商家路径，否则 OG 标签不会注入。",
+          "未配置时，微信分享将显示脉动默认信息（脉动网 Logo 和标题），影响商家品牌形象。",
         ],
       },
     ],
@@ -549,17 +550,6 @@ const CHAPTERS: Chapter[] = [
       },
       {
         id: "11.5",
-        title: "商家设置模块规范（强制）",
-        type: "list",
-        content: [
-          "必填配置项：shareTitle（商家名称）、shareLogo（Logo，建议正方形）、shareCoverImage（封面图，1200×630px）、shareDescription（描述语，50字以内）。",
-          "未配置时，微信分享将显示脉动默认信息（脉动网 Logo 和标题），影响商家品牌形象。",
-          "服务端 MERCHANT_PATH_MAP 必须添加商家路径映射，才能启用服务端 OG meta 标签注入。",
-          "图片上传规范：自动压缩至最大宽度1200px，转WebP格式，存储到腾讯云COS。",
-        ],
-      },
-      {
-        id: "11.6",
         title: "商家子页面目录结构规范",
         type: "list",
         content: [
@@ -570,7 +560,7 @@ const CHAPTERS: Chapter[] = [
         ],
       },
       {
-        id: "11.7",
+        id: "11.6",
         title: "路由与访问控制规范",
         type: "list",
         content: [
