@@ -8454,12 +8454,8 @@ export const appRouter = router({
         }
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 先自动修正：把该账本下 type='expense' 或 type='income' 的分类改为 type='branch'（兼容旧数据）
-        await dbConn.execute(
-          `UPDATE ledger_categories SET type='branch' WHERE ledgerId=? AND type IN ('expense','income')`,
-          [input.ledgerId]
-        ).catch(() => {}); // 静默失败
-        // 查 ledger_categories 中 type='branch' 的记录，并统计每个分店的意见数
+        // 查 ledger_categories 中 type='branch' 的分店记录
+        // 注：服务器启动时 ensureOpinionBookColumns 已将旧数据的 expense/income 改为 branch
         const [rows] = await dbConn.execute(
           `SELECT c.id, c.name, c.sort_order,
                   COUNT(r.id) as entry_count

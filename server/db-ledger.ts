@@ -197,14 +197,35 @@ async function ensureOpinionBookColumns() {
   const db = await getLedgerDb();
   if (!db) return;
 
-  // 1. ledger_categories.type 枚举新增 'branch'（分店）
+  // 1. 将 ledger_categories.type 从 ENUM 改为 VARCHAR(20)，彻底消除枚举约束
+  //    这样 'branch' 类型就不会因枚举限制而写入失败
   try {
-    await db.execute(sql`ALTER TABLE ledger_categories MODIFY COLUMN type ENUM('income','expense','branch') NOT NULL`);
-    console.log('[ensureOpinionBookColumns] ledger_categories.type 枚举已更新');
+    await db.execute(sql`ALTER TABLE ledger_categories MODIFY COLUMN type VARCHAR(20) NOT NULL DEFAULT 'expense'`);
+    console.log('[ensureOpinionBookColumns] ledger_categories.type 已改为 VARCHAR(20)');
   } catch (e: any) {
-    if (!e.message?.includes('Duplicate') && !e.message?.includes('already exists')) {
-      console.error('[ensureOpinionBookColumns] type enum error:', e.message);
+    // 如果已经是 VARCHAR 就不会报错，其他错误才记录
+    if (!e.message?.includes('already exists') && !e.message?.includes('Nothing to change')) {
+      console.error('[ensureOpinionBookColumns] type varchar error:', e.message);
     }
+  }
+
+  // 2. 修正旧数据：把 opinion_book 账本下所有 type='expense'/'income' 的分类改为 type='branch'
+  //    这些是用旧的 addCategory 接口创建的，需要一次性修正
+  try {
+    const conn = await getDbConnection();
+    if (conn) {
+      const [result] = await conn.execute(
+        `UPDATE ledger_categories lc
+         INNER JOIN ledgers l ON l.id = lc.ledgerId
+         SET lc.type = 'branch'
+         WHERE l.type = 'opinion_book'
+           AND lc.type IN ('expense', 'income')
+           AND (lc.isDefault = 0 OR lc.isDefault IS NULL)`
+      ) as any;
+      console.log(`[ensureOpinionBookColumns] 旧分店数据修正完成，共修正 ${result?.affectedRows || 0} 条`);
+    }
+  } catch (e: any) {
+    console.error('[ensureOpinionBookColumns] 分店数据修正失败:', e.message);
   }
 
   // 2. ledger_records 新增 rating 字段（评分 1-5）
@@ -889,7 +910,7 @@ export async function getLedgerCategories(
 export async function addLedgerCategory(data: {
   ledgerId: number;
   name: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "branch";
   parentId?: number;
   icon?: string;
   color?: string;
