@@ -8416,18 +8416,37 @@ export const appRouter = router({
         const joinCondition = hasDeletedAt
           ? `r.ledgerId = l.id AND r.deleted_at IS NULL`
           : `r.ledgerId = l.id`;
-        // 从 ledgers 表查 opinion_book 类型，同时统计 ledger_records 中的意见数量
-        const [rows] = await dbConn.execute(
-          `SELECT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
-                  COUNT(r.id) as entry_count
-           FROM ledgers l
-           LEFT JOIN ledger_records r ON ${joinCondition}
-           WHERE l.type = 'opinion_book' AND l.ownerId = ? AND l.isArchived = 0
-           GROUP BY l.id
-           ORDER BY l.created_at DESC`,
-          [ctx.user.id]
-        ) as any;
-        return rows as any[];
+        // 从 ledgers 表查 opinion_book 类型
+        // super_admin 看全部，admin 看自己创建的 + 自己是成员的
+        let rows: any[];
+        if (ctx.user.role === 'super_admin') {
+          const [r] = await dbConn.execute(
+            `SELECT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
+                    COUNT(r.id) as entry_count
+             FROM ledgers l
+             LEFT JOIN ledger_records r ON ${joinCondition}
+             WHERE l.type = 'opinion_book' AND l.isArchived = 0
+             GROUP BY l.id
+             ORDER BY l.created_at DESC`
+          ) as any;
+          rows = r as any[];
+        } else {
+          // admin：自己是 owner 或自己是成员
+          const [r] = await dbConn.execute(
+            `SELECT DISTINCT l.id, l.id as ledger_id, l.name, l.description, l.created_at,
+                    COUNT(r.id) as entry_count
+             FROM ledgers l
+             LEFT JOIN ledger_records r ON ${joinCondition}
+             LEFT JOIN ledger_members lm ON lm.ledgerId = l.id AND lm.userId = ?
+             WHERE l.type = 'opinion_book' AND l.isArchived = 0
+               AND (l.ownerId = ? OR lm.userId IS NOT NULL)
+             GROUP BY l.id
+             ORDER BY l.created_at DESC`,
+            [ctx.user.id, ctx.user.id]
+          ) as any;
+          rows = r as any[];
+        }
+        return rows;
       }),
 
     // ═══ 分店管理（全部用原始SQL，不依赖type字段值，不依赖ORM） ═══
