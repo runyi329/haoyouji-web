@@ -153,6 +153,18 @@ export default function OpinionBookDetail() {
     return all;
   }, [transactionsData]);
 
+  // ─── 六大维度定义 ────────────────────────────────────────────────────────────
+  const DIMENSIONS = [
+    { id: "food",       label: "菜品质量", keyword: "菜品质量" },
+    { id: "service",    label: "服务表现", keyword: "服务表现" },
+    { id: "env",        label: "环境氛围", keyword: "环境氛围" },
+    { id: "hygiene",    label: "卫生安全", keyword: "卫生安全" },
+    { id: "efficiency", label: "运营效率", keyword: "运营效率" },
+    { id: "value",      label: "价值感",   keyword: "价值感" },
+  ];
+  // 饼图颜色：同一红色系深浅渐变
+  const DIM_COLORS = ["#FFFFFF", "rgba(255,255,255,0.75)", "rgba(255,255,255,0.55)", "rgba(255,255,255,0.38)", "rgba(255,255,255,0.22)", "rgba(255,255,255,0.12)"];
+
   // ─── 数据概览统计（基于全量 entries）─────────────────────────────────────────
   const stats = useMemo(() => {
     const total = entries.length;
@@ -162,26 +174,23 @@ export default function OpinionBookDetail() {
 
     let todayCount = 0;
     let weekCount = 0;
-    const branchCountMap: Record<string, number> = {};
+
+    // 六大维度计数
+    const dimCountMap: Record<string, number> = {};
+    DIMENSIONS.forEach(d => { dimCountMap[d.id] = 0; });
 
     entries.forEach((e: any) => {
       const t = new Date(e.created_at).getTime();
       if (t >= todayStart) todayCount++;
       if (t >= weekStart) weekCount++;
-      // 分店统计：取 branch_name 的第一段（分店名）
-      if (e.branch_name) {
-        const branchName = e.branch_name.split('-')[0];
-        branchCountMap[branchName] = (branchCountMap[branchName] || 0) + 1;
-      } else {
-        branchCountMap['未分类'] = (branchCountMap['未分类'] || 0) + 1;
-      }
+      // 解析内容中的【维度】标签
+      const content = e.content || "";
+      DIMENSIONS.forEach(dim => {
+        if (content.includes(`【${dim.keyword}】`)) {
+          dimCountMap[dim.id]++;
+        }
+      });
     });
-
-    // 分店排行（最多显示4个）
-    const branchRanking = Object.entries(branchCountMap)
-      .filter(([name]) => name !== '未分类')
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4);
 
     // 最近7天每天数量
     const last7Days: { label: string; count: number }[] = [];
@@ -196,7 +205,17 @@ export default function OpinionBookDetail() {
       last7Days.push({ label: `${d.getMonth() + 1}/${d.getDate()}`, count });
     }
 
-    return { total, todayCount, weekCount, branchRanking, last7Days };
+    // 维度饼图数据（只保留有数据的维度）
+    const dimTotal = Object.values(dimCountMap).reduce((a, b) => a + b, 0);
+    const dimPieData = DIMENSIONS.map((dim, i) => ({
+      id: dim.id,
+      label: dim.label,
+      count: dimCountMap[dim.id],
+      pct: dimTotal > 0 ? Math.round((dimCountMap[dim.id] / dimTotal) * 100) : 0,
+      color: DIM_COLORS[i],
+    })).filter(d => d.count > 0).sort((a, b) => b.count - a.count);
+
+    return { total, todayCount, weekCount, last7Days, dimPieData, dimTotal };
   }, [entries]);
 
   // ─── 分店筛选 ──────────────────────────────────────────────────────────────
@@ -223,7 +242,6 @@ export default function OpinionBookDetail() {
     : branchFilteredEntries;
 
   const selectedBranch = branches.find((b: any) => b.id === selectedBranchId);
-  const maxBranchCount = stats.branchRanking.length > 0 ? stats.branchRanking[0][1] : 1;
   const maxDay7Count = Math.max(...stats.last7Days.map(d => d.count), 1);
 
   return (
@@ -293,31 +311,51 @@ export default function OpinionBookDetail() {
             </div>
           </div>
 
-          {/* 第二行：分店排行 + 7天趋势 */}
+          {/* 第二行：维度饼图 + 7天趋势 */}
           <div className="flex-1 grid grid-cols-2 gap-2 overflow-hidden">
 
-            {/* 左：分店意见排行 */}
-            <div className="rounded-xl px-3 py-2 flex flex-col gap-1 overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-              <div className="text-xs font-medium flex-shrink-0" style={{ color: "rgba(255,255,255,0.85)" }}>分店排行</div>
-              {stats.branchRanking.length === 0 ? (
-                <div className="text-xs flex-1 flex items-center" style={{ color: "rgba(255,255,255,0.5)" }}>暂无分店数据</div>
+            {/* 左：六大维度占比饼图 */}
+            <div className="rounded-xl px-2 py-2 flex flex-col overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+              <div className="text-xs font-medium flex-shrink-0 mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>问题维度</div>
+              {stats.dimPieData.length === 0 ? (
+                <div className="text-xs flex-1 flex items-center" style={{ color: "rgba(255,255,255,0.5)" }}>暂无维度数据</div>
               ) : (
-                <div className="flex flex-col gap-1 flex-1 justify-around">
-                  {stats.branchRanking.map(([name, count]) => (
-                    <div key={name} className="flex items-center gap-1.5">
-                      <span className="text-xs truncate flex-shrink-0" style={{ color: "rgba(255,255,255,0.85)", maxWidth: "52px" }}>{name}</span>
-                      <div className="flex-1 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.15)", height: "5px" }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.round((count / maxBranchCount) * 100)}%`,
-                            backgroundColor: "rgba(255,255,255,0.85)",
-                          }}
-                        />
+                <div className="flex-1 flex items-center gap-1.5 overflow-hidden">
+                  {/* SVG 饼图 */}
+                  <svg viewBox="0 0 40 40" className="flex-shrink-0" style={{ width: "44px", height: "44px" }}>
+                    {(() => {
+                      const total = stats.dimPieData.reduce((s, d) => s + d.count, 0);
+                      let startAngle = -Math.PI / 2;
+                      return stats.dimPieData.map((seg, i) => {
+                        const angle = (seg.count / total) * 2 * Math.PI;
+                        const endAngle = startAngle + angle;
+                        const r = 18;
+                        const cx = 20, cy = 20;
+                        const x1 = cx + r * Math.cos(startAngle);
+                        const y1 = cy + r * Math.sin(startAngle);
+                        const x2 = cx + r * Math.cos(endAngle);
+                        const y2 = cy + r * Math.sin(endAngle);
+                        const largeArc = angle > Math.PI ? 1 : 0;
+                        const d = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`;
+                        const el = <path key={seg.id} d={d} fill={seg.color} stroke="rgba(211,47,47,0.6)" strokeWidth="0.5" />;
+                        startAngle = endAngle;
+                        return el;
+                      });
+                    })()}
+                    {/* 中心圆 */}
+                    <circle cx="20" cy="20" r="9" fill="rgba(211,47,47,0.7)" />
+                    <text x="20" y="22" textAnchor="middle" fontSize="5" fill="rgba(255,255,255,0.9)" fontWeight="bold">{stats.dimTotal}</text>
+                  </svg>
+                  {/* 右侧图例 */}
+                  <div className="flex flex-col gap-0.5 flex-1 overflow-hidden justify-around">
+                    {stats.dimPieData.slice(0, 4).map((seg) => (
+                      <div key={seg.id} className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: seg.color }} />
+                        <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.85)", fontSize: "10px", maxWidth: "38px" }}>{seg.label}</span>
+                        <span className="text-xs font-semibold ml-auto flex-shrink-0" style={{ color: "rgba(255,255,255,0.95)", fontSize: "10px" }}>{seg.pct}%</span>
                       </div>
-                      <span className="text-xs font-semibold flex-shrink-0" style={{ color: "rgba(255,255,255,0.9)", minWidth: "16px", textAlign: "right" }}>{count}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
