@@ -1,5 +1,6 @@
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { clearToken } from "@/lib/tokenStorage";
 import { TRPCClientError } from "@trpc/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
@@ -42,13 +43,9 @@ export function useAuth(options?: UseAuthOptions) {
       }
       throw error;
     } finally {
-      // 清除 localStorage 中的 token
-      try {
-        localStorage.removeItem('auth-token');
-        console.log('[Logout] Token removed from localStorage');
-      } catch (e) {
-        console.warn('[Logout] Failed to remove token from localStorage:', e);
-      }
+      // 清除三层存储中的 token（localStorage + Cookie + IndexedDB）
+      await clearToken();
+      console.log('[Logout] Token cleared from all storage layers');
       // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留给下一个登录用户
       queryClient.clear();
     }

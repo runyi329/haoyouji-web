@@ -8,27 +8,7 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 import "./styles/red-white-dual-engine.css";
-
-// 启动时：如果localStorage中没有auth-token，尝试从Cookie中恢复
-// 解决微信WebView关闭后localStorage被清空的问题
-(function restoreTokenFromCookie() {
-  try {
-    const hasToken = localStorage.getItem('auth-token');
-    if (!hasToken) {
-      // 从Cookie中读取app_session_id
-      const cookieMatch = document.cookie.match(/(?:^|;\s*)app_session_id=([^;]+)/);
-      if (cookieMatch && cookieMatch[1]) {
-        const tokenFromCookie = decodeURIComponent(cookieMatch[1]);
-        if (tokenFromCookie && tokenFromCookie.length > 10) {
-          localStorage.setItem('auth-token', tokenFromCookie);
-          console.log('[Auth] 从Cookie恢复auth-token到localStorage，无需重新登录');
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[Auth] 恢复token失败:', e);
-  }
-})();
+import { restoreToken } from "@/lib/tokenStorage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,7 +16,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnMount: true,
       refetchOnReconnect: false,
-      staleTime: 0, // 禁用缓存，立即刷新
+      staleTime: 0,
     },
   },
 });
@@ -46,20 +26,14 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (typeof window === "undefined") return;
 
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
   if (!isUnauthorized) return;
 
-  // 在预览模式下不跳转到登录页，允许用户查看UI
-  // 预览模式的特征：直接访问/contacts或其他页面，而不是从登录页跳转
   const isPreviewMode = window.location.pathname !== '/login' && window.location.pathname !== '/';
-  
   if (isPreviewMode) {
     console.log('[Preview Mode] 忽略未授权错误，允许预览模式继续');
     return;
   }
 
-  // 使用 history.pushState + 手动触发 popstate 来实现SPA导航
-  // 避免 window.location.href 在 Safari PWA 中创建新视图层
   const loginUrl = getLoginUrl();
   if (window.location.pathname !== loginUrl) {
     window.history.pushState(null, '', loginUrl);
@@ -89,57 +63,69 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
-        // 从 localStorage 读取最新登录的 token
+        // 从 localStorage 读取最新登录的 token（restoreToken 已在启动时写入）
         const token = localStorage.getItem('auth-token');
         const headers = new Headers(init?.headers);
-        
+
         if (token) {
-          // 添加 Authorization header
           headers.set('Authorization', `Bearer ${token}`);
-          
-          // 强制用 localStorage 中的 token 覆盖 Cookie
-          // 解决微信浏览器中 Cookie 和 localStorage token 不一致的问题
-          // （微信多 webview 可能导致旧用户的 Cookie 残留）
+          // 顺便同步到 Cookie，保持三层一致
           try {
             document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
           } catch (e) {}
         }
-        
+
         return globalThis.fetch(input, {
           ...(init ?? {}),
           headers,
           credentials: "include",
-          cache: "no-store",  // 禁用 HTTP 缓存
+          cache: "no-store",
         });
       },
     }),
   ],
 });
 
-createRoot(document.getElementById("root")!).render(
-  <QueryClientProvider client={queryClient}>
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <App />
-    </trpc.Provider>
-  </QueryClientProvider>
-);
+/**
+ * 启动流程：
+ * 1. 先执行三层 token 恢复（localStorage → Cookie → IndexedDB）
+ * 2. 恢复完成后再挂载 React，确保 tRPC 第一个请求就能携带正确的 token
+ *
+ * 解决微信安卓 WebView 上滑关闭后 localStorage 被清空的问题
+ */
+async function bootstrap() {
+  // 尝试从三层存储中恢复 token
+  const recovered = await restoreToken();
+  if (recovered) {
+    console.log('[Auth] Token 恢复成功，无需重新登录');
+  } else {
+    console.log('[Auth] 未找到有效 token，需要登录');
+  }
 
-// 注册 Service Worker支持 PWA 功能
+  createRoot(document.getElementById("root")!).render(
+    <QueryClientProvider client={queryClient}>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <App />
+      </trpc.Provider>
+    </QueryClientProvider>
+  );
+}
+
+bootstrap();
+
+// 注册 Service Worker 支持 PWA 功能
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
       .then((registration) => {
         console.log('[PWA] Service Worker 注册成功:', registration.scope);
-        
-        // 监听 Service Worker 更新
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (newWorker) {
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 console.log('[PWA] 新版本可用，刷新页面以更新');
-                // 可以在这里显示一个提示，让用户选择是否刷新
               }
             });
           }

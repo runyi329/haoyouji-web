@@ -4,6 +4,7 @@ import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { saveToken } from "@/lib/tokenStorage";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -41,7 +42,9 @@ export default function Login() {
   // 切换用户时清空所有缓存，防止旧用户数据残留
   const clearAllCacheAndNavigate = (token?: string) => {
     if (token) {
-      try { localStorage.setItem('auth-token', token); } catch (e) {}
+      // 同步写入三层存储（localStorage + Cookie + IndexedDB）
+      // 解决微信安卓 WebView 上滑关闭后 localStorage 被清空的问题
+      saveToken(token);
     }
     // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留
     queryClient.clear();

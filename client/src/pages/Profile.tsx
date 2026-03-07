@@ -281,10 +281,10 @@ export default function Profile() {
 
   // 退出登录mutation
   const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      localStorage.removeItem('auth-token');
+    onSuccess: async () => {
+      // 清除三层存储（localStorage + Cookie + IndexedDB）
+      const { clearToken } = await import('@/lib/tokenStorage');
+      await clearToken();
       navigate("/login");
     },
   });
