@@ -204,7 +204,9 @@ export default function FeedbackPage() {
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <p className="text-white/70 text-xs mb-0.5 truncate">
-              {info.book.name}{info.branch ? ` · ${info.branch.name}` : ""}
+              {info.book.name}
+              {info.branch ? ` · ${info.branch.name}` : ""}
+              {(info as any).tableName ? ` · ${(info as any).tableName}` : ""}
             </p>
             <h1 className="text-white text-lg font-bold leading-tight">欢迎提意见</h1>
             <p className="text-white/70 text-xs mt-0.5">提交后享 <span className="text-yellow-300 font-semibold">95折</span> 优惠</p>
