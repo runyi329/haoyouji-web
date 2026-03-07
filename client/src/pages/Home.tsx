@@ -257,10 +257,10 @@ export default function Home() {
     { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", path: "/parent/profile/invite" },
   ];
 
-  const handleLogout = () => {
-    document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    localStorage.removeItem('auth-token');
+  const handleLogout = async () => {
+    // 清除三层存储（localStorage + Cookie + IndexedDB）
+    const { clearToken } = await import('@/lib/tokenStorage');
+    await clearToken();
     navigate("/login");
   };
 
