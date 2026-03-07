@@ -8552,6 +8552,7 @@ export const appRouter = router({
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 允许 super_admin、admin 或账本 owner 查看
+        let isOwner = ctx.user.role === 'super_admin';
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           const [ownerRows] = await dbConn.execute(
             `SELECT id FROM ledgers WHERE id=? AND ownerId=? AND isArchived=0`,
@@ -8560,6 +8561,22 @@ export const appRouter = router({
           if (!(ownerRows as any[]).length) {
             throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
           }
+          isOwner = true; // 通过了 owner 检查，说明是账本 owner
+        } else if (ctx.user.role === 'admin') {
+          // admin 不是 owner，需额外检查是否是账本成员
+          const [memberRows] = await dbConn.execute(
+            `SELECT id FROM ledger_members WHERE ledgerId=? AND userId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          if (!(memberRows as any[]).length) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看此意见本' });
+          }
+          // 检查是否是 owner
+          const [ownerCheck] = await dbConn.execute(
+            `SELECT id FROM ledgers WHERE id=? AND ownerId=?`,
+            [input.ledgerId, ctx.user.id]
+          ) as any;
+          isOwner = (ownerCheck as any[]).length > 0;
         }
         const offset = (input.page - 1) * input.pageSize;
 
@@ -8577,7 +8594,11 @@ export const appRouter = router({
 
         let query: string;
         if (hasOpinionColumns) {
-          query = `SELECT r.id, r.description as content, r.rating, r.guest_name, r.guest_wechat, r.is_read,
+          // 只有 owner 才能看到 guest_name 和 guest_wechat
+          const guestFields = isOwner
+            ? `r.guest_name, r.guest_wechat`
+            : `NULL as guest_name, NULL as guest_wechat`;
+          query = `SELECT r.id, r.description as content, r.rating, ${guestFields}, r.is_read,
                           r.createdAt as created_at, r.categoryId as category_id,
                           c.name as branch_name
                    FROM ledger_records r
