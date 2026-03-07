@@ -6932,6 +6932,21 @@ export const appRouter = router({
         return await dbLedger.getLedgerCategories(input.ledgerId, ctx.user.id, input.type, input.parentId);
       }),
 
+    // 公开获取演示账本分类（无需登录）
+    getPublicCategories: publicProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return [];
+        const [rows] = await dbConn.execute(
+          `SELECT id, name, parentId, isDefault FROM ledger_categories
+           WHERE ledgerId=? AND (deleted_at IS NULL OR deleted_at=0)
+           ORDER BY sortOrder ASC, id ASC`,
+          [input.ledgerId]
+        ) as any;
+        return rows as any[];
+      }),
+
     // 添加账本分类
     addCategory: protectedProcedure
       .input(z.object({
@@ -8593,9 +8608,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 验证账本存在且是 opinion_book 类型
+        // 验证账本存在且是 opinion_book 或 opinion_book_demo 类型
         const [ledgerRows] = await dbConn.execute(
-          `SELECT id FROM ledgers WHERE id=? AND type='opinion_book' AND isArchived=0`,
+          `SELECT id FROM ledgers WHERE id=? AND type IN ('opinion_book','opinion_book_demo') AND isArchived=0`,
           [input.ledgerId]
         ) as any;
         if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的意见本' });
@@ -8630,7 +8645,7 @@ export const appRouter = router({
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [ledgerRows] = await dbConn.execute(
-          `SELECT id, name, description FROM ledgers WHERE id=? AND type='opinion_book' AND isArchived=0`,
+          `SELECT id, name, description, icon FROM ledgers WHERE id=? AND type IN ('opinion_book','opinion_book_demo') AND isArchived=0`,
           [input.ledgerId]
         ) as any;
         if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '意见本不存在' });
@@ -8722,6 +8737,195 @@ export const appRouter = router({
             return a.name.localeCompare(b.name);
           });
         return { tables: allTables, created: created.length };
+      }),
+
+    // 初始化演示账本（仅超级管理员，幂等操作）
+    initDemo: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+
+        const DEMO_NAME = '麻六记·北京区域意见簿';
+        const DEMO_DESC = '麻六记北京区域顾客意见收集平台（演示账本）';
+        const MALUJI_LOGO = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_40f7da5d.png';
+        const ownerId = ctx.user.id;
+
+        // 检查是否已存在
+        const [existRows] = await dbConn.execute(
+          `SELECT id FROM ledgers WHERE name=? AND type='opinion_book_demo' LIMIT 1`,
+          [DEMO_NAME]
+        ) as any;
+
+        let ledgerId: number;
+        if ((existRows as any[]).length > 0) {
+          ledgerId = (existRows as any[])[0].id;
+        } else {
+          // 创建演示账本
+          const [res] = await dbConn.execute(
+            `INSERT INTO ledgers (name, description, type, currency, icon, createdBy, ownerId, isVip, isArchived)
+             VALUES (?, ?, 'opinion_book_demo', 'CNY', ?, ?, ?, 0, 0)`,
+            [DEMO_NAME, DEMO_DESC, MALUJI_LOGO, ownerId, ownerId]
+          ) as any;
+          ledgerId = (res as any).insertId;
+          // 加入成员
+          await dbConn.execute(
+            `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, memberType, nickname, permissionView, permissionAdd, permissionEdit, permissionDelete, canEdit, canDelete, canInvite)
+             VALUES (?, ?, 'owner', 'real', '麻六记管理员', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+            [ledgerId, ownerId]
+          );
+        }
+
+        // 创建10家北京门店
+        const BRANCHES = [
+          '国贸商城店', '银泰中心店', '金融街店', '王府井APM店', '三里屯太古里店',
+          '望京华彩店', '中关村欧美汇店', '西单大悦城店', '朝阳大悦城店', '来广营环宇汇店'
+        ];
+        const branchIds: number[] = [];
+        for (let i = 0; i < BRANCHES.length; i++) {
+          const [existBranch] = await dbConn.execute(
+            `SELECT id FROM ledger_categories WHERE ledgerId=? AND name=? LIMIT 1`,
+            [ledgerId, BRANCHES[i]]
+          ) as any;
+          if ((existBranch as any[]).length > 0) {
+            branchIds.push((existBranch as any[])[0].id);
+          } else {
+            const [r] = await dbConn.execute(
+              `INSERT INTO ledger_categories (ledgerId, name, type, icon, color, isDefault, sortOrder) VALUES (?, ?, 'expense', '🏪', '#E8472A', 0, ?)`,
+              [ledgerId, BRANCHES[i], i + 1]
+            ) as any;
+            branchIds.push((r as any).insertId);
+          }
+        }
+
+        // 检查是否已有足够数据
+        const [countRows] = await dbConn.execute(
+          `SELECT COUNT(*) as cnt FROM ledger_records WHERE ledgerId=?`,
+          [ledgerId]
+        ) as any;
+        const existCount = Number((countRows as any[])[0].cnt);
+        if (existCount >= 300) {
+          return { ledgerId, created: false, message: '演示数据已存在' };
+        }
+
+        // 插入300条模拟点评
+        const POSITIVE = [
+          '菜品口味非常好，麻辣鲜香，层次丰富，下次还会来！',
+          '服务员态度很好，上菜速度快，整体体验很满意。',
+          '环境干净整洁，装修有特色，适合朋友聚餐。',
+          '酸辣粉真的很好吃，汤底浓郁，分量也足。',
+          '性价比很高，味道正宗，是我吃过最好的川菜之一。',
+          '店员很热情，推荐了几道招牌菜，都非常好吃。',
+          '食材新鲜，火候到位，麻辣程度可以自选，很贴心。',
+          '招牌夫妻肺片超级好吃，红油拌得很均匀。',
+          '整体体验超出预期，强烈推荐给喜欢川菜的朋友！',
+          '点了套餐，量很足，两个人吃很划算。',
+          '装修很有川渝风格，拍照很好看。',
+          '辣度可以调节，非常适合不太能吃辣的朋友。',
+          '老板很亲切，会主动询问口味偏好。',
+          '外卖包装也很用心，送到家还是热的。',
+          '位置很好找，停车方便，下次带家人来。',
+        ];
+        const NEGATIVE = [
+          '等位时间有点长，希望能优化一下叫号系统。',
+          '菜品口味偏咸，建议减少盐的用量。',
+          '服务员有点忙，叫了几次才来，希望增加人手。',
+          '空调温度有点低，坐久了有点冷，建议调高一点。',
+          '停车位不够，找了很久才停好车。',
+          '菜品上桌速度有点慢，等了将近20分钟。',
+          '分量稍微少了一点，建议加量或者降价。',
+          '有一道菜的食材不太新鲜，希望加强食材管理。',
+          '结账时排队时间较长，建议增加收银台。',
+          '噪音有点大，用餐体验稍受影响。',
+          '菜单更新不够及时，有几道菜已经下架但还在菜单上。',
+          '餐具有一个有点脏，希望加强清洗质量。',
+          '辣度标注不够准确，点了微辣但实际很辣。',
+          '桌子间距有点小，坐着有点拥挤。',
+          '希望增加一些非辣菜品，方便不能吃辣的顾客。',
+        ];
+        const NEUTRAL = [
+          '整体还不错，就是价格稍微贵了一点。',
+          '口味中规中矩，没有特别惊艳但也不差。',
+          '环境一般，但菜品质量还可以。',
+          '第一次来，还在适应口味，下次再来试试其他菜。',
+          '朋友推荐来的，感觉和预期差不多。',
+          '性价比一般，但胜在位置方便。',
+          '味道还行，就是等位时间有点长。',
+          '菜品种类丰富，但有几道菜口味一般。',
+          '服务态度还不错，但上菜速度可以再快一点。',
+          '整体来说是一次还算满意的用餐体验。',
+        ];
+        const NAMES = ['张先生','李女士','王先生','赵女士','陈先生','刘女士','杨先生','黄女士','周先生','吴女士','徐先生','孙女士','马先生','朱女士','胡先生','郭女士','何先生','高女士','林先生','郑女士','匿名顾客','路过的食客','常客','老顾客'];
+        
+        const now = Date.now();
+        for (let i = 0; i < branchIds.length; i++) {
+          for (let j = 0; j < 30; j++) {
+            const rand = Math.random();
+            let rating: number, content: string;
+            if (rand < 0.45) { rating = 5; content = POSITIVE[Math.floor(Math.random() * POSITIVE.length)]; }
+            else if (rand < 0.70) { rating = 4; content = POSITIVE[Math.floor(Math.random() * POSITIVE.length)]; }
+            else if (rand < 0.85) { rating = 3; content = NEUTRAL[Math.floor(Math.random() * NEUTRAL.length)]; }
+            else if (rand < 0.95) { rating = 2; content = NEGATIVE[Math.floor(Math.random() * NEGATIVE.length)]; }
+            else { rating = 1; content = NEGATIVE[Math.floor(Math.random() * NEGATIVE.length)]; }
+            const guestName = NAMES[Math.floor(Math.random() * NAMES.length)];
+            const daysAgo = Math.floor(Math.random() * 90);
+            const recordDate = new Date(now - daysAgo * 86400000).toISOString().split('T')[0];
+            await dbConn.execute(
+              `INSERT INTO ledger_records (ledgerId, type, amount, categoryId, description, recordDate, createdBy, rating, guest_name, guest_wechat, guest_ip, is_read)
+               VALUES (?, 'expense', '0.00', ?, ?, ?, 0, ?, ?, NULL, NULL, 0)`,
+              [ledgerId, branchIds[i], content, recordDate, rating, guestName]
+            );
+          }
+        }
+
+        return { ledgerId, created: true, message: '演示账本初始化成功，已创建300条模拟点评' };
+      }),
+
+    // 演示账本公开获取意见列表（无需登录）
+    getDemoEntries: publicProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        categoryId: z.number().optional(),
+        page: z.number().default(1),
+        pageSize: z.number().default(20),
+        isOwner: z.boolean().default(false),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 只允许访问 opinion_book_demo 类型的账本
+        const [ledgerRows] = await dbConn.execute(
+          `SELECT id FROM ledgers WHERE id=? AND type='opinion_book_demo' AND isArchived=0`,
+          [input.ledgerId]
+        ) as any;
+        if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '演示账本不存在' });
+        const offset = (input.page - 1) * input.pageSize;
+        const guestFields = input.isOwner
+          ? `r.guest_name, r.guest_wechat`
+          : `NULL as guest_name, NULL as guest_wechat`;
+        let query = `SELECT r.id, r.description as content, r.rating, ${guestFields}, r.is_read,
+                        r.createdAt as created_at, r.categoryId as category_id,
+                        c.name as branch_name
+                 FROM ledger_records r
+                 LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                 WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)`;
+        const params: any[] = [input.ledgerId];
+        if (input.categoryId !== undefined) {
+          query += ` AND r.categoryId = ?`;
+          params.push(input.categoryId);
+        }
+        query += ` ORDER BY r.createdAt DESC LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`;
+        const [rows] = await dbConn.execute(query, params) as any;
+        let countQuery = `SELECT COUNT(*) as total FROM ledger_records r WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)`;
+        const countParams: any[] = [input.ledgerId];
+        if (input.categoryId !== undefined) {
+          countQuery += ` AND r.categoryId = ?`;
+          countParams.push(input.categoryId);
+        }
+        const [countRows] = await dbConn.execute(countQuery, countParams) as any;
+        return { entries: rows as any[], total: (countRows as any[])[0].total };
       }),
 
     // 获取分店下的桌号列表（用于二维码管理页展示）

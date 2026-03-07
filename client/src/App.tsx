@@ -209,6 +209,8 @@ const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 const OpinionBookDetail = lazy(() => import("./pages/OpinionBookDetail"));
 // AB 意见本 - 二维码管理
 const QrCodeManager = lazy(() => import("./pages/QrCodeManager"));
+// AB 意见本 - 多角色演示页（无需登录）
+const DemoOpinionBook = lazy(() => import("./pages/DemoOpinionBook"));
 // 私人定制展示页
 const CustomShowcase = lazy(() => import("./pages/CustomShowcase"));
 const CustomShowcaseShare = lazy(() => import("./pages/CustomShowcase").then(m => ({ default: m.CustomShowcaseShare })));
@@ -425,6 +427,8 @@ function Router() {
         <Route path="/feedback/:ledgerId" component={FeedbackPage} />
         {/* AB 意见本 - 管理者查看页面 */}
         <Route path="/opinion/:bookId" component={OpinionBookDetail} />
+        {/* AB 意见本 - 多角色演示页（无需登录） */}
+        <Route path="/demo/opinion/:bookId" component={DemoOpinionBook} />
         <Route path="/ledger/:id/qrcodes" component={QrCodeManager} />
 
         {/* 404 */}
