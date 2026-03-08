@@ -1133,23 +1133,26 @@ export default function DemoOpinionBook() {
         <div className="flex items-center px-3 py-2.5 gap-2">
           {/* 角色切换按钮 - 只保留文字 */}
           <div className="flex-1 flex gap-2">
-            {(Object.keys(ROLE_CONFIG) as Role[]).map(r => {
-              const cfg = ROLE_CONFIG[r];
-              const isActive = role === r;
-              return (
-                <button
-                  key={r}
-                  onClick={() => setRole(r)}
-                  className="flex-1 py-2 rounded-lg transition-all text-sm font-semibold"
-                  style={{
-                    backgroundColor: isActive ? "#D32F2F" : "rgba(255,255,255,0.07)",
-                    color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.45)",
-                  }}
-                >
-                  {cfg.label}
-                </button>
-              );
-            })}
+            <button
+              onClick={() => setRole('guest')}
+              className="flex-1 py-2 rounded-lg transition-all text-sm font-semibold whitespace-nowrap"
+              style={{
+                backgroundColor: role === 'guest' ? "#D32F2F" : "rgba(255,255,255,0.07)",
+                color: role === 'guest' ? "#FFFFFF" : "rgba(255,255,255,0.45)",
+              }}
+            >
+              {ROLE_CONFIG.guest.label}
+            </button>
+            <button
+              onClick={() => setRole('merchant')}
+              className="flex-none py-2 px-4 rounded-lg transition-all text-sm font-semibold whitespace-nowrap"
+              style={{
+                backgroundColor: role === 'merchant' ? "#D32F2F" : "rgba(255,255,255,0.07)",
+                color: role === 'merchant' ? "#FFFFFF" : "rgba(255,255,255,0.45)",
+              }}
+            >
+              {ROLE_CONFIG.merchant.label}
+            </button>
           </div>
 
           {/* 分享按钮 */}
