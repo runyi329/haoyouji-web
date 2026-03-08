@@ -88,7 +88,7 @@ export default function LedgerDetail() {
   // 减肥账本：快捷操作弹窗
 
   // 减肥账本数据
-  const isDiet = (ledgerData as any)?.type === 'diet';
+  const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isDietCoach = isDiet && (isOwner || isAdmin);
