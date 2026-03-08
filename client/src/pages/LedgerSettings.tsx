@@ -327,71 +327,99 @@ export default function LedgerSettings() {
  {members?.filter((m: any) => m.memberType !== 'ai').length || 0}
  </div>
  
- {/* */}
- <div className="flex items-center gap-3 px-4 pb-4 overflow-x-auto">
+ {/* 头像列表区域 */}
+ <div className="flex items-end gap-3 px-4 pb-4 overflow-x-auto">
  {members?.map((member, index) => (
- <div key={member.userId} className="flex flex-col items-center flex-shrink-0 relative group">
- <div className="relative">
- <div className="w-16 h-16 rounded-lg overflow-hidden">
+ <div key={member.userId} className="flex flex-col items-center flex-shrink-0">
+ {/* 头像容器：固定 64×64 */}
+ <div className="relative w-16 h-16 flex-shrink-0">
+ <div className="w-16 h-16 rounded-xl overflow-hidden">
  <UserAvatar
  username={member.username}
  avatar={member.avatar}
  nickname={member.nickname}
  size="lg"
- className="w-full h-full rounded-lg"
+ className="w-full h-full rounded-xl"
  />
  </div>
+ {/* 创建人标签：左上角 */}
  {member.role === 'owner' && (
- <div 
- className="absolute top-0 left-0 text-white px-1.5 py-0.5 rounded-br-lg rounded-tl-lg font-medium shadow-sm" 
- style={{ backgroundColor: '#D32F2F', fontSize: '10px' }}
+ <div
+ className="absolute top-0 left-0 text-white font-semibold shadow-sm"
+ style={{
+ backgroundColor: '#D32F2F',
+ fontSize: '9px',
+ padding: '2px 5px',
+ borderRadius: '6px 0 6px 0',
+ lineHeight: '13px',
+ letterSpacing: '0.5px',
+ }}
  >
- 
+ 创建人
  </div>
  )}
+ {/* AI 标签：底部居中悬浮 */}
  {(member as any).memberType === 'ai' && (
- <div 
- className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/3 text-white font-bold shadow-sm border-2 border-white"
- style={{ 
- background: 'linear-gradient(135deg, #D32F2F, #FF5252)', 
- fontSize: '9px', 
- padding: '1px 6px', 
+ <div
+ className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-white font-bold shadow-sm"
+ style={{
+ background: 'linear-gradient(135deg, #D32F2F, #FF5252)',
+ fontSize: '9px',
+ padding: '2px 7px',
  borderRadius: '8px',
  lineHeight: '14px',
- letterSpacing: '1px'
+ letterSpacing: '1px',
+ border: '1.5px solid #fff',
+ whiteSpace: 'nowrap',
  }}
  >
  AI
  </div>
  )}
  </div>
- <div className="text-sm text-gray-900 mt-1">
+ {/* 昵称：AI成员底部留出标签空间 */}
+ <div
+ className="text-xs text-gray-700 text-center w-16 truncate"
+ style={{ marginTop: (member as any).memberType === 'ai' ? '14px' : '6px' }}
+ >
  {member.nickname || member.username || ""}
  </div>
  </div>
  ))}
- 
- {/* + */}
- <button 
+
+ {/* 加成员按钮 */}
+ <button
  onClick={() => setShowInviteDialog(true)}
- className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
+ className="flex flex-col items-center flex-shrink-0 hover:opacity-75 transition-opacity"
  >
- <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: '#D32F2F' }}>
- <span className="text-3xl" style={{ color: '#D32F2F' }}>+</span>
+ <div
+ className="w-16 h-16 rounded-xl flex items-center justify-center"
+ style={{
+ backgroundColor: '#FFF5F5',
+ border: '1.5px solid #FFCDD2',
+ }}
+ >
+ <span className="text-2xl font-light leading-none" style={{ color: '#D32F2F' }}>+</span>
  </div>
- <div className="text-sm mt-1" style={{ color: '#D32F2F' }}></div>
+ <div className="text-xs mt-1.5 font-medium" style={{ color: '#D32F2F' }}>添加</div>
  </button>
 
- {/* -owner */}
+ {/* 移除成员按钮（仅 owner/admin 可见） */}
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
- <button 
+ <button
  onClick={() => setShowRemovePicker(true)}
- className="flex flex-col items-center flex-shrink-0 hover:opacity-80 transition-opacity"
+ className="flex flex-col items-center flex-shrink-0 hover:opacity-75 transition-opacity"
  >
- <div className="w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center" style={{ borderColor: 'var(--brand-red)' }}>
- <span className="text-3xl" style={{ color: 'var(--brand-red)' }}>−</span>
+ <div
+ className="w-16 h-16 rounded-xl flex items-center justify-center"
+ style={{
+ backgroundColor: '#F5F5F5',
+ border: '1.5px solid #E0E0E0',
+ }}
+ >
+ <span className="text-2xl font-light leading-none" style={{ color: '#9E9E9E' }}>−</span>
  </div>
- <div className="text-sm mt-1" style={{ color: 'var(--brand-red)' }}></div>
+ <div className="text-xs mt-1.5 font-medium" style={{ color: '#9E9E9E' }}>移除</div>
  </button>
  )}
  </div>
