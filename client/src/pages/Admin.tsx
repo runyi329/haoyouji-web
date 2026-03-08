@@ -65,6 +65,7 @@ import CustomAAManager from "./admin/CustomAAManager";
 import CustomABManager from "./admin/CustomABManager";
 import CustomACManager from "./admin/CustomACManager";
 import CustomADManager from "./admin/CustomADManager";
+import CustomAEManager from "./admin/CustomAEManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -94,8 +95,15 @@ const CUSTOM_LEDGER_TYPES = [
     key: "AD",
     label: "AD 型",
     name: "永忆",
-    desc: "永忆：分类存储地址、账号密码、银行卡号、网站登录等，一键复制单字段或整条",
+    desc: "永忆：分类存储地址、账号密码、銀行卡号、网站登录等，一键复制单字段或整条",
     component: CustomADManager,
+  },
+  {
+    key: "AE",
+    label: "AE 型",
+    name: "共享抽奖",
+    desc: "以共享账本为底座，支持即时刻刻乐、定时集体开奖、阶段解锁三种模式，内置公平验证机制",
+    component: CustomAEManager,
   },
 ];
 

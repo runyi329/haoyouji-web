@@ -447,6 +447,21 @@ export default function LedgerSettings() {
             onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
           />
         )}
+        {/* 定制账本(AE)：共享抽奖管理入口 */}
+        {ledgerData?.type === 'custom_ae' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+          <SettingItem
+            label="🎰 抽奖活动管理"
+            showIcon
+            onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
+          />
+        )}
+        {ledgerData?.type === 'custom_ae' && ledgerData?.userRole !== 'owner' && ledgerData?.userRole !== 'admin' && (
+          <SettingItem
+            label="🎟️ 我的抽奖"
+            showIcon
+            onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
+          />
+        )}
         {/* 账目明细：创建人/管理员可见 */}
         {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
           <SettingItem
