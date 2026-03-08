@@ -603,7 +603,6 @@ export default function LotteryActivity() {
   const activityId = parseInt(params?.activityId ?? "0");
   const { user } = useAuth();
 
-  const [displayName, setDisplayName] = useState(user?.name ?? "");
   const [signingUp, setSigningUp] = useState(false);
   const [participantId, setParticipantId] = useState<number | null>(null);
   const [drawResult, setDrawResult] = useState<{ prize: { name: string; description: string }; drawSeed: string } | null>(null);
@@ -618,11 +617,11 @@ export default function LotteryActivity() {
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
 
   const handleSignup = async () => {
-    if (!displayName.trim()) { setSignupError("请填写您的名字"); return; }
+    if (!user) { setSignupError("请先登录后再报名"); return; }
     setSigningUp(true);
     setSignupError("");
     try {
-      const result = await signupMutation.mutateAsync({ activityId, displayName: displayName.trim(), userId: user?.id });
+      const result = await signupMutation.mutateAsync({ activityId, displayName: user.name ?? user.username ?? "匿名用户", userId: user.id });
       setParticipantId(result.id);
       if (activity?.mode === "instant") setShowDraw(true);
     } catch (e: any) {
@@ -671,6 +670,11 @@ export default function LotteryActivity() {
     completed: { label: '已结束', bg: '#F5F5F5', color: '#9E9E9E' },
     cancelled: { label: '已取消', bg: '#FFEBEE', color: '#D32F2F' },
   }[activity.status as string] ?? { label: activity.status, bg: '#F5F5F5', color: '#9E9E9E' };
+
+  // 底部按钮逻辑（顶层变量，避免 IIFE 导致崩溃）
+  const regMode = activity.registration_mode ?? 'open';
+  const isOrganizer = activity.organizer_id === user?.id;
+  const isInviteOnly = (regMode === 'invite' || regMode === 'organizer_add') && !isOrganizer;
 
   return (
     <div className="min-h-screen pb-32" style={{ backgroundColor: C.bg }}>
@@ -917,32 +921,56 @@ export default function LotteryActivity() {
       </div>
 
       {/* ── 底部固定按钮 ── */}
-      {isOpen && !participantId && !showDraw && (
+      {isOpen && !participantId && !showDraw && isInviteOnly && (
+        <div
+          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
+          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
+        >
+          <div
+            className="max-w-lg mx-auto rounded-2xl py-3 px-4 flex items-center gap-3"
+            style={{ background: '#FFF3E0', border: '1px solid #FFB74D' }}
+          >
+            <span className="text-xl flex-shrink-0">&#128274;</span>
+            <div>
+              <div className="font-bold text-sm" style={{ color: '#E65100' }}>此活动为邀请制</div>
+              <div className="text-xs" style={{ color: '#757575' }}>请联系活动组织者获取邀请</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {isOpen && !participantId && !showDraw && !isInviteOnly && (
         <div
           className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
           style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
         >
           <div className="max-w-lg mx-auto">
-            <input
-              className="w-full rounded-2xl px-4 py-3 text-sm border mb-2 focus:outline-none"
-              style={{ backgroundColor: C.card, borderColor: C.border, color: C.text }}
-              placeholder="您的名字（将显示在中奖名单）"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-            />
+            {!user && (
+              <div className="mb-2 text-xs text-center" style={{ color: C.sub }}>请先登录后再报名</div>
+            )}
             {signupError && (
               <div className="mb-2 text-xs text-center" style={{ color: C.red }}>{signupError}</div>
             )}
+            {user && (
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                  style={{ background: C.red }}
+                >
+                  {(user.name ?? user.username ?? '?')[0]?.toUpperCase()}
+                </div>
+                <span className="text-xs" style={{ color: C.sub }}>以 <strong style={{ color: C.text }}>{user.name ?? user.username}</strong> 的身份参与</span>
+              </div>
+            )}
             <button
               onClick={handleSignup}
-              disabled={signingUp}
-              className="w-full py-4 rounded-2xl text-white font-bold text-base hover:opacity-90 transition-opacity disabled:opacity-50"
+              disabled={signingUp || !user}
+              className="w-full py-4 rounded-full text-white font-bold text-base transition-opacity disabled:opacity-50"
               style={{
-                background: `linear-gradient(135deg, ${C.red}, ${C.redDark})`,
-                boxShadow: `0 4px 16px ${C.red}55`,
+                background: user ? `linear-gradient(135deg, ${C.red}, ${C.redDark})` : '#BDBDBD',
+                boxShadow: user ? `0 4px 16px ${C.red}55` : 'none',
               }}
             >
-              {signingUp ? "报名中..." : "🎉 立即参与报名"}
+              {signingUp ? "报名中..." : "立即参与报名"}
             </button>
             {parseFloat(activity.signup_fee) > 0 && (
               <p className="text-center text-xs mt-2" style={{ color: C.sub }}>报名费：¥{activity.signup_fee}</p>
