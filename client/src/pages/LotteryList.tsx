@@ -1,12 +1,16 @@
 /**
- * A1 定制账本 - 共享抽奖：历史记录列表页
+ * A1 定制账本 - 共享抽奖：管理后台列表页（仅管理员/创建者可访问）
  * 路由：/lottery/list/:ledgerId
- * 入口：账本详情页 → 共享抽奖入口
+ * 功能：查看、编辑、发布、暂停、恢复、取消活动
  */
+import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ChevronLeft, Plus, Trophy, Users, Clock, Zap, Layers } from "lucide-react";
+import {
+  ChevronLeft, Plus, Trophy, Users, Clock, Zap, Layers,
+  Edit2, PlayCircle, PauseCircle, XCircle, Eye,
+} from "lucide-react";
 
 const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
   instant: {
@@ -40,15 +44,46 @@ const STATUS_CONFIG: Record<string, { label: string; bgColor: string; textColor:
   cancelled: { label: "已取消", bgColor: "#FFEBEE", textColor: "#C62828", dotColor: "#EF5350" },
 };
 
-import React from "react";
-
 export default function LotteryList() {
   const [, params] = useRoute("/lottery/list/:ledgerId");
   const ledgerId = parseInt(params?.ledgerId ?? "0");
   const [, navigate] = useLocation();
   const { user } = useAuth();
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<number | null>(null);
 
-  const { data: activities, isLoading } = trpc.lottery.listByLedger.useQuery({ ledgerId });
+  const { data: activities, isLoading, refetch } = trpc.lottery.listByLedger.useQuery({ ledgerId });
+  const updateMutation = trpc.lottery.update.useMutation();
+
+  const handleStatusChange = async (activityId: number, newStatus: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (newStatus === 'cancelled') {
+      setConfirmCancel(activityId);
+      return;
+    }
+    setActionLoading(activityId);
+    try {
+      await updateMutation.mutateAsync({ activityId, status: newStatus as any });
+      await refetch();
+    } catch (err: any) {
+      alert(err.message || '操作失败');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmCancel = async (activityId: number) => {
+    setActionLoading(activityId);
+    setConfirmCancel(null);
+    try {
+      await updateMutation.mutateAsync({ activityId, status: 'cancelled' });
+      await refetch();
+    } catch (err: any) {
+      alert(err.message || '取消失败');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: "#FAF3ED" }}>
@@ -65,7 +100,7 @@ export default function LotteryList() {
             <ChevronLeft className="w-5 h-5" style={{ color: "#424242" }} />
           </button>
           <h1 className="text-base font-semibold" style={{ color: "#212121" }}>
-            共享抽奖
+            抽奖活动管理
           </h1>
           <button
             onClick={() => navigate(`/lottery/create?ledgerId=${ledgerId}`)}
@@ -79,26 +114,6 @@ export default function LotteryList() {
       </div>
 
       <div className="px-4 pt-4 pb-6 max-w-lg mx-auto">
-        {/* 说明卡片 */}
-        <div
-          className="bg-white rounded-2xl p-4 mb-4 flex items-start gap-3"
-          style={{ border: "1px solid #EEEEEE" }}
-        >
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "#FFEBEE" }}
-          >
-            <Trophy className="w-4.5 h-4.5" style={{ color: "#D32F2F" }} />
-          </div>
-          <div>
-            <div className="text-sm font-semibold mb-0.5" style={{ color: "#212121" }}>
-              共享抽奖
-            </div>
-            <div className="text-xs leading-relaxed" style={{ color: "#757575" }}>
-              以共享账本为底座，每场抽奖对应一个子账本，每条报名记录对应一条账目。支持即时刮刮乐、定时集体开奖、阶段解锁三种模式，内置公平验证机制。
-            </div>
-          </div>
-        </div>
 
         {/* 加载中 */}
         {isLoading && (
@@ -139,102 +154,234 @@ export default function LotteryList() {
             {activities.map((activity: any) => {
               const mode = MODE_CONFIG[activity.mode];
               const status = STATUS_CONFIG[activity.status] ?? STATUS_CONFIG.draft;
+              const isLoading = actionLoading === activity.id;
 
               return (
                 <div
                   key={activity.id}
-                  onClick={() => navigate(`/lottery/${activity.id}`)}
-                  className="bg-white rounded-2xl p-4 cursor-pointer active:scale-[0.99] transition-all"
-                  style={{ border: "1px solid #EEEEEE" }}
+                  className="bg-white rounded-2xl overflow-hidden"
+                  style={{ border: "1px solid #EEEEEE", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" }}
                 >
-                  {/* 标题行 */}
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <h3
-                      className="font-semibold text-sm flex-1 min-w-0 truncate"
-                      style={{ color: "#212121" }}
-                    >
-                      {activity.title}
-                    </h3>
-                    {/* 状态标签 */}
-                    <span
-                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
-                      style={{
-                        backgroundColor: status.bgColor,
-                        color: status.textColor,
-                      }}
-                    >
+                  {/* 卡片主体（点击进入详情） */}
+                  <div
+                    onClick={() => navigate(`/lottery/${activity.id}`)}
+                    className="p-4 cursor-pointer active:bg-gray-50 transition-colors"
+                  >
+                    {/* 标题行 */}
+                    <div className="flex items-start justify-between gap-2 mb-2.5">
+                      <h3
+                        className="font-semibold text-sm flex-1 min-w-0 truncate"
+                        style={{ color: "#212121" }}
+                      >
+                        {activity.title}
+                      </h3>
+                      {/* 状态标签 */}
                       <span
-                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: status.dotColor }}
-                      />
-                      {status.label}
-                    </span>
-                  </div>
-
-                  {activity.description && (
-                    <p className="text-xs truncate mb-2.5" style={{ color: "#757575" }}>
-                      {activity.description}
-                    </p>
-                  )}
-
-                  {/* 标签行 */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {mode && (
-                      <span
-                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
                         style={{
-                          backgroundColor: mode.bgColor,
-                          color: mode.textColor,
-                          border: `1px solid ${mode.borderColor}`,
+                          backgroundColor: status.bgColor,
+                          color: status.textColor,
                         }}
                       >
-                        {mode.icon}
-                        {mode.label}
+                        <span
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: status.dotColor }}
+                        />
+                        {status.label}
                       </span>
+                    </div>
+
+                    {activity.description && (
+                      <p className="text-xs truncate mb-2.5" style={{ color: "#757575" }}>
+                        {activity.description}
+                      </p>
                     )}
-                    <span
-                      className="flex items-center gap-1 text-xs"
-                      style={{ color: "#9E9E9E" }}
+
+                    {/* 标签行 */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {mode && (
+                        <span
+                          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{
+                            backgroundColor: mode.bgColor,
+                            color: mode.textColor,
+                            border: `1px solid ${mode.borderColor}`,
+                          }}
+                        >
+                          {mode.icon}
+                          {mode.label}
+                        </span>
+                      )}
+                      <span
+                        className="flex items-center gap-1 text-xs"
+                        style={{ color: "#9E9E9E" }}
+                      >
+                        <Users className="w-3 h-3" />
+                        {activity.participantCount} 人参与
+                      </span>
+                      {activity.winnerCount > 0 && (
+                        <span className="text-xs font-medium" style={{ color: "#D32F2F" }}>
+                          {activity.winnerCount} 人中奖
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 开奖时间 */}
+                    {activity.draw_at && activity.status === "open" && (
+                      <div
+                        className="mt-2.5 text-xs flex items-center gap-1"
+                        style={{ color: "#9E9E9E" }}
+                      >
+                        <Clock className="w-3 h-3" />
+                        开奖：{new Date(activity.draw_at).toLocaleString("zh-CN", {
+                          month: "numeric",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    )}
+
+                    {/* 创建时间 */}
+                    <div
+                      className="mt-1.5 text-xs"
+                      style={{ color: "#BDBDBD" }}
                     >
-                      <Users className="w-3 h-3" />
-                      {activity.participantCount} 人参与
-                    </span>
-                    {activity.winnerCount > 0 && (
-                      <span className="text-xs font-medium" style={{ color: "#D32F2F" }}>
-                        {activity.winnerCount} 人中奖
-                      </span>
-                    )}
+                      创建于 {new Date(activity.created_at).toLocaleDateString("zh-CN")}
+                    </div>
                   </div>
 
-                  {/* 开奖时间 */}
-                  {activity.draw_at && activity.status === "open" && (
+                  {/* 操作按钮栏（分隔线下方） */}
+                  {activity.status !== 'completed' && activity.status !== 'cancelled' && (
                     <div
-                      className="mt-2.5 text-xs flex items-center gap-1"
-                      style={{ color: "#9E9E9E" }}
+                      className="flex items-center border-t"
+                      style={{ borderColor: "#F5F5F5" }}
                     >
-                      <Clock className="w-3 h-3" />
-                      开奖：{new Date(activity.draw_at).toLocaleString("zh-CN", {
-                        month: "numeric",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {/* 查看详情 */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/lottery/${activity.id}`); }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors"
+                        style={{ color: "#616161" }}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        查看
+                      </button>
+
+                      <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+
+                      {/* 编辑（草稿/报名中可编辑） */}
+                      {(activity.status === 'draft' || activity.status === 'open') && (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/lottery/edit/${activity.id}`); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors"
+                            style={{ color: "#1565C0" }}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            编辑
+                          </button>
+                          <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+                        </>
+                      )}
+
+                      {/* 发布（草稿 → 报名中） */}
+                      {activity.status === 'draft' && (
+                        <>
+                          <button
+                            onClick={(e) => handleStatusChange(activity.id, 'open', e)}
+                            disabled={isLoading}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors disabled:opacity-50"
+                            style={{ color: "#2E7D32" }}
+                          >
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            {isLoading ? '处理中...' : '发布'}
+                          </button>
+                          <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+                        </>
+                      )}
+
+                      {/* 暂停（报名中 → 草稿） */}
+                      {activity.status === 'open' && (
+                        <>
+                          <button
+                            onClick={(e) => handleStatusChange(activity.id, 'draft', e)}
+                            disabled={isLoading}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors disabled:opacity-50"
+                            style={{ color: "#E65100" }}
+                          >
+                            <PauseCircle className="w-3.5 h-3.5" />
+                            {isLoading ? '处理中...' : '暂停'}
+                          </button>
+                          <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+                        </>
+                      )}
+
+                      {/* 取消 */}
+                      <button
+                        onClick={(e) => handleStatusChange(activity.id, 'cancelled', e)}
+                        disabled={isLoading}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors disabled:opacity-50"
+                        style={{ color: "#C62828" }}
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        取消
+                      </button>
                     </div>
                   )}
 
-                  {/* 创建时间 */}
-                  <div
-                    className="mt-1.5 text-xs"
-                    style={{ color: "#BDBDBD" }}
-                  >
-                    创建于 {new Date(activity.created_at).toLocaleDateString("zh-CN")}
-                  </div>
+                  {/* 已结束/已取消状态只显示查看按钮 */}
+                  {(activity.status === 'completed' || activity.status === 'cancelled') && (
+                    <div
+                      className="flex items-center border-t"
+                      style={{ borderColor: "#F5F5F5" }}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate(`/lottery/${activity.id}`); }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors"
+                        style={{ color: "#9E9E9E" }}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        查看结果
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* 取消确认弹窗 */}
+      {confirmCancel !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div
+            className="w-full max-w-lg bg-white rounded-t-3xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold mb-2" style={{ color: "#212121" }}>确认取消活动？</h3>
+            <p className="text-sm mb-6" style={{ color: "#757575" }}>
+              取消后活动将无法恢复，已报名的参与者将无法继续参与。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmCancel(null)}
+                className="flex-1 py-3 rounded-2xl text-sm font-medium"
+                style={{ backgroundColor: "#F5F5F5", color: "#424242" }}
+              >
+                再想想
+              </button>
+              <button
+                onClick={() => handleConfirmCancel(confirmCancel)}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
+                style={{ backgroundColor: "#C62828" }}
+              >
+                确认取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
