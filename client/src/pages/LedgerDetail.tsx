@@ -25,7 +25,11 @@ import {
   CheckCircle,
   XCircle,
   Loader,
+  Timer,
+  Trophy,
+  Flame,
 } from "lucide-react";
+
 
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
@@ -93,6 +97,12 @@ export default function LedgerDetail() {
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   // 抽奖子 Tab：正在进行中 / 往期回顾
   const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
+  // 倒计时刻度（每秒更新）
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // 抽奖活动列表（全量，前端按子Tab过滤）
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
@@ -275,6 +285,40 @@ export default function LedgerDetail() {
     organizer_add: '主办方添加',
   };
 
+  // 倒计时辅助函数（tick 参数确保每秒重新计算）
+  const formatCountdown = (targetTime: string | null | undefined): string => {
+    void tick; // 依赖 tick 以触发每秒重渲染
+    if (!targetTime) return '';
+    const diff = new Date(targetTime).getTime() - Date.now();
+    if (diff <= 0) return '即将开奖';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    if (h > 24) {
+      const d = Math.floor(h / 24);
+      return `还有 ${d} 天`;
+    }
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  };
+
+  // 参与进度百分比（基于 max_participants）
+  const getProgressPct = (activity: any): number => {
+    const max = activity.max_participants;
+    const cur = activity.participantCount ?? 0;
+    if (!max || max <= 0) return 0;
+    return Math.min(100, Math.round((cur / max) * 100));
+  };
+
+  // 奖品占位图（如果没有图片，用渐变色占位）
+  const PRIZE_PLACEHOLDER_COLORS = [
+    'from-[#D32F2F] to-[#B71C1C]',
+    'from-[#C62828] to-[#880E4F]',
+    'from-[#AD1457] to-[#6A1B9A]',
+    'from-[#4527A0] to-[#1565C0]',
+    'from-[#0277BD] to-[#00695C]',
+  ];
+
   return (
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
@@ -427,7 +471,7 @@ export default function LedgerDetail() {
             </button>
           </div>
 
-          {/* 活动列表 */}
+          {/* 大图卡片流列表 */}
           <div className="px-4 space-y-3">
             {lotteryLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -435,73 +479,194 @@ export default function LedgerDetail() {
               </div>
             ) : displayLotteryList.length === 0 ? (
               <div className="text-center py-12">
-                <Gift className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <Gift className="w-14 h-14 text-gray-200 mx-auto mb-3" />
                 {lotteryTab === 'active' ? (
                   <>
-                    <div className="text-gray-400 text-base mb-1">暂无进行中的活动</div>
+                    <div className="text-gray-400 text-base mb-1 font-medium">暂无进行中的活动</div>
                     <div className="text-gray-400 text-sm">账本管理员可在设置中创建抽奖活动</div>
                   </>
                 ) : (
                   <>
-                    <div className="text-gray-400 text-base mb-1">还没有历史活动</div>
+                    <div className="text-gray-400 text-base mb-1 font-medium">还没有历史活动</div>
                     <div className="text-gray-400 text-sm">已结束或已取消的活动将在这里展示</div>
                   </>
                 )}
               </div>
             ) : (
-              displayLotteryList.map((activity: any) => {
-                const status = lotteryStatusMap[activity.status] ?? lotteryStatusMap.draft;
-                const StatusIcon = status.icon;
-                const drawTime = activity.draw_at ? new Date(activity.draw_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+              displayLotteryList.map((activity: any, idx: number) => {
+                const isActive = ['draft', 'open', 'drawing'].includes(activity.status);
+                const isCompleted = activity.status === 'completed';
+                const isCancelled = activity.status === 'cancelled';
+                const progressPct = getProgressPct(activity);
+                const countdown = formatCountdown(activity.draw_at);
+                const placeholderGrad = PRIZE_PLACEHOLDER_COLORS[idx % PRIZE_PLACEHOLDER_COLORS.length];
+                // 中奖者（取第一个）
+                const firstWinner = activity.firstWinner || null;
+
                 return (
                   <div
                     key={activity.id}
-                    className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 cursor-pointer active:bg-[#FFF5F5] transition-colors"
+                    className="relative rounded-2xl overflow-hidden cursor-pointer"
+                    style={{
+                      background: '#fff',
+                      boxShadow: isActive
+                        ? '0 4px 20px rgba(211,47,47,0.12)'
+                        : '0 2px 8px rgba(0,0,0,0.06)',
+                      opacity: isCancelled ? 0.6 : 1,
+                    }}
                     onClick={() => setLocation(`/lottery/${activity.id}`)}
+                    onTouchStart={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.98)'; }}
+                    onTouchEnd={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
                   >
-                    {/* 标题行 */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Gift className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
-                        <span className="text-base font-semibold text-[#222222] truncate">{activity.title}</span>
-                      </div>
-                      <span className={`ml-2 flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
-                        {StatusIcon && <StatusIcon className="w-3 h-3" />}
-                        {status.label}
-                      </span>
-                    </div>
-                    {/* 描述 */}
-                    {activity.description && (
-                      <div className="text-xs text-gray-500 mb-2 line-clamp-2">{activity.description}</div>
+                    {/* 已结束蒙层 */}
+                    {!isActive && (
+                      <div className="absolute inset-0 bg-white/40 z-10 pointer-events-none" />
                     )}
-                    {/* 信息网格 */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5" />
-                        <span>{activity.participantCount ?? 0} 人已报名</span>
+
+                    {/* 已结束 Ribbon */}
+                    {isCompleted && (
+                      <div
+                        className="absolute top-3 right-[-22px] z-20 bg-gray-500 text-white text-[10px] font-bold px-8 py-0.5 rotate-45"
+                        style={{ letterSpacing: '0.05em' }}
+                      >
+                        已开奖
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Gift className="w-3.5 h-3.5" />
-                        <span>{lotteryModeMap[activity.mode] ?? activity.mode}</span>
+                    )}
+                    {isCancelled && (
+                      <div
+                        className="absolute top-3 right-[-22px] z-20 bg-red-400 text-white text-[10px] font-bold px-8 py-0.5 rotate-45"
+                        style={{ letterSpacing: '0.05em' }}
+                      >
+                        已取消
                       </div>
-                      {drawTime && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>开奖 {drawTime}</span>
+                    )}
+
+                    {/* 卡片主体：左图右文 */}
+                    <div className="flex" style={{ minHeight: '120px' }}>
+                      {/* 左侧奖品图区 */}
+                      <div
+                        className={`flex-shrink-0 flex items-center justify-center bg-gradient-to-br ${placeholderGrad} relative`}
+                        style={{ width: '120px', minHeight: '120px' }}
+                      >
+                        {activity.cover_image ? (
+                          <img
+                            src={activity.cover_image}
+                            alt={activity.title}
+                            className="w-full h-full object-cover"
+                            style={{ minHeight: '120px' }}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            <Gift className="w-10 h-10 text-white/80" />
+                            <span className="text-white/60 text-[10px]">奖品图片</span>
+                          </div>
+                        )}
+                        {/* 开奖中火焰动效标 */}
+                        {activity.status === 'drawing' && (
+                          <div className="absolute top-1.5 left-1.5 bg-orange-500 rounded-full p-1">
+                            <Flame className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 右侧文字区 */}
+                      <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+                        {/* 第二级：奖品名称 + 状态 */}
+                        <div>
+                          <div className="flex items-start justify-between gap-1 mb-1">
+                            <span className="text-[15px] font-bold text-[#1A1A1A] leading-snug line-clamp-2 flex-1">
+                              {activity.title}
+                            </span>
+                            <span className={`flex-shrink-0 ml-1 mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                              activity.status === 'open' ? 'bg-green-100 text-green-700' :
+                              activity.status === 'drawing' ? 'bg-orange-100 text-orange-700' :
+                              activity.status === 'draft' ? 'bg-gray-100 text-gray-500' :
+                              'bg-gray-100 text-gray-400'
+                            }`}>
+                              {lotteryStatusMap[activity.status]?.label ?? '未知'}
+                            </span>
+                          </div>
+                          {/* 描述 */}
+                          {activity.description && (
+                            <div className="text-[11px] text-gray-400 line-clamp-1 mb-1.5">{activity.description}</div>
+                          )}
                         </div>
-                      )}
-                      {activity.registration_mode && (
-                        <div className="flex items-center gap-1">
-                          <span>📋</span>
-                          <span>{lotteryRegMap[activity.registration_mode] ?? activity.registration_mode}</span>
+
+                        {/* 第三级：进度条（有 max_participants 时显示） */}
+                        {isActive && activity.max_participants > 0 && (
+                          <div className="mb-1.5">
+                            <div className="flex justify-between text-[10px] text-gray-400 mb-0.5">
+                              <span>{activity.participantCount ?? 0} / {activity.max_participants} 人</span>
+                              <span>{progressPct}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${progressPct}%`,
+                                  background: progressPct >= 80
+                                    ? 'linear-gradient(90deg,#D32F2F,#FF5722)'
+                                    : 'linear-gradient(90deg,#CBA471,#D32F2F)',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 第四级：底部信息行 */}
+                        <div className="flex items-center justify-between">
+                          {isActive ? (
+                            <>
+                              {/* 倒计时或参与人数 */}
+                              <div className="flex items-center gap-1">
+                                {countdown ? (
+                                  <>
+                                    <Timer className="w-3 h-3 text-[#D32F2F]" />
+                                    <span className="text-[11px] font-mono font-semibold text-[#D32F2F]">{countdown}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Users className="w-3 h-3 text-gray-400" />
+                                    <span className="text-[11px] text-gray-400">{activity.participantCount ?? 0} 人已参与</span>
+                                  </>
+                                )}
+                              </div>
+                              {/* 参与按钒 */}
+                              <button
+                                className="text-[11px] font-semibold text-white px-3 py-1 rounded-full"
+                                style={{ background: 'linear-gradient(135deg,#D32F2F,#B71C1C)' }}
+                                onClick={e => { e.stopPropagation(); setLocation(`/lottery/${activity.id}`); }}
+                              >
+                                {activity.status === 'open' ? '去报名' : '查看'}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {/* 已结束：显示中奖者或参与人数 */}
+                              <div className="flex items-center gap-1">
+                                {firstWinner ? (
+                                  <>
+                                    <Trophy className="w-3 h-3 text-[#CBA471]" />
+                                    <span className="text-[11px] text-gray-500">中奖：{firstWinner}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Users className="w-3 h-3 text-gray-400" />
+                                    <span className="text-[11px] text-gray-400">{activity.participantCount ?? 0} 人参与</span>
+                                  </>
+                                )}
+                              </div>
+                              {/* 查看中奖名单按钒 */}
+                              <button
+                                className="text-[11px] font-medium text-gray-500 border border-gray-300 px-3 py-1 rounded-full bg-white"
+                                onClick={e => { e.stopPropagation(); setLocation(`/lottery/${activity.id}`); }}
+                              >
+                                查看名单
+                              </button>
+                            </>
+                          )}
                         </div>
-                      )}
-                      {activity.external_seed_type && (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span>🎲</span>
-                          <span>种子源：{lotterySeedMap[activity.external_seed_type] ?? activity.external_seed_type}</span>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
