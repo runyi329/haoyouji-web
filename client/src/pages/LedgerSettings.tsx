@@ -305,8 +305,9 @@ export default function LedgerSettings() {
 
  return (
  <div className="min-h-screen bg-gray-50 pb-20">
- {/* */}
+ {/* 导航栏 + 头像区域合并为一个白色卡片 */}
  <div className="bg-white border-b border-divider sticky top-0 z-10">
+ {/* 顶部导航行 */}
  <div className="container flex items-center justify-between h-14 px-4">
  <button
  onClick={() => setLocation(ledgerData?.type === 'opinion_book' ? `/opinion/${ledgerId}` : `/ledger/${ledgerId}`)}
@@ -314,21 +315,13 @@ export default function LedgerSettings() {
  >
  <ChevronLeft className="w-6 h-6 text-gray-700" />
  </button>
- <h1 className="text-lg font-medium text-gray-900">
+ <h1 className="text-lg font-medium text-gray-900 truncate max-w-[220px]">
  {ledgerData.name}
  </h1>
  <div className="w-10"></div>
  </div>
- </div>
-
- {/* */}
- <div className="bg-white mt-3">
- <div className="px-4 py-3 text-sm text-gray-500">
- {members?.filter((m: any) => m.memberType !== 'ai').length || 0}
- </div>
- 
- {/* 头像列表区域 */}
- <div className="flex items-end gap-3 px-4 pb-4 overflow-x-auto">
+ {/* 头像列表区域（与导航栏同一卡片） */}
+ <div className="flex items-start gap-3 px-4 pb-4 overflow-x-auto">
  {members?.map((member, index) => (
  <div key={member.userId} className="flex flex-col items-center flex-shrink-0">
  {/* 头像容器：固定 64×64 */}
