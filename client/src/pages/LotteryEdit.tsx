@@ -49,7 +49,7 @@ export default function LotteryEdit() {
   const [drawAt, setDrawAt] = useState("");
   const [signupEndAt, setSignupEndAt] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("");
-  const [registrationMode, setRegistrationMode] = useState<"open" | "member_only" | "invite_only">("open");
+  const [registrationMode, setRegistrationMode] = useState<"open" | "invite" | "organizer_add">("open");
   const [requiresInfo, setRequiresInfo] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [externalSeedType, setExternalSeedType] = useState<"none" | "sh_index" | "sz_index" | "ssq" | "dlt">("none");
@@ -248,8 +248,8 @@ export default function LotteryEdit() {
           <div className="flex gap-1.5 mb-3">
             {([
               { value: 'open', label: '公开报名' },
-              { value: 'member_only', label: '仅限成员' },
-              { value: 'invite_only', label: '邀请制' },
+              { value: 'organizer_add', label: '仅限成员' },
+              { value: 'invite', label: '邀请制' },
             ] as const).map(opt => (
               <button key={opt.value} onClick={() => setRegistrationMode(opt.value)}
                 className="flex-1 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors"
