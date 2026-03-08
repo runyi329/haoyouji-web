@@ -8155,6 +8155,7 @@ export const appRouter = router({
         keyword: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        await dbMemo.ensureMemoTables();
         if (input.keyword && input.keyword.trim()) {
           return await dbMemo.searchMemoItems(input.ledgerId, input.keyword.trim());
         }
@@ -8174,6 +8175,7 @@ export const appRouter = router({
         note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await dbMemo.ensureMemoTables();
         const id = await dbMemo.createMemoItem({
           ledgerId: input.ledgerId,
           userId: ctx.user.id,
