@@ -249,13 +249,31 @@ export const lotteryRouter = router({
       const activities = await _execQuery(
         `SELECT a.*,
            (SELECT COUNT(*) FROM lottery_participants WHERE activity_id=a.id AND status='confirmed') AS participantCount,
-           (SELECT COUNT(*) FROM lottery_results WHERE activity_id=a.id) AS winnerCount
+           (SELECT COUNT(*) FROM lottery_results WHERE activity_id=a.id) AS winnerCount,
+           (SELECT u.display_name FROM lottery_results lr
+              JOIN users u ON u.id=lr.winner_id
+              WHERE lr.activity_id=a.id ORDER BY lr.created_at ASC LIMIT 1) AS firstWinnerName
          FROM lottery_activities a
          WHERE a.ledger_id=?
          ORDER BY a.created_at DESC`,
         [input.ledgerId]
       ) as any[];
-      return activities;
+
+      // 为每个活动附加最近 3 个参与者头像
+      const activitiesWithParticipants = await Promise.all(
+        activities.map(async (a: any) => {
+          const recentParticipants = await _execQuery(
+            `SELECT u.display_name, u.avatar_url
+             FROM lottery_participants lp
+             JOIN users u ON u.id=lp.user_id
+             WHERE lp.activity_id=? AND lp.status='confirmed'
+             ORDER BY lp.created_at DESC LIMIT 3`,
+            [a.id]
+          ) as any[];
+          return { ...a, recentParticipants };
+        })
+      );
+      return activitiesWithParticipants;
     }),
 
   // ── 添加奖项 ──────────────────────────────
