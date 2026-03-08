@@ -128,7 +128,7 @@ export default function LotteryEdit() {
         }
       }
       setSuccess(true);
-      setTimeout(() => navigate(`/lottery/manage/${activityId}` as any), 1200);
+      setTimeout(() => navigate(`/lottery/${activityId}` as any), 1200);
     } catch (e: any) {
       setError(e.message || "保存失败，请重试");
     } finally {

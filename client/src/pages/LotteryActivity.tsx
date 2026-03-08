@@ -624,7 +624,7 @@ export default function LotteryActivity() {
   const [signupError, setSignupError] = useState("");
   const [showFullParticipants, setShowFullParticipants] = useState(false);
 
-  const { data: activity, isLoading } = trpc.lottery.getActivity.useQuery({ activityId });
+  const { data: activity, isLoading, isError } = trpc.lottery.getActivity.useQuery({ activityId }, { retry: false });
   const countdown = useCountdown(activity?.draw_at ?? null);
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
@@ -663,9 +663,14 @@ export default function LotteryActivity() {
     </div>
   );
 
-  if (!activity) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: C.bg }}>
-      <div className="text-sm" style={{ color: C.sub }}>活动不存在</div>
+  if (isError || !activity) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: C.bg }}>
+      <div className="text-sm" style={{ color: C.sub }}>活动不存在或已被删除</div>
+      <button
+        onClick={() => window.history.back()}
+        className="text-xs px-4 py-2 rounded-full text-white"
+        style={{ backgroundColor: C.red }}
+      >返回上一页</button>
     </div>
   );
 
@@ -686,7 +691,7 @@ export default function LotteryActivity() {
 
   // 底部按钮逻辑（顶层变量，避免 IIFE 导致崩溃）
   const regMode = activity.registration_mode ?? 'open';
-  const isOrganizer = activity.organizer_id === user?.id;
+  const isOrganizer = activity.created_by === user?.id;
   const isInviteOnly = (regMode === 'invite' || regMode === 'organizer_add') && !isOrganizer;
 
   return (
@@ -710,9 +715,9 @@ export default function LotteryActivity() {
 
       {/* ── 1. Hero 区：奖品大图 + 倒计时 ── */}
       <div className="relative" style={{ minHeight: '220px' }}>
-        {activity.cover_image ? (
+        {activity.cover_image_url ? (
           <img
-            src={activity.cover_image}
+            src={activity.cover_image_url}
             alt={activity.title}
             className="w-full object-cover"
             style={{ height: '220px' }}

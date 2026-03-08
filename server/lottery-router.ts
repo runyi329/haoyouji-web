@@ -430,7 +430,11 @@ export const lotteryRouter = router({
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
       const participants = await _execQuery(
-        `SELECT id, display_name, created_at FROM lottery_participants WHERE activity_id=? AND status='confirmed' ORDER BY created_at ASC`,
+        `SELECT lp.id, lp.display_name, lp.created_at, u.avatar AS avatar_url
+         FROM lottery_participants lp
+         LEFT JOIN users u ON u.id = lp.user_id
+         WHERE lp.activity_id=? AND lp.status='confirmed'
+         ORDER BY lp.created_at ASC`,
         [input.activityId]
       ) as any[];
       return participants;
