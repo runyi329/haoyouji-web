@@ -205,8 +205,10 @@ router.post("/api/alipay/feedback-pay", async (req: Request, res: Response) => {
     // 生成唯一订单号
     const orderId = `FB${Date.now()}${nanoid(6)}`;
 
-    // 构建回调地址
-    const host = req.headers.origin || `https://${req.headers.host}`;
+    // 构建回调地址（优先使用 x-forwarded-host，确保生产环境域名正确）
+    const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const hostHeader = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'jiangyuchen.cn';
+    const host = `${protocol}://${hostHeader}`;
     const notifyUrl = `${host}/api/alipay/notify`;
     const returnUrl = `${host}/feedback/${ledgerId || ""}?paid=1&orderId=${orderId}`;
 
