@@ -36,6 +36,7 @@ import { posterFavoritesRouter } from "./poster-favorites-router";
 import { beautyRouter } from "./beauty-router";
 import { dietRouter } from "./diet-router";
 import { merchantRouter } from "./merchant-router";
+import { lotteryRouter } from "./lottery-router";
 import * as dbMemo from "./db-memo";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
@@ -54,6 +55,7 @@ export const appRouter = router({
   beauty: beautyRouter,
   diet: dietRouter,
   merchant: merchantRouter,
+  lottery: lotteryRouter,
 
   // 支付账户管理
   paymentAccounts: router({
