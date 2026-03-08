@@ -8041,6 +8041,7 @@ export const appRouter = router({
       }),
 
     // 获取 AC 账本列表（仅管理员）
+    // 同时包含旧的 'diet' 类型和新的 'custom_ac' 类型，不限所有权
     listCustomAC: protectedProcedure
       .query(async ({ ctx }) => {
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
@@ -8056,7 +8057,7 @@ export const appRouter = router({
             createdAt: ledgers.createdAt,
           })
           .from(ledgers)
-          .where(eq(ledgers.type, 'custom_ac'))
+          .where(inArray(ledgers.type, ['diet', 'custom_ac']))
           .orderBy(desc(ledgers.createdAt));
         return rows;
       }),
@@ -8077,12 +8078,11 @@ export const appRouter = router({
           .select({ id: ledgers.id, type: ledgers.type })
           .from(ledgers)
           .where(eq(ledgers.id, input.ledgerId));
-        if (!ledger || ledger.type !== 'custom_ac') {
+         if (!ledger || !['diet', 'custom_ac'].includes(ledger.type)) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AC定制账本' });
         }
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
       }),
-
     // 获取当前用户的初始金额配置（定制账本AA）
     getMyInitialBalances: protectedProcedure
       .input(z.object({
