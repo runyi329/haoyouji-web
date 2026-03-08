@@ -6,33 +6,43 @@
 import { getLedgerDb } from "./db";
 import { sql } from "drizzle-orm";
 
-let _tablesCreated = false;
+// 用 WeakSet 追踪哪些 db 实例已建表，避免重复建表同时支持多数据库
+const _tablesCreatedSet = new WeakSet<object>();
 
 export async function ensureMemoTables() {
-  if (_tablesCreated) return;
   const db = await getLedgerDb();
   if (!db) return;
 
-  // 备忘录条目表
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS memo_items (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      ledgerId INT NOT NULL,
-      userId INT NOT NULL,
-      category VARCHAR(50) NOT NULL DEFAULT 'other',
-      title VARCHAR(100) NOT NULL,
-      fields JSON NOT NULL,
-      note TEXT,
-      sortOrder INT DEFAULT 0,
-      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      deletedAt TIMESTAMP NULL DEFAULT NULL,
-      INDEX idx_ledger_user (ledgerId, userId),
-      INDEX idx_ledger_category (ledgerId, category)
-    )
-  `);
+  // 如果这个 db 实例已经建过表，跳过
+  if (_tablesCreatedSet.has(db as object)) return;
 
-  _tablesCreated = true;
+  try {
+    // 备忘录条目表（IF NOT EXISTS 保证幂等）
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS memo_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledgerId INT NOT NULL,
+        userId INT NOT NULL,
+        category VARCHAR(50) NOT NULL DEFAULT 'other',
+        title VARCHAR(100) NOT NULL,
+        fields JSON NOT NULL,
+        note TEXT,
+        sortOrder INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deletedAt TIMESTAMP NULL DEFAULT NULL,
+        INDEX idx_ledger_user (ledgerId, userId),
+        INDEX idx_ledger_category (ledgerId, category)
+      )
+    `);
+    _tablesCreatedSet.add(db as object);
+  } catch (e: any) {
+    // 表已存在或其他非致命错误，继续执行
+    if (!e?.message?.includes('already exists')) {
+      console.warn('[memo] ensureMemoTables warning:', e?.message);
+    }
+    _tablesCreatedSet.add(db as object);
+  }
 }
 
 export interface MemoField {
