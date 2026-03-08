@@ -1136,3 +1136,15 @@ input[type="range"].slider::-moz-range-thumb {
     transform: translateY(-2px);
   }
 }
+
+/* ============================================================
+   手机端安全区适配（iPhone刘海屏/底部Home条）
+   ============================================================ */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 底部导航栏安全区 */
+nav.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+}

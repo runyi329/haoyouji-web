@@ -627,7 +627,7 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-end bg-black/50" onClick={onClose}>
       <div className="w-full bg-white rounded-t-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div>
@@ -701,7 +701,8 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
           </button>
           <p className="mt-3 text-xs text-gray-400 text-center">支付即表示同意服务条款，虚拟商品不支持退款</p>
         </div>
-        <div className="h-6" />
+        {/* safe-area 底部留白，防止 iPhone Home 条遮挡 */}
+        <div style={{ height: 'max(24px, env(safe-area-inset-bottom, 24px))' }} />
       </div>
     </div>
   );
@@ -730,10 +731,7 @@ export default function ProductDetail() {
   }
 
   const handleBuy = () => {
-    if (!isAuthenticated) {
-      window.location.href = getLoginUrl() + '?returnUrl=' + encodeURIComponent(window.location.pathname);
-      return;
-    }
+    // 先弹出支付弹窗，登录检查在确认支付时进行
     setShowPayment(true);
   };
 
@@ -930,29 +928,29 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* BottomNav 占位高度（避免内容被遮挡） */}
-      <div className="h-[130px]" />
+      {/* 底部占位：购买栏高度 + BottomNav高度 + safe-area */}
+      <div className="h-[140px]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }} />
 
-      {/* 吸底购买栏 —— z-60 高于 BottomNav(z-50)，悬浮在导航栏上方 */}
+      {/* 吸底购买栏 —— 在 BottomNav 上方，z-60 */}
       <div
-        className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.10)]"
-        style={{ bottom: '64px', zIndex: 60 }}
+        className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.12)]"
+        style={{ bottom: 'calc(56px + env(safe-area-inset-bottom, 0px))', zIndex: 60 }}
       >
-        <div className="max-w-md mx-auto px-4 py-2.5 flex items-center gap-3">
+        <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl font-bold text-[#D32F2F]">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold text-[#D32F2F]">
                 ¥{product.price % 1 === 0 ? product.price : product.price.toFixed(1)}
               </span>
               <span className="text-xs text-gray-400">{product.unit}</span>
             </div>
             {product.originalPrice && (
-              <p className="text-[11px] text-gray-400 line-through">原价 ¥{product.originalPrice}</p>
+              <p className="text-xs text-gray-400 line-through">原价 ¥{product.originalPrice}</p>
             )}
           </div>
           <button
             onClick={handleBuy}
-            className="flex-shrink-0 px-8 py-3 bg-[#D32F2F] text-white font-bold text-base rounded-xl active:scale-95 transition-transform"
+            className="flex-shrink-0 px-8 py-4 bg-[#D32F2F] text-white font-bold text-base rounded-xl active:scale-95 transition-transform min-h-[52px]"
           >
             立即购买
           </button>
