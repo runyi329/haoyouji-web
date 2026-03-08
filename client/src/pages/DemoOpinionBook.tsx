@@ -289,8 +289,20 @@ const ROLE_CONFIG = {
 };
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
-function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{ id: number; name: string }> }) {
-  const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
+function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; branches: Array<{ id: number; name: string }>; allCategories: any[] }) {
+  // 模拟扫码：组件挂载时随机选一个分店+桌号（模拟真实客户扫码效果）
+  const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(() => {
+    if (branches.length === 0) return undefined;
+    const randomBranch = branches[Math.floor(Math.random() * branches.length)];
+    // 找该分店下的桌号（二级分类）
+    const tables = allCategories.filter((c: any) => c.parentId === randomBranch.id);
+    if (tables.length > 0) {
+      // 随机选一个桌号
+      return tables[Math.floor(Math.random() * tables.length)].id;
+    }
+    // 没有桌号则直接用分店id
+    return randomBranch.id;
+  });
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>([]);
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [selectedSubItems, setSelectedSubItems] = useState<string[]>([]);
@@ -306,6 +318,20 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
   const [amount, setAmount] = useState("");
   const [payLoading, setPayLoading] = useState(false);
   const [scanTime] = useState(() => new Date());
+  const [randomInitialized, setRandomInitialized] = useState(false);
+
+  // 当 branches 加载完成后，随机初始化分店+桌号（只执行一次）
+  useEffect(() => {
+    if (randomInitialized || branches.length === 0 || allCategories.length === 0) return;
+    const randomBranch = branches[Math.floor(Math.random() * branches.length)];
+    const tables = allCategories.filter((c: any) => c.parentId === randomBranch.id);
+    if (tables.length > 0) {
+      setSelectedBranchId(tables[Math.floor(Math.random() * tables.length)].id);
+    } else {
+      setSelectedBranchId(randomBranch.id);
+    }
+    setRandomInitialized(true);
+  }, [branches, allCategories, randomInitialized]);
 
   const { data: info } = trpc.opinionBook.getPublicInfo.useQuery(
     { ledgerId, categoryId: selectedBranchId },
@@ -894,7 +920,7 @@ export default function DemoOpinionBook() {
 
       {/* 内容区域 */}
       <div className="flex-1" style={{ overflow: role === 'guest' ? 'auto' : 'hidden' }}>
-        {role === "guest" && <GuestView ledgerId={ledgerId} branches={branches} />}
+        {role === "guest" && <GuestView ledgerId={ledgerId} branches={branches} allCategories={allCategories} />}
         {role === "manager" && <ManagerView ledgerId={ledgerId} isOwner={false} branches={branches} />}
         {role === "owner" && <ManagerView ledgerId={ledgerId} isOwner={true} branches={branches} />}
       </div>
