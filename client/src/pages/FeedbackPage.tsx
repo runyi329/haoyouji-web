@@ -173,6 +173,8 @@ export default function FeedbackPage() {
   const urlSearch = new URLSearchParams(window.location.search);
   const urlBranch = urlSearch.get("branch") || "";
   const urlTable = urlSearch.get("table") || "";
+  const isPaid = urlSearch.get("paid") === "1";
+  const paidOrderId = urlSearch.get("orderId") || "";
 
   // 意见填写展开状态
   const [opinionOpen, setOpinionOpen] = useState(true);
@@ -330,6 +332,79 @@ export default function FeedbackPage() {
       setPayLoading(false);
     }
   };
+
+  // 支付宝回调后显示支付成功页面
+  if (isPaid) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex flex-col">
+        {/* 顶部红色装饰区 */}
+        <div className="bg-[#D32F2F] h-32 relative overflow-hidden flex-shrink-0">
+          <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/10 rounded-full" />
+          <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-white/10 rounded-full" />
+          <div className="absolute top-4 left-4">
+            <p className="text-white/70 text-xs">好友记 · 意见反馈</p>
+            <p className="text-white font-bold text-lg mt-0.5">{info?.book?.name || "意见反馈"}</p>
+          </div>
+        </div>
+
+        {/* 主内容卡片 - 上移覆盖红色区域 */}
+        <div className="flex-1 px-4 -mt-8 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+            {/* 大绿色对勾 */}
+            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">支付成功</h2>
+            <p className="text-gray-400 text-sm mb-6">感谢您的宝贵意见！</p>
+
+            {/* 优惠信息卡 */}
+            <div className="bg-red-50 rounded-xl p-4 mb-6 border border-red-100">
+              <p className="text-red-500 text-xs font-medium mb-1">本次优惠</p>
+              <p className="text-red-600 text-base font-semibold">已享受 <span className="text-2xl font-bold">95折</span> 优惠</p>
+              <p className="text-red-400 text-xs mt-1">感谢您帮助我们改进服务</p>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="border-t border-dashed border-gray-100 mb-6" />
+
+            {/* 温馨提示 */}
+            <div className="text-left space-y-2 mb-6">
+              <div className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                <p className="text-gray-500 text-xs">优惠已自动计入本次消费，请向服务员出示此页面</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                <p className="text-gray-500 text-xs">您的意见将帮助我们为您提供更好的服务体验</p>
+              </div>
+              {paidOrderId && (
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 flex-shrink-0" />
+                  <p className="text-gray-300 text-xs">订单号：{paidOrderId}</p>
+                </div>
+              )}
+            </div>
+
+            {/* 返回按钮 */}
+            <button
+              onClick={() => window.location.href = `/feedback/${ledgerId}`}
+              className="w-full py-3 bg-[#D32F2F] text-white rounded-xl font-semibold text-sm active:opacity-90"
+            >
+              返回意见簿
+            </button>
+          </div>
+
+          {/* 底部品牌信息 */}
+          <div className="text-center mt-6">
+            <p className="text-gray-300 text-xs">好友记 · 共享建议簿</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
