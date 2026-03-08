@@ -87,40 +87,52 @@ const DIMENSIONS_KEYWORDS = [
 // ─── 词云组件（与OpinionBookDetail保持一致）──────────────────────────────────
 function WordCloud({ tags }: { tags: Array<{ tag: string; count: number }> }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [placed, setPlaced] = useState<Array<{ tag: string; x: number; y: number; fontSize: number; opacity: number; fontWeight: number }>>([]);
+  const [placed, setPlaced] = useState<Array<{ tag: string; x: number; y: number; fontSize: number; opacity: number; fontWeight: number; rotate: number; color: string }>>([])
   useEffect(() => {
     if (!containerRef.current || tags.length === 0) { setPlaced([]); return; }
     const W = containerRef.current.offsetWidth;
     const H = containerRef.current.offsetHeight;
     if (W === 0 || H === 0) return;
     const maxCount = tags[0].count;
+    const minCount = tags[tags.length - 1].count;
+    const countRange = Math.max(maxCount - minCount, 1);
     const cx = W / 2; const cy = H / 2;
     const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
     const result: typeof placed = [];
-    tags.forEach(({ tag, count }) => {
-      const ratio = count / maxCount;
-      const fontSize = Math.round(10 + ratio * 10);
-      const opacity = 0.5 + ratio * 0.5;
-      const fontWeight = ratio >= 0.8 ? 700 : ratio >= 0.5 ? 600 : 400;
-      const tw = tag.length * fontSize * 0.95;
-      const th = fontSize * 1.4;
+    // 颜色池：白色系 + 黄色点缀
+    const colors = ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFE082", "#FFFFFF", "rgba(255,255,255,0.75)"];
+    // 旋转角度池（只用少量旋转，避免太乱）
+    const rotates = [0, 0, 0, -15, 15, -30, 30];
+    tags.forEach(({ tag, count }, idx) => {
+      const ratio = (count - minCount) / countRange;
+      // 字体：9px ~ 30px，差距更大
+      const fontSize = Math.round(9 + ratio * 21);
+      // 透明度：0.45 ~ 1.0
+      const opacity = 0.45 + ratio * 0.55;
+      const fontWeight = ratio >= 0.75 ? 800 : ratio >= 0.45 ? 600 : 400;
+      // 旋转：高频词不旋转，低频词随机旋转
+      const rotate = ratio >= 0.7 ? 0 : rotates[idx % rotates.length];
+      const color = colors[idx % colors.length];
+      // 估算文字宽高（旋转后需要更大的碰撞盒）
+      const tw = tag.length * fontSize * (rotate !== 0 ? 1.1 : 0.95);
+      const th = fontSize * (rotate !== 0 ? 1.6 : 1.4);
       let placed_ok = false;
       const step = 2;
       const maxR = Math.min(W, H) * 0.52;
       for (let r = 0; r <= maxR && !placed_ok; r += step) {
-        const angleCount = r === 0 ? 1 : Math.max(8, Math.round(2 * Math.PI * r / (fontSize * 1.2)));
-        const angleOffset = (count * 137.5 * Math.PI) / 180;
+        const angleCount = r === 0 ? 1 : Math.max(8, Math.round(2 * Math.PI * r / (fontSize * 1.1)));
+        const angleOffset = (idx * 137.508 * Math.PI) / 180;
         for (let ai = 0; ai < angleCount && !placed_ok; ai++) {
           const angle = angleOffset + (ai / angleCount) * 2 * Math.PI;
           const x = cx + r * Math.cos(angle) - tw / 2;
           const y = cy + r * Math.sin(angle) - th / 2;
           if (x < 0 || y < 0 || x + tw > W || y + th > H) continue;
           const overlap = rects.some(rc =>
-            x < rc.x + rc.w + 2 && x + tw + 2 > rc.x && y < rc.y + rc.h + 2 && y + th + 2 > rc.y
+            x < rc.x + rc.w + 3 && x + tw + 3 > rc.x && y < rc.y + rc.h + 3 && y + th + 3 > rc.y
           );
           if (!overlap) {
             rects.push({ x, y, w: tw, h: th });
-            result.push({ tag, x, y, fontSize, opacity, fontWeight });
+            result.push({ tag, x, y, fontSize, opacity, fontWeight, rotate, color });
             placed_ok = true;
           }
         }
@@ -134,7 +146,9 @@ function WordCloud({ tags }: { tags: Array<{ tag: string; count: number }> }) {
         <span key={i} style={{
           position: "absolute", left: item.x, top: item.y,
           fontSize: item.fontSize, opacity: item.opacity, fontWeight: item.fontWeight,
-          color: "#FFFFFF", whiteSpace: "nowrap", lineHeight: 1.4,
+          color: item.color, whiteSpace: "nowrap", lineHeight: 1.4,
+          transform: item.rotate !== 0 ? `rotate(${item.rotate}deg)` : undefined,
+          transformOrigin: "center center",
         }}>{item.tag}</span>
       ))}
     </div>
