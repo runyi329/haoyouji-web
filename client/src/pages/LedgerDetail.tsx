@@ -112,6 +112,7 @@ export default function LedgerDetail() {
 
   // 减肥账本数据
   const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
+  const isCustomAE = (ledgerData as any)?.type === 'custom_ae';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isDietCoach = isDiet && (isOwner || isAdmin);
@@ -435,8 +436,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 抽奖活动列表（双 Tab：正在进行中 / 往期回顾） */}
-      {!isDiet && (
+      {/* 抽奖活动列表（双 Tab：正在进行中 / 往期回顾）—— 仅 custom_ae 账本 */}
+      {isCustomAE && (
         <div className="flex-1 pb-20">
           {/* 子 Tab 切换栏 */}
           <div className="flex mx-4 mt-3 mb-3 rounded-xl overflow-hidden" style={{ backgroundColor: '#F5F5F5' }}>
@@ -776,9 +777,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 记账记录列表 */}
-      {/* 记账明细列表已隐藏（此账本仅用于抽奖） */}
-      <div className={`flex-1 px-4 pb-20 space-y-3 hidden`}>
+      {/* 记账记录列表 —— 非 custom_ae 账本显示 */}
+      {!isCustomAE && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -903,10 +903,22 @@ export default function LedgerDetail() {
             );
           })
         )}
-      </div>
+      </div>}
 
-      {/* 底部添加按钮已移除（此账本仅用于抽奖，参与者通过活动详情页报名） */}
-      {/* 减肥账本仍保留打卡按钮 */}
+      {/* 底部添加按钮：非 custom_ae 账本显示 */}
+      {!isCustomAE && !isDiet && (
+        <button
+          onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+          style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      )}
+      {/* 减肥账本打卡按钮 */}
       {isDiet && (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/diet-checkin`)}

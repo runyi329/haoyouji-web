@@ -252,7 +252,7 @@ export const lotteryRouter = router({
            (SELECT COUNT(*) FROM lottery_results WHERE activity_id=a.id) AS winnerCount,
            (SELECT u.name FROM lottery_results lr
               JOIN users u ON u.id=lr.winner_id
-              WHERE lr.activity_id=a.id ORDER BY lr.created_at ASC LIMIT 1) AS firstWinnerName
+              WHERE lr.activity_id=a.id ORDER BY lr.drawn_at ASC LIMIT 1) AS firstWinnerName
          FROM lottery_activities a
          WHERE a.ledger_id=?
          ORDER BY a.created_at DESC`,
