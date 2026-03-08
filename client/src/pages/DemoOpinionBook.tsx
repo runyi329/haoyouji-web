@@ -408,62 +408,68 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      {/* 顶部红色区 - 大众点评风格品牌展示 */}
-      <div className="bg-[#C62828] relative overflow-hidden" style={{ minHeight: '130px' }}>
-        {/* 背景纹理装饰 */}
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 50%)', backgroundSize: '8px 8px' }} />
-        {/* 左侧：品牌信息区 */}
-        <div className="relative z-10 flex items-stretch" style={{ minHeight: '130px' }}>
-          <div className="flex-1 px-4 py-3 flex flex-col justify-between min-w-0">
-            {/* 顶部：logo + 品牌名 */}
-            <div className="flex items-center gap-2">
-              <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_logo_extracted_71ab90cf.jpg" alt="麻六记" className="w-10 h-10 object-contain rounded-md flex-shrink-0" style={{ imageRendering: 'auto' }} />
-              <div className="min-w-0">
-                <h1 className="text-white font-bold text-[17px] leading-tight truncate">麻六记</h1>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFE082' }}>👑 连锁</span>
-                  <span className="text-white/60 text-[10px]">川菜馆</span>
-                </div>
+      {/* 顶部红色区 - 麻六记官方品牌区域 */}
+      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #B71C1C 0%, #D32F2F 50%, #C62828 100%)', minHeight: '170px' }}>
+        {/* 背景装饰：斥光散射效果 */}
+        <div className="absolute top-0 left-0 w-full h-full" style={{ background: 'radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.08) 0%, transparent 60%)' }} />
+        {/* 底部细线 */}
+        <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
+
+        <div className="relative z-10 flex items-stretch" style={{ minHeight: '170px' }}>
+          {/* 左侧：品牌信息区 */}
+          <div className="flex-1 px-4 pt-4 pb-4 flex flex-col justify-between min-w-0">
+            {/* 顶部：品牌名 + 标签 */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-white text-[22px] font-black tracking-wide leading-none" style={{ fontFamily: 'serif', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>麻六记</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none" style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', letterSpacing: '0.05em' }}>连锁</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/65 text-[11px]">川菜馆</span>
+                <span className="text-white/30 text-[10px]">·</span>
+                <span className="text-white/65 text-[11px]">全国直营</span>
               </div>
             </div>
-            {/* 评分行 */}
-            <div className="mt-2">
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-0.5">
-                  {[1,2,3,4].map(i => <span key={i} className="text-[#FF8F00] text-sm">★</span>)}
-                  <span className="text-[#FF8F00] text-sm" style={{ clipPath: 'inset(0 70% 0 0)' }}>★</span>
+
+            {/* 中部：评分 */}
+            <div className="mt-3">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[#FFD54F] font-black text-[22px] leading-none">4.3</span>
+                <div className="flex items-center gap-0.5 mb-0.5">
+                  {[1,2,3,4].map(i => (
+                    <svg key={i} viewBox="0 0 12 12" className="w-3 h-3" fill="#FFD54F"><polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9,11 6,9.5 3,11 3.5,7.5 1,5 4.5,4.5"/></svg>
+                  ))}
+                  <svg viewBox="0 0 12 12" className="w-3 h-3"><defs><linearGradient id="hstar"><stop offset="30%" stopColor="#FFD54F"/><stop offset="30%" stopColor="rgba(255,255,255,0.3)"/></linearGradient></defs><polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9,11 6,9.5 3,11 3.5,7.5 1,5 4.5,4.5" fill="url(#hstar)"/></svg>
                 </div>
-                <span className="text-[#FFE082] font-bold text-sm">4.3</span>
-                <span className="text-white/50 text-xs">1398条评价</span>
+                <span className="text-white/50 text-[11px]">1398条评价</span>
               </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-white/70 text-[11px]">口味4.3</span>
-                <span className="text-white/30 text-[10px]">|</span>
-                <span className="text-white/70 text-[11px]">环境4.4</span>
-                <span className="text-white/30 text-[10px]">|</span>
-                <span className="text-white/70 text-[11px]">服务4.4</span>
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className="text-white/70 text-[11px]">口味 <span className="text-white/90 font-semibold">4.3</span></span>
+                <span className="text-white/70 text-[11px]">环境 <span className="text-white/90 font-semibold">4.4</span></span>
+                <span className="text-white/70 text-[11px]">服务 <span className="text-white/90 font-semibold">4.4</span></span>
               </div>
             </div>
-            {/* 底部：合作标签 */}
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#FFE082', border: '1px solid rgba(255,215,0,0.3)' }}>✦ 品牌合作商家</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)' }}>提意见享95折</span>
+
+            {/* 底部：意见反馈标识 */}
+            <div className="flex items-center gap-2 mt-3">
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <svg viewBox="0 0 16 16" className="w-3 h-3 flex-shrink-0" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5"><path d="M14 9.5a5 5 0 0 1-5 5H3l-1 1V5a5 5 0 0 1 5-5h2"/><circle cx="12" cy="4" r="3" fill="rgba(255,255,255,0.9)" stroke="none"/></svg>
+                <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.95)' }}>意见反馈专用页</span>
+              </div>
+              <div className="px-2.5 py-1 rounded" style={{ backgroundColor: 'rgba(255,213,79,0.2)', border: '1px solid rgba(255,213,79,0.4)' }}>
+                <span className="text-[11px] font-semibold" style={{ color: '#FFD54F' }}>提意见享 95 折</span>
+              </div>
             </div>
           </div>
-          {/* 右侧：菜品图 */}
-          <div className="flex-shrink-0 relative" style={{ width: '130px' }}>
+
+          {/* 右侧：麻六记商标（透明背景） */}
+          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '140px', paddingRight: '8px' }}>
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_dish_clean_f441bf93.jpg"
-              alt="招牌菜品"
-              className="w-full h-full object-cover"
-              style={{ minHeight: '130px' }}
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_logo_transparent_82ed2c56.png"
+              alt="麻六记 MALUJI"
+              className="object-contain drop-shadow-lg"
+              style={{ width: '120px', height: '120px', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.4))' }}
             />
-            {/* 渐变遮罩（左侧淡入） */}
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, #C62828 0%, transparent 35%)' }} />
-            {/* 右下角标签 */}
-            <div className="absolute bottom-2 right-2">
-              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.9)' }}>招牌菜</span>
-            </div>
           </div>
         </div>
       </div>
