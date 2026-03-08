@@ -290,19 +290,9 @@ const ROLE_CONFIG = {
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
 function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; branches: Array<{ id: number; name: string }>; allCategories: any[] }) {
-  // 模拟扫码：组件挂载时随机选一个分店+桌号（模拟真实客户扫码效果）
-  const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(() => {
-    if (branches.length === 0) return undefined;
-    const randomBranch = branches[Math.floor(Math.random() * branches.length)];
-    // 找该分店下的桌号（二级分类）
-    const tables = allCategories.filter((c: any) => c.parentId === randomBranch.id);
-    if (tables.length > 0) {
-      // 随机选一个桌号
-      return tables[Math.floor(Math.random() * tables.length)].id;
-    }
-    // 没有桌号则直接用分店id
-    return randomBranch.id;
-  });
+  // 模拟扫码：随机选分店ID（用于提交），随机生成A01-A30桌号字符串（仅展示用）
+  const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
+  const [simulatedTable, setSimulatedTable] = useState<string | null>(null); // "A07" 这样的桌号
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>([]);
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [selectedSubItems, setSelectedSubItems] = useState<string[]>([]);
@@ -321,17 +311,16 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
   const [randomInitialized, setRandomInitialized] = useState(false);
 
   // 当 branches 加载完成后，随机初始化分店+桌号（只执行一次）
+  // 桌号从 A01-A30 中随机生成，不依赖数据库二级分类
   useEffect(() => {
-    if (randomInitialized || branches.length === 0 || allCategories.length === 0) return;
+    if (randomInitialized || branches.length === 0) return;
     const randomBranch = branches[Math.floor(Math.random() * branches.length)];
-    const tables = allCategories.filter((c: any) => c.parentId === randomBranch.id);
-    if (tables.length > 0) {
-      setSelectedBranchId(tables[Math.floor(Math.random() * tables.length)].id);
-    } else {
-      setSelectedBranchId(randomBranch.id);
-    }
+    setSelectedBranchId(randomBranch.id);
+    // 随机桌号 A01-A30
+    const tableNum = Math.floor(Math.random() * 30) + 1;
+    setSimulatedTable(`A${String(tableNum).padStart(2, '0')}`);
     setRandomInitialized(true);
-  }, [branches, allCategories, randomInitialized]);
+  }, [branches, randomInitialized]);
 
   const { data: info } = trpc.opinionBook.getPublicInfo.useQuery(
     { ledgerId, categoryId: selectedBranchId },
@@ -581,8 +570,8 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
             <p className="text-[13px] font-semibold text-gray-700">本次消费金额</p>
             <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
               {info?.branch && <span>{info.branch.name}</span>}
-              {info?.tableName && <><span className="text-gray-200">·</span><span>{info.tableName}</span></>}
-              {(info?.branch || info?.tableName) && <span className="text-gray-200">·</span>}
+              {simulatedTable && <><span className="text-gray-200">·</span><span>{simulatedTable}桌</span></>}
+              {(info?.branch || simulatedTable) && <span className="text-gray-200">·</span>}
               <span>{scanTime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           </div>
