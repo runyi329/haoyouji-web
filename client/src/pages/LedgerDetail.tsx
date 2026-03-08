@@ -91,8 +91,8 @@ export default function LedgerDetail() {
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
-  // Tab 状态：'records' | 'lottery'
-  const [activeTab, setActiveTab] = useState<'records' | 'lottery'>('records');
+  // Tab 状态：只保留 'lottery'（记账明细已移除）
+  const [activeTab, setActiveTab] = useState<'records' | 'lottery'>('lottery');
 
   // 抽奖活动列表
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
@@ -265,54 +265,7 @@ export default function LedgerDetail() {
 
         {/* 成员头像和功能按钮 */}
         <div className="px-4 py-2 flex items-center justify-between">
-          {/* 成员头像（靠左，堆厠显示） - 减肥账本学员不显示 */}
-          {!isDietStudent && (
-          <div className="flex items-center">
-            {membersData && Array.isArray(membersData) && membersData.length > 0 && membersData.slice(0, 5).map((member, index) => (
-              <div
-                key={member.userId}
-                className="relative"
-                style={{ marginLeft: index === 0 ? 0 : '-12px', zIndex: 5 - index }}
-              >
-                <UserAvatar
-                  username={member.username}
-                  avatar={member.avatar}
-                  nickname={member.nickname}
-                  size="md"
-                />
-                {(member as any).memberType === 'ai' && (
-                  <div 
-                    className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-white font-bold border border-white"
-                    style={{ 
-                      background: 'linear-gradient(135deg, #D32F2F, #FF5252)', 
-                      fontSize: '7px', 
-                      padding: '0px 3px', 
-                      borderRadius: '6px',
-                      lineHeight: '11px',
-                      letterSpacing: '0.5px',
-                      zIndex: 10
-                    }}
-                  >
-                    AI
-                  </div>
-                )}
-              </div>
-            ))}
-            {/* 显示更多按钮 */}
-            {membersData && Array.isArray(membersData) && membersData.length > 0 && (
-              <div
-                className="w-10 h-10 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-[#757575] text-lg font-medium cursor-pointer hover:bg-[#FFEBEE]"
-                style={{ marginLeft: membersData.length > 0 ? '-12px' : 0, zIndex: 0 }}
-                onClick={() => setShowMembersDialog(true)}
-              >
-                +
-              </div>
-            )}
-          </div>
-          )}
-          
-          {/* 减肥账本学员：我的头像（靠右） */}
-          {isDietStudent && (
+          {/* 当前登录用户头像（靠左，单个头像） */}
           <div className="flex items-center">
             {user && (
               <UserAvatar
@@ -323,9 +276,10 @@ export default function LedgerDetail() {
               />
             )}
           </div>
-          )}
           
-          {/* 功能按钮（靠右） */}
+
+          
+          {/* 功能按钮（靠右）：管理员/创建者显示设置按钮，其他人全部隐藏 */}
           <div className="flex items-center gap-2">
             {/* 减肥账本教练：学员管理按钮 */}
             {isDietCoach && (
@@ -337,33 +291,15 @@ export default function LedgerDetail() {
                 <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
               </div>
             )}
-            {/* 减肥账本学员不显示设置按钮 */}
-            {!isDietStudent && (
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-              style={{ backgroundColor: '#FFFFFF' }}
-              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-            >
-              <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
-            </div>
-            )}
-            {!isDiet && (
-              <>
-                <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                  style={{ backgroundColor: '#FFFFFF' }}
-                  onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-                >
-                  <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
-                </div>
-                <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                  style={{ backgroundColor: '#FFFFFF' }}
-                  onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-                >
-                  <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
-                </div>
-              </>
+            {/* 只有管理员或创建者才显示设置按钮 */}
+            {(isOwner || isAdmin) && (
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                style={{ backgroundColor: '#FFFFFF' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              >
+                <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
+              </div>
             )}
           </div>
         </div>
@@ -509,31 +445,7 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* Tab 切换 */}
-      {!isDiet && (
-        <div className="flex mx-4 mt-3 mb-1 bg-white rounded-lg overflow-hidden border border-gray-100">
-          <button
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'records'
-                ? 'bg-[#D32F2F] text-white'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-            onClick={() => setActiveTab('records')}
-          >
-            记账明细
-          </button>
-          <button
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'lottery'
-                ? 'bg-[#D32F2F] text-white'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-            onClick={() => setActiveTab('lottery')}
-          >
-            抽奖活动
-          </button>
-        </div>
-      )}
+      {/* Tab 切换已移除：只保留抽奖活动列表 */}
 
       {/* 抽奖活动列表 */}
       {activeTab === 'lottery' && !isDiet && (
@@ -634,7 +546,8 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 */}
-      <div className={`flex-1 px-4 pb-20 space-y-3 ${activeTab !== 'records' && !isDiet ? 'hidden' : ''}`}>
+      {/* 记账明细列表已隐藏（此账本仅用于抽奖） */}
+      <div className={`flex-1 px-4 pb-20 space-y-3 hidden`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -761,21 +674,11 @@ export default function LedgerDetail() {
         )}
       </div>
 
-      {/* 固定底部中间的添加账目按钮 */}
-      {isDiet ? (
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/diet-checkin`)}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
-            style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-      ) : (
+      {/* 底部添加按钮已移除（此账本仅用于抽奖，参与者通过活动详情页报名） */}
+      {/* 减肥账本仍保留打卡按钮 */}
+      {isDiet && (
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+          onClick={() => setLocation(`/ledger/${ledgerId}/diet-checkin`)}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
           style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
         >
