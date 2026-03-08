@@ -317,7 +317,7 @@ function LotteryBalls({ seedType, seedValue, seedSource }: {
 }
 
 // ─── 算法公式展示 ─────────────────────────────────────────────────────────────
-function AlgorithmBox({ seedType, mode }: { seedType?: string | null; mode: string }) {
+function AlgorithmBox({ seedType, mode, seedDate }: { seedType?: string | null; mode: string; seedDate?: string | null }) {
   const isStock = seedType === 'sh_index' || seedType === 'sz_index';
   const isLottery = seedType === 'ssq' || seedType === 'dlt';
   const seedName = {
@@ -369,6 +369,19 @@ function AlgorithmBox({ seedType, mode }: { seedType?: string | null; mode: stri
           <div className="flex items-start gap-1.5">
             <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#66BB6A' }} />
             <span>开奖依据来自第三方公开数据，主办方无法干预结果</span>
+          </div>
+        )}
+        {(isStock || isLottery) && (
+          <div className="flex items-start gap-1.5 mt-1 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(203,164,113,0.1)', border: '1px solid rgba(203,164,113,0.2)' }}>
+            <span className="text-xs" style={{ color: C.gold }}>
+              📅 开奖依据日期：
+              <strong style={{ color: '#FFFFFF' }}>
+                {seedDate ? seedDate : '开奖当天最新数据'}
+              </strong>
+              {seedDate && isStock && <span style={{ color: C.darkSub }}>（上交所收盘价）</span>}
+              {seedDate && seedType === 'ssq' && <span style={{ color: C.darkSub }}>（双色球开奖号码）</span>}
+              {seedDate && seedType === 'dlt' && <span style={{ color: C.darkSub }}>（大乐透开奖号码）</span>}
+            </span>
           </div>
         )}
       </div>
@@ -813,7 +826,7 @@ export default function LotteryActivity() {
 
         {/* ── 4. 开奖算法公式 ── */}
         {(hasExternalSeed || activity.mode === 'scheduled') && (
-          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} />
+          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} />
         )}
 
         {/* ── 5. 开奖结果（已结束时展示）── */}

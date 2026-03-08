@@ -194,6 +194,8 @@ export const lotteryRouter = router({
       registrationMode: z.enum(['invite', 'organizer_add', 'open', 'member_only', 'invite_only']).optional(),
       status: z.enum(["draft", "open", "drawing", "completed", "cancelled"]).optional(),
       isPublic: z.boolean().optional(),
+      externalSeedType: z.enum(['sh_index', 'sz_index', 'ssq', 'dlt']).optional(),
+      externalSeedDate: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { activityId, ...fields } = input;
@@ -217,6 +219,8 @@ export const lotteryRouter = router({
       if (fields.registrationMode !== undefined) { updates.push("registration_mode=?"); values.push(fields.registrationMode); }
       if (fields.status !== undefined) { updates.push("status=?"); values.push(fields.status); }
       if (fields.isPublic !== undefined) { updates.push("is_public=?"); values.push(fields.isPublic ? 1 : 0); }
+      if (fields.externalSeedType !== undefined) { updates.push("external_seed_type=?"); values.push(fields.externalSeedType); }
+      if (fields.externalSeedDate !== undefined) { updates.push("external_seed_date=?"); values.push(fields.externalSeedDate); }
 
       if (updates.length === 0) return { success: true };
       values.push(activityId);

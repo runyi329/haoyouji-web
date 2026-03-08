@@ -7,8 +7,9 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useRef } from "react";
 import {
-  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X
+  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X, TrendingUp, Shield
 } from "lucide-react";
+import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 
 interface PrizeRow {
   id?: number;
@@ -51,6 +52,8 @@ export default function LotteryEdit() {
   const [registrationMode, setRegistrationMode] = useState<"open" | "member_only" | "invite_only">("open");
   const [requiresInfo, setRequiresInfo] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
+  const [externalSeedType, setExternalSeedType] = useState<"none" | "sh_index" | "sz_index" | "ssq" | "dlt">("none");
+  const [externalSeedDate, setExternalSeedDate] = useState("");
   const [prizes, setPrizes] = useState<PrizeRow[]>([]);
   const [editingPrizeIdx, setEditingPrizeIdx] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +68,8 @@ export default function LotteryEdit() {
     setRegistrationMode(activity.registration_mode ?? "open");
     setRequiresInfo(!!activity.requires_info);
     setIsPublic(activity.is_public !== false);
+    setExternalSeedType((activity.external_seed_type as any) ?? "none");
+    setExternalSeedDate(activity.external_seed_date ?? "");
     setMaxParticipants(activity.max_participants ? String(activity.max_participants) : "");
     if (activity.draw_at) {
       const d = new Date(activity.draw_at);
@@ -96,6 +101,8 @@ export default function LotteryEdit() {
         signupEndAt: signupEndAt || undefined,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
         isPublic, requiresInfo, registrationMode,
+        externalSeedType: externalSeedType === 'none' ? undefined : externalSeedType,
+        externalSeedDate: externalSeedDate || undefined,
       });
       for (const prize of prizes) {
         if (prize.deleted && prize.id) {
@@ -427,6 +434,53 @@ export default function LotteryEdit() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* 卡片6：公平开奖依据 */}
+        <div className="bg-white rounded-xl p-3.5" style={{ border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color: C.sub }}>
+            <Shield className="w-3.5 h-3.5" style={{ color: C.red }} />公平开奖依据
+          </div>
+          <div className="flex gap-1.5 flex-wrap mb-2">
+            {([
+              { value: 'none', label: '随机算法' },
+              { value: 'sh_index', label: '上证指数' },
+              { value: 'sz_index', label: '深证成指' },
+              { value: 'ssq', label: '双色球' },
+              { value: 'dlt', label: '大乐透' },
+            ] as const).map(opt => (
+              <button key={opt.value} onClick={() => { setExternalSeedType(opt.value); setExternalSeedDate(''); }}
+                className="py-1.5 px-3 rounded-lg text-xs font-medium border-2 transition-colors"
+                style={{
+                  borderColor: externalSeedType === opt.value ? C.red : C.border,
+                  backgroundColor: externalSeedType === opt.value ? C.redLight : '#FAFAFA',
+                  color: externalSeedType === opt.value ? C.red : C.sub,
+                }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {externalSeedType !== 'none' && (
+            <div className="mt-2">
+              <div className="text-xs mb-1.5" style={{ color: C.sub }}>
+                {externalSeedType === 'sh_index' || externalSeedType === 'sz_index'
+                  ? '选择依据的交易日（灰色为非交易日）'
+                  : externalSeedType === 'ssq'
+                  ? '选择双色球开奖日（仅周二/四/日）'
+                  : '选择大乐透开奖日（仅周一/三/六）'}
+              </div>
+              <LotteryDatePicker
+                seedType={externalSeedType}
+                value={externalSeedDate}
+                onChange={setExternalSeedDate}
+              />
+              {externalSeedDate && (
+                <div className="mt-1.5 text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: C.redLight, color: C.red }}>
+                  已选：{externalSeedDate}
+                </div>
+              )}
             </div>
           )}
         </div>
