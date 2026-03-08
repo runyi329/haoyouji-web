@@ -551,20 +551,19 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
 
         {/* 支付区 */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 pt-5 pb-2">
-            <p className="text-xs text-gray-400 mb-1">{submitted ? "已享95折优惠" : "提交意见后享95折优惠"}</p>
+          <div className="px-5 pt-5 pb-2 flex items-center justify-between">
             <p className="text-[13px] font-semibold text-gray-700">本次消费金额</p>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+              {info?.branch && <span>{info.branch.name}</span>}
+              {info?.tableName && <><span className="text-gray-200">·</span><span>{info.tableName}</span></>}
+              {(info?.branch || info?.tableName) && <span className="text-gray-200">·</span>}
+              <span>{scanTime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
           </div>
           <div className="px-5 pb-5">
-            <div className="mb-4 bg-gray-50 rounded-xl px-4 py-3 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">扫码时间</span>
-                <span className="text-gray-700">{scanTime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            </div>
-            <div className="flex items-end gap-1 mb-4 border-b border-gray-100 pb-3">
+            <div className="flex items-end gap-1 mb-4 border-b border-gray-100 pb-3 pt-2">
               <span className="text-gray-500 text-xl mb-0.5">¥</span>
-              <input type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" className="flex-1 text-[40px] font-light text-gray-900 bg-transparent border-0 outline-none leading-none placeholder:text-gray-200" />
+              <input type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="请输入用餐金额" className="flex-1 text-[32px] font-light text-gray-900 bg-transparent border-0 outline-none leading-none placeholder:text-gray-300 placeholder:text-[18px]" />
             </div>
             {discountedAmount ? (
               <div className="mb-4 space-y-2">
@@ -573,7 +572,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                 <div className="flex items-center justify-between border-t border-gray-100 pt-2"><span className="text-sm font-semibold text-gray-800">实付金额</span><span className="text-xl font-bold text-gray-900">¥{discountedAmount}</span></div>
               </div>
             ) : (
-              <div className="mb-4 text-center py-2"><p className="text-sm text-gray-400">输入金额后自动计算95折优惠</p></div>
+              <div className="mb-4"></div>
             )}
             <button onClick={handleAlipayPay} disabled={!discountedAmount || payLoading || !submitted}
               className={`w-full py-3.5 rounded-full font-semibold text-[15px] transition-all ${discountedAmount && !payLoading && submitted ? "bg-[#1677FF] text-white active:opacity-80" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}>
