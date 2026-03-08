@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ChevronLeft, Plus, Trophy, Users, Clock, Zap, Layers,
-  Edit2, PlayCircle, PauseCircle, XCircle, Eye,
+  Edit2, PlayCircle, PauseCircle, XCircle, Eye, Trash2,
 } from "lucide-react";
 
 const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
@@ -51,9 +51,11 @@ export default function LotteryList() {
   const { user } = useAuth();
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const { data: activities, isLoading, refetch } = trpc.lottery.listByLedger.useQuery({ ledgerId });
   const updateMutation = trpc.lottery.update.useMutation();
+  const deleteMutation = trpc.lottery.deleteActivity.useMutation();
 
   const handleStatusChange = async (activityId: number, newStatus: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -80,6 +82,19 @@ export default function LotteryList() {
       await refetch();
     } catch (err: any) {
       alert(err.message || '取消失败');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmDelete = async (activityId: number) => {
+    setActionLoading(activityId);
+    setConfirmDelete(null);
+    try {
+      await deleteMutation.mutateAsync({ activityId });
+      await refetch();
+    } catch (err: any) {
+      alert(err.message || '删除失败');
     } finally {
       setActionLoading(null);
     }
@@ -350,10 +365,21 @@ export default function LotteryList() {
                         <XCircle className="w-3.5 h-3.5" />
                         取消
                       </button>
+                      <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+                      {/* 删除 */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(activity.id); }}
+                        disabled={actionLoading === activity.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors disabled:opacity-50"
+                        style={{ color: "#9E9E9E" }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        删除
+                      </button>
                     </div>
                   )}
 
-                  {/* 已结束/已取消状态只显示查看按钮 */}
+                  {/* 已结束/已取消状态显示查看 + 删除按鈕 */}
                   {(activity.status === 'completed' || activity.status === 'cancelled') && (
                     <div
                       className="flex items-center border-t"
@@ -367,6 +393,16 @@ export default function LotteryList() {
                         <Eye className="w-3.5 h-3.5" />
                         查看结果
                       </button>
+                      <div className="w-px h-5" style={{ backgroundColor: "#F0F0F0" }} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(activity.id); }}
+                        disabled={actionLoading === activity.id}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium active:bg-gray-50 transition-colors disabled:opacity-50"
+                        style={{ color: "#9E9E9E" }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        删除
+                      </button>
                     </div>
                   )}
                 </div>
@@ -376,6 +412,33 @@ export default function LotteryList() {
         )}
       </div>
 
+      {/* 删除确认弹窗 */}
+      {confirmDelete !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <div className="w-full max-w-lg bg-white rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold mb-2" style={{ color: "#212121" }}>确认删除活动？</h3>
+            <p className="text-sm mb-6" style={{ color: "#757575" }}>
+              删除后该活动将完全移除，包括往期回顾中也不再显示。此操作不可恢复。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-3 rounded-2xl text-sm font-medium"
+                style={{ backgroundColor: "#F5F5F5", color: "#424242" }}
+              >
+                再想想
+              </button>
+              <button
+                onClick={() => handleConfirmDelete(confirmDelete)}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
+                style={{ backgroundColor: "#757575" }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 取消确认弹窗 */}
       {confirmCancel !== null && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
