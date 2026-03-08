@@ -5381,7 +5381,7 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
                     className="hex-pulse" />
                 )}
                 {label === "共享建议簿" && (() => {
-                  const rFlow = r + 3;
+                  const rFlow = r; // 贴着蜂巢边框
                   const flowPts = hexPoints(px, py, rFlow);
                   // 计算六角形周长（边长 * 6）
                   const side = rFlow;
@@ -5498,7 +5498,7 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
           50% { opacity: 0.3; }
         }
         .hex-flow-light {
-          animation: hexFlowMove 4s linear infinite, hexFlowBreath2 3s ease-in-out infinite;
+          animation: hexFlowMove 1s linear infinite, hexFlowBreath2 3s ease-in-out infinite;
         }
         @keyframes hexFlowMove {
           from { stroke-dashoffset: 0; }
