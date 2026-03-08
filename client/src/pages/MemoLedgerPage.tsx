@@ -25,6 +25,7 @@ import {
   StickyNote,
   ChevronDown,
   ChevronUp,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -507,6 +508,15 @@ export default function MemoLedgerPage({
             <p className="text-base font-semibold truncate">{user?.nickname || user?.name || user?.username || "用户"}</p>
             <p className="text-xs text-red-200 mt-0.5">共 {(items as any[]).length} 条备忘</p>
           </div>
+          {/* 设置按鈕 */}
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            title="账本设置"
+          >
+            <Settings className="w-5 h-5 text-white" />
+          </button>
         </div>
 
         {/* 搜索栏 */}
