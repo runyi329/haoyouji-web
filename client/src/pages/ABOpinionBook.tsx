@@ -291,7 +291,7 @@ const ROLE_CONFIG = {
 };
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
-function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; branches: Array<{ id: number; name: string }>; allCategories: any[] }) {
+function GuestView({ ledgerId, branches, allCategories, initialCategoryId }: { ledgerId: number; branches: Array<{ id: number; name: string }>; allCategories: any[]; initialCategoryId?: number }) {
   // 模拟扫码：随机选分店ID（用于提交），随机生成A01-A30桌号字符串（仅展示用）
   const [selectedBranchId, setSelectedBranchId] = useState<number | undefined>(undefined);
   const [simulatedTable, setSimulatedTable] = useState<string | null>(null); // "A07" 这样的桌号
@@ -317,17 +317,31 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
   const [scanTime] = useState(() => new Date());
   const [randomInitialized, setRandomInitialized] = useState(false);
 
-  // 当 branches 加载完成后，随机初始化分店+桌号（只执行一次）
-  // 桌号从 A01-A30 中随机生成，不依赖数据库二级分类
+  // 当 branches 加载完成后，初始化分店+桌号（只执行一次）
+  // 如果有 initialCategoryId（扫码进入），直接使用对应的分店；否则随机选择
   useEffect(() => {
     if (randomInitialized || branches.length === 0) return;
-    const randomBranch = branches[Math.floor(Math.random() * branches.length)];
-    setSelectedBranchId(randomBranch.id);
-    // 随机桌号 A01-A30
-    const tableNum = Math.floor(Math.random() * 30) + 1;
-    setSimulatedTable(`A${String(tableNum).padStart(2, '0')}`);
+    if (initialCategoryId) {
+      // 扫码进入：查找 categoryId 对应的二级分类（桌号）
+      const tableCategory = (allCategories as any[]).find((c: any) => c.id === initialCategoryId);
+      if (tableCategory?.parentId) {
+        setSelectedBranchId(tableCategory.parentId);
+        setSimulatedTable(tableCategory.name);
+      } else {
+        // 如果是一级分类（分店），直接设置
+        setSelectedBranchId(initialCategoryId);
+        const tableNum = Math.floor(Math.random() * 30) + 1;
+        setSimulatedTable(`A${String(tableNum).padStart(2, '0')}`);
+      }
+    } else {
+      // 无扫码信息：随机选分店和桌号
+      const randomBranch = branches[Math.floor(Math.random() * branches.length)];
+      setSelectedBranchId(randomBranch.id);
+      const tableNum = Math.floor(Math.random() * 30) + 1;
+      setSimulatedTable(`A${String(tableNum).padStart(2, '0')}`);
+    }
     setRandomInitialized(true);
-  }, [branches, randomInitialized]);
+  }, [branches, randomInitialized, initialCategoryId, allCategories]);
 
   const { data: info } = trpc.opinionBook.getPublicInfo.useQuery(
     { ledgerId, categoryId: selectedBranchId },
@@ -1085,8 +1099,9 @@ function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwne
 
 // ─── AB型正式页面（无演示按钮，直接显示顾客填写视角）──────────────────────────
 export default function ABOpinionBook() {
-  const params = useParams<{ bookId: string }>();
+  const params = useParams<{ bookId: string; categoryId?: string }>();
   const ledgerId = parseInt(params.bookId || "0");
+  const initialCategoryId = params.categoryId ? parseInt(params.categoryId) : undefined;
 
   // 获取分店列表（公开接口）
   const { data: allCategories = [] } = trpc.ledger.getPublicCategories.useQuery(
@@ -1101,7 +1116,7 @@ export default function ABOpinionBook() {
 
   return (
     <div className="flex flex-col" style={{ minHeight: '100vh', overflow: 'auto' }}>
-      <GuestView ledgerId={ledgerId} branches={branches} allCategories={allCategories} />
+      <GuestView ledgerId={ledgerId} branches={branches} allCategories={allCategories} initialCategoryId={initialCategoryId} />
     </div>
   );
 }

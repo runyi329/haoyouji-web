@@ -4,7 +4,7 @@
  *
  * 架构：
  * - 桌号作为二级分类存在数据库（分店 > 桌号），永久不消失
- * - 二维码 URL 格式：/feedback/:ledgerId/:categoryId（categoryId = 桌号分类ID）
+ * - 二维码 URL 格式：/ab/opinion/:ledgerId/:categoryId（categoryId = 桌号分类ID）
  * - 每次进入页面直接从数据库读取桌号，无需重新生成
  */
 import { useState, useCallback, useMemo, useRef } from "react";
@@ -139,7 +139,7 @@ export default function QrCodeManager() {
     setRenderingQrs(true);
     const map = new Map<number, HTMLCanvasElement>();
     for (const table of tableList) {
-      const url = `${baseUrl}/feedback/${ledgerId}/${table.categoryId}`;
+      const url = `${baseUrl}/ab/opinion/${ledgerId}/${table.categoryId}`;
       try {
         const canvas = await generateQrCanvas(url, storeName, branchName, table.name);
         map.set(table.categoryId, canvas);
