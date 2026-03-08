@@ -17,56 +17,89 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-// ─── 六大维度（与FeedbackPage保持一致）──────────────────────────────────────
+// ─── 六大维度（与FeedbackPage保持一致，正负面标签）─────────────────────────────────
 const OPINION_DIMENSIONS = [
   {
     id: "food", label: "菜品质量", desc: "口味、食材、分量",
-    subItems: [
+    negItems: [
       { id: "food_salty", label: "太咸" }, { id: "food_bland", label: "太淡" },
       { id: "food_oily", label: "太油腻" }, { id: "food_sweet", label: "太甜" },
       { id: "food_fresh", label: "食材不新鲜" }, { id: "food_smell", label: "有异味" },
       { id: "food_temp", label: "温度不对" }, { id: "food_portion", label: "分量不足" },
-      { id: "food_ratio", label: "配菜多于主料" }, { id: "food_price", label: "性价比低" },
       { id: "food_look", label: "卖相不佳" }, { id: "food_cook", label: "火候不对" },
+    ],
+    posItems: [
+      { id: "food_p_taste", label: "味道很好" }, { id: "food_p_portion", label: "分量十足" },
+      { id: "food_p_fresh", label: "食材新鲜" }, { id: "food_p_variety", label: "菜品丰富" },
+      { id: "food_p_special", label: "有特色招牌菜" }, { id: "food_p_look", label: "摆盘精致" },
+      { id: "food_p_temp", label: "温度恰到好处" }, { id: "food_p_healthy", label: "健康少油" },
     ],
   },
   {
     id: "service", label: "服务表现", desc: "态度、响应、专业度",
-    subItems: [
+    negItems: [
       { id: "svc_slow", label: "响应太慢" }, { id: "svc_attitude", label: "态度不好" },
       { id: "svc_knowledge", label: "不了解菜品" }, { id: "svc_proactive", label: "不够主动" },
       { id: "svc_order", label: "点单出错" }, { id: "svc_bill", label: "结账不顺畅" },
       { id: "svc_seat", label: "领位不及时" }, { id: "svc_water", label: "未主动加水" },
     ],
+    posItems: [
+      { id: "svc_p_smile", label: "服务热情" }, { id: "svc_p_fast", label: "响应迅速" },
+      { id: "svc_p_pro", label: "专业懂菜" }, { id: "svc_p_init", label: "主动贴心" },
+      { id: "svc_p_memory", label: "记住了偏好" }, { id: "svc_p_clean", label: "及时撤盘" },
+      { id: "svc_p_water", label: "主动加水" }, { id: "svc_p_guide", label: "点菜建议好" },
+    ],
   },
   {
     id: "env", label: "环境氛围", desc: "噪音、温度、装修",
-    subItems: [
-      { id: "env_noise", label: "太吵" }, { id: "env_temp", label: "温度不适" },
-      { id: "env_crowd", label: "太拥挤" }, { id: "env_light", label: "灯光太暗" },
-      { id: "env_music", label: "音乐太吵" }, { id: "env_deco", label: "装修老旧" },
+    negItems: [
+      { id: "env_noise", label: "噪音太大" }, { id: "env_light", label: "灯光刺眼" },
+      { id: "env_ac", label: "空调不适" }, { id: "env_seat", label: "座椅不舒适" },
+      { id: "env_smell", label: "有油烟/异味" }, { id: "env_music", label: "音乐音量不合适" },
+    ],
+    posItems: [
+      { id: "env_p_cozy", label: "氛围温馨" }, { id: "env_p_quiet", label: "安静舒适" },
+      { id: "env_p_design", label: "装修有格调" }, { id: "env_p_light", label: "灯光柔和" },
+      { id: "env_p_seat", label: "座位宽敞" }, { id: "env_p_photo", label: "适合拍照打卡" },
     ],
   },
   {
     id: "hygiene", label: "卫生安全", desc: "清洁、异物、过期",
-    subItems: [
-      { id: "hyg_table", label: "桌面不干净" }, { id: "hyg_floor", label: "地面脏" },
-      { id: "hyg_toilet", label: "卫生间脏" }, { id: "hyg_foreign", label: "食物有异物" },
+    negItems: [
+      { id: "hyg_utensil", label: "餐具不干净" }, { id: "hyg_table", label: "桌面不干净" },
+      { id: "hyg_toilet", label: "洗手间脏乱" }, { id: "hyg_foreign", label: "食物有异物" },
       { id: "hyg_expired", label: "食材疑似过期" }, { id: "hyg_pest", label: "发现虫鼠" },
+    ],
+    posItems: [
+      { id: "hyg_p_clean", label: "餐具干净" }, { id: "hyg_p_table", label: "桌面整洁" },
+      { id: "hyg_p_toilet", label: "洗手间干净" }, { id: "hyg_p_staff", label: "员工整洁" },
+      { id: "hyg_p_air", label: "空气清新" }, { id: "hyg_p_food", label: "食品安全放心" },
     ],
   },
   {
     id: "efficiency", label: "运营效率", desc: "等待、出餐、结账",
-    subItems: [
+    negItems: [
       { id: "eff_wait", label: "等位太久" }, { id: "eff_food", label: "出餐太慢" },
       { id: "eff_pay", label: "结账太慢" }, { id: "eff_queue", label: "排队系统混乱" },
+      { id: "eff_miss", label: "漏单" }, { id: "eff_book", label: "预约流程繁琐" },
+    ],
+    posItems: [
+      { id: "eff_p_fast", label: "上菜快" }, { id: "eff_p_book", label: "预约便捷" },
+      { id: "eff_p_queue", label: "排队有序" }, { id: "eff_p_bill", label: "结账顺畅" },
+      { id: "eff_p_wait", label: "等位时间短" }, { id: "eff_p_order", label: "点单流程简单" },
     ],
   },
   {
     id: "value", label: "价值感", desc: "性价比、优惠、体验",
-    subItems: [
+    negItems: [
       { id: "val_price", label: "价格偏高" }, { id: "val_portion", label: "分量不足" },
-      { id: "val_promo", label: "优惠不实惠" }, { id: "val_overall", label: "整体体验差" },
+      { id: "val_promo", label: "优惠不实惠" }, { id: "val_hidden", label: "有隐性消费" },
+      { id: "val_worth", label: "不值这个价" },
+    ],
+    posItems: [
+      { id: "val_p_ratio", label: "性价比很高" }, { id: "val_p_worth", label: "物超所值" },
+      { id: "val_p_promo", label: "优惠活动好" }, { id: "val_p_drink", label: "酒水价格合理" },
+      { id: "val_p_member", label: "会员权益好" }, { id: "val_p_gift", label: "有惊喜赠品" },
     ],
   },
 ];
@@ -239,7 +272,6 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [selectedSubItems, setSelectedSubItems] = useState<string[]>([]);
   const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -267,7 +299,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
       if (prev.includes(id)) {
         const dim = OPINION_DIMENSIONS.find(d => d.id === id);
         if (dim) {
-          const subIds = dim.subItems.map(s => s.id);
+          const subIds = [...dim.negItems, ...dim.posItems].map(s => s.id);
           setSelectedSubItems(prev2 => prev2.filter(s => !subIds.includes(s)));
         }
         if (expandedDimension === id) setExpandedDimension(null);
@@ -305,7 +337,8 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
     selectedDimensions.forEach(dimId => {
       const dim = OPINION_DIMENSIONS.find(d => d.id === dimId);
       if (!dim) return;
-      const selectedSubs = dim.subItems.filter(s => selectedSubItems.includes(s.id)).map(s => s.label);
+      const allItems = [...dim.negItems, ...dim.posItems];
+      const selectedSubs = allItems.filter(s => selectedSubItems.includes(s.id)).map(s => s.label);
       parts.push(selectedSubs.length > 0 ? `【${dim.label}】${selectedSubs.join("、")}` : `【${dim.label}】`);
     });
     if (content.trim()) parts.push(content.trim());
@@ -388,32 +421,60 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
 
               {selectedDimensions.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">具体问题（可多选）</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">印象标签（可多选）</p>
                   {selectedDimensions.map(dimId => {
                     const dim = OPINION_DIMENSIONS.find(d => d.id === dimId);
                     if (!dim) return null;
                     const isExpanded = expandedDimension === dimId;
-                    const selectedCount = dim.subItems.filter(s => selectedSubItems.includes(s.id)).length;
+                    const negCount = dim.negItems.filter(s => selectedSubItems.includes(s.id)).length;
+                    const posCount = dim.posItems.filter(s => selectedSubItems.includes(s.id)).length;
                     return (
                       <div key={dimId} className="rounded-xl overflow-hidden border border-gray-100">
                         <button className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 active:bg-gray-100" onClick={() => setExpandedDimension(isExpanded ? null : dimId)}>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-gray-700">{dim.label}</span>
-                            {selectedCount > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>已选 {selectedCount}</span>}
+                            {negCount > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#FFEBEE", color: "#D32F2F" }}>待改进 {negCount}</span>}
+                            {posCount > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#E8F5E9", color: "#2E7D32" }}>好评 {posCount}</span>}
                           </div>
                           <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                         </button>
                         {isExpanded && (
-                          <div className="px-3 py-3 flex flex-wrap gap-2">
-                            {dim.subItems.map(sub => {
-                              const isSubSelected = selectedSubItems.includes(sub.id);
-                              return (
-                                <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                  className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
-                                  {sub.label}
-                                </button>
-                              );
-                            })}
+                          <div className="px-3 py-3 space-y-3">
+                            <div>
+                              <p className="text-[11px] text-gray-400 mb-1.5 flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                                需要改进
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {dim.negItems.map(sub => {
+                                  const isSubSelected = selectedSubItems.includes(sub.id);
+                                  return (
+                                    <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
+                                      className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                      {sub.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="border-t border-dashed border-gray-100"></div>
+                            <div>
+                              <p className="text-[11px] text-gray-400 mb-1.5 flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                                值得表扬
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {dim.posItems.map(sub => {
+                                  const isSubSelected = selectedSubItems.includes(sub.id);
+                                  return (
+                                    <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
+                                      className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                      {sub.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -421,18 +482,6 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                   })}
                 </div>
               )}
-
-              <div>
-                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">整体评分（可选）</p>
-                <div className="flex gap-2 justify-center">
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <button key={s} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} onClick={() => setRating(rating === s ? 0 : s)} className="transition-transform active:scale-90">
-                      <Star className={`w-9 h-9 transition-colors ${s <= (hoverRating || rating) ? "text-yellow-400 fill-yellow-400" : "text-gray-200 fill-gray-100"}`} />
-                    </button>
-                  ))}
-                </div>
-                {rating > 0 && <p className="text-xs text-center text-gray-500 mt-1">{RATING_LABELS[rating]}</p>}
-              </div>
 
               <div>
                 <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">拍照（最多5张，可选）</p>
