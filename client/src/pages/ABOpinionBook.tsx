@@ -17,25 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-// ─── 麻六记真实菜单（来源：官网+大众点评多店推荐菜汇总）────────────────────────
-const MALUJI_DISHES = [
-  // 招牌热菜
-  "传统山城毛血旺", "歌乐山辣子鸡", "宫保虾球", "陈麻婆豆腐",
-  "鲜青椒水煮鱼", "传统沸腾水煮鱼", "自贡酸菜鱼", "川南水煮牛肉",
-  "陈年花雕红烧肉", "夫妻肺片", "鱼香肉丝", "宫保鸡丁",
-  "农家泡菜炒鸡杂", "猪油渣炒莲花白", "回锅肉", "干煸四季豆",
-  // 凉菜
-  "传统口水鸡", "蒜泥白肉", "麻酱油麦菜", "烧椒四川皮蛋",
-  "鸡丝凉面", "麻麻鸭舌",
-  // 汤品
-  "老妈蹄花汤", "豆汤什锦蔬菜",
-  // 小吃/主食
-  "渣渣豆花牛肉", "担担面", "酸辣粉", "糖油果子", "醪糟杏仁冰粉",
-  // 蔬菜
-  "清炒时蔬", "清炒豌豆苗", "蒜蓉粉丝虾",
-  // 特色
-  "椒麻手撕仔鸡", "豆花肥肠", "小锅血旺", "毛肚干拌冒菜",
-];
+// ─── AB型通用模板：菜单默认为空，可在后台配置菜品──────────────────────
+const MALUJI_DISHES: string[] = [];
 
 // ─── 六大维度（大众点评/美团风格，字数自然混排，每行约10字最优排列）────────────
 const OPINION_DIMENSIONS = [
@@ -589,9 +572,8 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                 </div>
               )}
 
-              {/* 菜品推荐区域 */}
-              {/* 菜品评价区域 - 常驻展开，左右切换模式 */}
-              <div className="rounded-xl overflow-hidden border border-gray-100 bg-white">
+              {/* 菜品评价区域 - 菜单不为空时才显示 */}
+              {MALUJI_DISHES.length > 0 && (<div className="rounded-xl overflow-hidden border border-gray-100 bg-white">
                 {/* 标题行 */}
                 <div className="px-3 pt-3 pb-2">
                   <span className="text-sm font-semibold text-gray-700">菜品评价（可选）</span>
@@ -707,6 +689,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                   )}
                 </div>
               </div>
+              )}
 
               <div>
                 <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">拍照（最多5张，可选）</p>
