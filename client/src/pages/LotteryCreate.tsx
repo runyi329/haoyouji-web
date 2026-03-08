@@ -357,7 +357,7 @@ export default function LotteryCreate() {
       }
 
       await updateActivity.mutateAsync({ activityId, status: "open" });
-      navigate(`/lottery/${activityId}`);
+      navigate(`/lottery/list/${ledgerId}`);
     } catch (e: any) {
       setError(e.message || "创建失败，请重试");
     } finally {

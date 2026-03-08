@@ -270,7 +270,11 @@ export const lotteryRouter = router({
              ORDER BY lp.created_at DESC LIMIT 3`,
             [a.id]
           ) as any[];
-          return { ...a, recentParticipants };
+          const prizes = await _execQuery(
+            `SELECT id, name, quantity, is_consolation FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
+            [a.id]
+          ) as any[];
+          return { ...a, recentParticipants, prizes };
         })
       );
       return activitiesWithParticipants;

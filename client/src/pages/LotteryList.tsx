@@ -242,6 +242,30 @@ export default function LotteryList() {
                       </div>
                     )}
 
+                    {/* 奖项列表 */}
+                    {activity.prizes && activity.prizes.length > 0 && (
+                      <div className="mt-2.5 pt-2.5" style={{ borderTop: '1px dashed #F0E8E0' }}>
+                        <div className="text-xs font-medium mb-1.5" style={{ color: '#9E9E9E' }}>奖项设置</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {activity.prizes.map((prize: any) => (
+                            <span
+                              key={prize.id}
+                              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: prize.is_consolation ? '#F5F5F5' : '#FFF3E0',
+                                color: prize.is_consolation ? '#9E9E9E' : '#E65100',
+                                border: `1px solid ${prize.is_consolation ? '#E0E0E0' : '#FFCC80'}`,
+                              }}
+                            >
+                              <Trophy className="w-2.5 h-2.5" />
+                              {prize.name}
+                              <span style={{ opacity: 0.7 }}>×{prize.quantity}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 创建时间 */}
                     <div
                       className="mt-1.5 text-xs"
