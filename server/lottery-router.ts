@@ -239,6 +239,8 @@ export const lotteryRouter = router({
         [input.activityId]
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
+      // 将 BigInt 转为 Number（mysql2 的 COUNT(*) 子查询返回 BigInt）
+      activity.participantCount = Number(activity.participantCount ?? 0);
 
       const prizes = await _execQuery(
         `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
@@ -283,7 +285,12 @@ export const lotteryRouter = router({
           return { ...a, recentParticipants, prizes };
         })
       );
-      return activitiesWithParticipants;
+      // 将 BigInt 转为 Number（mysql2 的 COUNT(*) 子查询返回 BigInt）
+      return activitiesWithParticipants.map((a: any) => ({
+        ...a,
+        participantCount: Number(a.participantCount ?? 0),
+        winnerCount: Number(a.winnerCount ?? 0),
+      }));
     }),
 
   // ── 添加奖项 ──────────────────────────────
@@ -373,7 +380,7 @@ export const lotteryRouter = router({
           `SELECT COUNT(*) AS cnt FROM lottery_participants WHERE activity_id=? AND status='confirmed'`,
           [input.activityId]
         ) as any[];
-        if (cnt >= activity.max_participants) {
+        if (Number(cnt) >= activity.max_participants) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "报名人数已满" });
         }
       }
