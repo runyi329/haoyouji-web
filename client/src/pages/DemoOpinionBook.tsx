@@ -17,108 +17,112 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-// ─── 六大维度（全3字标签，按高频/重要度排序，左右各10个，覆盖90%+客人感知）────────────
+// ─── 六大维度（大众点评/美团风格，字数自然混排，每行约10字最优排列）────────────
 const OPINION_DIMENSIONS = [
   {
     id: "food", label: "菜品质量", desc: "口味、食材、分量",
+    // 每行排列说明：行宽约10字宽，标签内边距加字数≈实际占宽
+    // 行1: 味道偏淡(4)+分量太少(4) = 8字展开得很整齐
+    // 行2: 食材不新鲜(6)+太油(2) = 8字
+    // 行3: 有异味(3)+火候过老(4)+太咸(2) = 9字
     negItems: [
-      { id: "food_bland", label: "味道淡" }, { id: "food_salty", label: "味道咸" },
-      { id: "food_oily", label: "油太多" }, { id: "food_portion", label: "分量少" },
-      { id: "food_fresh", label: "不新鲜" }, { id: "food_temp", label: "温度差" },
-      { id: "food_tough", label: "口感老" }, { id: "food_look", label: "卖相差" },
-      { id: "food_smell", label: "有异味" }, { id: "food_sweet", label: "甜度高" },
+      { id: "food_bland", label: "味道偏淡" }, { id: "food_portion", label: "分量太少" },
+      { id: "food_fresh", label: "食材不新鲜" }, { id: "food_oily", label: "太油" },
+      { id: "food_smell", label: "有异味" }, { id: "food_tough", label: "火候过老" }, { id: "food_salty", label: "太咸" },
+      { id: "food_temp", label: "上桂时已冷" }, { id: "food_look", label: "卖相差" },
+      { id: "food_sweet", label: "太甜腑" }, { id: "food_spicy", label: "辟度不对" },
     ],
     posItems: [
-      { id: "food_p_taste", label: "味正宗" }, { id: "food_p_fresh", label: "食材鲜" },
-      { id: "food_p_portion", label: "分量足" }, { id: "food_p_temp", label: "温度好" },
-      { id: "food_p_tender", label: "口感嫩" }, { id: "food_p_look", label: "摆盘美" },
-      { id: "food_p_variety", label: "菜品多" }, { id: "food_p_special", label: "有特色" },
-      { id: "food_p_healthy", label: "少油腻" }, { id: "food_p_sauce", label: "酱料棒" },
+      { id: "food_p_taste", label: "味道正宗" }, { id: "food_p_fresh", label: "食材新鲜" },
+      { id: "food_p_portion", label: "分量足" }, { id: "food_p_special", label: "有招牌菜" },
+      { id: "food_p_look", label: "摆盘精致" }, { id: "food_p_temp", label: "出餐温度恰好" },
+      { id: "food_p_variety", label: "菜品多样" }, { id: "food_p_tender", label: "口感嫩" },
+      { id: "food_p_healthy", label: "少油少盐" }, { id: "food_p_sauce", label: "酱料小料很棒" },
     ],
   },
   {
     id: "service", label: "服务表现", desc: "态度、响应、专业度",
     negItems: [
-      { id: "svc_attitude", label: "态度差" }, { id: "svc_slow", label: "响应慢" },
-      { id: "svc_proactive", label: "主动差" }, { id: "svc_order", label: "点单错" },
-      { id: "svc_knowledge", label: "不懂菜" }, { id: "svc_bill", label: "结账慢" },
-      { id: "svc_urge", label: "催单烦" }, { id: "svc_miss", label: "上菜漏" },
-      { id: "svc_dish", label: "换盘慢" }, { id: "svc_seat", label: "领位乱" },
+      { id: "svc_attitude", label: "态度冷漠" }, { id: "svc_slow", label: "叫了半天没人理" },
+      { id: "svc_order", label: "点单出错" }, { id: "svc_proactive", label: "不够主动" },
+      { id: "svc_knowledge", label: "不了解菜品" }, { id: "svc_urge", label: "催客人点单" },
+      { id: "svc_miss", label: "漏上菜" }, { id: "svc_bill", label: "结账太慢" },
+      { id: "svc_dish", label: "换盘不及时" }, { id: "svc_seat", label: "领位混乱" },
     ],
     posItems: [
-      { id: "svc_p_smile", label: "态度好" }, { id: "svc_p_fast", label: "响应快" },
-      { id: "svc_p_init", label: "很主动" }, { id: "svc_p_pro", label: "懂菜品" },
-      { id: "svc_p_memory", label: "记偏好" }, { id: "svc_p_clean", label: "勤撤盘" },
-      { id: "svc_p_water", label: "主加水" }, { id: "svc_p_guide", label: "推荐好" },
-      { id: "svc_p_bill", label: "结账快" }, { id: "svc_p_care", label: "必应到" },
+      { id: "svc_p_smile", label: "服务热情" }, { id: "svc_p_fast", label: "叫啦就来" },
+      { id: "svc_p_init", label: "非常主动" }, { id: "svc_p_pro", label: "点菜建议很专业" },
+      { id: "svc_p_memory", label: "记住常客偏好" }, { id: "svc_p_clean", label: "勤撤盘" },
+      { id: "svc_p_water", label: "主动加水" }, { id: "svc_p_guide", label: "推荐的菜都好吃" },
+      { id: "svc_p_bill", label: "结账快" }, { id: "svc_p_care", label: "有求必应" },
     ],
   },
   {
     id: "env", label: "环境氛围", desc: "噪音、温度、装修",
     negItems: [
-      { id: "env_noise", label: "噪音大" }, { id: "env_crowd", label: "桌距密" },
-      { id: "env_cold", label: "空调冷" }, { id: "env_hot", label: "空调热" },
-      { id: "env_light", label: "灯光刺" }, { id: "env_smoke", label: "油烟味" },
-      { id: "env_old", label: "装修旧" }, { id: "env_park", label: "停车难" },
-      { id: "env_music", label: "音乐吵" }, { id: "env_toilet", label: "厕所难" },
+      { id: "env_noise", label: "太噪了" }, { id: "env_crowd", label: "桌与桌之间太拥挤" },
+      { id: "env_cold", label: "空调开得太冷" }, { id: "env_hot", label: "通风差" },
+      { id: "env_light", label: "灯光刺眼" }, { id: "env_smoke", label: "油烟味很重" },
+      { id: "env_old", label: "装修老旧" }, { id: "env_park", label: "停车难" },
+      { id: "env_music", label: "音乐声音太大" }, { id: "env_toilet", label: "厕所难找" },
     ],
     posItems: [
-      { id: "env_p_cozy", label: "氛围好" }, { id: "env_p_quiet", label: "很安静" },
-      { id: "env_p_design", label: "装修好" }, { id: "env_p_light", label: "灯光柔" },
-      { id: "env_p_seat", label: "座位宽" }, { id: "env_p_photo", label: "拍照好" },
-      { id: "env_p_park", label: "停车便" }, { id: "env_p_air", label: "空气好" },
-      { id: "env_p_music", label: "音乐好" }, { id: "env_p_gather", label: "聚餐好" },
+      { id: "env_p_cozy", label: "氛围感很好" }, { id: "env_p_quiet", label: "安静" },
+      { id: "env_p_design", label: "装修有格调" }, { id: "env_p_light", label: "灯光柔和" },
+      { id: "env_p_seat", label: "座位宽敬" }, { id: "env_p_photo", label: "适合拍照打卡" },
+      { id: "env_p_park", label: "停车方便" }, { id: "env_p_air", label: "空气清新" },
+      { id: "env_p_music", label: "音乐选曲好" }, { id: "env_p_gather", label: "适合聚餐" },
     ],
   },
   {
     id: "hygiene", label: "卫生安全", desc: "清洁、异物、过期",
     negItems: [
-      { id: "hyg_utensil", label: "餐具脏" }, { id: "hyg_table", label: "桌面脏" },
-      { id: "hyg_floor", label: "地面滑" }, { id: "hyg_toilet", label: "厕所脏" },
-      { id: "hyg_foreign", label: "有异物" }, { id: "hyg_expired", label: "食材旧" },
-      { id: "hyg_staff", label: "员工脏" }, { id: "hyg_pest", label: "有虫鼠" },
-      { id: "hyg_smoke", label: "油烟重" }, { id: "hyg_air", label: "空气差" },
+      { id: "hyg_utensil", label: "餐具不干净" }, { id: "hyg_table", label: "桌面脏" },
+      { id: "hyg_floor", label: "地面滑" }, { id: "hyg_toilet", label: "厕所脏乱" },
+      { id: "hyg_foreign", label: "食物里有异物" }, { id: "hyg_expired", label: "食材不新鲜" },
+      { id: "hyg_staff", label: "员工不整洁" }, { id: "hyg_pest", label: "发现虫鼠" },
+      { id: "hyg_smoke", label: "油烟味重" }, { id: "hyg_air", label: "空气污浊" },
     ],
     posItems: [
-      { id: "hyg_p_utensil", label: "餐具净" }, { id: "hyg_p_table", label: "桌面洁" },
-      { id: "hyg_p_floor", label: "地面净" }, { id: "hyg_p_toilet", label: "厕所洁" },
-      { id: "hyg_p_staff", label: "员工洁" }, { id: "hyg_p_food", label: "食材安" },
-      { id: "hyg_p_air", label: "空气鲜" }, { id: "hyg_p_disinfect", label: "消毒好" },
-      { id: "hyg_p_smell", label: "无异味" }, { id: "hyg_p_safe", label: "很安全" },
+      { id: "hyg_p_utensil", label: "餐具干净" }, { id: "hyg_p_table", label: "桌面整洁" },
+      { id: "hyg_p_toilet", label: "厕所很干净" }, { id: "hyg_p_staff", label: "员工整洁" },
+      { id: "hyg_p_food", label: "食材安全放心" }, { id: "hyg_p_air", label: "无异味" },
+      { id: "hyg_p_disinfect", label: "消毒很到位" }, { id: "hyg_p_floor", label: "地面干净" },
+      { id: "hyg_p_smell", label: "空气清新" }, { id: "hyg_p_safe", label: "吃着很放心" },
     ],
   },
   {
     id: "efficiency", label: "运营效率", desc: "等待、出餐、结账",
     negItems: [
-      { id: "eff_wait", label: "等位久" }, { id: "eff_food", label: "出餐慢" },
-      { id: "eff_pay", label: "结账慢" }, { id: "eff_order", label: "点单烦" },
-      { id: "eff_queue", label: "叫号乱" }, { id: "eff_miss", label: "漏单错" },
-      { id: "eff_urge", label: "催菜难" }, { id: "eff_book", label: "预约难" },
-      { id: "eff_qr", label: "扫码卡" }, { id: "eff_peak", label: "高峰乱" },
+      { id: "eff_wait", label: "等位太久" }, { id: "eff_food", label: "上菜太慢" },
+      { id: "eff_pay", label: "结账慢" }, { id: "eff_order", label: "点单流程复杂" },
+      { id: "eff_queue", label: "叫号混乱" }, { id: "eff_miss", label: "漏单" },
+      { id: "eff_urge", label: "催菜无人理" }, { id: "eff_book", label: "预约难" },
+      { id: "eff_qr", label: "扫码点餐卡顿" }, { id: "eff_peak", label: "高峰期混乱" },
     ],
     posItems: [
-      { id: "eff_p_fast", label: "上菜快" }, { id: "eff_p_bill", label: "结账快" },
-      { id: "eff_p_book", label: "预约便" }, { id: "eff_p_queue", label: "排队顺" },
-      { id: "eff_p_wait", label: "等位短" }, { id: "eff_p_order", label: "点单快" },
-      { id: "eff_p_call", label: "叫号准" }, { id: "eff_p_nowait", label: "无需等" },
-      { id: "eff_p_qr", label: "系统顺" }, { id: "eff_p_peak", label: "高峰稳" },
+      { id: "eff_p_fast", label: "上菜很快" }, { id: "eff_p_bill", label: "结账快" },
+      { id: "eff_p_book", label: "预约方便" }, { id: "eff_p_queue", label: "排队有序" },
+      { id: "eff_p_wait", label: "等位时间短" }, { id: "eff_p_order", label: "点单方便" },
+      { id: "eff_p_call", label: "叫号准时" }, { id: "eff_p_nowait", label: "无需等位" },
+      { id: "eff_p_qr", label: "扫码点餐很顺" }, { id: "eff_p_peak", label: "高峰期也不乱" },
     ],
   },
   {
     id: "value", label: "价值体验", desc: "性价比、优惠、体验",
     negItems: [
-      { id: "val_price", label: "价格高" }, { id: "val_portion", label: "分量少" },
-      { id: "val_promo", label: "优惠假" }, { id: "val_hidden", label: "有隐费" },
-      { id: "val_worth", label: "不值价" }, { id: "val_trap", label: "套餐坑" },
-      { id: "val_member", label: "会员差" }, { id: "val_rise", label: "涨价快" },
-      { id: "val_gift", label: "赠品差" }, { id: "val_trick", label: "活动套" },
+      { id: "val_price", label: "价格偏高" }, { id: "val_portion", label: "分量少" },
+      { id: "val_promo", label: "优惠活动水分高" }, { id: "val_hidden", label: "有隐性消费" },
+      { id: "val_worth", label: "不夠划算" }, { id: "val_trap", label: "套餐性价比差" },
+      { id: "val_member", label: "会员权益差" }, { id: "val_rise", label: "涨价快" },
+      { id: "val_gift", label: "赠品没诚意" }, { id: "val_trick", label: "活动有套路" },
     ],
     posItems: [
-      { id: "val_p_ratio", label: "性价高" }, { id: "val_p_worth", label: "超所值" },
-      { id: "val_p_promo", label: "优惠好" }, { id: "val_p_portion", label: "分量足" },
-      { id: "val_p_member", label: "会员好" }, { id: "val_p_activity", label: "活动真" },
-      { id: "val_p_gift", label: "赠品惊喜" }, { id: "val_p_clear", label: "价格透明" },
-      { id: "val_p_set", label: "套餐好" }, { id: "val_p_return", label: "值得回" },
+      { id: "val_p_ratio", label: "性价比高" }, { id: "val_p_worth", label: "吃得很划算" },
+      { id: "val_p_promo", label: "优惠力度大" }, { id: "val_p_portion", label: "分量足" },
+      { id: "val_p_member", label: "会员权益好" }, { id: "val_p_activity", label: "活动很实惠" },
+      { id: "val_p_gift", label: "赠品有惊喜" }, { id: "val_p_clear", label: "价格透明" },
+      { id: "val_p_set", label: "套餐很划算" }, { id: "val_p_return", label: "还会再来" },
     ],
   },
 ];
@@ -464,12 +468,12 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                                   <span className="inline-block w-1 h-1 rounded-full bg-red-400"></span>
                                   需要改进
                                 </p>
-                                <div className="grid grid-cols-3 gap-1">
+                                <div className="flex flex-wrap gap-1">
                                   {dim.negItems.map(sub => {
                                     const isSubSelected = selectedSubItems.includes(sub.id);
                                     return (
                                       <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                        className={`py-1 rounded text-[11px] font-medium border text-center transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        className={`px-2 py-1 rounded text-[11px] font-medium border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                         {sub.label}
                                       </button>
                                     );
@@ -482,12 +486,12 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                                   <span className="inline-block w-1 h-1 rounded-full bg-green-400"></span>
                                   值得表扬
                                 </p>
-                                <div className="grid grid-cols-3 gap-1">
+                                <div className="flex flex-wrap gap-1">
                                   {dim.posItems.map(sub => {
                                     const isSubSelected = selectedSubItems.includes(sub.id);
                                     return (
                                       <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                        className={`py-1 rounded text-[11px] font-medium border text-center transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        className={`px-2 py-1 rounded text-[11px] font-medium border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                         {sub.label}
                                       </button>
                                     );
