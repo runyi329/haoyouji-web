@@ -394,7 +394,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
           <button className="w-full flex items-center justify-between px-4 py-3 active:bg-gray-50" onClick={() => setOpinionOpen(v => !v)}>
             <div className="flex items-center gap-2">
               {submitted ? <CheckCircle className="w-4 h-4 text-green-500" /> : <MessageSquare className="w-4 h-4 text-[#D32F2F]" />}
-              <span className="font-semibold text-sm text-gray-800">{submitted ? "意见已提交，感谢您！" : "填写意见（提交后享95折）"}</span>
+              <span className="font-semibold text-sm text-gray-800">{submitted ? "意见已提交，感谢您！" : "这次用餐体验，哪方面还可以改进？"}</span>
             </div>
             {opinionOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
@@ -402,7 +402,6 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
           {opinionOpen && !submitted && (
             <div className="px-4 pb-4 space-y-5 border-t border-gray-50">
               <div className="pt-3">
-                <p className="text-xs font-semibold text-gray-500 mb-2.5 uppercase tracking-wide">这次体验，哪方面需要改进？（可多选）</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   {OPINION_DIMENSIONS.map(dim => {
                     const isSelected = selectedDimensions.includes(dim.id);
