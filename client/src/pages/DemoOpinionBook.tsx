@@ -436,40 +436,43 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                           <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                         </button>
                         {isExpanded && (
-                          <div className="px-3 py-3 space-y-3">
-                            <div>
-                              <p className="text-[11px] text-gray-400 mb-1.5 flex items-center gap-1">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400"></span>
-                                需要改进
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {dim.negItems.map(sub => {
-                                  const isSubSelected = selectedSubItems.includes(sub.id);
-                                  return (
-                                    <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
-                                      {sub.label}
-                                    </button>
-                                  );
-                                })}
+                          <div className="px-2 py-2">
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-0">
+                              {/* 左列：需要改进 */}
+                              <div className="border-r border-dashed border-gray-100 pr-2">
+                                <p className="text-[10px] text-red-400 font-medium mb-1.5 flex items-center gap-1">
+                                  <span className="inline-block w-1 h-1 rounded-full bg-red-400"></span>
+                                  需要改进
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {dim.negItems.map(sub => {
+                                    const isSubSelected = selectedSubItems.includes(sub.id);
+                                    return (
+                                      <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
+                                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        {sub.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                            <div className="border-t border-dashed border-gray-100"></div>
-                            <div>
-                              <p className="text-[11px] text-gray-400 mb-1.5 flex items-center gap-1">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                                值得表扬
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {dim.posItems.map(sub => {
-                                  const isSubSelected = selectedSubItems.includes(sub.id);
-                                  return (
-                                    <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
-                                      {sub.label}
-                                    </button>
-                                  );
-                                })}
+                              {/* 右列：值得表扬 */}
+                              <div className="pl-0">
+                                <p className="text-[10px] text-green-500 font-medium mb-1.5 flex items-center gap-1">
+                                  <span className="inline-block w-1 h-1 rounded-full bg-green-400"></span>
+                                  值得表扬
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {dim.posItems.map(sub => {
+                                    const isSubSelected = selectedSubItems.includes(sub.id);
+                                    return (
+                                      <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
+                                        className={`px-1.5 py-0.5 rounded text-[11px] font-medium border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        {sub.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           </div>
