@@ -17,6 +17,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
+// ─── 麻六记真实菜单（来源：官网+大众点评多店推荐菜汇总）────────────────────────
+const MALUJI_DISHES = [
+  // 招牌热菜
+  "传统山城毛血旺", "歌乐山辣子鸡", "宫保虾球", "陈麻婆豆腐",
+  "鲜青椒水煮鱼", "传统沸腾水煮鱼", "自贡酸菜鱼", "川南水煮牛肉",
+  "陈年花雕红烧肉", "夫妻肺片", "鱼香肉丝", "宫保鸡丁",
+  "农家泡菜炒鸡杂", "猪油渣炒莲花白", "回锅肉", "干煸四季豆",
+  // 凉菜
+  "传统口水鸡", "蒜泥白肉", "麻酱油麦菜", "烧椒四川皮蛋",
+  "鸡丝凉面", "麻麻鸭舌",
+  // 汤品
+  "老妈蹄花汤", "豆汤什锦蔬菜",
+  // 小吃/主食
+  "渣渣豆花牛肉", "担担面", "酸辣粉", "糖油果子", "醪糟杏仁冰粉",
+  // 蔬菜
+  "清炒时蔬", "清炒豌豆苗", "蒜蓉粉丝虾",
+  // 特色
+  "椒麻手撕仔鸡", "豆花肥肠", "小锅血旺", "毛肚干拌冒菜",
+];
+
 // ─── 六大维度（大众点评/美团风格，字数自然混排，每行约10字最优排列）────────────
 const OPINION_DIMENSIONS = [
   {
@@ -306,6 +326,10 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
   const [submitted, setSubmitted] = useState(false);
   const [opinionOpen, setOpinionOpen] = useState(true);
   const [amount, setAmount] = useState("");
+  // 菜品推荐相关 state
+  const [favDishes, setFavDishes] = useState<string[]>([]);    // 最推荐，最多3项
+  const [badDishes, setBadDishes] = useState<string[]>([]);    // 最不推荐，最多3项
+  const [dishSectionOpen, setDishSectionOpen] = useState(false); // 菜品区域是否展开
   const [payLoading, setPayLoading] = useState(false);
   const [scanTime] = useState(() => new Date());
   const [randomInitialized, setRandomInitialized] = useState(false);
@@ -380,6 +404,9 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
       parts.push(selectedSubs.length > 0 ? `【${dim.label}】${selectedSubs.join("、")}` : `【${dim.label}】`);
     });
     if (content.trim()) parts.push(content.trim());
+    // 加入菜品推荐信息
+    if (favDishes.length > 0) parts.push(`【最推荐菜】${favDishes.join("、")}`);
+    if (badDishes.length > 0) parts.push(`【最不推荐菜】${badDishes.join("、")}`);
     const finalContent = parts.join(" ") || "（无文字内容）";
     submitMutation.mutate({
       ledgerId, categoryId: selectedBranchId, content: finalContent,
@@ -561,6 +588,101 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                   })}
                 </div>
               )}
+
+              {/* 菜品推荐区域 */}
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 active:bg-gray-100"
+                  onClick={() => setDishSectionOpen(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-700">菜品评价（可选）</span>
+                    {(favDishes.length > 0 || badDishes.length > 0) && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#FFF3E0", color: "#E65100" }}>
+                        已选 {favDishes.length + badDishes.length} 项
+                      </span>
+                    )}
+                  </div>
+                  <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${dishSectionOpen ? "rotate-90" : ""}`} />
+                </button>
+
+                {dishSectionOpen && (
+                  <div className="px-3 py-3 space-y-4 border-t border-gray-50">
+                    {/* 最推荐的三款菜 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-[#2E7D32]">&#x2605; 您最推荐的三款菜</p>
+                        <span className="text-[10px] text-gray-400">{favDishes.length}/3</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {MALUJI_DISHES.map(dish => {
+                          const isFav = favDishes.includes(dish);
+                          const isBad = badDishes.includes(dish);
+                          const disabled = !isFav && favDishes.length >= 3;
+                          return (
+                            <button
+                              key={`fav-${dish}`}
+                              disabled={disabled || isBad}
+                              onClick={() => {
+                                if (isFav) {
+                                  setFavDishes(p => p.filter(d => d !== dish));
+                                } else if (!disabled && !isBad) {
+                                  setFavDishes(p => [...p, dish]);
+                                }
+                              }}
+                              className={`py-1 rounded text-[11px] font-medium border text-center transition-all
+                                ${isFav ? "bg-[#2E7D32] text-white border-[#2E7D32]"
+                                  : isBad ? "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed"
+                                  : disabled ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
+                                  : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}
+                            >
+                              {dish}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 分隔线 */}
+                    <div className="border-t border-dashed border-gray-100" />
+
+                    {/* 最不推荐的三款菜 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-[#D32F2F]">&#x2606; 您最不推荐的三款菜</p>
+                        <span className="text-[10px] text-gray-400">{badDishes.length}/3</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {MALUJI_DISHES.map(dish => {
+                          const isBad = badDishes.includes(dish);
+                          const isFav = favDishes.includes(dish);
+                          const disabled = !isBad && badDishes.length >= 3;
+                          return (
+                            <button
+                              key={`bad-${dish}`}
+                              disabled={disabled || isFav}
+                              onClick={() => {
+                                if (isBad) {
+                                  setBadDishes(p => p.filter(d => d !== dish));
+                                } else if (!disabled && !isFav) {
+                                  setBadDishes(p => [...p, dish]);
+                                }
+                              }}
+                              className={`py-1 rounded text-[11px] font-medium border text-center transition-all
+                                ${isBad ? "bg-[#D32F2F] text-white border-[#D32F2F]"
+                                  : isFav ? "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed"
+                                  : disabled ? "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
+                                  : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}
+                            >
+                              {dish}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div>
                 <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">拍照（最多5张，可选）</p>
