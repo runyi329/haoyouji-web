@@ -36,6 +36,7 @@ import { posterFavoritesRouter } from "./poster-favorites-router";
 import { beautyRouter } from "./beauty-router";
 import { dietRouter } from "./diet-router";
 import { merchantRouter } from "./merchant-router";
+import * as dbMemo from "./db-memo";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
 
@@ -8083,6 +8084,132 @@ export const appRouter = router({
         }
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
       }),
+
+    // ===== AD 型定制账本（私人备忘录·永不忘）=====
+    // 创建 AD 账本（仅管理员）
+    createCustomAD: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建AD定制账本' });
+        }
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: 'custom_ad',
+          createdBy: ctx.user.id,
+        });
+        return ledger;
+      }),
+    // 获取 AD 账本列表（仅管理员）
+    listCustomAD: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看AD定制账本列表' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const rows = await db
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            description: ledgers.description,
+            createdAt: ledgers.createdAt,
+          })
+          .from(ledgers)
+          .where(eq(ledgers.type, 'custom_ad'))
+          .orderBy(desc(ledgers.createdAt));
+        return rows;
+      }),
+    // 邀请成员加入 AD 账本（仅管理员）
+    inviteToCustomAD: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        username: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请成员加入AD账本' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [ledger] = await db
+          .select({ id: ledgers.id, type: ledgers.type })
+          .from(ledgers)
+          .where(eq(ledgers.id, input.ledgerId));
+        if (!ledger || ledger.type !== 'custom_ad') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AD定制账本' });
+        }
+        return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
+      }),
+
+    // ===== 备忘录条目 CRUD（AD型账本使用）=====
+    // 获取备忘录列表
+    getMemoItems: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        category: z.string().optional(),
+        keyword: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (input.keyword && input.keyword.trim()) {
+          return await dbMemo.searchMemoItems(input.ledgerId, input.keyword.trim());
+        }
+        return await dbMemo.getMemoItems(input.ledgerId, undefined, input.category);
+      }),
+    // 创建备忘录条目
+    createMemoItem: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        category: z.string(),
+        title: z.string().min(1).max(100),
+        fields: z.array(z.object({
+          label: z.string(),
+          value: z.string(),
+          sensitive: z.boolean().optional(),
+        })),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await dbMemo.createMemoItem({
+          ledgerId: input.ledgerId,
+          userId: ctx.user.id,
+          category: input.category,
+          title: input.title,
+          fields: input.fields,
+          note: input.note,
+        });
+        return { id };
+      }),
+    // 更新备忘录条目
+    updateMemoItem: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        category: z.string().optional(),
+        title: z.string().optional(),
+        fields: z.array(z.object({
+          label: z.string(),
+          value: z.string(),
+          sensitive: z.boolean().optional(),
+        })).optional(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        await dbMemo.updateMemoItem(id, ctx.user.id, data);
+        return { success: true };
+      }),
+    // 删除备忘录条目
+    deleteMemoItem: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.deleteMemoItem(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
     // 获取当前用户的初始金额配置（定制账本AA）
     getMyInitialBalances: protectedProcedure
       .input(z.object({

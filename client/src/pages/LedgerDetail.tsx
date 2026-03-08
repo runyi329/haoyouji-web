@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
+const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 // 不再使用动态主题，固定红色配色
@@ -125,6 +126,16 @@ export default function LedgerDetail() {
       localStorage.setItem('lastVisitedLedgerId', String(ledgerId));
     }
   }, [ledgerId]);
+
+  // 定制账本(AD)：私人备忘录
+  const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
+  if (!isLoading && !error && isCustomAD && ledgerData) {
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="text-gray-500">加载中...</div></div>}>
+        <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} />
+      </Suspense>
+    );
+  }
 
   // 定制账本(AA)：使用专用UI
   const isCustomAA = (ledgerData as any)?.type === 'custom_aa';

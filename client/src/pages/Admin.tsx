@@ -64,6 +64,7 @@ import DataSecurityPanel from "./admin/DataSecurityPanel";
 import CustomAAManager from "./admin/CustomAAManager";
 import CustomABManager from "./admin/CustomABManager";
 import CustomACManager from "./admin/CustomACManager";
+import CustomADManager from "./admin/CustomADManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -88,6 +89,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "共享健康·减肥账本",
     desc: "多学员体重/三围/卡路里打卡，教练统一管理学员档案与进度",
     component: CustomACManager,
+  },
+  {
+    key: "AD",
+    label: "AD 型",
+    name: "私人备忘录·永不忘",
+    desc: "分类存储地址、账号密码、銀行卡号、网站登录等，一键复制单字段或整条",
+    component: CustomADManager,
   },
 ];
 
