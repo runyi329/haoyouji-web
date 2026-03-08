@@ -66,37 +66,12 @@ export function setCurrentIsGuest(isGuest: boolean) {
 
 /**
  * 获取数据库连接
- * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
- * @param forceGuest - 强制使用游客数据库
+ * 所有用户（包括游客）统一使用腾讯云数据库，不再使用Manus临时数据库
+ * @param forceGuest - 已废弃参数，保留兼容性，不再区分游客/真实用户数据库
  */
 export async function getDb(forceGuest: boolean = false) {
-  // 如果是游客用户，使用Manus临时数据库
-  if (forceGuest || _currentIsGuest) {
-    if (!_guestDb) {
-      const dbUrl = process.env.DATABASE_URL;
-      if (dbUrl) {
-      try {
-        // 判断是否是本地连接
-        const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
-        const connection = await mysql.createConnection({
-          uri: dbUrl,
-          connectTimeout: 30000,
-          enableKeepAlive: true,
-          keepAliveInitialDelay: 0,
-          ssl: isLocalhost ? false : { rejectUnauthorized: false },
-          charset: 'utf8mb4',
-        });
-        _guestConnection = connection;
-        _guestDb = drizzle(connection);
-        console.log(`[GuestDatabase] 成功连接到Manus临时数据库`);
-        } catch (error) {
-          console.warn("[GuestDatabase] Failed to connect:", error);
-          _guestDb = null;
-        }
-      }
-    }
-    return _guestDb;
-  }
+  // 所有用户统一使用腾讯云数据库（ORIGINAL_DATABASE_URL 优先）
+  // 不再区分游客和真实用户，避免数据写入Manus临时数据库
   
   // 真实用户使用腾讯云数据库或开发数据库
   if (!_db) {
@@ -143,25 +118,21 @@ export async function getDb(forceGuest: boolean = false) {
 
 /**
  * 获取账本专用数据库连接
- * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
+ * 统一使用腾讯云数据库
  */
 export async function getLedgerDb() {
-  // 游客用户使用与getDb相同的数据库
   return getDb();
 }
 
 /**
  * 获取原始 mysql2 connection 对象（用于直接执行 SQL）
- * 游客用户使用Manus临时数据库，真实用户使用腾讯云数据库
+ * 统一使用腾讯云数据库
  */
 export async function getDbConnection(forceGuest: boolean = false): Promise<mysql.Connection | null> {
   // 先调用 getDb() 确保连接已创建
-  await getDb(forceGuest);
+  await getDb(false);
   
-  if (forceGuest || _currentIsGuest) {
-    return _guestConnection;
-  }
-  
+  // 统一返回腾讯云数据库连接，不再区分游客/真实用户
   return _connection;
 }
 
