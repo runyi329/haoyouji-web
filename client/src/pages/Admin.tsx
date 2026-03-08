@@ -93,8 +93,8 @@ const CUSTOM_LEDGER_TYPES = [
   {
     key: "AD",
     label: "AD 型",
-    name: "私人备忘录·永不忘",
-    desc: "分类存储地址、账号密码、銀行卡号、网站登录等，一键复制单字段或整条",
+    name: "永忆",
+    desc: "永忆：分类存储地址、账号密码、银行卡号、网站登录等，一键复制单字段或整条",
     component: CustomADManager,
   },
 ];

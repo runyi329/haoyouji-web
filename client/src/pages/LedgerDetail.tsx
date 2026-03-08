@@ -127,7 +127,7 @@ export default function LedgerDetail() {
     }
   }, [ledgerId]);
 
-  // 定制账本(AD)：私人备忘录
+  // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
   if (!isLoading && !error && isCustomAD && ledgerData) {
     return (
