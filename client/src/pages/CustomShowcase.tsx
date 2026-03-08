@@ -5380,29 +5380,7 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
                     style={{ filter: "drop-shadow(0 0 12px #CBA471)" }}
                     className="hex-pulse" />
                 )}
-                {label === "共享建议簿" && (() => {
-                  const rFlow = r; // 贴着蜂巢边框
-                  const flowPts = hexPoints(px, py, rFlow);
-                  // 计算六角形周长（边长 * 6）
-                  const side = rFlow;
-                  const perimeter = side * 6;
-                  const dashLen = perimeter * 0.18; // 光流长度占周长18%
-                  const gapLen = perimeter - dashLen;
-                  return (
-                    <>
-                      {/* 流光底层：极淡金色轮廓 */}
-                      <polygon points={flowPts} fill="none"
-                        stroke="rgba(203,164,113,0.15)" strokeWidth={1}
-                        className="hex-flow-base" />
-                      {/* 流光主体：流转的金色光流 */}
-                      <polygon points={flowPts} fill="none"
-                        stroke="#CBA471" strokeWidth={1.2}
-                        strokeDasharray={`${dashLen} ${gapLen}`}
-                        style={{ filter: "drop-shadow(0 0 4px rgba(203,164,113,0.8))" }}
-                        className="hex-flow-light" />
-                    </>
-                  );
-                })()}
+
                 {isSelected && (
                   <polygon points={hexPoints(px, py, r + 4)} fill="none"
                     stroke="#CBA471" strokeWidth={2}
@@ -5490,23 +5468,6 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
           0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 2px 12px rgba(198,40,40,0.5); }
           40% { transform: translateY(-5px) scale(1.06); box-shadow: 0 8px 20px rgba(198,40,40,0.7); }
           60% { transform: translateY(-3px) scale(1.03); }
-        }
-        /* 共享建议簿流光效果 */
-        .hex-flow-base { animation: hexFlowBreath 3s ease-in-out infinite; }
-        @keyframes hexFlowBreath {
-          0%, 100% { opacity: 0.08; }
-          50% { opacity: 0.3; }
-        }
-        .hex-flow-light {
-          animation: hexFlowMove 1s linear infinite, hexFlowBreath2 3s ease-in-out infinite;
-        }
-        @keyframes hexFlowMove {
-          from { stroke-dashoffset: 0; }
-          to { stroke-dashoffset: -9999; }
-        }
-        @keyframes hexFlowBreath2 {
-          0%, 100% { opacity: 0.55; }
-          50% { opacity: 1; }
         }
       `}</style>
     </div>
