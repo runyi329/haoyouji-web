@@ -432,6 +432,7 @@ function Router() {
         {/* AB 意见本 - 多角色演示页（无需登录） */}
         <Route path="/demo/opinion/:bookId" component={DemoOpinionBook} />
         {/* AB 意见本 - 正式模板页（无演示按钮，无需登录） */}
+        <Route path="/ab/opinion/:bookId/:categoryId" component={ABOpinionBook} />
         <Route path="/ab/opinion/:bookId" component={ABOpinionBook} />
         <Route path="/ledger/:id/qrcodes" component={QrCodeManager} />
 

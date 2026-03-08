@@ -493,7 +493,7 @@ export default function LedgerSettings() {
         )}
         <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
         {ledgerData?.type === 'opinion_book' && (
-          <SettingItem label="前端面板设置" showIcon onClick={() => setLocation(`/feedback/${ledgerId}`)} />
+          <SettingItem label="前端面板设置" showIcon onClick={() => setLocation(`/ab/opinion/${ledgerId}`)} />
         )}
         {ledgerData?.type === 'opinion_book' && (
           <SettingItem label="二维码管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/qrcodes`)} />
