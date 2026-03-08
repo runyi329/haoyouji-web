@@ -408,18 +408,62 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      {/* 顶部红色区 */}
-      <div className="bg-[#D32F2F] px-4 py-3 relative overflow-hidden">
-        <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full pointer-events-none" />
-        <div className="absolute -bottom-3 -left-3 w-14 h-14 bg-white/10 rounded-full pointer-events-none" />
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-white/70 text-xs mb-0.5 truncate">麻六记 · 演示账本</p>
-            <h1 className="text-white text-lg font-bold leading-tight">欢迎提意见</h1>
-
+      {/* 顶部红色区 - 大众点评风格品牌展示 */}
+      <div className="bg-[#C62828] relative overflow-hidden" style={{ minHeight: '130px' }}>
+        {/* 背景纹理装饰 */}
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #fff 0, #fff 1px, transparent 0, transparent 50%)', backgroundSize: '8px 8px' }} />
+        {/* 左侧：品牌信息区 */}
+        <div className="relative z-10 flex items-stretch" style={{ minHeight: '130px' }}>
+          <div className="flex-1 px-4 py-3 flex flex-col justify-between min-w-0">
+            {/* 顶部：logo + 品牌名 */}
+            <div className="flex items-center gap-2">
+              <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_logo_extracted_71ab90cf.jpg" alt="麻六记" className="w-10 h-10 object-contain rounded-md flex-shrink-0" style={{ imageRendering: 'auto' }} />
+              <div className="min-w-0">
+                <h1 className="text-white font-bold text-[17px] leading-tight truncate">麻六记</h1>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFE082' }}>👑 连锁</span>
+                  <span className="text-white/60 text-[10px]">川菜馆</span>
+                </div>
+              </div>
+            </div>
+            {/* 评分行 */}
+            <div className="mt-2">
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-0.5">
+                  {[1,2,3,4].map(i => <span key={i} className="text-[#FF8F00] text-sm">★</span>)}
+                  <span className="text-[#FF8F00] text-sm" style={{ clipPath: 'inset(0 70% 0 0)' }}>★</span>
+                </div>
+                <span className="text-[#FFE082] font-bold text-sm">4.3</span>
+                <span className="text-white/50 text-xs">1398条评价</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-white/70 text-[11px]">口味4.3</span>
+                <span className="text-white/30 text-[10px]">|</span>
+                <span className="text-white/70 text-[11px]">环境4.4</span>
+                <span className="text-white/30 text-[10px]">|</span>
+                <span className="text-white/70 text-[11px]">服务4.4</span>
+              </div>
+            </div>
+            {/* 底部：合作标签 */}
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#FFE082', border: '1px solid rgba(255,215,0,0.3)' }}>✦ 品牌合作商家</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)' }}>提意见享95折</span>
+            </div>
           </div>
-          <div className="ml-3 flex-shrink-0">
-            <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_6fe47d51.png" alt="麻六记" className="w-16 h-16 object-contain drop-shadow-lg rounded-full" />
+          {/* 右侧：菜品图 */}
+          <div className="flex-shrink-0 relative" style={{ width: '130px' }}>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_dish_clean_f441bf93.jpg"
+              alt="招牌菜品"
+              className="w-full h-full object-cover"
+              style={{ minHeight: '130px' }}
+            />
+            {/* 渐变遮罩（左侧淡入） */}
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, #C62828 0%, transparent 35%)' }} />
+            {/* 右下角标签 */}
+            <div className="absolute bottom-2 right-2">
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.9)' }}>招牌菜</span>
+            </div>
           </div>
         </div>
       </div>
