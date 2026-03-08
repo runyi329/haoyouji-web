@@ -383,13 +383,24 @@ export const lotteryRouter = router({
       return { success: true };
     }),
 
-  // ── 获取报名列表（组织者） ─────────────────
+  // ── 获取报名列表（组织者，含完整信息） ─────────────────
   getParticipants: protectedProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
       const participants = await _execQuery(
         `SELECT * FROM lottery_participants WHERE activity_id=? AND status='confirmed' ORDER BY created_at ASC`,
+        [input.activityId]
+      ) as any[];
+      return participants;
+    }),
+
+  // ── 获取报名名单（公开，仅展示昵称和时间） ─────────────────
+  getPublicParticipants: publicProcedure
+    .input(z.object({ activityId: z.number() }))
+    .query(async ({ input }) => {
+      const participants = await _execQuery(
+        `SELECT id, display_name, created_at FROM lottery_participants WHERE activity_id=? AND status='confirmed' ORDER BY created_at ASC`,
         [input.activityId]
       ) as any[];
       return participants;
