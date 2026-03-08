@@ -91,13 +91,15 @@ export default function LedgerDetail() {
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
-  // Tab 状态：只保留 'lottery'（记账明细已移除）
-  const [activeTab, setActiveTab] = useState<'records' | 'lottery'>('lottery');
+  // 主 Tab：固定为 lottery
+  const [activeTab] = useState<'records' | 'lottery'>('lottery');
+  // 抽奖子 Tab：正在进行中 / 往期回顾
+  const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
 
-  // 抽奖活动列表
+  // 抽奖活动列表（全量，前端按子Tab过滤）
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: activeTab === 'lottery' }
+    { enabled: !isDiet }
   );
   // 减肥账本：快捷操作弹窗
 
@@ -304,129 +306,41 @@ export default function LedgerDetail() {
           </div>
         </div>
 
-        {/* 统计区域 */}
-        <div className="px-4 pt-2 relative">
-          {/* 减肥账本：显示减肥进度面板 */}
-          {isDiet ? (
-            <div>
-              {dietConfig ? (
-                <>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-center">
-                      <div className="text-xs opacity-80">初始体重</div>
-                      <div className="text-base font-semibold">{dietInitialWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs opacity-80">当前体重</div>
-                      <div className="text-xl font-bold">{dietCurrentWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs opacity-80">目标体重</div>
-                      <div className="text-base font-semibold">{dietTargetWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
-                    </div>
+        {/* 减肥账本：保留进度面板 */}
+        {isDiet && (
+          <div className="px-4 pt-2 pb-3">
+            {dietConfig ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-center">
+                    <div className="text-xs opacity-80">初始体重</div>
+                    <div className="text-base font-semibold">{dietInitialWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
                   </div>
-                  <div className="bg-white/30 rounded-full h-2 mb-1">
-                    <div className="bg-white rounded-full h-2 transition-all" style={{ width: `${dietProgress}%` }} />
+                  <div className="text-center">
+                    <div className="text-xs opacity-80">当前体重</div>
+                    <div className="text-xl font-bold">{dietCurrentWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
                   </div>
-                  <div className="flex justify-between text-xs opacity-80">
-                    <span>已减 {dietLostWeight > 0 ? dietLostWeight.toFixed(1) : 0} 斤</span>
-                    <span>{dietProgress}%</span>
-                    <span>消耗 {dietTotalCalories.toLocaleString()} kcal</span>
+                  <div className="text-center">
+                    <div className="text-xs opacity-80">目标体重</div>
+                    <div className="text-base font-semibold">{dietTargetWeight ?? '--'}<span className="text-xs font-normal ml-0.5">斤</span></div>
                   </div>
-                </>
-              ) : (
-                <div className="text-center py-2 opacity-80">
-                  <div className="text-sm">{isDietCoach ? '在学员管理中为成员设置减肥档案' : '等待教练设置你的减肥档案'}</div>
                 </div>
-              )}
-            </div>
-          ) : (
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="relative">
-              <div className="text-xs opacity-90 flex items-center justify-center gap-1">
-                <span>
-                  {!hasDateFilter && statsPeriod === 'day' && '今日'}
-                  {!hasDateFilter && statsPeriod === 'week' && '本周'}
-                  {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                  {!hasDateFilter && statsPeriod === 'year' && '今年'}
-                  总收入
-                </span>
-                <button 
-                  onClick={() => setShowPeriodMenu(!showPeriodMenu)}
-                  className="inline-flex items-center justify-center w-4 h-4"
-                >
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 12 12">
-                    <path d="M6 8L2 4h8z" />
-                  </svg>
-                </button>
-              </div>
-              <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
-              
-              {/* 周期选择菜单 */}
-              {showPeriodMenu && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white rounded-lg shadow-lg border border-divider overflow-hidden z-50 w-[5.5rem]">
-                  <button
-                    onClick={() => {
-                      setStatsPeriod('day');
-                      setShowPeriodMenu(false);
-                    }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
-                  >
-                    按天
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatsPeriod('week');
-                      setShowPeriodMenu(false);
-                    }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
-                  >
-                    按自然周
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatsPeriod('month');
-                      setShowPeriodMenu(false);
-                    }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
-                  >
-                    按自然月
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatsPeriod('year');
-                      setShowPeriodMenu(false);
-                    }}
-                    className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
-                  >
-                    按自然年
-                  </button>
+                <div className="bg-white/30 rounded-full h-2 mb-1">
+                  <div className="bg-white rounded-full h-2 transition-all" style={{ width: `${dietProgress}%` }} />
                 </div>
-              )}
-            </div>
-            <div>
-              <div className="text-xs opacity-90">
-                {!hasDateFilter && statsPeriod === 'day' && '今日'}
-                {!hasDateFilter && statsPeriod === 'week' && '本周'}
-                {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                {!hasDateFilter && statsPeriod === 'year' && '今年'}
-                总结余
+                <div className="flex justify-between text-xs opacity-80">
+                  <span>已减 {dietLostWeight > 0 ? dietLostWeight.toFixed(1) : 0} 斤</span>
+                  <span>{dietProgress}%</span>
+                  <span>消耗 {dietTotalCalories.toLocaleString()} kcal</span>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-2 opacity-80">
+                <div className="text-sm">{isDietCoach ? '在学员管理中为成员设置减肥档案' : '等待教练设置你的减肥档案'}</div>
               </div>
-              <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
-            </div>
-            <div>
-              <div className="text-xs opacity-90">
-                {!hasDateFilter && statsPeriod === 'day' && '今日'}
-                {!hasDateFilter && statsPeriod === 'week' && '本周'}
-                {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
-                {!hasDateFilter && statsPeriod === 'year' && '今年'}
-                总支出
-              </div>
-              <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
-            </div>
+            )}
           </div>
-          )}
-        </div>
+        )}
       </div>
 
 
@@ -445,105 +359,163 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* Tab 切换已移除：只保留抽奖活动列表 */}
+      {/* 抽奖活动列表（双 Tab：正在进行中 / 往期回顾） */}
+      {!isDiet && (() => {
+        const allActivities = (lotteryActivities as any[]) ?? [];
+        // 正在进行中： draft/open/drawing
+        const activeActivities = allActivities.filter((a: any) => ['draft', 'open', 'drawing'].includes(a.status));
+        // 往期回顾： completed/cancelled
+        const pastActivities = allActivities.filter((a: any) => ['completed', 'cancelled'].includes(a.status));
+        const displayList = lotteryTab === 'active' ? activeActivities : pastActivities;
 
-      {/* 抽奖活动列表 */}
-      {activeTab === 'lottery' && !isDiet && (
-        <div className="flex-1 px-4 pb-20 space-y-3 pt-2">
-          {lotteryLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="w-6 h-6 text-[#D32F2F] animate-spin" />
+        const statusMap: Record<string, { label: string; color: string; icon: any }> = {
+          draft: { label: '草稿', color: 'text-gray-500 bg-gray-100', icon: null },
+          open: { label: '报名中', color: 'text-green-700 bg-green-100', icon: CheckCircle },
+          drawing: { label: '开奖中', color: 'text-orange-700 bg-orange-100', icon: Loader },
+          completed: { label: '已结束', color: 'text-gray-500 bg-gray-100', icon: CheckCircle },
+          cancelled: { label: '已取消', color: 'text-red-700 bg-red-100', icon: XCircle },
+        };
+        const modeMap: Record<string, string> = {
+          instant: '即时抽奖',
+          scheduled: '定时开奖',
+          milestone: '里程碑触发',
+        };
+        const seedMap: Record<string, string> = {
+          sh_index: '上证指数',
+          sz_index: '深证成指',
+          ssq: '双色球',
+          dlt: '超级大乐透',
+        };
+        const regMap: Record<string, string> = {
+          open: '自由报名',
+          invite: '邀请制',
+          organizer_add: '主办方添加',
+        };
+
+        return (
+          <div className="flex-1 pb-20">
+            {/* 子 Tab 切换栏 */}
+            <div className="flex mx-4 mt-3 mb-3 rounded-xl overflow-hidden" style={{ backgroundColor: '#F5F5F5' }}>
+              <button
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors rounded-xl ${
+                  lotteryTab === 'active'
+                    ? 'bg-[#D32F2F] text-white shadow-sm'
+                    : 'text-gray-500'
+                }`}
+                onClick={() => setLotteryTab('active')}
+              >
+                正在进行中
+                {activeActivities.length > 0 && (
+                  <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-xs ${
+                    lotteryTab === 'active' ? 'bg-white/30 text-white' : 'bg-[#D32F2F] text-white'
+                  }`}>
+                    {activeActivities.length}
+                  </span>
+                )}
+              </button>
+              <button
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors rounded-xl ${
+                  lotteryTab === 'past'
+                    ? 'bg-[#D32F2F] text-white shadow-sm'
+                    : 'text-gray-500'
+                }`}
+                onClick={() => setLotteryTab('past')}
+              >
+                往期回顾
+                {pastActivities.length > 0 && (
+                  <span className={`ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-xs ${
+                    lotteryTab === 'past' ? 'bg-white/30 text-white' : 'bg-gray-400 text-white'
+                  }`}>
+                    {pastActivities.length}
+                  </span>
+                )}
+              </button>
             </div>
-          ) : !lotteryActivities || (lotteryActivities as any[]).length === 0 ? (
-            <div className="text-center py-12">
-              <Gift className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <div className="text-gray-400 text-base mb-1">暂无抽奖活动</div>
-              <div className="text-gray-400 text-sm">账本管理员可在设置中创建抽奖活动</div>
-            </div>
-          ) : (
-            (lotteryActivities as any[]).map((activity: any) => {
-              const statusMap: Record<string, { label: string; color: string; icon: any }> = {
-                draft: { label: '草稿', color: 'text-gray-500 bg-gray-100', icon: null },
-                open: { label: '报名中', color: 'text-green-700 bg-green-100', icon: CheckCircle },
-                drawing: { label: '开奖中', color: 'text-orange-700 bg-orange-100', icon: Loader },
-                completed: { label: '已结束', color: 'text-gray-500 bg-gray-100', icon: CheckCircle },
-                cancelled: { label: '已取消', color: 'text-red-700 bg-red-100', icon: XCircle },
-              };
-              const modeMap: Record<string, string> = {
-                instant: '即时抽奖',
-                scheduled: '定时开奖',
-                milestone: '里程碑触发',
-              };
-              const seedMap: Record<string, string> = {
-                sh_index: '上证指数',
-                sz_index: '深证成指',
-                ssq: '双色球',
-                dlt: '超级大乐透',
-              };
-              const regMap: Record<string, string> = {
-                open: '自由报名',
-                invite: '邀请制',
-                organizer_add: '主办方添加',
-              };
-              const status = statusMap[activity.status] ?? statusMap.draft;
-              const StatusIcon = status.icon;
-              const drawTime = activity.draw_at ? new Date(activity.draw_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-              return (
-                <div
-                  key={activity.id}
-                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 cursor-pointer active:bg-[#FFF5F5] transition-colors"
-                  onClick={() => setLocation(`/lottery/${activity.id}`)}
-                >
-                  {/* 标题行 */}
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Gift className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
-                      <span className="text-base font-semibold text-[#222222] truncate">{activity.title}</span>
-                    </div>
-                    <span className={`ml-2 flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
-                      {StatusIcon && <StatusIcon className="w-3 h-3" />}
-                      {status.label}
-                    </span>
-                  </div>
-                  {/* 描述 */}
-                  {activity.description && (
-                    <div className="text-xs text-gray-500 mb-2 line-clamp-2">{activity.description}</div>
-                  )}
-                  {/* 信息网格 */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>{activity.participantCount ?? 0} 人已报名</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Gift className="w-3.5 h-3.5" />
-                      <span>{modeMap[activity.mode] ?? activity.mode}</span>
-                    </div>
-                    {drawTime && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>开奖 {drawTime}</span>
-                      </div>
-                    )}
-                    {activity.registration_mode && (
-                      <div className="flex items-center gap-1">
-                        <span>📋</span>
-                        <span>{regMap[activity.registration_mode] ?? activity.registration_mode}</span>
-                      </div>
-                    )}
-                    {activity.external_seed_type && (
-                      <div className="flex items-center gap-1 col-span-2">
-                        <span>🎲</span>
-                        <span>种子源：{seedMap[activity.external_seed_type] ?? activity.external_seed_type}</span>
-                      </div>
-                    )}
-                  </div>
+
+            {/* 活动列表 */}
+            <div className="px-4 space-y-3">
+              {lotteryLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="w-6 h-6 text-[#D32F2F] animate-spin" />
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
+              ) : displayList.length === 0 ? (
+                <div className="text-center py-12">
+                  <Gift className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  {lotteryTab === 'active' ? (
+                    <>
+                      <div className="text-gray-400 text-base mb-1">暂无进行中的活动</div>
+                      <div className="text-gray-400 text-sm">账本管理员可在设置中创建抽奖活动</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-gray-400 text-base mb-1">还没有历史活动</div>
+                      <div className="text-gray-400 text-sm">已结束或已取消的活动将在这里展示</div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                displayList.map((activity: any) => {
+                  const status = statusMap[activity.status] ?? statusMap.draft;
+                  const StatusIcon = status.icon;
+                  const drawTime = activity.draw_at ? new Date(activity.draw_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+                  return (
+                    <div
+                      key={activity.id}
+                      className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 cursor-pointer active:bg-[#FFF5F5] transition-colors"
+                      onClick={() => setLocation(`/lottery/${activity.id}`)}
+                    >
+                      {/* 标题行 */}
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Gift className="w-5 h-5 text-[#D32F2F] flex-shrink-0" />
+                          <span className="text-base font-semibold text-[#222222] truncate">{activity.title}</span>
+                        </div>
+                        <span className={`ml-2 flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                          {StatusIcon && <StatusIcon className="w-3 h-3" />}
+                          {status.label}
+                        </span>
+                      </div>
+                      {/* 描述 */}
+                      {activity.description && (
+                        <div className="text-xs text-gray-500 mb-2 line-clamp-2">{activity.description}</div>
+                      )}
+                      {/* 信息网格 */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>{activity.participantCount ?? 0} 人已报名</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Gift className="w-3.5 h-3.5" />
+                          <span>{modeMap[activity.mode] ?? activity.mode}</span>
+                        </div>
+                        {drawTime && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>开奖 {drawTime}</span>
+                          </div>
+                        )}
+                        {activity.registration_mode && (
+                          <div className="flex items-center gap-1">
+                            <span>📋</span>
+                            <span>{regMap[activity.registration_mode] ?? activity.registration_mode}</span>
+                          </div>
+                        )}
+                        {activity.external_seed_type && (
+                          <div className="flex items-center gap-1 col-span-2">
+                            <span>🎲</span>
+                            <span>种子源：{seedMap[activity.external_seed_type] ?? activity.external_seed_type}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 记账记录列表 */}
       {/* 记账明细列表已隐藏（此账本仅用于抽奖） */}
