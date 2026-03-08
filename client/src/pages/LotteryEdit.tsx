@@ -47,6 +47,8 @@ export default function LotteryEdit() {
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<"instant" | "scheduled" | "milestone">("instant");
   const [drawAt, setDrawAt] = useState("");
+  const [signupStartMode, setSignupStartMode] = useState<"immediate" | "scheduled">("immediate");
+  const [signupStartAt, setSignupStartAt] = useState("");
   const [signupEndAt, setSignupEndAt] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("");
   const [registrationMode, setRegistrationMode] = useState<"open" | "invite" | "organizer_add">("open");
@@ -75,6 +77,14 @@ export default function LotteryEdit() {
       const d = new Date(activity.draw_at);
       setDrawAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     }
+    if (activity.signup_start_at) {
+      const d = new Date(activity.signup_start_at);
+      setSignupStartMode('scheduled');
+      setSignupStartAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    } else {
+      setSignupStartMode('immediate');
+      setSignupStartAt('');
+    }
     if (activity.signup_end_at) {
       const d = new Date(activity.signup_end_at);
       setSignupEndAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
@@ -98,6 +108,7 @@ export default function LotteryEdit() {
         activityId, title: title.trim(),
         description: description.trim() || undefined,
         mode, drawAt: drawAt || undefined,
+        signupStartAt: signupStartMode === 'scheduled' && signupStartAt ? signupStartAt : undefined,
         signupEndAt: signupEndAt || undefined,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
         isPublic, requiresInfo, registrationMode,
@@ -221,12 +232,43 @@ export default function LotteryEdit() {
           )}
         </div>
 
-        {/* 卡片3：时间 + 人数（同一卡片两行） */}
+        {/* 卡片3：报名时间设置 */}
         <div className="bg-white rounded-xl p-3.5" style={{ border: `1px solid ${C.border}` }}>
           <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color: C.sub }}>
             <Clock className="w-3.5 h-3.5" style={{ color: C.red }} />报名设置
           </div>
           <div className="space-y-2">
+            {/* 报名开始时间 */}
+            <div>
+              <div className="text-xs mb-1.5" style={{ color: C.sub }}>报名开始</div>
+              <div className="flex gap-1.5 mb-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSignupStartMode('immediate')}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors"
+                  style={{
+                    borderColor: signupStartMode === 'immediate' ? C.red : C.border,
+                    backgroundColor: signupStartMode === 'immediate' ? C.redLight : '#FAFAFA',
+                    color: signupStartMode === 'immediate' ? C.red : C.sub,
+                  }}
+                >立即开始</button>
+                <button
+                  type="button"
+                  onClick={() => setSignupStartMode('scheduled')}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors"
+                  style={{
+                    borderColor: signupStartMode === 'scheduled' ? C.red : C.border,
+                    backgroundColor: signupStartMode === 'scheduled' ? C.redLight : '#FAFAFA',
+                    color: signupStartMode === 'scheduled' ? C.red : C.sub,
+                  }}
+                >定时开始</button>
+              </div>
+              {signupStartMode === 'scheduled' && (
+                <input type="datetime-local" className={inputCls} style={{ ...inputSty, width: '100%' }}
+                  value={signupStartAt} onChange={e => setSignupStartAt(e.target.value)} />
+              )}
+            </div>
+            {/* 报名截止时间 */}
             <div className="flex items-center gap-2">
               <div className="text-xs flex-shrink-0 w-16" style={{ color: C.sub }}>报名截止</div>
               <input type="datetime-local" className={inputCls} style={{ ...inputSty, flex: 1 }}

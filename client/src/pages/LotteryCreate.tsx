@@ -294,6 +294,8 @@ export default function LotteryCreate() {
   const [autoDrawEnabled, setAutoDrawEnabled] = useState(true);
   const [milestoneType, setMilestoneType] = useState<"amount" | "member_count" | "record_count">("amount");
   const [milestoneTarget, setMilestoneTarget] = useState("");
+  const [signupStartMode, setSignupStartMode] = useState<"immediate" | "scheduled">("immediate");
+  const [signupStartAt, setSignupStartAt] = useState("");
   const [signupEndAt, setSignupEndAt] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("");
   const [signupFee, setSignupFee] = useState("0");
@@ -334,6 +336,7 @@ export default function LotteryCreate() {
         autoDrawEnabled,
         milestoneType: mode === "milestone" ? milestoneType : undefined,
         milestoneTarget: mode === "milestone" && milestoneTarget ? parseFloat(milestoneTarget) : undefined,
+        signupStartAt: signupStartMode === 'scheduled' && signupStartAt ? signupStartAt : undefined,
         signupEndAt: signupEndAt || undefined,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : undefined,
         signupFee: parseFloat(signupFee) || 0,
@@ -597,6 +600,37 @@ export default function LotteryCreate() {
 
             {/* ── 其他报名设置 ── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border mb-4 space-y-4" style={{ borderColor: '#E0E0E0' }}>
+              {/* 报名开始时间 */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>报名开始时间</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setSignupStartMode('immediate')}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium border-2 transition-all"
+                    style={{
+                      borderColor: signupStartMode === 'immediate' ? '#D32F2F' : '#E0E0E0',
+                      backgroundColor: signupStartMode === 'immediate' ? '#FFEBEE' : '#FAF3ED',
+                      color: signupStartMode === 'immediate' ? '#D32F2F' : '#757575',
+                    }}
+                  >立即开始</button>
+                  <button
+                    type="button"
+                    onClick={() => setSignupStartMode('scheduled')}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium border-2 transition-all"
+                    style={{
+                      borderColor: signupStartMode === 'scheduled' ? '#D32F2F' : '#E0E0E0',
+                      backgroundColor: signupStartMode === 'scheduled' ? '#FFEBEE' : '#FAF3ED',
+                      color: signupStartMode === 'scheduled' ? '#D32F2F' : '#757575',
+                    }}
+                  >定时开始</button>
+                </div>
+                {signupStartMode === 'scheduled' && (
+                  <input type="datetime-local" className={inputClass} style={{ ...inputStyle, backgroundColor: '#FAF3ED' }}
+                    value={signupStartAt} onChange={e => setSignupStartAt(e.target.value)} />
+                )}
+              </div>
+              {/* 报名截止时间 */}
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>报名截止时间（可选）</label>
                 <input type="datetime-local" className={inputClass} style={{ ...inputStyle, backgroundColor: '#FAF3ED' }}
