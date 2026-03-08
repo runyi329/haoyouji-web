@@ -5111,23 +5111,7 @@ function DetailCard({ scene, onClose }: {
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: "#8B7355", letterSpacing: 2 }}>钱脉长，万物生</div>
           </div>
-          {scene.label === "共享建议簿" ? (
-            <a
-              href="/feedback/44"
-              style={{
-                fontSize: 12, fontWeight: 700, color: "#C62828",
-                background: "rgba(198,40,40,0.12)",
-                border: "1px solid rgba(198,40,40,0.4)",
-                borderRadius: 20, padding: "5px 14px",
-                textDecoration: "none", letterSpacing: 1,
-                whiteSpace: "nowrap", marginRight: -4
-              }}
-            >
-              试用
-            </a>
-          ) : (
-            <div style={{ width: 40 }} />
-          )}
+          <div style={{ width: 40 }} />
         </div>
       </div>
 
@@ -5143,9 +5127,28 @@ function DetailCard({ scene, onClose }: {
           }}>
             <Icon size={26} color="#fff" strokeWidth={2} />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 3 }}>定制案例</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
+              {scene.label === "共享建议簿" && (
+                <a
+                  href="/feedback/44"
+                  style={{
+                    fontSize: 13, fontWeight: 800, color: "#fff",
+                    background: "linear-gradient(135deg,#C62828,#E53935)",
+                    borderRadius: 20, padding: "5px 16px",
+                    textDecoration: "none", letterSpacing: 1,
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 2px 12px rgba(198,40,40,0.5)",
+                    animation: "trialBounce 1.2s ease-in-out infinite",
+                    display: "inline-block"
+                  }}
+                >
+                  试用
+                </a>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5446,6 +5449,11 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .hex-pulse { animation: hexPulse 2.8s ease-in-out infinite; }
         @keyframes hexPulse { 0%,100% { opacity: 0.2; } 50% { opacity: 0.75; } }
+        @keyframes trialBounce {
+          0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 2px 12px rgba(198,40,40,0.5); }
+          40% { transform: translateY(-5px) scale(1.06); box-shadow: 0 8px 20px rgba(198,40,40,0.7); }
+          60% { transform: translateY(-3px) scale(1.03); }
+        }
       `}</style>
     </div>
   );
