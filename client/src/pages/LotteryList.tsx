@@ -109,7 +109,7 @@ export default function LotteryList() {
       >
         <div className="flex items-center justify-between h-14 px-4">
           <button
-            onClick={() => window.history.back()}
+            onClick={() => navigate(`/ledger/${ledgerId}` as any)}
             className="p-2 -ml-2 rounded-lg active:bg-gray-100 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" style={{ color: "#424242" }} />
