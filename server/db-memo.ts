@@ -90,10 +90,12 @@ export async function getMemoItems(ledgerId: number, userId?: number, category?:
     ? (rows[0] as any).rows
     : rows;
 
-  return actualRows.map((r: any) => ({
-    ...r,
-    fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
-  }));
+  return actualRows
+    .map((r: any) => ({
+      ...r,
+      fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
+    }))
+    .filter((r: any) => r.title && r.title.trim() !== ''); // 过滤掉title为空的无效条目
 }
 
 // 搜索备忘录条目（全文搜索标题和字段值）
@@ -114,10 +116,12 @@ export async function searchMemoItems(ledgerId: number, keyword: string): Promis
     ? (rows[0] as any).rows
     : rows;
 
-  return actualRows.map((r: any) => ({
-    ...r,
-    fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
-  }));
+  return actualRows
+    .map((r: any) => ({
+      ...r,
+      fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
+    }))
+    .filter((r: any) => r.title && r.title.trim() !== ''); // 过滤掉title为空的无效条目
 }
 
 // 创建备忘录条目
