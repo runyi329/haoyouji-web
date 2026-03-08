@@ -109,6 +109,121 @@ export async function initDatabase() {
       await ensureOpinionBookColumns(dbConn);
     }
 
+    // ─── 抽奖模块：确保四张表存在 ────────────────────────────────────────────
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`lottery_activities\` (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        ledger_id INT NOT NULL,
+        created_by INT NOT NULL,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        cover_image_url TEXT,
+        mode ENUM('instant','scheduled','milestone') NOT NULL DEFAULT 'scheduled',
+        instant_style ENUM('scratch','wheel','flip','egg') DEFAULT 'scratch',
+        draw_at DATETIME DEFAULT NULL,
+        auto_draw_enabled TINYINT NOT NULL DEFAULT 1,
+        milestone_type ENUM('amount','member_count','record_count') DEFAULT NULL,
+        milestone_target DECIMAL(12,2) DEFAULT NULL,
+        signup_start_at DATETIME DEFAULT NULL,
+        signup_end_at DATETIME DEFAULT NULL,
+        max_participants INT DEFAULT NULL,
+        requires_info TINYINT NOT NULL DEFAULT 0,
+        required_fields JSON DEFAULT NULL,
+        signup_fee DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        registration_mode ENUM('open','invite','organizer_add') NOT NULL DEFAULT 'open',
+        random_seed_hash VARCHAR(64) DEFAULT NULL,
+        random_seed VARCHAR(255) DEFAULT NULL,
+        use_participant_seed TINYINT NOT NULL DEFAULT 0,
+        external_seed_type ENUM('sh_index','sz_index','ssq','dlt') DEFAULT NULL,
+        external_seed_date DATE DEFAULT NULL,
+        external_seed_value VARCHAR(255) DEFAULT NULL,
+        external_seed_source TEXT DEFAULT NULL,
+        status ENUM('draft','open','drawing','completed','cancelled') NOT NULL DEFAULT 'draft',
+        is_public TINYINT NOT NULL DEFAULT 1,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_lottery_ledger_id (ledger_id),
+        INDEX idx_lottery_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log("[DB Init] ✅ lottery_activities table checked/created");
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`lottery_prizes\` (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        activity_id INT NOT NULL,
+        name VARCHAR(50) NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        quantity INT NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        prize_value DECIMAL(10,2) DEFAULT NULL,
+        weight INT NOT NULL DEFAULT 1,
+        is_consolation TINYINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_lottery_prizes_activity (activity_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log("[DB Init] ✅ lottery_prizes table checked/created");
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`lottery_participants\` (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        activity_id INT NOT NULL,
+        user_id INT DEFAULT NULL,
+        ledger_record_id INT DEFAULT NULL,
+        display_name VARCHAR(50) DEFAULT NULL,
+        extra_info JSON DEFAULT NULL,
+        participant_seed VARCHAR(64) DEFAULT NULL,
+        status ENUM('pending','confirmed','cancelled') NOT NULL DEFAULT 'confirmed',
+        fee_paid DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        payment_status ENUM('free','pending','paid') NOT NULL DEFAULT 'free',
+        draw_count INT NOT NULL DEFAULT 1,
+        draw_used INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_lottery_part_activity (activity_id),
+        INDEX idx_lottery_part_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log("[DB Init] ✅ lottery_participants table checked/created");
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`lottery_results\` (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        activity_id INT NOT NULL,
+        prize_id INT NOT NULL,
+        participant_id INT NOT NULL,
+        ledger_record_id INT DEFAULT NULL,
+        winner_id INT DEFAULT NULL,
+        winner_name VARCHAR(50) DEFAULT NULL,
+        random_seed VARCHAR(255) DEFAULT NULL,
+        draw_index INT NOT NULL DEFAULT 0,
+        claim_status ENUM('unclaimed','claimed','expired') NOT NULL DEFAULT 'unclaimed',
+        claimed_at DATETIME DEFAULT NULL,
+        drawn_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_lottery_results_activity (activity_id),
+        INDEX idx_lottery_results_winner (winner_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log("[DB Init] ✅ lottery_results table checked/created");
+
+    // 兼容旧部署：确保 lottery_activities 有新字段
+    const dbConn2 = await getDbConnection();
+    if (dbConn2) {
+      const lotteryNewCols = [
+        { name: 'registration_mode', def: "ENUM('open','invite','organizer_add') NOT NULL DEFAULT 'open'" },
+        { name: 'external_seed_type', def: "ENUM('sh_index','sz_index','ssq','dlt') DEFAULT NULL" },
+        { name: 'external_seed_date', def: 'DATE DEFAULT NULL' },
+        { name: 'external_seed_value', def: 'VARCHAR(255) DEFAULT NULL' },
+        { name: 'external_seed_source', def: 'TEXT DEFAULT NULL' },
+      ];
+      for (const col of lotteryNewCols) {
+        await safeAddColumn(dbConn2, 'lottery_activities', col.name, col.def);
+      }
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
