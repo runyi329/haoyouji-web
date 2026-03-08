@@ -1500,3 +1500,10 @@ export * from "./merchant-schema";
 
 // ===== AB 定制账本 - 共享意见本模块 =====
 export * from "./opinion-schema";
+
+// ===== A1 定制账本 - 共享抽奖模块 =====
+export * from "./lottery-schema";
+
+// ===== 用户类型导出 =====
+export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;

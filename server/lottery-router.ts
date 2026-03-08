@@ -1,5 +1,5 @@
 /**
- * A1 定制账本 - 共享抽奖 tRPC 路由
+ * AE 定制账本 - 共享抽奖 tRPC 路由
  *
  * 接口列表：
  *   lottery.create          - 创建抽奖活动（组织者）
@@ -19,10 +19,25 @@
  */
 
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "./_core/trpc";
+import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { db } from "./db";
+import { getDbConnection } from "./db";
 import crypto from "crypto";
+
+
+// ─────────────────────────────────────────────
+// 辅助：封装 getDbConnection 执行原始 SQL
+// ─────────────────────────────────────────────
+async function _execQuery(sql: string, params?: any[]): Promise<any[]> {
+  const conn = await getDbConnection();
+  if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
+  try {
+    const [rows] = await conn.execute(sql, params ?? []);
+    return rows as any[];
+  } finally {
+    // 不销毁连接，复用连接池
+  }
+}
 
 // ─────────────────────────────────────────────
 // 工具函数：公平随机算法
@@ -87,7 +102,7 @@ function weightedDraw(
 // 路由定义
 // ─────────────────────────────────────────────
 
-export const lotteryRouter = createTRPCRouter({
+export const lotteryRouter = router({
 
   // ── 创建抽奖活动 ──────────────────────────
   create: protectedProcedure
@@ -119,7 +134,7 @@ export const lotteryRouter = createTRPCRouter({
       const userId = ctx.user.id;
 
       // 验证账本成员权限
-      const [member] = await db.query(
+      const [member] = await _execQuery(
         `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ?`,
         [input.ledgerId, userId]
       ) as any[];
@@ -130,7 +145,7 @@ export const lotteryRouter = createTRPCRouter({
       // 预生成种子哈希（开奖前公示用）
       const { seed, hash } = generateSeedHash();
 
-      const [result] = await db.query(
+      const [result] = await _execQuery(
         `INSERT INTO lottery_activities
           (ledger_id, created_by, title, description, mode, instant_style,
            draw_at, auto_draw_enabled, milestone_type, milestone_target,
@@ -198,7 +213,7 @@ export const lotteryRouter = createTRPCRouter({
 
       if (updates.length === 0) return { success: true };
       values.push(activityId);
-      await db.query(`UPDATE lottery_activities SET ${updates.join(",")} WHERE id=?`, values);
+      await _execQuery(`UPDATE lottery_activities SET ${updates.join(",")} WHERE id=?`, values);
       return { success: true };
     }),
 
@@ -206,7 +221,7 @@ export const lotteryRouter = createTRPCRouter({
   getActivity: publicProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT a.*, 
            (SELECT COUNT(*) FROM lottery_participants WHERE activity_id=a.id AND status='confirmed') AS participantCount
          FROM lottery_activities a WHERE a.id=?`,
@@ -214,7 +229,7 @@ export const lotteryRouter = createTRPCRouter({
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const prizes = await db.query(
+      const prizes = await _execQuery(
         `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
         [input.activityId]
       ) as any[];
@@ -226,7 +241,7 @@ export const lotteryRouter = createTRPCRouter({
   listByLedger: publicProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ input }) => {
-      const activities = await db.query(
+      const activities = await _execQuery(
         `SELECT a.*,
            (SELECT COUNT(*) FROM lottery_participants WHERE activity_id=a.id AND status='confirmed') AS participantCount,
            (SELECT COUNT(*) FROM lottery_results WHERE activity_id=a.id) AS winnerCount
@@ -253,7 +268,7 @@ export const lotteryRouter = createTRPCRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
-      const [result] = await db.query(
+      const [result] = await _execQuery(
         `INSERT INTO lottery_prizes (activity_id, name, description, image_url, quantity, sort_order, prize_value, weight, is_consolation)
          VALUES (?,?,?,?,?,?,?,?,?)`,
         [input.activityId, input.name, input.description ?? null, input.imageUrl ?? null,
@@ -289,7 +304,7 @@ export const lotteryRouter = createTRPCRouter({
       if (fields.isConsolation !== undefined) { updates.push("is_consolation=?"); values.push(fields.isConsolation ? 1 : 0); }
       if (updates.length === 0) return { success: true };
       values.push(prizeId);
-      await db.query(`UPDATE lottery_prizes SET ${updates.join(",")} WHERE id=?`, values);
+      await _execQuery(`UPDATE lottery_prizes SET ${updates.join(",")} WHERE id=?`, values);
       return { success: true };
     }),
 
@@ -298,7 +313,7 @@ export const lotteryRouter = createTRPCRouter({
     .input(z.object({ prizeId: z.number(), activityId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
-      await db.query(`DELETE FROM lottery_prizes WHERE id=?`, [input.prizeId]);
+      await _execQuery(`DELETE FROM lottery_prizes WHERE id=?`, [input.prizeId]);
       return { success: true };
     }),
 
@@ -311,7 +326,7 @@ export const lotteryRouter = createTRPCRouter({
       userId: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT * FROM lottery_activities WHERE id=?`, [input.activityId]
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
@@ -319,7 +334,7 @@ export const lotteryRouter = createTRPCRouter({
 
       // 检查人数上限
       if (activity.max_participants) {
-        const [{ cnt }] = await db.query(
+        const [{ cnt }] = await _execQuery(
           `SELECT COUNT(*) AS cnt FROM lottery_participants WHERE activity_id=? AND status='confirmed'`,
           [input.activityId]
         ) as any[];
@@ -330,7 +345,7 @@ export const lotteryRouter = createTRPCRouter({
 
       // 防重复报名（同一 userId 或同一 displayName）
       if (input.userId) {
-        const [existing] = await db.query(
+        const [existing] = await _execQuery(
           `SELECT id FROM lottery_participants WHERE activity_id=? AND user_id=? AND status='confirmed'`,
           [input.activityId, input.userId]
         ) as any[];
@@ -342,7 +357,7 @@ export const lotteryRouter = createTRPCRouter({
         ? crypto.randomBytes(16).toString("hex")
         : null;
 
-      const [result] = await db.query(
+      const [result] = await _execQuery(
         `INSERT INTO lottery_participants (activity_id, user_id, display_name, extra_info, participant_seed, status)
          VALUES (?,?,?,?,?,'confirmed')`,
         [input.activityId, input.userId ?? null, input.displayName,
@@ -356,7 +371,7 @@ export const lotteryRouter = createTRPCRouter({
   cancelSignup: protectedProcedure
     .input(z.object({ participantId: z.number(), activityId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      await db.query(
+      await _execQuery(
         `UPDATE lottery_participants SET status='cancelled' WHERE id=? AND user_id=?`,
         [input.participantId, ctx.user.id]
       );
@@ -368,7 +383,7 @@ export const lotteryRouter = createTRPCRouter({
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
-      const participants = await db.query(
+      const participants = await _execQuery(
         `SELECT * FROM lottery_participants WHERE activity_id=? AND status='confirmed' ORDER BY created_at ASC`,
         [input.activityId]
       ) as any[];
@@ -382,14 +397,14 @@ export const lotteryRouter = createTRPCRouter({
       participantId: z.number(),
     }))
     .mutation(async ({ input }) => {
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT * FROM lottery_activities WHERE id=? AND mode='instant'`,
         [input.activityId]
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
       if (activity.status !== "open") throw new TRPCError({ code: "BAD_REQUEST", message: "活动未开放" });
 
-      const [participant] = await db.query(
+      const [participant] = await _execQuery(
         `SELECT * FROM lottery_participants WHERE id=? AND activity_id=? AND status='confirmed'`,
         [input.participantId, input.activityId]
       ) as any[];
@@ -399,7 +414,7 @@ export const lotteryRouter = createTRPCRouter({
       }
 
       // 获取可用奖项（剩余名额 > 0）
-      const prizes = await db.query(
+      const prizes = await _execQuery(
         `SELECT p.*, 
            p.quantity - COALESCE((SELECT COUNT(*) FROM lottery_results r WHERE r.prize_id=p.id), 0) AS remaining
          FROM lottery_prizes p WHERE p.activity_id=? HAVING remaining > 0 ORDER BY p.sort_order ASC`,
@@ -424,7 +439,7 @@ export const lotteryRouter = createTRPCRouter({
       const prize = prizes.find((p: any) => p.id === winnerPrizeId) ?? prizes[prizes.length - 1];
 
       // 记录结果
-      await db.query(
+      await _execQuery(
         `INSERT INTO lottery_results (activity_id, prize_id, participant_id, winner_id, winner_name, random_seed, draw_index)
          VALUES (?,?,?,?,?,?,?)`,
         [input.activityId, prize.id, input.participantId,
@@ -432,7 +447,7 @@ export const lotteryRouter = createTRPCRouter({
       );
 
       // 更新已用次数
-      await db.query(
+      await _execQuery(
         `UPDATE lottery_participants SET draw_used=draw_used+1 WHERE id=?`,
         [input.participantId]
       );
@@ -449,23 +464,23 @@ export const lotteryRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
 
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT * FROM lottery_activities WHERE id=?`, [input.activityId]
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
       if (activity.status !== "open") throw new TRPCError({ code: "BAD_REQUEST", message: "活动状态不允许开奖" });
 
       // 标记为开奖中
-      await db.query(`UPDATE lottery_activities SET status='drawing' WHERE id=?`, [input.activityId]);
+      await _execQuery(`UPDATE lottery_activities SET status='drawing' WHERE id=?`, [input.activityId]);
 
       // 获取所有已确认参与者
-      const participants = await db.query(
+      const participants = await _execQuery(
         `SELECT * FROM lottery_participants WHERE activity_id=? AND status='confirmed'`,
         [input.activityId]
       ) as any[];
 
       // 获取奖项（按等级排序，高奖先抽）
-      const prizes = await db.query(
+      const prizes = await _execQuery(
         `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
         [input.activityId]
       ) as any[];
@@ -526,7 +541,7 @@ export const lotteryRouter = createTRPCRouter({
 
       // 批量写入结果
       for (const w of winners) {
-        await db.query(
+        await _execQuery(
           `INSERT INTO lottery_results (activity_id, prize_id, participant_id, winner_id, winner_name, random_seed, draw_index)
            SELECT ?, ?, ?, lp.user_id, ?, ?, ?
            FROM lottery_participants lp WHERE lp.id=?`,
@@ -535,7 +550,7 @@ export const lotteryRouter = createTRPCRouter({
       }
 
       // 更新活动状态为已完成，公布种子
-      await db.query(
+      await _execQuery(
         `UPDATE lottery_activities SET status='completed', random_seed=? WHERE id=?`,
         [finalSeed, input.activityId]
       );
@@ -547,7 +562,7 @@ export const lotteryRouter = createTRPCRouter({
   getResults: publicProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
-      const results = await db.query(
+      const results = await _execQuery(
         `SELECT r.*, p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image,
                 p.sort_order AS prize_sort_order
          FROM lottery_results r
@@ -557,7 +572,7 @@ export const lotteryRouter = createTRPCRouter({
         [input.activityId]
       ) as any[];
 
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT random_seed, random_seed_hash, use_participant_seed FROM lottery_activities WHERE id=?`,
         [input.activityId]
       ) as any[];
@@ -569,7 +584,7 @@ export const lotteryRouter = createTRPCRouter({
   verifyFairness: publicProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
-      const [activity] = await db.query(
+      const [activity] = await _execQuery(
         `SELECT random_seed, random_seed_hash FROM lottery_activities WHERE id=?`,
         [input.activityId]
       ) as any[];
@@ -593,7 +608,7 @@ export const lotteryRouter = createTRPCRouter({
 // 辅助：验证组织者权限
 // ─────────────────────────────────────────────
 async function ensureOrganizer(activityId: number, userId: number) {
-  const [activity] = await db.query(
+  const [activity] = await _execQuery(
     `SELECT a.created_by, a.ledger_id FROM lottery_activities a WHERE a.id=?`,
     [activityId]
   ) as any[];
@@ -601,7 +616,7 @@ async function ensureOrganizer(activityId: number, userId: number) {
 
   if (activity.created_by === userId) return; // 创建者直接通过
 
-  const [member] = await db.query(
+  const [member] = await _execQuery(
     `SELECT role FROM ledger_members WHERE ledger_id=? AND user_id=?`,
     [activity.ledger_id, userId]
   ) as any[];
