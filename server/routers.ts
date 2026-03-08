@@ -9157,6 +9157,117 @@ export const appRouter = router({
         return { entries: rows as any[], total: (countRows as any[])[0].total };
       }),
 
+    // AI 智能分析：读取账本所有评价，调用 LLM 生成最重要最紧急的建议
+    aiInsights: publicProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        categoryId: z.number().optional(),  // 可选分店筛选
+        forceRefresh: z.boolean().default(false),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证账本存在
+        const [ledgerRows] = await dbConn.execute(
+          `SELECT id, name FROM ledgers WHERE id=? AND type IN ('opinion_book','opinion_book_demo') AND isArchived=0`,
+          [input.ledgerId]
+        ) as any;
+        if (!(ledgerRows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '账本不存在' });
+        const ledgerName = (ledgerRows as any[])[0].name;
+
+        // 读取最近 200 条意见（防止 token 过多）
+        let entriesQuery = `SELECT r.description as content, r.createdAt as created_at,
+                                   c.name as branch_name
+                            FROM ledger_records r
+                            LEFT JOIN ledger_categories c ON c.id = r.categoryId
+                            WHERE r.ledgerId = ? AND (r.deleted_at IS NULL)`;
+        const params: any[] = [input.ledgerId];
+        if (input.categoryId !== undefined) {
+          entriesQuery += ` AND r.categoryId = ?`;
+          params.push(input.categoryId);
+        }
+        entriesQuery += ` ORDER BY r.createdAt DESC LIMIT 200`;
+        const [entryRows] = await dbConn.execute(entriesQuery, params) as any;
+        const entries = entryRows as any[];
+
+        if (entries.length === 0) {
+          return {
+            insights: [],
+            summary: '暂无足够意见数据，请等客户提交意见后再查看 AI 分析。',
+            totalAnalyzed: 0,
+          };
+        }
+
+        // 构建评价摘要文本
+        const entriesSummary = entries
+          .map((e: any, i: number) => `${i + 1}. [${e.branch_name || '未知分店'}] ${e.content}`)
+          .join('\n');
+
+        const { invokeLLM } = await import('./_core/llm');
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: 'system',
+              content: `你是一个餐饮行业经营顾问，擅长从大量客户意见中提炼关键洞察。你的任务是分析「${ledgerName}」的客户意见，为老板生成 3～5 条最重要、最紧急的改进建议。
+
+要求：
+1. 每条建议必须有具体可操作的行动方案
+2. 标注紧急程度：高（需立即处理）/ 中（本周内）/ 低（长期优化）
+3. 每条建议要指出该问题被多少客户提到
+4. 语言简洁直接，面向老板，不要学术化
+5. 返回 JSON 格式，包含字段： insights (数组) 和 summary (总结一句话)
+
+insights 数组每项包含：
+- title: 建议标题（不超过 20 字）
+- detail: 具体行动建议（不超过 60 字）
+- urgency: 高 | 中 | 低
+- count: 涉及该问题的意见条数（整数）`,
+            },
+            {
+              role: 'user',
+              content: `以下是最近 ${entries.length} 条客户意见：\n\n${entriesSummary}\n\n请分析并返回 JSON。`,
+            },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'ai_insights',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  insights: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        title: { type: 'string' },
+                        detail: { type: 'string' },
+                        urgency: { type: 'string' },
+                        count: { type: 'number' },
+                      },
+                      required: ['title', 'detail', 'urgency', 'count'],
+                      additionalProperties: false,
+                    },
+                  },
+                  summary: { type: 'string' },
+                },
+                required: ['insights', 'summary'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const content = response.choices[0].message.content;
+        const parsed = JSON.parse(content);
+        return {
+          insights: parsed.insights as Array<{ title: string; detail: string; urgency: string; count: number }>,
+          summary: parsed.summary as string,
+          totalAnalyzed: entries.length,
+        };
+      }),
+
     // 获取分店下的桌号列表（用于二维码管理页展示）
     getTables: protectedProcedure
       .input(z.object({

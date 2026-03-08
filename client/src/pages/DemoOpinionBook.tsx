@@ -642,6 +642,79 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
   );
 }
 
+// ─── AI 智能建议面板────────────────────────────────────────────────────────────────────
+function AIInsightsPanel({ ledgerId }: { ledgerId: number }) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { data, isLoading, error } = trpc.opinionBook.aiInsights.useQuery(
+    { ledgerId, forceRefresh: refreshKey > 0 },
+    { enabled: ledgerId > 0, retry: 1, staleTime: 5 * 60 * 1000 }
+  );
+
+  const urgencyColor = (u: string) => {
+    if (u === '高') return { bg: 'rgba(255,82,82,0.25)', text: '#FF8A80', dot: '#FF5252' };
+    if (u === '中') return { bg: 'rgba(255,193,7,0.2)', text: '#FFD54F', dot: '#FFC107' };
+    return { bg: 'rgba(255,255,255,0.12)', text: 'rgba(255,255,255,0.6)', dot: 'rgba(255,255,255,0.4)' };
+  };
+
+  return (
+    <>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between flex-shrink-0 mb-1.5">
+        <div className="flex items-center gap-1">
+          <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none">
+            <circle cx="8" cy="8" r="7" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5"/>
+            <path d="M5 8l2 2 4-4" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.9)' }}>AI 建议</span>
+        </div>
+        <button
+          onClick={() => setRefreshKey(k => k + 1)}
+          disabled={isLoading}
+          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] transition-opacity"
+          style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', opacity: isLoading ? 0.5 : 1 }}
+        >
+          <RefreshCw className={`w-2.5 h-2.5 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>刷新</span>
+        </button>
+      </div>
+
+      {/* 内容区 */}
+      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full gap-1.5 py-4">
+            <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.15)', borderTopColor: 'rgba(255,255,255,0.8)' }} />
+            <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>AI 分析中...</span>
+          </div>
+        ) : error ? (
+          <div className="text-[10px] text-center py-3" style={{ color: 'rgba(255,255,255,0.4)' }}>分析失败，请刷新重试</div>
+        ) : !data || data.insights.length === 0 ? (
+          <div className="text-[10px] text-center py-3" style={{ color: 'rgba(255,255,255,0.4)' }}>{data?.summary || '暂无数据'}</div>
+        ) : (
+          <div className="space-y-1.5">
+            {data.insights.map((item, i) => {
+              const c = urgencyColor(item.urgency);
+              return (
+                <div key={i} className="rounded-lg px-2 py-1.5" style={{ backgroundColor: c.bg }}>
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.dot }} />
+                    <span className="text-[11px] font-semibold leading-tight flex-1" style={{ color: '#FFFFFF' }}>{item.title}</span>
+                    <span className="text-[9px] px-1 py-0.5 rounded flex-shrink-0" style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: c.text }}>{item.urgency}</span>
+                  </div>
+                  <p className="text-[10px] leading-snug" style={{ color: 'rgba(255,255,255,0.72)', paddingLeft: '10px' }}>{item.detail}</p>
+                  <p className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)', paddingLeft: '10px' }}>{item.count} 条意见提到</p>
+                </div>
+              );
+            })}
+            {data.summary && (
+              <p className="text-[9px] pt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>{data.summary}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── 管理者视图（店长/老板共用，通过isOwner控制隐私字段）────────────────────
 function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwner: boolean; branches: Array<{ id: number; name: string }> }) {
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
@@ -785,12 +858,7 @@ function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwne
               )}
             </div>
             <div className="rounded-xl px-2 py-2 flex flex-col overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.12)", minHeight: "120px" }}>
-              <div className="text-xs font-medium flex-shrink-0 mb-1" style={{ color: "rgba(255,255,255,0.85)" }}>热词</div>
-              {stats.tagCloud.length === 0 ? (
-                <div className="text-xs flex-1 flex items-center justify-center" style={{ color: "rgba(255,255,255,0.4)" }}>暂无标签</div>
-              ) : (
-                <WordCloud tags={stats.tagCloud} />
-              )}
+              <AIInsightsPanel ledgerId={ledgerId} />
             </div>
           </div>
         </div>
