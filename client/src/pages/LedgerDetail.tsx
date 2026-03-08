@@ -576,9 +576,9 @@ export default function LedgerDetail() {
                         className="flex-shrink-0 relative"
                         style={{ width: '130px', minHeight: '130px' }}
                       >
-                        {activity.cover_image ? (
+                        {activity.cover_image_url ? (
                           <img
-                            src={activity.cover_image}
+                            src={activity.cover_image_url}
                             alt={activity.title}
                             className="absolute inset-0 w-full h-full object-cover"
                           />
