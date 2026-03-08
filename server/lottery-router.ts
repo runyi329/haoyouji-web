@@ -31,12 +31,11 @@ import crypto from "crypto";
 async function _execQuery(sql: string, params?: any[]): Promise<any[]> {
   const conn = await getDbConnection();
   if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库不可用" });
-  try {
-    const [rows] = await conn.execute(sql, params ?? []);
-    return rows as any[];
-  } finally {
-    // 不销毁连接，复用连接池
-  }
+  const [rows] = await conn.execute(sql, params ?? []);
+  // SELECT 返回数组，INSERT/UPDATE/DELETE 返回 ResultSetHeader（对象）
+  // 统一包装为数组，方便调用方解构
+  if (Array.isArray(rows)) return rows as any[];
+  return [rows] as any[]; // ResultSetHeader 包装成单元素数组
 }
 
 // ─────────────────────────────────────────────
@@ -127,8 +126,12 @@ export const lotteryRouter = router({
         options: z.array(z.string()).optional(),
       })).optional(),
       signupFee: z.number().default(0),
+      registrationMode: z.enum(['invite', 'organizer_add', 'open']).default('open'),
       useParticipantSeed: z.boolean().default(false),
       isPublic: z.boolean().default(true),
+      // 外部开奖数据源
+      externalSeedType: z.enum(['sh_index', 'sz_index', 'ssq', 'dlt']).optional(),
+      externalSeedDate: z.string().optional(), // YYYY-MM-DD
     }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
@@ -150,9 +153,10 @@ export const lotteryRouter = router({
           (ledger_id, created_by, title, description, mode, instant_style,
            draw_at, auto_draw_enabled, milestone_type, milestone_target,
            signup_start_at, signup_end_at, max_participants, requires_info,
-           required_fields, signup_fee, random_seed_hash, random_seed,
-           use_participant_seed, status, is_public)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           required_fields, signup_fee, registration_mode, random_seed_hash, random_seed,
+           use_participant_seed, status, is_public,
+           external_seed_type, external_seed_date)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           input.ledgerId, userId, input.title, input.description ?? null,
           input.mode, input.instantStyle ?? "scratch",
@@ -161,9 +165,10 @@ export const lotteryRouter = router({
           input.signupStartAt ?? null, input.signupEndAt ?? null,
           input.maxParticipants ?? null, input.requiresInfo ? 1 : 0,
           input.requiredFields ? JSON.stringify(input.requiredFields) : null,
-          input.signupFee, hash, seed,
+          input.signupFee, input.registrationMode ?? 'open', hash, seed,
           input.useParticipantSeed ? 1 : 0,
           "draft", input.isPublic ? 1 : 0,
+          input.externalSeedType ?? null, input.externalSeedDate ?? null,
         ]
       ) as any;
 
@@ -485,15 +490,83 @@ export const lotteryRouter = router({
         [input.activityId]
       ) as any[];
 
+      // ── 外部数据种子：拉取外部公认数据作为随机依据 ──
+      let externalSeedValue: string | null = null;
+      let externalSeedSource: string | null = null;
+      if (activity.external_seed_type) {
+        try {
+          const seedDate = activity.external_seed_date
+            ? new Date(activity.external_seed_date)
+            : new Date();
+          const dateStr = seedDate.toISOString().split('T')[0];
+          if (activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index') {
+            // 沪深股市收盘价（Yahoo Finance）
+            const symbol = activity.external_seed_type === 'sh_index' ? '000001.SS' : '399001.SZ';
+            const indexName = activity.external_seed_type === 'sh_index' ? '上证指数' : '深证成指';
+            const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+            const resp = await fetch(yahooUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const data = await resp.json() as any;
+            const result = data?.chart?.result?.[0];
+            if (result) {
+              const timestamps: number[] = result.timestamp || [];
+              const closes: number[] = result.indicators?.quote?.[0]?.close || [];
+              // 找到最接近指定日期的收盘价
+              let bestClose = closes[closes.length - 1];
+              for (let i = 0; i < timestamps.length; i++) {
+                const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+                if (d <= dateStr && closes[i]) bestClose = closes[i];
+              }
+              externalSeedValue = bestClose.toFixed(2);
+              externalSeedSource = `${indexName}(${symbol}) ${dateStr} 收盘价: ${externalSeedValue} 点 | 数据来源: Yahoo Finance`;
+            }
+          } else if (activity.external_seed_type === 'ssq' || activity.external_seed_type === 'dlt') {
+            // 双色球/大乐透：尝试从聚合数据 API 获取（需要 API key，否则用占位符提示）
+            const lotteryName = activity.external_seed_type === 'ssq' ? '双色球' : '大乐透';
+            const apiKey = process.env.JUHE_LOTTERY_API_KEY;
+            if (apiKey) {
+              const lotteryId = activity.external_seed_type === 'ssq' ? 'ssq' : 'dlt';
+              const apiUrl = `https://apis.juhe.cn/lottery/query?lottery_id=${lotteryId}&lottery_no=&key=${apiKey}`;
+              const resp = await fetch(apiUrl);
+              const data = await resp.json() as any;
+              if (data?.result?.data?.[0]) {
+                const latest = data.result.data[0];
+                const nums = latest.lottery_no || latest.preDrawNo || '';
+                externalSeedValue = nums;
+                externalSeedSource = `${lotteryName} 第${latest.lottery_id || ''}期 开奖号码: ${nums} | 数据来源: 聚合数据`;
+              }
+            } else {
+              // 无 API Key 时，使用占位符（管理员需手动填入）
+              externalSeedValue = `[待填入${lotteryName}开奖号码]`;
+              externalSeedSource = `${lotteryName} ${dateStr} 开奖号码（请在开奖后手动填入）`;
+            }
+          }
+          // 将外部数据写入数据库
+          if (externalSeedValue) {
+            await _execQuery(
+              `UPDATE lottery_activities SET external_seed_value=?, external_seed_source=? WHERE id=?`,
+              [externalSeedValue, externalSeedSource, input.activityId]
+            );
+          }
+        } catch (err) {
+          console.warn('[Lottery] Failed to fetch external seed data:', err);
+        }
+      }
+
       // 决定最终种子（如果开启了参与者共同决定）
       let finalSeed = activity.random_seed;
+      // 如果有外部数据，将外部数据混入种子
+      if (externalSeedValue) {
+        finalSeed = crypto.createHash("sha256")
+          .update(`${activity.random_seed}:external:${externalSeedValue}`)
+          .digest("hex");
+      }
       if (activity.use_participant_seed) {
         const allSeeds = participants
           .map((p: any) => p.participant_seed)
           .filter(Boolean)
           .join(":");
         finalSeed = crypto.createHash("sha256")
-          .update(`${activity.random_seed}:${allSeeds}`)
+          .update(`${finalSeed}:${allSeeds}`)
           .digest("hex");
       }
 
