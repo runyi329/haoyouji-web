@@ -334,7 +334,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
 
           </div>
           <div className="ml-3 flex-shrink-0">
-            <img src="https://cdn-us.manus.space/webdev-static/maluji-logo.png" alt="麻六记" className="w-16 h-16 object-contain drop-shadow-lg rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_6fe47d51.png" alt="麻六记" className="w-16 h-16 object-contain drop-shadow-lg rounded-full" />
           </div>
         </div>
       </div>
@@ -572,8 +572,8 @@ function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwne
       <div className="flex-none overflow-hidden flex flex-col" style={{ height: "40vh", backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         <div className="px-4 pt-3 pb-2 flex items-center gap-3 flex-shrink-0">
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
-              {isOwner ? <Crown className="w-6 h-6 text-white" /> : <Briefcase className="w-6 h-6 text-white" />}
+            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.9)" }}>
+              <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_6fe47d51.png" alt="麻六记" className="w-10 h-10 object-contain" />
             </div>
           </div>
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
