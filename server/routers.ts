@@ -8155,7 +8155,7 @@ export const appRouter = router({
         description: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建AE定制账本' });
         }
         const ledger = await dbLedger.createLedger({
@@ -8168,7 +8168,7 @@ export const appRouter = router({
       }),
     listCustomAE: protectedProcedure
       .query(async ({ ctx }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看AE定制账本列表' });
         }
         const db = await getDb();
@@ -8191,7 +8191,7 @@ export const appRouter = router({
         username: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        if (ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请成员加入AE账本' });
         }
         const db = await getDb();

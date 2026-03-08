@@ -162,7 +162,7 @@ const ProductStore = lazy(() => import("./pages/ProductStore"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
-// A1 共享抽奖
+// AE 共享抽奖
 const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
 const LotteryActivity = lazy(() => import("./pages/LotteryActivity"));
 const LotteryList = lazy(() => import("./pages/LotteryList"));
@@ -431,7 +431,7 @@ function Router() {
         <Route path="/wine/product/romanico" component={WineProductRomanico} />
         <Route path="/share/wine/product/romanico" component={WineProductRomanicoShare} />
         {/* AB 共享意见本 - 游客扫码页面（新架构：ledgerId + categoryId） */}
-        {/* A1 共享抽奖 */}
+        {/* AE 共享抽奖 */}
         <Route path="/lottery/create" component={LotteryCreate} />
         <Route path="/lottery/list/:ledgerId" component={LotteryList} />
         <Route path="/lottery/:activityId/draw" component={LotteryDrawScreen} />
