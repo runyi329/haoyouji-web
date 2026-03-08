@@ -5133,7 +5133,7 @@ function DetailCard({ scene, onClose }: {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
               {scene.label === "共享建议簿" && (
                 <a
-                  href="/feedback/44"
+                  href="/demo/opinion/44"
                   style={{
                     fontSize: 13, fontWeight: 800, color: "#fff",
                     background: "linear-gradient(135deg,#C62828,#E53935)",
