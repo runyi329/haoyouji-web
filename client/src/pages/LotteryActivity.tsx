@@ -1,10 +1,18 @@
 /**
- * 共享抽奖：活动详情 + 参与者报名 + 即时抽奖动效
+ * 抽奖活动详情页 —— 信任驱动型架构
  * 路由：/lottery/:activityId
- * 三个子 Tab：活动信息 | 报名名单 | 开奖结果
+ * 布局（从上到下）：
+ *   1. Hero 区（奖品大图 + 状态 + 倒计时）
+ *   2. 我的抽奖码
+ *   3. 第三方开奖校验区（股票行情看板 / 彩票球形序列）
+ *   4. 开奖算法公式
+ *   5. 历史开奖回顾
+ *   6. 奖项详情
+ *   7. 参与者名单（头像阵列 + 实时滚动）
+ *   8. 底部固定按钮
  */
 import { useState, useEffect, useRef } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -14,25 +22,52 @@ import {
   Clock,
   Gift,
   CheckCircle,
-  ListChecks,
-  BarChart3,
+  ExternalLink,
+  TrendingUp,
+  TrendingDown,
   Loader,
+  ShieldCheck,
+  Hash,
+  Flame,
+  Star,
 } from "lucide-react";
 
-// ─── 倒计时 Hook ────────────────────────────────────────────────────────────
+// ─── 配色常量（深色系，与网站13色系一致）────────────────────────────────────
+const C = {
+  red: '#D32F2F',
+  redDark: '#B71C1C',
+  redLight: '#FFEBEE',
+  gold: '#CBA471',
+  goldLight: '#FFF8E1',
+  bg: '#FAF3ED',
+  card: '#FFFFFF',
+  text: '#1A1A1A',
+  sub: '#757575',
+  border: '#E0E0E0',
+  // 深色系（用于开奖校验区）
+  darkBg: '#1A1A2E',
+  darkCard: '#16213E',
+  darkBorder: '#0F3460',
+  darkText: '#E0E0E0',
+  darkSub: '#9E9E9E',
+  // 股票颜色
+  stockUp: '#EF5350',
+  stockDown: '#26A69A',
+  // 彩票颜色
+  lotteryRed: '#D32F2F',
+  lotteryBlue: '#1565C0',
+};
+
+// ─── 倒计时 Hook ─────────────────────────────────────────────────────────────
 function useCountdown(targetTime: string | null) {
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
     if (!targetTime) return;
-    const update = () => {
-      const diff = new Date(targetTime).getTime() - Date.now();
-      setRemaining(Math.max(0, diff));
-    };
+    const update = () => setRemaining(Math.max(0, new Date(targetTime).getTime() - Date.now()));
     update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
   }, [targetTime]);
-
   const d = Math.floor(remaining / 86400000);
   const h = Math.floor((remaining % 86400000) / 3600000);
   const m = Math.floor((remaining % 3600000) / 60000);
@@ -40,7 +75,462 @@ function useCountdown(targetTime: string | null) {
   return { remaining, d, h, m, s };
 }
 
-// ─── 刮刮乐动效 ────────────────────────────────────────────────────────────
+// ─── 股票行情看板 ─────────────────────────────────────────────────────────────
+function StockBoard({ seedType, seedValue, seedSource }: {
+  seedType: string;
+  seedValue?: string | null;
+  seedSource?: string | null;
+}) {
+  const indexName = seedType === 'sh_index' ? '上证指数' : '深证成指';
+  const indexCode = seedType === 'sh_index' ? '000001.SH' : '399001.SZ';
+  const sinaUrl = seedType === 'sh_index'
+    ? 'https://finance.sina.com.cn/realstock/company/sh000001/nc.shtml'
+    : 'https://finance.sina.com.cn/realstock/company/sz399001/nc.shtml';
+
+  // 解析 seedValue（格式如 "3456.78" 或从 seedSource JSON 中取）
+  let price: string | null = null;
+  let change: string | null = null;
+  let isUp = true;
+  let tailDigits: string | null = null;
+
+  if (seedValue) {
+    price = seedValue;
+    const num = parseFloat(seedValue);
+    if (!isNaN(num)) {
+      const str = num.toFixed(2);
+      tailDigits = str.replace('.', '').slice(-2);
+    }
+  }
+  if (seedSource) {
+    try {
+      const parsed = JSON.parse(seedSource);
+      if (parsed.price) price = String(parsed.price);
+      if (parsed.change) { change = String(parsed.change); isUp = parseFloat(parsed.change) >= 0; }
+      if (parsed.close) {
+        const str = parseFloat(parsed.close).toFixed(2).replace('.', '');
+        tailDigits = str.slice(-2);
+      }
+    } catch {}
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg }}>
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.darkBorder }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-xs font-mono" style={{ color: C.darkSub }}>MARKET DATA</span>
+        </div>
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
+      </div>
+
+      {/* 指数名称 + 价格 */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="text-xs mb-1 font-mono tracking-widest" style={{ color: C.darkSub }}>{indexName}</div>
+        {price ? (
+          <div className="flex items-end gap-3">
+            <span
+              className="text-4xl font-bold font-mono"
+              style={{ color: isUp ? C.stockUp : C.stockDown }}
+            >
+              {price}
+            </span>
+            {change && (
+              <div className="flex items-center gap-1 mb-1">
+                {isUp ? <TrendingUp className="w-4 h-4" style={{ color: C.stockUp }} /> : <TrendingDown className="w-4 h-4" style={{ color: C.stockDown }} />}
+                <span className="text-sm font-mono" style={{ color: isUp ? C.stockUp : C.stockDown }}>{change}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-2xl font-mono" style={{ color: C.darkSub }}>待获取</div>
+        )}
+      </div>
+
+      {/* 尾数提取区 */}
+      {tailDigits && (
+        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}` }}>
+          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.darkSub }}>
+            <Hash className="w-3 h-3" />
+            <span>收盘价尾数提取</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+              {price?.replace('.', '')}
+            </span>
+            <span className="text-xs" style={{ color: C.darkSub }}>→ 取末两位 →</span>
+            <div className="flex gap-1">
+              {tailDigits.split('').map((d, i) => (
+                <span
+                  key={i}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold font-mono"
+                  style={{ background: C.red, color: '#fff', boxShadow: `0 0 12px ${C.red}66` }}
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+            <span className="text-xs ml-1" style={{ color: C.gold }}>← 开奖基数</span>
+          </div>
+        </div>
+      )}
+
+      {/* 底部：去验证链接 */}
+      <div className="px-4 pb-4">
+        <a
+          href={sinaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs"
+          style={{ color: C.gold }}
+          onClick={e => e.stopPropagation()}
+        >
+          <ExternalLink className="w-3 h-3" />
+          <span>去新浪财经查看原始数据 →</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── 彩票球形序列 ─────────────────────────────────────────────────────────────
+function LotteryBalls({ seedType, seedValue, seedSource }: {
+  seedType: string;
+  seedValue?: string | null;
+  seedSource?: string | null;
+}) {
+  const isSSQ = seedType === 'ssq';
+  const lotteryName = isSSQ ? '双色球' : '超级大乐透';
+  const officialUrl = isSSQ
+    ? 'https://www.cwl.gov.cn/ygkj/wqkjgg/ssq/'
+    : 'https://www.lottery.gov.cn/kj/kjlb.html?dlt';
+
+  // 解析号码
+  let redBalls: string[] = [];
+  let blueBalls: string[] = [];
+  let issueNo = '';
+  let drawTime = '';
+
+  if (seedSource) {
+    try {
+      const parsed = JSON.parse(seedSource);
+      if (parsed.red) redBalls = String(parsed.red).split(',').map((s: string) => s.trim().padStart(2, '0'));
+      if (parsed.blue) blueBalls = String(parsed.blue).split(',').map((s: string) => s.trim().padStart(2, '0'));
+      if (parsed.issue) issueNo = String(parsed.issue);
+      if (parsed.time) drawTime = String(parsed.time);
+    } catch {}
+  }
+  if (seedValue && redBalls.length === 0) {
+    // fallback: seedValue 格式 "01,02,03,04,05,06+07"
+    const parts = seedValue.split('+');
+    redBalls = (parts[0] || '').split(',').map(s => s.trim().padStart(2, '0'));
+    blueBalls = (parts[1] || '').split(',').map(s => s.trim().padStart(2, '0'));
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg }}>
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.darkBorder }}>
+        <div className="flex items-center gap-2">
+          <Star className="w-3.5 h-3.5" style={{ color: C.gold }} />
+          <span className="text-xs font-bold tracking-widest" style={{ color: C.darkText }}>{lotteryName}</span>
+        </div>
+        {issueNo && (
+          <span className="text-xs font-mono" style={{ color: C.darkSub }}>第 {issueNo} 期</span>
+        )}
+      </div>
+
+      {/* 球形序列 */}
+      <div className="px-4 py-5">
+        {redBalls.length > 0 ? (
+          <>
+            <div className="flex flex-wrap gap-2 justify-center mb-3">
+              {redBalls.map((n, i) => (
+                <div
+                  key={i}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                  style={{
+                    background: 'radial-gradient(circle at 35% 35%, #EF5350, #B71C1C)',
+                    boxShadow: '0 3px 8px rgba(183,28,28,0.5), inset 0 1px 2px rgba(255,255,255,0.3)',
+                  }}
+                >
+                  {n}
+                </div>
+              ))}
+              {blueBalls.map((n, i) => (
+                <div
+                  key={`b${i}`}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                  style={{
+                    background: 'radial-gradient(circle at 35% 35%, #42A5F5, #1565C0)',
+                    boxShadow: '0 3px 8px rgba(21,101,192,0.5), inset 0 1px 2px rgba(255,255,255,0.3)',
+                  }}
+                >
+                  {n}
+                </div>
+              ))}
+            </div>
+            {drawTime && (
+              <div className="text-center text-xs" style={{ color: C.darkSub }}>
+                开奖时间：{drawTime}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-4">
+            <div className="flex justify-center gap-2 mb-2">
+              {Array.from({ length: isSSQ ? 7 : 7 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
+                  style={{
+                    background: i < (isSSQ ? 6 : 5) ? 'rgba(211,47,47,0.3)' : 'rgba(21,101,192,0.3)',
+                    color: C.darkSub,
+                    border: `1px dashed ${C.darkBorder}`,
+                  }}
+                >
+                  ?
+                </div>
+              ))}
+            </div>
+            <div className="text-xs" style={{ color: C.darkSub }}>等待开奖数据...</div>
+          </div>
+        )}
+      </div>
+
+      {/* 底部：去验证链接 */}
+      <div className="px-4 pb-4 border-t" style={{ borderColor: C.darkBorder }}>
+        <a
+          href={officialUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs pt-3"
+          style={{ color: C.gold }}
+          onClick={e => e.stopPropagation()}
+        >
+          <ExternalLink className="w-3 h-3" />
+          <span>去官方彩票网站验证原始数据 →</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── 算法公式展示 ─────────────────────────────────────────────────────────────
+function AlgorithmBox({ seedType, mode }: { seedType?: string | null; mode: string }) {
+  const isStock = seedType === 'sh_index' || seedType === 'sz_index';
+  const isLottery = seedType === 'ssq' || seedType === 'dlt';
+  const seedName = {
+    sh_index: '上证收盘尾数', sz_index: '深证收盘尾数',
+    ssq: '双色球红球之和', dlt: '大乐透前区之和',
+  }[seedType ?? ''] ?? '随机种子';
+
+  return (
+    <div className="rounded-2xl p-4" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+      <div className="flex items-center gap-2 mb-3">
+        <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
+        <span className="text-sm font-bold" style={{ color: C.darkText }}>开奖算法说明</span>
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold }}>
+          可验证
+        </span>
+      </div>
+
+      {/* 公式框 */}
+      <div className="rounded-xl p-3 mb-3 font-mono text-xs" style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}` }}>
+        {isStock || isLottery ? (
+          <div className="space-y-1.5">
+            <div style={{ color: C.darkSub }}>// 开奖计算公式</div>
+            <div style={{ color: '#82AAFF' }}>
+              幸运码 = <span style={{ color: C.gold }}>{seedName}</span>
+            </div>
+            <div style={{ color: '#82AAFF' }}>
+              中奖者 = 参与者列表[幸运码 % 参与人数]
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div style={{ color: C.darkSub }}>// 随机种子算法</div>
+            <div style={{ color: '#82AAFF' }}>
+              种子 = SHA256(时间戳 + 活动ID + 随机熵)
+            </div>
+            <div style={{ color: '#82AAFF' }}>
+              中奖者 = 参与者列表[种子哈希 % 参与人数]
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="text-xs space-y-1" style={{ color: C.darkSub }}>
+        <div className="flex items-start gap-1.5">
+          <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#66BB6A' }} />
+          <span>开奖前公示随机种子哈希，开奖后公开完整种子，任何人可独立验证</span>
+        </div>
+        {(isStock || isLottery) && (
+          <div className="flex items-start gap-1.5">
+            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#66BB6A' }} />
+            <span>开奖依据来自第三方公开数据，主办方无法干预结果</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── 参与者名单 ───────────────────────────────────────────────────────────────
+function ParticipantGrid({ activityId }: { activityId: number }) {
+  const { data: participants, isLoading } = trpc.lottery.getPublicParticipants.useQuery({ activityId });
+  const [showAll, setShowAll] = useState(false);
+
+  if (isLoading) return (
+    <div className="flex justify-center py-6">
+      <Loader className="w-5 h-5 animate-spin" style={{ color: C.red }} />
+    </div>
+  );
+
+  const list = (participants as any[]) ?? [];
+  const display = showAll ? list : list.slice(0, 12);
+
+  if (list.length === 0) return (
+    <div className="text-center py-8">
+      <Users className="w-10 h-10 mx-auto mb-2" style={{ color: C.border }} />
+      <div className="text-sm" style={{ color: C.sub }}>暂无参与者</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* 实时滚动条（最新参与者） */}
+      {list.length > 0 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-xs"
+          style={{ background: C.redLight, color: C.red }}
+        >
+          <Flame className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">
+            刚刚，<strong>{list[0]?.display_name}</strong> 参与了活动
+          </span>
+        </div>
+      )}
+
+      {/* 头像阵列 */}
+      <div className="grid grid-cols-4 gap-3">
+        {display.map((p: any, idx: number) => (
+          <div key={p.id} className="flex flex-col items-center gap-1">
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-white text-base font-bold border-2"
+              style={{
+                background: p.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`,
+                borderColor: C.border,
+              }}
+            >
+              {p.avatar_url ? (
+                <img src={p.avatar_url} alt={p.display_name} className="w-full h-full rounded-full object-cover" />
+              ) : (
+                (p.display_name || '?')[0]
+              )}
+            </div>
+            <span className="text-[10px] text-center truncate w-full" style={{ color: C.sub }}>
+              {p.display_name}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {list.length > 12 && !showAll && (
+        <button
+          className="w-full mt-3 py-2 text-xs rounded-xl border"
+          style={{ color: C.sub, borderColor: C.border }}
+          onClick={() => setShowAll(true)}
+        >
+          查看全部 {list.length} 位参与者
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── 开奖结果展示 ─────────────────────────────────────────────────────────────
+function DrawResultsSection({ activityId }: { activityId: number }) {
+  const { data, isLoading } = trpc.lottery.getResults.useQuery({ activityId });
+
+  if (isLoading) return (
+    <div className="flex justify-center py-6">
+      <Loader className="w-5 h-5 animate-spin" style={{ color: C.red }} />
+    </div>
+  );
+
+  const results = (data?.results ?? []) as any[];
+  const fairness = data?.fairnessInfo as any;
+
+  if (results.length === 0) return (
+    <div className="text-center py-6">
+      <Trophy className="w-10 h-10 mx-auto mb-2" style={{ color: C.border }} />
+      <div className="text-sm" style={{ color: C.sub }}>开奖结果将在此公示</div>
+    </div>
+  );
+
+  const grouped: Record<string, { prizeName: string; sortOrder: number; winners: any[] }> = {};
+  for (const r of results) {
+    if (!grouped[r.prize_id]) grouped[r.prize_id] = { prizeName: r.prize_name, sortOrder: r.prize_sort_order, winners: [] };
+    grouped[r.prize_id].winners.push(r);
+  }
+  const sortedGroups = Object.values(grouped).sort((a, b) => a.sortOrder - b.sortOrder);
+  const prizeIcons = ["🥇", "🥈", "🥉", "🏅", "🎖️"];
+
+  return (
+    <div className="space-y-3">
+      {sortedGroups.map((group, gIdx) => (
+        <div key={gIdx} className="rounded-2xl overflow-hidden border" style={{ borderColor: C.border }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ background: C.redLight }}>
+            <span className="text-base">{prizeIcons[gIdx] ?? "🎁"}</span>
+            <span className="font-semibold text-sm" style={{ color: C.red }}>{group.prizeName}</span>
+            <span className="ml-auto text-xs" style={{ color: C.sub }}>{group.winners.length} 人获奖</span>
+          </div>
+          <div className="divide-y" style={{ divideColor: '#F5F5F5' }}>
+            {group.winners.map((w: any, wIdx: number) => (
+              <div key={wIdx} className="px-4 py-3 flex items-center gap-3">
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ background: C.red }}
+                >
+                  {wIdx + 1}
+                </div>
+                <span className="text-sm font-medium" style={{ color: C.text }}>{w.winner_name}</span>
+                <CheckCircle className="w-4 h-4 ml-auto" style={{ color: '#66BB6A' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* 公平性验证 */}
+      {fairness?.random_seed && (
+        <div className="rounded-2xl p-4" style={{ background: C.darkBg }}>
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
+            <span className="text-sm font-bold" style={{ color: C.darkText }}>公平性验证</span>
+          </div>
+          <div className="space-y-2 text-xs font-mono" style={{ color: C.darkSub }}>
+            <div>
+              <span style={{ color: C.darkText }}>随机种子：</span>
+              <span className="break-all">{fairness.random_seed.slice(0, 40)}...</span>
+            </div>
+            <div>
+              <span style={{ color: C.darkText }}>种子哈希：</span>
+              <span className="break-all">{fairness.random_seed_hash?.slice(0, 40)}...</span>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: '#66BB6A' }}>
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>开奖结果可通过种子独立验证，不可篡改</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 刮刮乐动效 ──────────────────────────────────────────────────────────────
 function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [revealed, setRevealed] = useState(false);
@@ -50,14 +540,14 @@ function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () 
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#D32F2F";
+    ctx.fillStyle = C.red;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < 200; i++) {
       ctx.fillStyle = `rgba(${180 + Math.random() * 40}, ${20 + Math.random() * 20}, 20, 0.3)`;
       ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
     }
     ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.font = "bold 15px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("← 用手指刮开 →", canvas.width / 2, canvas.height / 2);
   }, []);
@@ -75,32 +565,18 @@ function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () 
     for (let i = 3; i < imageData.data.length; i += 4) {
       if (imageData.data[i] < 128) transparent++;
     }
-    const ratio = transparent / (canvas.width * canvas.height);
-    if (ratio > 0.5 && !revealed) {
+    if (transparent / (canvas.width * canvas.height) > 0.5 && !revealed) {
       setRevealed(true);
       onReveal();
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!scratching) return;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    scratch(e.clientX - rect.left, e.clientY - rect.top);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault();
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const touch = e.touches[0];
-    scratch(touch.clientX - rect.left, touch.clientY - rect.top);
-  };
-
   return (
     <div className="relative w-64 h-40 mx-auto rounded-2xl overflow-hidden shadow-xl">
-      <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: C.bg }}>
         <div className="text-4xl mb-2">🎁</div>
-        <div className="font-bold text-xl" style={{ color: '#D32F2F' }}>{prizeName}</div>
-        <div className="text-sm mt-1" style={{ color: '#757575' }}>恭喜中奖！</div>
+        <div className="font-bold text-xl" style={{ color: C.red }}>{prizeName}</div>
+        <div className="text-sm mt-1" style={{ color: C.sub }}>恭喜中奖！</div>
       </div>
       {!revealed && (
         <canvas
@@ -110,10 +586,10 @@ function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () 
           className="absolute inset-0 cursor-crosshair"
           onMouseDown={() => setScratching(true)}
           onMouseUp={() => setScratching(false)}
-          onMouseMove={handleMouseMove}
+          onMouseMove={e => { if (!scratching) return; const r = canvasRef.current!.getBoundingClientRect(); scratch(e.clientX - r.left, e.clientY - r.top); }}
           onTouchStart={() => setScratching(true)}
           onTouchEnd={() => setScratching(false)}
-          onTouchMove={handleTouchMove}
+          onTouchMove={e => { e.preventDefault(); const r = canvasRef.current!.getBoundingClientRect(); const t = e.touches[0]; scratch(t.clientX - r.left, t.clientY - r.top); }}
           style={{ touchAction: "none" }}
         />
       )}
@@ -121,270 +597,12 @@ function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () 
   );
 }
 
-// ─── 大转盘动效 ────────────────────────────────────────────────────────────
-function SpinWheel({ prizes, winnerIdx, onDone }: { prizes: string[]; winnerIdx: number; onDone: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [spinning, setSpinning] = useState(false);
-  const [done, setDone] = useState(false);
-  const angleRef = useRef(0);
-  const rafRef = useRef<number>(0);
-
-  const colors = ["#D32F2F", "#B71C1C", "#E57373", "#EF9A9A", "#C62828", "#FF5252"];
-  const n = prizes.length;
-  const sliceAngle = (Math.PI * 2) / n;
-
-  const draw = (angle: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    const cx = canvas.width / 2, cy = canvas.height / 2, r = cx - 8;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < n; i++) {
-      const start = angle + i * sliceAngle;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, start, start + sliceAngle);
-      ctx.closePath();
-      ctx.fillStyle = colors[i % colors.length];
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.3)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(start + sliceAngle / 2);
-      ctx.textAlign = "right";
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 11px sans-serif";
-      ctx.fillText(prizes[i].length > 6 ? prizes[i].slice(0, 6) + "…" : prizes[i], r - 10, 4);
-      ctx.restore();
-    }
-    ctx.beginPath();
-    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
-    ctx.fill();
-    ctx.strokeStyle = "#D32F2F";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + r - 5, cy);
-    ctx.lineTo(cx + r + 14, cy - 8);
-    ctx.lineTo(cx + r + 14, cy + 8);
-    ctx.closePath();
-    ctx.fillStyle = "#D32F2F";
-    ctx.fill();
-  };
-
-  useEffect(() => { draw(0); }, [prizes]);
-
-  const spin = () => {
-    if (spinning || done) return;
-    setSpinning(true);
-    const targetAngle = -(winnerIdx * sliceAngle + sliceAngle / 2) + Math.PI * 2 * 8;
-    const startAngle = angleRef.current;
-    const totalDelta = targetAngle - startAngle;
-    const duration = 4000;
-    const startTime = performance.now();
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 4);
-      const current = startAngle + totalDelta * eased;
-      angleRef.current = current;
-      draw(current);
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(animate);
-      } else {
-        setSpinning(false);
-        setDone(true);
-        onDone();
-      }
-    };
-    rafRef.current = requestAnimationFrame(animate);
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <canvas ref={canvasRef} width={240} height={240} className="rounded-full shadow-xl" />
-      {!done && (
-        <button
-          onClick={spin}
-          disabled={spinning}
-          className="px-8 py-3 rounded-full text-white font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          style={{ backgroundColor: '#D32F2F' }}
-        >
-          {spinning ? "转动中..." : "🎡 开始旋转"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── 翻牌动效 ──────────────────────────────────────────────────────────────
-function FlipCards({ prizes, winnerIdx, onDone }: { prizes: string[]; winnerIdx: number; onDone: () => void }) {
-  const [flipped, setFlipped] = useState<number | null>(null);
-  const [done, setDone] = useState(false);
-
-  const handleFlip = (idx: number) => {
-    if (done || flipped !== null) return;
-    setFlipped(idx);
-    setTimeout(() => { setDone(true); onDone(); }, 800);
-  };
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <p className="text-sm" style={{ color: '#757575' }}>选择一张牌</p>
-      <div className="grid grid-cols-3 gap-3">
-        {prizes.map((prize, idx) => (
-          <div key={idx} onClick={() => handleFlip(idx)} className="w-20 h-28 cursor-pointer" style={{ perspective: "600px" }}>
-            <div className="relative w-full h-full transition-transform duration-700"
-              style={{ transformStyle: "preserve-3d", transform: flipped === idx ? "rotateY(180deg)" : "rotateY(0deg)" }}>
-              <div className="absolute inset-0 rounded-xl flex items-center justify-center border shadow-md"
-                style={{ backfaceVisibility: "hidden", backgroundColor: '#D32F2F', borderColor: '#B71C1C' }}>
-                <span className="text-3xl">🃏</span>
-              </div>
-              <div className="absolute inset-0 rounded-xl flex flex-col items-center justify-center border shadow-md"
-                style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", backgroundColor: '#FAF3ED', borderColor: '#E0E0E0' }}>
-                <span className="text-2xl">🎁</span>
-                <span className="text-xs text-center px-1 mt-1 font-bold" style={{ color: '#D32F2F' }}>
-                  {flipped === idx ? (idx === winnerIdx ? prize : "谢谢参与") : ""}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── 报名名单子 Tab ─────────────────────────────────────────────────────────
-function ParticipantsList({ activityId }: { activityId: number }) {
-  const { data: participants, isLoading } = trpc.lottery.getPublicParticipants.useQuery({ activityId });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader className="w-6 h-6 text-[#D32F2F] animate-spin" />
-      </div>
-    );
-  }
-
-  if (!participants || (participants as any[]).length === 0) {
-    return (
-      <div className="text-center py-12">
-        <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <div className="text-gray-400 text-base">暂无报名者</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="text-sm text-gray-500 mb-3">共 {(participants as any[]).length} 人报名</div>
-      {(participants as any[]).map((p: any, idx: number) => (
-        <div key={p.id} className="bg-white rounded-xl px-4 py-3 flex items-center gap-3 border border-gray-100">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-            style={{ backgroundColor: '#D32F2F' }}
-          >
-            {idx + 1}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm text-[#222222] truncate">{p.display_name}</div>
-            <div className="text-xs text-gray-400">
-              {new Date(p.created_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </div>
-          </div>
-          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── 开奖结果子 Tab ─────────────────────────────────────────────────────────
-function DrawResults({ activityId }: { activityId: number }) {
-  const { data, isLoading } = trpc.lottery.getResults.useQuery({ activityId });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader className="w-6 h-6 text-[#D32F2F] animate-spin" />
-      </div>
-    );
-  }
-
-  const results = (data?.results ?? []) as any[];
-  const fairness = data?.fairnessInfo as any;
-
-  if (results.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <Trophy className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <div className="text-gray-400 text-base">暂无开奖结果</div>
-        <div className="text-gray-400 text-sm mt-1">活动开奖后结果将在此公示</div>
-      </div>
-    );
-  }
-
-  // 按奖项分组
-  const grouped: Record<string, { prizeName: string; sortOrder: number; winners: any[] }> = {};
-  for (const r of results) {
-    if (!grouped[r.prize_id]) {
-      grouped[r.prize_id] = { prizeName: r.prize_name, sortOrder: r.prize_sort_order, winners: [] };
-    }
-    grouped[r.prize_id].winners.push(r);
-  }
-  const sortedGroups = Object.values(grouped).sort((a, b) => a.sortOrder - b.sortOrder);
-  const prizeIcons = ["🥇", "🥈", "🥉", "🏅", "🎖️"];
-
-  return (
-    <div className="space-y-4">
-      {sortedGroups.map((group, gIdx) => (
-        <div key={gIdx} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#FFEBEE' }}>
-            <span className="text-lg">{prizeIcons[gIdx] ?? "🎁"}</span>
-            <span className="font-semibold text-sm" style={{ color: '#D32F2F' }}>{group.prizeName}</span>
-            <span className="ml-auto text-xs text-gray-500">{group.winners.length} 人获奖</span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {group.winners.map((w: any, wIdx: number) => (
-              <div key={wIdx} className="px-4 py-3 flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ backgroundColor: '#D32F2F' }}>
-                  {wIdx + 1}
-                </div>
-                <span className="text-sm font-medium text-[#222222]">{w.winner_name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* 公平性验证信息 */}
-      {fairness?.random_seed && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <div className="text-xs font-semibold text-gray-500 mb-2">🔐 公平性验证</div>
-          <div className="text-xs text-gray-400 break-all space-y-1">
-            <div><span className="text-gray-600">随机种子：</span>{fairness.random_seed.slice(0, 32)}...</div>
-            <div><span className="text-gray-600">种子哈希：</span>{fairness.random_seed_hash?.slice(0, 32)}...</div>
-          </div>
-          <div className="mt-2 text-xs text-green-600">✓ 开奖结果可通过种子独立验证</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 主页面 ────────────────────────────────────────────────────────────────
+// ─── 主页面 ──────────────────────────────────────────────────────────────────
 export default function LotteryActivity() {
   const [, params] = useRoute("/lottery/:activityId");
   const activityId = parseInt(params?.activityId ?? "0");
-  const [, navigate] = useLocation();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'participants' | 'results'>('info');
   const [displayName, setDisplayName] = useState(user?.name ?? "");
   const [signingUp, setSigningUp] = useState(false);
   const [participantId, setParticipantId] = useState<number | null>(null);
@@ -392,10 +610,10 @@ export default function LotteryActivity() {
   const [drawing, setDrawing] = useState(false);
   const [showDraw, setShowDraw] = useState(false);
   const [signupError, setSignupError] = useState("");
+  const [showFullParticipants, setShowFullParticipants] = useState(false);
 
   const { data: activity, isLoading } = trpc.lottery.getActivity.useQuery({ activityId });
   const countdown = useCountdown(activity?.draw_at ?? null);
-
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
 
@@ -404,11 +622,7 @@ export default function LotteryActivity() {
     setSigningUp(true);
     setSignupError("");
     try {
-      const result = await signupMutation.mutateAsync({
-        activityId,
-        displayName: displayName.trim(),
-        userId: user?.id,
-      });
+      const result = await signupMutation.mutateAsync({ activityId, displayName: displayName.trim(), userId: user?.id });
       setParticipantId(result.id);
       if (activity?.mode === "instant") setShowDraw(true);
     } catch (e: any) {
@@ -431,260 +645,331 @@ export default function LotteryActivity() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
-        <Loader className="w-6 h-6 text-[#D32F2F] animate-spin" />
-      </div>
-    );
-  }
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: C.bg }}>
+      <Loader className="w-6 h-6 animate-spin" style={{ color: C.red }} />
+    </div>
+  );
 
-  if (!activity) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
-        <div className="text-sm" style={{ color: '#757575' }}>活动不存在</div>
-      </div>
-    );
-  }
+  if (!activity) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: C.bg }}>
+      <div className="text-sm" style={{ color: C.sub }}>活动不存在</div>
+    </div>
+  );
 
   const isOpen = activity.status === "open";
+  const isDrawing = activity.status === "drawing";
   const isCompleted = activity.status === "completed";
-  const modeLabel = { instant: "即时自助抽奖", scheduled: "定时集体开奖", milestone: "阶段解锁抽奖" }[activity.mode as string] ?? "";
-  const seedMap: Record<string, string> = {
-    sh_index: '上证指数', sz_index: '深证成指', ssq: '双色球', dlt: '超级大乐透',
-  };
-  const regMap: Record<string, string> = {
-    open: '自由报名', invite: '邀请制', organizer_add: '主办方添加',
-  };
+  const hasExternalSeed = !!activity.external_seed_type;
+  const isStock = activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index';
+  const isLottery = activity.external_seed_type === 'ssq' || activity.external_seed_type === 'dlt';
+
+  const statusConfig = {
+    draft: { label: '草稿', bg: '#E0E0E0', color: '#757575' },
+    open: { label: '报名中', bg: '#E8F5E9', color: '#2E7D32' },
+    drawing: { label: '开奖中', bg: '#FFF3E0', color: '#E65100' },
+    completed: { label: '已结束', bg: '#F5F5F5', color: '#9E9E9E' },
+    cancelled: { label: '已取消', bg: '#FFEBEE', color: '#D32F2F' },
+  }[activity.status as string] ?? { label: activity.status, bg: '#F5F5F5', color: '#9E9E9E' };
 
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: '#FAF3ED' }}>
-      {/* 顶部导航 */}
-      <div className="sticky top-0 z-10" style={{ backgroundColor: '#D32F2F' }}>
+    <div className="min-h-screen pb-32" style={{ backgroundColor: C.bg }}>
+
+      {/* ── 顶部导航栏 ── */}
+      <div className="sticky top-0 z-20" style={{ backgroundColor: C.red }}>
         <div className="flex items-center h-14 px-4 gap-3">
           <button onClick={() => window.history.back()} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-          <h1 className="flex-1 text-lg font-medium truncate text-white">{activity.title}</h1>
-          {/* 状态徽章 */}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            isOpen ? "bg-green-100 text-green-700" :
-            isCompleted ? "bg-white/20 text-white" :
-            "bg-orange-100 text-orange-700"
-          }`}>
-            {isOpen ? "报名中" : isCompleted ? "已结束" : activity.status === 'drawing' ? '开奖中' : activity.status}
+          <h1 className="flex-1 text-base font-semibold truncate text-white">{activity.title}</h1>
+          <span
+            className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
+            style={{ background: statusConfig.bg, color: statusConfig.color }}
+          >
+            {statusConfig.label}
           </span>
         </div>
+      </div>
 
-        {/* 三个子 Tab */}
-        <div className="flex border-t border-white/20">
-          {[
-            { key: 'info', label: '活动信息', icon: Gift },
-            { key: 'participants', label: '报名名单', icon: ListChecks },
-            { key: 'results', label: '开奖结果', icon: BarChart3 },
-          ].map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors ${
-                activeTab === key
-                  ? 'text-white border-b-2 border-white'
-                  : 'text-white/60 hover:text-white/80'
-              }`}
-              onClick={() => setActiveTab(key as any)}
+      {/* ── 1. Hero 区：奖品大图 + 倒计时 ── */}
+      <div className="relative" style={{ minHeight: '220px' }}>
+        {activity.cover_image ? (
+          <img
+            src={activity.cover_image}
+            alt={activity.title}
+            className="w-full object-cover"
+            style={{ height: '220px' }}
+          />
+        ) : (
+          <div
+            className="w-full flex flex-col items-center justify-center gap-3"
+            style={{
+              height: '220px',
+              background: `linear-gradient(135deg, ${C.redDark} 0%, ${C.red} 60%, #E57373 100%)`,
+            }}
+          >
+            <Gift className="w-16 h-16 text-white/60" />
+            <span className="text-white/70 text-sm">奖品图片</span>
+          </div>
+        )}
+
+        {/* 渐变蒙层 + 倒计时 */}
+        {(isOpen || isDrawing) && activity.draw_at && countdown.remaining > 0 && (
+          <div
+            className="absolute bottom-0 left-0 right-0 px-4 py-4"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)' }}
+          >
+            <div className="text-white/70 text-xs mb-2 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span>距离开奖</span>
+            </div>
+            <div className="flex gap-2">
+              {[
+                { v: countdown.d, u: '天' },
+                { v: countdown.h, u: '时' },
+                { v: countdown.m, u: '分' },
+                { v: countdown.s, u: '秒' },
+              ].map(({ v, u }) => (
+                <div key={u} className="flex flex-col items-center">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold text-white"
+                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}
+                  >
+                    {String(v).padStart(2, '0')}
+                  </div>
+                  <span className="text-white/60 text-[10px] mt-1">{u}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 开奖中动效标 */}
+        {isDrawing && (
+          <div
+            className="absolute top-3 left-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-bold"
+            style={{ background: 'rgba(255,109,0,0.9)', backdropFilter: 'blur(4px)' }}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>开奖进行中</span>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pt-4 max-w-lg mx-auto space-y-4">
+
+        {/* ── 2. 我的抽奖码（已报名时显示）── */}
+        {participantId && (
+          <div
+            className="rounded-2xl p-4 flex items-center gap-3"
+            style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: C.red }}
             >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-4 py-4 max-w-lg mx-auto">
-
-        {/* ── Tab: 活动信息 ── */}
-        {activeTab === 'info' && (
-          <>
-            {/* 活动头部信息 */}
-            <div className="bg-white rounded-2xl p-5 mb-4 shadow-sm border" style={{ borderColor: '#E0E0E0' }}>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className="text-xs px-2 py-0.5 rounded-full text-white font-medium" style={{ backgroundColor: '#D32F2F' }}>
-                  {modeLabel}
-                </span>
-                {activity.registration_mode && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border text-gray-600 bg-gray-50 border-gray-200">
-                    {regMap[activity.registration_mode] ?? activity.registration_mode}
-                  </span>
-                )}
-                {activity.external_seed_type && (
-                  <span className="text-xs px-2 py-0.5 rounded-full border text-blue-600 bg-blue-50 border-blue-200">
-                    🎲 {seedMap[activity.external_seed_type] ?? activity.external_seed_type}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-lg font-bold mb-1" style={{ color: '#222222' }}>{activity.title}</h2>
-              {activity.description && <p className="text-sm mb-3" style={{ color: '#757575' }}>{activity.description}</p>}
-              <div className="flex items-center gap-4 text-sm" style={{ color: '#757575' }}>
-                <span className="flex items-center gap-1">
-                  <Users className="w-4 h-4" />
-                  {activity.participantCount} 人已报名
-                </span>
-                {activity.max_participants && (
-                  <span>/ 最多 {activity.max_participants} 人</span>
-                )}
+              <Hash className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="text-xs mb-0.5" style={{ color: C.darkSub }}>我的参与编号</div>
+              <div className="text-xl font-bold font-mono" style={{ color: C.gold }}>
+                #{String(participantId).padStart(4, '0')}
               </div>
             </div>
-
-            {/* 定时模式：倒计时 */}
-            {activity.mode === "scheduled" && activity.draw_at && !isCompleted && (
-              <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm border" style={{ borderColor: '#E0E0E0' }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Clock className="w-4 h-4" style={{ color: '#D32F2F' }} />
-                  <span className="text-sm font-medium" style={{ color: '#222222' }}>
-                    {countdown.remaining > 0 ? "距离开奖还有" : "开奖时间已到"}
-                  </span>
-                </div>
-                {countdown.remaining > 0 ? (
-                  <div className="flex justify-center gap-3">
-                    {[{ v: countdown.d, u: "天" }, { v: countdown.h, u: "时" }, { v: countdown.m, u: "分" }, { v: countdown.s, u: "秒" }].map(({ v, u }) => (
-                      <div key={u} className="flex flex-col items-center">
-                        <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold text-white" style={{ backgroundColor: '#D32F2F' }}>
-                          {String(v).padStart(2, "0")}
-                        </div>
-                        <span className="text-xs mt-1" style={{ color: '#757575' }}>{u}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center font-bold" style={{ color: '#D32F2F' }}>🎉 开奖进行中...</div>
-                )}
-              </div>
-            )}
-
-            {/* 奖项展示 */}
-            <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm border" style={{ borderColor: '#E0E0E0' }}>
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: '#222222' }}>
-                <Trophy className="w-4 h-4" style={{ color: '#D32F2F' }} />
-                奖项设置
-              </h3>
-              <div className="space-y-2">
-                {(activity.prizes ?? []).map((prize: any, idx: number) => (
-                  <div key={prize.id} className="flex items-center justify-between rounded-xl px-4 py-3 border" style={{ backgroundColor: '#FAF3ED', borderColor: '#E0E0E0' }}>
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{["🥇", "🥈", "🥉", "🏅", "🎖️"][idx] ?? "🎁"}</span>
-                      <div>
-                        <div className="font-medium text-sm" style={{ color: '#222222' }}>{prize.name}</div>
-                        {prize.description && <div className="text-xs" style={{ color: '#757575' }}>{prize.description}</div>}
-                      </div>
-                    </div>
-                    <span className="text-xs" style={{ color: '#757575' }}>
-                      {prize.is_consolation ? "保底" : `×${prize.quantity}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <div className="ml-auto text-right">
+              <div className="text-xs" style={{ color: C.darkSub }}>报名成功</div>
+              <CheckCircle className="w-5 h-5 mt-1 ml-auto" style={{ color: '#66BB6A' }} />
             </div>
+          </div>
+        )}
 
-            {/* 报名区域 */}
-            {isOpen && !participantId && !showDraw && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm border" style={{ borderColor: '#E0E0E0' }}>
-                <h3 className="font-bold mb-4 text-center" style={{ color: '#222222' }}>参与报名</h3>
-                <input
-                  className="w-full rounded-xl px-4 py-3 text-sm border focus:outline-none mb-3"
-                  style={{ backgroundColor: '#FAF3ED', borderColor: '#E0E0E0', color: '#222222' }}
-                  placeholder="您的名字（将显示在中奖名单）"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                />
-                {signupError && (
-                  <div className="mb-3 text-sm" style={{ color: '#D32F2F' }}>{signupError}</div>
-                )}
-                <button
-                  onClick={handleSignup}
-                  disabled={signingUp}
-                  className="w-full py-3.5 rounded-xl text-white font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
-                  style={{ backgroundColor: '#D32F2F' }}
-                >
-                  {signingUp ? "报名中..." : "🎉 立即报名"}
-                </button>
-                {parseFloat(activity.signup_fee) > 0 && (
-                  <p className="text-center text-xs mt-2" style={{ color: '#757575' }}>报名费：¥{activity.signup_fee}</p>
-                )}
-              </div>
+        {/* ── 3. 第三方开奖校验区 ── */}
+        {hasExternalSeed && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
+            </div>
+            {isStock && (
+              <StockBoard
+                seedType={activity.external_seed_type}
+                seedValue={activity.external_seed_value}
+                seedSource={activity.external_seed_source}
+              />
             )}
-
-            {/* 报名成功（定时模式） */}
-            {participantId && activity.mode === "scheduled" && (
-              <div className="rounded-2xl p-5 border text-center" style={{ backgroundColor: '#F1F8E9', borderColor: '#A5D6A7' }}>
-                <div className="text-3xl mb-2">✅</div>
-                <div className="font-bold" style={{ color: '#2E7D32' }}>报名成功！</div>
-                <div className="text-sm mt-1" style={{ color: '#757575' }}>请等待开奖，结果将在「开奖结果」Tab 公示</div>
-              </div>
+            {isLottery && (
+              <LotteryBalls
+                seedType={activity.external_seed_type}
+                seedValue={activity.external_seed_value}
+                seedSource={activity.external_seed_source}
+              />
             )}
+          </div>
+        )}
 
-            {/* 即时抽奖动效 */}
-            {showDraw && !drawResult && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border text-center" style={{ borderColor: '#E0E0E0' }}>
-                <h3 className="font-bold mb-6" style={{ color: '#D32F2F' }}>🎊 开始抽奖！</h3>
-                {activity.instant_style === "scratch" && (
-                  <div>
-                    <p className="text-sm mb-4" style={{ color: '#757575' }}>用手指刮开涂层，查看您的奖品</p>
-                    <ScratchCard prizeName={drawing ? "..." : "刮开查看"} onReveal={handleInstantDraw} />
-                  </div>
-                )}
-                {activity.instant_style === "wheel" && (
-                  <SpinWheel prizes={(activity.prizes ?? []).map((p: any) => p.name)} winnerIdx={0} onDone={handleInstantDraw} />
-                )}
-                {activity.instant_style === "flip" && (
-                  <FlipCards prizes={(activity.prizes ?? []).map((p: any) => p.name)} winnerIdx={0} onDone={handleInstantDraw} />
-                )}
-                {activity.instant_style === "egg" && (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="text-8xl cursor-pointer select-none transition-transform active:scale-90" onClick={handleInstantDraw}>🥚</div>
-                    <p className="text-sm" style={{ color: '#757575' }}>点击金蛋，查看您的奖品</p>
-                  </div>
-                )}
-              </div>
-            )}
+        {/* ── 4. 开奖算法公式 ── */}
+        {(hasExternalSeed || activity.mode === 'scheduled') && (
+          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} />
+        )}
 
-            {/* 抽奖结果 */}
-            {drawResult && (
-              <div className="rounded-2xl p-6 border text-center" style={{ backgroundColor: '#FFEBEE', borderColor: '#D32F2F' }}>
-                <div className="text-5xl mb-3">🎉</div>
-                <div className="text-2xl font-bold mb-1" style={{ color: '#D32F2F' }}>{drawResult.prize.name}</div>
-                {drawResult.prize.description && (
-                  <div className="text-sm mb-4" style={{ color: '#757575' }}>{drawResult.prize.description}</div>
-                )}
-                <div className="text-xs mt-4 break-all" style={{ color: '#BDBDBD' }}>
-                  随机种子：{drawResult.drawSeed.slice(0, 16)}...
-                  <span className="ml-1" style={{ color: '#D32F2F' }}>（可验证公正性）</span>
-                </div>
-              </div>
-            )}
+        {/* ── 5. 开奖结果（已结束时展示）── */}
+        {isCompleted && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="w-4 h-4" style={{ color: C.gold }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>开奖结果</span>
+            </div>
+            <DrawResultsSection activityId={activityId} />
+          </div>
+        )}
 
-            {/* 已结束：查看结果按钮 */}
-            {isCompleted && (
-              <button
-                onClick={() => setActiveTab('results')}
-                className="w-full mt-4 py-3.5 rounded-2xl font-bold border hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: '#FFEBEE', color: '#D32F2F', borderColor: '#D32F2F' }}
+        {/* ── 6. 奖项详情 ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Gift className="w-4 h-4" style={{ color: C.red }} />
+            <span className="text-sm font-bold" style={{ color: C.text }}>奖项设置</span>
+          </div>
+          <div className="space-y-2">
+            {(activity.prizes ?? []).map((prize: any, idx: number) => (
+              <div
+                key={prize.id}
+                className="flex items-center gap-3 rounded-2xl px-4 py-3 border"
+                style={{ background: C.card, borderColor: C.border }}
               >
-                查看完整开奖结果 →
-              </button>
+                <span className="text-xl flex-shrink-0">{["🥇", "🥈", "🥉", "🏅", "🎖️"][idx] ?? "🎁"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate" style={{ color: C.text }}>{prize.name}</div>
+                  {prize.description && (
+                    <div className="text-xs truncate" style={{ color: C.sub }}>{prize.description}</div>
+                  )}
+                </div>
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
+                  style={{ background: C.redLight, color: C.red }}
+                >
+                  {prize.is_consolation ? '保底' : `×${prize.quantity}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── 7. 参与者名单 ── */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4" style={{ color: C.red }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>参与者名单</span>
+            </div>
+            <span className="text-xs" style={{ color: C.sub }}>{activity.participantCount} 人已参与</span>
+          </div>
+          <div
+            className="rounded-2xl p-4 border"
+            style={{ background: C.card, borderColor: C.border }}
+          >
+            <ParticipantGrid activityId={activityId} />
+          </div>
+        </div>
+
+        {/* ── 即时抽奖动效区 ── */}
+        {showDraw && !drawResult && (
+          <div
+            className="rounded-2xl p-6 border text-center"
+            style={{ background: C.card, borderColor: C.border }}
+          >
+            <h3 className="font-bold mb-6" style={{ color: C.red }}>🎊 开始抽奖！</h3>
+            {activity.instant_style === "scratch" && (
+              <ScratchCard prizeName={drawing ? "..." : "刮开查看"} onReveal={handleInstantDraw} />
             )}
-          </>
+            {(activity.instant_style === "wheel" || !activity.instant_style) && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-6xl cursor-pointer select-none transition-transform active:scale-90" onClick={handleInstantDraw}>🎡</div>
+                <p className="text-sm" style={{ color: C.sub }}>点击开始抽奖</p>
+              </div>
+            )}
+            {activity.instant_style === "egg" && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="text-8xl cursor-pointer select-none transition-transform active:scale-90" onClick={handleInstantDraw}>🥚</div>
+                <p className="text-sm" style={{ color: C.sub }}>点击金蛋，查看您的奖品</p>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* ── Tab: 报名名单 ── */}
-        {activeTab === 'participants' && (
-          <ParticipantsList activityId={activityId} />
-        )}
-
-        {/* ── Tab: 开奖结果 ── */}
-        {activeTab === 'results' && (
-          <DrawResults activityId={activityId} />
+        {/* ── 抽奖结果 ── */}
+        {drawResult && (
+          <div
+            className="rounded-2xl p-6 border text-center"
+            style={{ background: C.redLight, borderColor: C.red }}
+          >
+            <div className="text-5xl mb-3">🎉</div>
+            <div className="text-2xl font-bold mb-1" style={{ color: C.red }}>{drawResult.prize.name}</div>
+            {drawResult.prize.description && (
+              <div className="text-sm mb-4" style={{ color: C.sub }}>{drawResult.prize.description}</div>
+            )}
+            <div className="text-xs mt-4 break-all" style={{ color: '#BDBDBD' }}>
+              随机种子：{drawResult.drawSeed.slice(0, 16)}...
+              <span className="ml-1" style={{ color: C.red }}>（可验证公正性）</span>
+            </div>
+          </div>
         )}
 
       </div>
+
+      {/* ── 底部固定按钮 ── */}
+      {isOpen && !participantId && !showDraw && (
+        <div
+          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
+          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
+        >
+          <div className="max-w-lg mx-auto">
+            <input
+              className="w-full rounded-2xl px-4 py-3 text-sm border mb-2 focus:outline-none"
+              style={{ backgroundColor: C.card, borderColor: C.border, color: C.text }}
+              placeholder="您的名字（将显示在中奖名单）"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+            />
+            {signupError && (
+              <div className="mb-2 text-xs text-center" style={{ color: C.red }}>{signupError}</div>
+            )}
+            <button
+              onClick={handleSignup}
+              disabled={signingUp}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base hover:opacity-90 transition-opacity disabled:opacity-50"
+              style={{
+                background: `linear-gradient(135deg, ${C.red}, ${C.redDark})`,
+                boxShadow: `0 4px 16px ${C.red}55`,
+              }}
+            >
+              {signingUp ? "报名中..." : "🎉 立即参与报名"}
+            </button>
+            {parseFloat(activity.signup_fee) > 0 && (
+              <p className="text-center text-xs mt-2" style={{ color: C.sub }}>报名费：¥{activity.signup_fee}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 已报名（定时模式）提示 */}
+      {participantId && activity.mode === "scheduled" && !drawResult && (
+        <div
+          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
+          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
+        >
+          <div
+            className="max-w-lg mx-auto rounded-2xl py-3 px-4 flex items-center gap-3"
+            style={{ background: '#E8F5E9', border: '1px solid #A5D6A7' }}
+          >
+            <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#2E7D32' }} />
+            <div>
+              <div className="font-bold text-sm" style={{ color: '#2E7D32' }}>报名成功！</div>
+              <div className="text-xs" style={{ color: '#757575' }}>请等待开奖，结果将在上方公示</div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
