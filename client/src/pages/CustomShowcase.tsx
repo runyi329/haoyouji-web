@@ -5111,7 +5111,23 @@ function DetailCard({ scene, onClose }: {
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: "#8B7355", letterSpacing: 2 }}>钱脉长，万物生</div>
           </div>
-          <div style={{ width: 40 }} />
+          {scene.label === "共享建议簿" ? (
+            <a
+              href="/feedback/44"
+              style={{
+                fontSize: 12, fontWeight: 700, color: "#C62828",
+                background: "rgba(198,40,40,0.12)",
+                border: "1px solid rgba(198,40,40,0.4)",
+                borderRadius: 20, padding: "5px 14px",
+                textDecoration: "none", letterSpacing: 1,
+                whiteSpace: "nowrap", marginRight: -4
+              }}
+            >
+              试用
+            </a>
+          ) : (
+            <div style={{ width: 40 }} />
+          )}
         </div>
       </div>
 
