@@ -250,7 +250,7 @@ export default function LotteryCreate() {
  <div className="min-h-screen bg-gray-950 text-white">
  {/* 顶部导航 */}
  <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800/50 px-4 py-3 flex items-center gap-3">
- <button onClick={() => stepIdx > 0 ? setStep(steps[stepIdx - 1]) : navigate(-1 as any)}
+ <button onClick={() => stepIdx > 0 ? setStep(steps[stepIdx - 1]) : (ledgerId ? navigate(`/lottery/list/${ledgerId}`) : window.history.back())}
  className="text-gray-400 hover:text-white transition-colors">
  ← 返回
  </button>

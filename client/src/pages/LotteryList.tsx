@@ -33,7 +33,7 @@ export default function LotteryList() {
  <div className="min-h-screen bg-gray-950 text-white pb-24">
  {/* 顶部 */}
  <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800/50 px-4 py-3 flex items-center gap-3">
- <button onClick={() => navigate(-1 as any)} className="text-gray-400 hover:text-white">← 返回</button>
+ <button onClick={() => window.history.back()} className="text-gray-400 hover:text-white">← 返回</button>
  <h1 className="flex-1 text-center font-bold text-amber-400">共享抽奖</h1>
  <button
  onClick={() => navigate(`/lottery/create?ledgerId=${ledgerId}`)}
