@@ -256,7 +256,7 @@ export const lotteryRouter = router({
               JOIN users u ON u.id=lr.winner_id
               WHERE lr.activity_id=a.id ORDER BY lr.drawn_at ASC LIMIT 1) AS firstWinnerName
          FROM lottery_activities a
-         WHERE a.ledger_id=? AND a.status != 'deleted'
+         WHERE a.ledger_id=?
          ORDER BY a.created_at DESC`,
         [input.ledgerId]
       ) as any[];
@@ -688,15 +688,16 @@ export const lotteryRouter = router({
       return { results, fairnessInfo: activity };
     }),
 
-  // ── 删除活动（软删除） ──────────────────────
+  // ── 删除活动（物理删除） ──────────────────────
   deleteActivity: protectedProcedure
     .input(z.object({ activityId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
-      await _execQuery(
-        `UPDATE lottery_activities SET status='deleted' WHERE id=?`,
-        [input.activityId]
-      );
+      // 先删除关联数据，再删除活动本身
+      await _execQuery(`DELETE FROM lottery_results WHERE activity_id=?`, [input.activityId]);
+      await _execQuery(`DELETE FROM lottery_participants WHERE activity_id=?`, [input.activityId]);
+      await _execQuery(`DELETE FROM lottery_prizes WHERE activity_id=?`, [input.activityId]);
+      await _execQuery(`DELETE FROM lottery_activities WHERE id=?`, [input.activityId]);
       return { success: true };
     }),
 
