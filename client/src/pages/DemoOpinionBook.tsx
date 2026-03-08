@@ -727,7 +727,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                   )}
                   <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleImageSelect} />
                 </div>
-                <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="如果今天只能改进一点，你希望是什么？" className="min-h-[80px] text-sm resize-none bg-gray-50 border-gray-100" maxLength={500} />
+                <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="更多宝贵建议" className="min-h-[80px] text-sm resize-none bg-gray-50 border-gray-100" maxLength={500} />
                 <p className="text-xs text-gray-300 text-right mt-0.5">{content.length}/500</p>
               </div>
 
