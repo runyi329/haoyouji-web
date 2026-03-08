@@ -258,7 +258,7 @@ export default function LedgerDetail() {
   // 抽奖活动分组（在 return 前计算，避免 JSX 中使用 IIFE）
   const allLotteryActivities = (lotteryActivities as any[]) ?? [];
   // 普通用户不显示草稿状态；管理员/创建者可看到草稿
-  const isManager = ledgerData?.role === 'owner' || ledgerData?.role === 'admin';
+  const isManager = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
   const activeActivities = allLotteryActivities.filter((a: any) => {
     if (a.status === 'draft') return isManager; // 草稿只对管理员可见
     return ['open', 'drawing'].includes(a.status);

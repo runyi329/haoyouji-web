@@ -250,7 +250,7 @@ export const lotteryRouter = router({
         `SELECT a.*,
            (SELECT COUNT(*) FROM lottery_participants WHERE activity_id=a.id AND status='confirmed') AS participantCount,
            (SELECT COUNT(*) FROM lottery_results WHERE activity_id=a.id) AS winnerCount,
-           (SELECT u.display_name FROM lottery_results lr
+           (SELECT u.name FROM lottery_results lr
               JOIN users u ON u.id=lr.winner_id
               WHERE lr.activity_id=a.id ORDER BY lr.created_at ASC LIMIT 1) AS firstWinnerName
          FROM lottery_activities a
@@ -263,7 +263,7 @@ export const lotteryRouter = router({
       const activitiesWithParticipants = await Promise.all(
         activities.map(async (a: any) => {
           const recentParticipants = await _execQuery(
-            `SELECT u.display_name, u.avatar_url
+            `SELECT u.name AS display_name, u.avatar AS avatar_url
              FROM lottery_participants lp
              JOIN users u ON u.id=lp.user_id
              WHERE lp.activity_id=? AND lp.status='confirmed'
