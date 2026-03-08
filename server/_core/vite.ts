@@ -147,7 +147,9 @@ export function serveStatic(app: Express) {
   // fall through to index.html only for HTML navigation requests
   app.use("*", async (req, res) => {
     // 如果请求的是资源文件（JS/CSS/图片等），返回404而不是index.html
-    const ext = path.extname(req.originalUrl);
+    // 注意：必须只取 pathname 部分，不能用 originalUrl（含 query string，其中的点号会被误判）
+    const pathname = req.originalUrl.split('?')[0];
+    const ext = path.extname(pathname);
     if (ext && ext !== '.html') {
       return res.status(404).send('Not Found');
     }
