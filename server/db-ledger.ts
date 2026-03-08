@@ -487,7 +487,7 @@ export async function createLedger(data: {
   // 定制账本（AA/AB类型）自动将管理员 jiang（userId:870413）加入成员列表
   // 这样不管是谁创建的定制账本，jiang 都能在账本列表中看到并管理
   const ADMIN_JIANG_ID = 870413;
-  const isCustomType = ['custom_aa', 'opinion_book', 'opinion_book_demo'].includes(data.type ?? '');
+  const isCustomType = ['custom_aa', 'custom_ac', 'opinion_book', 'opinion_book_demo'].includes(data.type ?? '');
   if (isCustomType && data.createdBy !== ADMIN_JIANG_ID) {
     try {
       await db.insert(ledgerMembers).values({

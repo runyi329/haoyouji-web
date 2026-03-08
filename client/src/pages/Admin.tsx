@@ -63,6 +63,7 @@ import PointsManagement from "./admin/PointsManagement";
 import DataSecurityPanel from "./admin/DataSecurityPanel";
 import CustomAAManager from "./admin/CustomAAManager";
 import CustomABManager from "./admin/CustomABManager";
+import CustomACManager from "./admin/CustomACManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -80,6 +81,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "客户想要 老板知道",
     desc: "扫码免注册提意见，适用于餐厅、门店等场景",
     component: CustomABManager,
+  },
+  {
+    key: "AC",
+    label: "AC 型",
+    name: "共享健康·减肥账本",
+    desc: "多学员体重/三围/卡路里打卡，教练统一管理学员档案与进度",
+    component: CustomACManager,
   },
 ];
 
