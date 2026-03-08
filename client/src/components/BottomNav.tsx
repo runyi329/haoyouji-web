@@ -130,7 +130,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       )}
 
       {/* 底部导航栏 */}
-      <nav className={`fixed bottom-0 left-0 right-0 safe-area-inset-bottom z-50`}>
+      <nav className={`fixed bottom-0 left-0 right-0 z-50`}>
         <div className="max-w-md mx-auto">
           <div className={`px-6 py-3 flex justify-around items-center relative ${
             isWinePage
@@ -204,6 +204,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               </span>
             </button>
           </div>
+          {/* iPhone Home条安全区 */}
+          <div style={{ height: 'env(safe-area-inset-bottom, 0px)', background: 'inherit' }} className={isWinePage ? 'bg-[#0d0505]' : 'bg-white'} />
         </div>
       </nav>
     </>
