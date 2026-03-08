@@ -415,24 +415,25 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
         {/* 底部细线 */}
         <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
 
-        <div className="relative z-10 flex items-stretch" style={{ minHeight: '170px' }}>
+        <div className="relative z-10 flex items-center px-4 py-4" style={{ minHeight: '170px', gap: '0' }}>
           {/* 左侧：品牌信息区 */}
-          <div className="flex-1 px-4 pt-4 pb-4 flex flex-col justify-between min-w-0">
-            {/* 顶部：品牌名 + 标签 */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-white text-[22px] font-black tracking-wide leading-none" style={{ fontFamily: 'serif', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>麻六记</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none" style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', letterSpacing: '0.05em' }}>连锁</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-white/65 text-[11px]">川菜馆</span>
-                <span className="text-white/30 text-[10px]">·</span>
-                <span className="text-white/65 text-[11px]">全国直营</span>
-              </div>
+          <div className="flex-1 flex flex-col justify-center gap-2 min-w-0">
+            {/* 顶部：品牌名 + 共享建议簿标签 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white text-[22px] font-black tracking-wide leading-none" style={{ fontFamily: 'serif', textShadow: '0 1px 3px rgba(0,0,0,0.3)' }}>麻六记</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold leading-none" style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', letterSpacing: '0.05em' }}>连锁</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium leading-none" style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.92)' }}>共享建议簿</span>
             </div>
 
-            {/* 中部：评分 */}
-            <div className="mt-3">
+            {/* 分类标签 */}
+            <div className="flex items-center gap-2">
+              <span className="text-white/65 text-[11px]">川菜馆</span>
+              <span className="text-white/30 text-[10px]">·</span>
+              <span className="text-white/65 text-[11px]">全国直营</span>
+            </div>
+
+            {/* 评分行（与右侧logo垂直对齐） */}
+            <div>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[#FFD54F] font-black text-[22px] leading-none">4.3</span>
                 <div className="flex items-center gap-0.5 mb-0.5">
@@ -443,32 +444,21 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                 </div>
                 <span className="text-white/50 text-[11px]">1398条评价</span>
               </div>
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-1">
                 <span className="text-white/70 text-[11px]">口味 <span className="text-white/90 font-semibold">4.3</span></span>
                 <span className="text-white/70 text-[11px]">环境 <span className="text-white/90 font-semibold">4.4</span></span>
                 <span className="text-white/70 text-[11px]">服务 <span className="text-white/90 font-semibold">4.4</span></span>
               </div>
             </div>
-
-            {/* 底部：意见反馈标识 */}
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex items-center gap-1 px-2.5 py-1 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.2)' }}>
-                <svg viewBox="0 0 16 16" className="w-3 h-3 flex-shrink-0" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5"><path d="M14 9.5a5 5 0 0 1-5 5H3l-1 1V5a5 5 0 0 1 5-5h2"/><circle cx="12" cy="4" r="3" fill="rgba(255,255,255,0.9)" stroke="none"/></svg>
-                <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.95)' }}>意见反馈专用页</span>
-              </div>
-              <div className="px-2.5 py-1 rounded" style={{ backgroundColor: 'rgba(255,213,79,0.2)', border: '1px solid rgba(255,213,79,0.4)' }}>
-                <span className="text-[11px] font-semibold" style={{ color: '#FFD54F' }}>提意见享 95 折</span>
-              </div>
-            </div>
           </div>
 
-          {/* 右侧：麻六记商标（透明背景） */}
-          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '140px', paddingRight: '8px' }}>
+          {/* 右侧：麻六记商标（透明背景，高度与评分区对齐） */}
+          <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '130px' }}>
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_logo_transparent_82ed2c56.png"
               alt="麻六记 MALUJI"
-              className="object-contain drop-shadow-lg"
-              style={{ width: '120px', height: '120px', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.4))' }}
+              className="object-contain"
+              style={{ width: '110px', height: '110px', filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.45))' }}
             />
           </div>
         </div>
