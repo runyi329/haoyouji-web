@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -49,6 +50,15 @@ const CATEGORIES = [
   { key: "website", label: "网站登录", icon: Globe, color: "#8E24AA" },
   { key: "other", label: "其他", icon: StickyNote, color: "#FB8C00" },
 ];
+
+// 每种分类的标题字段（第一个关键字段自动成为标题）
+const TITLE_FIELD: Record<string, string> = {
+  address: "收件人",
+  account: "平台名称",
+  bank: "銀行名称",
+  website: "网站名称",
+  other: "名称",
+};
 
 // 每种分类的默认字段模板
 const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean }>> = {
@@ -250,12 +260,17 @@ function MemoFormDialog({
   onSuccess: () => void;
 }) {
   const [category, setCategory] = useState(editItem?.category || "account");
-  const [title, setTitle] = useState(editItem?.title || "");
   const [fields, setFields] = useState<MemoField[]>(
     editItem?.fields || FIELD_TEMPLATES["account"].map(f => ({ ...f, value: "" }))
   );
   const [note, setNote] = useState(editItem?.note || "");
   const utils = trpc.useUtils();
+
+  // 根据字段自动推导标题：第一个关键字段的值即为标题
+  const titleFieldLabel = TITLE_FIELD[category] || "名称";
+  const titleFromField = fields.find(f => f.label === titleFieldLabel)?.value?.trim() || "";
+  // 编辑模式下保留原标题（如果关键字段为空）
+  const derivedTitle = titleFromField || (editItem?.title || "");
 
   // 切换分类时重置字段
   const handleCategoryChange = (cat: string) => {
@@ -286,8 +301,8 @@ function MemoFormDialog({
   });
 
   const handleSave = () => {
-    if (!title.trim()) {
-      toast.error("请填写标题");
+    if (!derivedTitle) {
+      toast.error(`请填写「${titleFieldLabel}」作为标题`);
       return;
     }
     const validFields = fields.filter(f => f.value.trim());
@@ -296,9 +311,9 @@ function MemoFormDialog({
       return;
     }
     if (editItem) {
-      updateMutation.mutate({ id: editItem.id, category, title: title.trim(), fields, note: note.trim() || undefined });
+      updateMutation.mutate({ id: editItem.id, category, title: derivedTitle, fields, note: note.trim() || undefined });
     } else {
-      createMutation.mutate({ ledgerId, category, title: title.trim(), fields, note: note.trim() || undefined });
+      createMutation.mutate({ ledgerId, category, title: derivedTitle, fields, note: note.trim() || undefined });
     }
   };
 
@@ -342,16 +357,6 @@ function MemoFormDialog({
               );
             })}
           </div>
-        </div>
-
-        {/* 标题 */}
-        <div className="space-y-1">
-          <label className="text-sm text-gray-600">标题 *</label>
-          <Input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="如：工商银行储蓄卡、淘宝账号..."
-          />
         </div>
 
         {/* 字段列表 */}
@@ -468,17 +473,40 @@ export default function MemoLedgerPage({
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 h-14">
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-4 h-12">
           <button onClick={() => setLocation("/ledger")} className="p-1 -ml-2">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-medium flex-1 text-center">{ledgerData?.name || "备忘录"}</h1>
+          <h1 className="text-base font-medium flex-1 text-center">{ledgerData?.name || "备忘录"}</h1>
           <button
             onClick={() => { setEditItem(null); setShowForm(true); }}
             className="p-1 -mr-2"
           >
             <Plus className="w-6 h-6" />
           </button>
+        </div>
+
+        {/* 个人信息行 */}
+        <div className="px-4 pt-1 pb-2 flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {user ? (
+              <UserAvatar
+                username={user.username}
+                avatar={user.avatar}
+                nickname={user.nickname}
+                size="lg"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold" style={{ backgroundColor: "rgba(255,255,255,0.3)" }}>
+                ?
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-semibold truncate">{user?.nickname || user?.name || user?.username || "用户"}</p>
+            <p className="text-xs text-red-200 mt-0.5">共 {(items as any[]).length} 条备忘</p>
+          </div>
         </div>
 
         {/* 搜索栏 */}
