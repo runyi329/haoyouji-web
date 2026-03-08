@@ -269,7 +269,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="min-h-screen bg-[#FAF3ED] pb-16 max-w-md mx-auto relative shadow-2xl">
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {

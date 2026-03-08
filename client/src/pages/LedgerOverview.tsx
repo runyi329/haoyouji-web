@@ -112,7 +112,7 @@ export default function LedgerOverview() {
   const featureBoxHeight = FEATURE_ROW_HEIGHT * VISIBLE_ROWS;
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="min-h-screen bg-[#FAF3ED] pb-16 max-w-md mx-auto relative shadow-2xl">
       {/* Header Banner Carousel */}
       <div className="relative">
         <Carousel 
