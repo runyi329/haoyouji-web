@@ -400,13 +400,13 @@ export default function LedgerSettings() {
  {/* */}
  <div className="bg-white mt-3">
  <SettingItem 
- label={ledgerData?.type === 'opinion_book' ? '' : ['diet', 'custom_ac'].includes(ledgerData?.type) ? '' : ''} 
+ label={ledgerData?.type === 'opinion_book' ? '店铺名称' : ['diet', 'custom_ac'].includes(ledgerData?.type) ? '减肥账本名称' : '账本名称'} 
  value={ledgerData.name} 
  showIcon 
  onClick={() => setLocation(`/ledger/${ledgerId}/edit-name`)}
  />
  <SettingItem 
- label="" 
+ label="我在账本的昵称"
  value={members?.find(m => m.isCurrentUser)?.nickname || members?.find(m => m.isCurrentUser)?.username || ""} 
  showIcon 
  onClick={() => setLocation(`/ledger/${ledgerId}/edit-nickname`)}
@@ -416,14 +416,14 @@ export default function LedgerSettings() {
 
  {ledgerData?.type !== 'opinion_book' && (
  <SettingItem 
- label="AI " 
+ label="AI 分身" 
  showIcon 
  hasHelp 
  onClick={() => setLocation(`/ledger/${ledgerId}/ai-employees`)}
  />
  )}
  <SettingItem 
- label={ledgerData?.type === 'opinion_book' ? '' : ''} 
+ label={ledgerData?.type === 'opinion_book' ? '全成员权限设置' : '成员权限设置'} 
  showIcon 
  hasHelp 
  onClick={() => setLocation(`/ledger/${ledgerId}/permissions`)}
@@ -433,7 +433,7 @@ export default function LedgerSettings() {
  {/* (owner)(admin)opinion_book */}
  {ledgerData?.type !== 'opinion_book' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem 
- label={ledgerData?.type === 'diet' ? '' : ''} 
+ label={ledgerData?.type === 'diet' ? '成员信息设置' : '成员记账审批'} 
  showIcon 
  hasHelp 
  onClick={() => setLocation(`/ledger/${ledgerId}/${ledgerData?.type === 'diet' ? 'member-info' : 'approval-settings'}`)}
@@ -442,22 +442,22 @@ export default function LedgerSettings() {
  {/* (AA)owner/admin */}
  {ledgerData?.type === 'custom_aa' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
- label=""
+ label="初始金额管理"
  showIcon
  onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
  />
  )}
- {/* (AE) */}
+ {/* AE 型抽奖入口 */}
  {ledgerData?.type === 'custom_ae' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
- label=" "
+ label="抽奖活动管理"
  showIcon
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
  )}
  {ledgerData?.type === 'custom_ae' && ledgerData?.userRole !== 'owner' && ledgerData?.userRole !== 'admin' && (
  <SettingItem
- label=" "
+ label="我的抽奖"
  showIcon
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
@@ -465,19 +465,19 @@ export default function LedgerSettings() {
  {/* / */}
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
- label=""
+ label="账目明细"
  showIcon
  onClick={() => setLocation(`/ledger/${ledgerId}/admin-transactions`)}
  />
  )}
- {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && <SettingItem label="&" showIcon hasHelp />}
+ {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
  </div>
 
  {/* */}
  {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
  <div className="bg-white mt-3">
  <SettingItem 
- label="" 
+ label="账本结算币种"
  value={(() => {
  const currencyMap: Record<string, string> = {
  CNY: ' ',
@@ -504,19 +504,19 @@ export default function LedgerSettings() {
 
 
  {ledgerData?.type !== 'opinion_book' && (
- <SettingItem label="" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
+ <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
  )}
- <SettingItem label={ledgerData?.type === 'opinion_book' ? '' : ''} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
+ <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
  {ledgerData?.type === 'opinion_book' && (
- <SettingItem label="" showIcon onClick={() => setLocation(`/ab/opinion/${ledgerId}`)} />
+ <SettingItem label="前端面板设置" showIcon onClick={() => setLocation(`/ab/opinion/${ledgerId}`)} />
  )}
  {ledgerData?.type === 'opinion_book' && (
- <SettingItem label="" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/qrcodes`)} />
+ <SettingItem label="二维码管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/qrcodes`)} />
  )}
- <SettingItem label="" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
+ <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
- <SettingItem label="" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
- <SettingItem label={ledgerData?.type === 'diet' ? '' : ''} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
+ <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
+ <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
  {/* - */}
  {(() => {
  const currentMember = members?.find(m => m.userId === user?.id);
@@ -524,7 +524,7 @@ export default function LedgerSettings() {
  if (!isAdminOrOwner) return null;
  return <SecretKeyItem ledgerId={ledgerId} showSecretKey={showSecretKey} setShowSecretKey={setShowSecretKey} />;
  })()}
- <SettingItem label="" showIcon onClick={() => {
+ <SettingItem label="创建人转移" showIcon onClick={() => {
  // owner
  const currentMember = members?.find(m => m.userId === user?.id);
  if (currentMember?.role !== 'owner') {
@@ -539,21 +539,21 @@ export default function LedgerSettings() {
  {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
  <div className="bg-white mt-3">
  <SettingItem 
- label="" 
+ label="表格导入账单"
  showIcon 
  onClick={() => setLocation(`/ledger/${ledgerId}/import`)} 
  />
  <SettingItem 
- label="" 
+ label="手动导出表格"
  showIcon={canBackup}
- value={!canBackup ? "" : undefined}
+ value={!canBackup ? "需先设置邮箱" : undefined}
  valueColor={!canBackup ? "text-red-500" : "text-gray-500"}
  onClick={canBackup ? handleOpenExportDialog : undefined} 
  />
  <SettingItem 
- label="" 
+ label="共享账本自动备份"
  showIcon={canBackup}
- value={!canBackup ? "" : undefined}
+ value={!canBackup ? "需先设置邮箱" : undefined}
  valueColor={!canBackup ? "text-red-500" : "text-gray-500"}
  onClick={canBackup ? () => {
  if (!user?.email) {
