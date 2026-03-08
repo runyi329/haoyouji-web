@@ -8085,7 +8085,7 @@ export const appRouter = router({
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
       }),
 
-    // ===== AD 型定制账本（私人备忘录·永不忘）=====
+    // ===== AD 型定制账本（永忆）=====
     // 创建 AD 账本（仅管理员）
     createCustomAD: protectedProcedure
       .input(z.object({

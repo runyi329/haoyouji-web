@@ -1,5 +1,5 @@
 /**
- * CustomADManager.tsx - AD 型定制账本（私人备忘录·永不忘）管理页面
+ * CustomADManager.tsx - AD 型定制账本（永忆）管理页面
  * 样式参照 CustomAAManager / CustomABManager / CustomACManager
  */
 import { useState } from "react";
@@ -92,7 +92,7 @@ export default function CustomADManager() {
             <Input
               value={newName}
               onChange={e => setNewName(e.target.value)}
-              placeholder="如：永不忘、私人密码本..."
+              placeholder="如：永忆、私人密码本..."
               className="text-sm"
             />
           </div>
