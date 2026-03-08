@@ -7,39 +7,81 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2 } from "lucide-react";
+import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2, HelpCircle } from "lucide-react";
 
 // ─── 抽奖模式配置 ──────────────────────────────────────────────────────────
 const MODES = [
   {
     key: "instant" as const,
-    icon: "⚡",
-    title: "即时自助抽奖",
-    subtitle: "满足条件即可独立抽，无需等待",
-    desc: "参与者扫码进入后立即可抽，支持刮刮乐、大转盘、翻牌、砸金蛋四种动效。",
+    title: "即时自助",
+    tooltip: "参与者扫码进入后立即可抽，支持刮刮乐、大转盘、翻牌、砸金蛋四种动效，满足条件即可独立抽，无需等待。",
   },
   {
     key: "scheduled" as const,
-    icon: "⏰",
-    title: "定时集体开奖",
-    subtitle: "设定时间，到点统一揭晓",
-    desc: "所有人先报名，到了约定时间统一开奖，支持大屏动效逐级揭晓，适合年会、团建。",
+    title: "定时开奖",
+    tooltip: "所有人先报名，到了约定时间统一开奖，支持大屏动效逐级揭晓，适合年会、团建。",
   },
   {
     key: "milestone" as const,
-    icon: "🏆",
-    title: "阶段解锁抽奖",
-    subtitle: "账本达成目标自动触发",
-    desc: "当账本金额、成员数或记录数达到设定目标时，自动解锁一次抽奖机会。",
+    title: "阶段解锁",
+    tooltip: "当账本金额、成员数或记录数达到设定目标时，自动解锁一次抽奖机会。",
   },
 ];
 
 const INSTANT_STYLES = [
-  { key: "scratch", emoji: "🎰", label: "刮刮乐" },
-  { key: "wheel", emoji: "🎡", label: "大转盘" },
-  { key: "flip", emoji: "🃏", label: "翻牌" },
-  { key: "egg", emoji: "🥚", label: "砸金蛋" },
+  { key: "scratch", label: "刮刮乐" },
+  { key: "wheel", label: "大转盘" },
+  { key: "flip", label: "翻牌" },
+  { key: "egg", label: "砸金蛋" },
 ];
+
+// ─── 模式选择组件（横排三按钮 + 问号 tooltip）────────────────────────────────
+function ModeSelector({ mode, setMode }: { mode: string; setMode: (m: any) => void }) {
+  const [tooltip, setTooltip] = useState<string | null>(null);
+  return (
+    <div className="mb-5">
+      <div className="grid grid-cols-3 gap-2">
+        {MODES.map(m => (
+          <div key={m.key} className="relative">
+            <button
+              type="button"
+              onClick={() => setMode(m.key)}
+              className="w-full py-2.5 px-2 rounded-xl border-2 text-center transition-all"
+              style={{
+                borderColor: mode === m.key ? '#D32F2F' : '#E0E0E0',
+                backgroundColor: mode === m.key ? '#FFEBEE' : '#FFFFFF',
+              }}
+            >
+              <div className="flex items-center justify-center gap-1">
+                <span className="text-sm font-semibold" style={{ color: mode === m.key ? '#D32F2F' : '#222222' }}>{m.title}</span>
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setTooltip(tooltip === m.key ? null : m.key); }}
+                  className="flex-shrink-0"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" style={{ color: mode === m.key ? '#D32F2F' : '#BDBDBD' }} />
+                </button>
+              </div>
+            </button>
+            {tooltip === m.key && (
+              <div
+                className="absolute z-20 left-0 right-0 top-full mt-1 p-2.5 rounded-xl text-xs leading-relaxed shadow-lg"
+                style={{ backgroundColor: '#222222', color: '#FFFFFF', minWidth: '200px', maxWidth: '240px' }}
+              >
+                {m.tooltip}
+                <button
+                  type="button"
+                  onClick={() => setTooltip(null)}
+                  className="block mt-1 text-xs opacity-60"
+                >点击关闭</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const MILESTONE_TYPES = [
   { key: "amount", label: "账本总金额达到" },
@@ -109,7 +151,7 @@ const EXTERNAL_SEED_TYPES = [
   },
   {
     key: "ssq" as const,
-    icon: <span className="text-xl">🔴</span>,
+    icon: <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ background: 'radial-gradient(circle at 35% 35%, #EF5350, #B71C1C)' }} />,
     title: "双色球开奖号码",
     subtitle: "以指定期双色球开奖号码为开奖依据",
     desc: "数据来源：中国福利彩票官方开奖结果，每周二、四、日开奖，号码公开可查。",
@@ -118,7 +160,7 @@ const EXTERNAL_SEED_TYPES = [
   },
   {
     key: "dlt" as const,
-    icon: <span className="text-xl">🌟</span>,
+    icon: <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ background: 'radial-gradient(circle at 35% 35%, #FFA726, #E65100)' }} />,
     title: "大乐透开奖号码",
     subtitle: "以指定期大乐透开奖号码为开奖依据",
     desc: "数据来源：中国体育彩票官方开奖结果，每周一、三、六开奖，号码公开可查。",
@@ -361,35 +403,8 @@ export default function LotteryCreate() {
         {step === "mode" && (
           <div>
             <h2 className="text-base font-bold mb-1" style={{ color: '#222222' }}>选择抽奖模式</h2>
-            <p className="text-sm mb-4" style={{ color: '#757575' }}>三种模式满足不同场景需求</p>
-            <div className="space-y-3 mb-5">
-              {MODES.map(m => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => setMode(m.key)}
-                  className="w-full text-left p-4 rounded-2xl border-2 transition-all"
-                  style={{
-                    borderColor: mode === m.key ? '#D32F2F' : '#E0E0E0',
-                    backgroundColor: mode === m.key ? '#FFEBEE' : '#FFFFFF',
-                  }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{m.icon}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm" style={{ color: '#222222' }}>{m.title}</span>
-                        {mode === m.key && (
-                          <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#D32F2F' }}>已选</span>
-                        )}
-                      </div>
-                      <p className="text-xs mt-0.5" style={{ color: '#D32F2F' }}>{m.subtitle}</p>
-                      <p className="text-xs mt-1 leading-relaxed" style={{ color: '#757575' }}>{m.desc}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm mb-3" style={{ color: '#757575' }}>三种模式满足不同场景需求</p>
+            <ModeSelector mode={mode} setMode={setMode} />
 
             {/* 即时模式：动效选择 */}
             {mode === "instant" && (
@@ -401,14 +416,13 @@ export default function LotteryCreate() {
                       key={s.key}
                       type="button"
                       onClick={() => setInstantStyle(s.key as any)}
-                      className="py-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all"
+                      className="py-2.5 rounded-xl border-2 flex items-center justify-center transition-all"
                       style={{
                         borderColor: instantStyle === s.key ? '#D32F2F' : '#E0E0E0',
                         backgroundColor: instantStyle === s.key ? '#FFEBEE' : '#FFFFFF',
                       }}
                     >
-                      <span className="text-xl">{s.emoji}</span>
-                      <span className="text-xs" style={{ color: instantStyle === s.key ? '#D32F2F' : '#757575' }}>{s.label}</span>
+                      <span className="text-xs font-medium" style={{ color: instantStyle === s.key ? '#D32F2F' : '#757575' }}>{s.label}</span>
                     </button>
                   ))}
                 </div>
@@ -643,8 +657,8 @@ export default function LotteryCreate() {
                 <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: '#FAF3ED', borderColor: '#E0E0E0' }}>
                   <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>
                     {externalSeedType === "sh_index" || externalSeedType === "sz_index"
-                      ? "📅 收盘日期（留空=开奖当天）"
-                      : "📅 开奖期日期（留空=最新一期）"}
+                      ? "收盘日期（留空=开奖当天）"
+                      : "开奖期日期（留空=最新一期）"}
                   </label>
                   <input
                     type="date"
@@ -655,10 +669,10 @@ export default function LotteryCreate() {
                   />
                   <p className="text-xs mt-2" style={{ color: '#757575' }}>
                     {externalSeedType === "sh_index" || externalSeedType === "sz_index"
-                      ? "⚠️ 股市收盘价在交易日 15:00 后更新，节假日无数据"
+                      ? "股市收盘价在交易日 15:00 后更新，节假日无数据"
                       : externalSeedType === "ssq"
-                        ? "⚠️ 双色球每周二、四、日开奖，请选择开奖日期"
-                        : "⚠️ 大乐透每周一、三、六开奖，请选择开奖日期"}
+                        ? "双色球每周二、四、日开奖，请选择开奖日期"
+                        : "大乐透每周一、三、六开奖，请选择开奖日期"}
                   </p>
                 </div>
               )}
@@ -761,7 +775,7 @@ export default function LotteryCreate() {
               className="w-full py-3.5 rounded-2xl text-white font-bold text-base hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: '#D32F2F' }}
             >
-              {submitting ? "创建中..." : "🎉 立即创建并开放报名"}
+              {submitting ? "创建中..." : "立即创建并开放报名"}
             </button>
           </div>
         )}
