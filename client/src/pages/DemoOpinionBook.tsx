@@ -550,12 +550,12 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                                   <span className="inline-block w-1 h-1 rounded-full bg-red-400"></span>
                                   需要改进
                                 </p>
-                                <div className="grid grid-cols-3 gap-1">
+                                <div className="grid grid-cols-2 gap-1">
                                   {dim.negItems.map(sub => {
                                     const isSubSelected = selectedSubItems.includes(sub.id);
                                     return (
                                       <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                        className={`py-1 rounded text-[11px] font-medium border text-center transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        className={`py-1 rounded text-[10px] font-medium border text-center transition-all leading-tight whitespace-nowrap overflow-hidden ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                         {sub.label}
                                       </button>
                                     );
@@ -568,12 +568,12 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                                   <span className="inline-block w-1 h-1 rounded-full bg-green-400"></span>
                                   值得表扬
                                 </p>
-                                <div className="grid grid-cols-3 gap-1">
+                                <div className="grid grid-cols-2 gap-1">
                                   {dim.posItems.map(sub => {
                                     const isSubSelected = selectedSubItems.includes(sub.id);
                                     return (
                                       <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                        className={`py-1 rounded text-[11px] font-medium border text-center transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                        className={`py-1 rounded text-[10px] font-medium border text-center transition-all leading-tight whitespace-nowrap overflow-hidden ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                         {sub.label}
                                       </button>
                                     );
