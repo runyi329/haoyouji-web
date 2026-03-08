@@ -400,7 +400,7 @@ export default function LedgerSettings() {
       {/* 基本设置 */}
       <div className="bg-white mt-3">
         <SettingItem 
-          label={ledgerData?.type === 'opinion_book' ? '店铺名称' : '减肥账本名称'} 
+          label={ledgerData?.type === 'opinion_book' ? '店铺名称' : ['diet', 'custom_ac'].includes(ledgerData?.type) ? '减肥账本名称' : '账本名称'} 
           value={ledgerData.name} 
           showIcon 
           onClick={() => setLocation(`/ledger/${ledgerId}/edit-name`)}
