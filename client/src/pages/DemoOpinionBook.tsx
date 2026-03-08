@@ -300,12 +300,11 @@ function BranchDropdown({ branches, selectedBranchId, onSelect }: {
 }
 
 // ─── 角色类型 ─────────────────────────────────────────────────────────────────
-type Role = "guest" | "manager" | "owner";
+type Role = "guest" | "merchant";
 
 const ROLE_CONFIG = {
-  guest: { label: "顾客视角", icon: User, desc: "填写意见，享95折优惠" },
-  manager: { label: "店长视角", icon: Briefcase, desc: "查看意见，隐私保护" },
-  owner: { label: "老板视角", icon: Crown, desc: "完整数据，全局统计" },
+  guest: { label: "顾客视角（扫餐桌码进入）", icon: User, desc: "填写意见，享95折优惠" },
+  merchant: { label: "商家视角", icon: Crown, desc: "完整数据，全局统计" },
 };
 
 // ─── 顾客视图 ─────────────────────────────────────────────────────────────────
@@ -1121,7 +1120,7 @@ export default function DemoOpinionBook() {
   const handleShare = () => {
     const url = window.location.href;
     if (navigator.share) {
-      navigator.share({ title: "麻六记意见簿演示", text: "体验麻六记意见簿系统，切换老板/店长/顾客三个视角", url });
+      navigator.share({ title: "麻六记意见簿演示", text: "体验麻六记意见簿系统，切换顾客/商家两个视角", url });
     } else {
       navigator.clipboard.writeText(url).then(() => toast.success("链接已复制到剪贴板")).catch(() => toast.error("复制失败，请手动复制链接"));
     }
@@ -1165,8 +1164,7 @@ export default function DemoOpinionBook() {
       {/* 内容区域 */}
       <div className="flex-1" style={{ overflow: role === 'guest' ? 'auto' : 'hidden' }}>
         {role === "guest" && <GuestView ledgerId={ledgerId} branches={branches} allCategories={allCategories} />}
-        {role === "manager" && <ManagerView ledgerId={ledgerId} isOwner={false} branches={branches} />}
-        {role === "owner" && <ManagerView ledgerId={ledgerId} isOwner={true} branches={branches} />}
+        {role === "merchant" && <ManagerView ledgerId={ledgerId} isOwner={true} branches={branches} />}
       </div>
     </div>
   );
