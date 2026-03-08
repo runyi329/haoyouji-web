@@ -9203,64 +9203,51 @@ export const appRouter = router({
           .map((e: any, i: number) => `${i + 1}. [${e.branch_name || '未知分店'}] ${e.content}`)
           .join('\n');
 
-        const { invokeLLM } = await import('./_core/llm');
-        const response = await invokeLLM({
-          messages: [
-            {
-              role: 'system',
-              content: `你是一个餐饮行业经营顾问，擅长从大量客户意见中提炼关键洞察。你的任务是分析「${ledgerName}」的客户意见，为老板生成 3～5 条最重要、最紧急的改进建议。
+        // 使用 DeepSeek API 进行 AI 分析
+        const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+        if (!deepseekApiKey) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DeepSeek API Key 未配置' });
+        const deepseekRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${deepseekApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: `你是一个餐饮行业经营顾问，擅长从大量客户意见中提炼关键洞察。你的任务是分析「${ledgerName}」的客户意见，为老板生成 3～5 条最重要、最紧急的改进建议。
 
 要求：
 1. 每条建议必须有具体可操作的行动方案
 2. 标注紧急程度：高（需立即处理）/ 中（本周内）/ 低（长期优化）
 3. 每条建议要指出该问题被多少客户提到
 4. 语言简洁直接，面向老板，不要学术化
-5. 返回 JSON 格式，包含字段： insights (数组) 和 summary (总结一句话)
+5. 返回纯 JSON 格式（不要包含 markdown 代码块），包含字段：insights (数组) 和 summary (总结一句话)
 
 insights 数组每项包含：
 - title: 建议标题（不超过 20 字）
 - detail: 具体行动建议（不超过 60 字）
 - urgency: 高 | 中 | 低
 - count: 涉及该问题的意见条数（整数）`,
-            },
-            {
-              role: 'user',
-              content: `以下是最近 ${entries.length} 条客户意见：\n\n${entriesSummary}\n\n请分析并返回 JSON。`,
-            },
-          ],
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: 'ai_insights',
-              strict: true,
-              schema: {
-                type: 'object',
-                properties: {
-                  insights: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        title: { type: 'string' },
-                        detail: { type: 'string' },
-                        urgency: { type: 'string' },
-                        count: { type: 'number' },
-                      },
-                      required: ['title', 'detail', 'urgency', 'count'],
-                      additionalProperties: false,
-                    },
-                  },
-                  summary: { type: 'string' },
-                },
-                required: ['insights', 'summary'],
-                additionalProperties: false,
               },
-            },
-          },
+              {
+                role: 'user',
+                content: `以下是最近 ${entries.length} 条客户意见：\n\n${entriesSummary}\n\n请分析并返回 JSON。`,
+              },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.7,
+          }),
         });
-
-        const content = response.choices[0].message.content;
-        const parsed = JSON.parse(content);
+        if (!deepseekRes.ok) {
+          const errText = await deepseekRes.text();
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `DeepSeek API 错误: ${errText.slice(0, 200)}` });
+        }
+        const deepseekData = await deepseekRes.json() as any;
+        const rawContent = deepseekData.choices[0].message.content;
+        const parsed = JSON.parse(rawContent);
         return {
           insights: parsed.insights as Array<{ title: string; detail: string; urgency: string; count: number }>,
           summary: parsed.summary as string,
