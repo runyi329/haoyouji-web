@@ -79,7 +79,7 @@ export async function getDb(forceGuest: boolean = false) {
     const useDevDb = process.env.USE_DEV_DB === 'true';
     const dbUrl = useDevDb 
       ? (process.env.DEV_DATABASE_URL || process.env.DATABASE_URL)
-      : (process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL);
+      : (process.env.ORIGINAL_DATABASE_URL || ENV.mainDatabaseUrl || process.env.DATABASE_URL);
     
     if (dbUrl) {
       try {
