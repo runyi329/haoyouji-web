@@ -318,6 +318,7 @@ export const lotteryRouter = router({
       prizeValue: z.number().optional(),
       weight: z.number().optional(),
       isConsolation: z.boolean().optional(),
+      imageUrl: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
@@ -331,6 +332,7 @@ export const lotteryRouter = router({
       if (fields.prizeValue !== undefined) { updates.push("prize_value=?"); values.push(fields.prizeValue); }
       if (fields.weight !== undefined) { updates.push("weight=?"); values.push(fields.weight); }
       if (fields.isConsolation !== undefined) { updates.push("is_consolation=?"); values.push(fields.isConsolation ? 1 : 0); }
+      if (fields.imageUrl !== undefined) { updates.push("image_url=?"); values.push(fields.imageUrl); }
       if (updates.length === 0) return { success: true };
       values.push(prizeId);
       await _execQuery(`UPDATE lottery_prizes SET ${updates.join(",")} WHERE id=?`, values);

@@ -5,8 +5,9 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useRef } from "react";
 import {
-  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type
+  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X
 } from "lucide-react";
 
 interface PrizeRow {
@@ -16,6 +17,7 @@ interface PrizeRow {
   quantity: number;
   prizeValue: string;
   isConsolation: boolean;
+  imageUrl?: string | null;
   isNew?: boolean;
   deleted?: boolean;
 }
@@ -38,6 +40,7 @@ export default function LotteryEdit() {
   const addPrizeMutation = trpc.lottery.addPrize.useMutation();
   const updatePrizeMutation = trpc.lottery.updatePrize.useMutation();
   const deletePrizeMutation = trpc.lottery.deletePrize.useMutation();
+  const uploadFileMutation = trpc.upload.file.useMutation();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -76,6 +79,7 @@ export default function LotteryEdit() {
         id: p.id, name: p.name ?? "", description: p.description ?? "",
         quantity: p.quantity ?? 1, prizeValue: p.prize_value ? String(p.prize_value) : "",
         isConsolation: !!p.is_consolation,
+        imageUrl: p.image_url ?? null,
       })));
     }
   }, [activity]);
@@ -103,6 +107,7 @@ export default function LotteryEdit() {
             quantity: prize.quantity,
             prizeValue: prize.prizeValue ? parseFloat(prize.prizeValue) : undefined,
             isConsolation: prize.isConsolation,
+            imageUrl: prize.imageUrl || undefined,
           });
         } else if (prize.id && !prize.deleted) {
           await updatePrizeMutation.mutateAsync({
@@ -111,6 +116,7 @@ export default function LotteryEdit() {
             quantity: prize.quantity,
             prizeValue: prize.prizeValue ? parseFloat(prize.prizeValue) : undefined,
             isConsolation: prize.isConsolation,
+            imageUrl: prize.imageUrl,
           });
         }
       }
@@ -298,14 +304,64 @@ export default function LotteryEdit() {
                   <div key={idx} className="rounded-lg border" style={{ borderColor: isEditing ? C.red : C.border }}>
                     {isEditing ? (
                       <div className="p-2.5 space-y-1.5">
-                        <input className="w-full rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
-                          style={{ borderColor: C.red, color: C.text, backgroundColor: '#FAFAFA' }}
-                          placeholder="奖项名称（必填）" value={prize.name} autoFocus
-                          onChange={e => updatePrizeField(idx, 'name', e.target.value)} />
-                        <input className="w-full rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
-                          style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAFAFA' }}
-                          placeholder="描述（选填）" value={prize.description}
-                          onChange={e => updatePrizeField(idx, 'description', e.target.value)} />
+                        {/* 图片上传区域 */}
+                        <div className="flex items-start gap-2">
+                          {/* 图片预览/上传按钮 */}
+                          <label className="relative flex-shrink-0 cursor-pointer">
+                            <input type="file" accept="image/*" className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 5 * 1024 * 1024) { alert('图片不能超过 5MB'); return; }
+                                const reader = new FileReader();
+                                reader.onload = async (ev) => {
+                                  const base64 = (ev.target?.result as string).split(',')[1];
+                                  try {
+                                    const { url } = await uploadFileMutation.mutateAsync({
+                                      base64Data: base64,
+                                      contentType: file.type,
+                                      prefix: 'lottery-prizes',
+                                    });
+                                    updatePrizeField(idx, 'imageUrl', url);
+                                  } catch { alert('上传失败，请重试'); }
+                                };
+                                reader.readAsDataURL(file);
+                              }} />
+                            {prize.imageUrl ? (
+                              <div className="relative w-16 h-16">
+                                <img src={prize.imageUrl} alt="奖品图" className="w-16 h-16 rounded-lg object-cover border" style={{ borderColor: C.border }} />
+                                <button type="button"
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center"
+                                  onClick={(e) => { e.preventDefault(); updatePrizeField(idx, 'imageUrl', null); }}>
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-0.5"
+                                style={{ borderColor: C.border, backgroundColor: '#FAFAFA' }}>
+                                {uploadFileMutation.isPending ? (
+                                  <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" />
+                                ) : (
+                                  <>
+                                    <ImagePlus className="w-4 h-4" style={{ color: C.sub }} />
+                                    <span className="text-xs" style={{ color: C.sub }}>图片</span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </label>
+                          {/* 名称+描述 */}
+                          <div className="flex-1 space-y-1.5">
+                            <input className="w-full rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
+                              style={{ borderColor: C.red, color: C.text, backgroundColor: '#FAFAFA' }}
+                              placeholder="奖项名称（必填）" value={prize.name} autoFocus
+                              onChange={e => updatePrizeField(idx, 'name', e.target.value)} />
+                            <input className="w-full rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
+                              style={{ borderColor: C.border, color: C.text, backgroundColor: '#FAFAFA' }}
+                              placeholder="描述（选填）" value={prize.description}
+                              onChange={e => updatePrizeField(idx, 'description', e.target.value)} />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-1.5">
                           <div>
                             <div className="text-xs mb-0.5" style={{ color: C.sub }}>数量</div>
@@ -344,10 +400,14 @@ export default function LotteryEdit() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 px-3 py-2">
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                          style={{ backgroundColor: C.redLight, color: C.red }}>
-                          {visIdx + 1}
-                        </div>
+                        {prize.imageUrl ? (
+                          <img src={prize.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: C.redLight, color: C.red }}>
+                            {visIdx + 1}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-medium" style={{ color: C.text }}>
                             {prize.name || <span style={{ color: C.sub }}>未填写</span>}
