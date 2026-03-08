@@ -821,7 +821,7 @@ export default function DemoOpinionBook() {
       </div>
 
       {/* 内容区域 */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1" style={{ overflow: role === 'guest' ? 'auto' : 'hidden' }}>
         {role === "guest" && <GuestView ledgerId={ledgerId} branches={branches} />}
         {role === "manager" && <ManagerView ledgerId={ledgerId} isOwner={false} branches={branches} />}
         {role === "owner" && <ManagerView ledgerId={ledgerId} isOwner={true} branches={branches} />}
