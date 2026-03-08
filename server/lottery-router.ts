@@ -373,6 +373,14 @@ export const lotteryRouter = router({
       ) as any[];
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
       if (activity.status !== "open") throw new TRPCError({ code: "BAD_REQUEST", message: "活动未开放报名" });
+      // 检查报名开始时间
+      if (activity.signup_start_at && new Date(activity.signup_start_at) > new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "报名尚未开始" });
+      }
+      // 检查报名截止时间
+      if (activity.signup_end_at && new Date(activity.signup_end_at) < new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "报名已截止" });
+      }
 
       // 检查人数上限
       if (activity.max_participants) {
