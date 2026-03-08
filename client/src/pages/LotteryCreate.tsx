@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2, HelpCircle } from "lucide-react";
+import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 
 // ─── 抽奖模式配置 ──────────────────────────────────────────────────────────
 const MODES = [
@@ -652,28 +653,19 @@ export default function LotteryCreate() {
                 ))}
               </div>
 
-              {/* 外部数据日期选择 */}
+              {/* 外部数据日期选择 - 智能日历 */}
               {externalSeedType !== "none" && (
-                <div className="mt-3 p-3 rounded-xl border" style={{ backgroundColor: '#FAF3ED', borderColor: '#E0E0E0' }}>
+                <div className="mt-3">
                   <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>
                     {externalSeedType === "sh_index" || externalSeedType === "sz_index"
-                      ? "收盘日期（留空=开奖当天）"
-                      : "开奖期日期（留空=最新一期）"}
+                      ? "选择收盘日期（必须是交易日）"
+                      : "选择开奖日期（仅显示开奖日）"}
                   </label>
-                  <input
-                    type="date"
-                    className={inputClass}
-                    style={inputStyle}
+                  <LotteryDatePicker
                     value={externalSeedDate}
-                    onChange={e => setExternalSeedDate(e.target.value)}
+                    onChange={setExternalSeedDate}
+                    seedType={externalSeedType}
                   />
-                  <p className="text-xs mt-2" style={{ color: '#757575' }}>
-                    {externalSeedType === "sh_index" || externalSeedType === "sz_index"
-                      ? "股市收盘价在交易日 15:00 后更新，节假日无数据"
-                      : externalSeedType === "ssq"
-                        ? "双色球每周二、四、日开奖，请选择开奖日期"
-                        : "大乐透每周一、三、六开奖，请选择开奖日期"}
-                  </p>
                 </div>
               )}
             </div>
