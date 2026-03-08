@@ -593,7 +593,7 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
 
   const handlePay = async () => {
     if (selected === 'wechat') {
-      alert('微信支付暂未开通，请使用支付宝支付');
+      setErrorMsg('微信支付正在开通中，暂请使用支付宝支付，感谢您的耐心等待！');
       return;
     }
     if (!isAuthenticated) {
@@ -663,14 +663,17 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
             </button>
             <button
               onClick={() => setSelected('wechat')}
-              className={`w-full flex items-center gap-3 p-3.5 rounded-xl border-2 ${selected === 'wechat' ? 'border-[#07C160] bg-green-50' : 'border-gray-200 bg-white'}`}
+              className={`w-full flex items-center gap-3 p-3.5 rounded-xl border-2 relative ${selected === 'wechat' ? 'border-[#07C160] bg-green-50' : 'border-gray-200 bg-gray-50'}`}
             >
-              <div className="w-9 h-9 bg-[#07C160] rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-[#07C160]/70 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-sm">微</span>
               </div>
               <div className="flex-1 text-left">
-                <p className="text-sm font-medium text-gray-900">微信支付</p>
-                <p className="text-xs text-gray-400">暂未开通</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-gray-700">微信支付</p>
+                  <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-medium">即将开通</span>
+                </div>
+                <p className="text-xs text-gray-400">开通后可使用微信支付</p>
               </div>
               <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selected === 'wechat' ? 'border-[#07C160] bg-[#07C160]' : 'border-gray-300'}`}>
                 {selected === 'wechat' && <Check size={12} className="text-white" />}
@@ -680,10 +683,21 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
           {errorMsg && <p className="mt-3 text-sm text-red-500 text-center">{errorMsg}</p>}
           <button
             onClick={handlePay}
-            disabled={confirming}
-            className="mt-4 w-full py-4 bg-[#D32F2F] text-white font-bold text-base rounded-xl active:opacity-90 disabled:opacity-60"
+            disabled={confirming || selected === 'wechat'}
+            className={`mt-4 w-full py-4 font-bold text-base rounded-xl transition-all ${
+              selected === 'wechat'
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : confirming
+                ? 'bg-[#D32F2F]/60 text-white cursor-wait'
+                : 'bg-[#D32F2F] text-white active:opacity-90'
+            }`}
           >
-            {confirming ? '跳转支付中...' : `确认支付 ¥${product.price % 1 === 0 ? product.price : product.price.toFixed(1)}`}
+            {selected === 'wechat'
+              ? '微信支付即将开通'
+              : confirming
+              ? '跳转支付中...'
+              : `支付宝支付 ¥${product.price % 1 === 0 ? product.price : product.price.toFixed(1)}`
+            }
           </button>
           <p className="mt-3 text-xs text-gray-400 text-center">支付即表示同意服务条款，虚拟商品不支持退款</p>
         </div>
@@ -916,29 +930,37 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* 吸底购买栏 */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-100 shadow-lg">
-        <div className="px-4 py-3 flex items-center gap-3">
-          <div className="flex-1">
-            <div className="flex items-baseline gap-1.5">
+      {/* BottomNav 占位高度（避免内容被遮挡） */}
+      <div className="h-[130px]" />
+
+      {/* 吸底购买栏 —— z-60 高于 BottomNav(z-50)，悬浮在导航栏上方 */}
+      <div
+        className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.10)]"
+        style={{ bottom: '64px', zIndex: 60 }}
+      >
+        <div className="max-w-md mx-auto px-4 py-2.5 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1">
               <span className="text-xl font-bold text-[#D32F2F]">
                 ¥{product.price % 1 === 0 ? product.price : product.price.toFixed(1)}
               </span>
               <span className="text-xs text-gray-400">{product.unit}</span>
             </div>
             {product.originalPrice && (
-              <p className="text-xs text-gray-400 line-through">原价 ¥{product.originalPrice}</p>
+              <p className="text-[11px] text-gray-400 line-through">原价 ¥{product.originalPrice}</p>
             )}
           </div>
           <button
             onClick={handleBuy}
-            className="flex-1 py-3.5 bg-[#D32F2F] text-white font-bold text-base rounded-xl active:opacity-90"
+            className="flex-shrink-0 px-8 py-3 bg-[#D32F2F] text-white font-bold text-base rounded-xl active:scale-95 transition-transform"
           >
             立即购买
           </button>
         </div>
-        <BottomNav />
       </div>
+
+      {/* BottomNav 在最底部 */}
+      <BottomNav />
 
       {showPayment && <PaymentModal product={product} onClose={() => setShowPayment(false)} />}
     </div>
