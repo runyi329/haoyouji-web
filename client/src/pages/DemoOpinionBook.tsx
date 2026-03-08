@@ -404,15 +404,14 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
             <div className="px-4 pb-4 space-y-5 border-t border-gray-50">
               <div className="pt-3">
                 <p className="text-xs font-semibold text-gray-500 mb-2.5 uppercase tracking-wide">这次体验，哪方面需要改进？（可多选）</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {OPINION_DIMENSIONS.map(dim => {
                     const isSelected = selectedDimensions.includes(dim.id);
                     return (
                       <button key={dim.id} onClick={() => toggleDimension(dim.id)}
-                        className={`relative flex flex-col items-center justify-center py-3 px-1 rounded-xl text-center transition-all border-2 ${isSelected ? "bg-[#FFF5F5] border-[#D32F2F]" : "bg-gray-50 border-gray-100 active:bg-gray-100"}`}>
-                        <span className={`text-xs font-semibold leading-tight ${isSelected ? "text-[#D32F2F]" : "text-gray-700"}`}>{dim.label}</span>
-                        <span className="text-[10px] text-gray-400 leading-tight mt-0.5 truncate w-full text-center px-1">{dim.desc}</span>
-                        {isSelected && <span className="absolute top-1 right-1 w-4 h-4 bg-[#D32F2F] rounded-full flex items-center justify-center"><span className="text-white text-[10px] font-bold">✓</span></span>}
+                        className={`relative px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${isSelected ? "bg-[#FFF5F5] border-[#D32F2F] text-[#D32F2F]" : "bg-gray-50 border-gray-200 text-gray-700 active:bg-gray-100"}`}>
+                        {dim.label}
+                        {isSelected && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#D32F2F] rounded-full flex items-center justify-center"><span className="text-white text-[9px] font-bold">✓</span></span>}
                       </button>
                     );
                   })}
@@ -421,7 +420,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
 
               {selectedDimensions.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">印象标签（可多选）</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">您的感受（可多选）</p>
                   {selectedDimensions.map(dimId => {
                     const dim = OPINION_DIMENSIONS.find(d => d.id === dimId);
                     if (!dim) return null;
@@ -450,7 +449,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                                   const isSubSelected = selectedSubItems.includes(sub.id);
                                   return (
                                     <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                      className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isSubSelected ? "bg-[#D32F2F] text-white border-[#D32F2F]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                       {sub.label}
                                     </button>
                                   );
@@ -468,7 +467,7 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
                                   const isSubSelected = selectedSubItems.includes(sub.id);
                                   return (
                                     <button key={sub.id} onClick={() => toggleSubItem(sub.id)}
-                                      className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
+                                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${isSubSelected ? "bg-[#2E7D32] text-white border-[#2E7D32]" : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"}`}>
                                       {sub.label}
                                     </button>
                                   );
