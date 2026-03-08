@@ -191,6 +191,7 @@ export const lotteryRouter = router({
       requiresInfo: z.boolean().optional(),
       requiredFields: z.array(z.any()).optional(),
       signupFee: z.number().optional(),
+      registrationMode: z.enum(['invite', 'organizer_add', 'open', 'member_only', 'invite_only']).optional(),
       status: z.enum(["draft", "open", "drawing", "completed", "cancelled"]).optional(),
       isPublic: z.boolean().optional(),
     }))
@@ -213,6 +214,7 @@ export const lotteryRouter = router({
       if (fields.requiresInfo !== undefined) { updates.push("requires_info=?"); values.push(fields.requiresInfo ? 1 : 0); }
       if (fields.requiredFields !== undefined) { updates.push("required_fields=?"); values.push(JSON.stringify(fields.requiredFields)); }
       if (fields.signupFee !== undefined) { updates.push("signup_fee=?"); values.push(fields.signupFee); }
+      if (fields.registrationMode !== undefined) { updates.push("registration_mode=?"); values.push(fields.registrationMode); }
       if (fields.status !== undefined) { updates.push("status=?"); values.push(fields.status); }
       if (fields.isPublic !== undefined) { updates.push("is_public=?"); values.push(fields.isPublic ? 1 : 0); }
 
@@ -254,7 +256,7 @@ export const lotteryRouter = router({
               JOIN users u ON u.id=lr.winner_id
               WHERE lr.activity_id=a.id ORDER BY lr.drawn_at ASC LIMIT 1) AS firstWinnerName
          FROM lottery_activities a
-         WHERE a.ledger_id=?
+         WHERE a.ledger_id=? AND a.status != 'deleted'
          ORDER BY a.created_at DESC`,
         [input.ledgerId]
       ) as any[];
@@ -684,6 +686,18 @@ export const lotteryRouter = router({
       ) as any[];
 
       return { results, fairnessInfo: activity };
+    }),
+
+  // ── 删除活动（软删除） ──────────────────────
+  deleteActivity: protectedProcedure
+    .input(z.object({ activityId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOrganizer(input.activityId, ctx.user.id);
+      await _execQuery(
+        `UPDATE lottery_activities SET status='deleted' WHERE id=?`,
+        [input.activityId]
+      );
+      return { success: true };
     }),
 
   // ── 公平性验证 ────────────────────────────
