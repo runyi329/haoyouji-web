@@ -200,9 +200,9 @@ export default function LotteryEdit() {
           </div>
           {/* 开奖时间（定时模式内联显示） */}
           {mode === 'scheduled' && (
-            <div className="mt-2">
-              <div className="text-xs mb-1" style={{ color: C.sub }}>开奖时间</div>
-              <input type="datetime-local" className={inputCls} style={inputSty}
+            <div className="mt-2 flex items-center gap-2">
+              <div className="text-xs flex-shrink-0" style={{ color: C.sub }}>开奖时间</div>
+              <input type="datetime-local" className={inputCls} style={{ ...inputSty, flex: 1 }}
                 value={drawAt} onChange={e => setDrawAt(e.target.value)} />
             </div>
           )}
@@ -213,15 +213,15 @@ export default function LotteryEdit() {
           <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color: C.sub }}>
             <Clock className="w-3.5 h-3.5" style={{ color: C.red }} />报名设置
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <div className="text-xs mb-1" style={{ color: C.sub }}>报名截止 <span style={{ color: '#BDBDBD' }}>选填</span></div>
-              <input type="datetime-local" className={inputCls} style={inputSty}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="text-xs flex-shrink-0 w-16" style={{ color: C.sub }}>报名截止</div>
+              <input type="datetime-local" className={inputCls} style={{ ...inputSty, flex: 1 }}
                 value={signupEndAt} onChange={e => setSignupEndAt(e.target.value)} />
             </div>
-            <div>
-              <div className="text-xs mb-1" style={{ color: C.sub }}>人数上限 <span style={{ color: '#BDBDBD' }}>选填</span></div>
-              <input type="number" min={1} className={inputCls} style={inputSty}
+            <div className="flex items-center gap-2">
+              <div className="text-xs flex-shrink-0 w-16" style={{ color: C.sub }}>人数上限</div>
+              <input type="number" min={1} className={inputCls} style={{ ...inputSty, flex: 1 }}
                 placeholder="不限" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} />
             </div>
           </div>
