@@ -480,12 +480,7 @@ export default function MemoLedgerPage({
             <ChevronLeft className="w-6 h-6" />
           </button>
           <h1 className="text-base font-medium flex-1 text-center">{ledgerData?.name || "备忘录"}</h1>
-          <button
-            onClick={() => { setEditItem(null); setShowForm(true); }}
-            className="p-1 -mr-2"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
+          <div className="w-8" />
         </div>
 
         {/* 个人信息行 */}
