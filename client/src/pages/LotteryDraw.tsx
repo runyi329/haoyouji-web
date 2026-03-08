@@ -123,7 +123,7 @@ export function LotteryDrawScreen() {
  <div className="min-h-screen bg-gray-950 text-white flex flex-col">
  {/* 顶部 */}
  <div className="px-6 py-4 flex items-center justify-between border-b border-gray-800/50">
- <button onClick={() => navigate(-1 as any)} className="text-gray-400 hover:text-white text-sm">← 返回</button>
+ <button onClick={() => window.history.back()} className="text-gray-400 hover:text-white text-sm">← 返回</button>
  <h1 className="text-lg font-bold text-amber-400">{activity.title}</h1>
  <span className="text-xs text-gray-500">组织者开奖</span>
  </div>
@@ -267,7 +267,7 @@ export function LotteryResults() {
  return (
  <div className="min-h-screen bg-gray-950 text-white pb-24">
  <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur border-b border-gray-800/50 px-4 py-3 flex items-center gap-3">
- <button onClick={() => navigate(-1 as any)} className="text-gray-400 hover:text-white">← 返回</button>
+ <button onClick={() => window.history.back()} className="text-gray-400 hover:text-white">← 返回</button>
  <h1 className="flex-1 text-center font-bold text-amber-400">开奖结果</h1>
  </div>
 
