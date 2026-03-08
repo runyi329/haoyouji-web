@@ -89,8 +89,7 @@ const OPINION_DIMENSIONS = [
       { id: "eff_p_wait", label: "等位时间短" }, { id: "eff_p_order", label: "点单流程简单" },
     ],
   },
-  {
-    id: "value", label: "价值感", desc: "性价比、优惠、体验",
+  { id: "value", label: "价值体验", desc: "性价比、优惠、体验",
     negItems: [
       { id: "val_price", label: "价格偏高" }, { id: "val_portion", label: "分量不足" },
       { id: "val_promo", label: "优惠不实惠" }, { id: "val_hidden", label: "有隐性消费" },
@@ -114,7 +113,7 @@ const DIMENSIONS_KEYWORDS = [
   { id: "env", label: "环境氛围", keyword: "环境氛围" },
   { id: "hygiene", label: "卫生安全", keyword: "卫生安全" },
   { id: "efficiency", label: "运营效率", keyword: "运营效率" },
-  { id: "value", label: "价值感", keyword: "价值感" },
+  { id: "value", label: "价值体验", keyword: "价值体验" },
 ];
 
 // ─── 词云组件（与OpinionBookDetail保持一致）──────────────────────────────────
@@ -404,12 +403,12 @@ function GuestView({ ledgerId, branches }: { ledgerId: number; branches: Array<{
             <div className="px-4 pb-4 space-y-5 border-t border-gray-50">
               <div className="pt-3">
                 <p className="text-xs font-semibold text-gray-500 mb-2.5 uppercase tracking-wide">这次体验，哪方面需要改进？（可多选）</p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   {OPINION_DIMENSIONS.map(dim => {
                     const isSelected = selectedDimensions.includes(dim.id);
                     return (
                       <button key={dim.id} onClick={() => toggleDimension(dim.id)}
-                        className={`relative px-3 py-1.5 rounded-md text-xs font-semibold transition-all border ${isSelected ? "bg-[#FFF5F5] border-[#D32F2F] text-[#D32F2F]" : "bg-gray-50 border-gray-200 text-gray-700 active:bg-gray-100"}`}>
+                        className={`relative py-2 rounded-md text-xs font-semibold text-center transition-all border ${isSelected ? "bg-[#FFF5F5] border-[#D32F2F] text-[#D32F2F]" : "bg-gray-50 border-gray-200 text-gray-700 active:bg-gray-100"}`}>
                         {dim.label}
                         {isSelected && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#D32F2F] rounded-full flex items-center justify-center"><span className="text-white text-[9px] font-bold">✓</span></span>}
                       </button>
