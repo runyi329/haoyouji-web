@@ -6,42 +6,36 @@
 import { getLedgerDb } from "./db";
 import { sql } from "drizzle-orm";
 
-// 用 WeakSet 追踪哪些 db 实例已建表，避免重复建表同时支持多数据库
-const _tablesCreatedSet = new WeakSet<object>();
+let _tableEnsured = false;
 
 export async function ensureMemoTables() {
+  if (_tableEnsured) return;
   const db = await getLedgerDb();
   if (!db) return;
 
-  // 如果这个 db 实例已经建过表，跳过
-  if (_tablesCreatedSet.has(db as object)) return;
-
   try {
-    // 备忘录条目表（IF NOT EXISTS 保证幂等）
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS memo_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         ledgerId INT NOT NULL,
         userId INT NOT NULL,
         category VARCHAR(50) NOT NULL DEFAULT 'other',
-        title VARCHAR(100) NOT NULL,
+        title VARCHAR(200) NOT NULL,
         fields JSON NOT NULL,
         note TEXT,
         sortOrder INT DEFAULT 0,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         deletedAt TIMESTAMP NULL DEFAULT NULL,
-        INDEX idx_ledger_user (ledgerId, userId),
+        INDEX idx_ledger (ledgerId),
         INDEX idx_ledger_category (ledgerId, category)
       )
     `);
-    _tablesCreatedSet.add(db as object);
+    console.log('[memo] memo_items 表已就绪');
+    _tableEnsured = true;
   } catch (e: any) {
-    // 表已存在或其他非致命错误，继续执行
-    if (!e?.message?.includes('already exists')) {
-      console.warn('[memo] ensureMemoTables warning:', e?.message);
-    }
-    _tablesCreatedSet.add(db as object);
+    console.warn('[memo] ensureMemoTables:', e?.message);
+    _tableEnsured = true; // 即使失败也标记，避免重复尝试
   }
 }
 
@@ -64,41 +58,60 @@ export interface MemoItem {
   updatedAt: string;
 }
 
+function parseRows(result: any): any[] {
+  // drizzle mysql2 execute 返回 [rows, fields] 格式
+  if (Array.isArray(result) && result.length >= 1) {
+    const first = result[0];
+    if (Array.isArray(first)) {
+      // [rows[], fields[]] 格式
+      return first;
+    }
+    if (first && typeof first === 'object' && Array.isArray((first as any).rows)) {
+      return (first as any).rows;
+    }
+    // 直接是行数组
+    return result;
+  }
+  return [];
+}
+
+function mapRow(r: any): MemoItem {
+  return {
+    ...r,
+    fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
+  };
+}
+
 // 获取账本所有备忘录条目
 export async function getMemoItems(ledgerId: number, userId?: number, category?: string): Promise<MemoItem[]> {
   await ensureMemoTables();
   const db = await getLedgerDb();
   if (!db) return [];
 
-  let rows: any[];
-  if (userId && category && category !== 'all') {
-    const result = await db.execute(sql`SELECT * FROM memo_items WHERE ledgerId = ${ledgerId} AND userId = ${userId} AND category = ${category} AND deletedAt IS NULL ORDER BY sortOrder, createdAt DESC`);
-    rows = result as any[];
-  } else if (userId) {
-    const result = await db.execute(sql`SELECT * FROM memo_items WHERE ledgerId = ${ledgerId} AND userId = ${userId} AND deletedAt IS NULL ORDER BY category, sortOrder, createdAt DESC`);
-    rows = result as any[];
-  } else if (category && category !== 'all') {
-    const result = await db.execute(sql`SELECT * FROM memo_items WHERE ledgerId = ${ledgerId} AND category = ${category} AND deletedAt IS NULL ORDER BY sortOrder, createdAt DESC`);
-    rows = result as any[];
+  let result: any;
+  if (category && category !== 'all') {
+    result = await db.execute(sql`
+      SELECT * FROM memo_items 
+      WHERE ledgerId = ${ledgerId} AND category = ${category} AND deletedAt IS NULL 
+      ORDER BY sortOrder ASC, createdAt DESC
+    `);
   } else {
-    const result = await db.execute(sql`SELECT * FROM memo_items WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL ORDER BY category, sortOrder, createdAt DESC`);
-    rows = result as any[];
+    result = await db.execute(sql`
+      SELECT * FROM memo_items 
+      WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL 
+      ORDER BY category ASC, sortOrder ASC, createdAt DESC
+    `);
   }
 
-  // drizzle execute 返回 [{rows: [...]}] 或直接 [row, ...]
-  const actualRows: any[] = Array.isArray(rows) && rows.length > 0 && Array.isArray((rows[0] as any)?.rows)
-    ? (rows[0] as any).rows
-    : rows;
-
-  return actualRows
-    .map((r: any) => ({
-      ...r,
-      fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
-    }))
-    .filter((r: any) => r.title && r.title.trim() !== ''); // 过滤掉title为空的无效条目
+  const rows = parseRows(result);
+  console.log(`[memo] getMemoItems ledgerId=${ledgerId} 查到 ${rows.length} 条`);
+  
+  return rows
+    .map(mapRow)
+    .filter((r: any) => r.title && r.title.trim() !== '');
 }
 
-// 搜索备忘录条目（全文搜索标题和字段值）
+// 搜索备忘录条目
 export async function searchMemoItems(ledgerId: number, keyword: string): Promise<MemoItem[]> {
   await ensureMemoTables();
   const db = await getLedgerDb();
@@ -108,20 +121,14 @@ export async function searchMemoItems(ledgerId: number, keyword: string): Promis
   const result = await db.execute(sql`
     SELECT * FROM memo_items
     WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL
-      AND (title LIKE ${like} OR note LIKE ${like} OR JSON_SEARCH(fields, 'one', ${like}) IS NOT NULL)
+      AND (title LIKE ${like} OR note LIKE ${like})
     ORDER BY createdAt DESC
   `);
-  const rows = result as any[];
-  const actualRows: any[] = Array.isArray(rows) && rows.length > 0 && Array.isArray((rows[0] as any)?.rows)
-    ? (rows[0] as any).rows
-    : rows;
 
-  return actualRows
-    .map((r: any) => ({
-      ...r,
-      fields: typeof r.fields === 'string' ? JSON.parse(r.fields) : (r.fields ?? []),
-    }))
-    .filter((r: any) => r.title && r.title.trim() !== ''); // 过滤掉title为空的无效条目
+  const rows = parseRows(result);
+  return rows
+    .map(mapRow)
+    .filter((r: any) => r.title && r.title.trim() !== '');
 }
 
 // 创建备忘录条目
@@ -142,7 +149,9 @@ export async function createMemoItem(data: {
     INSERT INTO memo_items (ledgerId, userId, category, title, fields, note)
     VALUES (${data.ledgerId}, ${data.userId}, ${data.category}, ${data.title}, ${fieldsJson}, ${data.note ?? null})
   `);
-  return (result as any)?.insertId ?? (result as any)?.[0]?.insertId ?? 0;
+  const insertId = (result as any)?.[0]?.insertId ?? (result as any)?.insertId ?? 0;
+  console.log(`[memo] createMemoItem 成功 id=${insertId} title="${data.title}"`);
+  return insertId;
 }
 
 // 更新备忘录条目
@@ -156,20 +165,26 @@ export async function updateMemoItem(id: number, userId: number, data: {
   const db = await getLedgerDb();
   if (!db) throw new Error('数据库不可用');
 
-  if (data.category !== undefined && data.title !== undefined && data.fields !== undefined && data.note !== undefined) {
-    const fieldsJson = JSON.stringify(data.fields);
-    await db.execute(sql`UPDATE memo_items SET category = ${data.category}, title = ${data.title}, fields = ${fieldsJson}, note = ${data.note} WHERE id = ${id} AND userId = ${userId}`);
-  } else if (data.category !== undefined && data.title !== undefined && data.fields !== undefined) {
-    const fieldsJson = JSON.stringify(data.fields);
-    await db.execute(sql`UPDATE memo_items SET category = ${data.category}, title = ${data.title}, fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}`);
-  } else if (data.title !== undefined && data.fields !== undefined) {
-    const fieldsJson = JSON.stringify(data.fields);
-    await db.execute(sql`UPDATE memo_items SET title = ${data.title}, fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}`);
-  } else if (data.fields !== undefined) {
-    const fieldsJson = JSON.stringify(data.fields);
-    await db.execute(sql`UPDATE memo_items SET fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}`);
+  const fieldsJson = data.fields !== undefined ? JSON.stringify(data.fields) : undefined;
+  
+  if (data.category !== undefined && data.title !== undefined && fieldsJson !== undefined) {
+    await db.execute(sql`
+      UPDATE memo_items 
+      SET category = ${data.category}, title = ${data.title}, fields = ${fieldsJson}, note = ${data.note ?? null}
+      WHERE id = ${id} AND userId = ${userId}
+    `);
+  } else if (data.title !== undefined && fieldsJson !== undefined) {
+    await db.execute(sql`
+      UPDATE memo_items SET title = ${data.title}, fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}
+    `);
+  } else if (fieldsJson !== undefined) {
+    await db.execute(sql`
+      UPDATE memo_items SET fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}
+    `);
   } else if (data.title !== undefined) {
-    await db.execute(sql`UPDATE memo_items SET title = ${data.title} WHERE id = ${id} AND userId = ${userId}`);
+    await db.execute(sql`
+      UPDATE memo_items SET title = ${data.title} WHERE id = ${id} AND userId = ${userId}
+    `);
   }
 }
 
@@ -180,4 +195,5 @@ export async function deleteMemoItem(id: number, userId: number): Promise<void> 
   if (!db) throw new Error('数据库不可用');
 
   await db.execute(sql`UPDATE memo_items SET deletedAt = NOW() WHERE id = ${id} AND userId = ${userId}`);
+  console.log(`[memo] deleteMemoItem id=${id}`);
 }
