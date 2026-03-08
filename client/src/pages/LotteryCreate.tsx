@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2 } from "lucide-react";
+import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2 } from "lucide-react";
 
 // ─── 抽奖模式配置 ──────────────────────────────────────────────────────────
 const MODES = [
@@ -45,6 +45,37 @@ const MILESTONE_TYPES = [
   { key: "amount", label: "账本总金额达到" },
   { key: "member_count", label: "成员人数达到" },
   { key: "record_count", label: "账目条数达到" },
+];
+
+// ─── 报名方式配置 ──────────────────────────────────────────────────────────
+const REGISTRATION_MODES = [
+  {
+    key: "open" as const,
+    icon: <Link2 className="w-5 h-5" style={{ color: '#1565C0' }} />,
+    title: "自由报名",
+    subtitle: "任何人扫码/点击链接即可报名",
+    desc: "参与者通过活动链接或二维码自主报名，无需审批，适合公开活动。",
+    tag: "推荐",
+    tagStyle: { color: '#1565C0', backgroundColor: '#E3F2FD', borderColor: '#90CAF9' },
+  },
+  {
+    key: "invite" as const,
+    icon: <UserPlus className="w-5 h-5" style={{ color: '#2E7D32' }} />,
+    title: "邀请报名",
+    subtitle: "仅持有邀请码的人可报名",
+    desc: "组织者生成专属邀请码或邀请链接，只有收到邀请的人才能参与，适合私密活动。",
+    tag: "私密",
+    tagStyle: { color: '#2E7D32', backgroundColor: '#F1F8E9', borderColor: '#A5D6A7' },
+  },
+  {
+    key: "organizer_add" as const,
+    icon: <Users className="w-5 h-5" style={{ color: '#E65100' }} />,
+    title: "组织者添加",
+    subtitle: "由组织者手动添加参与者名单",
+    desc: "组织者直接从账本成员或外部名单中添加参与者，参与者无需主动报名，适合内部抽奖。",
+    tag: "内部",
+    tagStyle: { color: '#E65100', backgroundColor: '#FFF3E0', borderColor: '#FFCC80' },
+  },
 ];
 
 // ─── 外部开奖数据源配置 ────────────────────────────────────────────────────
@@ -121,43 +152,23 @@ function PrizeEditor({ prizes, onChange }: {
     }]);
   };
 
-  const updatePrize = (id: string, field: keyof PrizeRow, value: any) => {
-    onChange(prizes.map(p => p.id === id ? { ...p, [field]: value } : p));
-  };
-
   const removePrize = (id: string) => {
     onChange(prizes.filter(p => p.id !== id));
   };
 
+  const updatePrize = (id: string, field: keyof PrizeRow, value: any) => {
+    onChange(prizes.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-semibold" style={{ color: '#222222' }}>奖项设置</span>
-        <button
-          type="button"
-          onClick={addPrize}
-          className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white font-medium"
-          style={{ backgroundColor: '#D32F2F' }}
-        >
-          <Plus className="w-3 h-3" />
-          添加奖项
-        </button>
-      </div>
-
-      {prizes.length === 0 && (
-        <div className="text-center py-6 text-sm rounded-xl border border-dashed" style={{ color: '#757575', borderColor: '#E0E0E0' }}>
-          还没有奖项，点击上方按钮添加
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {prizes.map((prize, idx) => (
+      <div className="space-y-3 mb-3">
+        {prizes.map((prize) => (
           <div key={prize.id} className="rounded-xl p-3 border" style={{ backgroundColor: '#FAF3ED', borderColor: '#E0E0E0' }}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-bold w-5" style={{ color: '#D32F2F' }}>{idx + 1}</span>
               <input
-                className="flex-1 rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
-                style={{ backgroundColor: '#FFFFFF', borderColor: '#E0E0E0', color: '#222222' }}
+                className="flex-1 rounded-lg px-3 py-2 text-sm border focus:outline-none font-medium"
+                style={{ backgroundColor: '#FFFFFF', borderColor: '#E0E0E0', color: '#D32F2F' }}
                 placeholder="奖项名称（如：一等奖）"
                 value={prize.name}
                 onChange={e => updatePrize(prize.id, "name", e.target.value)}
@@ -211,6 +222,15 @@ function PrizeEditor({ prizes, onChange }: {
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={addPrize}
+        className="w-full py-2.5 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-all hover:bg-red-50"
+        style={{ borderColor: '#D32F2F', color: '#D32F2F', backgroundColor: '#FFFFFF' }}
+      >
+        <Plus className="w-4 h-4" />
+        添加奖项
+      </button>
     </div>
   );
 }
@@ -234,6 +254,7 @@ export default function LotteryCreate() {
   const [signupEndAt, setSignupEndAt] = useState("");
   const [maxParticipants, setMaxParticipants] = useState("");
   const [signupFee, setSignupFee] = useState("0");
+  const [registrationMode, setRegistrationMode] = useState<"open" | "invite" | "organizer_add">("open");
   const [useParticipantSeed, setUseParticipantSeed] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [prizes, setPrizes] = useState<PrizeRow[]>([
@@ -273,6 +294,7 @@ export default function LotteryCreate() {
         signupEndAt: signupEndAt || undefined,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : undefined,
         signupFee: parseFloat(signupFee) || 0,
+        registrationMode,
         useParticipantSeed,
         isPublic,
         externalSeedType: externalSeedType !== "none" ? externalSeedType : undefined,
@@ -304,6 +326,7 @@ export default function LotteryCreate() {
   const steps = ["mode", "prizes", "rules", "confirm"] as const;
   const stepIdx = steps.indexOf(step);
   const externalSeedLabel = EXTERNAL_SEED_TYPES.find(t => t.key === externalSeedType)?.title || "系统内部随机";
+  const registrationModeLabel = REGISTRATION_MODES.find(m => m.key === registrationMode)?.title || "自由报名";
 
   // 通用输入框样式
   const inputClass = "w-full rounded-xl px-4 py-3 text-sm border focus:outline-none";
@@ -515,8 +538,49 @@ export default function LotteryCreate() {
         {step === "rules" && (
           <div>
             <h2 className="text-base font-bold mb-1" style={{ color: '#222222' }}>报名规则</h2>
-            <p className="text-sm mb-4" style={{ color: '#757575' }}>设置报名截止、人数上限及公平机制</p>
+            <p className="text-sm mb-4" style={{ color: '#757575' }}>设置报名方式、截止时间及公平机制</p>
 
+            {/* ── 报名方式 ── */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm border mb-4" style={{ borderColor: '#E0E0E0' }}>
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="w-4 h-4" style={{ color: '#D32F2F' }} />
+                <span className="text-sm font-semibold" style={{ color: '#222222' }}>报名方式</span>
+              </div>
+              <p className="text-xs mb-3" style={{ color: '#757575' }}>
+                决定参与者如何加入本次抽奖活动
+              </p>
+              <div className="space-y-2">
+                {REGISTRATION_MODES.map(m => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setRegistrationMode(m.key)}
+                    className="w-full text-left p-3.5 rounded-xl border-2 transition-all"
+                    style={{
+                      borderColor: registrationMode === m.key ? '#D32F2F' : '#E0E0E0',
+                      backgroundColor: registrationMode === m.key ? '#FFEBEE' : '#FAF3ED',
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex-shrink-0">{m.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm" style={{ color: '#222222' }}>{m.title}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded border" style={m.tagStyle}>{m.tag}</span>
+                          {registrationMode === m.key && (
+                            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#D32F2F' }}>已选</span>
+                          )}
+                        </div>
+                        <p className="text-xs mt-0.5" style={{ color: '#757575' }}>{m.subtitle}</p>
+                        <p className="text-xs mt-1 leading-relaxed" style={{ color: '#BDBDBD' }}>{m.desc}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── 其他报名设置 ── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border mb-4 space-y-4" style={{ borderColor: '#E0E0E0' }}>
               <div>
                 <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>报名截止时间（可选）</label>
@@ -645,6 +709,7 @@ export default function LotteryCreate() {
                 ...(mode === "instant" ? [{ label: "动效样式", value: INSTANT_STYLES.find(s => s.key === instantStyle)?.label, valueColor: '#222222' }] : []),
                 ...(mode === "scheduled" && drawAt ? [{ label: "开奖时间", value: new Date(drawAt).toLocaleString(), valueColor: '#222222' }] : []),
                 { label: "奖项数量", value: `${prizes.length} 个`, valueColor: '#222222' },
+                { label: "报名方式", value: registrationModeLabel, valueColor: '#1565C0' },
                 { label: "报名费", value: parseFloat(signupFee) > 0 ? `¥${signupFee}` : "免费", valueColor: '#222222' },
                 {
                   label: "开奖依据",
