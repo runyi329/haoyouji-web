@@ -135,7 +135,7 @@ export const lotteryRouter = router({
 
       // 验证账本成员权限
       const [member] = await _execQuery(
-        `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ?`,
+        `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ?`,
         [input.ledgerId, userId]
       ) as any[];
       if (!member || !["owner", "admin"].includes(member.role)) {
@@ -617,7 +617,7 @@ async function ensureOrganizer(activityId: number, userId: number) {
   if (activity.created_by === userId) return; // 创建者直接通过
 
   const [member] = await _execQuery(
-    `SELECT role FROM ledger_members WHERE ledger_id=? AND user_id=?`,
+    `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
     [activity.ledger_id, userId]
   ) as any[];
   if (!member || !["owner", "admin"].includes(member.role)) {
