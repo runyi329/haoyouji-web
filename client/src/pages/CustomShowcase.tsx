@@ -5111,7 +5111,21 @@ function DetailCard({ scene, onClose }: {
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 13, color: "#8B7355", letterSpacing: 2 }}>钱脉长，万物生</div>
           </div>
-          <div style={{ width: 40 }} />
+          <button
+            onClick={() => {
+              const shareUrl = `${window.location.origin}/custom-showcase/share`;
+              if (navigator.share) {
+                navigator.share({ title: scene.label, text: `钱脉长，万物生 · ${scene.label}`, url: shareUrl });
+              } else {
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                  alert('分享链接已复制到剪贴板');
+                });
+              }
+            }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, marginRight: -8 }}
+          >
+            <Share2 size={20} style={{ color: '#CBA471' }} />
+          </button>
         </div>
       </div>
 
