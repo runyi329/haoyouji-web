@@ -608,7 +608,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                         : 'bg-white text-gray-500 border-gray-200'
                     }`}
                   >
-                    &#x2605; 您最推荐的三款菜
+                    推荐菜
                     {favDishes.length > 0 && (
                       <span className={`ml-1 text-[10px] font-bold ${
                         dishMode === 'fav' ? 'text-green-200' : 'text-[#2E7D32]'
@@ -623,7 +623,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                         : 'bg-white text-gray-500 border-gray-200'
                     }`}
                   >
-                    &#x2606; 您最不推荐的三款菜
+                    不推荐菜
                     {badDishes.length > 0 && (
                       <span className={`ml-1 text-[10px] font-bold ${
                         dishMode === 'bad' ? 'text-red-200' : 'text-[#D32F2F]'
@@ -641,30 +641,38 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                       const favFull = !isFav && favDishes.length >= 3;
                       const badFull = !isBad && badDishes.length >= 3;
 
-                      // 当前模式下点击的行为
+                      // 当前模式下点击的行为（同一道菜不可同时推荐和不推荐）
                       const handleClick = () => {
                         if (dishMode === 'fav') {
-                          if (isFav) setFavDishes(p => p.filter(d => d !== dish));
-                          else if (!favFull) setFavDishes(p => [...p, dish]);
+                          if (isFav) {
+                            setFavDishes(p => p.filter(d => d !== dish)); // 取消推荐
+                          } else if (!isBad && !favFull) {
+                            setFavDishes(p => [...p, dish]); // 添加推荐（未被标记不推荐且未满）
+                          }
                         } else {
-                          if (isBad) setBadDishes(p => p.filter(d => d !== dish));
-                          else if (!badFull) setBadDishes(p => [...p, dish]);
+                          if (isBad) {
+                            setBadDishes(p => p.filter(d => d !== dish)); // 取消不推荐
+                          } else if (!isFav && !badFull) {
+                            setBadDishes(p => [...p, dish]); // 添加不推荐（未被标记推荐且未满）
+                          }
                         }
                       };
 
-                      // 当前模式下是否禁用
-                      const isDisabled = dishMode === 'fav' ? (favFull) : (badFull);
+                      // 禁用条件：已被对方标记，或当前模式已满且未选中
+                      const isDisabledByOpposite = dishMode === 'fav' ? isBad : isFav;
+                      const isDisabledByFull = dishMode === 'fav' ? (favFull) : (badFull);
+                      const isDisabled = isDisabledByOpposite || isDisabledByFull;
 
-                      // 按钮样式：绿色=推荐，红色=不推荐，两者都选=左绿右红分色边框
+                      // 按钮样式
                       let btnClass = '';
-                      if (isFav && isBad) {
-                        // 同时被推荐和不推荐：显示双色（绿色背景+红色右边框）
-                        btnClass = 'bg-[#E8F5E9] text-[#1B5E20] border-[#2E7D32] border-r-[#D32F2F] border-r-2';
-                      } else if (isFav) {
+                      if (isFav) {
                         btnClass = 'bg-[#2E7D32] text-white border-[#2E7D32]';
                       } else if (isBad) {
                         btnClass = 'bg-[#D32F2F] text-white border-[#D32F2F]';
-                      } else if (isDisabled) {
+                      } else if (isDisabledByOpposite) {
+                        // 已被对方标记，显示为灰色不可点
+                        btnClass = 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed';
+                      } else if (isDisabledByFull) {
                         btnClass = 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed';
                       } else {
                         btnClass = 'bg-white text-gray-600 border-gray-200 active:bg-gray-50';
@@ -673,7 +681,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
                       return (
                         <button
                           key={dish}
-                          disabled={isDisabled && !isFav && !isBad}
+                          disabled={isDisabled}
                           onClick={handleClick}
                           className={`py-1.5 rounded text-[11px] font-medium border text-center transition-all ${btnClass}`}
                         >
