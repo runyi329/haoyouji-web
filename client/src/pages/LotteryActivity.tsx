@@ -450,10 +450,10 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   // 实际人数：优先用真实参与者数量，其次用 participantCount，默认3
   const actualN = realParticipants.length > 0 ? realParticipants.length
     : (participantCount && participantCount > 0 ? participantCount : 3);
-  // 对照表展示上限9人（超过9人只展示前9行示例，但概率按实际人数算）
+  // 对照表展示上限
   const exampleN = actualN;
-  // 编号位数
-  const digits = actualN < 100 ? 2 : actualN < 1000 ? 3 : 4;
+  // 编号位数（编号从 00 开始）
+  const digits = actualN <= 100 ? 2 : actualN < 1000 ? 3 : 4;
   const fmtNo = (n: number) => String(n).padStart(digits, '0');
 
   const [showTip, setShowTip] = useState(false);
@@ -508,7 +508,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             {showTip && (
               <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}`, color: C.sub }}>
                 取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                    余数加 1 即为中奖编号：<strong style={{ color: C.text }}>余数 0→中奖编号 01，余数 1→中奖编号 02，余数 2→中奖编号 03，以此类推</strong>。每个人都有对应的余数，概率均等。
+                <strong style={{ color: C.text }}>余数直接对应中奖编号：余数 0→00号，余数 1→01号，余数 2→02号，以此类推</strong>。没有特例，不需要加一，每个人都有对应的余数。
               </div>
             )}
           </div>
@@ -516,31 +516,31 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
           {/* 完整对照表 */}
           {(() => {
             const intPart = '4162';
-            // 计算每个编号获得的尾数数量（按实际人数）
-            const countPerPerson: number[] = Array(exampleN + 1).fill(0);
+            // 计算每个编号获得的尾数数量（编号从 00 开始，即索引 0~N-1）
+            const countPerPerson: number[] = Array(exampleN).fill(0);
             for (let t = 0; t <= 99; t++) {
-              const person = (t % exampleN) + 1;
+              const person = t % exampleN; // 余数直接对应编号（从 0 开始）
               countPerPerson[person]++;
             }
-            // 对照表行数：1人→1行(100%)，2人→2行，3~9人→3行，10+人→每人一行（最多展示9行）
+            // 对照表行数：1人→1行(100%)，2人→2行，3+人→每人一行（最多展示9行）
             let exampleTails: number[];
             if (exampleN === 1) {
               exampleTails = [88]; // 1人必中，只展示1行
             } else if (exampleN === 2) {
               exampleTails = [88, 25]; // 2人展示2行
             } else {
-              // 3人以上：每人展示1个代表性尾数（余数=人员索引0..N-1）
+              // 3人以上：每人展示1个代表性尾数
               const displayN = Math.min(exampleN, 9);
               exampleTails = Array.from({ length: displayN }, (_, i) => {
-                // 找一个余数恰好等于 i 的尾数（即 i 本身，因为 i < N <= 100）
-                return i; // 尾数 0,1,2...对应余数 0,1,2...
+                // 尾数 i 的余数就是 i（因为 i < N）
+                return i;
               });
             }
             const rows = exampleTails.map(tail => {
               const tailStr = String(tail).padStart(2, '0');
               const remainder = tail % exampleN;
-              const winner = remainder + 1;
-              const participant = realParticipants[winner - 1]; // 对应的真实参与者（0-indexed）
+              const winner = remainder; // 余数直接就是中奖编号（00号开始）
+              const participant = realParticipants[winner]; // 对应的真实参与者（0-indexed）
               return { tail, tailStr, remainder, winner, participant };
             });
             return (
@@ -565,7 +565,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                         </td>
                         <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
                           {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→{fmtNo(winner)}号)</span>
+                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (余数={fmtNo(winner)}号)</span>
                         </td>
                         <td className="px-2 py-1.5">
                           {/* 中奖列：显示真实参与者头像+编号，无参与者时显示编号文字 */}
@@ -588,7 +588,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                 </div>
                                 {/* 编号+名字 */}
                                 <div className="flex flex-col items-start">
-                                  <span className="font-mono font-bold leading-none" style={{ color: C.red, fontSize: '0.9em' }}>抽奖编号 {fmtNo(winner)}</span>
+                                  <span className="font-mono font-bold leading-none" style={{ color: C.red, fontSize: '0.9em' }}>中奖编号 {fmtNo(winner)}</span>
                                   <span className="leading-none mt-0.5 truncate max-w-[60px]" style={{ color: C.sub, fontSize: '0.85em' }}>{participant.display_name}</span>
                                 </div>
                               </>
@@ -623,7 +623,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                       )}
                       <div>
                         <span className="font-mono font-bold" style={{ color: C.red }}>
-                          {realParticipants[0]?.display_name ?? '抽奖编号 01'}
+                          {realParticipants[0]?.display_name ?? '抽奖编号 00'}
                         </span>
                         <span className="ml-2 font-bold" style={{ color: C.red }}>100%</span>
                         <span className="ml-1 text-xs" style={{ color: C.sub }}>（唯一参与者，必定中奖）</span>
@@ -632,7 +632,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {Array.from({ length: Math.min(exampleN, 20) }, (_, idx) => {
-                        const person = idx + 1;
+                        const person = idx; // 编号从 00 开始
                         const cnt = countPerPerson[person];
                         const pct = (cnt / 100 * 100).toFixed(0);
                         const maxCnt = Math.ceil(100 / exampleN);
@@ -664,6 +664,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                             <span className="font-mono text-[10px]" style={{ color: isHigher ? C.red : C.text }}>
                               {participant?.display_name ?? `编号${fmtNo(person)}`}
                             </span>
+                            <span className="text-[10px] font-mono" style={{ color: isHigher ? C.red : C.sub, opacity: 0.7 }}>{fmtNo(person)}号</span>
                             <span className="text-[10px]" style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
                           </div>
                         );
@@ -674,7 +675,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     </div>
                   )}
                   <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
-                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
+                    公式：余数 = 中奖编号（编号从 00 开始）。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
                   </div>
                 </div>
               </div>
@@ -816,9 +817,9 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
       {/* 头像阵列 */}
       <div className="grid grid-cols-4 gap-3">
         {display.map((p: any, idx: number) => {
-          // 实际序号 = 在全列表中的真实位置（不受 showAll 影响）
+          // 实际序号 = 在全列表中的真实位置（编号从 00 开始）
           const realIdx = list.findIndex((x: any) => x.id === p.id);
-          const no = formatNo(realIdx + 1);
+          const no = formatNo(realIdx); // 编号从 00 开始
           return (
             <div key={p.id} className="flex flex-col items-center gap-0.5">
               {/* 头像 */}
