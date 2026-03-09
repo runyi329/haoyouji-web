@@ -6233,6 +6233,7 @@ export const appRouter = router({
           id: u.id,
           username: u.username,
           name: u.name,
+          avatar: u.avatar ?? null,
         }));
       }),
   }),

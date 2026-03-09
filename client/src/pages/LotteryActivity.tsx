@@ -606,6 +606,10 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
     </div>
   );
 
+  // 根据总人数自动适配编号位数：<100人用两位，<1000人用三位，否则四位
+  const digits = list.length < 100 ? 2 : list.length < 1000 ? 3 : 4;
+  const formatNo = (n: number) => String(n).padStart(digits, '0');
+
   return (
     <div>
       {/* 实时滚动条（最新参与者） */}
@@ -623,26 +627,40 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
 
       {/* 头像阵列 */}
       <div className="grid grid-cols-4 gap-3">
-        {display.map((p: any, idx: number) => (
-          <div key={p.id} className="flex flex-col items-center gap-1">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white text-base font-bold border-2"
-              style={{
-                background: p.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`,
-                borderColor: C.border,
-              }}
-            >
-              {p.avatar_url ? (
-                <img src={p.avatar_url} alt={p.display_name} className="w-full h-full rounded-full object-cover" />
-              ) : (
-                (p.display_name || '?')[0]
-              )}
+        {display.map((p: any, idx: number) => {
+          // 实际序号 = 在全列表中的真实位置（不受 showAll 影响）
+          const realIdx = list.findIndex((x: any) => x.id === p.id);
+          const no = formatNo(realIdx + 1);
+          return (
+            <div key={p.id} className="flex flex-col items-center gap-0.5">
+              {/* 头像 */}
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-base font-bold border-2"
+                style={{
+                  background: p.avatar_url ? 'transparent' : `hsl(${(realIdx * 47) % 360}, 55%, 45%)`,
+                  borderColor: C.border,
+                }}
+              >
+                {p.avatar_url ? (
+                  <img src={p.avatar_url} alt={p.display_name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  (p.display_name || '?')[0]
+                )}
+              </div>
+              {/* 昵称 */}
+              <span className="text-[10px] text-center truncate w-full" style={{ color: C.sub }}>
+                {p.display_name}
+              </span>
+              {/* 抽奖编号 */}
+              <span
+                className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: C.redLight, color: C.red }}
+              >
+                #{no}
+              </span>
             </div>
-            <span className="text-[10px] text-center truncate w-full" style={{ color: C.sub }}>
-              {p.display_name}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {list.length > 12 && !showAll && (
@@ -823,10 +841,11 @@ export default function LotteryActivity() {
 
   // 管理员邀请参与者弹窗
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteName, setInviteName] = useState("");
-  const [inviteAvatar, setInviteAvatar] = useState("");
+  const [inviteSearchQuery, setInviteSearchQuery] = useState("");
+  const [inviteSearchEnabled, setInviteSearchEnabled] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [addedUserIds, setAddedUserIds] = useState<Set<number>>(new Set());
 
   const { data: activity, isLoading, isError } = trpc.lottery.getActivity.useQuery({ activityId }, { retry: false });
   const utils = trpc.useUtils();
@@ -836,6 +855,11 @@ export default function LotteryActivity() {
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
   const adminAddMutation = trpc.lottery.adminAddParticipant.useMutation();
+  // 用户搜索（仅在弹窗开启且搜索词足够长时才触发）
+  const { data: searchResults, isFetching: isSearching } = trpc.contacts.searchUsers.useQuery(
+    { query: inviteSearchQuery.trim() },
+    { enabled: inviteSearchEnabled && inviteSearchQuery.trim().length >= 1 }
+  );
 
   const handleSignup = async () => {
     if (!user) { setSignupError("请先登录后再报名"); return; }
@@ -865,22 +889,16 @@ export default function LotteryActivity() {
     }
   };
 
-  const handleAdminInvite = async () => {
-    if (!inviteName.trim()) { setInviteError("请输入参与者昵称"); return; }
+  const handleAdminInvite = async (userId: number) => {
     setInviting(true);
     setInviteError("");
     try {
-      await adminAddMutation.mutateAsync({
-        activityId,
-        displayName: inviteName.trim(),
-        avatarUrl: inviteAvatar.trim() || undefined,
-      });
+      await adminAddMutation.mutateAsync({ activityId, userId });
       // 刷新参与者列表和活动详情（人数）
       await utils.lottery.getPublicParticipants.invalidate({ activityId });
       await utils.lottery.getActivity.invalidate({ activityId });
-      setInviteName("");
-      setInviteAvatar("");
-      setShowInviteModal(false);
+      // 标记已添加，避免重复点击
+      setAddedUserIds(prev => new Set(prev).add(userId));
     } catch (e: any) {
       setInviteError(e.message || "添加失败");
     } finally {
@@ -1306,73 +1324,97 @@ export default function LotteryActivity() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
           style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowInviteModal(false); }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowInviteModal(false); setInviteSearchQuery(''); setInviteSearchEnabled(false); setInviteError(''); } }}
         >
           <div
             className="w-full max-w-lg rounded-t-3xl px-5 pt-5 pb-8"
-            style={{ background: C.card }}
+            style={{ background: C.card, maxHeight: '80vh', overflowY: 'auto' }}
           >
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
               <span className="text-base font-bold" style={{ color: C.text }}>邀请参与者</span>
               <button
-                onClick={() => setShowInviteModal(false)}
+                onClick={() => { setShowInviteModal(false); setInviteSearchQuery(''); setInviteSearchEnabled(false); setInviteError(''); }}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-base"
                 style={{ background: C.bg, color: C.sub }}
               >×</button>
             </div>
 
-            {/* 昵称输入 */}
-            <div className="mb-3">
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.sub }}>参与者昵称（必填）</label>
+            {/* 搜索框 */}
+            <div className="mb-3 relative">
               <input
                 type="text"
-                value={inviteName}
-                onChange={e => setInviteName(e.target.value)}
-                placeholder="请输入昵称"
-                maxLength={50}
-                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                value={inviteSearchQuery}
+                onChange={e => { setInviteSearchQuery(e.target.value); setInviteSearchEnabled(true); setInviteError(''); }}
+                placeholder="搜索用户昵称或账号"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none pr-8"
                 style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
+                autoFocus
               />
-            </div>
-
-            {/* 头像 URL（可选） */}
-            <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.sub }}>头像图片链接（可选）</label>
-              <input
-                type="url"
-                value={inviteAvatar}
-                onChange={e => setInviteAvatar(e.target.value)}
-                placeholder="https://...（不填则显示昵称首字）"
-                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
-              />
-              {inviteAvatar.trim() && (
-                <div className="mt-2 flex items-center gap-2">
-                  <img
-                    src={inviteAvatar.trim()}
-                    alt="预览"
-                    className="w-10 h-10 rounded-full object-cover border"
-                    style={{ borderColor: C.border }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <span className="text-xs" style={{ color: C.sub }}>头像预览</span>
-                </div>
+              {isSearching && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: C.sub }}>搜索中...</span>
               )}
             </div>
+
+            {/* 搜索结果列表 */}
+            {inviteSearchEnabled && inviteSearchQuery.trim().length >= 1 && (
+              <div className="mb-3">
+                {!isSearching && (!searchResults || searchResults.length === 0) ? (
+                  <div className="text-center py-6 text-sm" style={{ color: C.sub }}>未找到匹配用户</div>
+                ) : (
+                  <div className="space-y-2">
+                    {(searchResults || []).map((u: any) => {
+                      const isAdded = addedUserIds.has(u.id);
+                      const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
+                      const bgColors = ['#C62828','#AD1457','#6A1B9A','#1565C0','#00695C','#E65100'];
+                      const bg = bgColors[u.id % bgColors.length];
+                      return (
+                        <div
+                          key={u.id}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                          style={{ background: C.bg, border: `1px solid ${C.border}` }}
+                        >
+                          {/* 头像 */}
+                          {u.avatar ? (
+                            <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold" style={{ background: bg }}>{initials}</div>
+                          )}
+                          {/* 姓名和账号 */}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold truncate" style={{ color: C.text }}>{u.name || u.username}</div>
+                            {u.name && u.username && (
+                              <div className="text-xs truncate" style={{ color: C.sub }}>@{u.username}</div>
+                            )}
+                          </div>
+                          {/* 添加按钮 */}
+                          <button
+                            onClick={() => handleAdminInvite(u.id)}
+                            disabled={inviting || isAdded}
+                            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50"
+                            style={isAdded
+                              ? { background: C.bg, color: C.sub, border: `1px solid ${C.border}` }
+                              : { background: C.red, color: '#fff' }
+                            }
+                          >
+                            {isAdded ? '已添加' : inviting ? '添加中...' : '添加'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {inviteError && (
               <div className="mb-3 text-xs text-center" style={{ color: C.red }}>{inviteError}</div>
             )}
 
-            <button
-              onClick={handleAdminInvite}
-              disabled={inviting || !inviteName.trim()}
-              className="w-full py-3.5 rounded-full text-white font-bold text-sm disabled:opacity-50"
-              style={{ background: `linear-gradient(135deg, ${C.red}, ${C.redDark})` }}
-            >
-              {inviting ? "添加中..." : "确认添加到名单"}
-            </button>
+            {/* 提示文字 */}
+            {!inviteSearchEnabled && (
+              <div className="text-center py-4 text-xs" style={{ color: C.sub }}>输入关键词搜索平台用户，搜到后点击“添加”即可加入名单</div>
+            )}
           </div>
         </div>
       )}
