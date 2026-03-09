@@ -108,7 +108,22 @@ export default function LedgerDetail() {
   const { data: lotteryActivities, isLoading: lotteryLoading } = trpc.lottery.listByLedger.useQuery(
     { ledgerId: Number(ledgerId) }
   );
-  // 减肥账本：快捷操作弹窗
+  // ============================================================
+  // ⚠️  账本类型隔离保护区 ⚠️
+  // ------------------------------------------------------------
+  // 账本类型一览：
+  //   普通账本   type = null / 'default'  ← 绝对不能被任何定制逻辑影响
+  //   减肥账本   type = 'diet' | 'custom_ac'   → isDiet
+  //   AE 抽奖箱  type = 'custom_ae'            → isCustomAE
+  //   AA 建议箱  type = 'custom_aa'            → isCustomAA（独立组件，早期 return）
+  //   AD 永忆    type = 'custom_ad'            → isCustomAD（独立组件，早期 return）
+  //
+  // 修改规则（必须遵守）：
+  //   1. 所有定制逻辑必须包在对应的 isXxx 条件里
+  //   2. 普通账本的统计面板、记账列表、底部+按钮等，
+  //      必须用 !isCustomAE && !isDiet && !isCustomAA && !isCustomAD 保护
+  //   3. 每次新增定制功能，先问自己：「普通账本会受影响吗？」
+  // ============================================================
 
   // 减肥账本数据
   const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
