@@ -545,7 +545,7 @@ export const lotteryRouter = router({
         if (!existingMember) {
           // 以 member 身份加入账本
           await _execQuery(
-            `INSERT INTO ledger_members (ledgerId, userId, role, memberType, permissionView, permissionAdd, permissionEdit, permissionDelete, canEdit, canDelete, canInvite, invitedBy)
+            `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy)
              VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, ?)`,
             [ledgerId, input.userId, ctx.user.id]
           );
