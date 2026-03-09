@@ -274,34 +274,25 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
           </div>
         ) : (
           <div className="px-4 pt-3 pb-2">
-            {/* shimmer 占位框 */}
-            <div className="flex items-end gap-3 mb-2">
+            {/* shimmer 占位框，AI提示叠加在内部 */}
+            <div className="relative mb-2" style={{ width: '100%', height: '44px' }}>
+              {/* 大shimmer框 */}
               <div
-                className="h-10 rounded-lg"
+                className="absolute inset-0 rounded-lg"
                 style={{
-                  width: '160px',
                   background: 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)',
                   backgroundSize: '200% 100%',
                   animation: 'shimmer 1.8s infinite',
                 }}
               />
-              <div
-                className="h-5 rounded mb-1"
-                style={{
-                  width: '56px',
-                  background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 1.8s infinite 0.3s',
-                }}
-              />
-            </div>
-            {/* AI 实时跟进提示 */}
-            <div className="flex items-center gap-2 mb-1.5">
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }}
-              />
-              <span className="text-xs font-semibold" style={{ color: '#FBBF24' }}>AI 实时跟进·官方结算中</span>
+              {/* AI实时跟进文字叠加在框内 */}
+              <div className="absolute inset-0 flex items-center px-3 gap-2">
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }}
+                />
+                <span className="text-xs font-semibold" style={{ color: '#FBBF24' }}>AI 实时跟进·官方结算中</span>
+              </div>
             </div>
             <div className="text-xs leading-relaxed" style={{ color: C.darkSub }}>
               <div>将于封盘后自动获取：</div>
