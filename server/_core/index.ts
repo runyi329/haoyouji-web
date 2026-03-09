@@ -266,7 +266,7 @@ async function startServer() {
 
     // ─── 股票类抽奖自动开奖任务（北京时间 15:01/15:02/15:03 触发）───
     // 上证/深证收盘时间为北京时间 15:00（UTC 07:00）
-    // 策略：15:01 首次尝试，失败则 15:02、15:03 各重试一次
+    // 策略：15:01 首次尝试，失败则每分钟重试，直到 15:30 放弃
     // 只处理 draw_at 日期 = 今天 且 external_seed_type 为股票类的活动
     const stockDrawAttempted = new Map<string, number>(); // key: 'YYYY-MM-DD_activityId', value: 尝试次数
     setInterval(async () => {
@@ -274,8 +274,8 @@ async function startServer() {
         const now = new Date();
         const bjHour = (now.getUTCHours() + 8) % 24;
         const bjMinute = now.getUTCMinutes();
-        // 只在 15:01、15:02、15:03 执行
-        if (bjHour !== 15 || bjMinute < 1 || bjMinute > 3) return;
+        // 在 15:01-15:30 之间每分钟尝试（扩大窗口，防止错过）
+        if (bjHour !== 15 || bjMinute < 1 || bjMinute > 30) return;
 
         const todayBJ = new Date(now.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
         const { getDbConnection } = await import('../db');
@@ -283,13 +283,17 @@ async function startServer() {
         if (!conn) return;
 
         // 查询今天到期的股票类活动（状态为 active 或 open）
+        // 使用宽松的时间范围匹配，避免 CONVERT_TZ 时区偏差导致匹配失败
+        // draw_at 在北京时间当天任意时到15:30之间（UTC 00:00 到 07:30）
+        const todayStart = `${todayBJ} 00:00:00`;
+        const todayEnd = `${todayBJ} 23:59:59`;
         const [rows] = await conn.execute(
           `SELECT id, title, external_seed_type, draw_at FROM lottery_activities
            WHERE (status='active' OR status='open')
              AND auto_draw_enabled=1
              AND external_seed_type IN ('sh_index', 'sz_index')
-             AND DATE(CONVERT_TZ(draw_at, '+00:00', '+08:00')) = ?`,
-          [todayBJ]
+             AND (DATE(draw_at) = ? OR (draw_at >= ? AND draw_at <= ?))`,
+          [todayBJ, todayStart, todayEnd]
         ) as any[];
 
         if (!Array.isArray(rows) || rows.length === 0) return;
