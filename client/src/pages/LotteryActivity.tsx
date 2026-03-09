@@ -1340,49 +1340,7 @@ export default function LotteryActivity() {
           </div>
         )}
 
-        {/* ── 3. 第三方开奖校验区 ── */}
-        {hasExternalSeed && (
-          <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
-              <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
-              <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
-            </div>
-            {isStock && (
-              <StockBoard
-                seedType={activity.external_seed_type}
-                seedValue={activity.external_seed_value}
-                seedSource={activity.external_seed_source}
-                drawAt={activity.draw_at}
-                seedDate={activity.external_seed_date}
-              />
-            )}
-            {isLottery && (
-              <LotteryBalls
-                seedType={activity.external_seed_type}
-                seedValue={activity.external_seed_value}
-                seedSource={activity.external_seed_source}
-                drawAt={activity.draw_at}
-                seedDate={activity.external_seed_date}
-              />
-            )}
-          </div>
-        )}
-
-        {/* ── 4. 开奖算法公式 ── */}
-        {(hasExternalSeed || activity.mode === 'scheduled') && (
-          <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
-              <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
-              <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>可验视</span>
-            </div>
-            <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
-          </div>
-        )}
-
-        {/* ── 5. 开奖结果（已结束时展示）── */}
+        {/* ── 3. 开奖结果（已结束时展示）── */}
         {isCompleted && (
           <div>
             <div className="flex items-center gap-2.5 mb-2">
@@ -1394,7 +1352,37 @@ export default function LotteryActivity() {
           </div>
         )}
 
-        {/* ── 6. 奖项详情 ── */}
+        {/* ── 4. 参与者名单 ── */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
+              <Users className="w-4 h-4" style={{ color: C.red }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>参与者名单</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: C.sub }}>{activity.participantCount} 人已参与</span>
+              {isOrganizer && (
+                <button
+                  onClick={() => { setShowInviteModal(true); setInviteTab('add'); setInviteError(""); setInviteSearchQuery(''); }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={{ background: C.red, color: '#fff' }}
+                >
+                  <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
+                  <span>邀请</span>
+                </button>
+              )}
+            </div>
+          </div>
+          <div
+            className="rounded-2xl p-4 border"
+            style={{ background: C.card, borderColor: C.border }}
+          >
+            <ParticipantGrid activityId={activityId} />
+          </div>
+        </div>
+
+        {/* ── 5. 奖项详情 ── */}
         <div>
           <div className="flex items-center gap-2.5 mb-2">
             <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
@@ -1429,36 +1417,47 @@ export default function LotteryActivity() {
           </div>
         </div>
 
-        {/* ── 7. 参与者名单 ── */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2.5">
+        {/* ── 6. 第三方开奖校验区 ── */}
+        {hasExternalSeed && (
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
+              <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
+            </div>
+            {isStock && (
+              <StockBoard
+                seedType={activity.external_seed_type}
+                seedValue={activity.external_seed_value}
+                seedSource={activity.external_seed_source}
+                drawAt={activity.draw_at}
+                seedDate={activity.external_seed_date}
+              />
+            )}
+            {isLottery && (
+              <LotteryBalls
+                seedType={activity.external_seed_type}
+                seedValue={activity.external_seed_value}
+                seedSource={activity.external_seed_source}
+                drawAt={activity.draw_at}
+                seedDate={activity.external_seed_date}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── 7. 开奖算法公式 ── */}
+        {(hasExternalSeed || activity.mode === 'scheduled') && (
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
               <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
-              <Users className="w-4 h-4" style={{ color: C.red }} />
-              <span className="text-sm font-bold" style={{ color: C.text }}>参与者名单</span>
+              <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
+              <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>可验视</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: C.sub }}>{activity.participantCount} 人已参与</span>
-              {/* 管理员专属：邀请参与者按鈕 */}
-              {isOrganizer && (
-                <button
-                  onClick={() => { setShowInviteModal(true); setInviteTab('add'); setInviteError(""); setInviteSearchQuery(''); }}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
-                  style={{ background: C.red, color: '#fff' }}
-                >
-                  <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
-                  <span>邀请</span>
-                </button>
-              )}
-            </div>
+            <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
           </div>
-          <div
-            className="rounded-2xl p-4 border"
-            style={{ background: C.card, borderColor: C.border }}
-          >
-            <ParticipantGrid activityId={activityId} />
-          </div>
-        </div>
+        )}
 
         {/* ── 即时抽奖动效区 ── */}
         {showDraw && !drawResult && (
