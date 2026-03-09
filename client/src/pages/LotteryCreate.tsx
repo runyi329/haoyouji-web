@@ -175,8 +175,8 @@ interface PrizeRow {
   id: string;
   name: string;
   description: string;
-  quantity: number;
-  weight: number;
+  quantity: number | string;  // 允许临时为空字符串，方便用户清空再输入
+  weight: number | string;   // 允许临时为空字符串，方便用户清空再输入
   isConsolation: boolean;
 }
 
@@ -239,7 +239,17 @@ function PrizeEditor({ prizes, onChange }: {
                   className="w-14 rounded px-2 py-1 text-center border focus:outline-none"
                   style={{ backgroundColor: '#FFFFFF', borderColor: '#E0E0E0', color: '#222222' }}
                   value={prize.quantity}
-                  onChange={e => updatePrize(prize.id, "quantity", parseInt(e.target.value) || 1)}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    // 允许临时空值，方便用户清空后重新输入
+                    updatePrize(prize.id, "quantity", raw === '' ? '' : (parseInt(raw) || 1));
+                  }}
+                  onBlur={e => {
+                    // 失焦时确保不为空
+                    if (e.target.value === '' || parseInt(e.target.value) < 1) {
+                      updatePrize(prize.id, "quantity", 1);
+                    }
+                  }}
                 />
               </label>
               <label className="flex items-center gap-1.5">
@@ -249,7 +259,15 @@ function PrizeEditor({ prizes, onChange }: {
                   className="w-14 rounded px-2 py-1 text-center border focus:outline-none"
                   style={{ backgroundColor: '#FFFFFF', borderColor: '#E0E0E0', color: '#222222' }}
                   value={prize.weight}
-                  onChange={e => updatePrize(prize.id, "weight", parseInt(e.target.value) || 1)}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    updatePrize(prize.id, "weight", raw === '' ? '' : (parseInt(raw) || 1));
+                  }}
+                  onBlur={e => {
+                    if (e.target.value === '' || parseInt(e.target.value) < 1) {
+                      updatePrize(prize.id, "weight", 1);
+                    }
+                  }}
                 />
               </label>
               <label className="flex items-center gap-1.5 cursor-pointer">
@@ -361,9 +379,9 @@ export default function LotteryCreate() {
           activityId,
           name: p.name,
           description: p.description || undefined,
-          quantity: p.quantity,
+          quantity: typeof p.quantity === 'string' ? (parseInt(p.quantity) || 1) : p.quantity,
           sortOrder: i,
-          weight: p.weight,
+          weight: typeof p.weight === 'string' ? (parseInt(p.weight) || 1) : p.weight,
           isConsolation: p.isConsolation,
         });
       }
