@@ -48,10 +48,37 @@ export default function LotteryList() {
   const [, params] = useRoute("/lottery/list/:ledgerId");
   const ledgerId = parseInt(params?.ledgerId ?? "0");
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  // 权限校验：查询当前用户在该账本中的角色
+  const { data: members, isLoading: membersLoading, isError: membersError } = trpc.ledger.getMembers.useQuery(
+    { ledgerId },
+    { enabled: !!user && ledgerId > 0, retry: false }
+  );
+
+  // 权限校验：非 owner/admin 跳回账本首页
+  React.useEffect(() => {
+    if (authLoading || membersLoading) return;
+    if (!user) {
+      navigate(`/ledger/${ledgerId}` as any);
+      return;
+    }
+    // 报错（非账本成员）或者没有权限，直接跳回账本首页
+    if (membersError) {
+      navigate(`/ledger/${ledgerId}` as any);
+      return;
+    }
+    if (members) {
+      const me = (members as any[]).find((m: any) => m.userId === user.id || m.user_id === user.id);
+      const isPrivileged = me && (me.role === 'owner' || me.role === 'admin');
+      if (!isPrivileged) {
+        navigate(`/ledger/${ledgerId}` as any);
+      }
+    }
+  }, [user, members, membersError, authLoading, membersLoading, ledgerId, navigate]);
 
   const { data: activities, isLoading, refetch } = trpc.lottery.listByLedger.useQuery({ ledgerId });
   const updateMutation = trpc.lottery.update.useMutation();
