@@ -510,18 +510,6 @@ export default function LedgerDetail() {
                 const recentParticipants: any[] = activity.recentParticipants ?? [];
                 const participantCount = Number(activity.participantCount ?? 0);
 
-                // 按钮样式
-                const btnActive = {
-                  background: activity.status === 'open'
-                    ? 'linear-gradient(135deg,#D32F2F,#B71C1C)'
-                    : activity.status === 'drawing'
-                    ? 'linear-gradient(135deg,#FF6D00,#E65100)'
-                    : '#9E9E9E',
-                  boxShadow: (activity.status === 'open' || activity.status === 'drawing')
-                    ? '0 3px 10px rgba(211,47,47,0.35)'
-                    : 'none',
-                };
-
                 return (
                   <div
                     key={activity.id}
@@ -693,20 +681,20 @@ export default function LedgerDetail() {
                           </div>
                         )}
 
-                        {/* 底部行：头像堆叠 + 倒计时 + 按钒 */}
+                        {/* 底部行：头像堆叠 + 开奖方式 */}
                         <div className="flex items-center justify-between">
                           {isActive ? (
                             <>
-                              {/* 头像堆叠 + 倒计时 */}
-                              <div className="flex items-center gap-1.5">
-                                {/* 头像堆叠 */}
+                              {/* 头像堆叠 + 开奖方式 */}
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                {/* 头像堆叠（最多显示5个） */}
                                 {recentParticipants.length > 0 && (
                                   <div className="flex -space-x-1.5">
-                                    {recentParticipants.slice(0, 3).map((p: any, pi: number) => (
+                                    {recentParticipants.slice(0, 5).map((p: any, pi: number) => (
                                       <div
                                         key={pi}
                                         className="w-5 h-5 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
-                                        style={{ zIndex: 3 - pi }}
+                                        style={{ zIndex: 5 - pi }}
                                       >
                                         {p.avatar_url ? (
                                           <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
@@ -722,24 +710,23 @@ export default function LedgerDetail() {
                                     ))}
                                   </div>
                                 )}
-                                {/* 倒计时 */}
+                                {/* 倒计时或开奖方式 */}
                                 {countdown ? (
                                   <div className="flex items-center gap-0.5">
                                     <Timer className="w-3 h-3 text-[#D32F2F]" />
                                     <span className="text-[11px] font-mono font-bold text-[#D32F2F]">{countdown}</span>
                                   </div>
                                 ) : (
-                                  <span className="text-[11px] text-gray-400">即时开奖</span>
+                                  <span className="text-[11px] text-gray-400">
+                                    {activity.external_seed_type === 'sh_index' ? '上证指数开奖' :
+                                     activity.external_seed_type === 'sz_index' ? '深证成指开奖' :
+                                     activity.external_seed_type === 'ssq' ? '双色球开奖' :
+                                     activity.external_seed_type === 'dlt' ? '大乐透开奖' :
+                                     activity.mode === 'scheduled' ? '统一时间开奖' :
+                                     activity.mode === 'instant' ? '即时开奖' : '统一时间开奖'}
+                                  </span>
                                 )}
                               </div>
-                              {/* 胶囊按钒 */}
-                              <button
-                                className="text-[12px] font-bold text-white px-4 py-1.5 rounded-full flex-shrink-0"
-                                style={btnActive}
-                                onClick={e => { e.stopPropagation(); setLocation(`/lottery/${activity.id}`); }}
-                              >
-                                {activity.status === 'open' ? '去报名' : activity.status === 'drawing' ? '开奖中' : '查看'}
-                              </button>
                             </>
                           ) : (
                             <>
