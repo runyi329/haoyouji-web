@@ -2,14 +2,102 @@
  * 抽奖活动编辑页（紧凑版）
  * 路由：/lottery/edit/:activityId
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { useRef } from "react";
 import {
-  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X, TrendingUp, Shield, Sparkles, Wand2
+  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X, TrendingUp, Shield, Sparkles, Wand2, Crop, RotateCcw
 } from "lucide-react";
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
+
+// ─── 裁剪工具函数 ────────────────────────────────────────────────────────────
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string> {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+// ─── 裁剪弹窗组件 ────────────────────────────────────────────────────────────
+function ImageCropModal({
+  imageSrc,
+  onConfirm,
+  onCancel,
+}: {
+  imageSrc: string;
+  onConfirm: (croppedDataUrl: string) => void;
+  onCancel: () => void;
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+
+  const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    setCroppedAreaPixels(croppedPixels);
+  }, []);
+
+  const handleConfirm = async () => {
+    if (!croppedAreaPixels) return;
+    const cropped = await getCroppedImg(imageSrc, croppedAreaPixels);
+    onConfirm(cropped);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(0,0,0,0.92)' }}>
+      {/* 顶部标题 */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <button onClick={onCancel} className="flex items-center gap-1 text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
+          <X className="w-4 h-4" />
+          取消
+        </button>
+        <div className="flex items-center gap-1.5">
+          <Crop className="w-4 h-4" style={{ color: '#FBBF24' }} />
+          <span className="text-sm font-semibold text-white">裁剪图片</span>
+        </div>
+        <button onClick={handleConfirm} className="text-sm font-semibold px-3 py-1 rounded-full" style={{ background: '#D32F2F', color: '#fff' }}>
+          确认
+        </button>
+      </div>
+      {/* 裁剪区域 */}
+      <div className="relative flex-1">
+        <Cropper
+          image={imageSrc}
+          crop={crop}
+          zoom={zoom}
+          aspect={1}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={onCropComplete}
+          style={{ containerStyle: { background: 'transparent' } }}
+        />
+      </div>
+      {/* 底部缩放条 */}
+      <div className="px-6 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+        <div className="flex items-center gap-3">
+          <RotateCcw className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} onClick={() => setZoom(1)} />
+          <input
+            type="range" min={1} max={3} step={0.01}
+            value={zoom}
+            onChange={e => setZoom(Number(e.target.value))}
+            className="flex-1 accent-red-500"
+          />
+          <span className="text-xs w-8 text-right" style={{ color: 'rgba(255,255,255,0.5)' }}>{Math.round(zoom * 100)}%</span>
+        </div>
+        <p className="text-center text-xs mt-2" style={{ color: 'rgba(255,255,255,0.4)' }}>双指缩放 或 拖动滑块调整大小，拖动图片选择区域</p>
+      </div>
+    </div>
+  );
+}
 
 interface PrizeRow {
   id?: number;
@@ -77,6 +165,9 @@ export default function LotteryEdit() {
   const [bannerAiPrompt, setBannerAiPrompt] = useState("");
   const [bannerAiGenerating, setBannerAiGenerating] = useState(false);
   const aiGenerateImageMutation = trpc.lottery.aiGenerateImage.useMutation();
+  // 裁剪弹窗状态
+  const [cropModalSrc, setCropModalSrc] = useState<string | null>(null);
+  const [cropTargetPrizeIdx, setCropTargetPrizeIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!activity) return;
@@ -202,6 +293,28 @@ export default function LotteryEdit() {
 
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: C.bg }}>
+      {/* 裁剪弹窗 */}
+      {cropModalSrc && cropTargetPrizeIdx !== null && (
+        <ImageCropModal
+          imageSrc={cropModalSrc}
+          onCancel={() => { setCropModalSrc(null); setCropTargetPrizeIdx(null); }}
+          onConfirm={async (croppedDataUrl) => {
+            setCropModalSrc(null);
+            const prizeIdx = cropTargetPrizeIdx;
+            setCropTargetPrizeIdx(null);
+            // 裁剪完成后上传
+            const base64 = croppedDataUrl.split(',')[1];
+            try {
+              const { url } = await uploadFileMutation.mutateAsync({
+                base64Data: base64,
+                contentType: 'image/jpeg',
+                prefix: 'lottery-prizes',
+              });
+              updatePrizeField(prizeIdx, 'imageUrl', url);
+            } catch { alert('上传失败，请重试'); }
+          }}
+        />
+      )}
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 px-4 h-12 flex items-center gap-3" style={{ backgroundColor: C.red }}>
         <button onClick={() => navigate(`/lottery/list/${activity.ledger_id}` as any)} className="p-1 -ml-1">
@@ -525,23 +638,20 @@ export default function LotteryEdit() {
                           {/* 图片预览/上传按钮 */}
                           <label className="relative flex-shrink-0 cursor-pointer">
                             <input type="file" accept="image/*" className="hidden"
-                              onChange={async (e) => {
+                              onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (!file) return;
                                 if (file.size > 5 * 1024 * 1024) { alert('图片不能超过 5MB'); return; }
                                 const reader = new FileReader();
-                                reader.onload = async (ev) => {
-                                  const base64 = (ev.target?.result as string).split(',')[1];
-                                  try {
-                                    const { url } = await uploadFileMutation.mutateAsync({
-                                      base64Data: base64,
-                                      contentType: file.type,
-                                      prefix: 'lottery-prizes',
-                                    });
-                                    updatePrizeField(idx, 'imageUrl', url);
-                                  } catch { alert('上传失败，请重试'); }
+                                reader.onload = (ev) => {
+                                  const dataUrl = ev.target?.result as string;
+                                  // 先打开裁剪弹窗
+                                  setCropTargetPrizeIdx(idx);
+                                  setCropModalSrc(dataUrl);
                                 };
                                 reader.readAsDataURL(file);
+                                // 清空 input，允许重复选择同一文件
+                                e.target.value = '';
                               }} />
                             {prize.imageUrl ? (
                               <div className="relative w-16 h-16">
