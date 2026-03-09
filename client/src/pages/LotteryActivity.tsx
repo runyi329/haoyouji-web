@@ -210,8 +210,11 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
     <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
       {/* 标题栏：深色底 */}
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.darkBorder}` }}>
-        <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
-        <span className="text-[11px] font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
+          <span className="text-[10px] font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
+        </div>
+        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
       </div>
 
       {/* 指数名称 + 价格 */}
