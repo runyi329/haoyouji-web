@@ -635,29 +635,29 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
                   {/* 展开内容 */}
                   {showProbDetail && (
-                    <div className="px-3 pb-3 pt-2" style={{ background: '#FAFAFA' }}>
+                    <div className="px-3 pb-3 pt-2" style={{ background: '#F5F5F5' }}>
                       {exampleN === 1 ? (
                         /* 唯一参与者特殊展示 */
-                        <div className="flex items-center gap-3 py-1.5">
+                        <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: C.card, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
                           <div
-                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                            style={{ background: realParticipants[0]?.avatar_url ? 'transparent' : `hsl(0,55%,45%)`, overflow: 'hidden' }}
+                            className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                            style={{ background: realParticipants[0]?.avatar_url ? 'transparent' : C.red, overflow: 'hidden' }}
                           >
                             {realParticipants[0]?.avatar_url
                               ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
                               : (realParticipants[0]?.display_name ?? '?').charAt(0)}
                           </div>
-                          <div style={{ width: '80px', flexShrink: 0 }}>
-                            <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(0)}号</div>
-                            <div className="text-xs font-bold" style={{ color: C.red }}>100.00%</div>
+                          <div className="flex flex-col gap-0.5">
+                            <div className="text-sm font-bold font-mono" style={{ color: C.text }}>{fmtNo(0)}号</div>
+                            <div className="text-sm font-bold" style={{ color: C.gold }}>100.00%</div>
                           </div>
-                          <div className="flex-1 text-[11px]" style={{ color: C.sub }}>唯一参与者，必定中奖</div>
+                          <div className="flex-1 text-[11px] text-right" style={{ color: C.sub }}>唯一参与者，必定中奖</div>
                         </div>
                       ) : (
-                        <div>
+                        <div className="flex flex-col gap-2">
                           {Array.from({ length: Math.min(exampleN, 50) }, (_, idx) => {
                             const cnt = countPerPerson[idx];
-                            const pct = (cnt / 100 * 100).toFixed(2); // 保留两位小数
+                            const pct = (cnt / 100 * 100).toFixed(2);
                             const participant = realParticipants[idx];
                             const bgColor = `hsl(${(idx * 47) % 360}, 55%, 45%)`;
                             // 计算该人对应的所有尾数
@@ -665,20 +665,16 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                             for (let t = 0; t <= 99; t++) {
                               if (t % exampleN === idx) myTails.push(String(t).padStart(2, '0'));
                             }
-                            // 尾数分两行均分
-                            const half = Math.ceil(myTails.length / 2);
-                            const row1 = myTails.slice(0, half);
-                            const row2 = myTails.slice(half);
                             return (
                               <div
                                 key={idx}
-                                className="flex items-stretch py-2"
-                                style={{ borderBottom: idx < Math.min(exampleN, 50) - 1 ? `1px solid ${C.border}` : 'none' }}
+                                className="rounded-xl p-3 flex items-center gap-3"
+                                style={{ background: C.card, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
                               >
-                                {/* 列 1：头像 */}
-                                <div className="flex items-center justify-center flex-shrink-0" style={{ width: '44px' }}>
+                                {/* 头像（放大，撑两行高度） */}
+                                <div className="flex-shrink-0">
                                   <div
-                                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                                    className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold"
                                     style={{ background: participant?.avatar_url ? 'transparent' : bgColor, overflow: 'hidden' }}
                                   >
                                     {participant?.avatar_url
@@ -686,39 +682,20 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                       : (participant?.display_name ?? '?').charAt(0)}
                                   </div>
                                 </div>
-                                {/* 列间分隔线 */}
-                                <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
-                                {/* 列 2：开奖编号 + 中奖概率（中间用横线隔开） */}
-                                <div className="flex flex-col flex-shrink-0" style={{ width: '80px' }}>
-                                  {/* 上半：开奖编号 */}
-                                  <div className="flex-1 flex flex-col items-center justify-center px-2 py-1">
-                                    <div className="text-[9px] mb-0.5" style={{ color: C.sub }}>开奖编号</div>
-                                    <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(idx)}号</div>
-                                  </div>
-                                  {/* 横向分隔线 */}
-                                  <div style={{ height: '1px', background: C.border, margin: '0 6px' }} />
-                                  {/* 下半：中奖概率 */}
-                                  <div className="flex-1 flex flex-col items-center justify-center px-2 py-1">
-                                    <div className="text-[9px] mb-0.5" style={{ color: C.sub }}>中奖概率</div>
-                                    <div className="text-xs font-bold" style={{ color: C.red }}>{pct}%</div>
-                                  </div>
+                                {/* 编号 + 概率（固定宽度，无标签） */}
+                                <div className="flex flex-col items-center gap-0.5 flex-shrink-0" style={{ width: '52px' }}>
+                                  <div className="text-sm font-bold font-mono" style={{ color: C.text }}>{fmtNo(idx)}号</div>
+                                  <div className="text-sm font-bold" style={{ color: C.gold }}>{pct}%</div>
                                 </div>
-                                {/* 列间分隔线 */}
-                                <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
-                                {/* 列 3：尾数 */}
-                                <div className="flex-1 flex flex-col justify-center gap-0.5 min-w-0 px-2">
-                                  <div className="flex justify-around">
-                                    {row1.map(t => (
-                                      <span key={t} className="font-mono text-[11px] font-medium" style={{ color: C.text }}>{t}</span>
-                                    ))}
-                                  </div>
-                                  {row2.length > 0 && (
-                                    <div className="flex justify-around">
-                                      {row2.map(t => (
-                                        <span key={t} className="font-mono text-[11px] font-medium" style={{ color: C.text }}>{t}</span>
-                                      ))}
-                                    </div>
-                                  )}
+                                {/* 尾数矩阵：每个数字一个圆角矩形底色 */}
+                                <div className="flex-1 flex flex-wrap gap-1 min-w-0">
+                                  {myTails.map(t => (
+                                    <span
+                                      key={t}
+                                      className="font-mono text-[11px] font-medium px-1.5 py-0.5 rounded"
+                                      style={{ background: C.redLight, color: C.red }}
+                                    >{t}</span>
+                                  ))}
                                 </div>
                               </div>
                             );
