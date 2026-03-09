@@ -619,7 +619,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     <tr style={{ background: 'rgba(0,0,0,0.04)' }}>
                       <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>收盘价示例</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>计算</th>
-                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖</th>
+                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖示例</th>
                     </tr>
                   </thead>
                   <tbody>
